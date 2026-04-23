@@ -1,0 +1,40 @@
+{
+  "name": "Action",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "description": "\u05e1\u05d5\u05d2 \u05d4\u05e4\u05e2\u05d5\u05dc\u05d4"
+    },
+    "title": {
+      "type": "string",
+      "description": "\u05db\u05d5\u05ea\u05e8\u05ea"
+    },
+    "reasoning": {
+      "type": "string",
+      "description": "\u05e0\u05d9\u05de\u05d5\u05e7"
+    },
+    "impact_estimate": {
+      "type": "string",
+      "description": "\u05d4\u05e2\u05e8\u05db\u05ea \u05d4\u05e9\u05e4\u05e2\u05d4"
+    },
+    "execution_plan": {
+      "type": "string",
+      "description": "\u05ea\u05d5\u05db\u05e0\u05d9\u05ea \u05d1\u05d9\u05e6\u05d5\u05e2"
+    },
+    "status": {
+      "type": "string",
+      "default": "proposed",
+      "description": "\u05e1\u05d8\u05d8\u05d5\u05e1"
+    },
+    "created_at": {
+      "type": "string",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da \u05d9\u05e6\u05d9\u05e8\u05d4"
+    },
+    "linked_business": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05d4\u05e2\u05e1\u05e7 \u05d4\u05de\u05e7\u05d5\u05e9\u05e8"
+    }
+  },
+  "required": []
+}

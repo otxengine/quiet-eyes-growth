@@ -1,0 +1,186 @@
+{
+  "name": "Lead",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "\u05e9\u05dd \u05d4\u05dc\u05d9\u05d3"
+    },
+    "source": {
+      "type": "string",
+      "description": "\u05de\u05e7\u05d5\u05e8"
+    },
+    "score": {
+      "type": "number",
+      "description": "\u05e6\u05d9\u05d5\u05df (0-100)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "hot",
+        "warm",
+        "cold",
+        "contacted",
+        "completed",
+        "lost"
+      ],
+      "description": "\u05e1\u05d8\u05d8\u05d5\u05e1"
+    },
+    "budget_range": {
+      "type": "string",
+      "description": "\u05d8\u05d5\u05d5\u05d7 \u05ea\u05e7\u05e6\u05d9\u05d1"
+    },
+    "service_needed": {
+      "type": "string",
+      "description": "\u05e9\u05d9\u05e8\u05d5\u05ea \u05e0\u05d3\u05e8\u05e9"
+    },
+    "contact_info": {
+      "type": "string",
+      "description": "\u05e4\u05e8\u05d8\u05d9 \u05d4\u05ea\u05e7\u05e9\u05e8\u05d5\u05ea"
+    },
+    "questionnaire_answers": {
+      "type": "string",
+      "description": "\u05ea\u05e9\u05d5\u05d1\u05d5\u05ea \u05dc\u05e9\u05d0\u05dc\u05d5\u05df"
+    },
+    "city": {
+      "type": "string",
+      "description": "\u05e2\u05d9\u05e8"
+    },
+    "urgency": {
+      "type": "string",
+      "description": "\u05d3\u05d7\u05d9\u05e4\u05d5\u05ea"
+    },
+    "intent_source": {
+      "type": "string",
+      "description": "\u05de\u05e7\u05d5\u05e8 \u05db\u05d5\u05d5\u05e0\u05ea \u05e7\u05e0\u05d9\u05d9\u05d4"
+    },
+    "intent_strength": {
+      "type": "string",
+      "enum": [
+        "high",
+        "medium",
+        "low",
+        "none"
+      ],
+      "description": "\u05e2\u05d5\u05e6\u05de\u05ea \u05db\u05d5\u05d5\u05e0\u05ea \u05e7\u05e0\u05d9\u05d9\u05d4"
+    },
+    "created_at": {
+      "type": "string",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da \u05d9\u05e6\u05d9\u05e8\u05d4"
+    },
+    "linked_business": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05d4\u05e2\u05e1\u05e7 \u05d4\u05de\u05e7\u05d5\u05e9\u05e8"
+    },
+    "lifecycle_stage": {
+      "type": "string",
+      "enum": [
+        "new",
+        "contacted",
+        "meeting",
+        "negotiation",
+        "closed_won",
+        "closed_lost",
+        "customer"
+      ],
+      "default": "new",
+      "description": "\u05e9\u05dc\u05d1 \u05d1\u05de\u05d7\u05d6\u05d5\u05e8 \u05d7\u05d9\u05d9\u05dd"
+    },
+    "lifecycle_updated_at": {
+      "type": "string",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da \u05e2\u05d3\u05db\u05d5\u05df \u05e9\u05dc\u05d1 \u05d0\u05d7\u05e8\u05d5\u05df"
+    },
+    "notes": {
+      "type": "string",
+      "description": "\u05d4\u05e2\u05e8\u05d5\u05ea \u05d7\u05d5\u05e4\u05e9\u05d9\u05d5\u05ea"
+    },
+    "next_action": {
+      "type": "string",
+      "description": "\u05e4\u05e2\u05d5\u05dc\u05d4 \u05d4\u05d1\u05d0\u05d4"
+    },
+    "next_action_date": {
+      "type": "string",
+      "format": "date",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da \u05e4\u05e2\u05d5\u05dc\u05d4 \u05d4\u05d1\u05d0\u05d4"
+    },
+    "total_value": {
+      "type": "number",
+      "description": "\u05e9\u05d5\u05d5\u05d9 \u05e2\u05e1\u05e7\u05d4 \u05d1\u05e9\"\u05d7"
+    },
+    "tags": {
+      "type": "string",
+      "description": "\u05ea\u05d2\u05d9\u05d5\u05ea \u05de\u05d5\u05e4\u05e8\u05d3\u05d5\u05ea \u05d1\u05e4\u05e1\u05d9\u05e7\u05d9\u05dd"
+    },
+    "linked_location": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05e1\u05e0\u05d9\u05e3 \u05de\u05e7\u05d5\u05e9\u05e8"
+    },
+    "source_url": {
+      "type": "string",
+      "description": "URL \u05de\u05e7\u05d5\u05e8 \u05d4\u05dc\u05d9\u05d3"
+    },
+    "source_description": {
+      "type": "string",
+      "description": "\u05ea\u05d9\u05d0\u05d5\u05e8 \u05de\u05e7\u05d5\u05e8 \u05d4\u05dc\u05d9\u05d3"
+    },
+    "discovery_method": {
+      "type": "string",
+      "description": "\u05e9\u05d9\u05d8\u05ea \u05d4\u05d2\u05d9\u05dc\u05d5\u05d9 (tavily_web_search / manual / whatsapp_bot)"
+    },
+    "closed_value": {
+      "type": "number",
+      "description": "\u05e1\u05db\u05d5\u05dd \u05e9\u05e0\u05e1\u05d2\u05e8 \u05d1\u05e4\u05d5\u05e2\u05dc \u05d1\u05e9\"\u05d7"
+    },
+    "closed_at": {
+      "type": "string",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da \u05e1\u05d2\u05d9\u05e8\u05ea \u05e2\u05e1\u05e7\u05d4"
+    },
+    "source_agent": {
+      "type": "string",
+      "description": "\u05d0\u05d9\u05d6\u05d4 \u05e1\u05d5\u05db\u05df \u05de\u05e6\u05d0 \u05d0\u05ea \u05d4\u05dc\u05d9\u05d3"
+    },
+    "source_origin": {
+      "type": "string",
+      "enum": ["tavily", "google_places", "apify", "manual", "whatsapp_bot"],
+      "default": "manual",
+      "description": "מקור הליד — tavily/google_places/apify = נתון אמיתי, manual/whatsapp_bot = הוזן ידנית"
+    },
+    "contact_phone": {
+      "type": "string",
+      "description": "מספר טלפון נקי לשיחה/WhatsApp"
+    },
+    "suggested_first_message": {
+      "type": "string",
+      "description": "Ready-to-send first contact message"
+    },
+    "discovered_at": {
+      "type": "string",
+      "description": "Exact discovery timestamp"
+    },
+    "freshness_score": {
+      "type": "number",
+      "description": "Freshness 0-100, decreases over time since discovery"
+    },
+    "last_contact_at": {
+      "type": "string",
+      "description": "Last contact date"
+    },
+    "is_archived": {
+      "type": "boolean",
+      "default": false,
+      "description": "ליד ארכיבי — מוסתר מתצוגת הרגילה"
+    },
+    "archived_at": {
+      "type": "string",
+      "description": "תאריך העברה לארכיב"
+    },
+    "retention_candidate": {
+      "type": "boolean",
+      "default": false,
+      "description": "מועמד לאיחזור — לקוח ישן שיכול לחזור"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

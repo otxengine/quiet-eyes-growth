@@ -1,0 +1,51 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noUnusedLocals": true
+  },
+  "tasks": {
+    "signal-collector":        "deno run --allow-env --allow-net signal_collector.ts",
+    "event-collector":         "deno run --allow-env --allow-net event_collector.ts",
+    "competitor-snapshot":     "deno run --allow-env --allow-net competitor_snapshot.ts",
+    "competitor-bootstrap":   "deno run --allow-env --allow-net competitor_data_bootstrap.ts",
+    "intent-classify":         "deno run --allow-env --allow-net intent_classification.ts",
+    "trend-radar":             "deno run --allow-env --allow-net sector_trend_radar.ts",
+    "event-impact":            "deno run --allow-env --allow-net event_impact_engine.ts",
+    "profile-intelligence":    "deno run --allow-env --allow-net profile_intelligence.ts",
+    "market-memory":           "deno run --allow-env --allow-net market_memory_engine.ts",
+    "action-scoring":          "deno run --allow-env --allow-net action_scoring_service.ts",
+    "health-monitor":          "deno run --allow-env --allow-net --allow-read system_health_monitor.ts",
+    "sync-bridge":             "deno run --allow-env --allow-net --env-file=.env otx_sync_bridge.ts",
+    "meta-configurator":       "deno run --allow-env --allow-net meta_configurator.ts",
+    "weather-demand":          "deno run --allow-env --allow-net sub/weather_demand_predictor.ts",
+    "local-event-anticipator": "deno run --allow-env --allow-net sub/local_event_anticipator.ts",
+    "micro-demand":            "deno run --allow-env --allow-net sub/micro_demand_forecaster.ts",
+    "resource-arbitrage":      "deno run --allow-env --allow-net resource_arbitrage_agent.ts",
+    "hyper-local-context":     "deno run --allow-env --allow-net hyper_local_context_agent.ts",
+    "cross-sector-bridge":     "deno run --allow-env --allow-net cross_sector_bridge_agent.ts",
+    "persona-simulator":       "deno run --allow-env --allow-net synthetic_persona_simulator.ts",
+    "layer5-run":              "deno task weather-demand && deno task local-event-anticipator && deno task micro-demand",
+    "layer6-run":              "deno task resource-arbitrage && deno task hyper-local-context && deno task cross-sector-bridge && deno task persona-simulator",
+    "v2-full-run":             "deno task meta-configurator && deno task layer5-run && deno task layer6-run",
+    "viral-catalyst":          "deno run --allow-env --allow-net viral_catalyst_agent.ts",
+    "influence-integrity":     "deno run --allow-env --allow-net influence_integrity_agent.ts",
+    "deep-context-vision":     "deno run --allow-env --allow-net deep_context_vision_agent.ts",
+    "retention-sentinel":      "deno run --allow-env --allow-net retention_sentinel_agent.ts",
+    "negotiation-pricing":     "deno run --allow-env --allow-net negotiation_pricing_agent.ts",
+    "campaign-autopilot":      "deno run --allow-env --allow-net campaign_autopilot_agent.ts",
+    "expansion-scout":         "deno run --allow-env --allow-net service_expansion_scout_agent.ts",
+    "reputation-war-room":     "deno run --allow-env --allow-net reputation_war_room_agent.ts",
+    "layer7-run":              "deno task viral-catalyst && deno task influence-integrity && deno task deep-context-vision && deno task retention-sentinel && deno task negotiation-pricing && deno task campaign-autopilot && deno task reputation-war-room && deno task expansion-scout",
+    "migrate-v5":              "deno run --allow-env --allow-net --allow-read - <<'EOF'\nimport { supabase } from './lib/supabase.ts';\nimport { readFileSync } from 'node:fs';\nconst sql = readFileSync('./migrations/v5_layer7_tables.sql', 'utf8');\nconst { error } = await supabase.rpc('exec_sql', { sql });\nif (error) { console.error(error); Deno.exit(1); }\nconsole.log('Migration v5 applied.');\nEOF",
+    "migrate-v6":              "deno run --allow-env --allow-net --allow-read - <<'EOF'\nimport { supabase } from './lib/supabase.ts';\nimport { readFileSync } from 'node:fs';\nconst sql = readFileSync('./migrations/v6_schema_fixes.sql', 'utf8');\nconst { error } = await supabase.rpc('exec_sql', { sql });\nif (error) { console.error(error); Deno.exit(1); }\nconsole.log('Migration v6 applied.');\nEOF",
+    "bus-listener":            "deno run --allow-env --allow-net orchestration/bus_listener.ts",
+    "bus-cleanup":             "deno eval \"import { cleanupExpiredBusEvents } from './orchestration/bus_consumer.ts'; import { supabase } from './lib/supabase.ts'; const n = await cleanupExpiredBusEvents(supabase); console.log('Deleted:', n);\"",
+    "migrate-v3":              "deno run --allow-env --allow-net --allow-read - <<'EOF'\nimport { supabase } from './lib/supabase.ts';\nimport { readFileSync } from 'node:fs';\nconst sql = readFileSync('./migrations/v3_agent_data_bus.sql', 'utf8');\nconst { error } = await supabase.rpc('exec_sql', { sql });\nif (error) { console.error(error); Deno.exit(1); }\nconsole.log('Migration v3 applied.');\nEOF",
+    "migrate-v4":              "deno run --allow-env --allow-net --allow-read - <<'EOF'\nimport { supabase } from './lib/supabase.ts';\nimport { readFileSync } from 'node:fs';\nconst sql = readFileSync('./migrations/v4_competitor_config.sql', 'utf8');\nconst { error } = await supabase.rpc('exec_sql', { sql });\nif (error) { console.error(error); Deno.exit(1); }\nconsole.log('Migration v4 applied.');\nEOF"
+  },
+  "imports": {
+    "https://esm.sh/": "https://esm.sh/"
+  }
+}

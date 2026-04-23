@@ -1,0 +1,73 @@
+{
+  "name": "ConversationHistory",
+  "type": "object",
+  "properties": {
+    "linked_business": {
+      "type": "string",
+      "description": "Business profile ID"
+    },
+    "lead_id": {
+      "type": "string",
+      "description": "Associated lead ID"
+    },
+    "sender_id": {
+      "type": "string",
+      "description": "Sender phone/ID on the platform"
+    },
+    "sender_name": {
+      "type": "string",
+      "description": "Sender display name"
+    },
+    "platform": {
+      "type": "string",
+      "enum": ["whatsapp", "instagram", "facebook", "tiktok", "website", "manual"],
+      "description": "Communication channel"
+    },
+    "messages": {
+      "type": "string",
+      "description": "JSON array of {role, text, time} objects"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["active", "qualified", "rejected", "handed_off", "closed"],
+      "default": "active",
+      "description": "Conversation status"
+    },
+    "qualification_step": {
+      "type": "number",
+      "default": 0,
+      "description": "Current step in qualification flow"
+    },
+    "total_steps": {
+      "type": "number",
+      "description": "Total qualification steps"
+    },
+    "lead_created": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether a lead was created from this conversation"
+    },
+    "human_takeover": {
+      "type": "boolean",
+      "default": false,
+      "description": "Human has taken over — bot stops responding"
+    },
+    "human_takeover_at": {
+      "type": "string",
+      "description": "When human took over"
+    },
+    "summary": {
+      "type": "string",
+      "description": "AI-generated conversation summary"
+    },
+    "last_message_at": {
+      "type": "string",
+      "description": "Timestamp of last message"
+    },
+    "meta_wa_message_id": {
+      "type": "string",
+      "description": "Meta WhatsApp message ID for tracking delivery"
+    }
+  },
+  "required": ["linked_business", "platform"]
+}

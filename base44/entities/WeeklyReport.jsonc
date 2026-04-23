@@ -1,0 +1,46 @@
+{
+  "name": "WeeklyReport",
+  "type": "object",
+  "properties": {
+    "report_text": {
+      "type": "string",
+      "description": "\u05d8\u05e7\u05e1\u05d8 \u05d4\u05d3\u05d5\u05d7"
+    },
+    "headline": {
+      "type": "string",
+      "description": "\u05db\u05d5\u05ea\u05e8\u05ea \u05d4\u05d3\u05d5\u05d7"
+    },
+    "week_start": {
+      "type": "string",
+      "description": "\u05ea\u05d7\u05d9\u05dc\u05ea \u05d4\u05e9\u05d1\u05d5\u05e2"
+    },
+    "week_end": {
+      "type": "string",
+      "description": "\u05e1\u05d5\u05e3 \u05d4\u05e9\u05d1\u05d5\u05e2"
+    },
+    "weekly_score": {
+      "type": "number",
+      "description": "\u05e6\u05d9\u05d5\u05df \u05e9\u05d1\u05d5\u05e2\u05d9 1-10"
+    },
+    "insights_count": {
+      "type": "number",
+      "description": "\u05de\u05e1\u05e4\u05e8 \u05ea\u05d5\u05d1\u05e0\u05d5\u05ea"
+    },
+    "reviews_count": {
+      "type": "number",
+      "description": "\u05de\u05e1\u05e4\u05e8 \u05d1\u05d9\u05e7\u05d5\u05e8\u05d5\u05ea"
+    },
+    "leads_count": {
+      "type": "number",
+      "description": "\u05de\u05e1\u05e4\u05e8 \u05dc\u05d9\u05d3\u05d9\u05dd"
+    },
+    "linked_business": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05d4\u05e2\u05e1\u05e7 \u05d4\u05de\u05e7\u05d5\u05e9\u05e8"
+    }
+  },
+  "required": [
+    "linked_business",
+    "report_text"
+  ]
+}

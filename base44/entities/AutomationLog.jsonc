@@ -1,0 +1,43 @@
+{
+  "name": "AutomationLog",
+  "type": "object",
+  "properties": {
+    "automation_name": {
+      "type": "string",
+      "description": "\u05e9\u05dd \u05d4\u05d0\u05d5\u05d8\u05d5\u05de\u05e6\u05d9\u05d4"
+    },
+    "start_time": {
+      "type": "string",
+      "description": "\u05d6\u05de\u05df \u05d4\u05ea\u05d7\u05dc\u05d4"
+    },
+    "end_time": {
+      "type": "string",
+      "description": "\u05d6\u05de\u05df \u05e1\u05d9\u05d5\u05dd"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "success",
+        "error"
+      ],
+      "description": "\u05e1\u05d8\u05d8\u05d5\u05e1"
+    },
+    "items_processed": {
+      "type": "number",
+      "default": 0,
+      "description": "\u05e4\u05e8\u05d9\u05d8\u05d9\u05dd \u05e9\u05e2\u05d5\u05d1\u05d3\u05d5"
+    },
+    "error_message": {
+      "type": "string",
+      "description": "\u05d4\u05d5\u05d3\u05e2\u05ea \u05e9\u05d2\u05d9\u05d0\u05d4"
+    },
+    "linked_business": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05d4\u05e2\u05e1\u05e7"
+    }
+  },
+  "required": [
+    "automation_name",
+    "linked_business"
+  ]
+}

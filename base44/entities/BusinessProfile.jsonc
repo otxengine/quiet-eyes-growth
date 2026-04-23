@@ -1,0 +1,425 @@
+{
+  "name": "BusinessProfile",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "\u05e9\u05dd \u05d4\u05e2\u05e1\u05e7"
+    },
+    "category": {
+      "type": "string",
+      "description": "\u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d9\u05ea \u05d4\u05e2\u05e1\u05e7"
+    },
+    "city": {
+      "type": "string",
+      "description": "\u05e2\u05d9\u05e8 \u05d4\u05e2\u05e1\u05e7"
+    },
+    "full_address": {
+      "type": "string",
+      "description": "\u05db\u05ea\u05d5\u05d1\u05ea \u05de\u05dc\u05d0\u05d4 \u05e9\u05dc \u05d4\u05e2\u05e1\u05e7"
+    },
+    "tone_preference": {
+      "type": "string",
+      "default": "friendly",
+      "description": "\u05e1\u05d2\u05e0\u05d5\u05df \u05ea\u05e7\u05e9\u05d5\u05e8\u05ea \u05de\u05d5\u05e2\u05d3\u05e3"
+    },
+    "target_market": {
+      "type": "string",
+      "description": "\u05e9\u05d5\u05e7 \u05d9\u05e2\u05d3"
+    },
+    "description": {
+      "type": "string",
+      "description": "\u05ea\u05d9\u05d0\u05d5\u05e8 \u05d4\u05e2\u05e1\u05e7"
+    },
+    "min_budget": {
+      "type": "string",
+      "description": "\u05ea\u05e7\u05e6\u05d9\u05d1 \u05de\u05d9\u05e0\u05d9\u05de\u05d5\u05dd \u05dc\u05dc\u05d9\u05d3\u05d9\u05dd"
+    },
+    "relevant_services": {
+      "type": "string",
+      "description": "\u05e9\u05d9\u05e8\u05d5\u05ea\u05d9\u05dd \u05e8\u05dc\u05d5\u05d5\u05e0\u05d8\u05d9\u05d9\u05dd"
+    },
+    "preferred_area": {
+      "type": "string",
+      "description": "\u05d0\u05d6\u05d5\u05e8 \u05d2\u05d9\u05d0\u05d5\u05d2\u05e8\u05e4\u05d9 \u05de\u05d5\u05e2\u05d3\u05e3"
+    },
+    "weekly_report": {
+      "type": "boolean",
+      "default": true,
+      "description": "\u05d3\u05d5\u05d7 \u05e9\u05d1\u05d5\u05e2\u05d9"
+    },
+    "hot_lead_alerts": {
+      "type": "boolean",
+      "default": true,
+      "description": "\u05d4\u05ea\u05e8\u05d0\u05d5\u05ea \u05dc\u05d9\u05d3\u05d9\u05dd \u05d7\u05de\u05d9\u05dd"
+    },
+    "monthly_summary": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05e1\u05d9\u05db\u05d5\u05dd \u05d7\u05d5\u05d3\u05e9\u05d9"
+    },
+    "push_email_alerts": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05d4\u05ea\u05e8\u05d0\u05d5\u05ea \u05de\u05d9\u05d9\u05d3\u05d9\u05d5\u05ea \u05d1\u05de\u05d9\u05d9\u05dc"
+    },
+    "push_whatsapp_alerts": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05d4\u05ea\u05e8\u05d0\u05d5\u05ea \u05de\u05d9\u05d9\u05d3\u05d9\u05d5\u05ea \u05d1\u05d5\u05d5\u05d0\u05d8\u05e1\u05d0\u05e4"
+    },
+    "push_whatsapp_number": {
+      "type": "string",
+      "description": "\u05de\u05e1\u05e4\u05e8 \u05d5\u05d5\u05d0\u05d8\u05e1\u05d0\u05e4 \u05dc\u05e7\u05d1\u05dc\u05ea \u05d4\u05ea\u05e8\u05d0\u05d5\u05ea"
+    },
+    "push_min_score": {
+      "type": "number",
+      "default": 80,
+      "description": "\u05e0\u05d9\u05e7\u05d5\u05d3 \u05de\u05d9\u05e0\u05d9\u05de\u05dc\u05d9 \u05dc\u05d4\u05ea\u05e8\u05d0\u05d4"
+    },
+    "bot_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05d4\u05d0\u05dd \u05d1\u05d5\u05d8 \u05d5\u05d5\u05d0\u05d8\u05e1\u05d0\u05e4 \u05e4\u05e2\u05d9\u05dc"
+    },
+    "bot_greeting": {
+      "type": "string",
+      "description": "\u05d4\u05d5\u05d3\u05e2\u05ea \u05e4\u05ea\u05d9\u05d7\u05d4 \u05e9\u05dc \u05d4\u05d1\u05d5\u05d8"
+    },
+    "bot_qualification_questions": {
+      "type": "string",
+      "description": "\u05e9\u05d0\u05dc\u05d5\u05ea \u05e1\u05d9\u05e0\u05d5\u05df \u05de\u05d5\u05ea\u05d0\u05de\u05d5\u05ea"
+    },
+    "bot_good_lead_criteria": {
+      "type": "string",
+      "description": "\u05e7\u05e8\u05d9\u05d8\u05e8\u05d9\u05d5\u05e0\u05d9\u05dd \u05dc\u05dc\u05d9\u05d3 \u05d8\u05d5\u05d1"
+    },
+    "bot_bad_lead_criteria": {
+      "type": "string",
+      "description": "\u05e7\u05e8\u05d9\u05d8\u05e8\u05d9\u05d5\u05e0\u05d9\u05dd \u05dc\u05dc\u05d9\u05d3 \u05dc\u05d0 \u05de\u05ea\u05d0\u05d9\u05dd"
+    },
+    "bot_services_info": {
+      "type": "string",
+      "description": "\u05de\u05d9\u05d3\u05e2 \u05e2\u05dc \u05e9\u05d9\u05e8\u05d5\u05ea\u05d9\u05dd \u05d5\u05de\u05d7\u05d9\u05e8\u05d9\u05dd \u05dc\u05d1\u05d5\u05d8"
+    },
+    "channels_whatsapp": {
+      "type": "string",
+      "description": "\u05de\u05e1\u05e4\u05e8 \u05d5\u05d5\u05d0\u05d8\u05e1\u05d0\u05e4 \u05e2\u05e1\u05e7\u05d9"
+    },
+    "channels_whatsapp_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05e2\u05e8\u05d5\u05e5 \u05d5\u05d5\u05d0\u05d8\u05e1\u05d0\u05e4 \u05de\u05d5\u05e4\u05e2\u05dc"
+    },
+    "channels_instagram": {
+      "type": "string",
+      "description": "\u05e9\u05dd \u05de\u05e9\u05ea\u05de\u05e9 \u05d0\u05d9\u05e0\u05e1\u05d8\u05d2\u05e8\u05dd"
+    },
+    "channels_instagram_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05e2\u05e8\u05d5\u05e5 \u05d0\u05d9\u05e0\u05e1\u05d8\u05d2\u05e8\u05dd \u05de\u05d5\u05e4\u05e2\u05dc"
+    },
+    "channels_facebook": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4/\u05e9\u05dd \u05e2\u05de\u05d5\u05d3 \u05e4\u05d9\u05d9\u05e1\u05d1\u05d5\u05e7"
+    },
+    "channels_facebook_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05e2\u05e8\u05d5\u05e5 \u05e4\u05d9\u05d9\u05e1\u05d1\u05d5\u05e7 \u05de\u05d5\u05e4\u05e2\u05dc"
+    },
+    "channels_tiktok": {
+      "type": "string",
+      "description": "\u05e9\u05dd \u05de\u05e9\u05ea\u05de\u05e9 \u05d8\u05d9\u05e7\u05d8\u05d5\u05e7"
+    },
+    "channels_tiktok_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05e2\u05e8\u05d5\u05e5 \u05d8\u05d9\u05e7\u05d8\u05d5\u05e7 \u05de\u05d5\u05e4\u05e2\u05dc"
+    },
+    "channels_website": {
+      "type": "string",
+      "description": "\u05db\u05ea\u05d5\u05d1\u05ea \u05d4\u05d0\u05ea\u05e8"
+    },
+    "channels_website_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05e6'\u05d0\u05ea \u05d1\u05d0\u05ea\u05e8 \u05de\u05d5\u05e4\u05e2\u05dc"
+    },
+    "channels_webhook_secret": {
+      "type": "string",
+      "description": "\u05de\u05e4\u05ea\u05d7 \u05e1\u05d5\u05d3\u05d9 \u05dc\u05d0\u05d9\u05de\u05d5\u05ea webhooks"
+    },
+    "website_url": {
+      "type": "string",
+      "description": "\u05db\u05ea\u05d5\u05d1\u05ea \u05d0\u05ea\u05e8 \u05d4\u05e2\u05e1\u05e7"
+    },
+    "facebook_url": {
+      "type": "string",
+      "description": "\u05e7\u05d9\u05e9\u05d5\u05e8 \u05dc\u05e4\u05e8\u05d5\u05e4\u05d9\u05dc \u05e4\u05d9\u05d9\u05e1\u05d1\u05d5\u05e7"
+    },
+    "instagram_url": {
+      "type": "string",
+      "description": "\u05e7\u05d9\u05e9\u05d5\u05e8 \u05dc\u05e4\u05e8\u05d5\u05e4\u05d9\u05dc \u05d0\u05d9\u05e0\u05e1\u05d8\u05d2\u05e8\u05dd"
+    },
+    "tiktok_url": {
+      "type": "string",
+      "description": "\u05e7\u05d9\u05e9\u05d5\u05e8 \u05dc\u05e4\u05e8\u05d5\u05e4\u05d9\u05dc \u05d8\u05d9\u05e7\u05d8\u05d5\u05e7"
+    },
+    "custom_keywords": {
+      "type": "string",
+      "description": "\u05de\u05d9\u05dc\u05d5\u05ea \u05de\u05e4\u05ea\u05d7 \u05de\u05d5\u05ea\u05d0\u05de\u05d5\u05ea \u05dc\u05de\u05e2\u05e7\u05d1"
+    },
+    "custom_urls": {
+      "type": "string",
+      "description": "\u05db\u05ea\u05d5\u05d1\u05d5\u05ea URL \u05de\u05d5\u05ea\u05d0\u05de\u05d5\u05ea \u05dc\u05e1\u05e8\u05d9\u05e7\u05d4 \u05e7\u05d1\u05d5\u05e2\u05d4"
+    },
+    "monitor_competitors_social": {
+      "type": "boolean",
+      "default": true,
+      "description": "\u05e0\u05d9\u05d8\u05d5\u05e8 \u05e8\u05e9\u05ea\u05d5\u05ea \u05d7\u05d1\u05e8\u05ea\u05d9\u05d5\u05ea \u05e9\u05dc \u05de\u05ea\u05d7\u05e8\u05d9\u05dd"
+    },
+    "onboarding_completed": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05d4\u05d0\u05dd \u05d4\u05d4\u05e8\u05e9\u05de\u05d4 \u05d4\u05d5\u05e9\u05dc\u05de\u05d4"
+    },
+    "created_at": {
+      "type": "string",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da \u05d9\u05e6\u05d9\u05e8\u05d4"
+    },
+    "auto_respond_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05ea\u05d2\u05d5\u05d1\u05d5\u05ea \u05d0\u05d5\u05d8\u05d5\u05de\u05d8\u05d9\u05d5\u05ea \u05dc\u05d1\u05d9\u05e7\u05d5\u05e8\u05d5\u05ea \u05d7\u05d9\u05d5\u05d1\u05d9\u05d5\u05ea"
+    },
+    "auto_respond_min_rating": {
+      "type": "number",
+      "default": 5,
+      "description": "\u05d3\u05d9\u05e8\u05d5\u05d2 \u05de\u05d9\u05e0\u05d9\u05de\u05dc\u05d9 \u05dc\u05ea\u05d2\u05d5\u05d1\u05d4 \u05d0\u05d5\u05d8\u05d5\u05de\u05d8\u05d9\u05ea"
+    },
+    "auto_respond_notify": {
+      "type": "boolean",
+      "default": true,
+      "description": "\u05d4\u05d5\u05d3\u05e2 \u05db\u05e9\u05d4\u05de\u05e2\u05e8\u05db\u05ea \u05d4\u05d2\u05d9\u05d1\u05d4 \u05d0\u05d5\u05d8\u05d5\u05de\u05d8\u05d9\u05ea"
+    },
+    "wa_alert_phone": {
+      "type": "string",
+      "description": "\u05de\u05e1\u05e4\u05e8 WhatsApp \u05dc\u05e7\u05d1\u05dc\u05ea \u05d4\u05ea\u05e8\u05d0\u05d5\u05ea"
+    },
+    "wa_alert_negative_review": {
+      "type": "boolean",
+      "default": true,
+      "description": "\u05d4\u05ea\u05e8\u05d0\u05ea \u05d1\u05d9\u05e7\u05d5\u05e8\u05ea \u05e9\u05dc\u05d9\u05dc\u05d9\u05ea"
+    },
+    "wa_alert_hot_lead": {
+      "type": "boolean",
+      "default": true,
+      "description": "\u05d4\u05ea\u05e8\u05d0\u05ea \u05dc\u05d9\u05d3 \u05d7\u05dd"
+    },
+    "wa_alert_high_impact": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05d4\u05ea\u05e8\u05d0\u05ea \u05ea\u05d5\u05d1\u05e0\u05d4 \u05d1\u05d4\u05e9\u05e4\u05e2\u05d4 \u05d2\u05d1\u05d5\u05d4\u05d4"
+    },
+    "crm_webhook_url": {
+      "type": "string",
+      "description": "\u05db\u05ea\u05d5\u05d1\u05ea Webhook \u05e9\u05dc \u05d4-CRM"
+    },
+    "crm_webhook_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05e1\u05e0\u05db\u05e8\u05d5\u05df CRM \u05de\u05d5\u05e4\u05e2\u05dc"
+    },
+    "crm_sync_events": {
+      "type": "string",
+      "default": "create,update",
+      "description": "\u05d0\u05d9\u05e8\u05d5\u05e2\u05d9\u05dd \u05dc\u05e1\u05e0\u05db\u05e8\u05d5\u05df"
+    },
+    "crm_zapier_url": {
+      "type": "string",
+      "description": "\u05db\u05ea\u05d5\u05d1\u05ea Zapier Webhook"
+    },
+    "crm_zapier_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05e1\u05e0\u05db\u05e8\u05d5\u05df Zapier \u05de\u05d5\u05e4\u05e2\u05dc"
+    },
+    "crm_last_sync": {
+      "type": "string",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da \u05e1\u05e0\u05db\u05e8\u05d5\u05df \u05d0\u05d7\u05e8\u05d5\u05df"
+    },
+    "crm_sync_count": {
+      "type": "number",
+      "default": 0,
+      "description": "\u05de\u05e1\u05e4\u05e8 \u05e1\u05e0\u05db\u05e8\u05d5\u05e0\u05d9\u05dd \u05e9\u05d1\u05d5\u05e6\u05e2\u05d5"
+    },
+    "crm_hubspot_api_key": {
+      "type": "string",
+      "description": "HubSpot Private App Token"
+    },
+    "crm_hubspot_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05d7\u05d9\u05d1\u05d5\u05e8 HubSpot \u05de\u05d5\u05e4\u05e2\u05dc"
+    },
+    "crm_hubspot_pipeline_id": {
+      "type": "string",
+      "description": "HubSpot Pipeline ID"
+    },
+    "crm_hubspot_field_map": {
+      "type": "string",
+      "description": "\u05de\u05d9\u05e4\u05d5\u05d9 \u05e9\u05d3\u05d5\u05ea HubSpot (JSON)"
+    },
+    "crm_monday_api_key": {
+      "type": "string",
+      "description": "Monday.com API Token"
+    },
+    "crm_monday_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05d7\u05d9\u05d1\u05d5\u05e8 Monday.com \u05de\u05d5\u05e4\u05e2\u05dc"
+    },
+    "crm_monday_board_id": {
+      "type": "string",
+      "description": "Monday.com Board ID"
+    },
+    "crm_monday_field_map": {
+      "type": "string",
+      "description": "\u05de\u05d9\u05e4\u05d5\u05d9 \u05e9\u05d3\u05d5\u05ea Monday (JSON)"
+    },
+    "meta_wa_phone_number_id": {
+      "type": "string",
+      "description": "Meta WhatsApp Business Phone Number ID"
+    },
+    "meta_wa_access_token": {
+      "type": "string",
+      "description": "Meta System User Access Token for WhatsApp Cloud API"
+    },
+    "meta_wa_real_send_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Send real WhatsApp messages via Meta Cloud API (vs. wa.me links)"
+    },
+    "crm_pipedrive_api_key": {
+      "type": "string",
+      "description": "Pipedrive API Token"
+    },
+    "crm_pipedrive_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Pipedrive integration enabled"
+    },
+    "crm_pipedrive_pipeline_id": {
+      "type": "string",
+      "description": "Pipedrive Pipeline ID"
+    },
+    "crm_salesforce_client_id": {
+      "type": "string",
+      "description": "Salesforce Connected App Client ID"
+    },
+    "crm_salesforce_client_secret": {
+      "type": "string",
+      "description": "Salesforce Connected App Client Secret"
+    },
+    "crm_salesforce_refresh_token": {
+      "type": "string",
+      "description": "Salesforce Refresh Token (OAuth)"
+    },
+    "crm_salesforce_instance_url": {
+      "type": "string",
+      "description": "Salesforce instance URL (e.g. https://company.salesforce.com)"
+    },
+    "crm_salesforce_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Salesforce integration enabled"
+    },
+    "bot_use_ml_criteria": {
+      "type": "boolean",
+      "default": true,
+      "description": "Use ML winner DNA to dynamically score and route leads"
+    },
+    "bot_off_hours_message": {
+      "type": "string",
+      "description": "Auto-reply when business is closed (outside working hours)"
+    },
+    "bot_working_hours_start": {
+      "type": "string",
+      "default": "09:00",
+      "description": "Working hours start HH:MM Israel time"
+    },
+    "bot_working_hours_end": {
+      "type": "string",
+      "default": "20:00",
+      "description": "Working hours end HH:MM Israel time"
+    },
+    "survey_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05e1\u05e7\u05e8 \u05e9\u05d1\u05d9\u05e2\u05d5\u05ea \u05e8\u05e6\u05d5\u05df \u05de\u05d5\u05e4\u05e2\u05dc"
+    },
+    "survey_q1": {
+      "type": "string",
+      "default": "\u05d0\u05d9\u05da \u05d4\u05d9\u05d9\u05ea \u05de\u05d3\u05e8\u05d2/\u05ea \u05d0\u05ea \u05d4\u05d7\u05d5\u05d5\u05d9\u05d4 \u05e9\u05dc\u05da?",
+      "description": "\u05e9\u05d0\u05dc\u05d4 1 \u05d1\u05e1\u05e7\u05e8"
+    },
+    "survey_q2": {
+      "type": "string",
+      "default": "\u05de\u05d4 \u05d4\u05db\u05d9 \u05d0\u05d4\u05d1\u05ea?",
+      "description": "\u05e9\u05d0\u05dc\u05d4 2 \u05d1\u05e1\u05e7\u05e8"
+    },
+    "survey_q3": {
+      "type": "string",
+      "default": "\u05de\u05d4 \u05d0\u05e4\u05e9\u05e8 \u05dc\u05e9\u05e4\u05e8?",
+      "description": "\u05e9\u05d0\u05dc\u05d4 3 \u05d1\u05e1\u05e7\u05e8"
+    },
+    "locations_prompt_dismissed": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05d4\u05d5\u05d3\u05e2\u05ea \u05e1\u05e0\u05d9\u05e4\u05d9\u05dd \u05e0\u05e1\u05d2\u05e8\u05d4"
+    },
+    "plan_id": {
+      "type": "string",
+      "default": "free",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05d4\u05ea\u05d5\u05db\u05e0\u05d9\u05ea \u05d4\u05e0\u05d5\u05db\u05d7\u05d9\u05ea"
+    },
+    "subscription_status": {
+      "type": "string",
+      "enum": ["active", "canceled", "past_due", "trialing", "none"],
+      "default": "none",
+      "description": "\u05e1\u05d8\u05d8\u05d5\u05e1 \u05d4\u05de\u05e0\u05d5\u05d9"
+    },
+    "stripe_customer_id": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05dc\u05e7\u05d5\u05d7 Stripe"
+    },
+    "subscription_started_at": {
+      "type": "string",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da \u05ea\u05d7\u05d9\u05dc\u05ea \u05de\u05e0\u05d5\u05d9"
+    },
+    "google_place_id": {
+      "type": "string",
+      "description": "מזהה Google Places של העסק"
+    },
+    "google_place_id_verified": {
+      "type": "boolean",
+      "default": false,
+      "description": "האם ה-Place ID אומת מול Google"
+    },
+    "google_rating": {
+      "type": "number",
+      "description": "דירוג ממוצע ב-Google (1-5)"
+    },
+    "google_review_count": {
+      "type": "number",
+      "description": "מספר ביקורות Google"
+    }
+  },
+  "required": [
+    "name",
+    "category",
+    "city"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "MetricsSnapshot",
+  "type": "object",
+  "properties": {
+    "metric_name": {
+      "type": "string",
+      "description": "\u05e9\u05dd \u05d4\u05de\u05d3\u05d3"
+    },
+    "metric_value": {
+      "type": "number",
+      "description": "\u05e2\u05e8\u05da \u05d4\u05de\u05d3\u05d3"
+    },
+    "snapshot_date": {
+      "type": "string",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da \u05d4\u05e6\u05d9\u05dc\u05d5\u05dd"
+    },
+    "linked_business": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05d4\u05e2\u05e1\u05e7 \u05d4\u05de\u05e7\u05d5\u05e9\u05e8"
+    }
+  },
+  "required": []
+}

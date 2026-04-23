@@ -1,0 +1,108 @@
+{
+  "name": "SectorKnowledge",
+  "type": "object",
+  "properties": {
+    "sector": {
+      "type": "string",
+      "description": "\u05e2\u05e0\u05e3"
+    },
+    "region": {
+      "type": "string",
+      "description": "\u05d0\u05d6\u05d5\u05e8"
+    },
+    "avg_rating": {
+      "type": "number",
+      "description": "\u05d3\u05d9\u05e8\u05d5\u05d2 \u05de\u05de\u05d5\u05e6\u05e2"
+    },
+    "common_complaints": {
+      "type": "string",
+      "description": "\u05ea\u05dc\u05d5\u05e0\u05d5\u05ea \u05e0\u05e4\u05d5\u05e6\u05d5\u05ea"
+    },
+    "trending_services": {
+      "type": "string",
+      "description": "\u05e9\u05d9\u05e8\u05d5\u05ea\u05d9\u05dd \u05d1\u05de\u05d2\u05de\u05ea \u05e2\u05dc\u05d9\u05d9\u05d4"
+    },
+    "price_range": {
+      "type": "string",
+      "description": "\u05d8\u05d5\u05d5\u05d7 \u05de\u05d7\u05d9\u05e8\u05d9\u05dd"
+    },
+    "competitor_count": {
+      "type": "number",
+      "description": "\u05de\u05e1\u05e4\u05e8 \u05de\u05ea\u05d7\u05e8\u05d9\u05dd"
+    },
+    "total_signals_analyzed": {
+      "type": "number",
+      "description": "\u05e1\u05d4\"\u05db \u05e1\u05d9\u05d2\u05e0\u05dc\u05d9\u05dd \u05e9\u05e0\u05d5\u05ea\u05d7\u05d5"
+    },
+    "last_updated": {
+      "type": "string",
+      "description": "\u05e2\u05d3\u05db\u05d5\u05df \u05d0\u05d7\u05e8\u05d5\u05df"
+    },
+    "winner_lead_dna": {
+      "type": "string",
+      "description": "JSON — תכונות משותפות ללידים שהפכו לעסקות (source, service, urgency, budget)"
+    },
+    "losing_lead_patterns": {
+      "type": "string",
+      "description": "JSON — דפוסים של לידים שנשרו (lost/cold)"
+    },
+    "top_review_topics_positive": {
+      "type": "string",
+      "description": "נושאים חוזרים בביקורות חיוביות (JSON array of strings)"
+    },
+    "top_review_topics_negative": {
+      "type": "string",
+      "description": "נושאים חוזרים בביקורות שליליות (JSON array of strings)"
+    },
+    "competitor_threat_score": {
+      "type": "number",
+      "description": "ציון סיכון תחרותי 0-100"
+    },
+    "agent_insights": {
+      "type": "string",
+      "description": "JSON — תובנות cross-agent שנוצרו ע\"י LLM"
+    },
+    "ml_last_run": {
+      "type": "string",
+      "description": "תאריך ריצה אחרון של מנוע ה-ML"
+    },
+    "wins_count": {
+      "type": "number",
+      "description": "סה\"כ עסקות שנסגרו בהצלחה"
+    },
+    "losses_count": {
+      "type": "number",
+      "description": "סה\"כ לידים שאבדו"
+    },
+    "conversion_rate": {
+      "type": "number",
+      "description": "אחוז המרה (wins/total)"
+    },
+    "agent_episodic_memory": {
+      "type": "string",
+      "description": "JSON array: last 30 episodic memories from agent runs — what was found, what changed, what to watch next"
+    },
+    "agent_message_queue": {
+      "type": "string",
+      "description": "JSON array: pending messages from one agent to another — priority signals to act on next run"
+    },
+    "agent_prompt_scores": {
+      "type": "string",
+      "description": "JSON: per-agent quality scores and prompt improvement notes accumulated over runs"
+    },
+    "last_ml_update": {
+      "type": "string",
+      "description": "Timestamp of last ML learning cycle"
+    },
+    "data_points_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Total data points accumulated — grows over time"
+    },
+    "linked_business": {
+      "type": "string",
+      "description": "מזהה העסק המקושר"
+    }
+  },
+  "required": []
+}

@@ -1,0 +1,669 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+}
+
+model BusinessProfile {
+  id                         String   @id @default(cuid())
+  created_date               DateTime @default(now())
+  created_by                 String?
+  name                       String
+  category                   String
+  city                       String
+  full_address               String?
+  tone_preference            String?  @default("friendly")
+  target_market              String?
+  description                String?
+  min_budget                 String?
+  relevant_services          String?
+  preferred_area             String?
+  weekly_report              Boolean? @default(true)
+  hot_lead_alerts            Boolean? @default(true)
+  monthly_summary            Boolean? @default(false)
+  push_email_alerts          Boolean? @default(false)
+  push_whatsapp_alerts       Boolean? @default(false)
+  push_whatsapp_number       String?
+  push_min_score             Float?   @default(80)
+  bot_enabled                Boolean? @default(false)
+  bot_greeting               String?
+  bot_qualification_questions String?
+  bot_good_lead_criteria     String?
+  bot_bad_lead_criteria      String?
+  bot_services_info          String?
+  channels_whatsapp          String?
+  channels_whatsapp_enabled  Boolean? @default(false)
+  channels_instagram         String?
+  channels_instagram_enabled Boolean? @default(false)
+  channels_facebook          String?
+  channels_facebook_enabled  Boolean? @default(false)
+  channels_tiktok            String?
+  channels_tiktok_enabled    Boolean? @default(false)
+  channels_website           String?
+  channels_website_enabled   Boolean? @default(false)
+  channels_webhook_secret    String?
+  website_url                String?
+  facebook_url               String?
+  instagram_url              String?
+  tiktok_url                 String?
+  custom_keywords            String?
+  custom_urls                String?
+  monitor_competitors_social Boolean? @default(true)
+  onboarding_completed       Boolean? @default(false)
+  plan_id                    String?  @default("free")
+  subscription_status        String?  @default("none")
+  stripe_customer_id         String?
+  subscription_started_at    String?
+  auto_respond_enabled       Boolean? @default(false)
+  auto_respond_min_rating    Float?   @default(5)
+  auto_respond_notify        Boolean? @default(true)
+  wa_alert_phone             String?
+  wa_alert_negative_review   Boolean? @default(true)
+  wa_alert_hot_lead          Boolean? @default(true)
+  wa_alert_high_impact       Boolean? @default(false)
+  crm_webhook_url            String?
+  crm_webhook_enabled        Boolean? @default(false)
+  crm_sync_events            String?  @default("create,update")
+  crm_zapier_url             String?
+  crm_zapier_enabled         Boolean? @default(false)
+  crm_last_sync              String?
+  crm_sync_count             Float?   @default(0)
+  crm_hubspot_api_key        String?
+  crm_hubspot_enabled        Boolean? @default(false)
+  crm_hubspot_pipeline_id    String?
+  crm_hubspot_field_map      String?
+  crm_monday_api_key         String?
+  crm_monday_enabled         Boolean? @default(false)
+  crm_monday_board_id        String?
+  crm_monday_field_map       String?
+  survey_enabled             Boolean? @default(false)
+  survey_q1                  String?
+  survey_q2                  String?
+  survey_q3                  String?
+  locations_prompt_dismissed Boolean? @default(false)
+  created_at                 String?
+  google_place_id            String?
+  google_place_id_verified   Boolean? @default(false)
+  google_rating              Float?
+  google_review_count        Float?
+
+  @@map("business_profiles")
+}
+
+model Lead {
+  id                  String   @id @default(cuid())
+  created_date        DateTime @default(now())
+  created_by          String?
+  linked_business     String?
+  linked_location     String?
+  name                String
+  source              String?
+  score               Float?
+  status              String?
+  budget_range        String?
+  service_needed      String?
+  contact_info        String?
+  contact_phone       String?
+  questionnaire_answers String?
+  city                String?
+  urgency             String?
+  intent_source       String?
+  intent_strength     String?
+  created_at          String?
+  lifecycle_stage     String?  @default("new")
+  lifecycle_updated_at String?
+  notes               String?
+  next_action         String?
+  next_action_date    String?
+  total_value         Float?
+  tags                String?
+  source_url          String?
+  source_description  String?
+  discovery_method    String?
+  closed_value        Float?
+  closed_at           String?
+  source_agent        String?
+  source_origin       String?  @default("manual")
+  // P1: Intent Freshness Score
+  discovered_at       String?
+  freshness_score     Float?   @default(100)
+  last_contact_at     String?
+  next_followup_date  String?
+  followup_count      Float?   @default(0)
+  referral_source     String?
+  score_reasoning     String?
+  suggested_first_message String?
+
+  @@map("leads")
+}
+
+model Review {
+  id               String   @id @default(cuid())
+  created_date     DateTime @default(now())
+  created_by       String?
+  linked_business  String?
+  linked_location  String?
+  platform         String?
+  rating           Float?
+  text             String
+  reviewer_name    String?
+  sentiment        String?
+  suggested_response String?
+  response_status  String?  @default("pending")
+  source_url       String?
+  created_at       String?
+  source_origin    String?  @default("manual")
+  google_review_id String?
+  is_verified      Boolean? @default(false)
+  // P1: Sentiment Topic Extraction
+  topics           String?  // comma-separated topic list
+  topic_sentiment  String?  // JSON: { topic: sentiment }
+
+  @@map("reviews")
+}
+
+model Competitor {
+  id                   String   @id @default(cuid())
+  created_date         DateTime @default(now())
+  created_by           String?
+  linked_business      String?
+  linked_location      String?
+  name                 String
+  category             String?
+  rating               Float?
+  review_count         Float?
+  trend_direction      String?
+  strengths            String?
+  weaknesses           String?
+  services             String?
+  price_range          String?
+  last_known_prices    String?
+  last_price_check     String?
+  price_changed_at     String?
+  address              String?
+  tags                 String?
+  notes                String?
+  last_scanned         String?
+  battlecard_headline  String?
+  battlecard_content   String?
+  battlecard_updated_at String?
+  source_urls          String?
+  data_freshness       String?
+  verification_status  String?  @default("לא מאומתת")
+  menu_highlights      String?
+  price_points         String?
+  current_promotions   String?
+  opening_hours        String?
+  recent_reviews_summary String?
+
+  @@map("competitors")
+}
+
+model MarketSignal {
+  id                 String   @id @default(cuid())
+  created_date       DateTime @default(now())
+  created_by         String?
+  linked_business    String?
+  linked_location    String?
+  summary            String
+  impact_level       String?
+  category           String?
+  recommended_action String?
+  confidence         Float?
+  source_signals     String?
+  is_read            Boolean? @default(false)
+  detected_at        String?
+  source_urls        String?
+  source_description String?
+  data_freshness     String?
+
+  @@map("market_signals")
+}
+
+model RawSignal {
+  id             String   @id @default(cuid())
+  created_date   DateTime @default(now())
+  created_by     String?
+  linked_business String?
+  linked_location String?
+  source         String?
+  content        String?
+  url            String?
+  signal_type    String?
+  platform       String?
+  sentiment      String?  @default("unknown")
+  checksum_hash  String?
+  detected_at    String?
+  source_origin  String?  @default("tavily")
+
+  @@map("raw_signals")
+}
+
+model Task {
+  id             String   @id @default(cuid())
+  created_date   DateTime @default(now())
+  created_by     String?
+  linked_business String?
+  title          String
+  description    String?
+  status         String?  @default("pending")
+  priority       String?  @default("medium")
+  assignee       String?
+  branch         String?
+  due_date       String?
+  source_alert_id String?
+  source_type    String?
+  completed_at   String?
+  notes          String?
+
+  @@map("tasks")
+}
+
+model AutomationLog {
+  id               String   @id @default(cuid())
+  created_date     DateTime @default(now())
+  created_by       String?
+  linked_business  String?
+  automation_name  String
+  start_time       String?
+  end_time         String?
+  status           String?
+  items_processed  Float?   @default(0)
+  error_message    String?
+
+  @@map("automation_logs")
+}
+
+model WeeklyReport {
+  id              String   @id @default(cuid())
+  created_date    DateTime @default(now())
+  created_by      String?
+  linked_business String?
+  report_text     String
+  headline        String?
+  week_start      String?
+  week_end        String?
+  weekly_score    Float?
+  insights_count  Float?
+  reviews_count   Float?
+  leads_count     Float?
+
+  @@map("weekly_reports")
+}
+
+model HealthScore {
+  id                String   @id @default(cuid())
+  created_date      DateTime @default(now())
+  created_by        String?
+  linked_business   String?
+  overall_score     Float
+  reputation_score  Float?
+  leads_score       Float?
+  competition_score Float?
+  market_score      Float?
+  engagement_score  Float?
+  improvements             String?
+  snapshot_date            String?
+  // P1: Local SEO Score
+  seo_score                Float?
+  google_rank_estimate     String?
+  reviews_needed_for_top3  Float?
+
+  @@map("health_scores")
+}
+
+model OutcomeLog {
+  id                  String   @id @default(cuid())
+  created_date        DateTime @default(now())
+  created_by          String?
+  linked_business     String?
+  action_type         String?
+  was_accepted        Boolean?
+  outcome_description String?
+  impact_score        Float?
+  created_at          String?
+  linked_action       String?
+
+  @@map("outcome_logs")
+}
+
+model SectorKnowledge {
+  id                     String   @id @default(cuid())
+  created_date           DateTime @default(now())
+  sector                 String?
+  region                 String?
+  avg_rating             Float?
+  common_complaints      String?
+  trending_services      String?
+  price_range            String?
+  competitor_count       Float?
+  total_signals_analyzed Float?
+  last_updated           String?
+  // P1: Lead Feedback Loop
+  winner_lead_dna        String?  // JSON with winner lead characteristics
+
+  @@map("sector_knowledge")
+}
+
+model Action {
+  id              String   @id @default(cuid())
+  created_date    DateTime @default(now())
+  created_by      String?
+  linked_business String?
+  type            String?
+  title           String?
+  reasoning       String?
+  impact_estimate String?
+  execution_plan  String?
+  status          String?  @default("proposed")
+  created_at      String?
+
+  @@map("actions")
+}
+
+model Prediction {
+  id                  String   @id @default(cuid())
+  created_date        DateTime @default(now())
+  created_by          String?
+  linked_business     String?
+  prediction_type     String?
+  title               String
+  summary             String?
+  confidence          Float?
+  timeframe           String?
+  impact_level        String?
+  recommended_actions String?
+  data_sources        String?
+  is_read             Boolean? @default(false)
+  status              String?  @default("active")
+  predicted_at        String?
+
+  @@map("predictions")
+}
+
+model ProactiveAlert {
+  id              String   @id @default(cuid())
+  created_date    DateTime @default(now())
+  created_by      String?
+  linked_business String?
+  alert_type      String?
+  title           String
+  description     String?
+  suggested_action String?
+  action_url      String?
+  priority        String?
+  source_agent    String?
+  is_dismissed    Boolean? @default(false)
+  is_acted_on     Boolean? @default(false)
+  created_at      String?
+
+  @@map("proactive_alerts")
+}
+
+model PendingAlert {
+  id              String   @id @default(cuid())
+  created_date    DateTime @default(now())
+  created_by      String?
+  linked_business String?
+  alert_type      String?
+  message         String?
+  customer_name   String?
+  whatsapp_url    String?
+  phone           String?
+  trigger_date    String?
+  is_sent         Boolean? @default(false)
+
+  @@map("pending_alerts")
+}
+
+model ReviewRequest {
+  id              String   @id @default(cuid())
+  created_date    DateTime @default(now())
+  created_by      String?
+  linked_business String?
+  customer_name       String
+  phone               String
+  platform            String?
+  sent_at             String?
+  // P1: Review Conversion Tracking
+  status              String?  @default("sent")  // sent | opened | converted | failed
+  review_link         String?
+  sent_via            String?  // whatsapp | sms | email
+  converted_review_id String?
+  lead_id             String?
+
+  @@map("review_requests")
+}
+
+model CustomerSurvey {
+  id                String   @id @default(cuid())
+  created_date      DateTime @default(now())
+  created_by        String?
+  linked_business   String?
+  customer_name     String
+  lead_id           String?
+  rating            Float?
+  liked_most        String?
+  improve           String?
+  survey_sent_at    String?
+  response_received Boolean? @default(false)
+
+  @@map("customer_surveys")
+}
+
+model BusinessLocation {
+  id              String   @id @default(cuid())
+  created_date    DateTime @default(now())
+  created_by      String?
+  linked_business String?
+  name            String
+  city            String?
+  address         String?
+  phone           String?
+  is_primary      Boolean? @default(false)
+
+  @@map("business_locations")
+}
+
+model MetricsSnapshot {
+  id              String   @id @default(cuid())
+  created_date    DateTime @default(now())
+  created_by      String?
+  linked_business String?
+  metric_name     String?
+  metric_value    Float?
+  snapshot_date   String?
+
+  @@map("metrics_snapshots")
+}
+
+model SocialAccount {
+  id              String   @id @default(cuid())
+  created_date    DateTime @default(now())
+  created_by      String?
+  linked_business String?
+  platform        String?
+  account_name    String?
+  access_token    String?
+  page_id         String?
+  is_connected    Boolean? @default(false)
+  last_sync       String?
+  last_error      String?
+
+  @@map("social_accounts")
+}
+
+// ── Meta Integration ──────────────────────────────────────────────────────────
+
+/**
+ * One MetaConnection per connected WhatsApp phone or Facebook Page.
+ * Linked to a BusinessProfile (our "tenant"). Tokens are always encrypted.
+ */
+model MetaConnection {
+  id                  String   @id @default(cuid())
+  created_date        DateTime @default(now())
+  business_profile_id String                        // FK → BusinessProfile.id
+  platform            String                        // 'whatsapp' | 'messenger'
+  page_id             String?  @unique              // Facebook Page ID (Messenger)
+  phone_number_id     String?  @unique              // WhatsApp Cloud API Phone Number ID
+  waba_id             String?                       // WhatsApp Business Account ID
+  encrypted_token     String                        // AES-256-GCM; never plaintext
+  is_active           Boolean  @default(true)
+  token_expires_at    String?                       // ISO string; long-lived tokens ~60 days
+
+  agentConfigs  AIAgentConfig[]
+  conversations Conversation[]
+
+  @@map("meta_connections")
+}
+
+/**
+ * AI agent configuration bound to a specific MetaConnection.
+ * Each connection can have one active agent (lead_gen, trend_analysis, etc.)
+ */
+model AIAgentConfig {
+  id                 String   @id @default(cuid())
+  created_date       DateTime @default(now())
+  meta_connection_id String
+  agent_type         String                        // 'lead_gen' | 'trend_analysis' | 'competitor_monitor' | 'campaign'
+  system_prompt      String                        // Full system prompt injected before every LLM call
+  is_active          Boolean  @default(true)
+  max_tokens         Int      @default(500)
+  temperature        Float    @default(0.7)
+  handoff_keywords   String?                       // Comma-separated; triggers human escalation
+
+  metaConnection MetaConnection @relation(fields: [meta_connection_id], references: [id], onDelete: Cascade)
+
+  @@map("ai_agent_configs")
+}
+
+/**
+ * Persists conversation history per sender so the AI has context across messages.
+ * Also tracks human-handoff state to suppress AI responses after escalation.
+ */
+model Conversation {
+  id                 String   @id @default(cuid())
+  created_date       DateTime @default(now())
+  meta_connection_id String
+  sender_id          String                        // WhatsApp phone number or Messenger PSID
+  platform           String                        // 'whatsapp' | 'messenger'
+  status             String   @default("active")   // 'active' | 'human_handoff' | 'closed'
+  context            String?                       // JSON array of {role, content} — last 20 turns
+  last_message_at    String?
+  handoff_reason     String?
+
+  metaConnection MetaConnection @relation(fields: [meta_connection_id], references: [id], onDelete: Cascade)
+
+  @@unique([meta_connection_id, sender_id])
+  @@map("conversations")
+}
+
+model SocialSignal {
+  id              String   @id @default(cuid())
+  created_date    DateTime @default(now())
+  created_by      String?
+  linked_business String?
+  platform        String?
+  post_id         String?
+  content         String?
+  post_url        String?
+  likes           Float?   @default(0)
+  comments        Float?   @default(0)
+  shares          Float?   @default(0)
+  views           Float?   @default(0)
+  post_date       String?
+  media_type      String?
+  sentiment       String?  @default("unknown")
+  fetched_at      String?
+
+  @@map("social_signals")
+}
+
+model AIOutput {
+  id              String   @id @default(cuid())
+  created_date    DateTime @default(now())
+  linked_business String?
+  agent_name      String?
+  module          String?
+  output_type     String?
+  content         String?
+  context_used    String?
+  confidence      Float?
+  feedback_score  Float?   @default(0)
+  outcome_status  String?  @default("pending")
+
+  @@map("ai_outputs")
+}
+
+model FeedbackEvent {
+  id             String   @id @default(cuid())
+  created_date   DateTime @default(now())
+  linked_business String?
+  ai_output_id   String?
+  agent_name     String?
+  module         String?
+  output_type    String?
+  rating         String?
+  score          Int?
+  comment        String?
+  tags           String?
+  correction     String?
+  action_taken   String?
+
+  @@map("feedback_events")
+}
+
+model BusinessMemory {
+  id               String   @id @default(cuid())
+  created_date     DateTime @default(now())
+  linked_business  String?  @unique
+  preferred_tone   String?
+  preferred_channels String?
+  rejected_patterns String?
+  accepted_patterns String?
+  lead_preferences  String?
+  content_style    String?
+  agent_weights    String?
+  feedback_summary String?
+  last_updated     String?
+  learning_version Int?     @default(1)
+
+  @@map("business_memory")
+}
+
+model AgentLearningProfile {
+  id               String   @id @default(cuid())
+  created_date     DateTime @default(now())
+  linked_business  String?
+  agent_name       String
+  total_outputs    Int?     @default(0)
+  positive_count   Int?     @default(0)
+  negative_count   Int?     @default(0)
+  accuracy_score   Float?   @default(0.5)
+  preference_weights String?
+  rejected_types   String?
+  accepted_types   String?
+  last_updated     String?
+
+  @@unique([linked_business, agent_name])
+  @@map("agent_learning_profiles")
+}
+
+model LearningSignal {
+  id               String   @id @default(cuid())
+  created_date     DateTime @default(now())
+  linked_business  String?
+  signal_type      String?
+  agent_name       String?
+  pattern_key      String?
+  pattern_label    String?
+  weight           Float?
+  occurrence_count Int?     @default(1)
+  last_seen        String?
+
+  @@map("learning_signals")
+}

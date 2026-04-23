@@ -1,0 +1,46 @@
+{
+  "name": "HealthScore",
+  "type": "object",
+  "properties": {
+    "linked_business": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05d4\u05e2\u05e1\u05e7"
+    },
+    "overall_score": {
+      "type": "number",
+      "description": "\u05e6\u05d9\u05d5\u05df \u05d1\u05e8\u05d9\u05d0\u05d5\u05ea \u05db\u05dc\u05dc\u05d9 0-100"
+    },
+    "reputation_score": {
+      "type": "number",
+      "description": "\u05e6\u05d9\u05d5\u05df \u05de\u05d5\u05e0\u05d9\u05d8\u05d9\u05df 0-100"
+    },
+    "leads_score": {
+      "type": "number",
+      "description": "\u05e6\u05d9\u05d5\u05df \u05dc\u05d9\u05d3\u05d9\u05dd 0-100"
+    },
+    "competition_score": {
+      "type": "number",
+      "description": "\u05e6\u05d9\u05d5\u05df \u05ea\u05d7\u05e8\u05d5\u05ea 0-100"
+    },
+    "market_score": {
+      "type": "number",
+      "description": "\u05e6\u05d9\u05d5\u05df \u05e9\u05d5\u05e7 0-100"
+    },
+    "engagement_score": {
+      "type": "number",
+      "description": "\u05e6\u05d9\u05d5\u05df \u05e4\u05e2\u05d9\u05dc\u05d5\u05ea 0-100"
+    },
+    "improvements": {
+      "type": "string",
+      "description": "\u05d4\u05de\u05dc\u05e6\u05d5\u05ea \u05dc\u05e9\u05d9\u05e4\u05d5\u05e8 (JSON)"
+    },
+    "snapshot_date": {
+      "type": "string",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da"
+    }
+  },
+  "required": [
+    "linked_business",
+    "overall_score"
+  ]
+}

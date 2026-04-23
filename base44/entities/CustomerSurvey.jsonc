@@ -1,0 +1,43 @@
+{
+  "name": "CustomerSurvey",
+  "type": "object",
+  "properties": {
+    "customer_name": {
+      "type": "string",
+      "description": "\u05e9\u05dd \u05d4\u05dc\u05e7\u05d5\u05d7"
+    },
+    "lead_id": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05d4\u05dc\u05d9\u05d3"
+    },
+    "rating": {
+      "type": "number",
+      "description": "\u05d3\u05d9\u05e8\u05d5\u05d2 1-5"
+    },
+    "liked_most": {
+      "type": "string",
+      "description": "\u05de\u05d4 \u05d4\u05db\u05d9 \u05d0\u05d4\u05d1\u05ea"
+    },
+    "improve": {
+      "type": "string",
+      "description": "\u05de\u05d4 \u05d0\u05e4\u05e9\u05e8 \u05dc\u05e9\u05e4\u05e8"
+    },
+    "survey_sent_at": {
+      "type": "string",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da \u05e9\u05dc\u05d9\u05d7\u05ea \u05d4\u05e1\u05e7\u05e8"
+    },
+    "response_received": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05d4\u05d0\u05dd \u05d4\u05ea\u05e7\u05d1\u05dc\u05d4 \u05ea\u05e9\u05d5\u05d1\u05d4"
+    },
+    "linked_business": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05d4\u05e2\u05e1\u05e7"
+    }
+  },
+  "required": [
+    "customer_name",
+    "linked_business"
+  ]
+}

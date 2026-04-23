@@ -1,0 +1,90 @@
+{
+  "name": "MarketSignal",
+  "type": "object",
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "\u05db\u05d5\u05ea\u05e8\u05ea \u05d4\u05ea\u05d5\u05d1\u05e0\u05d4"
+    },
+    "impact_level": {
+      "type": "string",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "description": "\u05e8\u05de\u05ea \u05d4\u05e9\u05e4\u05e2\u05d4"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "threat",
+        "opportunity",
+        "trend",
+        "competitor_move",
+        "mention"
+      ],
+      "description": "\u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d4"
+    },
+    "recommended_action": {
+      "type": "string",
+      "description": "\u05e4\u05e2\u05d5\u05dc\u05d4 \u05de\u05d5\u05de\u05dc\u05e6\u05ea"
+    },
+    "confidence": {
+      "type": "number",
+      "description": "\u05e8\u05de\u05ea \u05d1\u05d9\u05d8\u05d7\u05d5\u05df (0-100)"
+    },
+    "source_signals": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d9 \u05e1\u05d9\u05d2\u05e0\u05dc\u05d9\u05dd \u05d2\u05d5\u05dc\u05de\u05d9\u05d9\u05dd"
+    },
+    "is_read": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05d4\u05d0\u05dd \u05e0\u05e7\u05e8\u05d0"
+    },
+    "detected_at": {
+      "type": "string",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da \u05d6\u05d9\u05d4\u05d5\u05d9"
+    },
+    "linked_business": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05d4\u05e2\u05e1\u05e7 \u05d4\u05de\u05e7\u05d5\u05e9\u05e8"
+    },
+    "linked_location": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05e1\u05e0\u05d9\u05e3 \u05de\u05e7\u05d5\u05e9\u05e8"
+    },
+    "source_urls": {
+      "type": "string",
+      "description": "\u05db\u05ea\u05d5\u05d1\u05d5\u05ea URL \u05de\u05e7\u05d5\u05e8 \u05de\u05d5\u05e4\u05e8\u05d3\u05d5\u05ea \u05d1-|"
+    },
+    "source_description": {
+      "type": "string",
+      "description": "\u05ea\u05d9\u05d0\u05d5\u05e8 \u05de\u05e7\u05d5\u05e8 \u05d4\u05e0\u05ea\u05d5\u05e0\u05d9\u05dd"
+    },
+    "data_freshness": {
+      "type": "string",
+      "description": "רעננות הנתונים — עדכני / שעות / ימים / ישן"
+    },
+    "source_raw_excerpts": {
+      "type": "string",
+      "description": "JSON array: up to 3 short excerpts from source content that prove the insight"
+    },
+    "reasoning_chain": {
+      "type": "string",
+      "description": "Step-by-step explanation of the agent's reasoning — what signals were combined and why"
+    },
+    "agent_name": {
+      "type": "string",
+      "description": "Which agent produced this insight"
+    },
+    "self_score": {
+      "type": "number",
+      "description": "Agent's own quality rating 0-100 for this insight"
+    }
+  },
+  "required": [
+    "summary"
+  ]
+}

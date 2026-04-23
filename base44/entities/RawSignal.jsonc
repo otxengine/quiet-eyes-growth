@@ -1,0 +1,72 @@
+{
+  "name": "RawSignal",
+  "type": "object",
+  "properties": {
+    "source": {
+      "type": "string",
+      "description": "\u05de\u05e7\u05d5\u05e8 \u05d4\u05e1\u05d9\u05d2\u05e0\u05dc"
+    },
+    "content": {
+      "type": "string",
+      "description": "\u05ea\u05d5\u05db\u05df \u05d4\u05e1\u05d9\u05d2\u05e0\u05dc"
+    },
+    "url": {
+      "type": "string",
+      "description": "\u05db\u05ea\u05d5\u05d1\u05ea URL"
+    },
+    "signal_type": {
+      "type": "string",
+      "enum": [
+        "web_search",
+        "social_mention",
+        "social_review",
+        "competitor_social",
+        "custom_source",
+        "social_trend"
+      ],
+      "description": "\u05e1\u05d5\u05d2 \u05d4\u05e1\u05d9\u05d2\u05e0\u05dc"
+    },
+    "platform": {
+      "type": "string",
+      "description": "\u05e4\u05dc\u05d8\u05e4\u05d5\u05e8\u05de\u05d4"
+    },
+    "sentiment": {
+      "type": "string",
+      "enum": [
+        "positive",
+        "negative",
+        "neutral",
+        "unknown"
+      ],
+      "default": "unknown",
+      "description": "\u05e1\u05e0\u05d8\u05d9\u05de\u05e0\u05d8"
+    },
+    "checksum_hash": {
+      "type": "string",
+      "description": "\u05d7\u05ea\u05d9\u05de\u05d4 \u05d9\u05d9\u05d7\u05d5\u05d3\u05d9\u05ea"
+    },
+    "detected_at": {
+      "type": "string",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da \u05d6\u05d9\u05d4\u05d5\u05d9"
+    },
+    "linked_business": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05d4\u05e2\u05e1\u05e7 \u05d4\u05de\u05e7\u05d5\u05e9\u05e8"
+    },
+    "linked_location": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05e1\u05e0\u05d9\u05e3 \u05de\u05e7\u05d5\u05e9\u05e8"
+    },
+    "source_origin": {
+      "type": "string",
+      "enum": ["tavily", "apify", "google_places", "llm", "manual", "webhook"],
+      "default": "tavily",
+      "description": "מקור ה-URL — tavily/apify/google_places = אמיתי, llm = ממוצא"
+    },
+    "relevance_score": {
+      "type": "number",
+      "description": "0-100 how relevant this signal is to the business — set by collectWebSignals"
+    }
+  },
+  "required": []
+}

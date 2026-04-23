@@ -1,0 +1,70 @@
+{
+  "name": "ProactiveAlert",
+  "type": "object",
+  "properties": {
+    "linked_business": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05d4\u05e2\u05e1\u05e7"
+    },
+    "alert_type": {
+      "type": "string",
+      "enum": [
+        "action_needed",
+        "opportunity",
+        "risk",
+        "milestone",
+        "challenge"
+      ],
+      "description": "\u05e1\u05d5\u05d2 \u05d4\u05d4\u05ea\u05e8\u05d0\u05d4"
+    },
+    "title": {
+      "type": "string",
+      "description": "\u05db\u05d5\u05ea\u05e8\u05ea"
+    },
+    "description": {
+      "type": "string",
+      "description": "\u05ea\u05d9\u05d0\u05d5\u05e8 \u05de\u05e4\u05d5\u05e8\u05d8"
+    },
+    "suggested_action": {
+      "type": "string",
+      "description": "\u05e4\u05e2\u05d5\u05dc\u05d4 \u05de\u05d5\u05e6\u05e2\u05ea"
+    },
+    "action_url": {
+      "type": "string",
+      "description": "\u05e7\u05d9\u05e9\u05d5\u05e8 \u05dc\u05e2\u05de\u05d5\u05d3 \u05e8\u05dc\u05d5\u05d5\u05e0\u05d8\u05d9"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ],
+      "description": "\u05e2\u05d3\u05d9\u05e4\u05d5\u05ea"
+    },
+    "source_agent": {
+      "type": "string",
+      "description": "\u05e9\u05dd \u05d4\u05e1\u05d5\u05db\u05df \u05e9\u05d9\u05e6\u05e8"
+    },
+    "is_dismissed": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05d4\u05d0\u05dd \u05e0\u05e1\u05d2\u05e8"
+    },
+    "is_acted_on": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u05d4\u05d0\u05dd \u05d1\u05d5\u05e6\u05e2\u05d4 \u05e4\u05e2\u05d5\u05dc\u05d4"
+    },
+    "created_at": {
+      "type": "string",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da \u05d9\u05e6\u05d9\u05e8\u05d4"
+    }
+  },
+  "required": [
+    "linked_business",
+    "alert_type",
+    "title"
+  ]
+}

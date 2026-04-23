@@ -1,0 +1,83 @@
+{
+  "name": "Review",
+  "type": "object",
+  "properties": {
+    "platform": {
+      "type": "string",
+      "description": "\u05e4\u05dc\u05d8\u05e4\u05d5\u05e8\u05de\u05d4"
+    },
+    "rating": {
+      "type": "number",
+      "description": "\u05d3\u05d9\u05e8\u05d5\u05d2 (1-5)"
+    },
+    "text": {
+      "type": "string",
+      "description": "\u05ea\u05d5\u05db\u05df \u05d4\u05d1\u05d9\u05e7\u05d5\u05e8\u05ea"
+    },
+    "reviewer_name": {
+      "type": "string",
+      "description": "\u05e9\u05dd \u05d4\u05de\u05d1\u05e7\u05e8"
+    },
+    "sentiment": {
+      "type": "string",
+      "enum": [
+        "positive",
+        "negative",
+        "neutral"
+      ],
+      "description": "\u05e1\u05e0\u05d8\u05d9\u05de\u05e0\u05d8"
+    },
+    "suggested_response": {
+      "type": "string",
+      "description": "\u05ea\u05d2\u05d5\u05d1\u05d4 \u05de\u05d5\u05e6\u05e2\u05ea"
+    },
+    "response_status": {
+      "type": "string",
+      "default": "pending",
+      "description": "\u05e1\u05d8\u05d8\u05d5\u05e1 \u05ea\u05d2\u05d5\u05d1\u05d4"
+    },
+    "source_url": {
+      "type": "string",
+      "description": "\u05e7\u05d9\u05e9\u05d5\u05e8 \u05dc\u05de\u05e7\u05d5\u05e8 \u05d4\u05d1\u05d9\u05e7\u05d5\u05e8\u05ea"
+    },
+    "created_at": {
+      "type": "string",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da \u05d9\u05e6\u05d9\u05e8\u05d4"
+    },
+    "linked_business": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05d4\u05e2\u05e1\u05e7 \u05d4\u05de\u05e7\u05d5\u05e9\u05e8"
+    },
+    "linked_location": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05e1\u05e0\u05d9\u05e3 \u05de\u05e7\u05d5\u05e9\u05e8"
+    },
+    "source_origin": {
+      "type": "string",
+      "enum": ["google_places", "tavily", "apify", "manual"],
+      "default": "manual",
+      "description": "מקור הביקורת — google_places/tavily/apify = אמיתי, manual = הוזן ידנית"
+    },
+    "google_review_id": {
+      "type": "string",
+      "description": "מזהה ייחודי של ביקורת ב-Google"
+    },
+    "is_verified": {
+      "type": "boolean",
+      "default": false,
+      "description": "האם הביקורת אומתה מול המקור"
+    },
+    "is_historical": {
+      "type": "boolean",
+      "default": false,
+      "description": "ביקורת ישנה (מעל 180 יום) — מוצגת בארכיב ביקורות"
+    },
+    "review_year": {
+      "type": "number",
+      "description": "שנת הביקורת"
+    }
+  },
+  "required": [
+    "text"
+  ]
+}

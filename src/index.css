@@ -1,0 +1,265 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Hebrew:wght@400;500;600;700;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* OTXEngine — RTL Hebrew global rules */
+body {
+  direction: rtl;
+  text-align: right;
+  font-family: 'Noto Sans Hebrew', 'Heebo', sans-serif;
+}
+* {
+  box-sizing: border-box;
+  /* Thin, barely-visible scrollbar on all elements */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,0.15) transparent;
+}
+/* Prevent horizontal scroll at all viewports */
+html, body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+/* Hide stale-agents warning banner (shown only when agents haven't run in 8h) */
+.agents-stale-banner { display: none !important; }
+
+@layer base {
+  :root {
+    --font-heebo: 'Heebo', sans-serif;
+    --font-inter: 'Inter', sans-serif;
+
+    /* Warm off-white background */
+    --background: 36 20% 97%;
+    --background-card: 0 0% 100%;
+    --background-card-hover: 36 14% 95%;
+    --background-surface: 36 14% 96%;
+
+    /* Deep ink foreground */
+    --foreground: 222 47% 11%;
+    --foreground-secondary: 220 9% 36%;
+    --foreground-muted: 220 9% 55%;
+
+    /* Deep indigo primary */
+    --primary: 243 75% 59%;
+    --primary-foreground: 0 0% 100%;
+
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 0%;
+
+    --danger: 0 72% 51%;
+    --danger-foreground: 0 0% 100%;
+
+    --info: 220 9% 55%;
+    --info-foreground: 0 0% 100%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 55%;
+
+    --accent: 243 75% 59%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;
+    --border-hover: 220 13% 82%;
+
+    --input: 220 13% 91%;
+    --ring: 243 75% 59%;
+
+    --radius: 0.5rem;
+
+    /* Dark sidebar — Notion/Linear style */
+    --sidebar-background: 220 18% 13%;
+    --sidebar-foreground: 220 14% 85%;
+    --sidebar-foreground-muted: 220 10% 50%;
+    --sidebar-primary: 243 75% 68%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 15% 20%;
+    --sidebar-accent-active: 220 15% 24%;
+    --sidebar-accent-foreground: 220 14% 90%;
+    --sidebar-border: 220 15% 20%;
+    --sidebar-ring: 243 75% 59%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    direction: rtl;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-heebo);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  .pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+  
+  .slide-up {
+    animation: slide-up 0.5s ease-out forwards;
+  }
+  
+  .fade-in {
+    animation: fade-in 0.5s ease-out forwards;
+  }
+  
+  .card-enter {
+    animation: card-enter 0.6s ease-out forwards;
+  }
+  
+  .scanning-pulse {
+    animation: scanning-pulse 2s ease-in-out infinite;
+  }
+  
+  .card-hover {
+    @apply transition-all duration-200;
+  }
+  .card-hover:hover {
+    border-color: hsl(var(--border-hover));
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Refined card system */
+  .card-base {
+    @apply bg-white rounded-xl border border-border transition-all duration-200;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  }
+  .card-base:hover {
+    border-color: hsl(var(--border-hover));
+    box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.05);
+  }
+
+  .card-interactive {
+    @apply card-base cursor-pointer;
+  }
+  .card-interactive:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.06);
+  }
+
+  /* Micro-interactions */
+  .btn-subtle {
+    @apply transition-all duration-150 active:scale-[0.97];
+  }
+
+  .fade-in-up {
+    animation: fade-in-up 0.4s ease-out both;
+  }
+
+  .stagger-1 { animation-delay: 0.05s; }
+  .stagger-2 { animation-delay: 0.1s; }
+  .stagger-3 { animation-delay: 0.15s; }
+  .stagger-4 { animation-delay: 0.2s; }
+
+  /* Card elevation system */
+  .card-flat {
+    @apply bg-white rounded-xl border border-border;
+  }
+  .card-lifted {
+    @apply bg-white rounded-xl border border-border;
+    box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  }
+  .card-lifted:hover {
+    box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.08), 0 2px 4px 0 rgba(0, 0, 0, 0.04);
+  }
+
+  /* Stat card with top accent border */
+  .card-stat {
+    @apply card-base relative overflow-hidden;
+  }
+  .card-stat::before {
+    content: '';
+    @apply absolute top-0 left-0 right-0 h-[3px] rounded-t-xl;
+    background: hsl(var(--primary));
+  }
+  .card-stat-success::before { background: hsl(var(--success)); }
+  .card-stat-warning::before { background: hsl(var(--warning)); }
+  .card-stat-danger::before { background: hsl(var(--danger)); }
+
+  /* Signal border utility classes */
+  .signal-border-threat {
+    @apply border-r-[3px] border-r-red-400;
+  }
+  .signal-border-opportunity {
+    @apply border-r-[3px] border-r-emerald-400;
+  }
+  .signal-border-trend {
+    @apply border-r-[3px] border-r-amber-400;
+  }
+  .signal-border-mention {
+    @apply border-r-[3px] border-r-blue-400;
+  }
+  .signal-border-competitor_move {
+    @apply border-r-[3px] border-r-purple-400;
+  }
+  .signal-border-default {
+    @apply border-r-[3px] border-r-border;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(30px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes scanning-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.2); opacity: 1; }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}

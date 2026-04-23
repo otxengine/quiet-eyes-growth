@@ -1,0 +1,31 @@
+{
+  "name": "ReviewRequest",
+  "type": "object",
+  "properties": {
+    "customer_name": {
+      "type": "string",
+      "description": "\u05e9\u05dd \u05d4\u05dc\u05e7\u05d5\u05d7"
+    },
+    "phone": {
+      "type": "string",
+      "description": "\u05de\u05e1\u05e4\u05e8 \u05d8\u05dc\u05e4\u05d5\u05df"
+    },
+    "platform": {
+      "type": "string",
+      "description": "\u05e4\u05dc\u05d8\u05e4\u05d5\u05e8\u05de\u05d4"
+    },
+    "sent_at": {
+      "type": "string",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da \u05e9\u05dc\u05d9\u05d7\u05d4"
+    },
+    "linked_business": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05d4\u05e2\u05e1\u05e7 \u05d4\u05de\u05e7\u05d5\u05e9\u05e8"
+    }
+  },
+  "required": [
+    "customer_name",
+    "phone",
+    "linked_business"
+  ]
+}

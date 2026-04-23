@@ -1,0 +1,86 @@
+{
+  "name": "SocialSignal",
+  "type": "object",
+  "properties": {
+    "linked_business": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05d4\u05e2\u05e1\u05e7 \u05d4\u05de\u05e7\u05d5\u05e9\u05e8"
+    },
+    "platform": {
+      "type": "string",
+      "enum": [
+        "facebook",
+        "instagram",
+        "tiktok"
+      ],
+      "description": "\u05e4\u05dc\u05d8\u05e4\u05d5\u05e8\u05de\u05d4"
+    },
+    "post_id": {
+      "type": "string",
+      "description": "\u05de\u05d6\u05d4\u05d4 \u05d4\u05e4\u05d5\u05e1\u05d8 \u05d1\u05e4\u05dc\u05d8\u05e4\u05d5\u05e8\u05de\u05d4"
+    },
+    "content": {
+      "type": "string",
+      "description": "\u05ea\u05d5\u05db\u05df \u05d4\u05e4\u05d5\u05e1\u05d8"
+    },
+    "post_url": {
+      "type": "string",
+      "description": "\u05e7\u05d9\u05e9\u05d5\u05e8 \u05dc\u05e4\u05d5\u05e1\u05d8"
+    },
+    "likes": {
+      "type": "number",
+      "default": 0,
+      "description": "\u05db\u05de\u05d5\u05ea \u05dc\u05d9\u05d9\u05e7\u05d9\u05dd"
+    },
+    "comments": {
+      "type": "number",
+      "default": 0,
+      "description": "\u05db\u05de\u05d5\u05ea \u05ea\u05d2\u05d5\u05d1\u05d5\u05ea"
+    },
+    "shares": {
+      "type": "number",
+      "default": 0,
+      "description": "\u05db\u05de\u05d5\u05ea \u05e9\u05d9\u05ea\u05d5\u05e4\u05d9\u05dd"
+    },
+    "views": {
+      "type": "number",
+      "default": 0,
+      "description": "\u05db\u05de\u05d5\u05ea \u05e6\u05e4\u05d9\u05d5\u05ea"
+    },
+    "post_date": {
+      "type": "string",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da \u05e4\u05e8\u05e1\u05d5\u05dd"
+    },
+    "media_type": {
+      "type": "string",
+      "enum": [
+        "text",
+        "image",
+        "video",
+        "reel",
+        "story",
+        "carousel"
+      ],
+      "description": "\u05e1\u05d5\u05d2 \u05ea\u05d5\u05db\u05df"
+    },
+    "sentiment": {
+      "type": "string",
+      "enum": [
+        "positive",
+        "negative",
+        "neutral",
+        "unknown"
+      ],
+      "default": "unknown",
+      "description": "\u05e1\u05e0\u05d8\u05d9\u05de\u05e0\u05d8"
+    },
+    "fetched_at": {
+      "type": "string",
+      "description": "\u05ea\u05d0\u05e8\u05d9\u05da \u05de\u05e9\u05d9\u05db\u05d4"
+    }
+  },
+  "required": [
+    "linked_business",
+    "platform"
+  ]
+}
