@@ -9,6 +9,13 @@
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+// Keep backend alive on Render free plan (ping every 10 minutes)
+if (import.meta.env.VITE_API_URL) {
+  setInterval(() => {
+    fetch(`${API_BASE}/health`, { method: 'GET' }).catch(() => {});
+  }, 10 * 60 * 1000);
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 async function getToken() {
