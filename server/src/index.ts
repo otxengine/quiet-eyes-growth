@@ -45,9 +45,12 @@ app.use(express.json({
 
 // Only mount Clerk middleware when a real secret key is configured
 const clerkKey = process.env.CLERK_SECRET_KEY || '';
-if (clerkKey && !clerkKey.includes('your_key_here')) {
+const clerkPubKey = process.env.CLERK_PUBLISHABLE_KEY || '';
+const clerkEnabled = clerkKey && !clerkKey.includes('your_key_here') &&
+                     clerkPubKey && !clerkPubKey.includes('your_key_here');
+if (clerkEnabled) {
   const { clerkMiddleware } = require('@clerk/express');
-  app.use(clerkMiddleware({ publishableKey: process.env.CLERK_PUBLISHABLE_KEY }));
+  app.use(clerkMiddleware({ publishableKey: clerkPubKey }));
   console.log('Clerk auth enabled');
 } else {
   console.log('Clerk not configured — running in dev mode (all requests as dev-user)');
