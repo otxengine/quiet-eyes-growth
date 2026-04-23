@@ -47,7 +47,7 @@ app.use(express.json({
 const clerkKey = process.env.CLERK_SECRET_KEY || '';
 if (clerkKey && !clerkKey.includes('your_key_here')) {
   const { clerkMiddleware } = require('@clerk/express');
-  app.use(clerkMiddleware());
+  app.use(clerkMiddleware({ publishableKey: process.env.CLERK_PUBLISHABLE_KEY }));
   console.log('Clerk auth enabled');
 } else {
   console.log('Clerk not configured — running in dev mode (all requests as dev-user)');
@@ -69,6 +69,12 @@ app.use('/api/kpi', kpiRouter);
 app.use('/api/oauth', oauthRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
+// Global JSON error handler — must be last, catches Clerk + any other middleware errors
+app.use((err: any, _req: any, res: any, _next: any) => {
+  console.error('Unhandled error:', err.message);
+  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+});
 
 // Debug endpoint — shows all data counts for a business profile
 app.get('/api/debug/:bpId', async (req, res) => {
