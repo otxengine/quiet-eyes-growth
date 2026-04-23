@@ -34,10 +34,26 @@ async function apiFetch(path, options = {}) {
     ...(options.headers || {}),
   };
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const contentType = res.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
+
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw Object.assign(new Error(err.error || res.statusText), { status: res.status, data: err });
+    if (isJson) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw Object.assign(new Error(err.error || res.statusText), { status: res.status, data: err });
+    }
+    // Non-JSON error (e.g. HTML from Render while service is waking up)
+    if (res.status === 503 || res.status === 502 || !isJson) {
+      throw Object.assign(new Error('השרת מתעורר, נסה שוב בעוד 30 שניות'), { status: res.status });
+    }
+    throw Object.assign(new Error(res.statusText || 'Server error'), { status: res.status });
   }
+
+  if (!isJson) {
+    // Render "Starting..." HTML page returned as 200 — service is waking up
+    throw Object.assign(new Error('השרת מתעורר, נסה שוב בעוד 30 שניות'), { status: 503 });
+  }
+
   return res.json();
 }
 
