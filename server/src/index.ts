@@ -21,6 +21,8 @@ import oauthRouter from './routes/oauth';
 // Wire up all event choreography handlers at startup
 registerAllHandlers();
 
+import { startScheduler } from './scheduler';
+
 const app = express();
 const PORT = process.env.PORT || 3002;
 
@@ -73,6 +75,31 @@ app.use('/api/oauth', oauthRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
+// External cron trigger — POST /api/cron/run?secret=XXX
+// Called by cron-job.org every 14 minutes to keep Render alive + run pipelines
+app.post('/api/cron/run', async (_req, res) => {
+  const secret = _req.query.secret as string;
+  if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  try {
+    const { prisma: db } = await import('./db');
+    const profiles = await db.businessProfile.findMany({
+      where: { onboarding_completed: true },
+      select: { id: true },
+    });
+    res.json({ triggered: profiles.length, ids: profiles.map(p => p.id) });
+    // Run pipelines after responding so the HTTP call doesn't time out
+    const { runPipeline } = await import('./orchestration/MasterOrchestrator');
+    for (const p of profiles) {
+      runPipeline(p.id, { mode: 'full', triggeredBy: 'cron', skipStages: [], forceRun: false })
+        .catch(() => {});
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Global JSON error handler — must be last, catches Clerk + any other middleware errors
 app.use((err: any, _req: any, res: any, _next: any) => {
   console.error('Unhandled error:', err.message);
@@ -101,4 +128,5 @@ app.get('/api/debug/:bpId', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  startScheduler();
 });
