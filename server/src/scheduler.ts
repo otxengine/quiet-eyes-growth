@@ -33,8 +33,8 @@ async function getActiveProfiles(): Promise<string[]> {
 
 async function runForAll(
   label: string,
-  mode: 'full' | 'decision' = 'full',
-  skipStages: string[] = [],
+  mode: 'full' | 'partial' | 'signal_only' | 'decision_only' = 'full',
+  skipStages: import('../models').PipelineStage[] = [],
 ) {
   const ids = await getActiveProfiles();
   if (ids.length === 0) {
@@ -49,7 +49,7 @@ async function runForAll(
     const batch = ids.slice(i, i + CONCURRENCY);
     await Promise.allSettled(
       batch.map(id =>
-        runPipeline(id, { mode, triggeredBy: 'scheduler', skipStages, forceRun: false })
+        runPipeline(id, { mode, triggeredBy: 'schedule', skipStages, forceRun: false })
           .then(() => logger.info(`${label}: done`, { id }))
           .catch(err => logger.error(`${label}: failed`, { id, error: err.message })),
       ),
@@ -65,19 +65,14 @@ export function startScheduler() {
     runForAll('HourlyPipeline', 'full', []);
   });
 
-  // ── Every 6 hours: lead generation + data freshness ─────────────────────────
+  // ── Every 6 hours: signal_only (leads + freshness) ──────────────────────────
   cron.schedule('0 */6 * * *', () => {
-    runForAll('LeadGenCycle', 'full', [
-      'MarketIntelligence', 'Competitors', 'Trends', 'Predictions',
-    ]);
+    runForAll('LeadGenCycle', 'signal_only');
   });
 
-  // ── Every 24 hours at 03:00 UTC: ML learning ────────────────────────────────
+  // ── Every 24 hours at 03:00 UTC: decision_only (ML learning) ────────────────
   cron.schedule('0 3 * * *', () => {
-    runForAll('DailyLearning', 'full', [
-      'MarketIntelligence', 'Competitors', 'Trends', 'Predictions',
-      'Signals', 'Opportunities', 'Threats',
-    ]);
+    runForAll('DailyLearning', 'decision_only');
   });
 
   // ── Every 15 min: keep-alive log ─────────────────────────────────────────────

@@ -92,7 +92,7 @@ app.post('/api/cron/run', async (_req, res) => {
     // Run pipelines after responding so the HTTP call doesn't time out
     const { runPipeline } = await import('./orchestration/MasterOrchestrator');
     for (const p of profiles) {
-      runPipeline(p.id, { mode: 'full', triggeredBy: 'cron', skipStages: [], forceRun: false })
+      runPipeline(p.id, { mode: 'full', triggeredBy: 'schedule', skipStages: [], forceRun: false })
         .catch(() => {});
     }
   } catch (err: any) {
