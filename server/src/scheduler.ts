@@ -10,8 +10,9 @@
 
 import cron from 'node-cron';
 import { prisma } from './db';
-import { runPipeline } from './orchestration/MasterOrchestrator';
+import { runPipeline, OrchestratorOptions } from './orchestration/MasterOrchestrator';
 import { createLogger } from './infra/logger';
+import type { PipelineStage } from './models';
 
 const logger = createLogger('Scheduler');
 
@@ -33,8 +34,8 @@ async function getActiveProfiles(): Promise<string[]> {
 
 async function runForAll(
   label: string,
-  mode: 'full' | 'partial' | 'signal_only' | 'decision_only' = 'full',
-  skipStages: import('../models').PipelineStage[] = [],
+  mode: OrchestratorOptions['mode'] = 'full',
+  skipStages: PipelineStage[] = [],
 ) {
   const ids = await getActiveProfiles();
   if (ids.length === 0) {
