@@ -58,6 +58,7 @@ import { reviewRequestAutomation } from './reviewRequestAutomation';
 import { googleRankMonitor } from './googleRankMonitor';
 import { smartLeadNurture } from './smartLeadNurture';
 import { contentCalendarAgent } from './contentCalendarAgent';
+import { competitorIntelAgent } from './competitorIntelAgent';
 
 const router = Router();
 
@@ -121,6 +122,7 @@ const FUNCTION_MAP: Record<string, any> = {
   googleRankMonitor,
   smartLeadNurture,
   contentCalendarAgent,
+  competitorIntelAgent,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,

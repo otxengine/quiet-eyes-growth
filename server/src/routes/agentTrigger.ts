@@ -17,6 +17,7 @@ import { reviewRequestAutomation } from './functions/reviewRequestAutomation';
 import { googleRankMonitor } from './functions/googleRankMonitor';
 import { smartLeadNurture } from './functions/smartLeadNurture';
 import { contentCalendarAgent } from './functions/contentCalendarAgent';
+import { competitorIntelAgent } from './functions/competitorIntelAgent';
 import {
   runViralCatalyst,
   runInfluenceIntegrity,
@@ -69,12 +70,14 @@ const AGENT_HANDLERS: Record<string, (req: Request, res: Response) => any> = {
   googleRankMonitor,
   smartLeadNurture,
   contentCalendarAgent,
+  competitorIntelAgent,
   // By nameHe alias
   Respond:   autoRespondToReviews,
   Reviews:   reviewRequestAutomation,
   RankMon:   googleRankMonitor,
   Nurture:   smartLeadNurture,
   Calendar:  contentCalendarAgent,
+  CompIntel: competitorIntelAgent,
   // Layer 7 OTX agents — by functionName
   runViralCatalyst,
   runInfluenceIntegrity,
