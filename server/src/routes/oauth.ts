@@ -165,17 +165,36 @@ async function handleFacebookCallback(code: string, platform: string, businessId
     );
     const igData: any = igRes.ok ? await igRes.json() : {};
     const igId = igData?.instagram_business_account?.id ?? null;
+    const resolvedIgId = igId ?? pageId;
 
     await upsertSocialAccount(businessId, 'instagram_business', {
       account_name: pageName,
       access_token: pageToken,
-      page_id: igId ?? pageId,
+      page_id: resolvedIgId,
+    });
+
+    // Bridge: write tokens to BusinessProfile so InstagramPublisher can read them
+    await prisma.businessProfile.updateMany({
+      where: { id: businessId },
+      data: {
+        instagram_access_token: pageToken,
+        instagram_page_id: resolvedIgId,
+      },
     });
   } else {
     await upsertSocialAccount(businessId, 'facebook_page', {
       account_name: pageName,
       access_token: pageToken,
       page_id: pageId,
+    });
+
+    // Bridge: write tokens to BusinessProfile so InstagramPublisher can read them
+    await prisma.businessProfile.updateMany({
+      where: { id: businessId },
+      data: {
+        facebook_page_token: pageToken,
+        facebook_page_id: pageId,
+      },
     });
   }
 
@@ -290,6 +309,20 @@ router.post('/disconnect', async (req: Request, res: Response) => {
         data: { is_connected: false, access_token: null },
       });
     }
+
+    // Clear corresponding BusinessProfile fields
+    const bpClear: Record<string, null> = {};
+    if (platform === 'instagram_business') {
+      bpClear['instagram_access_token'] = null;
+      bpClear['instagram_page_id'] = null;
+    } else if (platform === 'facebook_page') {
+      bpClear['facebook_page_token'] = null;
+      bpClear['facebook_page_id'] = null;
+    }
+    if (Object.keys(bpClear).length > 0) {
+      await prisma.businessProfile.updateMany({ where: { id: businessId }, data: bpClear });
+    }
+
     return res.json({ ok: true });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
