@@ -107,6 +107,88 @@ app.use((err: any, _req: any, res: any, _next: any) => {
 });
 
 // Debug endpoint — shows all data counts for a business profile
+// Lead-finding diagnostic — shows exactly what Tavily returns and what the LLM says
+app.get('/api/debug/leads/:bpId', async (req, res) => {
+  const bpId = req.params.bpId;
+  const { prisma: db } = await import('./db');
+  const { invokeLLM } = await import('./lib/llm');
+
+  const TAVILY_KEY = process.env.TAVILY_API_KEY || '';
+  const report: any = {
+    env: {
+      tavily_key_set: !!TAVILY_KEY,
+      anthropic_key_set: !!process.env.ANTHROPIC_API_KEY,
+      openai_key_set: !!process.env.OPENAI_API_KEY,
+    },
+    profile: null,
+    tavily_results: [],
+    llm_sample: null,
+    error: null,
+  };
+
+  try {
+    const profiles = await db.businessProfile.findMany({ where: { id: bpId } });
+    const profile = profiles[0];
+    if (!profile) return res.json({ error: 'profile not found', ...report });
+    report.profile = { name: profile.name, category: profile.category, city: profile.city };
+
+    if (!TAVILY_KEY) {
+      report.error = 'TAVILY_API_KEY is not set — lead finding is completely disabled';
+      return res.json(report);
+    }
+
+    // Run 1 search query and show raw results
+    const query = `${profile.category} ${profile.city} מחפש המלצה`;
+    report.query_tested = query;
+
+    const tavilyRes = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: TAVILY_KEY, query, search_depth: 'basic', max_results: 5 }),
+    });
+
+    if (!tavilyRes.ok) {
+      const errBody = await tavilyRes.text();
+      report.error = `Tavily returned ${tavilyRes.status}: ${errBody}`;
+      return res.json(report);
+    }
+
+    const tavilyData: any = await tavilyRes.json();
+    const results = tavilyData.results || [];
+    report.tavily_results_count = results.length;
+    report.tavily_results = results.map((r: any) => ({
+      title: r.title,
+      url: r.url,
+      content_preview: (r.content || '').substring(0, 200),
+    }));
+
+    // Test LLM on first result
+    if (results.length > 0) {
+      const first = results[0];
+      const text = first.content || first.title || '';
+      try {
+        const llmResult = await invokeLLM({
+          prompt: `Extract lead information from this text. Only extract what is EXPLICITLY stated — do NOT invent or assume.
+
+TEXT: "${text.substring(0, 600)}"
+URL: ${first.url || ''}
+
+Return JSON: {"service_needed":"","urgency":"","budget_mentioned":"","person_name":"","platform":"facebook|instagram|forum|web","is_lead":true}
+Set is_lead=false if no clear intent to purchase/hire a service.`,
+          response_json_schema: { type: 'object' },
+        });
+        report.llm_sample = llmResult;
+      } catch (e: any) {
+        report.llm_error = e.message;
+      }
+    }
+  } catch (e: any) {
+    report.error = e.message;
+  }
+
+  return res.json(report);
+});
+
 app.get('/api/debug/:bpId', async (req, res) => {
   const { prisma } = await import('./db');
   const bpId = req.params.bpId;
