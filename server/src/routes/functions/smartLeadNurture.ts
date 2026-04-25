@@ -32,14 +32,14 @@ export async function smartLeadNurture(req: Request, res: Response) {
     const fortyEightHoursAgo = new Date(Date.now() - 48 * 3600000);
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600000);
 
-    // Find leads that are 'contacted' and haven't been updated in 48h+
+    // Find leads that are 'contacted' and were created 48h+ ago without progressing
     const staleLeads = await prisma.lead.findMany({
       where: {
         linked_business: businessProfileId,
         status: 'contacted',
-        updated_date: { lte: fortyEightHoursAgo },
+        created_date: { lte: fortyEightHoursAgo },
       },
-      orderBy: { updated_date: 'asc' },
+      orderBy: { created_date: 'asc' },
       take: 10,
     });
 
@@ -47,7 +47,7 @@ export async function smartLeadNurture(req: Request, res: Response) {
 
     for (const lead of staleLeads) {
       try {
-        const isCold = lead.updated_date <= sevenDaysAgo;
+        const isCold = lead.created_date <= sevenDaysAgo;
         const customerName = lead.name || 'ליד';
         const serviceNeeded = lead.service_needed || category;
 
