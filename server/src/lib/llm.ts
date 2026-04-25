@@ -53,11 +53,12 @@ async function _callAnthropic(
   response_json_schema: any,
 ): Promise<any> {
   const systemPrompt = response_json_schema
-    ? 'You are a helpful assistant. Return ONLY valid JSON matching the requested schema. No markdown, no explanation.'
+    ? 'You are a helpful assistant. Return ONLY valid JSON. No markdown fences, no explanation, no extra text — just the JSON object.'
     : 'You are a helpful assistant.';
 
+  // Claude 4.x does not support assistant-turn prefill.
+  // We rely on the system prompt + user prompt to get JSON back directly.
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: prompt }];
-  if (response_json_schema) messages.push({ role: 'assistant', content: '{' });
 
   const response = await anthropic.messages.create({
     model: modelId,
@@ -66,7 +67,7 @@ async function _callAnthropic(
     messages,
   });
 
-  const text = (response_json_schema ? '{' : '') + (response.content[0] as any).text;
+  const text = (response.content[0] as any).text || '';
 
   if (response_json_schema) {
     return _parseJson(text);

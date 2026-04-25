@@ -2,22 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
-
-const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
-
-async function tavilySearch(query: string, maxResults = 7): Promise<any[]> {
-  if (!TAVILY_API_KEY) return [];
-  try {
-    const res = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: TAVILY_API_KEY, query, search_depth: 'basic', max_results: maxResults }),
-    });
-    if (!res.ok) return [];
-    const data: any = await res.json();
-    return data.results || [];
-  } catch { return []; }
-}
+import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 
 /**
  * googleRankMonitor — estimates the business's Google local ranking vs competitors
@@ -36,9 +21,14 @@ export async function googleRankMonitor(req: Request, res: Response) {
 
     const { name, category, city } = profile;
 
+    if (isTavilyRateLimited()) {
+      await writeAutomationLog('googleRankMonitor', businessProfileId, startTime, 0);
+      return res.json({ note: 'Tavily rate limit reached' });
+    }
+
     // Search for local business results
     const searchQuery = `${category} ${city} גוגל ביקורות מומלצים`;
-    const results = await tavilySearch(searchQuery, 10);
+    const results = await tavilySearch(searchQuery, 7);
 
     // Try to find business position in results
     let rankEstimate = 10; // default: not in top 10

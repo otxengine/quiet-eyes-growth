@@ -3,22 +3,7 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
-
-const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
-
-async function tavilySearch(query: string, maxResults = 5): Promise<any[]> {
-  if (!TAVILY_API_KEY) return [];
-  try {
-    const res = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: TAVILY_API_KEY, query, search_depth: 'basic', max_results: maxResults }),
-    });
-    if (!res.ok) return [];
-    const data: any = await res.json();
-    return data.results || [];
-  } catch { return []; }
-}
+import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 
 // Intent scoring — used for lead scoring bonus only (not as a gate)
 const INTENT_KEYWORDS_HE = ['מחפש', 'מחפשת', 'צריך', 'צריכה', 'ממליצים', 'המלצה', 'מישהו מכיר', 'יש מישהו', 'אפשר להמליץ', 'בדחיפות', 'הצעת מחיר', 'מחיר', 'כמה עולה'];
@@ -58,24 +43,24 @@ export async function findSocialLeads(req: Request, res: Response) {
     });
     const existingUrls = new Set(existingLeads.map(l => l.source_url).filter(Boolean));
 
+    if (isTavilyRateLimited()) {
+      await writeAutomationLog('findSocialLeads', businessProfileId, startTime, 0);
+      return res.json({ leads_created: 0, note: 'Tavily rate limit reached — upgrade plan' });
+    }
+
+    // Keep query count low to preserve Tavily credits (4 queries × 5 results = 20 calls max)
     const queries = [
-      `${category} ${city} מחפש ממליצים פייסבוק`,
-      `"מחפש ${category}" ${city} קבוצה`,
-      `${category} ${city} מישהו מכיר המלצה`,
-      `${category} ${city} site:facebook.com`,
+      `${category} ${city} מחפש המלצה`,
       `"צריך ${category}" OR "מחפש ${category}" ${city}`,
-      `${category} ${city} פורום המלצה`,
-      `${category} ${city} instagram`,
-      `${category} אזור ${city} הצעת מחיר`,
-      // English-oriented queries (Tavily often returns EN content)
       `${category} ${city} recommendation looking for`,
-      `${category} near ${city} need help`,
+      `${category} near ${city} need help hire`,
     ];
 
     let leadsCreated = 0;
 
     for (const query of queries) {
-      const results = await tavilySearch(query, 7);
+      if (isTavilyRateLimited()) break;
+      const results = await tavilySearch(query, 5);
       for (const r of results) {
         const text = (r.content || r.title || '');
         if (!text || text.length < 30) continue; // skip empty snippets
