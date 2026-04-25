@@ -3,6 +3,8 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
+import { executeOrQueue } from '../../services/execution/executeOrQueue';
+import { getSectorContext, getSectorReviewResponse } from '../../lib/sectorPrompts';
 
 /**
  * autoRespondToReviews — proactively generates suggested responses for
@@ -71,6 +73,10 @@ export async function autoRespondToReviews(req: Request, res: Response) {
 
     for (const review of toProcess) {
       try {
+        const isNegative = (review.rating || 5) <= 3;
+        const sectorCtx = getSectorContext(category);
+        const sectorExample = getSectorReviewResponse(category, isNegative ? 'negative' : 'positive');
+
         // Generate Hebrew response
         const responseText = await invokeLLM({
           prompt: `כתוב תגובה מקצועית בעברית לביקורת הבאה עבור העסק "${name}" (${category}).
@@ -80,6 +86,9 @@ export async function autoRespondToReviews(req: Request, res: Response) {
 טקסט הביקורת: "${review.text.substring(0, 400)}"
 
 הנחיות סגנון: ${toneInstruction}
+${sectorCtx}
+דוגמת תגובה לסקטור זה (התאם לביקורת הספציפית): "${sectorExample}"
+
 כללים:
 - 2-4 משפטים בלבד
 - פתח בפנייה אישית לשם אם ידוע
@@ -95,26 +104,39 @@ export async function autoRespondToReviews(req: Request, res: Response) {
 
         if (!suggestedResponse) continue;
 
-        // Update the review with the suggested response
+        // Always pre-fill suggested_response so user can preview in UI
         await prisma.review.update({
           where: { id: review.id },
-          data: {
-            suggested_response: suggestedResponse,
-            response_status: 'suggested',
-          },
+          data: { suggested_response: suggestedResponse, response_status: 'suggested' },
         });
 
-        // Create a ProactiveAlert with ActionPopup-compatible metadata
         const reviewerLabel = review.reviewer_name || 'לקוח';
-        const alertTitle = `ביקורת שלילית: ${reviewerLabel} (${review.rating || '?'}⭐)`;
 
-        if (!existingTitles.has(alertTitle)) {
+        // Queue or auto-execute the review reply based on autonomy_level
+        const { executed, autoActionId } = await executeOrQueue({
+          businessProfileId,
+          agentName: 'autoRespondToReviews',
+          actionType: 'review_reply',
+          description: `תגובה לביקורת של ${reviewerLabel} (${review.rating || '?'}⭐)`,
+          payload: {
+            reviewId: review.id,
+            replyText: suggestedResponse,
+            googleReviewId: (review as any).google_review_id || null,
+          },
+          revenueImpact: 200,
+          autoExecuteAfterHours: 4,
+        });
+
+        // ProactiveAlert for dashboard visibility (skip if already auto-executed)
+        const alertTitle = `ביקורת שלילית: ${reviewerLabel} (${review.rating || '?'}⭐)`;
+        if (!executed && !existingTitles.has(alertTitle)) {
           const actionMeta = JSON.stringify({
             action_label: 'פרסם תגובה',
             action_type: 'respond',
             prefilled_text: suggestedResponse,
             urgency_hours: 12,
             impact_reason: 'תגובה מהירה לביקורת שלילית מגדילה אמון ב-30% ומונעת השפעה על דירוג',
+            auto_action_id: autoActionId,
           });
 
           await prisma.proactiveAlert.create({

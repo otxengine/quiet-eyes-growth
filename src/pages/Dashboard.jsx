@@ -12,6 +12,7 @@ import MarketIntelColumn from '@/components/dashboard/MarketIntelColumn';
 import QuickLookColumn from '@/components/dashboard/QuickLookColumn';
 import BottomActionBar from '@/components/dashboard/BottomActionBar';
 import ScanOverlay from '@/components/dashboard/ScanOverlay';
+import AutoActionsPanel from '@/components/dashboard/AutoActionsPanel';
 
 export default function Dashboard() {
   const { businessProfile } = useOutletContext();
@@ -119,6 +120,9 @@ export default function Dashboard() {
 
       {/* ROW 1: Morning Briefing */}
       <MorningBriefing businessProfile={businessProfile} stats={stats} />
+
+      {/* ROW 1b: Autonomous Actions Panel */}
+      <AutoActionsPanel bpId={bpId} />
 
       {/* ROW 2: Stat Cards with Context */}
       <ContextStatCards stats={stats} />

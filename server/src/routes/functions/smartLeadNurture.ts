@@ -3,6 +3,8 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
+import { executeOrQueue } from '../../services/execution/executeOrQueue';
+import { getSectorContext } from '../../lib/sectorPrompts';
 
 /**
  * smartLeadNurture — follows up on contacted leads that haven't responded:
@@ -95,11 +97,13 @@ export async function smartLeadNurture(req: Request, res: Response) {
           const followupCount = (lead.followup_count || 0) + 1;
           const angle = followupCount === 1 ? 'הוספת ערך — שאלה קצרה' : 'הזכרה קצרה וידידותית';
 
+          const sectorCtx = getSectorContext(category);
           const messageResult = await invokeLLM({
             prompt: `כתוב הודעת מעקב קצרה בוואטסאפ (2 שורות) מהעסק "${name}" (${category} ב${city}) ל${customerName}.
 
 הקשר: ${customerName} הביע עניין ב${serviceNeeded}, יצרנו קשר פעם ראשונה לפני מספר ימים, ועד כה לא ענה.
 גישה: ${angle}. ${toneInstruction}.
+${sectorCtx}
 אל תהיה לחצן. פנה בשם. משפט שאלה אחד בסוף.
 כתוב רק את טקסט ההודעה.`,
           });
@@ -122,18 +126,15 @@ export async function smartLeadNurture(req: Request, res: Response) {
             },
           });
 
-          // Queue pending WhatsApp alert
-          await prisma.pendingAlert.create({
-            data: {
-              linked_business: businessProfileId,
-              alert_type: 'lead_followup',
-              message: followupMsg,
-              customer_name: customerName,
-              whatsapp_url: waUrl || null,
-              phone,
-              trigger_date: new Date().toISOString(),
-              is_sent: false,
-            },
+          // Leads always require manual approval (isLead: true)
+          const { autoActionId } = await executeOrQueue({
+            businessProfileId,
+            agentName: 'smartLeadNurture',
+            actionType: 'whatsapp_send',
+            description: `מעקב ליד: ${customerName} — ניסיון ${followupCount}`,
+            payload: { phone, message: followupMsg, customerName, leadId: lead.id },
+            revenueImpact: 500,
+            isLead: true,
           });
 
           // ProactiveAlert with ActionPopup metadata
@@ -148,6 +149,7 @@ export async function smartLeadNurture(req: Request, res: Response) {
               prefilled_text: followupMsg,
               urgency_hours: 12,
               impact_reason: 'ליד שלא ענה בפעם הראשונה — 40% מגיבים להודעת מעקב שנייה',
+              auto_action_id: autoActionId,
             });
             await prisma.proactiveAlert.create({
               data: {

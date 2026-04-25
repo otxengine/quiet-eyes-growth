@@ -89,6 +89,15 @@ model BusinessProfile {
   google_place_id_verified   Boolean? @default(false)
   google_rating              Float?
   google_review_count        Float?
+  // Autonomy + API execution
+  autonomy_level             String?  @default("semi_auto") // 'manual' | 'semi_auto' | 'full_auto'
+  whatsapp_phone_number_id   String?  // Meta WhatsApp Cloud API phone number ID
+  whatsapp_access_token      String?  // encrypted Meta system user token
+  google_access_token        String?  // Google Business Profile OAuth token
+  instagram_access_token     String?  // Instagram Graph API token
+  instagram_page_id          String?  // Instagram Business account ID
+  facebook_page_token        String?  // Facebook Page access token
+  facebook_page_id           String?  // Facebook Page ID
 
   @@map("business_profiles")
 }
@@ -136,6 +145,9 @@ model Lead {
   referral_source     String?
   score_reasoning     String?
   suggested_first_message String?
+  // ROI tracking
+  deal_value              Float?   // actual deal value when closed_won (₪)
+  platform_sourced        Boolean? @default(false) // was this lead found by platform agents?
 
   @@map("leads")
 }
@@ -219,6 +231,9 @@ model MarketSignal {
   source_urls        String?
   source_description String?
   data_freshness     String?
+  agent_name         String?  // event/agent name for display
+  source_type        String?  // 'agent' | 'web_scan' | 'social'
+  tags               String?  // comma-separated classification tags
 
   @@map("market_signals")
 }
@@ -665,4 +680,30 @@ model LearningSignal {
   last_seen        String?
 
   @@map("learning_signals")
+}
+
+/**
+ * AutoAction — tracks every autonomous action taken (or pending approval)
+ * by the agent pipeline. Powers the Dashboard ROI feed + approval inbox.
+ *
+ * status flow:
+ *   pending_approval → approved → completed | failed | rejected
+ *   (semi_auto also sets auto_execute_at for delayed auto-execution)
+ *   full_auto goes straight to completed
+ */
+model AutoAction {
+  id               String   @id @default(cuid())
+  created_date     DateTime @default(now())
+  linked_business  String
+  agent_name       String   // which agent created this action
+  action_type      String   // 'review_reply' | 'whatsapp_send' | 'post_publish' | 'review_request'
+  description      String   // human-readable: "תגובה לביקורת של משה כהן (2⭐)"
+  payload          String?  // JSON — action-specific data (review_id, message, phone, etc.)
+  result           String?  // execution result message
+  status           String   @default("pending_approval") // 'pending_approval'|'approved'|'executing'|'completed'|'failed'|'rejected'
+  executed_at      String?
+  revenue_impact   Float?   @default(0) // estimated ₪ impact
+  auto_execute_at  String?  // semi_auto: ISO timestamp for auto-execution if not acted on
+
+  @@map("auto_actions")
 }

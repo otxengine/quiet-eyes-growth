@@ -28,6 +28,7 @@ const ENTITY_MAP: Record<string, string> = {
   MetricsSnapshot: 'metricsSnapshot',
   SocialAccount: 'socialAccount',
   SocialSignal: 'socialSignal',
+  AutoAction: 'autoAction',
 };
 
 function getModel(entity: string): any {

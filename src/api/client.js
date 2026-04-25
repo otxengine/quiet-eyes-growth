@@ -182,8 +182,16 @@ const ENTITIES = [
   'RawSignal', 'Task', 'AutomationLog', 'WeeklyReport', 'HealthScore',
   'OutcomeLog', 'SectorKnowledge', 'Action', 'Prediction', 'ProactiveAlert',
   'PendingAlert', 'ReviewRequest', 'CustomerSurvey', 'BusinessLocation',
-  'MetricsSnapshot', 'SocialAccount', 'SocialSignal',
+  'MetricsSnapshot', 'SocialAccount', 'SocialSignal', 'AutoAction',
 ];
+
+// ── raw API access ────────────────────────────────────────────────────────────
+
+const raw = {
+  async get(path) { return apiFetch(path); },
+  async put(path, data) { return apiFetch(path, { method: 'PUT', body: JSON.stringify(data || {}) }); },
+  async post(path, data) { return apiFetch(path, { method: 'POST', body: JSON.stringify(data || {}) }); },
+};
 
 // ── createClient ──────────────────────────────────────────────────────────────
 
@@ -192,5 +200,5 @@ export function createClient() {
   for (const name of ENTITIES) {
     entities[name] = makeEntityClient(name);
   }
-  return { entities, functions, auth, integrations, feedback };
+  return { entities, functions, auth, integrations, feedback, raw };
 }

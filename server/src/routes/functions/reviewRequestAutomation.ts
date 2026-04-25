@@ -3,6 +3,8 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
+import { executeOrQueue } from '../../services/execution/executeOrQueue';
+import { getSectorContext } from '../../lib/sectorPrompts';
 
 /**
  * reviewRequestAutomation — finds closed/won leads that haven't received a
@@ -68,6 +70,8 @@ export async function reviewRequestAutomation(req: Request, res: Response) {
         const customerName = lead.name || 'לקוח יקר';
         const serviceUsed = lead.service_needed || category;
 
+        const sectorCtx = getSectorContext(category);
+
         // Generate personalized review request message
         const messageResult = await invokeLLM({
           prompt: `כתוב הודעת WhatsApp קצרה בעברית (2-3 שורות) לבקשת ביקורת Google עבור העסק "${name}" (${category} ב${city}).
@@ -75,6 +79,7 @@ export async function reviewRequestAutomation(req: Request, res: Response) {
 שם הלקוח: ${customerName}
 שירות שקיבל: ${serviceUsed}
 ${reviewLink ? `קישור לביקורת: ${reviewLink}` : ''}
+${sectorCtx}
 
 הנחיות: ${toneInstruction}. פנה בשם אם ידוע. תודה אישית על הבחירה בעסק. בקש ביקורת ב-Google בעדינות. ${reviewLink ? 'צרף את הקישור.' : ''}
 כתוב רק את טקסט ההודעה בלבד.`,
@@ -103,43 +108,43 @@ ${reviewLink ? `קישור לביקורת: ${reviewLink}` : ''}
           },
         });
 
-        // Queue a PendingAlert so the owner can send it with one tap
-        await prisma.pendingAlert.create({
-          data: {
-            linked_business: businessProfileId,
-            alert_type: 'review_request',
-            message,
-            customer_name: customerName,
-            whatsapp_url: waUrl || null,
-            phone,
-            trigger_date: new Date().toISOString(),
-            is_sent: false,
-          },
+        // Queue or auto-send the WhatsApp review request based on autonomy_level
+        const { executed, autoActionId } = await executeOrQueue({
+          businessProfileId,
+          agentName: 'reviewRequestAutomation',
+          actionType: 'review_request',
+          description: `בקשת ביקורת Google ל${customerName}`,
+          payload: { phone, message, customerName, leadId: lead.id },
+          revenueImpact: 150,
+          autoExecuteAfterHours: 2,
         });
 
-        // Create ProactiveAlert for the dashboard
-        const actionMeta = JSON.stringify({
-          action_label: `שלח ל${customerName}`,
-          action_type: 'social_post',
-          prefilled_text: message,
-          urgency_hours: 48,
-          impact_reason: 'ביקורת Google נוספת מגדילה את הנראות המקומית וממיר 15% יותר לקוחות',
-        });
+        // ProactiveAlert for dashboard visibility (skip if already auto-sent)
+        if (!executed) {
+          const actionMeta = JSON.stringify({
+            action_label: `שלח ל${customerName}`,
+            action_type: 'social_post',
+            prefilled_text: message,
+            urgency_hours: 48,
+            impact_reason: 'ביקורת Google נוספת מגדילה את הנראות המקומית וממיר 15% יותר לקוחות',
+            auto_action_id: autoActionId,
+          });
 
-        await prisma.proactiveAlert.create({
-          data: {
-            alert_type: 'market_opportunity',
-            title: `בקשת ביקורת: ${customerName}`,
-            description: `${customerName} סיים טיפול — שלח בקשת ביקורת Google`,
-            suggested_action: `שלח הודעת WhatsApp ל${customerName}`,
-            priority: 'medium',
-            source_agent: actionMeta,
-            is_dismissed: false,
-            is_acted_on: false,
-            created_at: new Date().toISOString(),
-            linked_business: businessProfileId,
-          },
-        });
+          await prisma.proactiveAlert.create({
+            data: {
+              alert_type: 'market_opportunity',
+              title: `בקשת ביקורת: ${customerName}`,
+              description: `${customerName} סיים טיפול — שלח בקשת ביקורת Google`,
+              suggested_action: `שלח הודעת WhatsApp ל${customerName}`,
+              priority: 'medium',
+              source_agent: actionMeta,
+              is_dismissed: false,
+              is_acted_on: false,
+              created_at: new Date().toISOString(),
+              linked_business: businessProfileId,
+            },
+          });
+        }
 
         sent++;
       } catch (_) {}

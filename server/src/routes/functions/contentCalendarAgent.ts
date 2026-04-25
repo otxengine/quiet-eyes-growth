@@ -3,6 +3,7 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
+import { getSectorContext } from '../../lib/sectorPrompts';
 
 const DAYS_HE = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
@@ -90,9 +91,12 @@ export async function contentCalendarAgent(req: Request, res: Response) {
       return d.toISOString().split('T')[0];
     });
 
+    const sectorCtx = getSectorContext(category);
+
     // Generate the content calendar
     const calendarResult = await invokeLLM({
       prompt: `אתה מנהל תוכן דיגיטלי לעסקים ישראלים. צור לוח תוכן שבועי עבור "${name}" (${category} ב${city}).
+${sectorCtx}
 
 ${signalContext}
 ${competitorContext}

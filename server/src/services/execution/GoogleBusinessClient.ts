@@ -1,0 +1,92 @@
+/**
+ * GoogleBusinessClient — posts review replies via Google Business Profile API.
+ *
+ * Requires google_access_token on BusinessProfile (OAuth, scope:
+ * https://www.googleapis.com/auth/business.manage).
+ *
+ * If no token is configured, the reply is saved as suggested_response only
+ * and a ProactiveAlert is created for manual publishing.
+ */
+
+import { prisma } from '../../db';
+import { createLogger } from '../../infra/logger';
+
+const logger = createLogger('GoogleBusinessClient');
+
+export interface ReviewReplyPayload {
+  reviewId: string;      // Prisma Review.id
+  replyText: string;     // Hebrew response text
+  googleReviewId?: string; // Google review ID for API call
+}
+
+export interface ReviewReplyResult {
+  published: boolean;
+  method: 'api' | 'suggested_only';
+  error?: string;
+}
+
+export async function postReviewReply(
+  businessProfileId: string,
+  payload: ReviewReplyPayload,
+): Promise<ReviewReplyResult> {
+  const profile = await prisma.businessProfile.findUnique({
+    where: { id: businessProfileId },
+    select: { google_access_token: true, google_place_id: true, name: true },
+  });
+
+  // Update suggested_response regardless
+  await prisma.review.update({
+    where: { id: payload.reviewId },
+    data: {
+      suggested_response: payload.replyText,
+      response_status: 'suggested',
+    },
+  });
+
+  // Try Google Business Profile API if we have token + place_id
+  if (profile?.google_access_token && profile?.google_place_id && payload.googleReviewId) {
+    try {
+      const accountRes = await fetch(
+        'https://mybusinessaccountmanagement.googleapis.com/v1/accounts',
+        { headers: { Authorization: `Bearer ${profile.google_access_token}` } },
+      );
+
+      if (accountRes.ok) {
+        const accountData = await accountRes.json() as any;
+        const accountName = accountData?.accounts?.[0]?.name;
+
+        if (accountName) {
+          const replyRes = await fetch(
+            `https://mybusiness.googleapis.com/v4/${accountName}/locations/-/reviews/${payload.googleReviewId}/reply`,
+            {
+              method: 'PUT',
+              headers: {
+                Authorization: `Bearer ${profile.google_access_token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ comment: payload.replyText }),
+            },
+          );
+
+          if (replyRes.ok) {
+            await prisma.review.update({
+              where: { id: payload.reviewId },
+              data: { response_status: 'published' },
+            });
+            logger.info('Review reply published via Google API', { businessProfileId, reviewId: payload.reviewId });
+            return { published: true, method: 'api' };
+          }
+
+          const errData = await replyRes.json().catch(() => ({})) as any;
+          logger.warn('Google API reply failed', { status: replyRes.status, error: errData?.error?.message });
+        }
+      }
+    } catch (err: any) {
+      logger.warn('Google Business API error', { error: err.message });
+    }
+  }
+
+  // Not published via API — stays as suggested_response for manual approval
+  logger.info('Review reply saved as suggestion (no Google API token)', { businessProfileId, reviewId: payload.reviewId });
+  return { published: false, method: 'suggested_only' };
+}

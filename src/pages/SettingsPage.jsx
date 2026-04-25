@@ -1,8 +1,96 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Save, Loader2 } from 'lucide-react';
+import { Save, Loader2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
+
+const AUTONOMY_OPTIONS = [
+  {
+    value: 'manual',
+    label: 'ידני',
+    desc: 'כל פעולה מחכה לאישורך. שום דבר לא קורה אוטומטית.',
+    color: '#6366f1',
+  },
+  {
+    value: 'semi_auto',
+    label: 'חצי אוטומטי',
+    desc: 'הסוכנים מציעים פעולות — ואחרי 24 שעות (או לפי הגדרה) מבצעים אוטומטית אם לא דחית.',
+    color: '#d97706',
+  },
+  {
+    value: 'full_auto',
+    label: 'מלא אוטומטי',
+    desc: 'הסוכנים פועלים מיד — תגובות לביקורות, שליחת WhatsApp, פרסום תוכן. לידים תמיד ידניים.',
+    color: '#10b981',
+  },
+];
+
+function AutonomySelector({ businessProfile, onSave }) {
+  const current = businessProfile?.autonomy_level || 'semi_auto';
+  const [selected, setSelected] = useState(current);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setSelected(businessProfile?.autonomy_level || 'semi_auto');
+  }, [businessProfile?.autonomy_level]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onSave({ autonomy_level: selected });
+      toast.success('רמת האוטונומיה עודכנה ✓');
+    } catch {
+      toast.error('שגיאה בשמירה');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="card-base p-5">
+      <div className="flex items-center gap-2 mb-1">
+        <Zap className="w-4 h-4 text-primary" />
+        <h2 className="text-[14px] font-semibold text-foreground">רמת אוטונומיה של הסוכנים</h2>
+      </div>
+      <p className="text-[11px] text-foreground-muted mb-4">
+        קבע כמה כסף ומאמץ הסוכנים יחסכו לך אוטומטית. לידים תמיד ידניים ללא קשר להגדרה זו.
+      </p>
+      <div className="flex flex-col gap-2">
+        {AUTONOMY_OPTIONS.map(opt => (
+          <button
+            key={opt.value}
+            onClick={() => setSelected(opt.value)}
+            className={`flex items-start gap-3 p-3 rounded-lg border text-right transition-all ${
+              selected === opt.value
+                ? 'border-2 bg-white'
+                : 'border border-border bg-secondary/30 hover:bg-secondary/60'
+            }`}
+            style={selected === opt.value ? { borderColor: opt.color } : {}}
+          >
+            <span
+              className="w-3.5 h-3.5 rounded-full flex-shrink-0 mt-0.5"
+              style={{ background: selected === opt.value ? opt.color : '#cbd5e1' }}
+            />
+            <div>
+              <p className="text-[12px] font-semibold text-foreground">{opt.label}</p>
+              <p className="text-[10px] text-foreground-muted mt-0.5">{opt.desc}</p>
+            </div>
+          </button>
+        ))}
+      </div>
+      {selected !== current && (
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="mt-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-[11px] font-medium hover:opacity-90 transition-all disabled:opacity-60"
+        >
+          {saving && <Loader2 className="w-3 h-3 animate-spin" />}
+          {saving ? 'שומר...' : 'שמור רמת אוטונומיה'}
+        </button>
+      )}
+    </div>
+  );
+}
 import SettingsBusinessDetails from '@/components/settings/SettingsBusinessDetails';
 import SettingsTone from '@/components/settings/SettingsTone';
 import SettingsLeadCriteria from '@/components/settings/SettingsLeadCriteria';
@@ -227,6 +315,9 @@ export default function SettingsPage() {
       />
       <SettingsLocations businessProfile={businessProfile} />
       <SettingsLearnBusiness businessProfile={businessProfile} />
+
+      {/* Autonomy Level */}
+      <AutonomySelector businessProfile={businessProfile} onSave={saveField} />
 
       {/* Notification Settings (ITEM 4) */}
       <div className="card-base p-5">

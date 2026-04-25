@@ -14,6 +14,7 @@ import { runPipeline, OrchestratorOptions } from './orchestration/MasterOrchestr
 import { createLogger } from './infra/logger';
 import type { PipelineStage } from './models';
 import { autoRespondToReviews } from './routes/functions/autoRespondToReviews';
+import { processScheduledAutoActions } from './services/execution/executeOrQueue';
 import { reviewRequestAutomation } from './routes/functions/reviewRequestAutomation';
 import { googleRankMonitor } from './routes/functions/googleRankMonitor';
 import { smartLeadNurture } from './routes/functions/smartLeadNurture';
@@ -115,6 +116,12 @@ export function startScheduler() {
   // ── Every Sunday at 20:00 UTC: weekly content calendar ──────────────────────
   cron.schedule('0 20 * * 0', () => {
     runAgentForAll('ContentCalendarAgent', contentCalendarAgent);
+  });
+
+  // ── Every 30 min: execute semi_auto queued actions ───────────────────────────
+  cron.schedule('*/30 * * * *', () => {
+    processScheduledAutoActions()
+      .catch(err => logger.error('processScheduledAutoActions failed', { error: err.message }));
   });
 
   // ── Every 15 min: keep-alive log ─────────────────────────────────────────────
