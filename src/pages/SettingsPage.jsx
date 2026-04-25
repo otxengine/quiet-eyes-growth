@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Save, Loader2, Zap, KeyRound, Eye, EyeOff } from 'lucide-react';
+import { Save, Loader2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 const AUTONOMY_OPTIONS = [
@@ -108,75 +108,6 @@ import SettingsLocations from '@/components/settings/SettingsLocations.jsx';
 import AiInsightBox from '@/components/ai/AiInsightBox';
 import NotificationSettings from '@/components/settings/NotificationSettings';
 
-function ApiCredentialsCard({ form, setForm, onSave }) {
-  const [showToken, setShowToken] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await onSave({
-        whatsapp_phone_number_id: form.whatsapp_phone_number_id,
-        whatsapp_access_token: form.whatsapp_access_token,
-      });
-      toast.success('פרטי WhatsApp נשמרו ✓');
-    } catch {
-      toast.error('שגיאה בשמירה');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="card-base p-5">
-      <div className="flex items-center gap-2 mb-1">
-        <KeyRound className="w-4 h-4 text-primary" />
-        <h2 className="text-[14px] font-semibold text-foreground">WhatsApp Business API</h2>
-      </div>
-      <p className="text-[11px] text-foreground-muted mb-4">
-        נדרש לשליחת WhatsApp אוטומטית. ללא זה, הודעות ינותבו לאישור ידני. Facebook, Instagram וגוגל מחוברים דרך <span className="text-primary">אינטגרציות</span>.
-      </p>
-      <div className="space-y-3 mb-4">
-        <div>
-          <label className="block text-[11px] text-foreground-muted mb-1">Phone Number ID</label>
-          <input
-            type="text"
-            value={form.whatsapp_phone_number_id || ''}
-            onChange={e => setForm(f => ({ ...f, whatsapp_phone_number_id: e.target.value }))}
-            placeholder="1234567890 (מתוך Meta Business Suite)"
-            className="w-full border border-border rounded-lg px-3 py-2 text-[12px] bg-secondary/30 focus:outline-none focus:ring-1 focus:ring-primary"
-            dir="ltr"
-          />
-        </div>
-        <div>
-          <label className="block text-[11px] text-foreground-muted mb-1">Access Token</label>
-          <div className="relative">
-            <input
-              type={showToken ? 'text' : 'password'}
-              value={form.whatsapp_access_token || ''}
-              onChange={e => setForm(f => ({ ...f, whatsapp_access_token: e.target.value }))}
-              placeholder="EAAxxxxx..."
-              className="w-full border border-border rounded-lg px-3 py-2 text-[12px] bg-secondary/30 focus:outline-none focus:ring-1 focus:ring-primary pr-8"
-              dir="ltr"
-            />
-            <button type="button" onClick={() => setShowToken(v => !v)} className="absolute left-2 top-1/2 -translate-y-1/2 text-foreground-muted hover:text-foreground">
-              {showToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-            </button>
-          </div>
-        </div>
-      </div>
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-[11px] font-medium hover:opacity-90 transition-all disabled:opacity-60"
-      >
-        {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-        {saving ? 'שומר...' : 'שמור'}
-      </button>
-    </div>
-  );
-}
-
 export default function SettingsPage() {
   const { businessProfile } = useOutletContext();
   const [form, setForm] = useState({
@@ -199,7 +130,6 @@ export default function SettingsPage() {
     facebook_url: '', instagram_url: '', tiktok_url: '', website_url: '',
     monitor_competitors_social: true,
     survey_enabled: false, survey_q1: '', survey_q2: '', survey_q3: '',
-    whatsapp_phone_number_id: '', whatsapp_access_token: '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -257,8 +187,6 @@ export default function SettingsPage() {
         bot_good_lead_criteria: businessProfile.bot_good_lead_criteria || '',
         bot_bad_lead_criteria: businessProfile.bot_bad_lead_criteria || '',
         bot_services_info: businessProfile.bot_services_info || '',
-        whatsapp_phone_number_id: businessProfile.whatsapp_phone_number_id || '',
-        whatsapp_access_token: businessProfile.whatsapp_access_token || '',
       });
     }
   }, [businessProfile]);
@@ -387,9 +315,6 @@ export default function SettingsPage() {
       />
       <SettingsLocations businessProfile={businessProfile} />
       <SettingsLearnBusiness businessProfile={businessProfile} />
-
-      {/* API Credentials — WhatsApp Business + Google */}
-      <ApiCredentialsCard form={form} setForm={setForm} onSave={saveField} />
 
       {/* Autonomy Level */}
       <AutonomySelector businessProfile={businessProfile} onSave={saveField} />

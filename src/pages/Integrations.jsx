@@ -19,7 +19,7 @@ const SOCIAL_PLATFORMS = [
     icon: '📘',
     color: '#1877F2',
     bg: '#EBF3FF',
-    description: 'פרסם פוסטים ישירות מהמערכת',
+    description: 'פרסם פוסטים ועדכונים',
   },
   {
     id: 'instagram_business',
@@ -28,6 +28,14 @@ const SOCIAL_PLATFORMS = [
     color: '#E1306C',
     bg: '#FEF0F5',
     description: 'שתף תמונות וסטוריז',
+  },
+  {
+    id: 'whatsapp_business',
+    name: 'WhatsApp',
+    icon: '💬',
+    color: '#25D366',
+    bg: '#F0FDF4',
+    description: 'שלח הודעות אוטומטיות ללידים',
   },
   {
     id: 'google_business',

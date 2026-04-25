@@ -89,12 +89,14 @@ router.get('/initiate/:platform', (req: Request, res: Response) => {
 
   let authUrl: string;
 
-  if (platform === 'facebook_page' || platform === 'instagram_business') {
+  if (platform === 'facebook_page' || platform === 'instagram_business' || platform === 'whatsapp_business') {
     if (!FACEBOOK_APP_ID) {
       return res.status(503).json({ error: 'Facebook app not configured', demo: true });
     }
     const scope = platform === 'instagram_business'
       ? 'pages_show_list,pages_read_engagement,instagram_basic,instagram_content_publish,instagram_manage_comments'
+      : platform === 'whatsapp_business'
+      ? 'whatsapp_business_management,whatsapp_business_messaging,business_management'
       : 'pages_show_list,pages_manage_posts,pages_read_engagement,pages_messaging';
 
     authUrl =
@@ -218,6 +220,78 @@ async function handleFacebookCallback(code: string, platform: string, businessId
   return { page_name: pageName, platform };
 }
 
+// ── WhatsApp Business callback ────────────────────────────────────────────────
+async function handleWhatsAppCallback(code: string, businessId: string) {
+  const redirectUri = callbackUrl('whatsapp_business');
+
+  // 1. Exchange code → short-lived token
+  const tokenRes = await fetch(
+    `https://graph.facebook.com/v19.0/oauth/access_token?` +
+    `client_id=${FACEBOOK_APP_ID}&client_secret=${FACEBOOK_APP_SECRET}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`,
+  );
+  if (!tokenRes.ok) throw new Error('Token exchange failed');
+  const tokenData: any = await tokenRes.json();
+  const shortToken = tokenData.access_token;
+
+  // 2. Extend to long-lived user token
+  const longRes = await fetch(
+    `https://graph.facebook.com/v19.0/oauth/access_token?` +
+    `grant_type=fb_exchange_token&client_id=${FACEBOOK_APP_ID}` +
+    `&client_secret=${FACEBOOK_APP_SECRET}&fb_exchange_token=${shortToken}`,
+  );
+  const longData: any = longRes.ok ? await longRes.json() : {};
+  const userToken = longData.access_token || shortToken;
+
+  // 3. Get WhatsApp Business Account and phone number ID
+  let phoneNumberId = '';
+  let displayName   = 'WhatsApp Business';
+
+  try {
+    const bizRes  = await fetch(`https://graph.facebook.com/v19.0/me/businesses?access_token=${userToken}`);
+    const bizData: any = bizRes.ok ? await bizRes.json() : {};
+    const firstBiz = (bizData?.data || [])[0];
+
+    if (firstBiz?.id) {
+      const wabaRes  = await fetch(
+        `https://graph.facebook.com/v19.0/${firstBiz.id}/owned_whatsapp_business_accounts?access_token=${userToken}`,
+      );
+      const wabaData: any = wabaRes.ok ? await wabaRes.json() : {};
+      const firstWaba = (wabaData?.data || [])[0];
+
+      if (firstWaba?.id) {
+        const phonesRes  = await fetch(
+          `https://graph.facebook.com/v19.0/${firstWaba.id}/phone_numbers?access_token=${userToken}`,
+        );
+        const phonesData: any = phonesRes.ok ? await phonesRes.json() : {};
+        const firstPhone = (phonesData?.data || [])[0];
+
+        if (firstPhone?.id) {
+          phoneNumberId = firstPhone.id;
+          displayName   = firstPhone.display_phone_number || firstPhone.verified_name || displayName;
+        }
+      }
+    }
+  } catch (_) {}
+
+  await upsertSocialAccount(businessId, 'whatsapp_business', {
+    account_name: displayName,
+    access_token: userToken,
+    page_id:      phoneNumberId,
+  });
+
+  // Mirror into BusinessProfile so WhatsAppExecutor can read directly
+  await prisma.businessProfile.updateMany({
+    where: { id: businessId },
+    data: {
+      whatsapp_access_token:    userToken,
+      ...(phoneNumberId ? { whatsapp_phone_number_id: phoneNumberId } : {}),
+    },
+  });
+
+  return { page_name: displayName, platform: 'whatsapp_business' };
+}
+
 // ── Google Business callback ──────────────────────────────────────────────────
 async function handleGoogleCallback(code: string, businessId: string) {
   // Exchange code for tokens
@@ -335,6 +409,8 @@ router.get('/callback/:platform', async (req: Request, res: Response) => {
     let result: any;
     if (platform === 'facebook_page' || platform === 'instagram_business') {
       result = await handleFacebookCallback(code, platform, stateData.businessId);
+    } else if (platform === 'whatsapp_business') {
+      result = await handleWhatsAppCallback(code, stateData.businessId);
     } else if (platform === 'google_business') {
       result = await handleGoogleCallback(code, stateData.businessId);
     } else if (platform === 'tiktok_business') {
@@ -407,6 +483,9 @@ router.post('/disconnect', async (req: Request, res: Response) => {
     } else if (platform === 'facebook_page') {
       bpClear['facebook_page_token'] = null;
       bpClear['facebook_page_id'] = null;
+    } else if (platform === 'whatsapp_business') {
+      bpClear['whatsapp_access_token'] = null;
+      bpClear['whatsapp_phone_number_id'] = null;
     } else if (platform === 'google_business') {
       bpClear['google_access_token'] = null;
     }
