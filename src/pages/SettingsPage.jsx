@@ -109,8 +109,7 @@ import AiInsightBox from '@/components/ai/AiInsightBox';
 import NotificationSettings from '@/components/settings/NotificationSettings';
 
 function ApiCredentialsCard({ form, setForm, onSave }) {
-  const [showWaToken, setShowWaToken] = useState(false);
-  const [showGoogleToken, setShowGoogleToken] = useState(false);
+  const [showToken, setShowToken] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -119,10 +118,8 @@ function ApiCredentialsCard({ form, setForm, onSave }) {
       await onSave({
         whatsapp_phone_number_id: form.whatsapp_phone_number_id,
         whatsapp_access_token: form.whatsapp_access_token,
-        google_access_token: form.google_access_token,
-        google_place_id: form.google_place_id,
       });
-      toast.success('פרטי API נשמרו ✓');
+      toast.success('פרטי WhatsApp נשמרו ✓');
     } catch {
       toast.error('שגיאה בשמירה');
     } finally {
@@ -130,47 +127,43 @@ function ApiCredentialsCard({ form, setForm, onSave }) {
     }
   };
 
-  const field = (label, key, placeholder, secret = false, showState, toggleShow) => (
-    <div>
-      <label className="block text-[11px] text-foreground-muted mb-1">{label}</label>
-      <div className="relative">
-        <input
-          type={secret && !showState ? 'password' : 'text'}
-          value={form[key] || ''}
-          onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-          placeholder={placeholder}
-          className="w-full border border-border rounded-lg px-3 py-2 text-[12px] bg-secondary/30 focus:outline-none focus:ring-1 focus:ring-primary pr-8"
-          dir="ltr"
-        />
-        {secret && (
-          <button
-            type="button"
-            onClick={toggleShow}
-            className="absolute left-2 top-1/2 -translate-y-1/2 text-foreground-muted hover:text-foreground"
-          >
-            {showState ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-
   return (
     <div className="card-base p-5">
       <div className="flex items-center gap-2 mb-1">
         <KeyRound className="w-4 h-4 text-primary" />
-        <h2 className="text-[14px] font-semibold text-foreground">פרטי API לביצוע אוטומטי</h2>
+        <h2 className="text-[14px] font-semibold text-foreground">WhatsApp Business API</h2>
       </div>
       <p className="text-[11px] text-foreground-muted mb-4">
-        נדרש לשליחת WhatsApp אוטומטית ותגובות לביקורות Google. ללא אלו, פעולות ינותבו לאישור ידני.
+        נדרש לשליחת WhatsApp אוטומטית. ללא זה, הודעות ינותבו לאישור ידני. Facebook, Instagram וגוגל מחוברים דרך <span className="text-primary">אינטגרציות</span>.
       </p>
       <div className="space-y-3 mb-4">
-        <p className="text-[11px] font-semibold text-foreground-muted uppercase tracking-wide">WhatsApp Business API</p>
-        {field('Phone Number ID', 'whatsapp_phone_number_id', '1234567890 (מתוך Meta Business Suite)')}
-        {field('Access Token', 'whatsapp_access_token', 'EAAxxxxx...', true, showWaToken, () => setShowWaToken(v => !v))}
-        <p className="text-[11px] font-semibold text-foreground-muted uppercase tracking-wide mt-3">Google Business Profile</p>
-        {field('Google Place ID', 'google_place_id', 'ChIJxxxxx...')}
-        {field('Access Token', 'google_access_token', 'ya29.xxxxx...', true, showGoogleToken, () => setShowGoogleToken(v => !v))}
+        <div>
+          <label className="block text-[11px] text-foreground-muted mb-1">Phone Number ID</label>
+          <input
+            type="text"
+            value={form.whatsapp_phone_number_id || ''}
+            onChange={e => setForm(f => ({ ...f, whatsapp_phone_number_id: e.target.value }))}
+            placeholder="1234567890 (מתוך Meta Business Suite)"
+            className="w-full border border-border rounded-lg px-3 py-2 text-[12px] bg-secondary/30 focus:outline-none focus:ring-1 focus:ring-primary"
+            dir="ltr"
+          />
+        </div>
+        <div>
+          <label className="block text-[11px] text-foreground-muted mb-1">Access Token</label>
+          <div className="relative">
+            <input
+              type={showToken ? 'text' : 'password'}
+              value={form.whatsapp_access_token || ''}
+              onChange={e => setForm(f => ({ ...f, whatsapp_access_token: e.target.value }))}
+              placeholder="EAAxxxxx..."
+              className="w-full border border-border rounded-lg px-3 py-2 text-[12px] bg-secondary/30 focus:outline-none focus:ring-1 focus:ring-primary pr-8"
+              dir="ltr"
+            />
+            <button type="button" onClick={() => setShowToken(v => !v)} className="absolute left-2 top-1/2 -translate-y-1/2 text-foreground-muted hover:text-foreground">
+              {showToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </div>
       </div>
       <button
         onClick={handleSave}
@@ -178,7 +171,7 @@ function ApiCredentialsCard({ form, setForm, onSave }) {
         className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-[11px] font-medium hover:opacity-90 transition-all disabled:opacity-60"
       >
         {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-        {saving ? 'שומר...' : 'שמור פרטי API'}
+        {saving ? 'שומר...' : 'שמור'}
       </button>
     </div>
   );
@@ -207,7 +200,6 @@ export default function SettingsPage() {
     monitor_competitors_social: true,
     survey_enabled: false, survey_q1: '', survey_q2: '', survey_q3: '',
     whatsapp_phone_number_id: '', whatsapp_access_token: '',
-    google_access_token: '', google_place_id: '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -267,8 +259,6 @@ export default function SettingsPage() {
         bot_services_info: businessProfile.bot_services_info || '',
         whatsapp_phone_number_id: businessProfile.whatsapp_phone_number_id || '',
         whatsapp_access_token: businessProfile.whatsapp_access_token || '',
-        google_access_token: businessProfile.google_access_token || '',
-        google_place_id: businessProfile.google_place_id || '',
       });
     }
   }, [businessProfile]);

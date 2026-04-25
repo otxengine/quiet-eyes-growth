@@ -6,10 +6,10 @@
  *   GET  /api/oauth/callback/:platform
  *   POST /api/oauth/disconnect
  *
- * Supported platforms: facebook_page | instagram_business | tiktok_business
+ * Supported platforms: facebook_page | instagram_business | tiktok_business | google_business
  *
- * Tokens are stored in the `social_accounts` table (SocialAccount model).
- * The frontend reads back via GET /api/entities/SocialAccount?linked_business=...
+ * Tokens are stored in the `social_accounts` table (SocialAccount model)
+ * AND mirrored into BusinessProfile fields so executors can read them directly.
  */
 
 import { Router, Request, Response } from 'express';
@@ -23,6 +23,8 @@ const FACEBOOK_APP_ID      = process.env.FACEBOOK_APP_ID      || '';
 const FACEBOOK_APP_SECRET  = process.env.FACEBOOK_APP_SECRET  || '';
 const TIKTOK_CLIENT_KEY    = process.env.TIKTOK_CLIENT_KEY    || '';
 const TIKTOK_CLIENT_SECRET = process.env.TIKTOK_CLIENT_SECRET || '';
+const GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID     || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const FRONTEND_URL         = process.env.FRONTEND_URL         || 'http://localhost:5173';
 const SERVER_BASE_URL      = process.env.SERVER_BASE_URL      || 'http://localhost:3002';
 
@@ -114,6 +116,21 @@ router.get('/initiate/:platform', (req: Request, res: Response) => {
       `&response_type=code` +
       `&redirect_uri=${encodeURIComponent(callbackUrl(platform))}` +
       `&state=${state}`;
+
+  } else if (platform === 'google_business') {
+    if (!GOOGLE_CLIENT_ID) {
+      return res.status(503).json({ error: 'Google app not configured', demo: true });
+    }
+    authUrl =
+      `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${GOOGLE_CLIENT_ID}` +
+      `&redirect_uri=${encodeURIComponent(callbackUrl(platform))}` +
+      `&response_type=code` +
+      `&scope=${encodeURIComponent('https://www.googleapis.com/auth/business.manage email profile')}` +
+      `&access_type=offline` +
+      `&prompt=consent` +
+      `&state=${state}`;
+
   } else {
     return res.status(400).json({ error: `Unknown platform: ${platform}` });
   }
@@ -201,6 +218,76 @@ async function handleFacebookCallback(code: string, platform: string, businessId
   return { page_name: pageName, platform };
 }
 
+// ── Google Business callback ──────────────────────────────────────────────────
+async function handleGoogleCallback(code: string, businessId: string) {
+  // Exchange code for tokens
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id:     GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
+      redirect_uri:  callbackUrl('google_business'),
+      grant_type:    'authorization_code',
+    }).toString(),
+  });
+  if (!tokenRes.ok) throw new Error('Google token exchange failed');
+  const tokenData: any = await tokenRes.json();
+  const accessToken  = tokenData.access_token  || '';
+  const refreshToken = tokenData.refresh_token || '';
+
+  // Get user info for display name
+  const userRes  = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const userData: any = userRes.ok ? await userRes.json() : {};
+  const accountName = userData.name || userData.email || 'Google Account';
+
+  // Try to get first Google Business location's place_id
+  let placeId = '';
+  try {
+    const acctRes = await fetch(
+      'https://mybusinessaccountmanagement.googleapis.com/v1/accounts',
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (acctRes.ok) {
+      const acctData: any = await acctRes.json();
+      const firstAccount  = acctData?.accounts?.[0]?.name;
+      if (firstAccount) {
+        const locRes = await fetch(
+          `https://mybusinessbusinessinformation.googleapis.com/v1/${firstAccount}/locations?pageSize=1&readMask=name,storeCode`,
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        );
+        if (locRes.ok) {
+          const locData: any = await locRes.json();
+          // location name looks like "accounts/123/locations/456" — extract place_id if present
+          const loc = locData?.locations?.[0];
+          if (loc?.name) placeId = loc.name.split('/').pop() || '';
+        }
+      }
+    }
+  } catch (_) {}
+
+  // Persist to SocialAccount
+  await upsertSocialAccount(businessId, 'google_business', {
+    account_name: accountName,
+    access_token: accessToken,
+    page_id:      placeId || '',
+  });
+
+  // Mirror directly into BusinessProfile so GoogleBusinessClient can read it
+  await prisma.businessProfile.updateMany({
+    where: { id: businessId },
+    data: {
+      google_access_token: accessToken,
+      ...(placeId ? { google_place_id: placeId } : {}),
+    },
+  });
+
+  return { page_name: accountName, platform: 'google_business' };
+}
+
 // ── TikTok callback ───────────────────────────────────────────────────────────
 async function handleTikTokCallback(code: string, businessId: string) {
   const tokenRes = await fetch('https://open-api.tiktok.com/oauth/access_token/', {
@@ -248,6 +335,8 @@ router.get('/callback/:platform', async (req: Request, res: Response) => {
     let result: any;
     if (platform === 'facebook_page' || platform === 'instagram_business') {
       result = await handleFacebookCallback(code, platform, stateData.businessId);
+    } else if (platform === 'google_business') {
+      result = await handleGoogleCallback(code, stateData.businessId);
     } else if (platform === 'tiktok_business') {
       result = await handleTikTokCallback(code, stateData.businessId);
     } else {
@@ -318,6 +407,8 @@ router.post('/disconnect', async (req: Request, res: Response) => {
     } else if (platform === 'facebook_page') {
       bpClear['facebook_page_token'] = null;
       bpClear['facebook_page_id'] = null;
+    } else if (platform === 'google_business') {
+      bpClear['google_access_token'] = null;
     }
     if (Object.keys(bpClear).length > 0) {
       await prisma.businessProfile.updateMany({ where: { id: businessId }, data: bpClear });

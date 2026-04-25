@@ -20,7 +20,6 @@ const SOCIAL_PLATFORMS = [
     color: '#1877F2',
     bg: '#EBF3FF',
     description: 'פרסם פוסטים ישירות מהמערכת',
-    scope: 'pages_manage_posts,pages_read_engagement',
   },
   {
     id: 'instagram_business',
@@ -29,7 +28,14 @@ const SOCIAL_PLATFORMS = [
     color: '#E1306C',
     bg: '#FEF0F5',
     description: 'שתף תמונות וסטוריז',
-    scope: 'instagram_basic,instagram_content_publish',
+  },
+  {
+    id: 'google_business',
+    name: 'Google Business',
+    icon: '🔍',
+    color: '#4285F4',
+    bg: '#EBF3FF',
+    description: 'הגב לביקורות ישירות מהמערכת',
   },
   {
     id: 'tiktok_business',
@@ -38,7 +44,6 @@ const SOCIAL_PLATFORMS = [
     color: '#010101',
     bg: '#F0F0F0',
     description: 'פרסם סרטונים ותוכן',
-    scope: 'video.upload,video.publish',
   },
 ];
 
@@ -270,8 +275,8 @@ export default function Integrations() {
 
       {/* Social Networks */}
       <div className="space-y-3">
-        <h2 className="text-[13px] font-semibold text-foreground">רשתות חברתיות</h2>
-        <p className="text-[11px] text-foreground-muted">לאחר החיבור, תוכל לפרסם פוסטים ישירות מ-ActionPopup</p>
+        <h2 className="text-[13px] font-semibold text-foreground">רשתות חברתיות וגוגל</h2>
+        <p className="text-[11px] text-foreground-muted">לחץ "חבר" — יפתח חלון אישור קצר, וזהו. לאחר מכן OTX פועל אוטומטית.</p>
         <div className="space-y-2">
           {SOCIAL_PLATFORMS.map(platform => (
             <SocialPlatformCard
