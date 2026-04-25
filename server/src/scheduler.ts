@@ -18,6 +18,7 @@ import { reviewRequestAutomation } from './routes/functions/reviewRequestAutomat
 import { googleRankMonitor } from './routes/functions/googleRankMonitor';
 import { smartLeadNurture } from './routes/functions/smartLeadNurture';
 import { contentCalendarAgent } from './routes/functions/contentCalendarAgent';
+import { detectEvents } from './routes/functions/detectEvents';
 
 const logger = createLogger('Scheduler');
 
@@ -104,6 +105,7 @@ export function startScheduler() {
     runForAll('DailyLearning', 'decision_only');
     runAgentForAll('AutoRespondToReviews', autoRespondToReviews);
     runAgentForAll('ReviewRequestAutomation', reviewRequestAutomation);
+    runAgentForAll('DetectEvents', detectEvents);
   });
 
   // ── Every Sunday at 20:00 UTC: weekly content calendar ──────────────────────
