@@ -20,6 +20,7 @@ import { smartLeadNurture } from './routes/functions/smartLeadNurture';
 import { contentCalendarAgent } from './routes/functions/contentCalendarAgent';
 import { detectEvents } from './routes/functions/detectEvents';
 import { competitorIntelAgent } from './routes/functions/competitorIntelAgent';
+import { detectDeliveryChanges } from './routes/functions/detectDeliveryChanges';
 
 const logger = createLogger('Scheduler');
 
@@ -100,6 +101,7 @@ export function startScheduler() {
     runAgentForAll('GoogleRankMonitor', googleRankMonitor);
     runAgentForAll('SmartLeadNurture', smartLeadNurture);
     runAgentForAll('CompetitorIntel', competitorIntelAgent);
+    runAgentForAll('DeliveryPlatformIntel', detectDeliveryChanges);
   });
 
   // ── Every 24 hours at 03:00 UTC: decision_only (ML learning) ────────────────
