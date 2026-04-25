@@ -18,6 +18,8 @@ import { googleRankMonitor } from './functions/googleRankMonitor';
 import { smartLeadNurture } from './functions/smartLeadNurture';
 import { contentCalendarAgent } from './functions/contentCalendarAgent';
 import { competitorIntelAgent } from './functions/competitorIntelAgent';
+import { detectEvents } from './functions/detectEvents';
+import { detectDeliveryChanges } from './functions/detectDeliveryChanges';
 import {
   runViralCatalyst,
   runInfluenceIntegrity,
@@ -78,6 +80,11 @@ const AGENT_HANDLERS: Record<string, (req: Request, res: Response) => any> = {
   Nurture:   smartLeadNurture,
   Calendar:  contentCalendarAgent,
   CompIntel: competitorIntelAgent,
+  // Event + delivery intelligence agents
+  detectEvents,
+  detectDeliveryChanges,
+  DeliveryIntel: detectDeliveryChanges,
+  Events: detectEvents,
   // Layer 7 OTX agents — by functionName
   runViralCatalyst,
   runInfluenceIntegrity,

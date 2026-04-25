@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Eye, TrendingUp, AlertTriangle, Sparkles, MessageSquare, Users, FileText } from 'lucide-react';
+import { Eye, TrendingUp, AlertTriangle, Sparkles, MessageSquare, Users, FileText, Calendar } from 'lucide-react';
 import SignalCard from '@/components/intelligence/SignalCard';
 import AiInsightBox from '@/components/ai/AiInsightBox';
 import WeeklyReportsTab from '@/components/intelligence/WeeklyReportsTab';
@@ -14,7 +14,8 @@ const tabs = [
   { key: 'opportunity', label: 'הזדמנויות' },
   { key: 'trend', label: 'מגמות' },
   { key: 'mention', label: 'אזכורים' },
-  { key: 'competitor_move', label: 'מתחרים' },
+  { key: 'event', label: 'אירועים' },
+  { key: 'competitor_intel', label: 'מודיעין תחרותי' },
   { key: 'reports', label: 'דוחות' },
 ];
 
@@ -52,7 +53,8 @@ export default function Intelligence() {
   const threats = weekSignals.filter(s => s.category === 'threat');
   const opportunities = weekSignals.filter(s => s.category === 'opportunity');
   const trends = weekSignals.filter(s => s.category === 'trend');
-  const competitorMoves = weekSignals.filter(s => s.category === 'competitor_move');
+  const competitorMoves = weekSignals.filter(s => s.category === 'competitor_move' || s.category === 'competitor');
+  const eventSignals = allSignals.filter(s => s.category === 'event');
 
   // Raw signal stats
   const trendSignals = rawSignals.filter(s => s.signal_type === 'social_trend');
@@ -60,7 +62,10 @@ export default function Intelligence() {
   const competitorSocial = rawSignals.filter(s => s.signal_type === 'competitor_social');
 
   const mentions = weekSignals.filter(s => s.category === 'mention');
-  const filtered = activeTab === 'all' ? allSignals : activeTab === 'reports' ? [] : allSignals.filter(s => s.category === activeTab);
+  const filtered = activeTab === 'all' ? allSignals
+    : activeTab === 'reports' ? []
+    : activeTab === 'competitor_intel' ? allSignals.filter(s => s.category === 'competitor_move' || s.category === 'competitor')
+    : allSignals.filter(s => s.category === activeTab);
 
   useEffect(() => {
     window.__quieteyes_scan = () => setShowScan(true);
@@ -73,8 +78,8 @@ export default function Intelligence() {
     { label: 'איומים', value: threats.length, icon: AlertTriangle, color: 'text-[#dc2626]' },
     { label: 'הזדמנויות', value: opportunities.length, icon: Sparkles, color: 'text-[#d97706]' },
     { label: 'אזכורים חברתיים', value: socialMentions.length, icon: MessageSquare, color: 'text-purple-500' },
-    { label: 'מהלכי מתחרים', value: competitorMoves.length, icon: Users, color: 'text-[#6366f1]', sub: `${competitorSocial.length} אותות` },
-    { label: 'אזכורים', value: mentions.length, icon: MessageSquare, color: 'text-[#d97706]' },
+    { label: 'מודיעין תחרותי', value: competitorMoves.length, icon: Users, color: 'text-[#6366f1]', sub: `${competitorSocial.length} אותות` },
+    { label: 'אירועים', value: eventSignals.length, icon: Calendar, color: 'text-[#0ea5e9]' },
   ];
 
   return (
@@ -121,7 +126,7 @@ export default function Intelligence() {
             }`}>
             {tab.label}
             {!['all', 'reports'].includes(tab.key) && (() => {
-              const countMap = { threat: threats.length, opportunity: opportunities.length, trend: trends.length, competitor_move: competitorMoves.length, mention: mentions.length };
+              const countMap = { threat: threats.length, opportunity: opportunities.length, trend: trends.length, competitor_intel: competitorMoves.length, mention: mentions.length, event: eventSignals.length };
               const count = countMap[tab.key] || 0;
               return count > 0 ? <span className="mr-1 text-[9px] font-bold text-foreground-muted">({count})</span> : null;
             })()}

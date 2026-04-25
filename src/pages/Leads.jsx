@@ -198,6 +198,19 @@ export default function Leads() {
               <span>{searchLog[searchLog.length - 1] || 'מחפש...'}</span>
             </div>
           )}
+          <button onClick={async () => {
+              if (!bpId) return;
+              toast.info('מטפח לידים לא פעילים...');
+              try {
+                const res = await base44.functions.invoke('smartLeadNurture', { businessProfileId: bpId });
+                const { nurtured = 0, marked_cold = 0 } = res?.data || {};
+                queryClient.invalidateQueries({ queryKey: ['leadsPage', bpId] });
+                toast.success(nurtured > 0 || marked_cold > 0 ? `${nurtured} הודעות מעקב · ${marked_cold} קורים` : 'אין לידים שדורשים טיפוח כרגע');
+              } catch { toast.error('שגיאה בטיפוח לידים'); }
+            }}
+            className="btn-subtle flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-all">
+            <RotateCcw className="w-4 h-4" /> טפח לידים
+          </button>
           <button onClick={handleEnrich} disabled={enriching}
             className="btn-subtle flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium text-foreground-secondary bg-secondary border border-border hover:bg-secondary/80 hover:border-border-hover transition-all disabled:opacity-50">
             {enriching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}

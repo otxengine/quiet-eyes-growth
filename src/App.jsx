@@ -27,6 +27,7 @@ import Onboarding from '@/pages/Onboarding';
 import Dashboard from '@/pages/Dashboard.jsx';
 import Intelligence from '@/pages/Intelligence.jsx';
 import Competitors from '@/pages/Competitors.jsx';
+import Events from '@/pages/Events.jsx';
 import Reputation from '@/pages/Reputation.jsx';
 import Leads from '@/pages/Leads.jsx';
 import Retention from '@/pages/Retention.jsx';
@@ -133,6 +134,7 @@ const AuthenticatedApp = () => {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/signals" element={<Intelligence />} />
         <Route path="/competitors" element={<Competitors />} />
+        <Route path="/events" element={<Events />} />
         <Route path="/reviews" element={<Reputation />} />
         <Route path="/leads" element={<Leads />} />
         <Route path="/retention" element={<Retention />} />

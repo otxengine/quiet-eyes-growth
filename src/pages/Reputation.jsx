@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Star, Plus, Search, Loader2, MessageCircle, BarChart2 } from 'lucide-react';
+import { Star, Plus, Search, Loader2, MessageCircle, BarChart2, Bot, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import ReviewCard from '@/components/reputation/ReviewCard';
 import AddReviewModal from '@/components/reputation/AddReviewModal';
@@ -19,6 +19,8 @@ export default function Reputation() {
   const [scanning, setScanning] = useState(false);
   const [analyzingSentiment, setAnalyzingSentiment] = useState(false);
   const [sentimentResult, setSentimentResult] = useState(null);
+  const [autoResponding, setAutoResponding] = useState(false);
+  const [sendingRequests, setSendingRequests] = useState(false);
 
   // FIX 7: Sentiment analysis
   const handleAnalyzeSentiment = async () => {
@@ -107,6 +109,38 @@ export default function Reputation() {
       <div className="flex items-center justify-between">
         <h1 className="text-[16px] font-bold text-foreground tracking-tight">מוניטין</h1>
         <div className="flex items-center gap-2">
+          <button onClick={async () => {
+              if (!bpId) return;
+              setAutoResponding(true);
+              toast.info('מייצר תגובות AI לביקורות...');
+              try {
+                const res = await base44.functions.invoke('autoRespondToReviews', { businessProfileId: bpId });
+                const { responses_generated = 0 } = res?.data || {};
+                queryClient.invalidateQueries({ queryKey: ['reviewsPage', bpId] });
+                toast.success(responses_generated > 0 ? `${responses_generated} תגובות מוכנות לאישור ✓` : 'אין ביקורות שדורשות תגובה');
+              } catch { toast.error('שגיאה ביצירת תגובות'); }
+              setAutoResponding(false);
+            }} disabled={autoResponding}
+            className="btn-subtle flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 transition-all disabled:opacity-50">
+            {autoResponding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
+            {autoResponding ? 'מייצר...' : 'תגובות AI'}
+          </button>
+          <button onClick={async () => {
+              if (!bpId) return;
+              setSendingRequests(true);
+              toast.info('שולח בקשות ביקורת ללקוחות מרוצים...');
+              try {
+                const res = await base44.functions.invoke('reviewRequestAutomation', { businessProfileId: bpId });
+                const { requests_sent = 0 } = res?.data || {};
+                queryClient.invalidateQueries({ queryKey: ['reviewRequests', bpId] });
+                toast.success(requests_sent > 0 ? `${requests_sent} בקשות נשלחו ✓` : 'אין לקוחות כשירים כרגע');
+              } catch { toast.error('שגיאה בשליחת בקשות'); }
+              setSendingRequests(false);
+            }} disabled={sendingRequests}
+            className="btn-subtle flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium text-green-700 bg-green-50 border border-green-200 hover:bg-green-100 transition-all disabled:opacity-50">
+            {sendingRequests ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {sendingRequests ? 'שולח...' : 'שלח בקשות ביקורת'}
+          </button>
           <button onClick={handleAnalyzeSentiment} disabled={analyzingSentiment}
             className="btn-subtle flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium border border-border text-foreground hover:bg-secondary transition-all disabled:opacity-50">
             {analyzingSentiment ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart2 className="w-4 h-4" />}

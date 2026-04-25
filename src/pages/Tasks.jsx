@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Plus, ClipboardList } from 'lucide-react';
+import { Plus, ClipboardList, CalendarDays, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import TaskCard from '@/components/tasks/TaskCard';
 import TaskStatsBar from '@/components/tasks/TaskStatsBar';
 import AddTaskModal from '@/components/tasks/AddTaskModal';
@@ -19,9 +20,11 @@ const filterTabs = [
 export default function Tasks() {
   const { businessProfile } = useOutletContext();
   const bpId = businessProfile?.id;
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [prefill, setPrefill] = useState(null);
+  const [planningContent, setPlanningContent] = useState(false);
 
   // Check for prefill from alert redirect
   React.useEffect(() => {
@@ -65,10 +68,30 @@ export default function Tasks() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h1 className="text-[16px] font-bold text-foreground tracking-tight">משימות</h1>
-        <button onClick={() => setShowAddModal(true)}
-          className="btn-subtle flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium bg-foreground text-background hover:opacity-90 transition-all">
-          <Plus className="w-4 h-4" /> משימה חדשה
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={async () => {
+              if (!bpId) return;
+              setPlanningContent(true);
+              toast.info('מתכנן יומן תוכן שבועי...');
+              try {
+                const res = await base44.functions.invoke('contentCalendarAgent', { businessProfileId: bpId });
+                const { tasks_created = 0 } = res?.data || {};
+                queryClient.invalidateQueries({ queryKey: ['tasks', bpId] });
+                toast.success(tasks_created > 0 ? `נוצרו ${tasks_created} פוסטים ליומן השבועי ✓` : 'יומן תוכן עודכן');
+              } catch { toast.error('שגיאה בתכנון תוכן'); }
+              setPlanningContent(false);
+            }}
+            disabled={planningContent}
+            className="btn-subtle flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-all disabled:opacity-50">
+            {planningContent ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarDays className="w-4 h-4" />}
+            {planningContent ? 'מתכנן...' : 'תכנן תוכן שבועי'}
+          </button>
+          <button onClick={() => setShowAddModal(true)}
+            className="btn-subtle flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium bg-foreground text-background hover:opacity-90 transition-all">
+            <Plus className="w-4 h-4" /> משימה חדשה
+          </button>
+        </div>
       </div>
 
       <TaskStatsBar tasks={tasks} />
