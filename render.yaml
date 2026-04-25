@@ -12,6 +12,8 @@ services:
         value: production
       - key: DATABASE_URL
         sync: false
+      - key: DIRECT_URL
+        sync: false
       - key: CLERK_SECRET_KEY
         sync: false
       - key: CLERK_PUBLISHABLE_KEY
