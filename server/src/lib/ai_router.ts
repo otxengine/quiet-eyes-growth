@@ -170,9 +170,9 @@ async function callClaude(
 
   if (options.systemPrompt) body.system = options.systemPrompt;
 
-  // Prefill with '{' for JSON responses
-  if (options.jsonMode) {
-    body.messages.push({ role: 'assistant', content: '{' });
+  // Claude 4.x does not support assistant-turn prefill — rely on system prompt for JSON
+  if (options.jsonMode && !body.system) {
+    body.system = 'Return ONLY valid JSON. No markdown, no explanation.';
   }
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -191,8 +191,7 @@ async function callClaude(
   }
 
   const data: any = await res.json();
-  const text = data.content?.[0]?.text || '';
-  return options.jsonMode ? '{' + text : text;
+  return data.content?.[0]?.text || '';
 }
 
 // ── GPT call ──────────────────────────────────────────────────────────────────

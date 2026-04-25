@@ -70,14 +70,26 @@ export async function findSocialLeads(req: Request, res: Response) {
         let extracted: any = null;
         try {
           extracted = await invokeLLM({
-            prompt: `Extract lead information from this text. Only extract what is EXPLICITLY stated — do NOT invent or assume.
+            prompt: `You are a lead qualification expert. Analyze this web content and determine if it represents a REAL PERSON actively looking to hire or buy a service.
 
 TEXT: "${text.substring(0, 600)}"
 URL: ${r.url || ''}
 
 Return JSON: {"service_needed":"","urgency":"","budget_mentioned":"","person_name":"","platform":"facebook|instagram|forum|web","is_lead":true}
-Set is_lead=false if no clear intent to purchase/hire a service. Leave fields as "" if not mentioned.`,
+
+STRICT RULES — set is_lead=false if ANY of these are true:
+- The page is a business directory or list of service providers
+- The page is a contractor/business website (they ARE the service provider)
+- The page is a news article, blog post, or general information
+- The content is a review of a business (not someone seeking one)
+- The content is an advertisement
+- There is no specific person expressing a need
+
+Only set is_lead=true if there is a REAL PERSON posting something like "I need a contractor", "anyone recommend a plumber?", "looking for renovation help" — a genuine customer inquiry.
+
+Leave string fields as "" if not mentioned.`,
             response_json_schema: { type: 'object' },
+            model: 'haiku',
           });
         } catch (_) {}
 

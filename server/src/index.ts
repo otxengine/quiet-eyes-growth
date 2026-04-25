@@ -208,7 +208,54 @@ app.get('/api/debug/:bpId', async (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
+  // Create raw SQL tables that are referenced by agents but not in Prisma schema
+  try {
+    const { prisma: db } = await import('./db');
+    await db.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS agent_heartbeat (
+        id              SERIAL PRIMARY KEY,
+        agent_name      TEXT NOT NULL,
+        last_ping_utc   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_ingestion_utc TIMESTAMPTZ,
+        status          TEXT NOT NULL DEFAULT 'ok',
+        error_message   TEXT
+      )
+    `);
+    await db.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS agent_data_bus (
+        id           SERIAL PRIMARY KEY,
+        event_type   TEXT NOT NULL,
+        source_agent TEXT NOT NULL,
+        payload      JSONB,
+        status       TEXT NOT NULL DEFAULT 'pending',
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS otx_decisions (
+        id                     TEXT PRIMARY KEY,
+        business_id            TEXT NOT NULL,
+        decision_type          TEXT NOT NULL,
+        title                  TEXT NOT NULL,
+        reasoning              TEXT,
+        confidence_score       NUMERIC(5,3),
+        business_fit_score     NUMERIC(5,3),
+        timing_fit_score       NUMERIC(5,3),
+        historical_success_score NUMERIC(5,3),
+        roi_score              NUMERIC(5,3),
+        status                 TEXT NOT NULL DEFAULT 'pending',
+        insight_id             TEXT,
+        trace_id               TEXT,
+        created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_otx_decisions_biz ON otx_decisions(business_id, created_at DESC)`);
+    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_agent_heartbeat_name ON agent_heartbeat(agent_name, last_ping_utc DESC)`);
+    console.log('Startup tables ready (agent_heartbeat, agent_data_bus, otx_decisions)');
+  } catch (e: any) {
+    console.warn('Startup table creation skipped:', e.message);
+  }
   startScheduler();
 });
