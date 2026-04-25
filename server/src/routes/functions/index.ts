@@ -53,6 +53,11 @@ import { generateSmartPost } from './generateSmartPost';
 import { detectEarlyTrends } from './detectEarlyTrends';
 import { detectViralSignals } from './detectViralSignals';
 import { cleanupAndLearn } from './cleanupAndLearn';
+import { autoRespondToReviews } from './autoRespondToReviews';
+import { reviewRequestAutomation } from './reviewRequestAutomation';
+import { googleRankMonitor } from './googleRankMonitor';
+import { smartLeadNurture } from './smartLeadNurture';
+import { contentCalendarAgent } from './contentCalendarAgent';
 
 const router = Router();
 
@@ -110,6 +115,12 @@ const FUNCTION_MAP: Record<string, any> = {
   detectEarlyTrends,
   detectViralSignals,
   cleanupAndLearn,
+  // New growth agents
+  autoRespondToReviews,
+  reviewRequestAutomation,
+  googleRankMonitor,
+  smartLeadNurture,
+  contentCalendarAgent,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,

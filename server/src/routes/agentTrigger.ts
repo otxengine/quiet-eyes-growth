@@ -12,6 +12,11 @@ import { findSocialLeads } from './functions/findSocialLeads';
 import { detectTrends } from './functions/detectTrends';
 import { updateLeadFreshness } from './functions/updateLeadFreshness';
 import { runMLLearning } from './functions/learnFromClosedDeals';
+import { autoRespondToReviews } from './functions/autoRespondToReviews';
+import { reviewRequestAutomation } from './functions/reviewRequestAutomation';
+import { googleRankMonitor } from './functions/googleRankMonitor';
+import { smartLeadNurture } from './functions/smartLeadNurture';
+import { contentCalendarAgent } from './functions/contentCalendarAgent';
 import {
   runViralCatalyst,
   runInfluenceIntegrity,
@@ -58,6 +63,18 @@ const AGENT_HANDLERS: Record<string, (req: Request, res: Response) => any> = {
   Trends:     detectTrends,
   Cleaner:    updateLeadFreshness,
   Brain:      runMLLearning,
+  // New growth agents
+  autoRespondToReviews,
+  reviewRequestAutomation,
+  googleRankMonitor,
+  smartLeadNurture,
+  contentCalendarAgent,
+  // By nameHe alias
+  Respond:   autoRespondToReviews,
+  Reviews:   reviewRequestAutomation,
+  RankMon:   googleRankMonitor,
+  Nurture:   smartLeadNurture,
+  Calendar:  contentCalendarAgent,
   // Layer 7 OTX agents — by functionName
   runViralCatalyst,
   runInfluenceIntegrity,

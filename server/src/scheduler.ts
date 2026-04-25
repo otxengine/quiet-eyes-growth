@@ -13,6 +13,11 @@ import { prisma } from './db';
 import { runPipeline, OrchestratorOptions } from './orchestration/MasterOrchestrator';
 import { createLogger } from './infra/logger';
 import type { PipelineStage } from './models';
+import { autoRespondToReviews } from './routes/functions/autoRespondToReviews';
+import { reviewRequestAutomation } from './routes/functions/reviewRequestAutomation';
+import { googleRankMonitor } from './routes/functions/googleRankMonitor';
+import { smartLeadNurture } from './routes/functions/smartLeadNurture';
+import { contentCalendarAgent } from './routes/functions/contentCalendarAgent';
 
 const logger = createLogger('Scheduler');
 
@@ -29,6 +34,27 @@ async function getActiveProfiles(): Promise<string[]> {
   } catch (err: any) {
     logger.error('Failed to fetch active profiles', { error: err.message });
     return [];
+  }
+}
+
+/** Runs a single growth agent function for all active profiles */
+async function runAgentForAll(label: string, agentFn: Function) {
+  const ids = await getActiveProfiles();
+  if (ids.length === 0) return;
+  logger.info(`${label}: running for ${ids.length} profile(s)`);
+  for (let i = 0; i < ids.length; i += CONCURRENCY) {
+    const batch = ids.slice(i, i + CONCURRENCY);
+    await Promise.allSettled(
+      batch.map(id => {
+        const fakeReq = { body: { businessProfileId: id } } as any;
+        const fakeRes = {
+          json: (data: any) => logger.info(`${label} result`, { id, data }),
+          status: () => ({ json: (e: any) => logger.error(`${label} error`, { id, e }) }),
+        } as any;
+        return agentFn(fakeReq, fakeRes)
+          .catch((err: any) => logger.error(`${label}: failed`, { id, error: err.message }));
+      }),
+    );
   }
 }
 
@@ -69,11 +95,20 @@ export function startScheduler() {
   // ── Every 6 hours: signal_only (leads + freshness) ──────────────────────────
   cron.schedule('0 */6 * * *', () => {
     runForAll('LeadGenCycle', 'signal_only');
+    runAgentForAll('GoogleRankMonitor', googleRankMonitor);
+    runAgentForAll('SmartLeadNurture', smartLeadNurture);
   });
 
   // ── Every 24 hours at 03:00 UTC: decision_only (ML learning) ────────────────
   cron.schedule('0 3 * * *', () => {
     runForAll('DailyLearning', 'decision_only');
+    runAgentForAll('AutoRespondToReviews', autoRespondToReviews);
+    runAgentForAll('ReviewRequestAutomation', reviewRequestAutomation);
+  });
+
+  // ── Every Sunday at 20:00 UTC: weekly content calendar ──────────────────────
+  cron.schedule('0 20 * * 0', () => {
+    runAgentForAll('ContentCalendarAgent', contentCalendarAgent);
   });
 
   // ── Every 15 min: keep-alive log ─────────────────────────────────────────────
