@@ -18,7 +18,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { base44 } from '@/api/base44Client';
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3007';
+// Use the same backend URL as the rest of the app (VITE_API_URL already includes /api)
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/+$/, '');
 
 const AGENT_LABELS = {
   collectWebSignals:        'Eyeni — סורק אינטרנט',
@@ -73,7 +74,7 @@ export default function LearningCenter() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['learningDashboard', bpId],
     queryFn:  async () => {
-      const r = await fetch(`${SERVER_URL}/api/learning/dashboard/${bpId}`);
+      const r = await fetch(`${API_URL}/learning/dashboard/${bpId}`);
       if (!r.ok) throw new Error(`שגיאת שרת ${r.status}`);
       return r.json();
     },
@@ -86,7 +87,7 @@ export default function LearningCenter() {
     mutationFn: async () => {
       // Try the dedicated learning endpoint first, fall back to general function invoke
       try {
-        const r = await fetch(`${SERVER_URL}/api/learning/run/${bpId}`, { method: 'POST' });
+        const r = await fetch(`${API_URL}/learning/run/${bpId}`, { method: 'POST' });
         if (r.ok) return r.json();
       } catch (_) {}
       // Fallback: invoke via functions API

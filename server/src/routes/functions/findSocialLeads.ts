@@ -20,12 +20,15 @@ async function tavilySearch(query: string, maxResults = 5): Promise<any[]> {
   } catch { return []; }
 }
 
+// Intent scoring — used for lead scoring bonus only (not as a gate)
 const INTENT_KEYWORDS_HE = ['מחפש', 'מחפשת', 'צריך', 'צריכה', 'ממליצים', 'המלצה', 'מישהו מכיר', 'יש מישהו', 'אפשר להמליץ', 'בדחיפות', 'הצעת מחיר', 'מחיר', 'כמה עולה'];
-const INTENT_KEYWORDS_EN = ['looking for', 'recommend', 'anyone know', 'need a', 'searching for', 'can someone', 'help me find'];
+const INTENT_KEYWORDS_EN = ['looking for', 'recommend', 'anyone know', 'need a', 'searching for', 'can someone', 'help me find', 'price', 'quote', 'hire'];
 
-function hasIntent(text: string): boolean {
+function countIntent(text: string): number {
   const lower = text.toLowerCase();
-  return INTENT_KEYWORDS_HE.some(kw => lower.includes(kw)) || INTENT_KEYWORDS_EN.some(kw => lower.includes(kw));
+  const heMatches = INTENT_KEYWORDS_HE.filter(kw => lower.includes(kw)).length;
+  const enMatches = INTENT_KEYWORDS_EN.filter(kw => lower.includes(kw)).length;
+  return heMatches + enMatches;
 }
 
 export async function findSocialLeads(req: Request, res: Response) {
@@ -64,15 +67,18 @@ export async function findSocialLeads(req: Request, res: Response) {
       `${category} ${city} פורום המלצה`,
       `${category} ${city} instagram`,
       `${category} אזור ${city} הצעת מחיר`,
+      // English-oriented queries (Tavily often returns EN content)
+      `${category} ${city} recommendation looking for`,
+      `${category} near ${city} need help`,
     ];
 
     let leadsCreated = 0;
 
     for (const query of queries) {
-      const results = await tavilySearch(query, 5);
+      const results = await tavilySearch(query, 7);
       for (const r of results) {
         const text = (r.content || r.title || '');
-        if (!hasIntent(text)) continue;
+        if (!text || text.length < 30) continue; // skip empty snippets
         if (r.url && existingUrls.has(r.url)) continue;
 
         // Extract lead details via LLM — extract only, never invent
@@ -108,7 +114,7 @@ ${extracted.person_name ? `שם הפונה: ${extracted.person_name}` : ''}
           suggestedMessage = typeof msgResult === 'string' ? msgResult.trim() : '';
         } catch (_) {}
 
-        // Dynamic lead scoring (instead of hardcoded 80)
+        // Dynamic lead scoring
         let score = 50;
         if (extracted.urgency === 'immediate' || extracted.urgency === 'urgent') score += 25;
         else if (extracted.urgency === 'soon' || extracted.urgency === 'this_week') score += 12;
@@ -116,7 +122,9 @@ ${extracted.person_name ? `שם הפונה: ${extracted.person_name}` : ''}
         if (extracted.person_name) score += 5;
         if ((r.url || '').includes('facebook.com')) score += 5;
         if (text.includes('בדחיפות') || text.includes('מיד')) score += 10;
-        if (INTENT_KEYWORDS_HE.filter(kw => text.includes(kw)).length >= 2) score += 8;
+        const intentMatches = countIntent(text);
+        if (intentMatches >= 2) score += 8;
+        else if (intentMatches === 1) score += 4;
         score = Math.min(score, 98);
 
         // Determine action type: 'call' for immediate urgency leads
