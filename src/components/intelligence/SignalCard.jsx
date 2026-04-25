@@ -272,6 +272,21 @@ ACTION_TIME: [זמן ביצוע, למשל: "5 דקות"]
                   רעיון קמפיין
                 </button>
               )}
+              {(() => {
+                // Show action type badge when metadata is available
+                try {
+                  const m = JSON.parse(signal.source_description || '{}');
+                  const ACTION_ICON = { social_post:'📣', respond:'💬', promote:'🎯', call:'📞', task:'✅' };
+                  if (m.action_label && m.action_type) {
+                    return (
+                      <span className="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full border border-indigo-100">
+                        {ACTION_ICON[m.action_type] || '⚡'} {m.action_label}
+                      </span>
+                    );
+                  }
+                } catch {}
+                return null;
+              })()}
               <button
                 onClick={(e) => { e.stopPropagation(); setShowActionPopup(true); }}
                 className="btn-subtle text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 font-semibold flex items-center gap-1 px-2 py-0.5 rounded-md transition-all"

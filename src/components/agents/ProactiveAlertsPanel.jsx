@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useNavigate } from 'react-router-dom';
-import { Bell, X, ChevronLeft, AlertTriangle, Target, TrendingUp, Trophy, Zap, ClipboardList, Copy, CheckCheck, ExternalLink } from 'lucide-react';
+import { Bell, X, AlertTriangle, Target, TrendingUp, Trophy, Zap, ClipboardList, Copy, CheckCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import ActionDrawer from '@/components/ActionDrawer';
+import ActionPopup from '@/components/ui/ActionPopup';
 import FeedbackWidget from '@/components/FeedbackWidget';
 
 const typeConfig = {
@@ -31,9 +31,9 @@ function ActionButton({ alert, actionMeta, onActed }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
-    if (!actionMeta?.prefilled_content) return;
+    if (!actionMeta?.prefilled_text) return;
     try {
-      await navigator.clipboard.writeText(actionMeta.prefilled_content);
+      await navigator.clipboard.writeText(actionMeta.prefilled_text);
       setCopied(true);
       toast.success('הטקסט הועתק ✓');
       setTimeout(() => setCopied(false), 2000);
@@ -42,14 +42,14 @@ function ActionButton({ alert, actionMeta, onActed }) {
 
   if (!actionMeta?.action_label) return null;
 
-  const { action_type, action_label, prefilled_content } = actionMeta;
+  const { action_type, action_label, prefilled_text } = actionMeta;
 
-  // Social post — show copy button for prefilled text
-  if ((action_type === 'social_post' || action_type === 'promote') && prefilled_content) {
+  // Social post / promote — show copy button for prefilled text
+  if ((action_type === 'social_post' || action_type === 'promote') && prefilled_text) {
     return (
       <div className="mt-2 space-y-1.5">
         <div className="px-2.5 py-2 rounded-lg bg-white/70 border border-border/40 text-[11px] text-foreground-secondary leading-relaxed">
-          {prefilled_content}
+          {prefilled_text}
         </div>
         <button onClick={handleCopy}
           className="flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:opacity-70 transition-all">
@@ -60,12 +60,12 @@ function ActionButton({ alert, actionMeta, onActed }) {
     );
   }
 
-  // Reply/respond — show content + mark acted
-  if (action_type === 'respond' && prefilled_content) {
+  // Reply/respond — show content + copy
+  if (action_type === 'respond' && prefilled_text) {
     return (
       <div className="mt-2 space-y-1.5">
         <div className="px-2.5 py-2 rounded-lg bg-white/70 border border-border/40 text-[11px] text-foreground-secondary leading-relaxed">
-          {prefilled_content}
+          {prefilled_text}
         </div>
         <button onClick={handleCopy}
           className="flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:opacity-70 transition-all">
@@ -73,19 +73,6 @@ function ActionButton({ alert, actionMeta, onActed }) {
           {copied ? 'הועתק!' : action_label}
         </button>
       </div>
-    );
-  }
-
-  // Generic fallback — show an "open drawer" button for unknown action types
-  if (actionMeta?.action_label && actionMeta?.prefilled_content) {
-    return (
-      <button
-        onClick={() => onActed?.()}
-        className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:opacity-70 transition-all"
-      >
-        <ExternalLink className="w-3 h-3" />
-        {actionMeta.action_label}
-      </button>
     );
   }
 
@@ -95,7 +82,7 @@ function ActionButton({ alert, actionMeta, onActed }) {
 export default function ProactiveAlertsPanel({ bpId }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [drawer, setDrawer] = useState(null); // { title, description, actionType, content }
+  const [popupSignal, setPopupSignal] = useState(null);
 
   const { data: alerts = [] } = useQuery({
     queryKey: ['proactiveAlerts', bpId],
@@ -123,15 +110,13 @@ export default function ProactiveAlertsPanel({ bpId }) {
 
   return (
     <>
-    <ActionDrawer
-      open={!!drawer}
-      onClose={() => setDrawer(null)}
-      title={drawer?.title}
-      description={drawer?.description}
-      actionType={drawer?.actionType}
-      content={drawer?.content}
-      onActed={() => setDrawer(null)}
-    />
+    {popupSignal && (
+      <ActionPopup
+        signal={popupSignal}
+        businessProfile={{ id: bpId }}
+        onClose={() => setPopupSignal(null)}
+      />
+    )}
     <div className="card-base p-5">
       <div className="flex items-center gap-2 mb-4">
         <Bell className="w-4 h-4 text-foreground-muted" />
@@ -152,21 +137,40 @@ export default function ProactiveAlertsPanel({ bpId }) {
                   <p className="text-[12px] font-semibold text-foreground leading-snug">{alert.title}</p>
                   {alert.description && <p className="text-[11px] text-foreground-secondary mt-1 leading-relaxed">{alert.description}</p>}
 
-                  {/* Inline action with prefilled content */}
+                  {/* Inline action with prefilled text */}
                   <ActionButton
                     alert={alert}
                     actionMeta={actionMeta}
-                    onActed={() => {
-                      actMutation.mutate({ id: alert.id, url: null });
-                      if (actionMeta?.prefilled_content && (actionMeta.prefilled_content.length > 80 || actionMeta.action_type === 'generic')) {
-                        setDrawer({ title: alert.title, description: alert.description, actionType: actionMeta.action_type, content: actionMeta.prefilled_content });
-                      }
-                    }}
+                    onActed={() => actMutation.mutate({ id: alert.id, url: null })}
                   />
 
                   <div className="flex items-center gap-2.5 mt-2">
-                    {alert.suggested_action && !actionMeta?.prefilled_content && (
+                    {alert.suggested_action && !actionMeta?.prefilled_text && (
                       <span className="text-[11px] text-foreground-secondary">{alert.suggested_action}</span>
+                    )}
+                    {actionMeta?.action_label && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          actMutation.mutate({ id: alert.id, url: null });
+                          setPopupSignal({
+                            id: alert.id,
+                            summary: alert.description || alert.title,
+                            recommended_action: actionMeta.action_label,
+                            source_description: JSON.stringify({
+                              action_label: actionMeta.action_label,
+                              action_type: actionMeta.action_type || 'task',
+                              prefilled_text: actionMeta.prefilled_text || '',
+                              time_minutes: actionMeta.action_type === 'call' ? 10 : actionMeta.action_type === 'social_post' ? 15 : 20,
+                              urgency_hours: actionMeta.urgency_hours || 24,
+                            }),
+                            impact_level: alert.priority === 'high' || alert.priority === 'critical' ? 'high' : 'medium',
+                          });
+                        }}
+                        className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 transition-all"
+                      >
+                        <Zap className="w-3 h-3" /> פעל עכשיו
+                      </button>
                     )}
                     <button onClick={(e) => { e.stopPropagation(); navigate(`/tasks?from_alert=${alert.id}&title=${encodeURIComponent(actionMeta?.action_label || alert.suggested_action || alert.title)}&desc=${encodeURIComponent(alert.description || '')}&priority=${alert.priority === 'critical' ? 'critical' : alert.priority === 'high' ? 'high' : 'medium'}`); }}
                       className="btn-subtle flex items-center gap-1 text-[10px] font-medium text-foreground-muted hover:text-foreground transition-all">

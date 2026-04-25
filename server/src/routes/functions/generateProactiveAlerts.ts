@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
+import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
 
 export async function generateProactiveAlerts(req: Request, res: Response) {
   const { businessProfileId } = req.body;
@@ -42,9 +43,13 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
 
     const isNewBusiness = recentReviews.length === 0 && hotLeads.length === 0 && signals.length === 0;
 
+    // Inject learned business context (tone, channels, rejected patterns)
+    const bizCtx = await loadBusinessContext(businessProfileId);
+    const ctxPrompt = formatContextForPrompt(bizCtx, 'generateProactiveAlerts');
+
     const result = await invokeLLM({
       prompt: `אתה מערכת ניטור פרואקטיבית לעסקים ישראלים. היום: ${todayDate}.
-
+${ctxPrompt}
 ${contextBlock}
 
 ${isNewBusiness ? `זהו עסק חדש ללא נתוני לקוחות עדיין.
@@ -56,8 +61,9 @@ ${isNewBusiness ? `זהו עסק חדש ללא נתוני לקוחות עדיי�
 2. כל suggested_action חייב להתחיל בפועל ציווי + ערוץ + תוכן ספציפי
 3. action_label: מקסימום 4 מילים, מתחיל בפועל ("שלח תגובה", "פרסם פוסט", "צלצל ללקוח")
 4. action_type: אחד מ social_post / respond / call / task / promote
-5. prefilled_content: טקסט מוכן (פוסט/תגובה/סקריפט שיחה) בעברית — 20-60 מילים
+5. prefilled_text: טקסט מוכן (פוסט/תגובה/סקריפט שיחה) בעברית — 20-60 מילים, מותאם לטון העסק
 6. urgency_hours: כמה שעות יש לפעול (1-48)
+7. impact_reason: משפט אחד — מה יקרה אם לא יפעלו עכשיו
 
 צור 2-4 התראות. החזר JSON:
 {"alerts":[{
@@ -68,8 +74,9 @@ ${isNewBusiness ? `זהו עסק חדש ללא נתוני לקוחות עדיי�
   "suggested_action": "פעולה מפורטת ספציפית",
   "action_label": "פועל + עצם",
   "action_type": "social_post|respond|call|task|promote",
-  "prefilled_content": "טקסט מוכן לשימוש ישיר...",
-  "urgency_hours": 24
+  "prefilled_text": "טקסט מוכן לשימוש ישיר...",
+  "urgency_hours": 24,
+  "impact_reason": "מה יקרה אם לא יפעלו עכשיו — משפט אחד"
 }]}`,
       response_json_schema: { type: 'object' },
     });
@@ -80,12 +87,13 @@ ${isNewBusiness ? `זהו עסק חדש ללא נתוני לקוחות עדיי�
     for (const alert of alerts) {
       if (!alert.title || existingTitles.has(alert.title)) continue;
 
-      // Store action metadata + prefilled content in source_description as JSON
+      // Store action metadata in source_agent as JSON (unified with MarketSignal format)
       const actionMeta = JSON.stringify({
-        action_label: alert.action_label || alert.suggested_action?.split(' ').slice(0, 3).join(' ') || 'פתח משימה',
-        action_type: alert.action_type || 'task',
-        prefilled_content: alert.prefilled_content || '',
+        action_label:  alert.action_label || alert.suggested_action?.split(' ').slice(0, 3).join(' ') || 'פתח משימה',
+        action_type:   alert.action_type || 'task',
+        prefilled_text: alert.prefilled_text || alert.prefilled_content || '',
         urgency_hours: alert.urgency_hours || 24,
+        impact_reason: alert.impact_reason || '',
       });
 
       await prisma.proactiveAlert.create({

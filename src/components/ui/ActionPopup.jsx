@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { base44 } from '@/api/base44Client';
-import { X, Copy, CheckCheck, Sparkles, Loader2, Image, Users, Send } from 'lucide-react';
+import { X, Copy, CheckCheck, Sparkles, Loader2, Image, Users, Send, Phone, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { classifyInsight, popupTypeToActionType } from '@/lib/popup_classifier';
 
@@ -24,7 +24,14 @@ const ACTION_TYPE_CONFIG = {
   task:        { label: 'משימה פנימית',            icon: '✅' },
 };
 
-const STEPS = ['תוכן', 'תמונה', 'קהל', 'פרסם'];
+// Per-type step definitions
+const STEPS_BY_TYPE = {
+  social_post: ['תוכן', 'תמונה', 'קהל', 'פרסם'],
+  promote:     ['מבצע',  'תמונה', 'קהל', 'פרסם'],
+  respond:     ['תגובה', 'שיגור'],
+  call:        ['הכנה',  'שיחה'],
+  task:        ['פרטים', 'בצע'],
+};
 
 // Image generation is handled server-side via base44.functions.invoke('generateImage')
 // to avoid CORS/403 issues with third-party APIs from the browser.
@@ -61,6 +68,14 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
   const [audienceLoading, setAudienceLoading] = useState(false);
   const [dataQuality,     setDataQuality]     = useState(null); // 'real' | 'estimated'
 
+  // Respond type — tone regeneration
+  const [toneLoading, setToneLoading] = useState(false);
+
+  // Call type — AI call points
+  const [callPoints,        setCallPoints]        = useState([]);
+  const [callPointsLoading, setCallPointsLoading] = useState(false);
+  const [callDone,          setCallDone]          = useState(false);
+
   const meta = (() => {
     try { return JSON.parse(signal.source_description || '{}'); } catch { return {}; }
   })();
@@ -83,6 +98,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
   const timeMinutes = meta.time_minutes || 15;
   const config      = ACTION_TYPE_CONFIG[actionType] || ACTION_TYPE_CONFIG.task;
   const isSocialType = ['social_post', 'promote'].includes(actionType);
+  const STEPS = STEPS_BY_TYPE[actionType] || STEPS_BY_TYPE.task;
 
   useEffect(() => {
     setText(meta.prefilled_text || signal.recommended_action || '');
@@ -103,6 +119,10 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
     setSmartAudience(null);
     setSmartImagePrompt('');
     setDone(false);
+    setToneLoading(false);
+    setCallPoints([]);
+    setCallPointsLoading(false);
+    setCallDone(false);
 
     // For social posts: kick off the multi-brain pipeline automatically
     if (['social_post', 'promote'].includes(rawActionType)) {
@@ -155,6 +175,50 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
       console.warn('[ActionPopup] smart generation failed:', err?.message);
       setSmartPhase('ready'); // show whatever we have
     }
+  }
+
+  // ── Respond tone regeneration ──
+  async function handleRegenerateTone(tone) {
+    if (!businessProfile?.id) return;
+    setToneLoading(true);
+    try {
+      const result = await base44.integrations.Core.InvokeLLM({
+        model: 'haiku',
+        prompt: `כתוב תגובה לביקורת שלילית עבור העסק "${businessProfile?.name || ''}".
+ביקורת: "${signal.summary}"
+סגנון: ${tone === 'professional' ? 'מקצועי ורשמי, ללא אמוג\'י' : tone === 'empathetic' ? 'אמפתי וחם, עם הרגשה של אכפתיות אמיתית' : 'קצר ופשוט, 2-3 משפטים בלבד'}
+
+כתוב רק את טקסט התגובה בעברית, ללא כותרות.`,
+      });
+      if (typeof result === 'string' && result.trim()) {
+        setText(result.trim());
+        toast.success('התגובה עודכנה');
+      }
+    } catch { toast.error('שגיאה — נסה שוב'); }
+    setToneLoading(false);
+  }
+
+  // ── Generate call preparation points ──
+  async function handleGenerateCallPoints() {
+    if (!businessProfile?.id) return;
+    setCallPointsLoading(true);
+    try {
+      const result = await base44.integrations.Core.InvokeLLM({
+        model: 'haiku',
+        prompt: `צור 4 נקודות שיחה קצרות ועסקיות בעברית עבור שיחת טלפון.
+
+עסק: "${businessProfile?.name || ''}"
+נושא: ${signal.summary}
+פעולה מומלצת: ${signal.recommended_action || actionLabel}
+
+כל נקודה: משפט אחד, פועל ציווי, ספציפי. ללא מספור — רק הנקודות, כל אחת בשורה.`,
+      });
+      if (typeof result === 'string') {
+        setCallPoints(result.trim().split('\n').filter(Boolean).slice(0, 4));
+        toast.success('נקודות השיחה מוכנות');
+      }
+    } catch { toast.error('שגיאה — נסה שוב'); }
+    setCallPointsLoading(false);
   }
 
   useEffect(() => {
@@ -303,9 +367,16 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
 
       {/* Smart audience context when ready */}
       {smartPhase === 'ready' && smartAudience && (
-        <div className="flex items-center gap-2 mb-2 px-3 py-1.5 bg-indigo-50 rounded-xl border border-indigo-100">
+        <div className="flex items-center gap-2 mb-1.5 px-3 py-1.5 bg-indigo-50 rounded-xl border border-indigo-100">
           <span className="text-[10px] text-indigo-600">👥 {smartAudience.age_range} · {smartAudience.gender} · {smartAudience.preferred_channel}</span>
           <span className="text-[9px] text-indigo-400 mr-auto">Claude Sonnet</span>
+        </div>
+      )}
+      {/* Best posting time */}
+      {smartPhase === 'ready' && smartAudience?.best_time && (
+        <div className="flex items-center gap-1.5 mb-2 px-3 py-1 text-[10px] text-indigo-500">
+          <span>⏰</span>
+          <span>זמן אידיאלי לפרסום: {smartAudience.best_time}</span>
         </div>
       )}
 
@@ -383,7 +454,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           <span className="text-gray-600">{audienceLoading ? 'טוען...' : 'קהל יעד'}</span>
         </button>
         <button
-          onClick={() => setStep(3)}
+          onClick={() => setStep(STEPS.length - 1)}
           className="flex flex-col items-center gap-1.5 py-2.5 px-2 bg-indigo-600 text-white rounded-xl text-[11px] hover:bg-indigo-700 transition-all"
         >
           <Send className="w-4 h-4" />
@@ -544,7 +615,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           </div>
         )}
 
-        <button onClick={() => setStep(3)}
+        <button onClick={() => setStep(STEPS.length - 1)}
           className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-[12px] font-medium hover:bg-indigo-700 transition-all">
           המשך לפרסום ←
         </button>
@@ -651,7 +722,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
         </div>
       )}
 
-      <button onClick={() => setStep(3)}
+      <button onClick={() => setStep(STEPS.length - 1)}
         className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-[12px] font-medium hover:bg-indigo-700 transition-all">
         פרסם לקהל הזה ←
       </button>
@@ -728,7 +799,176 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
     </>
   );
 
-  const stepContents = [stepContent, stepImage, stepAudience, stepPublish];
+  // ── STEP: Respond (תגובה לביקורת) ──
+  const stepRespond = (
+    <>
+      {/* Original review/mention */}
+      <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 mb-3">
+        <p className="text-[10px] font-semibold text-gray-400 mb-1">הביקורת / האזכור:</p>
+        <p className="text-[12px] text-gray-700 leading-relaxed">{signal.summary}</p>
+      </div>
+
+      {/* Tone selector */}
+      <div className="flex gap-2 mb-2">
+        {[
+          { key: 'professional', label: 'מקצועי' },
+          { key: 'empathetic',   label: 'אמפתי' },
+          { key: 'short',        label: 'קצר ופשוט' },
+        ].map(t => (
+          <button key={t.key}
+            onClick={() => handleRegenerateTone(t.key)}
+            disabled={toneLoading}
+            className="flex-1 py-1.5 rounded-lg border border-gray-200 text-[11px] text-gray-600 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-all disabled:opacity-50">
+            {toneLoading ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : t.label}
+          </button>
+        ))}
+      </div>
+
+      <p className="text-[11px] font-semibold text-gray-600 mb-1.5">טקסט תגובה (ניתן לעריכה):</p>
+      <textarea
+        value={text}
+        onChange={e => setText(e.target.value)}
+        rows={5}
+        className="w-full text-[12px] text-gray-800 border border-gray-200 rounded-xl px-4 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+        style={{ fontFamily: 'inherit', lineHeight: 1.6 }}
+      />
+
+      <div className="space-y-2 pt-2 border-t border-gray-100 mt-3">
+        <button onClick={handleCopy}
+          className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-indigo-200 text-indigo-700 rounded-xl text-[13px] font-medium hover:bg-indigo-50 transition-all">
+          {copied ? <CheckCheck className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+          {copied ? 'הועתק!' : 'העתק תגובה'}
+        </button>
+        <button onClick={() => setStep(1)}
+          className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-[13px] font-semibold hover:bg-indigo-700 transition-all">
+          המשך לשיגור ←
+        </button>
+      </div>
+    </>
+  );
+
+  // ── STEP: Respond publish (שיגור תגובה) ──
+  const stepRespondPublish = (
+    <>
+      <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 mb-4 text-[12px] text-gray-700">
+        <p className="text-[10px] text-gray-400 mb-1">התגובה שתשלח:</p>
+        {text}
+      </div>
+      <div className="space-y-2">
+        {[
+          { label: 'Google Reviews', emoji: '🌟', action: () => { handleCopy(); window.open('https://business.google.com/reviews', '_blank'); toast.success('הועתק — הדבק ב-Google'); }},
+          { label: 'Facebook', emoji: '👤', action: () => { handleCopy(); window.open('https://www.facebook.com/', '_blank'); toast.success('הועתק — הדבק בפייסבוק'); }},
+          { label: 'Instagram DM', emoji: '📸', action: () => { handleCopy(); window.open('https://www.instagram.com/', '_blank'); toast.success('הועתק — שלח ב-DM'); }},
+        ].map(p => (
+          <button key={p.label} onClick={p.action}
+            className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/40 transition-all text-[12px] font-medium">
+            <span className="text-gray-400 text-[10px]">לחץ לשיגור</span>
+            <span className="flex items-center gap-2">{p.emoji} {p.label} ←</span>
+          </button>
+        ))}
+      </div>
+      <button onClick={handleCreateTask} disabled={creating}
+        className="w-full flex items-center justify-center gap-2 py-2.5 mt-3 border border-gray-200 text-gray-600 rounded-xl text-[12px] hover:bg-gray-50 transition-all disabled:opacity-70">
+        {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
+        {creating ? 'יוצר...' : 'צור משימה מעקב'}
+      </button>
+    </>
+  );
+
+  // ── STEP: Call prep (הכנה לשיחה) ──
+  const stepCall = (
+    <>
+      <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 mb-3">
+        <p className="text-[11px] font-semibold text-indigo-700 mb-1">נושא השיחה:</p>
+        <p className="text-[12px] text-indigo-900">{signal.summary}</p>
+      </div>
+
+      {/* Call points */}
+      {callPoints.length > 0 && (
+        <div className="space-y-2 mb-3">
+          <p className="text-[11px] font-semibold text-gray-600">נקודות לשיחה:</p>
+          {callPoints.map((pt, i) => (
+            <div key={i} className="flex items-start gap-2 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg">
+              <span className="text-indigo-500 text-[11px] font-bold flex-shrink-0">{i + 1}.</span>
+              <span className="text-[12px] text-gray-700">{pt}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {callPoints.length === 0 && (
+        <div className="text-center py-4 mb-3 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+          <MessageSquare className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+          <p className="text-[11px] text-gray-400 mb-3">לחץ לקבלת נקודות שיחה מותאמות אישית</p>
+          <button onClick={handleGenerateCallPoints} disabled={callPointsLoading}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-[12px] font-medium hover:bg-indigo-700 transition-all disabled:opacity-70">
+            {callPointsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            {callPointsLoading ? 'מכין...' : '✨ צור נקודות שיחה עם AI'}
+          </button>
+        </div>
+      )}
+
+      {callPoints.length > 0 && (
+        <button onClick={handleGenerateCallPoints} disabled={callPointsLoading}
+          className="w-full py-2 border border-gray-200 text-gray-500 rounded-xl text-[11px] hover:bg-gray-50 transition-all mb-3 disabled:opacity-50">
+          {callPointsLoading ? <Loader2 className="w-3 h-3 animate-spin inline mr-1" /> : '↻'} עדכן נקודות
+        </button>
+      )}
+
+      <button onClick={() => setStep(1)}
+        className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-[13px] font-semibold hover:bg-indigo-700 transition-all">
+        מוכן לשיחה ←
+      </button>
+    </>
+  );
+
+  // ── STEP: Call action (שיגור שיחה) ──
+  const stepCallAction = (
+    <>
+      {callPoints.length > 0 && (
+        <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 mb-4">
+          <p className="text-[10px] text-indigo-500 mb-1.5 font-semibold">נקודות לשיחה:</p>
+          {callPoints.map((pt, i) => (
+            <p key={i} className="text-[11px] text-indigo-800 mb-1">• {pt}</p>
+          ))}
+        </div>
+      )}
+      <div className="space-y-3">
+        {meta.phone && (
+          <a href={`tel:${meta.phone}`}
+            className="w-full flex items-center justify-center gap-3 py-4 bg-green-600 text-white rounded-2xl text-[14px] font-bold hover:bg-green-700 transition-all">
+            <Phone className="w-5 h-5" />
+            התקשר עכשיו
+          </a>
+        )}
+        {!meta.phone && (
+          <div className="w-full flex items-center justify-center gap-3 py-4 bg-gray-100 text-gray-500 rounded-2xl text-[13px]">
+            <Phone className="w-5 h-5" />
+            מספר טלפון לא זמין — בדוק בפרטי הליד
+          </div>
+        )}
+        <a href={`https://wa.me/${(meta.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(text || signal.recommended_action || '')}`}
+          target="_blank" rel="noopener noreferrer"
+          className="w-full flex items-center justify-center gap-2 py-3 bg-[#25D366] text-white rounded-xl text-[13px] font-medium hover:bg-[#1fb855] transition-all">
+          💬 שלח WhatsApp קודם
+        </a>
+      </div>
+      <button onClick={() => { setCallDone(true); handleCreateTask(); }}
+        disabled={creating}
+        className="w-full flex items-center justify-center gap-2 py-2.5 mt-3 border border-gray-200 text-gray-600 rounded-xl text-[12px] hover:bg-gray-50 transition-all disabled:opacity-70">
+        {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
+        סמן שיחה כבוצעה + צור משימה
+      </button>
+    </>
+  );
+
+  // Dynamic step content array based on action type
+  const stepContents = (() => {
+    if (actionType === 'respond') return [stepRespond, stepRespondPublish];
+    if (actionType === 'call')    return [stepCall, stepCallAction];
+    // social_post / promote / task — full 4-step flow
+    return [stepContent, stepImage, stepAudience, stepPublish];
+  })();
 
   // FIX 6: render at document.body via portal so position:fixed is never broken
   return createPortal(
@@ -757,6 +997,20 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
 
         {/* Content */}
         <div className="px-5 py-4 flex-1 overflow-y-auto">
+          {/* Urgency Banner — shown when high impact or urgent time window */}
+          {(signal.impact_level === 'high' || (meta.urgency_hours && meta.urgency_hours <= 6)) && (
+            <div className="flex items-center gap-2 px-3 py-2 mb-3 bg-red-50 border border-red-100 rounded-xl text-[11px] text-red-700">
+              <span className="flex-shrink-0">🔴</span>
+              <span>
+                {meta.urgency_hours
+                  ? `פעולה נדרשת תוך ${meta.urgency_hours} שעות`
+                  : 'השפעה גבוהה — פעל עכשיו'}
+              </span>
+              {meta.impact_reason && (
+                <span className="text-red-400 text-[10px] mr-auto truncate">{meta.impact_reason}</span>
+              )}
+            </div>
+          )}
           {stepBar}
           {done ? (
             <div className="text-center py-4">

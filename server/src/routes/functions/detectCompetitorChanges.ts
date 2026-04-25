@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { loadBusinessContext } from '../../lib/businessContext';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 
@@ -46,6 +47,10 @@ export async function detectCompetitorChanges(req: Request, res: Response) {
     });
 
     const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+
+    // Load context for personalized action suggestions
+    const bizCtx = await loadBusinessContext(businessProfileId);
+    const preferredChannel = bizCtx?.preferredChannels?.[0] || 'instagram';
 
     for (const comp of competitors) {
       try {
@@ -125,15 +130,15 @@ ${textBlob.slice(0, 2500)}
           if (analysis.new_promotion?.found) {
             actionLabel = `פרסם מבצע נגד ${comp.name}`;
             actionType  = 'promote';
-            prefillText += `${comp.name} משיק מבצע — שקול מבצע מענה: `;
+            prefillText += `${comp.name} משיק מבצע חדש: "${analysis.new_promotion.summary}". פרסם מבצע מענה ב${preferredChannel} שמבליט את הערך הייחודי שלך.`;
           } else if (analysis.price_change?.found) {
             actionLabel = `עדכן מחירים בתגובה ל${comp.name}`;
             actionType  = 'task';
-            prefillText += `${comp.name} שינה מחירים (${analysis.price_change.summary}) — בדוק מול המחירים שלך.`;
+            prefillText += `${comp.name} עדכן מחירים (${analysis.price_change.summary}) — בדוק האם המחירים שלך עדיין תחרותיים ושקול עדכון.`;
           } else if (analysis.new_post?.found) {
             actionLabel = `פרסם תגובה ל${comp.name}`;
             actionType  = 'social_post';
-            prefillText += `${comp.name} פרסם: ${analysis.new_post.summary}. שקול פרסום מקביל שמבליט את היתרונות שלך.`;
+            prefillText += `${comp.name} פרסם: "${analysis.new_post.summary}". צור פוסט מקביל שמציג את היתרון הייחודי שלך על פניהם.`;
           }
 
           const sourceDesc = JSON.stringify({
@@ -141,6 +146,12 @@ ${textBlob.slice(0, 2500)}
             action_type:    actionType,
             prefilled_text: prefillText,
             time_minutes:   15,
+            urgency_hours:  analysis.price_change?.found ? 12 : 24,
+            impact_reason:  analysis.new_promotion?.found
+              ? 'מתחרה עם מבצע פעיל עלול למשוך לקוחות שלך'
+              : analysis.price_change?.found
+              ? 'שינוי מחירים אצל מתחרה עשוי להשפיע על ההחלטות של לקוחותיך'
+              : 'תגובה מהירה לפרסום מתחרה שומרת על נוכחותך בשוק',
           });
 
           const sourceUrls = results

@@ -49,7 +49,9 @@ JSON בלבד:
   "action_type": "social_post|promote|task|call",
   "prefilled_text": "טקסט מוכן לשימוש ישיר בעברית — 30-50 מילים",
   "time_minutes": 15,
-  "confidence": 65
+  "confidence": 65,
+  "urgency_hours": 48,
+  "impact_reason": "מה יקרה אם לא יפעלו עכשיו — משפט אחד"
 }]}`,
         response_json_schema: { type: 'object' },
       });
@@ -62,10 +64,12 @@ JSON בלבד:
       for (const insight of coldInsights) {
         if (!insight.summary || existingSumsCold.has(insight.summary)) continue;
         const actionMeta = JSON.stringify({
-          action_label: insight.action_label || 'פתח משימה',
-          action_type: insight.action_type || 'task',
+          action_label:  insight.action_label || 'פתח משימה',
+          action_type:   insight.action_type || 'task',
           prefilled_text: insight.prefilled_text || '',
-          time_minutes: insight.time_minutes || 15,
+          time_minutes:  insight.time_minutes || 15,
+          urgency_hours: insight.urgency_hours || 48,
+          impact_reason: insight.impact_reason || '',
         });
         await prisma.marketSignal.create({
           data: {
@@ -121,7 +125,9 @@ ${contextBlock}
   "prefilled_text": "טקסט מוכן לשימוש...",
   "time_minutes": 15,
   "confidence": 75,
-  "source_urls": ["url1","url2"]
+  "source_urls": ["url1","url2"],
+  "urgency_hours": 24,
+  "impact_reason": "מה יקרה אם לא יפעלו עכשיו — משפט אחד"
 }]}`,
       response_json_schema: { type: 'object' },
     });
@@ -137,10 +143,12 @@ ${contextBlock}
       const sourceUrls = (insight.source_urls || []).filter((u: string) => u?.startsWith('http'));
       // Store action metadata in source_description as JSON for use by UI
       const actionMeta = JSON.stringify({
-        action_label: insight.action_label || insight.recommended_action?.split(' ').slice(0, 4).join(' ') || 'פתח משימה',
-        action_type: insight.action_type || 'task',
+        action_label:  insight.action_label || insight.recommended_action?.split(' ').slice(0, 4).join(' ') || 'פתח משימה',
+        action_type:   insight.action_type || 'task',
         prefilled_text: insight.prefilled_text || '',
-        time_minutes: insight.time_minutes || 15,
+        time_minutes:  insight.time_minutes || 15,
+        urgency_hours: insight.urgency_hours || 24,
+        impact_reason: insight.impact_reason || '',
       });
       await prisma.marketSignal.create({
         data: {

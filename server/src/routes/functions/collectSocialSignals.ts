@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { prisma } from '../../db';
+import { loadBusinessContext } from '../../lib/businessContext';
 
 const APIFY_API_KEY = process.env.APIFY_API_KEY || '';
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
@@ -256,6 +257,10 @@ export async function collectSocialSignals(req: Request, res: Response) {
     }
     console.log(`Phase 3: ${phase3Signals} new signals`);
 
+    // Load business context for personalized response templates
+    const bizCtx = await loadBusinessContext(businessProfileId);
+    const bTone = bizCtx?.preferredTone || 'professional';
+
     // ── Post-process: surface negative social mentions as actionable MarketSignals ──
     const NEGATIVE_KEYWORDS = [
       'גרוע', 'איום', 'נורא', 'מאכזב', 'disappointed', 'terrible', 'worst', 'awful',
@@ -285,6 +290,14 @@ export async function collectSocialSignals(req: Request, res: Response) {
 
       const snippet = (sig.content || '').slice(0, 100);
       const platformLabel = sig.platform === 'facebook' ? 'פייסבוק' : sig.platform === 'instagram' ? 'אינסטגרם' : 'רשת חברתית';
+      const dmChannel = sig.platform === 'facebook' ? 'פייסבוק מסנג\'ר' : 'DM';
+
+      // Personalize response template based on learned business tone
+      const responseTemplate = bTone === 'casual'
+        ? `היי! מצטערים לשמוע 🙏 ניצור קשר אישית לפתרון. ${name}`
+        : bTone === 'warm'
+        ? `שלום, מצטערים מאוד על החוויה. חשוב לנו מאוד לפתור את הבעיה — נשמח אם תפנה אלינו ישירות ב${dmChannel}. ${name}`
+        : `שלום, תודה שפנית אלינו. אנחנו מצטערים לשמוע על חוויתך ונשמח ליצור קשר ולפתור את הבעיה. נא פנה אלינו ב${dmChannel} או בטלפון. צוות ${name}`;
 
       await prisma.marketSignal.create({
         data: {
@@ -293,10 +306,12 @@ export async function collectSocialSignals(req: Request, res: Response) {
           impact_level: 'high',
           recommended_action: 'הגב לביקורת',
           source_description: JSON.stringify({
-            action_label: `הגב ב${platformLabel}`,
-            action_type:  'respond',
-            prefilled_text: `שלום, תודה שפנית אלינו. אנחנו מצטערים לשמוע על חוויתך. נשמח ליצור איתך קשר ולפתור את הבעיה. נא פנה אלינו ישירות ב${sig.platform === 'facebook' ? 'פייסבוק מסנג\'ר' : 'DM'} או בטלפון.`,
+            action_label:  `הגב ב${platformLabel}`,
+            action_type:   'respond',
+            prefilled_text: responseTemplate,
             time_minutes:   5,
+            urgency_hours:  4,
+            impact_reason:  'ביקורת שלילית ללא תגובה פוגעת בדירוג ובאמון לקוחות פוטנציאליים',
           }),
           source_signals: sig.url || '',
           confidence: 80,

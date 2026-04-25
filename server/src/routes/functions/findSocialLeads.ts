@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { loadBusinessContext } from '../../lib/businessContext';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 
@@ -38,6 +39,15 @@ export async function findSocialLeads(req: Request, res: Response) {
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
     const { name, category, city } = profile;
+
+    // Load learned business context for personalized messaging
+    const bizCtx = await loadBusinessContext(businessProfileId);
+    const tone = bizCtx?.preferredTone || 'professional';
+    const toneInstruction = tone === 'casual'
+      ? 'טון קליל וחברותי, עם אמוג\'י אחד לכל היותר'
+      : tone === 'warm'
+      ? 'טון חם ואישי, מבלי להיות מכירתי'
+      : 'טון מקצועי ואמין';
 
     const existingLeads = await prisma.lead.findMany({
       where: { linked_business: businessProfileId, source_origin: 'tavily' },
@@ -82,20 +92,38 @@ Set is_lead=false if no clear intent to purchase/hire a service. Leave fields as
 
         if (!extracted || !extracted.is_lead) continue;
 
-        // Generate Hebrew WhatsApp first contact message
+        // Generate Hebrew WhatsApp first contact message (personalized to business tone)
         let suggestedMessage = '';
         try {
           const msgResult = await invokeLLM({
-            prompt: `כתוב הודעת WhatsApp ראשונה טבעית בעברית (2-3 שורות) עבור העסק "${name}" (${category} ב${city}) בתגובה לאדם שמחפש שירות.
+            prompt: `כתוב הודעת WhatsApp ראשונה בעברית (2-3 שורות) עבור העסק "${name}" (${category} ב${city}).
 
 מה הוא מחפש: ${extracted.service_needed || category}
 פוסט מקורי: "${text.substring(0, 250)}"
+${extracted.person_name ? `שם הפונה: ${extracted.person_name}` : ''}
 
-כללים: טון טבעי ולא מכירתי. פתח בברכה. הזכר את השירות בקצרה. סיים בהצעת עזרה.
+הנחיות סגנון: ${toneInstruction}. פתח בשם אם ידוע. הזכר את השירות הספציפי. סיים בהצעה לעזור.
 כתוב רק את טקסט ההודעה בלבד.`,
           });
           suggestedMessage = typeof msgResult === 'string' ? msgResult.trim() : '';
         } catch (_) {}
+
+        // Dynamic lead scoring (instead of hardcoded 80)
+        let score = 50;
+        if (extracted.urgency === 'immediate' || extracted.urgency === 'urgent') score += 25;
+        else if (extracted.urgency === 'soon' || extracted.urgency === 'this_week') score += 12;
+        if (extracted.budget_mentioned) score += 15;
+        if (extracted.person_name) score += 5;
+        if ((r.url || '').includes('facebook.com')) score += 5;
+        if (text.includes('בדחיפות') || text.includes('מיד')) score += 10;
+        if (INTENT_KEYWORDS_HE.filter(kw => text.includes(kw)).length >= 2) score += 8;
+        score = Math.min(score, 98);
+
+        // Determine action type: 'call' for immediate urgency leads
+        const alertActionType = (extracted.urgency === 'immediate' || extracted.urgency === 'urgent')
+          ? 'call' : 'social_post';
+        const alertActionLabel = alertActionType === 'call'
+          ? `התקשר ל${extracted.person_name || 'הליד'}` : `שלח הודעה ל${extracted.person_name || 'הליד'}`;
 
         try {
           await prisma.lead.create({
@@ -109,7 +137,7 @@ Set is_lead=false if no clear intent to purchase/hire a service. Leave fields as
               urgency: extracted.urgency || 'this_week',
               budget_range: extracted.budget_mentioned || null,
               status: 'hot',
-              score: 80,
+              score,
               freshness_score: 100,
               discovered_at: new Date().toISOString(),
               lifecycle_stage: 'new',
@@ -122,15 +150,23 @@ Set is_lead=false if no clear intent to purchase/hire a service. Leave fields as
           if (r.url) existingUrls.add(r.url);
           leadsCreated++;
 
-          // Create ProactiveAlert
+          // Create ProactiveAlert with structured action metadata
+          const alertMeta = JSON.stringify({
+            action_label:  alertActionLabel,
+            action_type:   alertActionType,
+            prefilled_text: suggestedMessage || `שלח הודעת WhatsApp ל${extracted.person_name || 'הליד'} בנושא ${extracted.service_needed || category}`,
+            urgency_hours: extracted.urgency === 'immediate' ? 2 : 12,
+            impact_reason: 'ליד חם — ככל שתגיב מהר יותר, כך גדלים הסיכויים לסגירה',
+          });
+
           await prisma.proactiveAlert.create({
             data: {
-              alert_type: 'opportunity',
-              title: `ליד חדש מסושיאל: ${extracted.service_needed || category}`,
+              alert_type: 'hot_lead',
+              title: `ליד חם: ${extracted.service_needed || category}${extracted.person_name ? ` — ${extracted.person_name}` : ''}`,
               description: text.substring(0, 200),
               suggested_action: suggestedMessage || `צור קשר עם הליד`,
-              priority: 'high',
-              source_agent: 'findSocialLeads',
+              priority: score >= 80 ? 'high' : 'medium',
+              source_agent: alertMeta,
               linked_business: businessProfileId,
               created_at: new Date().toISOString(),
             },

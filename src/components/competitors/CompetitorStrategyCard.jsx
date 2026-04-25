@@ -5,6 +5,19 @@ import { toast } from 'sonner';
 import ActionPopup from '@/components/ui/ActionPopup';
 
 /**
+ * Infer action_type from tactic text — matches patterns in Hebrew/English.
+ */
+function inferActionType(tacticText) {
+  if (!tacticText) return 'task';
+  const t = tacticText;
+  if (/פרסם|פוסט|שתף|אינסטגרם|פייסבוק|סושיאל|תוכן/i.test(t)) return 'social_post';
+  if (/התקשר|פגישה|שיחה|טלפון|ליצור קשר/i.test(t))             return 'call';
+  if (/מבצע|הנחה|קמפיין|קידום|מכירות/i.test(t))                 return 'promote';
+  if (/הגב|תגובה|ביקורת|לקוח/i.test(t))                         return 'respond';
+  return 'task';
+}
+
+/**
  * CompetitorStrategyCard — AI-generated counter-strategy for a competitor.
  * Props: competitor (with .id), businessProfileId
  */
@@ -122,18 +135,21 @@ export default function CompetitorStrategyCard({ competitor, businessProfileId }
                 <div className="space-y-1.5">
                   {strategy.tactics.map((tactic, i) => (
                     <button key={i}
-                      onClick={() => setPopupSignal({
-                        id: `strategy_${competitor.id}_${i}`,
-                        summary: `אסטרטגיה מול ${competitor.name}: ${strategy.strategy}`,
-                        recommended_action: tactic,
-                        source_description: JSON.stringify({
-                          action_label: tactic,
-                          action_type: 'task',
-                          prefilled_text: `טקטיקה אסטרטגית מול ${competitor.name}:\n\n${tactic}\n\nאסטרטגיה: ${strategy.strategy}`,
-                          time_minutes: 20,
-                        }),
-                        impact_level: 'high',
-                      })}
+                      onClick={() => {
+                        const actionType = inferActionType(tactic);
+                        setPopupSignal({
+                          id: `strategy_${competitor.id}_${i}`,
+                          summary: `אסטרטגיה מול ${competitor.name}: ${strategy.strategy}`,
+                          recommended_action: tactic,
+                          source_description: JSON.stringify({
+                            action_label:  tactic.split(' ').slice(0, 5).join(' '),
+                            action_type:   actionType,
+                            prefilled_text: `טקטיקה אסטרטגית מול ${competitor.name}:\n\n${tactic}\n\nאסטרטגיה: ${strategy.strategy}`,
+                            time_minutes:  actionType === 'call' ? 10 : actionType === 'social_post' ? 15 : 20,
+                          }),
+                          impact_level: 'high',
+                        });
+                      }}
                       className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-[#e8e8e8] text-[11px] hover:border-indigo-300 hover:bg-indigo-50/50 transition-all text-right group">
                       <span className="text-[#333333]">{i + 1}. {tactic}</span>
                       <CheckCheck className="w-3 h-3 text-[#bbbbbb] group-hover:text-indigo-500 flex-shrink-0 transition-colors" />
