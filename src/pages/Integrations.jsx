@@ -179,7 +179,7 @@ function SocialPlatformCard({ platform, connection, onConnect, onDisconnect }) {
 
 // ── OAuth connect flow — server-side state + PKCE ─────────────────────────────
 
-const SERVER_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+const SERVER_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_SERVER_URL || '';
 
 async function initiateOAuth(platformId, businessId) {
   const res = await fetch(`${SERVER_BASE}/api/oauth/initiate/${platformId}?businessId=${businessId}`);
