@@ -45,7 +45,8 @@ export async function smartLeadNurture(req: Request, res: Response) {
       take: 10,
     });
 
-    let processed = 0;
+    let nurtured = 0;
+    let markedCold = 0;
 
     for (const lead of staleLeads) {
       try {
@@ -54,6 +55,7 @@ export async function smartLeadNurture(req: Request, res: Response) {
         const serviceNeeded = lead.service_needed || category;
 
         if (isCold) {
+          markedCold++;
           // Mark lead as cold
           await prisma.lead.update({
             where: { id: lead.id },
@@ -110,6 +112,7 @@ ${sectorCtx}
 
           const followupMsg = typeof messageResult === 'string' ? messageResult.trim() : '';
           if (!followupMsg) continue;
+          nurtured++;
 
           const phone = lead.contact_phone || '';
           const waUrl = phone
@@ -168,13 +171,13 @@ ${sectorCtx}
           }
         }
 
-        processed++;
       } catch (_) {}
     }
 
-    await writeAutomationLog('smartLeadNurture', businessProfileId, startTime, processed);
-    console.log(`smartLeadNurture done: ${processed} leads processed`);
-    return res.json({ leads_processed: processed });
+    const total = nurtured + markedCold;
+    await writeAutomationLog('smartLeadNurture', businessProfileId, startTime, total);
+    console.log(`smartLeadNurture done: ${nurtured} nurtured, ${markedCold} marked cold`);
+    return res.json({ leads_processed: total, nurtured, marked_cold: markedCold });
   } catch (err: any) {
     console.error('smartLeadNurture error:', err.message);
     await writeAutomationLog('smartLeadNurture', businessProfileId, startTime, 0, 'failed', err.message);

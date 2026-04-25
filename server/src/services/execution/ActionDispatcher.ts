@@ -25,6 +25,7 @@ import { decisionRepository } from '../../repositories/DecisionRepository';
 import { bus } from '../../events/EventBus';
 import { createLogger } from '../../infra/logger';
 import { prisma } from '../../db';
+import { executeOrQueue } from './executeOrQueue';
 
 const logger = createLogger('ActionDispatcher');
 
@@ -69,13 +70,47 @@ async function dashboardHandler(task: ExecutionTask, rec: Recommendation): Promi
   }
 }
 
+// Social / messaging channel handler — routes through executeOrQueue for autonomy-aware dispatch
+async function socialChannelHandler(task: ExecutionTask, rec: Recommendation): Promise<DispatchResult> {
+  const channel = task.channel;
+  try {
+    let actionType: 'whatsapp_send' | 'post_publish' | 'review_reply' = 'post_publish';
+    let payload: Record<string, any> = {
+      caption: rec.draft_content || rec.body || rec.title,
+      platform: channel === 'instagram' ? 'instagram' : channel === 'facebook' ? 'facebook' : 'both',
+    };
+
+    if (channel === 'whatsapp') {
+      actionType = 'whatsapp_send';
+      payload = { message: rec.body || rec.draft_content || rec.title };
+    } else if (channel === 'google') {
+      actionType = 'review_reply';
+      payload = { replyText: rec.body || rec.draft_content || rec.title, reviewId: '' };
+    }
+
+    await executeOrQueue({
+      businessProfileId: task.business_id,
+      agentName: 'ActionDispatcher',
+      actionType,
+      description: rec.title || task.task_type,
+      payload,
+      revenueImpact: 0,
+      autoExecuteAfterHours: 24,
+    });
+
+    return { success: true, result: `Queued via executeOrQueue → ${channel}`, metadata: {} };
+  } catch (e: any) {
+    return { success: false, result: e.message, metadata: {} };
+  }
+}
+
 const CHANNEL_HANDLERS: Record<string, ChannelHandler> = {
   dashboard: dashboardHandler,
   internal:  noopHandler,
-  instagram: noopHandler,
-  facebook:  noopHandler,
-  whatsapp:  noopHandler,
-  google:    noopHandler,
+  instagram: socialChannelHandler,
+  facebook:  socialChannelHandler,
+  whatsapp:  socialChannelHandler,
+  google:    socialChannelHandler,
   email:     noopHandler,
 };
 

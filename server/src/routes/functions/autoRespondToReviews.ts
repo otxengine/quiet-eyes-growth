@@ -162,7 +162,7 @@ ${sectorCtx}
 
     await writeAutomationLog('autoRespondToReviews', businessProfileId, startTime, processed);
     console.log(`autoRespondToReviews done: ${processed} reviews processed`);
-    return res.json({ reviews_processed: processed });
+    return res.json({ reviews_processed: processed, responses_generated: processed });
   } catch (err: any) {
     console.error('autoRespondToReviews error:', err.message);
     await writeAutomationLog('autoRespondToReviews', businessProfileId, startTime, 0, 'failed', err.message);
