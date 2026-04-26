@@ -406,9 +406,7 @@ export async function detectEvents(req: Request, res: Response) {
     // ── Phase 1: Find upcoming calendar events ────────────────────────────────
     const upcomingEvents = CALENDAR_EVENTS.filter(ev => {
       const eventDate = new Date(ev.date);
-      const alertDate = new Date(ev.date);
-      alertDate.setDate(alertDate.getDate() - ev.leadDays);
-      return eventDate >= now && eventDate <= windowEnd && now >= alertDate;
+      return eventDate >= now && eventDate <= windowEnd;
     });
 
     // ── Phase 2: Tavily search — sector-aware queries ─────────────────────────
