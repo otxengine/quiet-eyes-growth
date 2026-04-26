@@ -18,15 +18,17 @@ import { prisma } from '../db';
 
 const router = Router();
 
-// ── Env ──────────────────────────────────────────────────────────────────────
-const FACEBOOK_APP_ID      = process.env.FACEBOOK_APP_ID      || '';
-const FACEBOOK_APP_SECRET  = process.env.FACEBOOK_APP_SECRET  || '';
-const TIKTOK_CLIENT_KEY    = process.env.TIKTOK_CLIENT_KEY    || '';
-const TIKTOK_CLIENT_SECRET = process.env.TIKTOK_CLIENT_SECRET || '';
-const GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID     || '';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
-const FRONTEND_URL         = process.env.FRONTEND_URL         || 'http://localhost:5173';
-const SERVER_BASE_URL      = process.env.SERVER_BASE_URL      || 'http://localhost:3002';
+// ── Env — read lazily so dotenv has time to load ─────────────────────────────
+const env = () => ({
+  FACEBOOK_APP_ID:      process.env.FACEBOOK_APP_ID      || '',
+  FACEBOOK_APP_SECRET:  process.env.FACEBOOK_APP_SECRET  || '',
+  TIKTOK_CLIENT_KEY:    process.env.TIKTOK_CLIENT_KEY    || '',
+  TIKTOK_CLIENT_SECRET: process.env.TIKTOK_CLIENT_SECRET || '',
+  GOOGLE_CLIENT_ID:     process.env.GOOGLE_CLIENT_ID     || '',
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
+  FRONTEND_URL:         process.env.FRONTEND_URL         || 'http://localhost:5173',
+  SERVER_BASE_URL:      process.env.SERVER_BASE_URL      || 'http://localhost:3007',
+});
 
 // In-memory state store (replace with Redis/DB in production for multi-instance)
 const stateStore = new Map<string, { businessId: string; platform: string; expiresAt: number }>();
@@ -48,7 +50,7 @@ function consumeState(state: string): { businessId: string; platform: string } |
 }
 
 function callbackUrl(platform: string): string {
-  return `${SERVER_BASE_URL}/api/oauth/callback/${platform}`;
+  return `${env().SERVER_BASE_URL}/api/oauth/callback/${platform}`;
 }
 
 // Upsert a SocialAccount record (no unique index on linked_business+platform, so findFirst+update/create)
@@ -90,7 +92,7 @@ router.get('/initiate/:platform', (req: Request, res: Response) => {
   let authUrl: string;
 
   if (platform === 'facebook_page' || platform === 'instagram_business' || platform === 'whatsapp_business') {
-    if (!FACEBOOK_APP_ID) {
+    if (!env().FACEBOOK_APP_ID) {
       return res.status(503).json({ error: 'Facebook app not configured', demo: true });
     }
     const scope = platform === 'instagram_business'
@@ -101,31 +103,31 @@ router.get('/initiate/:platform', (req: Request, res: Response) => {
 
     authUrl =
       `https://www.facebook.com/v19.0/dialog/oauth?` +
-      `client_id=${FACEBOOK_APP_ID}` +
+      `client_id=${env().FACEBOOK_APP_ID}` +
       `&redirect_uri=${encodeURIComponent(callbackUrl(platform))}` +
       `&scope=${encodeURIComponent(scope)}` +
       `&state=${state}` +
       `&response_type=code`;
 
   } else if (platform === 'tiktok_business') {
-    if (!TIKTOK_CLIENT_KEY) {
+    if (!env().TIKTOK_CLIENT_KEY) {
       return res.status(503).json({ error: 'TikTok app not configured', demo: true });
     }
     authUrl =
       `https://www.tiktok.com/auth/authorize/?` +
-      `client_key=${TIKTOK_CLIENT_KEY}` +
+      `client_key=${env().TIKTOK_CLIENT_KEY}` +
       `&scope=user.info.basic,video.upload,video.publish` +
       `&response_type=code` +
       `&redirect_uri=${encodeURIComponent(callbackUrl(platform))}` +
       `&state=${state}`;
 
   } else if (platform === 'google_business') {
-    if (!GOOGLE_CLIENT_ID) {
+    if (!env().GOOGLE_CLIENT_ID) {
       return res.status(503).json({ error: 'Google app not configured', demo: true });
     }
     authUrl =
       `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${GOOGLE_CLIENT_ID}` +
+      `client_id=${env().GOOGLE_CLIENT_ID}` +
       `&redirect_uri=${encodeURIComponent(callbackUrl(platform))}` +
       `&response_type=code` +
       `&scope=${encodeURIComponent('https://www.googleapis.com/auth/business.manage email profile')}` +
@@ -147,7 +149,7 @@ async function handleFacebookCallback(code: string, platform: string, businessId
   // 1. Exchange code → short-lived token
   const tokenRes = await fetch(
     `https://graph.facebook.com/v19.0/oauth/access_token?` +
-    `client_id=${FACEBOOK_APP_ID}&client_secret=${FACEBOOK_APP_SECRET}` +
+    `client_id=${env().FACEBOOK_APP_ID}&client_secret=${env().FACEBOOK_APP_SECRET}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`,
   );
   if (!tokenRes.ok) throw new Error('Token exchange failed');
@@ -157,8 +159,8 @@ async function handleFacebookCallback(code: string, platform: string, businessId
   // 2. Extend to long-lived user token
   const longRes = await fetch(
     `https://graph.facebook.com/v19.0/oauth/access_token?` +
-    `grant_type=fb_exchange_token&client_id=${FACEBOOK_APP_ID}` +
-    `&client_secret=${FACEBOOK_APP_SECRET}&fb_exchange_token=${shortLivedToken}`,
+    `grant_type=fb_exchange_token&client_id=${env().FACEBOOK_APP_ID}` +
+    `&client_secret=${env().FACEBOOK_APP_SECRET}&fb_exchange_token=${shortLivedToken}`,
   );
   const longData: any = longRes.ok ? await longRes.json() : {};
   const userToken = longData.access_token || shortLivedToken;
@@ -227,7 +229,7 @@ async function handleWhatsAppCallback(code: string, businessId: string) {
   // 1. Exchange code → short-lived token
   const tokenRes = await fetch(
     `https://graph.facebook.com/v19.0/oauth/access_token?` +
-    `client_id=${FACEBOOK_APP_ID}&client_secret=${FACEBOOK_APP_SECRET}` +
+    `client_id=${env().FACEBOOK_APP_ID}&client_secret=${env().FACEBOOK_APP_SECRET}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`,
   );
   if (!tokenRes.ok) throw new Error('Token exchange failed');
@@ -237,8 +239,8 @@ async function handleWhatsAppCallback(code: string, businessId: string) {
   // 2. Extend to long-lived user token
   const longRes = await fetch(
     `https://graph.facebook.com/v19.0/oauth/access_token?` +
-    `grant_type=fb_exchange_token&client_id=${FACEBOOK_APP_ID}` +
-    `&client_secret=${FACEBOOK_APP_SECRET}&fb_exchange_token=${shortToken}`,
+    `grant_type=fb_exchange_token&client_id=${env().FACEBOOK_APP_ID}` +
+    `&client_secret=${env().FACEBOOK_APP_SECRET}&fb_exchange_token=${shortToken}`,
   );
   const longData: any = longRes.ok ? await longRes.json() : {};
   const userToken = longData.access_token || shortToken;
@@ -300,8 +302,8 @@ async function handleGoogleCallback(code: string, businessId: string) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       code,
-      client_id:     GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
+      client_id:     env().GOOGLE_CLIENT_ID,
+      client_secret: env().GOOGLE_CLIENT_SECRET,
       redirect_uri:  callbackUrl('google_business'),
       grant_type:    'authorization_code',
     }).toString(),
@@ -368,8 +370,8 @@ async function handleTikTokCallback(code: string, businessId: string) {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_key:    TIKTOK_CLIENT_KEY,
-      client_secret: TIKTOK_CLIENT_SECRET,
+      client_key:    env().TIKTOK_CLIENT_KEY,
+      client_secret: env().TIKTOK_CLIENT_SECRET,
       code,
       grant_type:    'authorization_code',
       redirect_uri:  callbackUrl('tiktok_business'),
@@ -394,15 +396,15 @@ router.get('/callback/:platform', async (req: Request, res: Response) => {
   const { code, state, error }   = req.query as Record<string, string>;
 
   if (error) {
-    return res.redirect(`${FRONTEND_URL}/integrations?oauth_error=${encodeURIComponent(error)}`);
+    return res.redirect(`${env().FRONTEND_URL}/integrations?oauth_error=${encodeURIComponent(error)}`);
   }
   if (!code || !state) {
-    return res.redirect(`${FRONTEND_URL}/integrations?oauth_error=missing_params`);
+    return res.redirect(`${env().FRONTEND_URL}/integrations?oauth_error=missing_params`);
   }
 
   const stateData = consumeState(state);
   if (!stateData) {
-    return res.redirect(`${FRONTEND_URL}/integrations?oauth_error=invalid_state`);
+    return res.redirect(`${env().FRONTEND_URL}/integrations?oauth_error=invalid_state`);
   }
 
   try {
@@ -416,7 +418,7 @@ router.get('/callback/:platform', async (req: Request, res: Response) => {
     } else if (platform === 'tiktok_business') {
       result = await handleTikTokCallback(code, stateData.businessId);
     } else {
-      return res.redirect(`${FRONTEND_URL}/integrations?oauth_error=unknown_platform`);
+      return res.redirect(`${env().FRONTEND_URL}/integrations?oauth_error=unknown_platform`);
     }
 
     const html = `<!DOCTYPE html>
