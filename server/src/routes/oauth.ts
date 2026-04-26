@@ -96,7 +96,7 @@ router.get('/initiate/:platform', (req: Request, res: Response) => {
       return res.status(503).json({ error: 'Facebook app not configured', demo: true });
     }
     const scope = platform === 'instagram_business'
-      ? 'pages_show_list,pages_read_engagement,instagram_basic,instagram_content_publish'
+      ? 'pages_show_list,pages_read_engagement'
       : platform === 'whatsapp_business'
       ? 'whatsapp_business_management,whatsapp_business_messaging,business_management'
       : 'pages_show_list,pages_read_engagement';
