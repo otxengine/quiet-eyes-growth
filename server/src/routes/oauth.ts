@@ -96,10 +96,10 @@ router.get('/initiate/:platform', (req: Request, res: Response) => {
       return res.status(503).json({ error: 'Facebook app not configured', demo: true });
     }
     const scope = platform === 'instagram_business'
-      ? 'pages_show_list,pages_read_engagement,instagram_basic,instagram_content_publish,instagram_manage_comments'
+      ? 'pages_show_list,pages_read_engagement,instagram_basic,instagram_content_publish'
       : platform === 'whatsapp_business'
       ? 'whatsapp_business_management,whatsapp_business_messaging,business_management'
-      : 'pages_show_list,pages_manage_posts,pages_read_engagement,pages_messaging';
+      : 'pages_show_list,pages_read_engagement';
 
     authUrl =
       `https://www.facebook.com/v19.0/dialog/oauth?` +
