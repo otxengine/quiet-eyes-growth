@@ -59,17 +59,8 @@ export async function runCompetitorIdentification(req: Request, res: Response) {
       ).join('\n')}` : '',
     ].filter(Boolean).join('\n\n');
 
-    if (!contextBlock) return res.json({ competitors_found: 0, new_competitors_created: 0, existing_competitors_updated: 0 });
-
-    const result = await invokeLLM({
-      prompt: `אתה מנתח תחרותי לעסקים ישראלים.
-
-עסק: "${name}", קטגוריה: ${category}, עיר: ${city}
-
-${contextBlock}
-
-זהה מתחרים ישירים בלבד (אותה קטגוריה, אותה עיר/אזור). עבור כל מתחרה חלץ:
-- name: שם המתחרה
+    // Build prompt — fallback to LLM sector knowledge when no external data available
+    const competitorFields = `- name: שם המתחרה
 - rating: דירוג (1-5 או null)
 - review_count: מספר ביקורות או null
 - address: כתובת אם ידועה
@@ -78,7 +69,28 @@ ${contextBlock}
 - price_range: טווח מחירים אם ידוע
 - source_urls: מערך URLים רלוונטיים
 
-החזר JSON: {"competitors": [...]}`,
+החזר JSON: {"competitors": [...]}`;
+
+    const llmPrompt = contextBlock
+      ? `אתה מנתח תחרותי לעסקים ישראלים.
+
+עסק: "${name}", קטגוריה: ${category}, עיר: ${city}
+
+${contextBlock}
+
+זהה מתחרים ישירים בלבד (אותה קטגוריה, אותה עיר/אזור). עבור כל מתחרה חלץ:
+${competitorFields}`
+      : `אתה מנתח תחרותי לעסקים ישראלים.
+
+עסק: "${name}", קטגוריה: ${category}, עיר: ${city}
+
+אין נתוני חיפוש חיצוניים. בהתבסס על הידע שלך על השוק הישראלי, זהה עד 5 מתחרים טיפוסיים בקטגוריה "${category}" באזור "${city}". השתמש בשמות אמיתיים אם ידועים לך, אחרת צור שמות אופייניים לסקטור.
+
+עבור כל מתחרה חלץ:
+${competitorFields}`;
+
+    const result = await invokeLLM({
+      prompt: llmPrompt,
       response_json_schema: { type: 'object' },
     });
 
