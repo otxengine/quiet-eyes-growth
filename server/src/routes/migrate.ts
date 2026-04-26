@@ -365,6 +365,13 @@ router.post('/', async (req: Request, res: Response) => {
     )`,
 
     `CREATE INDEX IF NOT EXISTS idx_otx_runs_biz ON otx_pipeline_runs(business_id, created_at DESC)`,
+
+    // ── Backfill columns missing from business_profiles ───────────────────────
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS owner_name TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS phone TEXT`,
+
+    // ── Backfill is_dismissed on market_signals ───────────────────────────────
+    `ALTER TABLE market_signals ADD COLUMN IF NOT EXISTS is_dismissed BOOLEAN DEFAULT false`,
   ];
 
   for (const sql of statements) {
