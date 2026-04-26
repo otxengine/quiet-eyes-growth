@@ -339,13 +339,15 @@ async function handleGoogleCallback(code: string, businessId: string) {
           const locData: any = await locRes.json();
           // location name looks like "accounts/123/locations/456" — extract place_id if present
           const loc = locData?.locations?.[0];
-          if (loc?.name) placeId = loc.name.split('/').pop() || '';
+          // Store the full GMB location path (e.g. "accounts/123/locations/456")
+        // so the Reviews API and reply endpoint can use it directly
+        if (loc?.name) placeId = loc.name;
         }
       }
     }
   } catch (_) {}
 
-  // Persist to SocialAccount
+  // Persist to SocialAccount — page_id holds full GMB location path for API calls
   await upsertSocialAccount(businessId, 'google_business', {
     account_name: accountName,
     access_token: accessToken,
@@ -353,11 +355,11 @@ async function handleGoogleCallback(code: string, businessId: string) {
   });
 
   // Mirror directly into BusinessProfile so GoogleBusinessClient can read it
+  // google_place_id stays as the Places API ID (fetched separately by collectReviews)
   await prisma.businessProfile.updateMany({
     where: { id: businessId },
     data: {
       google_access_token: accessToken,
-      ...(placeId ? { google_place_id: placeId } : {}),
     },
   });
 

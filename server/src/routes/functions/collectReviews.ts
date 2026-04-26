@@ -70,43 +70,103 @@ export async function collectReviews(req: Request, res: Response) {
     const existingGoogleIds = new Set(existingReviews.map(r => r.google_review_id).filter(Boolean));
     const existingTexts = new Set(existingReviews.map(r => (r.text || '').substring(0, 50)));
 
-    // Google Places
-    const placeId = profile.google_place_id || await findPlaceId(name, city);
-    if (placeId) {
-      if (!profile.google_place_id) {
-        await prisma.businessProfile.update({ where: { id: businessProfileId }, data: { google_place_id: placeId, google_place_id_verified: true } });
-      }
-      const googleReviews = await getPlaceReviews(placeId);
-      for (const gr of googleReviews) {
-        const googleId = `${gr.author_name}_${gr.time}`;
-        if (existingGoogleIds.has(googleId)) continue;
-        const textKey = (gr.text || '').substring(0, 50);
-        if (existingTexts.has(textKey) || !gr.text || gr.text.length < 5) continue;
+    // ── Google My Business API (OAuth) — preferred when client has connected ────
+    // Fetches ALL reviews with real review IDs so replies can be published directly.
+    const gmbAccount = await prisma.socialAccount.findFirst({
+      where: { linked_business: businessProfileId, platform: 'google_business', is_connected: true },
+    });
+    const gmbLocationPath = gmbAccount?.page_id; // "accounts/123/locations/456"
+    const gmbToken = gmbAccount?.access_token || (profile as any).google_access_token;
 
-        const sentiment = gr.rating >= 4 ? 'positive' : gr.rating <= 2 ? 'negative' : 'neutral';
-        const { topics, topic_sentiment } = await extractTopics(gr.text, sentiment);
-        await prisma.review.create({
-          data: {
-            platform: 'Google',
-            rating: gr.rating,
-            text: gr.text.substring(0, 500),
-            reviewer_name: gr.author_name || 'לקוח',
-            sentiment,
-            response_status: 'pending',
-            source_url: `https://www.google.com/maps/place/?q=place_id:${placeId}`,
-            source_origin: 'google_places',
-            google_review_id: googleId,
-            is_verified: true,
-            created_at: new Date(gr.time * 1000).toISOString(),
-            linked_business: businessProfileId,
-            topics,
-            topic_sentiment,
-          },
-        });
-        existingGoogleIds.add(googleId);
-        existingTexts.add(textKey);
-        newReviews++;
-        googleAdded++;
+    if (gmbToken && gmbLocationPath && gmbLocationPath.includes('/')) {
+      try {
+        const gmbRes = await fetch(
+          `https://mybusiness.googleapis.com/v4/${gmbLocationPath}/reviews?pageSize=50`,
+          { headers: { Authorization: `Bearer ${gmbToken}` } },
+        );
+        if (gmbRes.ok) {
+          const gmbData: any = await gmbRes.json();
+          for (const gr of (gmbData.reviews || [])) {
+            // gr.name looks like "accounts/123/locations/456/reviews/AbcXyz"
+            const reviewId = gr.name; // full path — used for reply API
+            if (existingGoogleIds.has(reviewId)) continue;
+            const text = gr.comment || '';
+            const textKey = text.substring(0, 50);
+            if (existingTexts.has(textKey) || text.length < 5) continue;
+
+            const rating = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }[gr.starRating as string] ?? 0;
+            const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
+            const reviewerName = gr.reviewer?.displayName || 'לקוח';
+            const { topics, topic_sentiment } = await extractTopics(text, sentiment);
+
+            await prisma.review.create({
+              data: {
+                platform: 'Google',
+                rating,
+                text: text.substring(0, 500),
+                reviewer_name: reviewerName,
+                sentiment,
+                response_status: gr.reviewReply ? 'published' : 'pending',
+                source_url: `https://www.google.com/maps/search/?q=${encodeURIComponent(name)}`,
+                source_origin: 'google_business_api',
+                google_review_id: reviewId,
+                is_verified: true,
+                created_at: gr.createTime || new Date().toISOString(),
+                linked_business: businessProfileId,
+                topics,
+                topic_sentiment,
+              },
+            });
+            existingGoogleIds.add(reviewId);
+            existingTexts.add(textKey);
+            newReviews++;
+            googleAdded++;
+          }
+        }
+      } catch (err: any) {
+        console.warn('GMB API reviews fetch failed, falling back to Places:', err.message);
+      }
+    }
+
+    // ── Google Places API — fallback when no OAuth token ─────────────────────
+    if (googleAdded === 0) {
+      const placeId = profile.google_place_id || await findPlaceId(name, city);
+      if (placeId) {
+        if (!profile.google_place_id) {
+          await prisma.businessProfile.update({ where: { id: businessProfileId }, data: { google_place_id: placeId, google_place_id_verified: true } });
+        }
+        const googleReviews = await getPlaceReviews(placeId);
+        for (const gr of googleReviews) {
+          const googleId = `places_${gr.author_name}_${gr.time}`;
+          if (existingGoogleIds.has(googleId)) continue;
+          const textKey = (gr.text || '').substring(0, 50);
+          if (existingTexts.has(textKey) || !gr.text || gr.text.length < 5) continue;
+
+          const sentiment = gr.rating >= 4 ? 'positive' : gr.rating <= 2 ? 'negative' : 'neutral';
+          const { topics, topic_sentiment } = await extractTopics(gr.text, sentiment);
+          await prisma.review.create({
+            data: {
+              platform: 'Google',
+              rating: gr.rating,
+              text: gr.text.substring(0, 500),
+              reviewer_name: gr.author_name || 'לקוח',
+              sentiment,
+              response_status: 'pending',
+              source_url: `https://www.google.com/maps/place/?q=place_id:${placeId}`,
+              source_origin: 'google_places',
+              google_review_id: googleId,
+              is_verified: true,
+              created_at: new Date(gr.time * 1000).toISOString(),
+              linked_business: businessProfileId,
+              topics,
+              topic_sentiment,
+            },
+          });
+          existingGoogleIds.add(googleId);
+          existingTexts.add(textKey);
+          newReviews++;
+          googleAdded++;
+        }
       }
     }
 

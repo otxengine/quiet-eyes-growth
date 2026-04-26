@@ -29,10 +29,19 @@ export async function postReviewReply(
   businessProfileId: string,
   payload: ReviewReplyPayload,
 ): Promise<ReviewReplyResult> {
-  const profile = await prisma.businessProfile.findUnique({
-    where: { id: businessProfileId },
-    select: { google_access_token: true, google_place_id: true, name: true },
-  });
+  const [profile, gmbAccount] = await Promise.all([
+    prisma.businessProfile.findUnique({
+      where: { id: businessProfileId },
+      select: { google_access_token: true, name: true },
+    }),
+    prisma.socialAccount.findFirst({
+      where: { linked_business: businessProfileId, platform: 'google_business', is_connected: true },
+    }),
+  ]);
+
+  const gmbToken = gmbAccount?.access_token || profile?.google_access_token;
+  // gmbAccount.page_id is the full location path "accounts/123/locations/456"
+  const locationPath = gmbAccount?.page_id;
 
   // Update suggested_response regardless
   await prisma.review.update({
@@ -43,44 +52,38 @@ export async function postReviewReply(
     },
   });
 
-  // Try Google Business Profile API if we have token + place_id
-  if (profile?.google_access_token && profile?.google_place_id && payload.googleReviewId) {
+  // Try Google Business Profile API if we have token + location path + real review ID
+  // googleReviewId should be the full review name "accounts/123/locations/456/reviews/AbcXyz"
+  if (gmbToken && locationPath && locationPath.includes('/') && payload.googleReviewId) {
     try {
-      const accountRes = await fetch(
-        'https://mybusinessaccountmanagement.googleapis.com/v1/accounts',
-        { headers: { Authorization: `Bearer ${profile.google_access_token}` } },
+      // Extract just the review ID segment if full path provided
+      const reviewSegment = payload.googleReviewId.includes('/')
+        ? payload.googleReviewId.split('/').pop()
+        : payload.googleReviewId;
+
+      const replyRes = await fetch(
+        `https://mybusiness.googleapis.com/v4/${locationPath}/reviews/${reviewSegment}/reply`,
+        {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${gmbToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ comment: payload.replyText }),
+        },
       );
 
-      if (accountRes.ok) {
-        const accountData = await accountRes.json() as any;
-        const accountName = accountData?.accounts?.[0]?.name;
-
-        if (accountName) {
-          const replyRes = await fetch(
-            `https://mybusiness.googleapis.com/v4/${accountName}/locations/-/reviews/${payload.googleReviewId}/reply`,
-            {
-              method: 'PUT',
-              headers: {
-                Authorization: `Bearer ${profile.google_access_token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ comment: payload.replyText }),
-            },
-          );
-
-          if (replyRes.ok) {
-            await prisma.review.update({
-              where: { id: payload.reviewId },
-              data: { response_status: 'published' },
-            });
-            logger.info('Review reply published via Google API', { businessProfileId, reviewId: payload.reviewId });
-            return { published: true, method: 'api' };
-          }
-
-          const errData = await replyRes.json().catch(() => ({})) as any;
-          logger.warn('Google API reply failed', { status: replyRes.status, error: errData?.error?.message });
-        }
+      if (replyRes.ok) {
+        await prisma.review.update({
+          where: { id: payload.reviewId },
+          data: { response_status: 'published' },
+        });
+        logger.info('Review reply published via Google API', { businessProfileId, reviewId: payload.reviewId });
+        return { published: true, method: 'api' };
       }
+
+      const errData = await replyRes.json().catch(() => ({})) as any;
+      logger.warn('Google API reply failed', { status: replyRes.status, error: errData?.error?.message });
     } catch (err: any) {
       logger.warn('Google Business API error', { error: err.message });
     }
