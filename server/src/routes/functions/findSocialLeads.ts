@@ -112,7 +112,7 @@ ${extracted.person_name ? `שם הפונה: ${extracted.person_name}` : ''}
         } catch (_) {}
 
         // Dynamic lead scoring
-        let score = 50;
+        let score = 25;
         if (extracted.urgency === 'immediate' || extracted.urgency === 'urgent') score += 25;
         else if (extracted.urgency === 'soon' || extracted.urgency === 'this_week') score += 12;
         if (extracted.budget_mentioned) score += 15;
@@ -123,6 +123,7 @@ ${extracted.person_name ? `שם הפונה: ${extracted.person_name}` : ''}
         if (intentMatches >= 2) score += 8;
         else if (intentMatches === 1) score += 4;
         score = Math.min(score, 98);
+        if (score < 45) continue; // skip low-confidence leads entirely
 
         // Determine action type: 'call' for immediate urgency leads
         const alertActionType = (extracted.urgency === 'immediate' || extracted.urgency === 'urgent')
@@ -141,7 +142,7 @@ ${extracted.person_name ? `שם הפונה: ${extracted.person_name}` : ''}
               service_needed: extracted.service_needed || category,
               urgency: extracted.urgency || 'this_week',
               budget_range: extracted.budget_mentioned || null,
-              status: 'hot',
+              status: score >= 75 ? 'hot' : score >= 55 ? 'warm' : 'new',
               score,
               freshness_score: 100,
               discovered_at: new Date().toISOString(),

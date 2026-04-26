@@ -230,6 +230,7 @@ model MarketSignal {
   confidence         Float?
   source_signals     String?
   is_read            Boolean? @default(false)
+  is_dismissed       Boolean? @default(false)
   detected_at        String?
   source_urls        String?
   source_description String?

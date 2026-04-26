@@ -37,7 +37,7 @@ export default function Intelligence() {
 
   const { data: allSignals = [] } = useQuery({
     queryKey: ['intelligenceSignals', bpId],
-    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId }, '-detected_at', 100),
+    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, is_dismissed: false }, '-detected_at', 100),
     enabled: !!bpId
   });
 

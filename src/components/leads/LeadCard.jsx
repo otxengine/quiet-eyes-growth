@@ -234,6 +234,17 @@ export default function LeadCard({ lead, businessProfile, onOpenDetail }) {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-[#aaaaaa] bg-white border border-[#eeeeee] hover:border-[#cccccc] hover:text-[#666666] transition-colors">
               <CheckCircle className="w-3.5 h-3.5" /> סמן כטופל
             </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                base44.entities.Lead.update(lead.id, { status: 'lost' });
+                queryClient.invalidateQueries({ queryKey: ['leadsPage'] });
+                toast('הליד הוסר');
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-[#999999] bg-white border border-[#eeeeee] hover:border-red-200 hover:text-red-400 transition-colors"
+            >
+              ✕ לא רלוונטי
+            </button>
             {onOpenDetail && (
               <button onClick={(e) => { e.stopPropagation(); onOpenDetail(); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-primary bg-primary/5 border border-primary/20 hover:bg-primary/10 transition-colors">

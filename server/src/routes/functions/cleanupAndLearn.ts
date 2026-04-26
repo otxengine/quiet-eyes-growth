@@ -91,6 +91,16 @@ export async function cleanupAndLearn(req: Request, res: Response) {
     });
     stats.signals_archived += staleDelete.count;
 
+    // ── Phase 1B2: Delete dismissed signals older than 7 days ────────────────
+    const dismissedDelete = await prisma.marketSignal.deleteMany({
+      where: {
+        linked_business: businessProfileId,
+        is_dismissed: true,
+        detected_at: { lt: sevenDaysAgo },
+      },
+    });
+    stats.signals_archived += dismissedDelete.count;
+
     // ── Phase 1C: Remove duplicate signals (same summary, keep newest) ───────
     const allSignals = await prisma.marketSignal.findMany({
       where: { linked_business: businessProfileId },

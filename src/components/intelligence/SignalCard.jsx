@@ -92,6 +92,26 @@ export default function SignalCard({ signal, businessProfile }) {
     enabled: expanded && sourceIds.length > 0,
   });
 
+  const dismissMutation = useMutation({
+    mutationFn: async () => {
+      await base44.entities.MarketSignal.update(signal.id, { is_dismissed: true });
+      try {
+        await base44.feedback.submit({
+          businessProfileId: businessProfile?.id,
+          agentName: signal.agent_name || 'MarketIntelligence',
+          outputType: 'market_signal',
+          score: -1,
+          tags: 'dismissed,not_relevant',
+          aiOutputId: signal.id,
+        });
+      } catch (_) {}
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['intelligenceSignals'] });
+      toast.success('קיבלנו 🧠 נלמד מזה ונשתפר');
+    },
+  });
+
   const markReadMutation = useMutation({
     mutationFn: async () => {
       await base44.entities.MarketSignal.update(signal.id, { is_read: true });
@@ -299,9 +319,25 @@ ACTION_TIME: [זמן ביצוע, למשל: "5 דקות"]
               >
                 <Sparkles className="w-3 h-3" /> תובנות AI <ArrowLeft className="w-3 h-3" />
               </button>
+              <FeedbackBar
+                compact
+                signalId={signal.id}
+                signalText={signal.summary}
+                agentName={signal.agent_name}
+                businessId={businessProfile?.id}
+              />
             </div>
           </div>
-          {!signal.is_read && <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-1.5" />}
+          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+            <button
+              onClick={(e) => { e.stopPropagation(); dismissMutation.mutate(); }}
+              className="btn-subtle text-[11px] text-foreground-muted hover:text-red-500 opacity-50 hover:opacity-100 transition-all"
+              title="הסר תובנה"
+            >
+              ✕
+            </button>
+            {!signal.is_read && <span className="w-2 h-2 rounded-full bg-primary" />}
+          </div>
         </div>
       </div>
 
@@ -500,14 +536,6 @@ ACTION_TIME: [זמן ביצוע, למשל: "5 דקות"]
                 )}
               </div>
 
-              {/* Feedback */}
-              <FeedbackBar
-                compact
-                signalId={signal.id}
-                signalText={signal.summary}
-                agentName={signal.agent_name}
-                businessId={businessProfile?.id}
-              />
             </div>
           )}
         </div>

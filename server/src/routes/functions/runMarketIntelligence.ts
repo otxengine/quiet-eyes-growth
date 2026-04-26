@@ -63,6 +63,7 @@ JSON בלבד:
 
       for (const insight of coldInsights) {
         if (!insight.summary || existingSumsCold.has(insight.summary)) continue;
+        if ((insight.confidence ?? 100) < 40) continue; // skip low-confidence insights
         const actionMeta = JSON.stringify({
           action_label:  insight.action_label || 'פתח משימה',
           action_type:   insight.action_type || 'task',
@@ -140,6 +141,7 @@ ${contextBlock}
     let dupes = 0;
     for (const insight of insights) {
       if (!insight.summary || existingSummaries.has(insight.summary)) { dupes++; continue; }
+      if ((insight.confidence ?? 100) < 40) continue; // skip low-confidence insights
       const sourceUrls = (insight.source_urls || []).filter((u: string) => u?.startsWith('http'));
       // Store action metadata in source_description as JSON for use by UI
       const actionMeta = JSON.stringify({

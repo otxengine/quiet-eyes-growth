@@ -137,7 +137,7 @@ export default function Leads() {
     // Tertiary: AI score
     return (b.score || 0) - (a.score || 0);
   });
-  const filtered = activeTab === 'all' ? sorted : sorted.filter(l => l.status === activeTab);
+  const filtered = activeTab === 'all' ? sorted.filter(l => l.status !== 'lost') : sorted.filter(l => l.status === activeTab);
 
   const statCards = [
     { label: 'לידים היום', value: todayLeads.length },
