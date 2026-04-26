@@ -38,6 +38,7 @@ export async function runPredictions(req: Request, res: Response) {
       prompt: `אתה מנתח עסקי המתמחה בחיזוי מגמות לעסקים ישראלים.
 
 עסק: ${profile.name} (${profile.category}, ${profile.city})
+${profile.description ? `תיאור: ${profile.description}` : ''}
 נתונים:
 - ${leads.length} לידים, מתוכם ${hotLeadsCount} חמים
 - ${reviews.length} ביקורות, ממוצע ${avgRating || 'לא ידוע'}, ${negativeReviewsCount} שליליות

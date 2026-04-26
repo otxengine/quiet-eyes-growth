@@ -94,9 +94,11 @@ export async function contentCalendarAgent(req: Request, res: Response) {
     const sectorCtx = getSectorContext(category);
 
     // Generate the content calendar
+    const descriptionLine = profile.description ? `תיאור העסק: ${profile.description}\n` : '';
+
     const calendarResult = await invokeLLM({
       prompt: `אתה מנהל תוכן דיגיטלי לעסקים ישראלים. צור לוח תוכן שבועי עבור "${name}" (${category} ב${city}).
-${sectorCtx}
+${descriptionLine}${sectorCtx}
 
 ${signalContext}
 ${competitorContext}

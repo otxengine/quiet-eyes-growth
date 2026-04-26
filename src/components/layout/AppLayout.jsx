@@ -71,10 +71,13 @@ export default function AppLayout() {
 
   const stillLoading = loadingUser || (!!user?.email && loadingProfiles);
 
+  const fromOnboarding = location.state?.fromOnboarding;
+
   // Redirect to onboarding if no business profile found
   useEffect(() => {
     if (stillLoading) return;
     if (location.pathname.startsWith('/onboarding')) return;
+    if (fromOnboarding) return;
     // If user loaded but no profile — go to onboarding
     if (user && !businessProfile) {
       navigate('/onboarding');
@@ -84,7 +87,7 @@ export default function AppLayout() {
     if (userError && !user) {
       navigate('/onboarding');
     }
-  }, [businessProfile, stillLoading, user, userError, navigate, location.pathname]);
+  }, [businessProfile, stillLoading, user, userError, navigate, location.pathname, fromOnboarding]);
 
   // Fetch badge counts
   const { data: unreadSignals } = useQuery({

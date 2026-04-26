@@ -76,7 +76,8 @@ export async function getAudienceSegments(req: Request, res: Response) {
 
 עסק: "${profile.name}" — ${profile.category} ב${profile.city}
 שירותים: ${profile.relevant_services || 'לא צוינו'}
-שוק יעד: ${profile.target_market || 'לא צוין'}${insightContext}
+שוק יעד: ${profile.target_market || 'לא צוין'}
+${profile.description ? `תיאור: ${profile.description}` : ''}${insightContext}
 
 נתונים (${hasRealData ? 'אמיתיים' : 'מוגבלים'}):
 - ${reviews.length} ביקורות (${positiveReviews.length} חיוביות, ${negativeReviews.length} שליליות)

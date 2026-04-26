@@ -101,7 +101,7 @@ export async function generateWeeklyReport(req: Request, res: Response) {
       prompt: `אתה יועץ עסקי. כתוב דוח שבועי תמציתי לבעל העסק.
 
 עסק: "${profile.name}" — ${profile.category} ב${profile.city}
-
+${profile.description ? `תיאור: ${profile.description}` : ''}
 נתוני השבוע:
 • ${weekSignals.length} תובנות חדשות (${opportunities} הזדמנויות, ${threats} איומים)
 • ${weekLeads.length} לידים חדשים | ${hotLeads} חמים כרגע

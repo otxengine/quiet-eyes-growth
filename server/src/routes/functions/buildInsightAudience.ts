@@ -68,7 +68,7 @@ export async function buildInsightAudience(req: Request, res: Response) {
 
 עסק: "${profile.name}" — ${profile.category} ב${profile.city}
 שירותים: ${profile.relevant_services || 'לא צוינו'}
-
+${profile.description ? `תיאור: ${profile.description}` : ''}
 תובנה ספציפית: "${insight_text}"
 פעולה מוצעת: "${action_label || 'לא צוינה'}"
 סוג: ${insight_type || 'כללי'}

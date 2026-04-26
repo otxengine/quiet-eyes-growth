@@ -33,6 +33,7 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
 
     const contextBlock = [
       `עסק: ${profile.name} (${profile.category}, ${profile.city})`,
+      profile.description ? `תיאור: ${profile.description}` : '',
       recentReviews.length > 0 ? `ביקורות אחרונות: ${recentReviews.length} ביקורות, ממוצע ${avgRating}, ${negativeReviews.length} שליליות` : 'ביקורות: אין עדיין — עסק חדש',
       hotLeads.length > 0 ? `לידים חמים: ${hotLeads.length} לידים ממתינים לטיפול` : 'לידים: אין עדיין',
       signals.length > 0 ? `תובנות שוק: ${signals.slice(0, 3).map(s => s.summary).join('; ')}` : '',

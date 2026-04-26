@@ -99,6 +99,8 @@ model BusinessProfile {
   instagram_page_id          String?  // Instagram Business account ID
   facebook_page_token        String?  // Facebook Page access token
   facebook_page_id           String?  // Facebook Page ID
+  owner_name                 String?  // Contact person / business owner full name
+  phone                      String?  // Business contact phone number
 
   @@map("business_profiles")
 }

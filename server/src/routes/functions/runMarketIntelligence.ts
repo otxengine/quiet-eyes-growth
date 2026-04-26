@@ -34,8 +34,8 @@ export async function runMarketIntelligence(req: Request, res: Response) {
         prompt: `אתה אנליסט מודיעין שוק לעסקים קטנים בישראל.
 עסק חדש ללא נתוני שוק עדיין. בנה תובנות ראשוניות רלוונטיות לסקטור ולעיר.
 
-עסק: "${profile.name}" | תחום: ${profile.category} | עיר: ${profile.city}${competitorContext}
-
+עסק: "${profile.name}" | תחום: ${profile.category} | עיר: ${profile.city}
+${profile.description ? `תיאור: ${profile.description}` : ''}${competitorContext}
 צור 3 תובנות אסטרטגיות ראשוניות ספציפיות לסקטור זה בישראל.
 כל תובנה חייבת להיות ספציפית לסקטור ולעיר — לא גנרית.
 
@@ -101,8 +101,8 @@ JSON בלבד:
       prompt: `אתה אנליסט מודיעין שוק לעסקים קטנים בישראל. ניתח את האותות הבאים וצור תובנות ספציפיות ואקציונביליות.
 
 עסק: "${profile.name}" | תחום: ${profile.category} | עיר: ${profile.city}
+${profile.description ? `תיאור: ${profile.description}` : ''}
 ${competitorContext}
-
 אותות גולמיים (${signals.length} אותות):
 ${contextBlock}
 

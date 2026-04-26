@@ -83,6 +83,7 @@ export async function generateMarketAnalysis(req: Request, res: Response) {
 עסק: "${profile.name}" — ${profile.category} ב${profile.city}
 שירותים: ${profile.relevant_services || 'לא צוינו'}
 שוק יעד: ${profile.target_market || 'לא צוין'}
+${profile.description ? `תיאור: ${profile.description}` : ''}
 
 נתונים:
 • ${signals.length} סיגנלים שוק (${opportunities} הזדמנויות, ${threats} איומים)

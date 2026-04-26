@@ -17,9 +17,9 @@ export default function OnboardingInsights() {
   const handleContinue = async () => {
     if (businessProfile?.id) {
       await base44.entities.BusinessProfile.update(businessProfile.id, { onboarding_completed: true });
-      try { base44.functions.invoke('runFullScan', {}); } catch (e) {}
+      try { base44.functions.invoke('runFullScan', { businessProfileId: businessProfile.id }); } catch (e) {}
     }
-    navigate('/');
+    navigate('/', { state: { fromOnboarding: true } });
   };
 
   if (!businessProfile || !signals) { navigate('/onboarding'); return null; }

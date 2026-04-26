@@ -73,6 +73,7 @@ export async function generateRecommendation(
   const prompt = `אתה מייעץ עסקי לעסקים ישראלים קטנים. הכן המלצה מפורטת ושימושית.
 
 עסק: ${ctx.profile.name} (${ctx.profile.category}, ${ctx.profile.city})
+${ctx.profile.description ? `תיאור: ${ctx.profile.description}` : ''}
 החלטה: ${decision.title}
 סוג פעולה: ${decision.action_type}
 ניתוח: ${decision.decision_reasoning}

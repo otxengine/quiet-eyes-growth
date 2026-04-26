@@ -160,6 +160,10 @@ function buildContextSummary(ctx: EnrichedContext): string {
     `מתחרים: ${ctx.competitors.length}`,
   ];
 
+  if (ctx.profile.description) {
+    parts.push(`תיאור: ${ctx.profile.description}`);
+  }
+
   if (ctx.active_opportunities.length > 0) {
     parts.push(`הזדמנויות זוהו (${ctx.active_opportunities.length}): ${
       ctx.active_opportunities.slice(0, 2).map(o => `${o.type}(${o.urgency})`).join(', ')

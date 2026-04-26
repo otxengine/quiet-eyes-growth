@@ -63,6 +63,7 @@ export async function generateSmartPost(req: Request, res: Response) {
     const audience = await callAIJson<any>('build_audience', `
 עסק: "${profile.name}" — ${profile.category} ב${profile.city}
 שירותים: ${profile.relevant_services || 'לא צוינו'}
+${profile.description ? `תיאור: ${profile.description}` : ''}
 תובנה ספציפית: "${insight_text}"
 פעולה מוצעת: "${action_label}"
 פלטפורמה: ${platform}
@@ -99,6 +100,7 @@ export async function generateSmartPost(req: Request, res: Response) {
 כתוב פוסט שיווקי ל${platform} בעברית.
 
 עסק: "${profile.name}" — ${profile.category} ב${profile.city}
+${profile.description ? `תיאור: ${profile.description}` : ''}
 תובנה: "${insight_text}"
 קהל: ${audience.age_range}, ${audience.gender}
 כאב: ${audience.pain_point}

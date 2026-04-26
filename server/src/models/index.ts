@@ -190,11 +190,14 @@ export interface EnrichedContext {
   trace_id?:    string;
 
   profile: {
-    name:       string;
-    category:   string;
-    city:       string;
-    plan_id:    string | null;
-    website?:   string;
+    name:        string;
+    category:    string;
+    city:        string;
+    plan_id:     string | null;
+    website?:    string;
+    description?: string | null;
+    owner_name?:  string | null;
+    phone?:       string | null;
   };
 
   meta_configuration: MetaConfiguration | null;

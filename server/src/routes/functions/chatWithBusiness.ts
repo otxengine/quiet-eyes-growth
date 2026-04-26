@@ -85,6 +85,7 @@ export async function chatWithBusiness(req: Request, res: Response) {
 • סקטור: ${profile.category}
 • עיר: ${profile.city}
 • שירותים: ${profile.relevant_services || 'לא צוינו'}
+${profile.description ? `• תיאור: ${profile.description}` : ''}
 • ציון שבועי: ${weeklyScore}/10
 
 מה קורה עכשיו בשוק שלך:
