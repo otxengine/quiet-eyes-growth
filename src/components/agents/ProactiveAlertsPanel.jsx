@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useNavigate } from 'react-router-dom';
-import { Bell, X, AlertTriangle, Target, TrendingUp, Trophy, Zap, ClipboardList, Copy, CheckCheck } from 'lucide-react';
+import { Bell, X, AlertTriangle, Target, TrendingUp, Trophy, Zap, ClipboardList, Copy, CheckCheck, Send, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import ActionPopup from '@/components/ui/ActionPopup';
 import FeedbackWidget from '@/components/FeedbackWidget';
+
+const _apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3007/api';
+const SERVER_BASE = _apiUrl.replace(/\/api\/?$/, '');
 
 const typeConfig = {
   action_needed:      { icon: Zap,           color: '#ef4444', bg: 'bg-red-50' },
@@ -27,8 +30,10 @@ function parseActionMeta(sourceAgent) {
   try { return JSON.parse(sourceAgent); } catch { return null; }
 }
 
-function ActionButton({ alert, actionMeta, onActed }) {
-  const [copied, setCopied] = useState(false);
+function ActionButton({ alert, actionMeta, bpId, onActed }) {
+  const [copied, setCopied]     = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished]   = useState(false);
 
   const handleCopy = async () => {
     if (!actionMeta?.prefilled_text) return;
@@ -40,11 +45,61 @@ function ActionButton({ alert, actionMeta, onActed }) {
     } catch {}
   };
 
+  const handlePublish = async () => {
+    if (!actionMeta?.prefilled_text || !bpId) return;
+    setPublishing(true);
+    try {
+      const res = await fetch(`${SERVER_BASE}/api/functions/publishPost`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessProfileId: bpId,
+          caption: actionMeta.prefilled_text,
+          platform: 'both',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'שגיאה בפרסום');
+      setPublished(true);
+      toast.success(data.message || 'הפוסט נשלח לפרסום ✓');
+      onActed?.();
+    } catch (err) {
+      toast.error(`שגיאה בפרסום: ${err.message}`);
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   if (!actionMeta?.action_label) return null;
 
   const { action_type, action_label, prefilled_text } = actionMeta;
 
-  // Social post / promote — show copy button for prefilled text
+  // post_publish — publish directly to Facebook/Instagram
+  if (action_type === 'post_publish' && prefilled_text) {
+    return (
+      <div className="mt-2 space-y-1.5">
+        <div className="px-2.5 py-2 rounded-lg bg-white/70 border border-border/40 text-[11px] text-foreground-secondary leading-relaxed">
+          {prefilled_text}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handlePublish}
+            disabled={publishing || published}
+            className="flex items-center gap-1.5 text-[11px] font-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-2.5 py-1 rounded-lg transition-all disabled:opacity-60"
+          >
+            {publishing ? <Loader2 className="w-3 h-3 animate-spin" /> : published ? <CheckCheck className="w-3 h-3" /> : <Send className="w-3 h-3" />}
+            {published ? 'פורסם!' : publishing ? 'מפרסם...' : action_label || 'פרסם עכשיו'}
+          </button>
+          <button onClick={handleCopy} className="flex items-center gap-1 text-[10px] text-foreground-muted hover:text-foreground transition-all">
+            {copied ? <CheckCheck className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            {copied ? 'הועתק' : 'העתק'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // promote / social_post (legacy) — copy only
   if ((action_type === 'social_post' || action_type === 'promote') && prefilled_text) {
     return (
       <div className="mt-2 space-y-1.5">
@@ -60,7 +115,7 @@ function ActionButton({ alert, actionMeta, onActed }) {
     );
   }
 
-  // Reply/respond — show content + copy
+  // respond — copy text for manual reply
   if (action_type === 'respond' && prefilled_text) {
     return (
       <div className="mt-2 space-y-1.5">
@@ -141,6 +196,7 @@ export default function ProactiveAlertsPanel({ bpId }) {
                   <ActionButton
                     alert={alert}
                     actionMeta={actionMeta}
+                    bpId={bpId}
                     onActed={() => actMutation.mutate({ id: alert.id, url: null })}
                   />
 
