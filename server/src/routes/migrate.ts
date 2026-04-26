@@ -376,6 +376,38 @@ router.post('/', async (req: Request, res: Response) => {
     // ── Backfill channel/timing preferences on business_memory ───────────────
     `ALTER TABLE business_memory ADD COLUMN IF NOT EXISTS channel_preferences TEXT`,
     `ALTER TABLE business_memory ADD COLUMN IF NOT EXISTS timing_preferences TEXT`,
+
+    // ── Backfill missing columns on otx_decisions (DecisionRepository v3) ────
+    `ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`,
+    `ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS title TEXT`,
+    `ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS reasoning TEXT`,
+    `ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS priority INT DEFAULT 5`,
+    `ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS score NUMERIC(8,3)`,
+    `ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS score_breakdown JSONB DEFAULT '{}'`,
+    `ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS confidence NUMERIC(5,3)`,
+    `ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS expected_roi NUMERIC(8,3)`,
+    `ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'`,
+    `ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS context_snapshot TEXT`,
+
+    // ── v3_approval_requests table ────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS v3_approval_requests (
+      id                  TEXT        PRIMARY KEY,
+      business_id         TEXT        NOT NULL,
+      tenant_id           TEXT,
+      decision_id         TEXT        NOT NULL,
+      recommendation_id   TEXT,
+      execution_task_id   TEXT,
+      approval_type       TEXT        NOT NULL,
+      requested_by        TEXT        NOT NULL,
+      requested_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+      expires_at          TIMESTAMPTZ,
+      status              TEXT        NOT NULL DEFAULT 'pending',
+      resolved_by         TEXT,
+      resolved_at         TIMESTAMPTZ,
+      notes               TEXT
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_approval_biz ON v3_approval_requests(business_id, status)`,
+    `CREATE INDEX IF NOT EXISTS idx_approval_decision ON v3_approval_requests(decision_id)`,
   ];
 
   for (const sql of statements) {
