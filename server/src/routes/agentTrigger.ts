@@ -18,6 +18,9 @@ import { googleRankMonitor } from './functions/googleRankMonitor';
 import { smartLeadNurture } from './functions/smartLeadNurture';
 import { contentCalendarAgent } from './functions/contentCalendarAgent';
 import { competitorIntelAgent } from './functions/competitorIntelAgent';
+import { fetchSocialInsights } from './functions/fetchSocialInsights';
+import { schedulePostPublisher } from './functions/schedulePostPublisher';
+import { analyzeInstagramComments } from './functions/analyzeInstagramComments';
 import { detectEvents } from './functions/detectEvents';
 import { detectDeliveryChanges } from './functions/detectDeliveryChanges';
 import {
@@ -73,6 +76,13 @@ const AGENT_HANDLERS: Record<string, (req: Request, res: Response) => any> = {
   smartLeadNurture,
   contentCalendarAgent,
   competitorIntelAgent,
+  // Social OAuth agents (run when platforms are connected)
+  fetchSocialInsights,
+  schedulePostPublisher,
+  analyzeInstagramComments,
+  SocialInsights:   fetchSocialInsights,
+  PostPublisher:    schedulePostPublisher,
+  IgComments:       analyzeInstagramComments,
   // By nameHe alias
   Respond:   autoRespondToReviews,
   Reviews:   reviewRequestAutomation,

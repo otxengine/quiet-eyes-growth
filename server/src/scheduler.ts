@@ -22,6 +22,9 @@ import { contentCalendarAgent } from './routes/functions/contentCalendarAgent';
 import { detectEvents } from './routes/functions/detectEvents';
 import { competitorIntelAgent } from './routes/functions/competitorIntelAgent';
 import { detectDeliveryChanges } from './routes/functions/detectDeliveryChanges';
+import { fetchSocialInsights } from './routes/functions/fetchSocialInsights';
+import { schedulePostPublisher } from './routes/functions/schedulePostPublisher';
+import { analyzeInstagramComments } from './routes/functions/analyzeInstagramComments';
 
 const logger = createLogger('Scheduler');
 
@@ -103,6 +106,10 @@ export function startScheduler() {
     runAgentForAll('SmartLeadNurture', smartLeadNurture);
     runAgentForAll('CompetitorIntel', competitorIntelAgent);
     runAgentForAll('DeliveryPlatformIntel', detectDeliveryChanges);
+    // Social OAuth agents — only run if accounts connected (agents handle gracefully)
+    runAgentForAll('FetchSocialInsights', fetchSocialInsights);
+    runAgentForAll('SchedulePostPublisher', schedulePostPublisher);
+    runAgentForAll('AnalyzeInstagramComments', analyzeInstagramComments);
   });
 
   // ── Every 24 hours at 03:00 UTC: decision_only (ML learning) ────────────────

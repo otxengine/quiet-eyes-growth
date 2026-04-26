@@ -59,6 +59,9 @@ import { googleRankMonitor } from './googleRankMonitor';
 import { smartLeadNurture } from './smartLeadNurture';
 import { contentCalendarAgent } from './contentCalendarAgent';
 import { competitorIntelAgent } from './competitorIntelAgent';
+import { fetchSocialInsights } from './fetchSocialInsights';
+import { schedulePostPublisher } from './schedulePostPublisher';
+import { analyzeInstagramComments } from './analyzeInstagramComments';
 
 const router = Router();
 
@@ -123,6 +126,10 @@ const FUNCTION_MAP: Record<string, any> = {
   smartLeadNurture,
   contentCalendarAgent,
   competitorIntelAgent,
+  // Social OAuth agents
+  fetchSocialInsights,
+  schedulePostPublisher,
+  analyzeInstagramComments,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,
