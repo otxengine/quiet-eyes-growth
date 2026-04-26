@@ -50,6 +50,7 @@ export async function cleanupAndLearn(req: Request, res: Response) {
     duplicates_removed: 0,
     competitors_archived: 0,
     decisions_pruned: 0,
+    alerts_dismissed: 0,
     ml_cycles_run: 0,
     patterns_learned: 0,
   };
@@ -156,6 +157,92 @@ export async function cleanupAndLearn(req: Request, res: Response) {
       stats.decisions_pruned = pruneResult as number;
     } catch (_) {
       // otx_decisions may not exist yet — safe to ignore
+    }
+
+    // ── Phase 1F: ProactiveAlert cleanup ──────────────────────────────────────
+    // 1. Delete already-dismissed alerts older than 7 days
+    await prisma.proactiveAlert.deleteMany({
+      where: {
+        linked_business: businessProfileId,
+        is_dismissed: true,
+        created_at: { lt: sevenDaysAgo },
+      },
+    });
+
+    // 2. Auto-dismiss non-critical undismissed alerts older than 7 days
+    const oldAlertsDismiss = await prisma.proactiveAlert.updateMany({
+      where: {
+        linked_business: businessProfileId,
+        is_dismissed: false,
+        priority: { not: 'critical' },
+        created_at: { lt: sevenDaysAgo },
+      },
+      data: { is_dismissed: true },
+    });
+    stats.alerts_dismissed += oldAlertsDismiss.count;
+
+    // 3. Auto-dismiss event-related alerts where the event date has already passed
+    //    (title pattern: "📅 שם אירוע — בעוד X ימים", check description for past date)
+    const eventAlerts = await prisma.proactiveAlert.findMany({
+      where: {
+        linked_business: businessProfileId,
+        is_dismissed: false,
+        alert_type: 'market_opportunity',
+      },
+      select: { id: true, description: true, created_at: true },
+    });
+
+    const pastEventIds: string[] = [];
+    for (const alert of eventAlerts) {
+      // Detect alerts whose "X ימים" count has expired — created more than 30 days ago
+      // OR description contains a past date string
+      const desc = alert.description || '';
+      // Parse dates like "30.4.2026" or "22.4.2026" from the description
+      const dateMatch = desc.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+      if (dateMatch) {
+        const eventDate = new Date(
+          parseInt(dateMatch[3]),
+          parseInt(dateMatch[2]) - 1,
+          parseInt(dateMatch[1]),
+        );
+        if (eventDate < now) {
+          pastEventIds.push(alert.id);
+        }
+      }
+    }
+
+    if (pastEventIds.length > 0) {
+      await prisma.proactiveAlert.updateMany({
+        where: { id: { in: pastEventIds } },
+        data: { is_dismissed: true },
+      });
+      stats.alerts_dismissed += pastEventIds.length;
+    }
+
+    // 4. Cap undismissed alerts to max 10 — dismiss lowest-priority oldest ones
+    const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+    const activeAlerts = await prisma.proactiveAlert.findMany({
+      where: { linked_business: businessProfileId, is_dismissed: false },
+      select: { id: true, priority: true, created_at: true },
+      orderBy: { created_at: 'desc' },
+    });
+
+    if (activeAlerts.length > 10) {
+      // Sort: critical first, then high, medium, low — within same priority newest first
+      const sorted = [...activeAlerts].sort((a, b) => {
+        const pa = priorityRank[a.priority || 'low'] ?? 3;
+        const pb = priorityRank[b.priority || 'low'] ?? 3;
+        if (pa !== pb) return pa - pb;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+      const toDismiss = sorted.slice(10).map(a => a.id);
+      if (toDismiss.length > 0) {
+        await prisma.proactiveAlert.updateMany({
+          where: { id: { in: toDismiss } },
+          data: { is_dismissed: true },
+        });
+        stats.alerts_dismissed += toDismiss.length;
+      }
     }
 
     // ── Phase 2: LEARN from signal quality ───────────────────────────────────
@@ -316,7 +403,7 @@ JSON בלבד:
     return res.json({
       success: true,
       ...stats,
-      message: `ניקוי: ${stats.signals_archived} אותות ישנים, ${stats.duplicates_removed} כפולות, ${stats.competitors_archived} מתחרים ארכיון. למידה: ${stats.ml_cycles_run} מחזורי ML, ${stats.patterns_learned} תבניות.`,
+      message: `ניקוי: ${stats.signals_archived} אותות ישנים, ${stats.duplicates_removed} כפולות, ${stats.competitors_archived} מתחרים ארכיון, ${stats.alerts_dismissed} התראות ישנות. למידה: ${stats.ml_cycles_run} מחזורי ML, ${stats.patterns_learned} תבניות.`,
     });
 
   } catch (err: any) {

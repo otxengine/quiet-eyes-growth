@@ -126,7 +126,7 @@ const CALENDAR_EVENTS: CalendarEvent[] = [
   },
 
   {
-    name: 'יום העצמאות', nameEn: 'Independence Day', date: '2026-04-30',
+    name: 'יום העצמאות', nameEn: 'Independence Day', date: '2026-04-22',
     type: 'national', leadDays: 14,
     sectors: [
       { keywords: ['מסעדה', 'אוכל', 'food', 'restaurant', 'קייטרינג', 'catering'], boost: 'high', opportunity: 'מנגל לאומי — ביקוש לשיפודים, סלטים, קייטרינג ליום העצמאות' },
@@ -370,6 +370,38 @@ export async function detectEvents(req: Request, res: Response) {
 
     const now = new Date();
     const windowEnd = new Date(now.getTime() + 28 * 24 * 3600000);
+
+    // ── Phase 0: Dismiss stale event alerts whose date has passed ─────────────
+    // Finds market_opportunity alerts where the description contains a date like "DD.MM.YYYY"
+    // and that date is in the past.
+    try {
+      const openEventAlerts = await prisma.proactiveAlert.findMany({
+        where: {
+          linked_business: businessProfileId,
+          is_dismissed: false,
+          alert_type: 'market_opportunity',
+        },
+        select: { id: true, description: true },
+      });
+
+      const staleIds: string[] = [];
+      for (const alert of openEventAlerts) {
+        const desc = alert.description || '';
+        const m = desc.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+        if (m) {
+          const eventDate = new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
+          if (eventDate < now) staleIds.push(alert.id);
+        }
+      }
+
+      if (staleIds.length > 0) {
+        await prisma.proactiveAlert.updateMany({
+          where: { id: { in: staleIds } },
+          data: { is_dismissed: true },
+        });
+        console.log(`[detectEvents] dismissed ${staleIds.length} past-event alerts`);
+      }
+    } catch (_) {}
 
     // ── Phase 1: Find upcoming calendar events ────────────────────────────────
     const upcomingEvents = CALENDAR_EVENTS.filter(ev => {
