@@ -372,6 +372,10 @@ router.post('/', async (req: Request, res: Response) => {
 
     // ── Backfill is_dismissed on market_signals ───────────────────────────────
     `ALTER TABLE market_signals ADD COLUMN IF NOT EXISTS is_dismissed BOOLEAN DEFAULT false`,
+
+    // ── Backfill channel/timing preferences on business_memory ───────────────
+    `ALTER TABLE business_memory ADD COLUMN IF NOT EXISTS channel_preferences TEXT`,
+    `ALTER TABLE business_memory ADD COLUMN IF NOT EXISTS timing_preferences TEXT`,
   ];
 
   for (const sql of statements) {

@@ -369,7 +369,7 @@ export async function detectEvents(req: Request, res: Response) {
     const toneInstruction = tone === 'casual' ? 'קליל וחברותי' : tone === 'warm' ? 'חם ואנושי' : 'מקצועי ואמין';
 
     const now = new Date();
-    const windowEnd = new Date(now.getTime() + 28 * 24 * 3600000);
+    const windowEnd = new Date(now.getTime() + 45 * 24 * 3600000);
 
     // ── Phase 0: Dismiss stale event alerts whose date has passed ─────────────
     // Finds market_opportunity alerts where the description contains a date like "DD.MM.YYYY"

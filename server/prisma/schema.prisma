@@ -645,10 +645,12 @@ model BusinessMemory {
   accepted_patterns String?
   lead_preferences  String?
   content_style    String?
-  agent_weights    String?
-  feedback_summary String?
-  last_updated     String?
-  learning_version Int?     @default(1)
+  agent_weights        String?
+  feedback_summary     String?
+  last_updated         String?
+  learning_version     Int?     @default(1)
+  channel_preferences  String?
+  timing_preferences   String?
 
   @@map("business_memory")
 }
