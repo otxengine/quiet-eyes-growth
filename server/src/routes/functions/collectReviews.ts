@@ -7,13 +7,15 @@ import { tavilySearch } from '../../lib/tavily';
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
 
 async function findPlaceId(name: string, city: string): Promise<string | null> {
-  if (!GOOGLE_API_KEY) return null;
+  if (!GOOGLE_API_KEY) { console.warn('[collectReviews] No GOOGLE_PLACES_API_KEY'); return null; }
   try {
     const input = encodeURIComponent(`${name} ${city}`);
     const res = await fetch(`https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${input}&inputtype=textquery&fields=place_id&key=${GOOGLE_API_KEY}`);
     const data: any = await res.json();
-    return data.candidates?.[0]?.place_id || null;
-  } catch { return null; }
+    const placeId = data.candidates?.[0]?.place_id || null;
+    console.log(`[collectReviews] findPlaceId status=${data.status} placeId=${placeId} candidates=${data.candidates?.length ?? 0}`);
+    return placeId;
+  } catch (e: any) { console.warn('[collectReviews] findPlaceId error:', e.message); return null; }
 }
 
 async function getPlaceReviews(placeId: string): Promise<any[]> {
@@ -21,8 +23,10 @@ async function getPlaceReviews(placeId: string): Promise<any[]> {
   try {
     const res = await fetch(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=rating,user_ratings_total,reviews&language=iw&key=${GOOGLE_API_KEY}`);
     const data: any = await res.json();
-    return data.result?.reviews || [];
-  } catch { return []; }
+    const reviews = data.result?.reviews || [];
+    console.log(`[collectReviews] getPlaceReviews status=${data.status} reviews=${reviews.length} total_ratings=${data.result?.user_ratings_total ?? 0}`);
+    return reviews;
+  } catch (e: any) { console.warn('[collectReviews] getPlaceReviews error:', e.message); return []; }
 }
 
 // ── P1: Sentiment Topic Extraction ───────────────────────────────────────────
