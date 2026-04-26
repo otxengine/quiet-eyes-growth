@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
+import { tavilySearch } from '../../lib/tavily';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
 
@@ -167,6 +168,50 @@ export async function collectReviews(req: Request, res: Response) {
           newReviews++;
           googleAdded++;
         }
+      }
+    }
+
+    // ── Tavily direct search — when no Google API key available ──────────────
+    if (googleAdded === 0) {
+      const tavilyResults = await tavilySearch(`"${name}" ביקורות ${city}`, 8);
+      for (const result of tavilyResults) {
+        const content = result.content || result.snippet || '';
+        const url = result.url || '';
+        if (!content || content.length < 20) continue;
+        const textKey = content.substring(0, 50);
+        if (existingTexts.has(textKey)) continue;
+
+        try {
+          const parsed = await invokeLLM({
+            prompt: `הטקסט הזה נאסף מ-${url}:\n"${content.substring(0, 600)}"\n\nהאם יש כאן ביקורת/ות על "${name}"? חלץ ביקורת אחת מייצגת: text (ציטוט מדויק עד 300 תווים), rating (1-5 או 0 אם לא ידוע), reviewer_name (אם מופיע), platform (Google/Facebook/TripAdvisor/אחר). אם אין ביקורת ברורה: {"is_review":false}`,
+            response_json_schema: { type: 'object' },
+          });
+          if (!parsed?.text || parsed.text.length < 10 || parsed.is_review === false) continue;
+          if (existingTexts.has(parsed.text.substring(0, 50))) continue;
+
+          const rating = parsed.rating || 0;
+          const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
+          const { topics, topic_sentiment } = await extractTopics(parsed.text, sentiment);
+          await prisma.review.create({
+            data: {
+              platform: parsed.platform || 'אתר חיצוני',
+              rating,
+              text: parsed.text.substring(0, 500),
+              reviewer_name: parsed.reviewer_name || 'לקוח',
+              sentiment,
+              response_status: 'pending',
+              source_url: url || `https://www.google.com/search?q=${encodeURIComponent(name + ' ביקורות')}`,
+              source_origin: 'tavily',
+              is_verified: false,
+              created_at: new Date().toISOString(),
+              linked_business: businessProfileId,
+              topics,
+              topic_sentiment,
+            },
+          });
+          existingTexts.add(parsed.text.substring(0, 50));
+          newReviews++;
+        } catch { continue; }
       }
     }
 
