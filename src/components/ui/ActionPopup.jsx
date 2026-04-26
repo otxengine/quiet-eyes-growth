@@ -3,7 +3,10 @@ import { createPortal } from 'react-dom';
 import { base44 } from '@/api/base44Client';
 import { X, Copy, CheckCheck, Sparkles, Loader2, Image, Users, Send, Phone, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
-import { classifyInsight, popupTypeToActionType } from '@/lib/popup_classifier';
+import { classifyInsight, popupTypeToActionType, getPlatformSetupConfig } from '@/lib/popup_classifier';
+
+const _apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3007/api';
+const SERVER_BASE = _apiUrl.replace(/\/api\/?$/, '');
 
 /**
  * ActionPopup — 4-step action modal for a MarketSignal.
@@ -17,20 +20,22 @@ import { classifyInsight, popupTypeToActionType } from '@/lib/popup_classifier';
  */
 
 const ACTION_TYPE_CONFIG = {
-  social_post: { label: 'פרסום ברשתות חברתיות', icon: '📣' },
-  respond:     { label: 'תגובה ללקוח / ביקורת',  icon: '💬' },
-  promote:     { label: 'מבצע / קידום מכירות',    icon: '🎯' },
-  call:        { label: 'שיחת טלפון / פגישה',     icon: '📞' },
-  task:        { label: 'משימה פנימית',            icon: '✅' },
+  social_post:    { label: 'פרסום ברשתות חברתיות', icon: '📣' },
+  respond:        { label: 'תגובה ללקוח / ביקורת',  icon: '💬' },
+  promote:        { label: 'מבצע / קידום מכירות',    icon: '🎯' },
+  call:           { label: 'שיחת טלפון / פגישה',     icon: '📞' },
+  task:           { label: 'משימה פנימית',            icon: '✅' },
+  platform_setup: { label: 'הגדרת פלטפורמה דיגיטלית', icon: '🔧' },
 };
 
 // Per-type step definitions
 const STEPS_BY_TYPE = {
-  social_post: ['תוכן', 'תמונה', 'קהל', 'פרסם'],
-  promote:     ['מבצע',  'תמונה', 'קהל', 'פרסם'],
-  respond:     ['תגובה', 'שיגור'],
-  call:        ['הכנה',  'שיחה'],
-  task:        ['פרטים', 'בצע'],
+  social_post:    ['תוכן', 'תמונה', 'קהל', 'פרסם'],
+  promote:        ['מבצע',  'תמונה', 'קהל', 'פרסם'],
+  respond:        ['תגובה', 'שיגור'],
+  call:           ['הכנה',  'שיחה'],
+  task:           ['פרטים', 'בצע'],
+  platform_setup: ['הגדרה'],
 };
 
 // Image generation is handled server-side via base44.functions.invoke('generateImage')
@@ -76,6 +81,13 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
   const [callPointsLoading, setCallPointsLoading] = useState(false);
   const [callDone,          setCallDone]          = useState(false);
 
+  // Direct publish to social API
+  const [publishing,     setPublishing]     = useState(false);
+  const [publishResult,  setPublishResult]  = useState(null); // null | 'ok' | 'error'
+
+  // Platform setup — completed steps checklist
+  const [completedSteps, setCompletedSteps] = useState([]);
+
   const meta = (() => {
     try { return JSON.parse(signal.source_description || '{}'); } catch { return {}; }
   })();
@@ -94,6 +106,9 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
   })();
 
   const actionType  = rawActionType || 'task';
+  const platformSetupConfig = actionType === 'platform_setup'
+    ? getPlatformSetupConfig(signal.summary || '', meta.action_label || signal.recommended_action || '')
+    : null;
   const actionLabel = meta.action_label || signal.recommended_action || 'פעולה מומלצת';
   const timeMinutes = meta.time_minutes || 15;
   const config      = ACTION_TYPE_CONFIG[actionType] || ACTION_TYPE_CONFIG.task;
@@ -123,6 +138,9 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
     setCallPoints([]);
     setCallPointsLoading(false);
     setCallDone(false);
+    setPublishing(false);
+    setPublishResult(null);
+    setCompletedSteps([]);
 
     // For social posts: kick off the multi-brain pipeline automatically
     if (['social_post', 'promote'].includes(rawActionType)) {
@@ -317,6 +335,33 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
       toast.error('שגיאה ביצירת המשימה');
     }
     setCreating(false);
+  }
+
+  // Direct API publish to Facebook/Instagram
+  async function handlePublishToSocial(platform = 'both') {
+    if (!businessProfile?.id) { toast.error('נדרש חשבון עסקי'); return; }
+    setPublishing(true);
+    try {
+      const res = await fetch(`${SERVER_BASE}/api/functions/publishPost`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessProfileId: businessProfile.id,
+          caption: text,
+          imageUrl: imageUrl || null,
+          platform,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'שגיאה בפרסום');
+      setPublishResult('ok');
+      toast.success(data.message || 'הפוסט נשלח לפרסום ✓');
+    } catch (err) {
+      setPublishResult('error');
+      toast.error(`שגיאה: ${err.message}`);
+    } finally {
+      setPublishing(false);
+    }
   }
 
   // Step bar progress
@@ -730,44 +775,6 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
   );
 
   // ── STEP 3: Publish ──
-  const platforms = [
-    {
-      id: 'whatsapp',
-      label: 'WhatsApp',
-      emoji: '💬',
-      connected: true,
-      action: () => {
-        const msg = imageUrl
-          ? `${text}\n\n🖼 תמונה: ${imageUrl}`
-          : text;
-        window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-        toast.success('נפתח WhatsApp ✓');
-      },
-    },
-    {
-      id: 'instagram',
-      label: 'Instagram',
-      emoji: '📸',
-      connected: true,
-      action: async () => {
-        await navigator.clipboard.writeText(text).catch(() => {});
-        window.open('https://www.instagram.com/', '_blank');
-        toast.success('טקסט הועתק — הדבק באינסטגרם ✓');
-      },
-    },
-    {
-      id: 'facebook',
-      label: 'Facebook',
-      emoji: '👤',
-      connected: true,
-      action: async () => {
-        await navigator.clipboard.writeText(text).catch(() => {});
-        window.open('https://www.facebook.com/', '_blank');
-        toast.success('טקסט הועתק — הדבק בפייסבוק ✓');
-      },
-    },
-  ];
-
   const stepPublish = (
     <>
       {segments?.[0] && (
@@ -779,23 +786,58 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
       {imageUrl && (
         <div className="mb-3">
           <img src={imageUrl} alt="marketing" className="w-full rounded-lg object-cover" style={{ maxHeight: 120 }} />
-          <a href={imageUrl} download className="text-[10px] text-indigo-500 hover:underline mt-1 block text-center">
-            ⬇ הורד תמונה
-          </a>
+          <a href={imageUrl} download className="text-[10px] text-indigo-500 hover:underline mt-1 block text-center">⬇ הורד תמונה</a>
         </div>
       )}
-      <div className="space-y-2">
-        {platforms.map(p => (
-          <button key={p.id} onClick={p.action}
-            className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/40 transition-all text-[12px] font-medium text-right">
-            <span className="text-gray-400 text-[10px]">לחץ לפרסם</span>
-            <span className="flex items-center gap-2">
-              <span>{p.emoji}</span>
-              <span>{p.label} ←</span>
-            </span>
-          </button>
-        ))}
+
+      {/* Preview */}
+      <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 mb-3 text-[12px] text-gray-700 leading-relaxed">
+        {text}
       </div>
+
+      {publishResult === 'ok' ? (
+        <div className="flex flex-col items-center gap-2 py-6 text-center">
+          <CheckCheck className="w-10 h-10 text-emerald-500" />
+          <p className="text-[14px] font-semibold text-emerald-700">הפוסט נשלח לפרסום!</p>
+          <p className="text-[11px] text-gray-400">המערכת תפרסם לפי רמת האוטונומיה שהגדרת</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {/* Primary — publish via API (connected accounts) */}
+          <button
+            onClick={() => handlePublishToSocial('both')}
+            disabled={publishing}
+            className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl text-[13px] font-semibold hover:bg-indigo-700 transition-all disabled:opacity-60"
+          >
+            {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {publishing ? 'שולח לפרסום...' : 'פרסם עכשיו — Facebook + Instagram'}
+          </button>
+
+          {/* Fallback — manual copy */}
+          <div className="flex gap-2">
+            <button
+              onClick={async () => { await navigator.clipboard.writeText(text).catch(()=>{}); window.open('https://www.instagram.com/', '_blank'); toast.success('הועתק — הדבק באינסטגרם'); }}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-gray-200 rounded-xl text-[11px] text-gray-600 hover:bg-gray-50 transition-all"
+            >
+              📸 העתק + פתח Instagram
+            </button>
+            <button
+              onClick={async () => { await navigator.clipboard.writeText(text).catch(()=>{}); window.open('https://www.facebook.com/', '_blank'); toast.success('הועתק — הדבק בפייסבוק'); }}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-gray-200 rounded-xl text-[11px] text-gray-600 hover:bg-gray-50 transition-all"
+            >
+              👤 העתק + פתח Facebook
+            </button>
+          </div>
+
+          {/* WhatsApp share */}
+          <button
+            onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(text + (imageUrl ? `\n\n🖼 תמונה: ${imageUrl}` : ''))}`, '_blank')}
+            className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#25D366] text-white rounded-xl text-[12px] font-medium hover:bg-[#1fb855] transition-all"
+          >
+            💬 שתף ב-WhatsApp
+          </button>
+        </div>
+      )}
     </>
   );
 
@@ -962,8 +1004,94 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
     </>
   );
 
+  // ── STEP: Platform Setup (הגדרת פלטפורמה) ──
+  const stepPlatformSetup = platformSetupConfig ? (
+    <>
+      {/* Platform header */}
+      <div className="flex items-center gap-3 mb-4 px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+        <span className="text-3xl">{platformSetupConfig.icon}</span>
+        <div>
+          <p className="text-[13px] font-bold text-indigo-800">{platformSetupConfig.platform}</p>
+          <p className="text-[11px] text-indigo-500">{signal.summary}</p>
+        </div>
+      </div>
+
+      {/* Why it matters */}
+      {meta.prefilled_text && (
+        <div className="mb-4 px-3 py-2.5 bg-amber-50 border border-amber-100 rounded-xl text-[11px] text-amber-800">
+          💡 {meta.prefilled_text}
+        </div>
+      )}
+
+      {/* Step-by-step checklist */}
+      <p className="text-[11px] font-semibold text-gray-500 mb-2">סדר פעולות:</p>
+      <div className="space-y-2 mb-4">
+        {platformSetupConfig.steps.map((step, i) => {
+          const done = completedSteps.includes(i);
+          return (
+            <button
+              key={i}
+              onClick={() => setCompletedSteps(prev =>
+                done ? prev.filter(x => x !== i) : [...prev, i]
+              )}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-[12px] text-right transition-all ${
+                done
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  : 'bg-white border-gray-200 text-gray-700 hover:border-indigo-300 hover:bg-indigo-50/30'
+              }`}
+            >
+              <span className={`w-6 h-6 flex-shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold transition-all ${
+                done ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-400'
+              }`}>
+                {done ? '✓' : i + 1}
+              </span>
+              <span className={done ? 'line-through opacity-60' : ''}>{step}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Progress indicator */}
+      {completedSteps.length > 0 && (
+        <div className="mb-3 px-3 py-2 bg-gray-50 rounded-xl">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] text-gray-500">התקדמות</span>
+            <span className="text-[10px] font-semibold text-indigo-600">{completedSteps.length}/{platformSetupConfig.steps.length}</span>
+          </div>
+          <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-indigo-500 rounded-full transition-all"
+              style={{ width: `${(completedSteps.length / platformSetupConfig.steps.length) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Primary CTA — open platform */}
+      <a
+        href={platformSetupConfig.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl text-[13px] font-semibold hover:bg-indigo-700 transition-all mb-2"
+      >
+        {platformSetupConfig.icon} פתח {platformSetupConfig.platform}
+      </a>
+
+      {/* Mark done */}
+      <button
+        onClick={handleCreateTask}
+        disabled={creating}
+        className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-[12px] hover:bg-gray-50 transition-all disabled:opacity-70"
+      >
+        {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
+        {creating ? 'יוצר...' : 'צור משימה מעקב'}
+      </button>
+    </>
+  ) : null;
+
   // Dynamic step content array based on action type
   const stepContents = (() => {
+    if (actionType === 'platform_setup') return [stepPlatformSetup];
     if (actionType === 'respond') return [stepRespond, stepRespondPublish];
     if (actionType === 'call')    return [stepCall, stepCallAction];
     // social_post / promote / task — full 4-step flow
