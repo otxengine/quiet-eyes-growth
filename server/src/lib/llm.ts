@@ -4,7 +4,8 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' })
 
 export interface LLMOptions {
   response_json_schema?: any;
-  model?: string; // 'haiku' | 'sonnet' | 'opus' or full model ID
+  model?: string;    // 'haiku' | 'sonnet' | 'opus' or full model ID
+  maxTokens?: number; // override default (haiku=512, others=4096)
 }
 
 const MODEL_MAP: Record<string, string> = {
@@ -20,10 +21,10 @@ const MODEL_MAP: Record<string, string> = {
  * Automatically falls back to OpenAI GPT-4o when Anthropic fails (and vice versa).
  */
 export async function invokeLLM(options: { prompt: string } & LLMOptions): Promise<any> {
-  const { prompt, response_json_schema, model } = options;
+  const { prompt, response_json_schema, model, maxTokens: maxTokensOverride } = options;
 
   const modelId = MODEL_MAP[model || ''] || model || 'claude-sonnet-4-6';
-  const maxTokens = model === 'haiku' ? 512 : 4096;
+  const maxTokens = maxTokensOverride ?? (model === 'haiku' ? 512 : 4096);
 
   // Try Anthropic first
   if (process.env.ANTHROPIC_API_KEY) {

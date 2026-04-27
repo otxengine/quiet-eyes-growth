@@ -29,31 +29,39 @@ async function getPlaceReviews(placeId: string): Promise<any[]> {
   } catch (e: any) { console.warn('[collectReviews] getPlaceReviews error:', e.message); return []; }
 }
 
-// ── P1: Sentiment Topic Extraction ───────────────────────────────────────────
+// ── Batch topic extraction — 1 Haiku call for all reviews ────────────────────
 
-async function extractTopics(
-  text: string,
-  overallSentiment: string
-): Promise<{ topics: string; topic_sentiment: string }> {
+async function batchExtractTopics(
+  reviews: Array<{ text: string; sentiment: string }>,
+): Promise<Array<{ topics: string; topic_sentiment: string }>> {
+  const fallback = reviews.map(r => ({ topics: r.sentiment, topic_sentiment: '{}' }));
+  if (reviews.length === 0) return fallback;
+
+  const itemsStr = reviews
+    .map((r, i) => `[${i}] "${r.text.substring(0, 200)}"`)
+    .join('\n');
+
   try {
     const result = await invokeLLM({
-      prompt: `בדוק את הביקורת הבאה וחלץ עד 5 נושאים מרכזיים (כגון: שירות, מחיר, איכות, משלוח, ניקיון, זמינות).
-לכל נושא ציין גם את הסנטימנט: positive / negative / neutral.
-הביקורת: "${text.substring(0, 300)}"
-החזר JSON בלבד: { "topics": ["נושא1","נושא2"], "sentiments": {"נושא1":"positive","נושא2":"negative"} }`,
+      prompt: `חלץ נושאים מהביקורות הבאות. לכל ביקורת: עד 4 נושאים (שירות/מחיר/איכות/ניקיון/אווירה/זמינות/משלוח) וסנטימנט לכל נושא (positive/negative/neutral).
+${itemsStr}
+JSON בלבד: {"results":[{"topics":["נושא1"],"sentiments":{"נושא1":"positive"}},...]}, מערך באותו אורך ובאותו סדר.`,
       response_json_schema: { type: 'object' },
+      model: 'haiku',
+      maxTokens: 1200,
     });
 
-    if (!result?.topics || !Array.isArray(result.topics)) {
-      return { topics: overallSentiment, topic_sentiment: '{}' };
-    }
-
-    return {
-      topics:          (result.topics as string[]).join(','),
-      topic_sentiment: JSON.stringify(result.sentiments ?? {}),
-    };
+    const results: any[] = result?.results || [];
+    return reviews.map((r, i) => {
+      const item = results[i];
+      if (!item?.topics || !Array.isArray(item.topics)) return { topics: r.sentiment, topic_sentiment: '{}' };
+      return {
+        topics:          item.topics.join(','),
+        topic_sentiment: JSON.stringify(item.sentiments || {}),
+      };
+    });
   } catch {
-    return { topics: '', topic_sentiment: '{}' };
+    return fallback;
   }
 }
 
@@ -76,11 +84,10 @@ export async function collectReviews(req: Request, res: Response) {
     const existingTexts = new Set(existingReviews.map(r => (r.text || '').substring(0, 50)));
 
     // ── Google My Business API (OAuth) — preferred when client has connected ────
-    // Fetches ALL reviews with real review IDs so replies can be published directly.
     const gmbAccount = await prisma.socialAccount.findFirst({
       where: { linked_business: businessProfileId, platform: 'google_business', is_connected: true },
     });
-    const gmbLocationPath = gmbAccount?.page_id; // "accounts/123/locations/456"
+    const gmbLocationPath = gmbAccount?.page_id;
     const gmbToken = gmbAccount?.access_token || (profile as any).google_access_token;
 
     if (gmbToken && gmbLocationPath && gmbLocationPath.includes('/')) {
@@ -91,19 +98,23 @@ export async function collectReviews(req: Request, res: Response) {
         );
         if (gmbRes.ok) {
           const gmbData: any = await gmbRes.json();
+          // Collect all new reviews first, then batch-extract topics
+          const gmbPending: Array<{ gr: any; reviewId: string; text: string; textKey: string; rating: number; sentiment: string; reviewerName: string }> = [];
           for (const gr of (gmbData.reviews || [])) {
-            // gr.name looks like "accounts/123/locations/456/reviews/AbcXyz"
-            const reviewId = gr.name; // full path — used for reply API
+            const reviewId = gr.name;
             if (existingGoogleIds.has(reviewId)) continue;
             const text = gr.comment || '';
             const textKey = text.substring(0, 50);
             if (existingTexts.has(textKey) || text.length < 5) continue;
-
             const rating = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }[gr.starRating as string] ?? 0;
             const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
             const reviewerName = gr.reviewer?.displayName || 'לקוח';
-            const { topics, topic_sentiment } = await extractTopics(text, sentiment);
-
+            gmbPending.push({ gr, reviewId, text, textKey, rating, sentiment, reviewerName });
+          }
+          const gmbTopics = await batchExtractTopics(gmbPending.map(p => ({ text: p.text, sentiment: p.sentiment })));
+          for (let i = 0; i < gmbPending.length; i++) {
+            const { gr, reviewId, text, textKey, rating, sentiment, reviewerName } = gmbPending[i];
+            const { topics, topic_sentiment } = gmbTopics[i];
             await prisma.review.create({
               data: {
                 platform: 'Google',
@@ -141,14 +152,19 @@ export async function collectReviews(req: Request, res: Response) {
           await prisma.businessProfile.update({ where: { id: businessProfileId }, data: { google_place_id: placeId, google_place_id_verified: true } });
         }
         const googleReviews = await getPlaceReviews(placeId);
+        const placesPending: Array<{ gr: any; googleId: string; textKey: string; sentiment: string }> = [];
         for (const gr of googleReviews) {
           const googleId = `places_${gr.author_name}_${gr.time}`;
           if (existingGoogleIds.has(googleId)) continue;
           const textKey = (gr.text || '').substring(0, 50);
           if (existingTexts.has(textKey) || !gr.text || gr.text.length < 5) continue;
-
           const sentiment = gr.rating >= 4 ? 'positive' : gr.rating <= 2 ? 'negative' : 'neutral';
-          const { topics, topic_sentiment } = await extractTopics(gr.text, sentiment);
+          placesPending.push({ gr, googleId, textKey, sentiment });
+        }
+        const placesTopics = await batchExtractTopics(placesPending.map(p => ({ text: p.gr.text, sentiment: p.sentiment })));
+        for (let i = 0; i < placesPending.length; i++) {
+          const { gr, googleId, textKey, sentiment } = placesPending[i];
+          const { topics, topic_sentiment } = placesTopics[i];
           await prisma.review.create({
             data: {
               platform: 'Google',
@@ -178,48 +194,68 @@ export async function collectReviews(req: Request, res: Response) {
     // ── Tavily direct search — when no Google API key available ──────────────
     if (googleAdded === 0) {
       const tavilyResults = await tavilySearch(`"${name}" ביקורות ${city}`, 8);
-      for (const result of tavilyResults) {
-        const content = result.content || result.snippet || '';
-        const url = result.url || '';
-        if (!content || content.length < 20) continue;
-        const textKey = content.substring(0, 50);
-        if (existingTexts.has(textKey)) continue;
+      // Batch-classify all Tavily results in one Haiku call
+      const tavilyContents = tavilyResults
+        .map(r => ({ content: r.content || r.snippet || '', url: r.url || '' }))
+        .filter(r => r.content.length >= 20 && !existingTexts.has(r.content.substring(0, 50)));
 
+      if (tavilyContents.length > 0) {
+        const itemsStr = tavilyContents
+          .map((r, i) => `[${i}] מ-${r.url}: "${r.content.substring(0, 300)}"`)
+          .join('\n');
+        let tavilyParsed: any[] = [];
         try {
-          const parsed = await invokeLLM({
-            prompt: `הטקסט הזה נאסף מ-${url}:\n"${content.substring(0, 600)}"\n\nהאם יש כאן ביקורת/ות על "${name}"? חלץ ביקורת אחת מייצגת: text (ציטוט מדויק עד 300 תווים), rating (1-5 או 0 אם לא ידוע), reviewer_name (אם מופיע), platform (Google/Facebook/TripAdvisor/אחר). אם אין ביקורת ברורה: {"is_review":false}`,
+          const batchResult = await invokeLLM({
+            prompt: `עבור כל קטע טקסט, האם יש ביקורת על "${name}"? חלץ: text (עד 300 תווים), rating (1-5 או 0), reviewer_name, platform, is_review (true/false).\n${itemsStr}\nJSON בלבד: {"results":[{...},...]}, מערך באותו אורך ובאותו סדר.`,
             response_json_schema: { type: 'object' },
+            model: 'haiku',
+            maxTokens: 1500,
           });
+          tavilyParsed = batchResult?.results || [];
+        } catch { tavilyParsed = []; }
+
+        const tavilyReviewsPending: Array<{ parsed: any; url: string }> = [];
+        for (let i = 0; i < tavilyContents.length; i++) {
+          const parsed = tavilyParsed[i];
           if (!parsed?.text || parsed.text.length < 10 || parsed.is_review === false) continue;
           if (existingTexts.has(parsed.text.substring(0, 50))) continue;
-
+          tavilyReviewsPending.push({ parsed, url: tavilyContents[i].url });
+        }
+        const tavilyTopics = await batchExtractTopics(tavilyReviewsPending.map(p => ({
+          text: p.parsed.text,
+          sentiment: (p.parsed.rating || 0) >= 4 ? 'positive' : (p.parsed.rating || 0) <= 2 ? 'negative' : 'neutral',
+        })));
+        for (let i = 0; i < tavilyReviewsPending.length; i++) {
+          const { parsed, url } = tavilyReviewsPending[i];
+          const { topics, topic_sentiment } = tavilyTopics[i];
           const rating = parsed.rating || 0;
           const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
-          const { topics, topic_sentiment } = await extractTopics(parsed.text, sentiment);
-          await prisma.review.create({
-            data: {
-              platform: parsed.platform || 'אתר חיצוני',
-              rating,
-              text: parsed.text.substring(0, 500),
-              reviewer_name: parsed.reviewer_name || 'לקוח',
-              sentiment,
-              response_status: 'pending',
-              source_url: url || `https://www.google.com/search?q=${encodeURIComponent(name + ' ביקורות')}`,
-              source_origin: 'tavily',
-              is_verified: false,
-              created_at: new Date().toISOString(),
-              linked_business: businessProfileId,
-              topics,
-              topic_sentiment,
-            },
-          });
-          existingTexts.add(parsed.text.substring(0, 50));
-          newReviews++;
-        } catch { continue; }
+          try {
+            await prisma.review.create({
+              data: {
+                platform: parsed.platform || 'אתר חיצוני',
+                rating,
+                text: parsed.text.substring(0, 500),
+                reviewer_name: parsed.reviewer_name || 'לקוח',
+                sentiment,
+                response_status: 'pending',
+                source_url: url || `https://www.google.com/search?q=${encodeURIComponent(name + ' ביקורות')}`,
+                source_origin: 'tavily',
+                is_verified: false,
+                created_at: new Date().toISOString(),
+                linked_business: businessProfileId,
+                topics,
+                topic_sentiment,
+              },
+            });
+            existingTexts.add(parsed.text.substring(0, 50));
+            newReviews++;
+          } catch { continue; }
+        }
       }
     }
 
-    // Tavily fallback from raw signals
+    // ── Tavily fallback from raw signals ─────────────────────────────────────
     const rawSignals = await prisma.rawSignal.findMany({
       where: { linked_business: businessProfileId, source_origin: 'tavily' },
       orderBy: { created_date: 'desc' },
@@ -237,40 +273,63 @@ export async function collectReviews(req: Request, res: Response) {
         nameParts.some((part: string) => content.includes(part)) &&
         s.url?.startsWith('http') &&
         !existingUrls.has(s.url);
-    });
+    }).slice(0, 20);
 
-    for (const signal of reviewSignals.slice(0, 20)) {
+    if (reviewSignals.length > 0) {
+      // Batch-classify raw signals in one Haiku call
+      const signalsStr = reviewSignals
+        .map((s, i) => `[${i}] מ-${s.url}: "${(s.content || '').substring(0, 250)}"`)
+        .join('\n');
+      let signalsParsed: any[] = [];
       try {
-        const parsed = await invokeLLM({
-          prompt: `הטקסט הזה נאסף מ-${signal.url}:\n"${signal.content}"\n\nהאם זה ביקורת על "${name}"? חלץ: text (ציטוט מדויק), rating (1-5 או 0), reviewer_name, platform. אם לא ביקורת: {"is_review":false}`,
+        const batchResult = await invokeLLM({
+          prompt: `עבור כל קטע, האם זו ביקורת על "${name}"? חלץ: text, rating (1-5 או 0), reviewer_name, platform, is_review.\n${signalsStr}\nJSON בלבד: {"results":[...]}, אותו אורך ואותו סדר.`,
           response_json_schema: { type: 'object' },
+          model: 'haiku',
+          maxTokens: 1500,
         });
+        signalsParsed = batchResult?.results || [];
+      } catch { signalsParsed = []; }
+
+      const signalReviewsPending: Array<{ parsed: any; url: string }> = [];
+      for (let i = 0; i < reviewSignals.length; i++) {
+        const parsed = signalsParsed[i];
         if (!parsed?.is_review || !parsed.text || parsed.text.length < 10) continue;
         const textKey = parsed.text.substring(0, 50);
         if (existingTexts.has(textKey)) continue;
-
-        const sentiment = parsed.rating >= 4 ? 'positive' : parsed.rating <= 2 ? 'negative' : 'neutral';
-        const { topics, topic_sentiment } = await extractTopics(parsed.text, sentiment);
-        await prisma.review.create({
-          data: {
-            platform: parsed.platform || 'אתר חיצוני',
-            rating: parsed.rating || 0,
-            text: parsed.text.substring(0, 500),
-            reviewer_name: parsed.reviewer_name || 'לקוח',
-            sentiment,
-            response_status: 'pending',
-            source_url: signal.url,
-            source_origin: 'tavily',
-            is_verified: false,
-            created_at: new Date().toISOString(),
-            linked_business: businessProfileId,
-            topics,
-            topic_sentiment,
-          },
-        });
-        existingTexts.add(textKey);
-        newReviews++;
-      } catch { continue; }
+        signalReviewsPending.push({ parsed, url: reviewSignals[i].url || '' });
+      }
+      const signalTopics = await batchExtractTopics(signalReviewsPending.map(p => ({
+        text: p.parsed.text,
+        sentiment: (p.parsed.rating || 0) >= 4 ? 'positive' : (p.parsed.rating || 0) <= 2 ? 'negative' : 'neutral',
+      })));
+      for (let i = 0; i < signalReviewsPending.length; i++) {
+        const { parsed, url } = signalReviewsPending[i];
+        const { topics, topic_sentiment } = signalTopics[i];
+        const rating = parsed.rating || 0;
+        const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
+        try {
+          await prisma.review.create({
+            data: {
+              platform: parsed.platform || 'אתר חיצוני',
+              rating,
+              text: parsed.text.substring(0, 500),
+              reviewer_name: parsed.reviewer_name || 'לקוח',
+              sentiment,
+              response_status: 'pending',
+              source_url: url,
+              source_origin: 'tavily',
+              is_verified: false,
+              created_at: new Date().toISOString(),
+              linked_business: businessProfileId,
+              topics,
+              topic_sentiment,
+            },
+          });
+          existingTexts.add(parsed.text.substring(0, 50));
+          newReviews++;
+        } catch { continue; }
+      }
     }
 
     await writeAutomationLog('collectReviews', businessProfileId, startTime, newReviews);
