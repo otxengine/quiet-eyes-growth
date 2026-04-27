@@ -88,16 +88,29 @@ export async function analyzeTikTokContent(req: Request, res: Response) {
       where: { linked_business: businessProfileId, platform: 'tiktok_business', is_connected: true },
     });
 
+    // Extract TikTok username from profile URL (entered during onboarding)
+    // e.g. https://www.tiktok.com/@username → username
+    const tiktokUrl: string | null = (profile as any).tiktok_url || null;
+    const tiktokUsernameFromUrl = tiktokUrl
+      ? (tiktokUrl.match(/@([\w.]+)/) || tiktokUrl.match(/tiktok\.com\/([\w.]+)/))?.[1] || null
+      : null;
+
     let videos: any[] = [];
     let dataSource = 'tavily';
 
-    // ── 1. TikTok API (own videos) ──────────────────────────────────────────
+    // ── 1. TikTok API (own videos — OAuth connected) ─────────────────────────
     if (tiktokAccount?.access_token && tiktokAccount?.page_id) {
       videos = await fetchTikTokUserVideos(tiktokAccount.access_token, tiktokAccount.page_id);
       if (videos.length > 0) dataSource = 'tiktok_api';
     }
 
-    // ── 2. Apify fallback — scrape TikTok profile by username ───────────────
+    // ── 2. Apify — scrape by URL entered in onboarding (no OAuth needed) ─────
+    if (videos.length === 0 && tiktokUsernameFromUrl) {
+      const apifyVideos = await apifyTikTokProfile(tiktokUsernameFromUrl);
+      if (apifyVideos.length > 0) { videos = apifyVideos; dataSource = 'apify_url'; }
+    }
+
+    // ── 3. Apify fallback — scrape by OAuth account name ─────────────────────
     if (videos.length === 0 && tiktokAccount?.account_name) {
       const apifyVideos = await apifyTikTokProfile(tiktokAccount.account_name);
       if (apifyVideos.length > 0) { videos = apifyVideos; dataSource = 'apify'; }
