@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import {
   LayoutGrid, Eye, Users, Star, CheckCircle, Heart, Settings,
   ChevronRight, ChevronLeft, LogOut, FileBarChart, TrendingUp,
-  ClipboardList, Database, Bot, Plug, Crown, Share2, Sparkles, Calendar
+  ClipboardList, Database, Bot, Plug, Crown, Share2, Sparkles, Calendar, Megaphone
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -24,6 +24,7 @@ const navItems = [
       { path: '/reviews', label: 'מוניטין', icon: Star, badgeKey: 'pendingReviews' },
       { path: '/leads', label: 'לידים', icon: CheckCircle, badgeKey: 'hotLeads' },
       { path: '/retention', label: 'שימור', icon: Heart },
+      { path: '/campaigns', label: 'קמפיינים', icon: Megaphone },
       { path: '/tasks', label: 'משימות', icon: ClipboardList },
     ]
   },
