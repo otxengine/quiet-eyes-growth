@@ -131,7 +131,7 @@ export async function analyzeInstagramComments(req: Request, res: Response) {
         await writeAutomationLog('analyzeInstagramComments', businessProfileId, startTime, 0);
         return res.json({ comments_analyzed: 0, note: 'Could not fetch Instagram media' });
       }
-      const posts: any[] = (await mediaRes.json()).data || [];
+      const posts: any[] = ((await mediaRes.json()) as any).data || [];
       const postsWithComments = posts.filter(p => (p.comments_count || 0) > 0).slice(0, 5);
 
       const allComments: string[] = [];
