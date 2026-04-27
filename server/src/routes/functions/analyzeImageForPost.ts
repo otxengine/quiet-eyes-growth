@@ -61,21 +61,27 @@ Analyze this image and return JSON:
       analysis = { description: 'תמונה שהועלתה', suggested_post: '', audience_hint: '', tone: 'casual' };
     }
 
-    // Save to MediaAsset
-    const id = crypto.randomUUID();
-    await prisma.mediaAsset.create({
-      data: {
-        id,
-        linked_business: businessProfileId,
-        image_base64:    base64Data,
-        mime_type:       mimeType,
-        source:          'uploaded',
-        description:     analysis.description || '',
-      },
-    });
+    // Save to MediaAsset (optional — table may not exist yet)
+    let savedMediaId: string | null = null;
+    try {
+      const id = crypto.randomUUID();
+      await (prisma as any).mediaAsset.create({
+        data: {
+          id,
+          linked_business: businessProfileId,
+          image_base64:    base64Data,
+          mime_type:       mimeType,
+          source:          'uploaded',
+          description:     analysis.description || '',
+        },
+      });
+      savedMediaId = id;
+    } catch (saveErr: any) {
+      console.warn('[analyzeImageForPost] MediaAsset save skipped:', saveErr.message);
+    }
 
     return res.json({
-      mediaAssetId:   id,
+      mediaAssetId:   savedMediaId,
       description:    analysis.description    || '',
       suggested_post: analysis.suggested_post || '',
       audience_hint:  analysis.audience_hint  || '',

@@ -136,11 +136,23 @@ export default function Events() {
 
   const isLoading = loadingAlerts || loadingSignals;
 
-  // Merge alerts + signals, deduplicate by title
+  // Extract event date for chronological sorting
+  function extractEventDate(item) {
+    const text = item._type === 'alert' ? (item.description || '') : (item.summary || '');
+    const m = text.match(/(\d{1,2})[./](\d{1,2})[./](\d{4})/);
+    if (m) return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1])).getTime();
+    try {
+      const meta = JSON.parse(item._type === 'alert' ? (item.source_agent || '{}') : (item.source_description || '{}'));
+      if (meta.urgency_hours) return Date.now() + Number(meta.urgency_hours) * 3600000;
+    } catch {}
+    return new Date(item.created_date || item.detected_at || 0).getTime();
+  }
+
+  // Merge alerts + signals, sort chronologically (closest event first)
   const allItems = [
     ...eventAlerts.map(a => ({ ...a, _type: 'alert' })),
     ...eventSignals.map(s => ({ ...s, _type: 'signal' })),
-  ];
+  ].sort((a, b) => extractEventDate(a) - extractEventDate(b));
 
   const filtered = activeTab === 'all'
     ? allItems
@@ -162,10 +174,10 @@ export default function Events() {
     toast.info('סורק אירועים קרובים...');
     try {
       const res = await base44.functions.invoke('detectEvents', { businessProfileId: bpId });
-      const found = res?.data?.events_created ?? 0;
+      const found = res?.data?.signals_created ?? 0;
       queryClient.invalidateQueries({ queryKey: ['eventAlerts', bpId] });
       queryClient.invalidateQueries({ queryKey: ['eventSignals', bpId] });
-      toast.success(found > 0 ? `נמצאו ${found} אירועים רלוונטיים ✓` : 'הסריקה הושלמה');
+      toast.success(found > 0 ? `נמצאו ${found} אירועים רלוונטיים ✓` : 'הסריקה הושלמה — בדוק שוב בעוד מספר שניות');
     } catch {
       toast.error('שגיאה בסריקת אירועים');
     }
