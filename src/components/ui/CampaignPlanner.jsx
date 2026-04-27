@@ -81,13 +81,14 @@ export default function CampaignPlanner({ businessProfile, audienceSegments, onC
     setLoading(true);
     setError(null);
     try {
-      const data = await base44.functions.invoke('estimateCampaignMetrics', {
+      const res = await base44.functions.invoke('estimateCampaignMetrics', {
         businessProfileId: businessProfile.id,
         platform,
         daily_budget_ils: budget,
         objective,
         campaign_days: days,
       });
+      const data = res?.data || res;
       setResult(data);
     } catch (e) {
       setError(e.message || 'שגיאה בחישוב');
