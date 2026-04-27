@@ -79,7 +79,7 @@ model BusinessProfile {
   crm_monday_api_key         String?
   crm_monday_enabled         Boolean? @default(false)
   crm_monday_board_id        String?
-  services_json              String?  // JSON array of { name, price, category, description }
+  // services_json removed temporarily — add column to DB first, then restore
   crm_monday_field_map       String?
   survey_enabled             Boolean? @default(false)
   survey_q1                  String?
