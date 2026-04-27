@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { base44 } from '@/api/base44Client';
-import { X, Copy, CheckCheck, Sparkles, Loader2, Image, Users, Send, Phone, MessageSquare } from 'lucide-react';
+import { X, Copy, CheckCheck, Sparkles, Loader2, Image, Users, Send, Phone, MessageSquare, Target } from 'lucide-react';
 import { toast } from 'sonner';
 import { classifyInsight, popupTypeToActionType, getPlatformSetupConfig } from '@/lib/popup_classifier';
+import CampaignPlanner from './CampaignPlanner';
 
 const _apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3007/api';
 const SERVER_BASE = _apiUrl.replace(/\/api\/?$/, '');
@@ -72,6 +73,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
   const [segments,        setSegments]        = useState(null);   // legacy 3-segment list
   const [audienceLoading, setAudienceLoading] = useState(false);
   const [dataQuality,     setDataQuality]     = useState(null); // 'real' | 'estimated'
+  const [showCampaign,    setShowCampaign]    = useState(false); // toggle campaign planner
 
   // Respond type — tone regeneration
   const [toneLoading, setToneLoading] = useState(false);
@@ -670,101 +672,139 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
   );
 
   // ── STEP 2: Audience ──
-  const SIZE_LABELS = { small: 'קטן', medium: 'בינוני', large: 'גדול' };
+  const SIZE_LABELS   = { small: 'קטן', medium: 'בינוני', large: 'גדול' };
   const INCOME_LABELS = { low: 'נמוך', mid: 'בינוני', high: 'גבוה' };
 
   const stepAudience = (
     <>
-      <div className="flex items-center gap-2 mb-3">
-        <p className="text-[12px] font-semibold text-gray-700">
-          {audience ? 'קהל יעד לתובנה זו' : '3 קהלי יעד מבוססי נתונים'}
-        </p>
-        {dataQuality && (
-          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
-            dataQuality === 'real'
-              ? 'bg-green-50 text-green-700 border-green-200'
-              : 'bg-amber-50 text-amber-600 border-amber-200'
-          }`}>
-            {dataQuality === 'real' ? 'נתונים אמיתיים' : 'הערכה'}
-          </span>
-        )}
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <p className="text-[12px] font-semibold text-gray-700">
+            {audience ? 'קהל יעד לתובנה זו' : '3 קהלי יעד מבוססי נתונים'}
+          </p>
+          {dataQuality && (
+            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
+              dataQuality === 'real'
+                ? 'bg-green-50 text-green-700 border-green-200'
+                : 'bg-amber-50 text-amber-600 border-amber-200'
+            }`}>
+              {dataQuality === 'real' ? 'נתונים אמיתיים' : 'הערכה'}
+            </span>
+          )}
+        </div>
+        {/* Campaign planner toggle */}
+        <button
+          onClick={() => setShowCampaign(v => !v)}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all"
+          style={{
+            background: showCampaign ? '#4f46e5' : '#eef2ff',
+            color: showCampaign ? '#fff' : '#4f46e5',
+          }}
+        >
+          <Target className="w-3 h-3" />
+          {showCampaign ? 'קהל יעד' : 'בנה קמפיין'}
+        </button>
       </div>
 
-      {/* Per-insight audience profile (ITEM 1) */}
-      {audience && (
-        <div className="space-y-2.5 mb-3">
-          {/* Headline */}
-          <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
-            <p className="text-[13px] font-bold text-indigo-800 mb-0.5">{audience.headline}</p>
-            <p className="text-[11px] text-indigo-600">
-              {audience.age_range} · {audience.gender} · {audience.best_channel} · {audience.best_time}
-            </p>
-          </div>
-          {/* Why this insight */}
-          {audience.why_this_insight_matters && (
-            <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
-              <p className="text-[10px] text-gray-400 mb-1">למה התובנה הזו רלוונטית לקהל</p>
-              <p className="text-[12px] text-gray-700">{audience.why_this_insight_matters}</p>
-            </div>
-          )}
-          {/* Grid */}
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { label: 'כאב מרכזי', value: audience.pain_point },
-              { label: 'גודל קהל',  value: audience.estimated_size },
-            ].map(item => (
-              <div key={item.label} className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-                <p className="text-[10px] text-gray-400 mb-0.5">{item.label}</p>
-                <p className="text-[11px] text-gray-700">{item.value}</p>
+      {/* ── Campaign Planner panel ── */}
+      {showCampaign ? (
+        <CampaignPlanner
+          businessProfile={businessProfile}
+          audienceSegments={segments}
+        />
+      ) : (
+        <>
+          {/* Per-insight audience profile */}
+          {audience && (
+            <div className="space-y-2.5 mb-3">
+              <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
+                <p className="text-[13px] font-bold text-indigo-800 mb-0.5">{audience.headline}</p>
+                <p className="text-[11px] text-indigo-600">
+                  {audience.age_range} · {audience.gender} · {audience.best_channel} · {audience.best_time}
+                </p>
               </div>
-            ))}
-          </div>
-          {/* Keywords */}
-          {audience.keywords?.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {audience.keywords.map((kw, j) => (
-                <span key={j} className="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full border border-indigo-100">
-                  {kw}
-                </span>
-              ))}
-            </div>
-          )}
-          {audience.confidence === 'low' && (
-            <p className="text-[10px] text-amber-600">⚠ נתונים מועטים — הפעל סריקה לדיוק גבוה יותר</p>
-          )}
-        </div>
-      )}
-
-      {/* Legacy 3-segment fallback */}
-      {!audience && (!segments || segments.length === 0) && (
-        <div className="text-center py-6 text-[12px] text-gray-400">
-          <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
-          אין מספיק נתונים לפילוח עדיין
-        </div>
-      )}
-      {!audience && segments && segments.length > 0 && (
-        <div className="space-y-3 mb-3">
-          {segments.map((seg, i) => (
-            <div key={i} className="border border-gray-100 rounded-xl px-4 py-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-bold text-indigo-700">{seg.segment_name}</span>
-                <span className="text-[10px] text-gray-400">{seg.age_range}</span>
+              {audience.why_this_insight_matters && (
+                <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
+                  <p className="text-[10px] text-gray-400 mb-1">למה התובנה הזו רלוונטית לקהל</p>
+                  <p className="text-[12px] text-gray-700">{audience.why_this_insight_matters}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { label: 'כאב מרכזי', value: audience.pain_point },
+                  { label: 'גודל קהל',  value: audience.estimated_size },
+                ].map(item => (
+                  <div key={item.label} className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                    <p className="text-[10px] text-gray-400 mb-0.5">{item.label}</p>
+                    <p className="text-[11px] text-gray-700">{item.value}</p>
+                  </div>
+                ))}
               </div>
-              <div className="flex gap-3 text-[10px] text-gray-500 mb-1.5">
-                <span>הכנסה: {INCOME_LABELS[seg.income_level] || seg.income_level}</span>
-                <span>גודל: {SIZE_LABELS[seg.estimated_size] || seg.estimated_size}</span>
-                <span>המרה: {Math.round((seg.conversion_probability || 0) * 100)}%</span>
-              </div>
-              {seg.preferred_channels?.length > 0 && (
+              {audience.keywords?.length > 0 && (
                 <div className="flex flex-wrap gap-1">
-                  {seg.preferred_channels.map((ch, j) => (
-                    <span key={j} className="text-[9px] px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded-full">{ch}</span>
+                  {audience.keywords.map((kw, j) => (
+                    <span key={j} className="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full border border-indigo-100">
+                      {kw}
+                    </span>
                   ))}
                 </div>
               )}
+              {audience.confidence === 'low' && (
+                <p className="text-[10px] text-amber-600">⚠ נתונים מועטים — הפעל סריקה לדיוק גבוה יותר</p>
+              )}
             </div>
-          ))}
-        </div>
+          )}
+
+          {/* 3-segment paid-ads format (new getAudienceSegments output) */}
+          {!audience && segments && segments.length > 0 && (
+            <div className="space-y-3 mb-3">
+              {segments.map((seg, i) => (
+                <div key={i} className="border border-gray-100 rounded-xl px-4 py-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold text-indigo-700">{seg.segment_name}</span>
+                    <span className="text-[10px] text-gray-400">{seg.age_min}–{seg.age_max} | {seg.genders || seg.age_range}</span>
+                  </div>
+                  <p className="text-[10px] text-gray-600 mb-2">{seg.description}</p>
+                  {/* Facebook interests */}
+                  {seg.facebook_targeting?.interests?.length > 0 && (
+                    <div className="mb-1.5">
+                      <p className="text-[9px] text-gray-400 mb-0.5">📘 FB Interests</p>
+                      <div className="flex flex-wrap gap-1">
+                        {seg.facebook_targeting.interests.slice(0, 4).map((kw, j) => (
+                          <span key={j} className="text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-full border border-blue-100">{kw}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Google keywords */}
+                  {seg.google_targeting?.keywords?.length > 0 && (
+                    <div className="mb-1.5">
+                      <p className="text-[9px] text-gray-400 mb-0.5">🔍 Google Keywords</p>
+                      <div className="flex flex-wrap gap-1">
+                        {seg.google_targeting.keywords.slice(0, 3).map((kw, j) => (
+                          <span key={j} className="text-[9px] px-1.5 py-0.5 bg-green-50 text-green-700 rounded-full border border-green-100">{kw}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex gap-2 text-[9px] text-gray-400 mt-1">
+                    {seg.estimated_audience_range && <span>👥 {seg.estimated_audience_range}</span>}
+                    <span>המרה: {Math.round((seg.conversion_probability || 0) * 100)}%</span>
+                    {seg.best_posting_time && <span>⏰ {seg.best_posting_time}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!audience && (!segments || segments.length === 0) && (
+            <div className="text-center py-6 text-[12px] text-gray-400">
+              <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              אין מספיק נתונים לפילוח עדיין
+            </div>
+          )}
+        </>
       )}
 
       <button onClick={() => setStep(STEPS.length - 1)}

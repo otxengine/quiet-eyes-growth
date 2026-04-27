@@ -64,6 +64,7 @@ import { schedulePostPublisher } from './schedulePostPublisher';
 import { analyzeInstagramComments } from './analyzeInstagramComments';
 import { analyzeTikTokContent } from './analyzeTikTokContent';
 import { publishPost } from './publishPost';
+import { estimateCampaignMetrics } from './estimateCampaignMetrics';
 
 const router = Router();
 
@@ -134,6 +135,7 @@ const FUNCTION_MAP: Record<string, any> = {
   analyzeInstagramComments,
   analyzeTikTokContent,
   publishPost,
+  estimateCampaignMetrics,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,

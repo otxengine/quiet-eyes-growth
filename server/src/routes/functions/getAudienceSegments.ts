@@ -5,11 +5,12 @@ import { invokeLLM } from '../../lib/llm';
 /**
  * getAudienceSegments
  *
- * Analyzes reviews + leads + recent signals to produce 3 audience profiles.
- * Data-driven: if enough real data exists, the segments are grounded in evidence.
+ * Produces 3 audience profiles in proper paid-advertising format
+ * (Facebook/Instagram targeting + Google Ads targeting),
+ * grounded in the business's real reviews and leads data.
  *
  * Body: { businessProfileId, insight_text?, action_type? }
- * Returns: { segments: AudienceSegment[], data_quality: 'real' | 'estimated' }
+ * Returns: { segments, data_quality }
  */
 export async function getAudienceSegments(req: Request, res: Response) {
   const { businessProfileId, insight_text, action_type } = req.body;
@@ -40,7 +41,6 @@ export async function getAudienceSegments(req: Request, res: Response) {
     const hasRealData = reviews.length >= 3 || leads.length >= 3;
     const dataQuality = hasRealData ? 'real' : 'estimated';
 
-    // Build grounded data context
     const positiveReviews = reviews.filter(r => r.sentiment === 'positive' || (r.rating || 0) >= 4);
     const negativeReviews = reviews.filter(r => r.sentiment === 'negative' || (r.rating || 0) <= 2);
 
@@ -51,28 +51,18 @@ export async function getAudienceSegments(req: Request, res: Response) {
 
     const leadSamples = leads
       .slice(0, 12)
-      .map(l => `"${(l.service_needed || l.name || '').slice(0, 80)}" (${l.source || 'unknown'}, סטטוס: ${l.status || '?'})`)
+      .map(l => `"${(l.service_needed || l.name || '').slice(0, 80)}" (${l.source || 'unknown'})`)
       .join('\n');
 
-    const signalSamples = signals
-      .slice(0, 8)
-      .map(s => s.summary)
-      .join(', ');
-
-    // Conversion rate stats
-    const completedLeads = leads.filter(l => l.status === 'completed').length;
-    const lostLeads      = leads.filter(l => l.status === 'lost').length;
-    const conversionRate = leads.length > 0
-      ? Math.round((completedLeads / leads.length) * 100)
-      : 0;
-
-    const insightContext = insight_text
-      ? `\n\nתובנה שמצריכה קמפיין: "${insight_text}"${action_type ? ` (סוג: ${action_type})` : ''}`
+    const completedLeads  = leads.filter(l => l.status === 'completed').length;
+    const conversionRate  = leads.length > 0 ? Math.round((completedLeads / leads.length) * 100) : 0;
+    const signalSamples   = signals.slice(0, 8).map(s => s.summary).join(', ');
+    const insightContext  = insight_text
+      ? `\n\nתובנה רלוונטית: "${insight_text}"${action_type ? ` (סוג: ${action_type})` : ''}`
       : '';
 
     const result = await invokeLLM({
-      // sonnet (4096 tokens) — haiku's 512 limit truncates 3 full segment objects
-      prompt: `אתה מומחה פילוח קהלים לעסקים ישראליים. בנה פרופילים מבוססי נתונים אמיתיים.
+      prompt: `אתה מומחה פרסום ממומן לעסקים ישראלים. בנה 3 קהלי יעד מדויקים לפורמט Facebook Ads ו-Google Ads.
 
 עסק: "${profile.name}" — ${profile.category} ב${profile.city}
 שירותים: ${profile.relevant_services || 'לא צוינו'}
@@ -81,35 +71,50 @@ ${profile.description ? `תיאור: ${profile.description}` : ''}${insightConte
 
 נתונים (${hasRealData ? 'אמיתיים' : 'מוגבלים'}):
 - ${reviews.length} ביקורות (${positiveReviews.length} חיוביות, ${negativeReviews.length} שליליות)
-- ${leads.length} לידים | המרה: ${conversionRate}% (${completedLeads} הושלמו, ${lostLeads} אבדו)
+- ${leads.length} לידים | המרה: ${conversionRate}%
 - סיגנלים: ${signalSamples || 'אין'}
 
-ביקורות לדוגמה:
+ביקורות:
 ${reviewSamples || 'אין ביקורות עדיין'}
 
-לידים לדוגמה:
+לידים:
 ${leadSamples || 'אין לידים עדיין'}
 
-בנה 3 פרופילי קהל יעד ספציפיים לנתונים — לא כלליים. JSON בלבד:
+בנה 3 קהלי יעד שונים — כל אחד עם טרגטינג מוכן להדבקה בפלטפורמות הפרסום. JSON בלבד:
 {
   "segments": [
     {
       "segment_name": "שם קצר ותיאורי (עד 4 מילים)",
-      "age_range": "XX-XX",
       "description": "תיאור הקהל — עד 15 מילה",
+      "age_min": 24,
+      "age_max": 45,
+      "genders": "נשים וגברים|נשים בלבד|גברים בלבד",
       "income_level": "low|mid|high",
-      "interests": ["עניין 1", "עניין 2"],
-      "pain_points": ["כאב עיקרי 1", "כאב עיקרי 2"],
-      "purchase_triggers": ["מה גורם לרכישה"],
-      "preferred_channels": ["Instagram", "WhatsApp", "Facebook"],
+      "conversion_probability": 0.35,
       "estimated_size": "small|medium|large",
-      "conversion_probability": 0.0,
-      "best_time_to_reach": "שעה/יום מומלץ",
-      "targeting_keywords": ["מילת מפתח לפרסום"]
+      "estimated_audience_range": "15,000–55,000",
+      "facebook_targeting": {
+        "interests": ["שם עניין ב-Facebook 1","עניין 2","עניין 3","עניין 4"],
+        "behaviors": ["התנהגות Facebook 1","התנהגות 2"],
+        "custom_audience": "תיאור Custom Audience מומלץ",
+        "lookalike_source": "מה להשתמש כ-seed ל-Lookalike",
+        "exclusions": ["מה לא לכלול בטרגטינג"]
+      },
+      "google_targeting": {
+        "keywords": ["ביטוי חיפוש 1","ביטוי 2","ביטוי 3"],
+        "negative_keywords": ["מילת שלילה 1"],
+        "in_market_audiences": ["קהל in-market 1","קהל 2"],
+        "custom_intent": "תיאור Custom Intent Audience"
+      },
+      "best_channels": ["Facebook","Instagram","Google"],
+      "best_posting_time": "יום ושעה אופטימלית",
+      "ad_creative_tip": "טיפ ספציפי לקריאייטיב לקהל זה",
+      "pain_point": "הכאב העיקרי של הקהל הזה",
+      "purchase_trigger": "מה גורם לרכישה"
     }
   ]
 }
-חוק: כל פרופיל חייב להיות שונה מהאחרים ומבוסס על הנתונים שניתנו.`,
+חוק: כל פרופיל חייב להיות שונה. השתמש בשמות עניין ספציפיים שקיימים ב-Facebook Ads Manager.`,
       response_json_schema: { type: 'object' },
     });
 
