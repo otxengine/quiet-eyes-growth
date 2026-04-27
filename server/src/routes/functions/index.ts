@@ -62,6 +62,7 @@ import { competitorIntelAgent } from './competitorIntelAgent';
 import { fetchSocialInsights } from './fetchSocialInsights';
 import { schedulePostPublisher } from './schedulePostPublisher';
 import { analyzeInstagramComments } from './analyzeInstagramComments';
+import { analyzeTikTokContent } from './analyzeTikTokContent';
 import { publishPost } from './publishPost';
 
 const router = Router();
@@ -131,6 +132,7 @@ const FUNCTION_MAP: Record<string, any> = {
   fetchSocialInsights,
   schedulePostPublisher,
   analyzeInstagramComments,
+  analyzeTikTokContent,
   publishPost,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,

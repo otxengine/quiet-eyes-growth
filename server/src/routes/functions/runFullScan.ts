@@ -19,6 +19,9 @@ import { updateLeadFreshness as applyDataFreshness } from './updateLeadFreshness
 import { runMLLearning } from './learnFromClosedDeals';
 import { runMLLearningCycle } from './runMLLearningCycle';
 import { cleanupAndLearn } from './cleanupAndLearn';
+import { analyzeInstagramComments } from './analyzeInstagramComments';
+import { analyzeSocialComments } from './analyzeSocialComments';
+import { analyzeTikTokContent } from './analyzeTikTokContent';
 
 async function callHandler(fn: Function, businessProfileId: string): Promise<any> {
   return new Promise((resolve) => {
@@ -54,6 +57,9 @@ export async function runFullScan(req: Request, res: Response) {
     // ── Data Collection ──────────────────────────────────────────
     ['collectWebSignals',           collectWebSignals],
     ['collectSocialSignals',        collectSocialSignals],
+    ['analyzeInstagramComments',    analyzeInstagramComments],
+    ['analyzeSocialComments',       analyzeSocialComments],
+    ['analyzeTikTokContent',        analyzeTikTokContent],
     ['collectReviews',              collectReviews],
     // ── Analysis ────────────────────────────────────────────────
     ['runMarketIntelligence',       runMarketIntelligence],

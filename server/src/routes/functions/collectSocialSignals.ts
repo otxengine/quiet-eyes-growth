@@ -2,9 +2,11 @@ import { Request, Response } from 'express';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { prisma } from '../../db';
 import { loadBusinessContext } from '../../lib/businessContext';
+import { invokeLLM } from '../../lib/llm';
+import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 
 const APIFY_API_KEY = process.env.APIFY_API_KEY || '';
-const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
+const GRAPH_BASE    = 'https://graph.facebook.com/v19.0';
 
 async function runApifyActor(actorId: string, input: any, maxWaitMs = 90_000): Promise<any[]> {
   if (!APIFY_API_KEY) return [];
@@ -49,19 +51,7 @@ async function runApifyActor(actorId: string, input: any, maxWaitMs = 90_000): P
   }
 }
 
-async function tavilySearch(query: string): Promise<any[]> {
-  if (!TAVILY_API_KEY) return [];
-  try {
-    const res = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: TAVILY_API_KEY, query, search_depth: 'basic', max_results: 5 }),
-    });
-    if (!res.ok) return [];
-    const data: any = await res.json();
-    return data.results || [];
-  } catch { return []; }
-}
+// tavilySearch imported from lib/tavily (shared rate-limit flag)
 
 export async function collectSocialSignals(req: Request, res: Response) {
   const { businessProfileId } = req.body;
@@ -141,41 +131,114 @@ export async function collectSocialSignals(req: Request, res: Response) {
       }
     }
 
-    // ── Instagram hashtag search (sector + city, no account needed) ──────────
-    if (APIFY_API_KEY) {
-      const hebrewCity: Record<string, string> = {
-        'תל אביב': 'telaviv', 'ירושלים': 'jerusalem', 'חיפה': 'haifa',
-        'בני ברק': 'bneibrak', 'ראשון לציון': 'rishonlezion', 'נתניה': 'netanya',
-        'זכרון יעקב': 'zikhronyaakov',
+    // ── Instagram Graph API — sector hashtag search ──────────────────────────
+    // Uses the connected IG Business account to search trending posts by hashtag
+    const igAccount = await prisma.socialAccount.findFirst({
+      where: { linked_business: businessProfileId, platform: 'instagram_business', is_connected: true },
+    });
+    if (igAccount?.access_token && igAccount?.page_id) {
+      const igUserId = igAccount.page_id;
+      const token    = igAccount.access_token;
+      const sectorHashtags = [
+        category.replace(/\s+/g, ''),
+        `${category.replace(/\s+/g, '')}${city.replace(/\s+/g, '')}`,
+        name.replace(/\s+/g, ''),
+      ].filter(Boolean).slice(0, 3);
+
+      for (const hashtag of sectorHashtags) {
+        try {
+          const hashtagRes = await fetch(
+            `${GRAPH_BASE}/ig_hashtag_search?user_id=${igUserId}&q=${encodeURIComponent(hashtag)}&access_token=${token}`,
+          );
+          const hashtagData: any = await hashtagRes.json();
+          const hashtagId = hashtagData?.data?.[0]?.id;
+          if (!hashtagId) continue;
+
+          const topMediaRes = await fetch(
+            `${GRAPH_BASE}/${hashtagId}/top_media?user_id=${igUserId}&fields=id,caption,like_count,comments_count,permalink&access_token=${token}&limit=6`,
+          );
+          const topMediaData: any = await topMediaRes.json();
+          const posts: any[] = topMediaData?.data || [];
+
+          for (const post of posts) {
+            const url = post.permalink || '';
+            if (!url || existingUrls.has(url)) continue;
+            const content = (post.caption || '').substring(0, 500);
+            if (!content) continue;
+            await prisma.rawSignal.create({
+              data: {
+                source: `instagram_hashtag_graph: #${hashtag}`,
+                content,
+                url,
+                signal_type: 'social_mention',
+                platform: 'instagram',
+                source_origin: 'instagram_graph_api',
+                detected_at: new Date().toISOString(),
+                linked_business: businessProfileId,
+              },
+            });
+            existingUrls.add(url);
+            newSignals++;
+          }
+        } catch (e: any) {
+          console.warn(`[IG hashtag] #${hashtag}:`, e.message);
+        }
+      }
+    }
+
+    // ── Influencer scanner — Tavily + LLM ────────────────────────────────────
+    if (!isTavilyRateLimited()) {
+      const cityEn: Record<string, string> = {
+        'תל אביב': 'Tel Aviv', 'ירושלים': 'Jerusalem', 'חיפה': 'Haifa',
+        'זכרון יעקב': 'Zichron Yaakov', 'נתניה': 'Netanya', 'ראשון לציון': 'Rishon LeZion',
       };
-      const cityTag = hebrewCity[city] || city.replace(/\s+/g, '').toLowerCase();
-      const sectorTag = category === 'מסעדה' ? 'מסעדה' : category === 'fitness' ? 'כושר' : category;
-      const hashtags = [`#${sectorTag}${cityTag}`, `#${cityTag}אוכל`, `#${name.replace(/\s/g,'')}`];
+      const catEn: Record<string, string> = {
+        'מסעדה': 'restaurant food', 'כושר': 'fitness gym', 'יופי': 'beauty salon',
+        'קפה': 'cafe coffee', 'מאפייה': 'bakery pastry',
+      };
+      const cityStr = cityEn[city] || city;
+      const catStr  = catEn[category] || category;
 
-      const igPosts = await runApifyActor('apify~instagram-hashtag-scraper', {
-        hashtags: hashtags.slice(0, 2),
-        resultsLimit: 15,
-      });
+      const influencerResults = await tavilySearch(
+        `influencers ${catStr} Israel instagram tiktok micro-influencer`,
+        6,
+      );
 
-      for (const post of igPosts) {
-        const url = post.url || (post.shortCode ? `https://www.instagram.com/p/${post.shortCode}/` : null);
-        if (!url || existingUrls.has(url)) continue;
-        const content = (post.caption || post.alt || '').substring(0, 500);
-        if (!content) continue;
-        await prisma.rawSignal.create({
-          data: {
-            source: `instagram_hashtag: ${hashtags[0]}`,
-            content,
-            url,
-            signal_type: 'social_mention',
-            platform: 'instagram',
-            source_origin: 'apify',
-            detected_at: new Date().toISOString(),
-            linked_business: businessProfileId,
-          },
+      if (influencerResults.length > 0) {
+        const influencerCtx = influencerResults
+          .map(r => `${r.title || ''}: ${(r.content || '').slice(0, 150)}`)
+          .join('\n');
+
+        const influencerAnalysis = await invokeLLM({
+          prompt: `אתה מומחה שיווק דיגיטלי ישראלי. זהה אושיות רשת (influencers) רלוונטיות לסקטור.
+סקטור: ${category}, אזור: ${cityStr}
+
+נתונים מהאינטרנט:
+${influencerCtx}
+
+זהה עד 3 אושיות רשת שפעילות בסקטור זה בישראל.
+JSON בלבד:
+{"influencers":[{"name":"שם","platform":"instagram|tiktok|youtube","followers_estimate":"50K","relevance":"למה רלוונטי לסקטור","collaboration_idea":"רעיון קונקרטי לשיתוף פעולה"}]}`,
+          response_json_schema: { type: 'object' },
         });
-        existingUrls.add(url);
-        newSignals++;
+
+        const influencers: any[] = influencerAnalysis?.influencers || [];
+        if (influencers.length > 0) {
+          const names = influencers.map((i: any) => `${i.name} (${i.platform}, ${i.followers_estimate})`).join(', ');
+          await prisma.marketSignal.create({
+            data: {
+              linked_business: businessProfileId,
+              summary: `אושיות רשת בסקטור: ${names}`,
+              category: 'social',
+              impact_level: 'medium',
+              confidence: 0.65,
+              recommended_action: influencers[0]?.collaboration_idea || 'שקול שיתוף פעולה עם micro-influencers בסקטור',
+              detected_at: new Date().toISOString(),
+              source_description: 'Influencer Scanner AI',
+              is_read: false,
+            },
+          });
+        }
       }
     }
 
