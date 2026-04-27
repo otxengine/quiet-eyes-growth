@@ -29,6 +29,7 @@ const ENTITY_MAP: Record<string, string> = {
   SocialAccount: 'socialAccount',
   SocialSignal: 'socialSignal',
   AutoAction: 'autoAction',
+  Campaign: 'campaign',
 };
 
 function getModel(entity: string): any {

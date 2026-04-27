@@ -182,7 +182,7 @@ const ENTITIES = [
   'RawSignal', 'Task', 'AutomationLog', 'WeeklyReport', 'HealthScore',
   'OutcomeLog', 'SectorKnowledge', 'Action', 'Prediction', 'ProactiveAlert',
   'PendingAlert', 'ReviewRequest', 'CustomerSurvey', 'BusinessLocation',
-  'MetricsSnapshot', 'SocialAccount', 'SocialSignal', 'AutoAction',
+  'MetricsSnapshot', 'SocialAccount', 'SocialSignal', 'AutoAction', 'Campaign',
 ];
 
 // ── raw API access ────────────────────────────────────────────────────────────

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { ArrowLeft, Loader2, CheckCheck, ExternalLink, ListPlus, Sparkles, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Loader2, CheckCheck, ExternalLink, ListPlus, Sparkles, RefreshCw, Megaphone } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { SourceTypeBadge, PlatformBadge, SentimentBadge } from './SignalSourceBadge';
 import AiConfidenceBadge from '@/components/ai/AiConfidenceBadge';
@@ -66,10 +67,9 @@ export default function SignalCard({ signal, businessProfile }) {
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [analysisError,  setAnalysisError]  = useState('');
   const [creatingTask,   setCreatingTask]   = useState(false);
-  const [creatingCampaign, setCreatingCampaign] = useState(false);
   const [showActionPopup, setShowActionPopup] = useState(false);
-  const [campaignPopupSignal, setCampaignPopupSignal] = useState(null); // synthetic signal for campaign popup
 
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const config = categoryConfig[signal.category] || { borderClass: 'signal-border-default', label: 'כללי' };
   const impact = impactLabels[signal.impact_level] || impactLabels.medium;
@@ -155,36 +155,15 @@ export default function SignalCard({ signal, businessProfile }) {
     setCreatingTask(false);
   };
 
-  const handleCreateCampaignIdea = async () => {
-    setCreatingCampaign(true);
-    try {
-      const idea = await base44.integrations.Core.InvokeLLM({
-        model: 'haiku',
-        prompt: `צור טקסט לפוסט שיווקי קצר ומעשי בעברית עבור עסק בתחום ${businessProfile?.category || ''} ב${businessProfile?.city || ''}.
-
-מגמה/הזדמנות: "${signal.summary}"
-פעולה מומלצת: ${signal.recommended_action || ''}
-
-כתוב טקסט לפוסט אינסטגרם/פייסבוק: 3-4 משפטים, טון חברותי, עם קריאה לפעולה בסוף. רק הטקסט — ללא כותרות או הסברים.`,
-      });
-      const ideaText = typeof idea === 'string' ? idea.trim() : (idea?.content || JSON.stringify(idea));
-      // Open ActionPopup with campaign content
-      setCampaignPopupSignal({
-        id: signal.id + '_campaign',
-        summary: `רעיון קמפיין: ${signal.summary}`,
-        recommended_action: 'פרסם את הפוסט ברשתות החברתיות',
-        source_description: JSON.stringify({
-          action_label: 'פרסם קמפיין',
-          action_type: 'social_post',
-          prefilled_text: ideaText,
-          time_minutes: 5,
-        }),
-        impact_level: signal.impact_level,
-      });
-    } catch (_) {
-      toast.error('שגיאה ביצירת הרעיון');
-    }
-    setCreatingCampaign(false);
+  const handleCreateCampaignIdea = () => {
+    const params = new URLSearchParams({
+      signalId: signal.id,
+      summary:  signal.summary || '',
+      action:   signal.recommended_action || '',
+      category: signal.category || '',
+      impact:   signal.impact_level || '',
+    });
+    navigate(`/campaigns/create?${params.toString()}`);
   };
 
   const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
@@ -285,11 +264,9 @@ ACTION_TIME: [זמן ביצוע, למשל: "5 דקות"]
               {(signal.category === 'trend' || signal.category === 'opportunity') && (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleCreateCampaignIdea(); }}
-                  disabled={creatingCampaign}
                   className="btn-subtle text-[10px] text-foreground-muted hover:text-primary flex items-center gap-1"
                 >
-                  {creatingCampaign ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                  רעיון קמפיין
+                  <Megaphone className="w-3 h-3" /> צור קמפיין
                 </button>
               )}
               {(() => {
@@ -349,14 +326,6 @@ ACTION_TIME: [זמן ביצוע, למשל: "5 דקות"]
           onClose={() => setShowActionPopup(false)}
         />
       )}
-      {campaignPopupSignal && (
-        <ActionPopup
-          signal={campaignPopupSignal}
-          businessProfile={businessProfile}
-          onClose={() => setCampaignPopupSignal(null)}
-        />
-      )}
-
       {expanded && (
         <div className="px-5 pb-4 mx-5 mb-3 rounded-xl bg-secondary border border-border space-y-4 p-4 fade-in-up">
 
@@ -525,13 +494,10 @@ ACTION_TIME: [זמן ביצוע, למשל: "5 דקות"]
                 {(signal.category === 'trend' || signal.category === 'opportunity') && (
                   <button
                     onClick={handleCreateCampaignIdea}
-                    disabled={creatingCampaign}
                     className="text-[10px] text-primary/70 hover:text-primary flex items-center gap-1 transition-colors mr-auto"
                   >
-                    {creatingCampaign
-                      ? <Loader2 className="w-3 h-3 animate-spin" />
-                      : <Sparkles className="w-3 h-3" />}
-                    רעיון קמפיין
+                    <Megaphone className="w-3 h-3" />
+                    צור קמפיין
                   </button>
                 )}
               </div>

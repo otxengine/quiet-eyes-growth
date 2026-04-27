@@ -43,6 +43,7 @@ import SocialConnections from '@/pages/SocialConnections.jsx';
 import OTXDashboard from '@/pages/OTXDashboard';
 import LearningCenter from '@/pages/LearningCenter.jsx';
 import Campaigns from '@/pages/Campaigns.jsx';
+import CampaignCreate from '@/pages/CampaignCreate.jsx';
 import DevUserSwitcher from '@/components/DevUserSwitcher';
 
 const AuthenticatedApp = () => {
@@ -152,6 +153,7 @@ const AuthenticatedApp = () => {
         <Route path="/otx" element={<OTXDashboard />} />
         <Route path="/learning" element={<LearningCenter />} />
         <Route path="/campaigns" element={<Campaigns />} />
+        <Route path="/campaigns/create" element={<CampaignCreate />} />
       </Route>
 
       <Route path="/sign-in/*" element={

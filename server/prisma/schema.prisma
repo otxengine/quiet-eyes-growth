@@ -713,3 +713,32 @@ model AutoAction {
 
   @@map("auto_actions")
 }
+
+model Campaign {
+  id               String    @id @default(cuid())
+  created_date     DateTime  @default(now())
+  linked_business  String?
+  signal_id        String?   // source MarketSignal id
+  signal_summary   String?   // signal context text
+  title            String
+  platform         String?   // 'meta' | 'instagram' | 'google'
+  objective        String?   // 'awareness' | 'traffic' | 'leads' | 'conversions'
+  post_content     String?   // generated post text
+  image_url        String?
+  audience_json    String?   // JSON of chosen audience targeting segment
+  daily_budget_ils Float?
+  campaign_days    Int?
+  total_budget_ils Float?
+  est_reach_low    Int?
+  est_reach_high   Int?
+  est_leads_low    Int?
+  est_leads_high   Int?
+  status           String    @default("draft") // 'draft' | 'published' | 'active' | 'completed'
+  published_at     DateTime?
+  actual_reach     Int?
+  actual_clicks    Int?
+  actual_leads     Int?
+  actual_spend_ils Float?
+
+  @@map("campaigns")
+}
