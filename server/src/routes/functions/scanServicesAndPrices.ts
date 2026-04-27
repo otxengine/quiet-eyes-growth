@@ -68,11 +68,7 @@ ${rawText}`,
 
     const services: any[] = Array.isArray(result?.services) ? result.services.slice(0, 15) : [];
 
-    await (prisma.businessProfile as any).update({
-      where: { id: businessProfileId },
-      data:  { services_json: JSON.stringify(services) },
-    });
-
+    // services_json column not yet migrated — return result without saving to DB
     return res.json({ services_count: services.length, services });
   } catch (err: any) {
     console.error('[scanServicesAndPrices]', err.message);
