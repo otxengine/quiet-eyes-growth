@@ -164,7 +164,7 @@ export default function SignalCard({ signal, businessProfile }) {
       category: signal.category || '',
       impact:   signal.impact_level || '',
     });
-    navigate(`/campaigns/create?${params.toString()}`);
+    navigate(`/marketing/create?${params.toString()}`);
   };
 
   const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
