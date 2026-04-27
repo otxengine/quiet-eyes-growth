@@ -66,6 +66,7 @@ export async function collectSocialSignals(req: Request, res: Response) {
     const { name, category, city } = profile;
     const facebook_url: string | null  = (profile as any).facebook_url  || null;
     const instagram_url: string | null = (profile as any).instagram_url || null;
+    console.log(`[collectSocialSignals] settings → facebook_url=${facebook_url || 'none'} instagram_url=${instagram_url || 'none'} apify=${!!APIFY_API_KEY}`);
     const existingSignals = await prisma.rawSignal.findMany({ where: { linked_business: businessProfileId } });
     const existingUrls = new Set(existingSignals.map(s => s.url).filter(Boolean));
 

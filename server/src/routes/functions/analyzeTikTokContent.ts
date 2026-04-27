@@ -94,6 +94,7 @@ export async function analyzeTikTokContent(req: Request, res: Response) {
     const tiktokUsernameFromUrl = tiktokUrl
       ? (tiktokUrl.match(/@([\w.]+)/) || tiktokUrl.match(/tiktok\.com\/([\w.]+)/))?.[1] || null
       : null;
+    console.log(`[analyzeTikTokContent] settings → tiktok_url=${tiktokUrl || 'none'} username=${tiktokUsernameFromUrl || 'none'} oauth=${!!tiktokAccount?.access_token}`);
 
     let videos: any[] = [];
     let dataSource = 'tavily';
