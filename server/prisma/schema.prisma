@@ -79,6 +79,7 @@ model BusinessProfile {
   crm_monday_api_key         String?
   crm_monday_enabled         Boolean? @default(false)
   crm_monday_board_id        String?
+  services_json              String?  // JSON array of { name, price, category, description }
   crm_monday_field_map       String?
   survey_enabled             Boolean? @default(false)
   survey_q1                  String?
@@ -712,6 +713,36 @@ model AutoAction {
   auto_execute_at  String?  // semi_auto: ISO timestamp for auto-execution if not acted on
 
   @@map("auto_actions")
+}
+
+model MediaAsset {
+  id              String   @id @default(cuid())
+  created_date    DateTime @default(now())
+  linked_business String?
+  image_base64    String?  // base64-encoded image data
+  mime_type       String?  @default("image/jpeg")
+  source          String?  @default("uploaded") // 'uploaded' | 'ai_generated'
+  description     String?  // AI-generated description of the image
+  used_in         String?  // 'post' | 'campaign' | 'story'
+
+  @@map("media_assets")
+}
+
+model OrganicPost {
+  id              String    @id @default(cuid())
+  created_date    DateTime  @default(now())
+  linked_business String?
+  signal_id       String?
+  signal_summary  String?
+  platform        String?   // 'instagram' | 'facebook' | 'tiktok'
+  post_type       String    @default("post") // 'post' | 'story'
+  content         String?
+  media_asset_id  String?   // ref to MediaAsset
+  image_url       String?   // external URL or data URL
+  status          String    @default("draft") // 'draft' | 'published'
+  published_at    DateTime?
+
+  @@map("organic_posts")
 }
 
 model Campaign {

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { ArrowLeft, Loader2, CheckCheck, ExternalLink, ListPlus, Sparkles, RefreshCw, Megaphone } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { classifyInsight, isOrganicContent, isPaidCampaign } from '@/lib/popup_classifier';
 import { toast } from 'sonner';
 import { SourceTypeBadge, PlatformBadge, SentimentBadge } from './SignalSourceBadge';
 import AiConfidenceBadge from '@/components/ai/AiConfidenceBadge';
@@ -285,7 +286,38 @@ ACTION_TIME: [זמן ביצוע, למשל: "5 דקות"]
                 return null;
               })()}
               <button
-                onClick={(e) => { e.stopPropagation(); setShowActionPopup(true); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  let meta = {};
+                  try { meta = JSON.parse(signal.source_description || '{}'); } catch {}
+                  const popupType = classifyInsight({
+                    action_type: meta.action_type || signal.action_type,
+                    action_label: meta.action_label,
+                    summary: signal.summary,
+                    recommended_action: signal.recommended_action,
+                    category: signal.category,
+                  });
+                  if (isOrganicContent(popupType)) {
+                    const params = new URLSearchParams({
+                      create: 'organic',
+                      type: popupType === 'story_post' ? 'story' : 'post',
+                      signalId: signal.id,
+                      summary: signal.summary || '',
+                      action: signal.recommended_action || '',
+                    });
+                    navigate(`/marketing?${params.toString()}`);
+                  } else if (isPaidCampaign(popupType)) {
+                    const params = new URLSearchParams({
+                      signalId: signal.id,
+                      summary: signal.summary || '',
+                      action: signal.recommended_action || '',
+                      category: signal.category || '',
+                    });
+                    navigate(`/marketing/create?${params.toString()}`);
+                  } else {
+                    setShowActionPopup(true);
+                  }
+                }}
                 className="btn-subtle text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 font-semibold flex items-center gap-1 px-2 py-0.5 rounded-md transition-all"
               >
                 ⚡ פעל עכשיו

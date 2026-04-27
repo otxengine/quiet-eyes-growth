@@ -42,7 +42,7 @@ import DataSources from '@/pages/DataSources.jsx';
 import SocialConnections from '@/pages/SocialConnections.jsx';
 import OTXDashboard from '@/pages/OTXDashboard';
 import LearningCenter from '@/pages/LearningCenter.jsx';
-import Campaigns from '@/pages/Campaigns.jsx';
+import Marketing from '@/pages/Marketing.jsx';
 import CampaignCreate from '@/pages/CampaignCreate.jsx';
 import DevUserSwitcher from '@/components/DevUserSwitcher';
 
@@ -152,8 +152,8 @@ const AuthenticatedApp = () => {
         {/* OTXEngine growth intelligence dashboard */}
         <Route path="/otx" element={<OTXDashboard />} />
         <Route path="/learning" element={<LearningCenter />} />
-        <Route path="/campaigns" element={<Campaigns />} />
-        <Route path="/campaigns/create" element={<CampaignCreate />} />
+        <Route path="/marketing" element={<Marketing />} />
+        <Route path="/marketing/create" element={<CampaignCreate />} />
       </Route>
 
       <Route path="/sign-in/*" element={

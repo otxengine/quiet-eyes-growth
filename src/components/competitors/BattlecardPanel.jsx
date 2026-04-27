@@ -18,10 +18,10 @@ export default function BattlecardPanel({ competitor, businessProfile }) {
       });
       if (res?.data?.battlecard || res?.battlecard) {
         setBattlecard(res?.data?.battlecard || res?.battlecard);
-        toast.success('Battlecard עודכן ✓');
+        toast.success('פרופיל עודכן ✓');
       }
     } catch (_) {
-      toast.error('שגיאה ביצירת battlecard');
+      toast.error('שגיאה ביצירת פרופיל המתחרה');
     }
     setLoading(false);
   };
@@ -29,11 +29,11 @@ export default function BattlecardPanel({ competitor, businessProfile }) {
   if (!battlecard) {
     return (
       <div className="text-center py-6">
-        <p className="text-[12px] text-foreground-muted mb-3">אין battlecard עדיין</p>
+        <p className="text-[12px] text-foreground-muted mb-3">אין פרופיל מתחרה עדיין</p>
         <button onClick={generate} disabled={loading}
           className="flex items-center gap-2 px-4 py-2 bg-foreground text-background text-[12px] font-medium rounded-lg hover:opacity-90 transition-opacity mx-auto disabled:opacity-60">
           {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
-          {loading ? 'מייצר...' : 'צור Battlecard'}
+          {loading ? 'מייצר...' : 'צור פרופיל מתחרה'}
         </button>
       </div>
     );
@@ -52,7 +52,7 @@ export default function BattlecardPanel({ competitor, businessProfile }) {
         <button onClick={generate} disabled={loading}
           className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 text-[10px] text-foreground-muted border border-border rounded-md hover:bg-secondary transition-colors">
           {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-          {loading ? 'מעדכן...' : 'עדכן'}
+          {loading ? 'מעדכן...' : 'רענן פרופיל'}
         </button>
       </div>
 

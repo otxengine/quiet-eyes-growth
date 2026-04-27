@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import {
   Loader2, RefreshCw, ChevronDown, ChevronUp, Send, ArrowRight,
   Eye, MousePointerClick, Users, TrendingUp, Zap, CheckCircle,
+  Upload, Sparkles, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -128,6 +128,13 @@ export default function CampaignCreate() {
   const [chosenSeg,    setChosenSeg]    = useState(null); // selected audience segment
 
   // Async state
+  const [imageUrl,       setImageUrl]       = useState('');
+  const [imageDesc,      setImageDesc]      = useState('');
+  const [mediaAssetId,   setMediaAssetId]   = useState(null);
+  const [genImage,       setGenImage]       = useState(false);
+  const [analyzingImg,   setAnalyzingImg]   = useState(false);
+  const fileRef = useRef(null);
+
   const [generatingPost,  setGeneratingPost]  = useState(false);
   const [loadingAudience, setLoadingAudience] = useState(false);
   const [loadingForecast, setLoadingForecast] = useState(false);
@@ -225,6 +232,7 @@ ${signalAction  ? `מטרת הקמפיין: ${signalAction}` : ''}
         platform,
         objective,
         post_content:     postContent,
+        image_url:        imageUrl || null,
         audience_json:    chosenSeg ? JSON.stringify(chosenSeg) : null,
         daily_budget_ils: Number(budget),
         campaign_days:    Number(days),
@@ -237,7 +245,7 @@ ${signalAction  ? `מטרת הקמפיין: ${signalAction}` : ''}
         published_at:     asDraft ? null : new Date().toISOString(),
       });
       toast.success(asDraft ? 'נשמר כטיוטה' : 'הקמפיין פורסם! 🎉');
-      navigate('/campaigns');
+      navigate('/marketing');
     } catch (e) {
       toast.error('שגיאה בשמירת הקמפיין');
     }
@@ -259,7 +267,7 @@ ${signalAction  ? `מטרת הקמפיין: ${signalAction}` : ''}
 
       {/* Header */}
       <div className="flex items-center gap-3 mb-2">
-        <button onClick={() => navigate('/campaigns')} className="text-foreground-muted hover:text-foreground">
+        <button onClick={() => navigate('/marketing')} className="text-foreground-muted hover:text-foreground">
           <ArrowRight className="w-5 h-5" />
         </button>
         <div>
@@ -302,7 +310,103 @@ ${signalAction  ? `מטרת הקמפיין: ${signalAction}` : ''}
         </div>
       </SectionCard>
 
-      {/* ── 2. Platform & Objective ── */}
+      {/* ── 2. Image ── */}
+      <SectionCard title="תמונה לקמפיין" subtitle="העלה מהמכשיר או צור עם AI" defaultOpen={false}>
+        <div className="p-4 space-y-3">
+          {imageUrl ? (
+            <div className="relative">
+              <img src={imageUrl} alt="" className="w-full h-44 object-cover rounded-xl border border-border" />
+              {analyzingImg && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl">
+                  <div className="text-white text-[12px] flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" /> מנתח תמונה...
+                  </div>
+                </div>
+              )}
+              {imageDesc && <p className="text-[10px] text-foreground-muted mt-1">🔍 {imageDesc}</p>}
+              <button
+                onClick={() => { setImageUrl(''); setMediaAssetId(null); setImageDesc(''); }}
+                className="absolute top-2 left-2 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-black/80"
+              >✕</button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={async () => {
+                  setGenImage(true);
+                  try {
+                    const res = await base44.functions.invoke('generateImage', {
+                      businessProfileId: bpId,
+                      post_text: postContent,
+                      insight_text: signalSummary,
+                    });
+                    const d = res?.data || res;
+                    if (d?.url) {
+                      setImageUrl(d.url);
+                      if (d.url.startsWith('data:')) {
+                        try {
+                          const asset = await base44.entities.MediaAsset.create({
+                            linked_business: bpId,
+                            image_base64: d.url.split(',')[1],
+                            mime_type: 'image/png',
+                            source: 'ai_generated',
+                            description: postContent.slice(0, 80),
+                            used_in: 'campaign',
+                          });
+                          setMediaAssetId(asset.id);
+                        } catch {}
+                      }
+                    }
+                  } catch { }
+                  setGenImage(false);
+                }}
+                disabled={genImage}
+                className="flex-1 flex items-center justify-center gap-1.5 py-3 border border-dashed border-border rounded-xl text-[12px] text-foreground-muted hover:bg-secondary transition-colors"
+              >
+                {genImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                {genImage ? 'יוצר תמונה...' : 'תמונה AI'}
+              </button>
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="flex-1 flex items-center justify-center gap-1.5 py-3 border border-dashed border-border rounded-xl text-[12px] text-foreground-muted hover:bg-secondary transition-colors"
+              >
+                <Upload className="w-4 h-4" /> העלה מהמכשיר
+              </button>
+              <input ref={fileRef} type="file" accept="image/*" className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = async (ev) => {
+                    const dataUrl = ev.target.result;
+                    setImageUrl(dataUrl);
+                    setAnalyzingImg(true);
+                    try {
+                      const b64 = dataUrl.split(',')[1];
+                      const res = await base44.functions.invoke('analyzeImageForPost', {
+                        businessProfileId: bpId,
+                        imageBase64: b64,
+                        mimeType: file.type || 'image/jpeg',
+                        platform,
+                      });
+                      const d = res?.data || res;
+                      if (d?.mediaAssetId) setMediaAssetId(d.mediaAssetId);
+                      if (d?.description)  setImageDesc(d.description);
+                      if (d?.suggested_post) {
+                        setPostContent(d.suggested_post);
+                      }
+                    } catch {}
+                    setAnalyzingImg(false);
+                  };
+                  reader.readAsDataURL(file);
+                }}
+              />
+            </div>
+          )}
+        </div>
+      </SectionCard>
+
+      {/* ── 3. Platform & Objective ── */}
       <SectionCard title="פלטפורמה ומטרה">
         <div className="p-4 space-y-4">
           {/* Platform tabs */}

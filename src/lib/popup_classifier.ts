@@ -6,7 +6,9 @@
  */
 
 export type PopupType =
-  | 'social_post'      // פרסם פוסט / story
+  | 'organic_post'     // פוסט אורגני (לא ממומן)
+  | 'story_post'       // סטורי אורגני
+  | 'social_post'      // פרסם פוסט / story (legacy)
   | 'respond'          // הגב לביקורת / לקוח
   | 'internal_task'    // משימה פנימית בעסק
   | 'whatsapp_blast'   // שלח ל-WhatsApp
@@ -14,6 +16,16 @@ export type PopupType =
   | 'pricing_action'   // שינוי מחיר / מבצע
   | 'delivery_promo'   // מבצע משלוח
   | 'platform_setup';  // הגדרת פלטפורמה (גוגל מפס, פייסבוק, אינסטגרם)
+
+/** Returns true for signal types that should navigate to /marketing (organic content) */
+export function isOrganicContent(type: PopupType): boolean {
+  return type === 'organic_post' || type === 'social_post' || type === 'story_post';
+}
+
+/** Returns true for signal types that should navigate to /marketing/create (paid campaign) */
+export function isPaidCampaign(type: PopupType): boolean {
+  return type === 'campaign' || type === 'pricing_action' || type === 'delivery_promo';
+}
 
 export function classifyInsight(insight: {
   action_platform?: string;
@@ -33,7 +45,9 @@ export function classifyInsight(insight: {
 
   // Already explicitly typed — map to PopupType
   if (type === 'platform_setup') return 'platform_setup';
-  if (type === 'social_post' || type === 'promote' || type === 'post_publish') return 'social_post';
+  if (type === 'story_post' || type === 'story') return 'story_post';
+  if (type === 'organic_post') return 'organic_post';
+  if (type === 'social_post' || type === 'promote' || type === 'post_publish') return 'organic_post';
   if (type === 'respond')     return 'respond';
   if (type === 'campaign')    return 'campaign';
   if (type === 'call')        return 'internal_task';
@@ -55,7 +69,8 @@ export function classifyInsight(insight: {
   if (platform === 'wolt' || platform === 'ten_bis') return 'delivery_promo';
 
   // Label / text heuristics
-  if (/פרסם|פוסט|סטורי|story|post|שתף/.test(label)) return 'social_post';
+  if (/סטורי|story/.test(label)) return 'story_post';
+  if (/פרסם|פוסט|post|שתף/.test(label)) return 'organic_post';
   if (/הגב|ביקורת|תגובה|respond|reply/.test(label)) return 'respond';
   if (/whatsapp|ווטסאפ|הודע|blast/.test(label))    return 'whatsapp_blast';
   if (/קמפיין|campaign|ממומן|פרסום ממומן/.test(label)) return 'campaign';
@@ -63,11 +78,11 @@ export function classifyInsight(insight: {
   if (/משלוח|delivery|wolt|תן ביס/.test(label))    return 'delivery_promo';
 
   // Signal category
-  if (category === 'opportunity' || category === 'trend') return 'social_post';
+  if (category === 'opportunity' || category === 'trend') return 'organic_post';
   if (category === 'competitor_move') return 'internal_task';
 
   // Text-level signals
-  if (/happy.?hour|קוקטייל|מבצע|sale|discount/.test(text)) return 'social_post';
+  if (/happy.?hour|קוקטייל|מבצע|sale|discount/.test(text)) return 'organic_post';
   if (/ביקורת שלילית|negative review|לא מרוצה/.test(text)) return 'respond';
   if (/משלוח|wolt|ten.?bis/.test(text)) return 'delivery_promo';
 
@@ -77,6 +92,8 @@ export function classifyInsight(insight: {
 /** Map classifyInsight result back to ActionPopup's existing action_type strings */
 export function popupTypeToActionType(t: PopupType): string {
   switch (t) {
+    case 'organic_post':   return 'social_post';
+    case 'story_post':     return 'social_post';
     case 'social_post':    return 'social_post';
     case 'respond':        return 'respond';
     case 'campaign':       return 'promote';

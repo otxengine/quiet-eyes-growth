@@ -399,7 +399,7 @@ export default function Competitors() {
           { key: 'analysis',    label: 'ניתוח',          icon: LayoutGrid },
           { key: 'platforms',   label: 'פלטפורמות',       icon: Globe },
           { key: 'osint',       label: 'תובנות OSINT',    icon: ShieldCheck },
-          { key: 'battlecards', label: 'Battlecards',     icon: FileText },
+          { key: 'battlecards', label: 'פרופיל מתחרה',    icon: FileText },
         ].map(({ key, label, icon: Icon }) => (
           <button key={key} onClick={() => setActiveSection(key)}
             className={`flex items-center gap-1.5 px-4 py-2.5 text-[12px] font-medium transition-all duration-150 relative ${
@@ -723,7 +723,7 @@ export default function Competitors() {
           {competitors.length === 0 ? (
             <div className="card-base py-16 text-center">
               <FileText className="w-10 h-10 text-foreground-muted opacity-20 mx-auto mb-3" />
-              <p className="text-[13px] text-foreground-muted">זהה מתחרים תחילה כדי ליצור Battlecards</p>
+              <p className="text-[13px] text-foreground-muted">זהה מתחרים תחילה כדי ליצור פרופיל מתחרה</p>
             </div>
           ) : (
             competitors.map(comp => (

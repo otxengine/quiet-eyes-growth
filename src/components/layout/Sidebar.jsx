@@ -24,7 +24,7 @@ const navItems = [
       { path: '/reviews', label: 'מוניטין', icon: Star, badgeKey: 'pendingReviews' },
       { path: '/leads', label: 'לידים', icon: CheckCircle, badgeKey: 'hotLeads' },
       { path: '/retention', label: 'שימור', icon: Heart },
-      { path: '/campaigns', label: 'קמפיינים', icon: Megaphone },
+      { path: '/marketing', label: 'מרכז שיווק', icon: Megaphone },
       { path: '/tasks', label: 'משימות', icon: ClipboardList },
     ]
   },
@@ -40,7 +40,6 @@ const navItems = [
     items: [
       { path: '/learning', label: 'מרכז למידה', icon: Sparkles },
       { path: '/data-sources', label: 'מקורות מידע', icon: Database },
-      { path: '/social', label: 'רשתות חברתיות', icon: Share2 },
       { path: '/integrations', label: 'אינטגרציות', icon: Plug },
       { path: '/subscription', label: 'מנוי', icon: Crown },
       { path: '/settings', label: 'הגדרות', icon: Settings },
