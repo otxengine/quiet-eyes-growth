@@ -15,16 +15,16 @@ async function apifyRun(actor: string, input: any): Promise<any[]> {
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) },
     );
     if (!startRes.ok) { console.warn(`[Apify] start failed (${actor}):`, startRes.status); return []; }
-    const runId = (await startRes.json())?.data?.id;
+    const runId = ((await startRes.json()) as any)?.data?.id;
     if (!runId) return [];
 
     for (let i = 0; i < 12; i++) {
       await new Promise(r => setTimeout(r, 5000));
-      const statusData: any = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_KEY}`).then(r => r.json());
+      const statusData = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_KEY}`).then(r => r.json() as Promise<any>);
       const status = statusData?.data?.status;
       if (status === 'SUCCEEDED') {
         const datasetId = statusData?.data?.defaultDatasetId;
-        const items: any = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_KEY}&limit=50`).then(r => r.json());
+        const items = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_KEY}&limit=50`).then(r => r.json() as Promise<any>);
         return Array.isArray(items) ? items : [];
       }
       if (['FAILED', 'ABORTED', 'TIMED-OUT'].includes(status)) { console.warn(`[Apify] run ended with ${status}`); return []; }
