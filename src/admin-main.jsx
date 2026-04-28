@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { ClerkProvider, SignedIn, SignedOut, SignIn, useUser } from '@clerk/clerk-react';
+import { ClerkProvider, SignedIn, SignedOut, SignIn, useUser, useClerk } from '@clerk/clerk-react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import { queryClientInstance } from '@/lib/query-client';
@@ -21,6 +21,7 @@ function isAdminEmail(email) {
 
 function AdminApp() {
   const { user, isLoaded } = useUser();
+  const { signOut } = useClerk();
 
   if (!isLoaded) {
     return (
@@ -31,13 +32,23 @@ function AdminApp() {
     );
   }
 
-  const email = user?.primaryEmailAddress?.emailAddress || '';
+  // Try all possible email paths in Clerk
+  const email =
+    user?.primaryEmailAddress?.emailAddress ||
+    user?.emailAddresses?.[0]?.emailAddress ||
+    '';
 
   if (!isAdminEmail(email)) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, fontFamily: 'sans-serif', direction: 'rtl' }}>
-        <p style={{ fontSize: 14, color: '#666' }}>אין הרשאת גישה לחשבון זה ({email})</p>
-        <a href="/" style={{ fontSize: 12, color: '#999', textDecoration: 'underline' }}>חזור לאתר</a>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, fontFamily: 'sans-serif', direction: 'rtl' }}>
+        <p style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>אין הרשאת גישה</p>
+        <p style={{ fontSize: 12, color: '#888' }}>מחובר כ: <strong>{email || '(לא ידוע)'}</strong></p>
+        <button
+          onClick={() => signOut(() => window.location.reload())}
+          style={{ marginTop: 8, padding: '8px 20px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 13, cursor: 'pointer', color: '#333' }}
+        >
+          התנתק והתחבר עם חשבון אחר
+        </button>
       </div>
     );
   }
@@ -49,7 +60,7 @@ function AdminApp() {
           <span style={{ fontSize: 13, fontWeight: 700 }}>OTX Admin</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <span style={{ fontSize: 11, color: '#999' }}>{email}</span>
-            <a href="/" style={{ fontSize: 11, color: '#999', textDecoration: 'underline' }}>לאתר הראשי</a>
+            <button onClick={() => signOut(() => window.location.reload())} style={{ fontSize: 11, color: '#999', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>התנתק</button>
           </div>
         </header>
         <main style={{ padding: '16px 24px' }}>
