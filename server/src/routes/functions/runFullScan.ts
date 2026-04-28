@@ -53,23 +53,23 @@ export async function runFullScan(req: Request, res: Response) {
   const profile = profileRows[0];
 
   // Cooldown: prevent burning API budget with multiple full scans within 6 hours
-  const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+  const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
   try {
     const recentScan = await prisma.automationLog.findFirst({
       where: {
-        agent_name: 'runFullScan',
+        automation_name: 'runFullScan',
         linked_business: businessProfileId,
-        created_at: { gt: sixHoursAgo },
+        created_date: { gt: sixHoursAgo },
       },
-      orderBy: { created_at: 'desc' },
+      orderBy: { created_date: 'desc' },
     });
     if (recentScan) {
-      const nextScanAt = new Date(new Date(recentScan.created_at).getTime() + 6 * 60 * 60 * 1000);
+      const nextScanAt = new Date(recentScan.created_date.getTime() + 6 * 60 * 60 * 1000);
       return res.json({
         success: false,
         cooldown: true,
         message: `סריקה מלאה כבר בוצעה לאחרונה. הסריקה הבאה אפשרית ב-${nextScanAt.toLocaleTimeString('he-IL')}.`,
-        last_scan: recentScan.created_at,
+        last_scan: recentScan.created_date,
         next_scan_at: nextScanAt.toISOString(),
       });
     }
@@ -80,10 +80,10 @@ export async function runFullScan(req: Request, res: Response) {
   // detectEarlyTrends is expensive (12 Tavily + 5 SerpAPI) — skip if ran within 48h
   let earlyTrendsHandler: Function = detectEarlyTrends;
   try {
-    const last48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const last48h = new Date(Date.now() - 48 * 60 * 60 * 1000);
     const recentET = await prisma.automationLog.findFirst({
-      where: { agent_name: 'detectEarlyTrends', linked_business: businessProfileId, created_at: { gt: last48h } },
-      orderBy: { created_at: 'desc' },
+      where: { automation_name: 'detectEarlyTrends', linked_business: businessProfileId, created_date: { gt: last48h } },
+      orderBy: { created_date: 'desc' },
     });
     if (recentET) {
       earlyTrendsHandler = (_req: Request, res: Response) =>
