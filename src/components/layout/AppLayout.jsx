@@ -72,11 +72,20 @@ export default function AppLayout() {
 
   const fromOnboarding = location.state?.fromOnboarding;
 
+  // Check if current user is admin (skip onboarding for admins)
+  const isAdmin = (() => {
+    try {
+      const email = window.__clerk?.user?.primaryEmailAddress?.emailAddress || user?.email || '';
+      return email === 'contact@otxenginee.io' || email.endsWith('@otx.ai') || email.endsWith('@quieteyes.ai');
+    } catch { return false; }
+  })();
+
   // Redirect to onboarding if no business profile found
   useEffect(() => {
     if (stillLoading) return;
     if (location.pathname.startsWith('/onboarding')) return;
     if (fromOnboarding) return;
+    if (isAdmin) return; // admins skip onboarding entirely
     // If user loaded but no profile — go to onboarding
     if (user && !businessProfile) {
       navigate('/onboarding');
@@ -86,7 +95,7 @@ export default function AppLayout() {
     if (userError && !user) {
       navigate('/onboarding');
     }
-  }, [businessProfile, stillLoading, user, userError, navigate, location.pathname, fromOnboarding]);
+  }, [businessProfile, stillLoading, user, userError, navigate, location.pathname, fromOnboarding, isAdmin]);
 
   // Fetch badge counts
   const { data: unreadSignals } = useQuery({
