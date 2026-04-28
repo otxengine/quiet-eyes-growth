@@ -1,23 +1,23 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useUser } from '@clerk/clerk-react';
+import { useAuth } from '@/lib/AuthContext';
 import OnboardingForm from '@/components/onboarding/OnboardingForm';
 import OnboardingScanning from '@/components/onboarding/OnboardingScanning';
 import OnboardingInsights from '@/components/onboarding/OnboardingInsights';
-import { base44 } from '@/api/base44Client';
 
 const ADMIN_EMAILS = ['contact@otxenginee.io'];
 const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai'];
 
 function isAdminEmail(email) {
   if (!email) return false;
-  return ADMIN_EMAILS.includes(email) || ADMIN_DOMAINS.some(d => email.endsWith(d));
+  const e = email.toLowerCase().trim();
+  return ADMIN_EMAILS.includes(e) || ADMIN_DOMAINS.some(d => e.endsWith(d));
 }
 
 export default function Onboarding() {
-  const { user: clerkUser, isLoaded } = useUser();
+  const { user, isLoadingAuth, logout } = useAuth();
 
-  if (!isLoaded) {
+  if (isLoadingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="w-8 h-8 border-4 border-gray-200 border-t-gray-800 rounded-full animate-spin" />
@@ -25,9 +25,7 @@ export default function Onboarding() {
     );
   }
 
-  const email = clerkUser?.primaryEmailAddress?.emailAddress || '';
-
-  if (isAdminEmail(email)) {
+  if (isAdminEmail(user?.email)) {
     return <Navigate to="/admin-dashboard" replace />;
   }
 
@@ -36,7 +34,7 @@ export default function Onboarding() {
       {/* Emergency logout */}
       <div style={{ position: 'fixed', top: 12, left: 12, zIndex: 9999 }}>
         <button
-          onClick={() => base44.auth.logout('/')}
+          onClick={() => logout()}
           style={{ fontSize: 11, color: '#999', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
         >
           התנתק
