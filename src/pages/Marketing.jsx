@@ -8,6 +8,7 @@ import {
   Image as ImageIcon, Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import PlanGate from '@/components/subscription/PlanGate';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -444,6 +445,7 @@ export default function Marketing() {
   });
 
   return (
+    <PlanGate requires="growth" featureName="מרכז השיווק">
     <div className="p-4 md:p-6 max-w-5xl mx-auto" dir="rtl">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
@@ -545,5 +547,6 @@ export default function Marketing() {
         />
       )}
     </div>
+    </PlanGate>
   );
 }

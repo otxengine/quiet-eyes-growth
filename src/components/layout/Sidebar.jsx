@@ -3,8 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {
   LayoutGrid, Eye, Users, Star, CheckCircle, Heart, Settings,
-  ChevronRight, ChevronLeft, LogOut, FileBarChart, TrendingUp,
-  ClipboardList, Database, Bot, Plug, Crown, Share2, Sparkles, Calendar, Megaphone, ShieldAlert
+  ChevronRight, ChevronLeft, LogOut, FileBarChart,
+  ClipboardList, Database, Bot, Plug, Crown, Sparkles, Calendar, Megaphone, ShieldAlert
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -26,13 +26,7 @@ const navItems = [
       { path: '/retention', label: 'שימור', icon: Heart },
       { path: '/marketing', label: 'מרכז שיווק', icon: Megaphone },
       { path: '/tasks', label: 'משימות', icon: ClipboardList },
-    ]
-  },
-  {
-    group: 'ניתוח',
-    items: [
       { path: '/reports', label: 'דוחות', icon: FileBarChart },
-      { path: '/market-analysis', label: 'ניתוח שוק', icon: TrendingUp },
     ]
   },
   {

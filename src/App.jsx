@@ -34,7 +34,6 @@ import Retention from '@/pages/Retention.jsx';
 import Agents from '@/pages/Agents.jsx';
 import SettingsPage from '@/pages/SettingsPage.jsx';
 import Reports from '@/pages/Reports.jsx';
-import MarketAnalysis from '@/pages/MarketAnalysis.jsx';
 import Tasks from '@/pages/Tasks.jsx';
 import Subscription from '@/pages/Subscription.jsx';
 import Integrations from '@/pages/Integrations.jsx';
@@ -142,7 +141,6 @@ const AuthenticatedApp = () => {
         <Route path="/leads" element={<Leads />} />
         <Route path="/retention" element={<Retention />} />
         <Route path="/reports" element={<Reports />} />
-        <Route path="/market-analysis" element={<MarketAnalysis />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/subscription" element={<Subscription />} />
         <Route path="/agents" element={<Agents />} />

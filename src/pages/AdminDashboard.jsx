@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { Navigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2, Zap, ChevronLeft, AlertCircle, CheckCircle2, Activity } from 'lucide-react';
+import { Loader2, Zap, ChevronLeft, AlertCircle, CheckCircle2, Activity, Crown, Search } from 'lucide-react';
 import { toast } from 'sonner';
+import { PLAN_LABELS, PLAN_COLORS, PLAN_ORDER } from '@/lib/usePlan';
 
 function useIsAdmin() {
   try {
@@ -26,11 +27,54 @@ const AGENTS = [
 ];
 
 const TABS = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'users',    label: 'משתמשים' },
-  { key: 'agents',   label: 'Agent Logs' },
-  { key: 'actions',  label: 'פעולות מנהל' },
+  { key: 'overview',       label: 'Overview' },
+  { key: 'subscriptions',  label: 'מנויים' },
+  { key: 'users',          label: 'משתמשים' },
+  { key: 'agents',         label: 'Agent Logs' },
+  { key: 'actions',        label: 'פעולות מנהל' },
 ];
+
+const PLAN_FEATURES = {
+  free_trial: [
+    'Dashboard + Briefing',
+    '5 תובנות שוק',
+    '3 מתחרים (צפייה)',
+    'סריקה אחת',
+    'פוסט AI אחד',
+  ],
+  starter: [
+    'Dashboard + Briefing',
+    '15 תובנות שוק',
+    '5 מתחרים (צפייה)',
+    '4 סריקות/חודש',
+    '5 פוסטים AI',
+  ],
+  growth: [
+    'תובנות ללא הגבלה',
+    '10 מתחרים + Battlecard',
+    '30 סריקות/חודש',
+    '30 פוסטים + 10 תמונות AI',
+    'מגמות, Viral, לידים חברתיים',
+    'דוח שבועי + מרכז למידה',
+    'שימור לקוחות + מרכז שיווק',
+  ],
+  pro: [
+    'הכל ב-Growth',
+    'סריקות + מתחרים ללא הגבלה',
+    'תמונות AI ללא הגבלה',
+    'אינטגרציות FB/IG/Apify',
+    'תמיכה Priority 4h',
+    'Onboarding אישי',
+  ],
+  enterprise: [
+    'הכל ב-Pro',
+    'Account Manager ייעודי',
+    'SLA 99.5%',
+    'Onboarding מלא + הדרכה',
+    'חשבונית / העברה בנקאית',
+    'ניהול מרובה סניפים',
+  ],
+};
 
 function StatCard({ label, value, color = 'text-foreground' }) {
   return (
@@ -52,6 +96,8 @@ export default function AdminDashboard() {
   const [selectedAgent, setSelectedAgent]   = useState(AGENTS[0].id);
   const [running, setRunning]               = useState(false);
   const [agentResult, setAgentResult]       = useState(null);
+  const [subSearch, setSubSearch]           = useState('');
+  const [savingPlan, setSavingPlan]         = useState(null); // bizId being saved
 
   // ── Queries (no created_by filter = all data) ──────────────────
   const { data: allBusinesses = [], isLoading: loadingBiz } = useQuery({
@@ -132,6 +178,21 @@ export default function AdminDashboard() {
   });
   const drillBusiness = allBusinesses.find(b => b.id === drillBiz);
   const drillLogs     = allLogs.filter(l => l.linked_business === drillBiz).slice(0, 25);
+
+  // ── Update subscription plan ──────────────────────────────────
+  const updatePlan = async (bizId, newPlan) => {
+    setSavingPlan(bizId);
+    try {
+      await base44.entities.BusinessProfile.update(bizId, { subscription_plan: newPlan });
+      qc.invalidateQueries({ queryKey: ['admin_businesses'] });
+      qc.invalidateQueries({ queryKey: ['subscriptionStatus'] });
+      qc.invalidateQueries({ queryKey: ['businessProfiles'] });
+      toast.success(`תוכנית עודכנה ל-${PLAN_LABELS[newPlan]} ✓`);
+    } catch (e) {
+      toast.error('שגיאה בעדכון: ' + e.message);
+    }
+    setSavingPlan(null);
+  };
 
   // ── Run agent ─────────────────────────────────────────────────
   const handleRunAgent = async (bizId = selectedBiz) => {
@@ -270,6 +331,128 @@ export default function AdminDashboard() {
       )}
 
       {/* ══════════════════════════════════════════════════════════ */}
+      {/* SUBSCRIPTIONS                                            */}
+      {/* ══════════════════════════════════════════════════════════ */}
+      {tab === 'subscriptions' && (
+        <div className="space-y-4">
+          {/* Plan stats */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {PLAN_ORDER.map(planId => {
+              const count = allBusinesses.filter(b => (b.subscription_plan || 'free_trial') === planId).length;
+              return (
+                <div key={planId} className="card-base p-4 border-t-4" style={{ borderTopColor: PLAN_COLORS[planId] }}>
+                  <p className="text-[10px] font-semibold text-foreground-muted mb-1">{PLAN_LABELS[planId]}</p>
+                  <span className="text-[26px] font-bold tracking-tight" style={{ color: PLAN_COLORS[planId] }}>{count}</span>
+                  <p className="text-[9px] text-foreground-muted mt-0.5">משתמשים</p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground-muted" />
+            <input
+              value={subSearch}
+              onChange={e => setSubSearch(e.target.value)}
+              placeholder="חיפוש לפי שם עסק..."
+              className="w-full pr-9 pl-3 py-2.5 text-[12px] border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              dir="rtl"
+            />
+          </div>
+
+          {/* Users table */}
+          <div className="card-base overflow-hidden">
+            <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+              <h3 className="text-[13px] font-semibold text-foreground flex items-center gap-2">
+                <Crown className="w-4 h-4 text-warning" /> ניהול מנויים
+              </h3>
+              <span className="text-[10px] text-foreground-muted">{allBusinesses.length} עסקים</span>
+            </div>
+            <div className="divide-y divide-border">
+              {allBusinesses
+                .filter(b => !subSearch || b.name?.toLowerCase().includes(subSearch.toLowerCase()) || b.city?.includes(subSearch))
+                .map(biz => {
+                  const currentPlan = biz.subscription_plan || 'free_trial';
+                  const isSaving    = savingPlan === biz.id;
+                  const active      = activeIds.has(biz.id);
+                  return (
+                    <div key={biz.id} className="px-5 py-4 hover:bg-secondary/20 transition-colors">
+                      <div className="flex items-center gap-4 flex-wrap">
+                        {/* Business info */}
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${active ? 'bg-green-400' : 'bg-gray-300'}`} />
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-semibold text-foreground truncate">{biz.name}</p>
+                            <p className="text-[10px] text-foreground-muted">{biz.category} · {biz.city}</p>
+                            <p className="text-[9px] text-foreground-muted opacity-50 truncate">{biz.created_by}</p>
+                          </div>
+                        </div>
+
+                        {/* Current plan badge */}
+                        <div className="shrink-0">
+                          <span
+                            className="text-[11px] font-bold px-2.5 py-1 rounded-full text-white"
+                            style={{ background: PLAN_COLORS[currentPlan] }}
+                          >
+                            {PLAN_LABELS[currentPlan]}
+                          </span>
+                        </div>
+
+                        {/* Plan selector */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <select
+                            defaultValue={currentPlan}
+                            key={currentPlan}
+                            disabled={isSaving}
+                            onChange={e => updatePlan(biz.id, e.target.value)}
+                            className="text-[12px] border border-border rounded-lg px-3 py-1.5 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                          >
+                            {PLAN_ORDER.map(p => (
+                              <option key={p} value={p}>{PLAN_LABELS[p]}</option>
+                            ))}
+                          </select>
+                          {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin text-foreground-muted" />}
+                        </div>
+                      </div>
+
+                      {/* Features list for current plan */}
+                      <div className="mt-2.5 flex flex-wrap gap-1.5 pr-5">
+                        {(PLAN_FEATURES[currentPlan] || []).map(f => (
+                          <span key={f} className="text-[9px] px-1.5 py-0.5 rounded-full bg-secondary border border-border text-foreground-muted">
+                            {f}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+
+          {/* Quick bulk actions */}
+          <div className="card-base p-5">
+            <h4 className="text-[13px] font-semibold text-foreground mb-3">פעולות מהירות</h4>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {PLAN_ORDER.filter(p => p !== 'free_trial').map(planId => (
+                <div key={planId} className="p-3 rounded-xl border border-border bg-secondary/20">
+                  <p className="text-[11px] font-bold mb-1" style={{ color: PLAN_COLORS[planId] }}>
+                    {PLAN_LABELS[planId]}
+                  </p>
+                  <p className="text-[10px] text-foreground-muted mb-2">
+                    {allBusinesses.filter(b => (b.subscription_plan || 'free_trial') === planId).length} משתמשים פעילים
+                  </p>
+                  <p className="text-[9px] text-foreground-muted leading-relaxed">
+                    {PLAN_FEATURES[planId]?.slice(0, 3).join(' · ')}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════ */}
       {/* USERS LIST                                                */}
       {/* ══════════════════════════════════════════════════════════ */}
       {tab === 'users' && !drillBiz && (
@@ -334,11 +517,36 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-3">
-            <StatCard label="סיגנלים"    value={drillSignals.length} />
-            <StatCard label="לידים"      value={drillLeads.length} />
+          {/* Plan + Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatCard label="סיגנלים"     value={drillSignals.length} />
+            <StatCard label="לידים"       value={drillLeads.length} />
             <StatCard label="ריצות Agent" value={drillLogs.length} />
+            {/* Plan change inline */}
+            <div className="card-base p-4">
+              <p className="text-[10px] font-medium text-foreground-muted mb-2 flex items-center gap-1">
+                <Crown className="w-3 h-3 text-warning" /> תוכנית מנוי
+              </p>
+              <div className="flex items-center gap-2">
+                <select
+                  defaultValue={drillBusiness?.subscription_plan || 'free_trial'}
+                  key={drillBusiness?.subscription_plan}
+                  disabled={!!savingPlan}
+                  onChange={e => updatePlan(drillBiz, e.target.value)}
+                  className="flex-1 text-[11px] border border-border rounded-lg px-2 py-1.5 bg-background text-foreground focus:outline-none"
+                >
+                  {PLAN_ORDER.map(p => (
+                    <option key={p} value={p}>{PLAN_LABELS[p]}</option>
+                  ))}
+                </select>
+                {savingPlan === drillBiz && <Loader2 className="w-3 h-3 animate-spin text-foreground-muted shrink-0" />}
+              </div>
+              <p className="text-[9px] text-foreground-muted mt-1.5">
+                נוכחי: <span className="font-semibold" style={{ color: PLAN_COLORS[drillBusiness?.subscription_plan || 'free_trial'] }}>
+                  {PLAN_LABELS[drillBusiness?.subscription_plan || 'free_trial']}
+                </span>
+              </p>
+            </div>
           </div>
 
           {/* Signals */}

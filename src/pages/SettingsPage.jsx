@@ -96,17 +96,11 @@ import SettingsTone from '@/components/settings/SettingsTone';
 import SettingsLeadCriteria from '@/components/settings/SettingsLeadCriteria';
 import SettingsAlerts from '@/components/settings/SettingsAlerts';
 import SettingsPushNotifications from '@/components/settings/SettingsPushNotifications';
-import SettingsWhatsAppBot from '@/components/settings/SettingsWhatsAppBot';
 import SettingsChannels from '@/components/settings/SettingsChannels';
 import SettingsLearnBusiness from '@/components/settings/SettingsLearnBusiness.jsx';
 import SettingsDataSources from '@/components/settings/SettingsDataSources.jsx';
 import SettingsAutoRespond from '@/components/settings/SettingsAutoRespond.jsx';
 import SettingsWhatsAppAlerts from '@/components/settings/SettingsWhatsAppAlerts.jsx';
-import SettingsCrmSync from '@/components/settings/SettingsCrmSync.jsx';
-import SettingsSurvey from '@/components/settings/SettingsSurvey.jsx';
-import SettingsLocations from '@/components/settings/SettingsLocations.jsx';
-import AiInsightBox from '@/components/ai/AiInsightBox';
-import NotificationSettings from '@/components/settings/NotificationSettings';
 
 export default function SettingsPage() {
   const { businessProfile } = useOutletContext();
@@ -234,25 +228,6 @@ export default function SettingsPage() {
           toast.success('הגדרות ערוצים נשמרו ✓');
         }}
       />
-      <SettingsWhatsAppBot
-        form={form}
-        setForm={setForm}
-        businessProfile={businessProfile}
-        saving={saving}
-        onSave={async () => {
-          setSaving(true);
-          await saveField({
-            bot_enabled: form.bot_enabled,
-            bot_greeting: form.bot_greeting,
-            bot_qualification_questions: form.bot_qualification_questions,
-            bot_good_lead_criteria: form.bot_good_lead_criteria,
-            bot_bad_lead_criteria: form.bot_bad_lead_criteria,
-            bot_services_info: form.bot_services_info,
-          });
-          setSaving(false);
-          toast.success('הגדרות הבוט נשמרו ✓');
-        }}
-      />
       <SettingsPushNotifications
         form={form}
         onToggle={(key, val) => saveField({ [key]: val })}
@@ -290,52 +265,12 @@ export default function SettingsPage() {
         onToggle={(key, val) => { setForm(f => ({ ...f, [key]: val })); saveField({ [key]: val }); }}
         onFieldChange={(key, val) => { setForm(f => ({ ...f, [key]: val })); saveField({ [key]: val }); }}
       />
-      <SettingsCrmSync
-        form={form}
-        setForm={setForm}
-        businessProfile={businessProfile}
-        onToggle={(key, val) => { setForm(f => ({ ...f, [key]: val })); saveField({ [key]: val }); }}
-        onFieldChange={(key, val) => { setForm(f => ({ ...f, [key]: val })); saveField({ [key]: val }); }}
-      />
-      <SettingsSurvey
-        form={form}
-        setForm={setForm}
-        saving={saving}
-        onSave={async () => {
-          setSaving(true);
-          await saveField({
-            survey_enabled: form.survey_enabled,
-            survey_q1: form.survey_q1,
-            survey_q2: form.survey_q2,
-            survey_q3: form.survey_q3,
-          });
-          setSaving(false);
-          toast.success('הגדרות סקר נשמרו ✓');
-        }}
-      />
-      <SettingsLocations businessProfile={businessProfile} />
       <SettingsLearnBusiness businessProfile={businessProfile} />
 
       {/* Autonomy Level */}
       <AutonomySelector businessProfile={businessProfile} onSave={saveField} />
 
-      {/* Notification Settings (ITEM 4) */}
-      <div className="card-base p-5">
-        <h2 className="text-[14px] font-semibold text-foreground mb-1">🔔 התראות WhatsApp ומייל</h2>
-        <p className="text-[11px] text-foreground-muted mb-4">הגדר לאיפה לשלוח התראות על אירועים חשובים</p>
-        <NotificationSettings businessId={businessProfile?.id} />
-      </div>
       <SettingsAlerts form={form} onToggle={(key, val) => saveField({ [key]: val })} />
-
-      <AiInsightBox
-        title="בדיקת הגדרות חכמה — המלצות AI"
-        prompt={`אתה יועץ הגדרות מערכת OTX. בדוק את הגדרות העסק "${form.name}" (${form.category}, ${form.city}):
-- טון: ${form.tone_preference}, שוק יעד: ${form.target_market || 'לא הוגדר'}
-- תקציב מינימום: ${form.min_budget || 'לא הוגדר'}, שירותים: ${form.relevant_services || 'לא הוגדר'}
-- ערוצים מופעלים: ${[form.channels_whatsapp_enabled && 'WhatsApp', form.channels_instagram_enabled && 'Instagram', form.channels_facebook_enabled && 'Facebook', form.channels_tiktok_enabled && 'TikTok', form.channels_website_enabled && 'אתר'].filter(Boolean).join(', ') || 'אין'}
-- בוט: ${form.bot_enabled ? 'פעיל' : 'לא פעיל'}, התראות push: ${form.push_email_alerts ? 'מייל' : ''} ${form.push_whatsapp_alerts ? 'WhatsApp' : ''}
-זהה הגדרות חסרות או לא אופטימליות, והצע 3-5 שיפורים ספציפיים. בעברית, Markdown.`}
-      />
     </div>
   );
 }

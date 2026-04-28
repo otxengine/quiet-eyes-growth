@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Heart, Star, ClipboardList, AlertTriangle } from 'lucide-react';
+import PlanGate from '@/components/subscription/PlanGate';
 import RetentionCustomerList from '@/components/retention/RetentionCustomerList';
 import AiInsightBox from '@/components/ai/AiInsightBox';
 import SurveyResponseModal from '@/components/surveys/SurveyResponseModal';
@@ -51,6 +52,7 @@ export default function Retention() {
   ];
 
   return (
+    <PlanGate requires="growth" featureName="שימור לקוחות">
     <div className="space-y-5">
       <h1 className="text-[16px] font-bold text-foreground tracking-tight">שימור</h1>
 
@@ -200,5 +202,6 @@ export default function Retention() {
         />
       )}
     </div>
+    </PlanGate>
   );
 }

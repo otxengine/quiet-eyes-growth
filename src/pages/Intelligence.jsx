@@ -7,6 +7,8 @@ import SignalCard from '@/components/intelligence/SignalCard';
 import AiInsightBox from '@/components/ai/AiInsightBox';
 import WeeklyReportsTab from '@/components/intelligence/WeeklyReportsTab';
 import ScanOverlay from '@/components/dashboard/ScanOverlay';
+import PlanGate from '@/components/subscription/PlanGate';
+import { usePlan } from '@/lib/usePlan';
 
 const tabs = [
   { key: 'all', label: 'הכל' },
@@ -34,6 +36,7 @@ export default function Intelligence() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('all');
   const [showScan, setShowScan] = useState(false);
+  const { can } = usePlan();
 
   const { data: allSignals = [] } = useQuery({
     queryKey: ['intelligenceSignals', bpId],
@@ -145,7 +148,10 @@ export default function Intelligence() {
 זהה 3 מגמות עולות ספציפיות ל"${businessProfile?.name}", הסבר את קצב העלייה, ההשפעה הצפויה, ואיך לנצל/להתמודד. בעברית, Markdown.`}
       />
 
-      {activeTab === 'reports' ? (
+      {/* Trend / Viral tabs gated at Growth+ */}
+      {(activeTab === 'trend' || activeTab === 'reports') && !can('growth') ? (
+        <PlanGate requires="growth" featureName={activeTab === 'reports' ? 'דוחות שבועיים' : 'ניתוח מגמות'} />
+      ) : activeTab === 'reports' ? (
         <WeeklyReportsTab bpId={bpId} />
       ) : (
         <div className="card-base fade-in-up">

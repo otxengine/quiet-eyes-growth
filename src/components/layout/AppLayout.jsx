@@ -32,7 +32,6 @@ const pageTitles = {
   '/leads': 'לידים',
   '/retention': 'שימור לקוחות',
   '/reports': 'דוחות וניתוח',
-  '/market-analysis': 'ניתוח שוק',
   '/tasks': 'משימות',
   '/data-sources': 'מקורות מידע',
   '/subscription': 'ניהול מנוי',
