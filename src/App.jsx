@@ -44,6 +44,7 @@ import LearningCenter from '@/pages/LearningCenter.jsx';
 import Marketing from '@/pages/Marketing.jsx';
 import CampaignCreate from '@/pages/CampaignCreate.jsx';
 import AdminDashboard from '@/pages/AdminDashboard.jsx';
+import AdminLayout from '@/components/layout/AdminLayout';
 import DevUserSwitcher from '@/components/DevUserSwitcher';
 
 const AuthenticatedApp = () => {
@@ -130,6 +131,11 @@ const AuthenticatedApp = () => {
       {/* Onboarding flow */}
       <Route path="/onboarding/*" element={<Onboarding />} />
 
+      {/* Admin — standalone layout, no businessProfile required */}
+      <Route element={<AdminLayout />}>
+        <Route path="/admin-dashboard" element={<AdminDashboard />} />
+      </Route>
+
       {/* Main app with layout */}
       <Route element={<AppLayout />}>
         <Route path="/" element={<Dashboard />} />
@@ -153,7 +159,6 @@ const AuthenticatedApp = () => {
         <Route path="/learning" element={<LearningCenter />} />
         <Route path="/marketing" element={<Marketing />} />
         <Route path="/marketing/create" element={<CampaignCreate />} />
-        <Route path="/admin-dashboard" element={<AdminDashboard />} />
       </Route>
 
       <Route path="/sign-in/*" element={
