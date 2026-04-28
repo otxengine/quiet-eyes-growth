@@ -189,7 +189,6 @@ export async function detectEarlyTrends(req: Request, res: Response) {
 
     // ── 5. AI analysis — pre-peak trend scoring ─────────────────────────────
     const result = await invokeLLM({
-      model: 'sonnet',
       prompt: `אתה אנליסט מגמות מתמחה בגילוי טרנדים לפני שהם מגיעים לפיק שלהם.
 המשימה: מצא 2-5 טרנדים שנמצאים עדיין ב-"stage ראשוני" — לא עוד mainstream — אך מראים סימני צמיחה מהירה.
 
@@ -197,7 +196,7 @@ export async function detectEarlyTrends(req: Request, res: Response) {
 שירותים: ${relevant_services || 'לא צוינו'}
 
 נתונים:
-${fullContext.slice(0, 7000)}
+${fullContext.slice(0, 3500)}
 
 הוראות חשובות:
 • כלול רק טרנדים שיש להם ראיות ספציפיות בנתונים לעיל

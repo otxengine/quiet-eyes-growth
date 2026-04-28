@@ -123,7 +123,7 @@ export async function detectTrends(req: Request, res: Response) {
 עסק: ${name}, ${category}, ${city}
 
 נתונים:
-${combinedContext.substring(0, 6000)}
+${combinedContext.substring(0, 3500)}
 
 זהה 2-4 מגמות טרום-מיינסטרים עם ראיות מהנתונים בלבד.
 חוק: כלול רק מגמות עם ראיות ספציפיות. דלג על מגמות ללא אסמכתא.

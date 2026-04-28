@@ -52,6 +52,31 @@ export async function runFullScan(req: Request, res: Response) {
   const profileRows = await prisma.businessProfile.findMany({ where: { id: businessProfileId }, take: 1 });
   const profile = profileRows[0];
 
+  // Cooldown: prevent burning API budget with multiple full scans within 6 hours
+  const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+  try {
+    const recentScan = await prisma.automationLog.findFirst({
+      where: {
+        agent_name: 'runFullScan',
+        linked_business: businessProfileId,
+        created_at: { gt: sixHoursAgo },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+    if (recentScan) {
+      const nextScanAt = new Date(new Date(recentScan.created_at).getTime() + 6 * 60 * 60 * 1000);
+      return res.json({
+        success: false,
+        cooldown: true,
+        message: `סריקה מלאה כבר בוצעה לאחרונה. הסריקה הבאה אפשרית ב-${nextScanAt.toLocaleTimeString('he-IL')}.`,
+        last_scan: recentScan.created_at,
+        next_scan_at: nextScanAt.toISOString(),
+      });
+    }
+  } catch (_) {
+    // automationLog query failure → continue scan (don't block on cooldown check)
+  }
+
   // Full pipeline — ordered from data collection → analysis → learning → cleanup
   const pipeline: Array<[string, Function]> = [
     // ── Data Collection ──────────────────────────────────────────

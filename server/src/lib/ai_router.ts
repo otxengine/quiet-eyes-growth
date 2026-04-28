@@ -31,10 +31,10 @@ export const AI_ROUTER: Record<AITask, AIConfig> = {
   // ── Claude — deep analysis + strategy ─────────────────────────────────────
   analyze_market: {
     provider:    'anthropic',
-    model:       'claude-opus-4-6',
-    max_tokens:  1000,
+    model:       'claude-haiku-4-5-20251001',
+    max_tokens:  800,
     temperature: 0.3,
-    reason:      'ניתוח עמוק של שוק — Claude Opus מצטיין בהיגיון מורכב',
+    reason:      'ניתוח שוק — Haiku מספיק לניתוח מובנה עם JSON schema',
   },
   classify_intent: {
     provider:    'anthropic',
@@ -45,17 +45,17 @@ export const AI_ROUTER: Record<AITask, AIConfig> = {
   },
   build_audience: {
     provider:    'anthropic',
-    model:       'claude-sonnet-4-6',
-    max_tokens:  1500,
+    model:       'claude-haiku-4-5-20251001',
+    max_tokens:  600,
     temperature: 0.4,
-    reason:      'פילוח קהל — Sonnet מאזן בין עומק לעלות',
+    reason:      'פילוח קהל — Haiku מספיק לפרופיל קהל מובנה',
   },
   competitor_analysis: {
     provider:    'anthropic',
-    model:       'claude-sonnet-4-6',
-    max_tokens:  1500,
+    model:       'claude-haiku-4-5-20251001',
+    max_tokens:  800,
     temperature: 0.3,
-    reason:      'ניתוח מתחרים — נדרשת הבנה אסטרטגית עמוקה',
+    reason:      'ניתוח מתחרים — Haiku מספיק לJSON מובנה',
   },
 
   // ── GPT-4o — creative marketing content ───────────────────────────────────

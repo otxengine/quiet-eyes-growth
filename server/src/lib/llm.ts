@@ -23,8 +23,8 @@ const MODEL_MAP: Record<string, string> = {
 export async function invokeLLM(options: { prompt: string } & LLMOptions): Promise<any> {
   const { prompt, response_json_schema, model, maxTokens: maxTokensOverride } = options;
 
-  const modelId = MODEL_MAP[model || ''] || model || 'claude-sonnet-4-6';
-  const maxTokens = maxTokensOverride ?? (model === 'haiku' ? 512 : 4096);
+  const modelId = MODEL_MAP[model || ''] || model || 'claude-haiku-4-5-20251001';
+  const maxTokens = maxTokensOverride ?? (model === 'sonnet' || model === 'opus' ? 1200 : 700);
 
   // Try Anthropic first
   if (process.env.ANTHROPIC_API_KEY) {
@@ -89,8 +89,8 @@ async function _callOpenAI(prompt: string, response_json_schema: any): Promise<a
   ];
 
   const body: any = {
-    model: 'gpt-4o',
-    max_tokens: 4096,
+    model: 'gpt-4o-mini',
+    max_tokens: 800,
     temperature: 0.3,
     messages,
   };

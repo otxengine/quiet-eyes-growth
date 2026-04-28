@@ -92,7 +92,6 @@ export async function detectViralSignals(req: Request, res: Response) {
 
     // ── AI viral analysis ────────────────────────────────────────────────────
     const result = await invokeLLM({
-      model: 'sonnet',
       prompt: `אתה מומחה וירליות ברשתות חברתיות. נתח מה הולך ויראלי עכשיו ואיך העסק יכול לנצל את זה.
 
 עסק: "${name}" — ${category} ב${city}
@@ -100,7 +99,7 @@ export async function detectViralSignals(req: Request, res: Response) {
 טון: ${tone_preference}
 
 תוצאות חיפוש:
-${context.slice(0, 6000)}
+${context.slice(0, 3500)}
 
 מצא 2-4 סיגנלים ויראלים שרלוונטיים לעסק. לכל אחד — כתוב תוכן מוכן לפרסום.
 

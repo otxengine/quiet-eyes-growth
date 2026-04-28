@@ -313,7 +313,6 @@ export async function cleanupAndLearn(req: Request, res: Response) {
     // AI synthesizes learning patterns
     if (retainedSignals.length > 0) {
       const learningResult = await invokeLLM({
-        model: 'sonnet',
         prompt: `אתה מנוע ML עבור פלטפורמת מודיעין עסקי. נתח את הנתונים ולמד מהם.
 
 נתוני ביצועים:
