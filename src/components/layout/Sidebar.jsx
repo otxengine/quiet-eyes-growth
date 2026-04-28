@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import {
   LayoutGrid, Eye, Users, Star, CheckCircle, Heart, Settings,
   ChevronRight, ChevronLeft, LogOut, FileBarChart, TrendingUp,
-  ClipboardList, Database, Bot, Plug, Crown, Share2, Sparkles, Calendar, Megaphone
+  ClipboardList, Database, Bot, Plug, Crown, Share2, Sparkles, Calendar, Megaphone, ShieldAlert
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -127,6 +127,26 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate }
           flex: '1 1 0',
         }}
       >
+        {/* Admin-only: admin dashboard */}
+        {isAdmin && (
+          <div className="px-2 mb-1">
+            <Link
+              to="/admin"
+              onClick={() => onNavigate && onNavigate()}
+              className={`flex items-center gap-2.5 h-8 rounded-md transition-all duration-150 text-[12px] relative ${collapsed ? 'justify-center px-0' : 'px-2.5'}`}
+              style={{
+                background: location.pathname === '/admin' ? 'hsl(var(--sidebar-accent-active))' : 'transparent',
+                color: location.pathname === '/admin' ? 'hsl(var(--sidebar-accent-foreground))' : 'hsl(var(--sidebar-foreground-muted))',
+              }}
+              onMouseEnter={e => { if (location.pathname !== '/admin') { e.currentTarget.style.background = 'hsl(var(--sidebar-accent))'; e.currentTarget.style.color = 'hsl(var(--sidebar-accent-foreground))'; } }}
+              onMouseLeave={e => { if (location.pathname !== '/admin') { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'hsl(var(--sidebar-foreground-muted))'; } }}
+            >
+              <ShieldAlert className="w-[14px] h-[14px] flex-shrink-0 opacity-60" />
+              {!collapsed && <span className="flex-1 font-medium text-[11px] opacity-70">Admin Dashboard</span>}
+            </Link>
+          </div>
+        )}
+
         {/* Admin-only: agents page */}
         {isAdmin && (
           <div className="px-2 mb-1">

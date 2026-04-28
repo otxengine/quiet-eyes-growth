@@ -44,6 +44,7 @@ import OTXDashboard from '@/pages/OTXDashboard';
 import LearningCenter from '@/pages/LearningCenter.jsx';
 import Marketing from '@/pages/Marketing.jsx';
 import CampaignCreate from '@/pages/CampaignCreate.jsx';
+import AdminDashboard from '@/pages/AdminDashboard.jsx';
 import DevUserSwitcher from '@/components/DevUserSwitcher';
 
 const AuthenticatedApp = () => {
@@ -154,6 +155,7 @@ const AuthenticatedApp = () => {
         <Route path="/learning" element={<LearningCenter />} />
         <Route path="/marketing" element={<Marketing />} />
         <Route path="/marketing/create" element={<CampaignCreate />} />
+        <Route path="/admin" element={<AdminDashboard />} />
       </Route>
 
       <Route path="/sign-in/*" element={
