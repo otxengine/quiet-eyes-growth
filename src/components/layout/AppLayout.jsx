@@ -2,6 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { useAuth } from '@/lib/AuthContext';
+
+const ADMIN_EMAILS = ['contact@otxenginee.io'];
+const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai'];
+function checkIsAdmin(email) {
+  if (!email) return false;
+  const e = email.toLowerCase().trim();
+  return ADMIN_EMAILS.includes(e) || ADMIN_DOMAINS.some(d => e.endsWith(d));
+}
 
 // FIX 4: Track page visits in sessionStorage so badge counts clear after visiting the relevant page
 function usePageVisits(pathname) {
@@ -50,6 +59,10 @@ export default function AppLayout() {
   const location = useLocation();
   const pageVisits = usePageVisits(location.pathname);
 
+  // Use reactive auth context for reliable admin detection
+  const { user: authUser, isLoadingAuth } = useAuth();
+  const isAdmin = checkIsAdmin(authUser?.email);
+
   // Get current user
   const { data: user, isLoading: loadingUser, isError: userError } = useQuery({
     queryKey: ['currentUser'],
@@ -72,17 +85,10 @@ export default function AppLayout() {
 
   const fromOnboarding = location.state?.fromOnboarding;
 
-  // Check if current user is admin (skip onboarding for admins)
-  const isAdmin = (() => {
-    try {
-      const email = window.__clerk?.user?.primaryEmailAddress?.emailAddress || user?.email || '';
-      return email === 'contact@otxenginee.io' || email.endsWith('@otx.ai') || email.endsWith('@quieteyes.ai');
-    } catch { return false; }
-  })();
-
   // Redirect to onboarding if no business profile found
   useEffect(() => {
     if (stillLoading) return;
+    if (isLoadingAuth) return; // wait for auth to resolve before checking admin
     if (location.pathname.startsWith('/onboarding')) return;
     if (fromOnboarding) return;
     if (isAdmin) return; // admins skip onboarding entirely
@@ -95,7 +101,7 @@ export default function AppLayout() {
     if (userError && !user) {
       navigate('/onboarding');
     }
-  }, [businessProfile, stillLoading, user, userError, navigate, location.pathname, fromOnboarding, isAdmin]);
+  }, [businessProfile, stillLoading, isLoadingAuth, user, userError, navigate, location.pathname, fromOnboarding, isAdmin]);
 
   // Fetch badge counts
   const { data: unreadSignals } = useQuery({
