@@ -3,22 +3,9 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 
-const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
-const SERP_API_KEY   = process.env.SERP_API_KEY   || '';
+import { tavilyAdvancedSearch } from '../../lib/tavily';
 
-async function tavilySearch(query: string, maxResults = 5): Promise<any[]> {
-  if (!TAVILY_API_KEY) return [];
-  try {
-    const res = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: TAVILY_API_KEY, query, search_depth: 'advanced', max_results: maxResults }),
-    });
-    if (!res.ok) return [];
-    const data: any = await res.json();
-    return data.results || [];
-  } catch { return []; }
-}
+const SERP_API_KEY = process.env.SERP_API_KEY || '';
 
 /**
  * Fetch Google Trends growth for a keyword via SerpAPI.
@@ -75,7 +62,7 @@ export async function detectTrends(req: Request, res: Response) {
       `${category} העדפות לקוחות שינויים`,
     ];
 
-    const searchResults = await Promise.all(searchQueries.map(q => tavilySearch(q, 5)));
+    const searchResults = await Promise.all(searchQueries.map(q => tavilyAdvancedSearch(q, 5)));
     const allWebResults = searchResults.flat();
 
     const seen = new Set<string>();

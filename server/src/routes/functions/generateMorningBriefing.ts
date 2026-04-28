@@ -3,11 +3,17 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 
+// Process-level daily cache — resets on server restart (Render redeploys daily anyway)
+const _dailyCache = new Map<string, { result: any; date: string }>();
+
 export async function generateMorningBriefing(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
   const startTime = new Date().toISOString();
+  const todayDate = new Date().toISOString().slice(0, 10);
+  const cacheKey = `${businessProfileId}:${todayDate}`;
+
   try {
     const [profiles, reviews, leads, competitors, signals, weeklyReports] = await Promise.all([
       prisma.businessProfile.findMany({ where: { id: businessProfileId } }),
@@ -67,11 +73,36 @@ priority 1=urgent (red), 2=important (orange), 3=helpful (green). Only include i
 Return ONLY valid JSON:
 {"lines":[{"emoji":"🔴","text":"...","link":"/reviews","type":"urgent"}],"weekly_score":${weeklyScore || 6.5},"score_trend":"stable","source_count":${totalSources},"today_actions":[{"action":"...","type":"review","priority":1}]}`;
 
+    // Return cached briefing if already generated today (skip LLM re-call)
+    const cached = _dailyCache.get(cacheKey);
+    if (cached && cached.date === todayDate) {
+      return res.json({
+        briefing: cached.result,
+        generated_at: new Date().toISOString(),
+        cached: true,
+        stats: {
+          pendingReviews: pendingReviews.length,
+          negativeReviews: negativeReviews.length,
+          hotLeads: hotLeads.length,
+          newLeadsToday: newLeadsToday.length,
+          unreadSignals: signals.length,
+          highImpactSignals: highImpactSignals.length,
+          competitorChanges: changedCompetitors.length,
+          totalCompetitors: competitors.length,
+          totalReviews: reviews.length,
+          totalLeads: leads.length,
+          avgRating: avgRating ? parseFloat(avgRating) : null,
+        },
+      });
+    }
+
     const result = await invokeLLM({ prompt, response_json_schema: { type: 'object' } });
 
     if (result && monthRevenue > 0 && !result.month_revenue) {
       result.month_revenue = monthRevenue;
     }
+
+    _dailyCache.set(cacheKey, { result, date: todayDate });
 
     await writeAutomationLog('generateMorningBriefing', businessProfileId, startTime, 1);
     return res.json({

@@ -62,7 +62,7 @@ export const AI_ROUTER: Record<AITask, AIConfig> = {
   generate_post: {
     provider:    'openai',
     model:       'gpt-4o',
-    max_tokens:  1500,
+    max_tokens:  800,
     temperature: 0.8,
     reason:      'כתיבת פוסט — GPT-4o מצטיין בקופי שיווקי יצירתי',
   },
@@ -142,13 +142,13 @@ async function callFallback(
 ): Promise<string> {
   const config = AI_ROUTER[task];
   if (config.provider === 'openai' && ANTHROPIC_KEY()) {
-    // GPT failed → Claude sonnet fallback
-    console.warn(`[AI_ROUTER] fallback: openai→anthropic for task=${task}`);
-    return callClaude(prompt, { ...config, provider: 'anthropic', model: 'claude-sonnet-4-6' }, options);
+    // GPT failed → Claude Haiku fallback (cheap, fast)
+    console.warn(`[AI_ROUTER] fallback: openai→anthropic(haiku) for task=${task}`);
+    return callClaude(prompt, { ...config, provider: 'anthropic', model: 'claude-haiku-4-5-20251001' }, options);
   } else if (config.provider === 'anthropic' && OPENAI_KEY()) {
-    // Claude failed → GPT-4o fallback
-    console.warn(`[AI_ROUTER] fallback: anthropic→openai for task=${task}`);
-    return callGPT(prompt, { ...config, provider: 'openai', model: 'gpt-4o' }, options);
+    // Claude failed → GPT-4o-mini fallback (cheap)
+    console.warn(`[AI_ROUTER] fallback: anthropic→openai(mini) for task=${task}`);
+    return callGPT(prompt, { ...config, provider: 'openai', model: 'gpt-4o-mini' }, options);
   }
   throw originalErr;
 }

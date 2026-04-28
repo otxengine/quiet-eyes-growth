@@ -16,27 +16,7 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 
-const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
-
-async function tavilySearch(query: string, maxResults = 6): Promise<any[]> {
-  if (!TAVILY_API_KEY) return [];
-  try {
-    const res = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        api_key: TAVILY_API_KEY,
-        query,
-        search_depth: 'advanced',
-        max_results: maxResults,
-        include_answer: false,
-      }),
-    });
-    if (!res.ok) return [];
-    const data: any = await res.json();
-    return data.results || [];
-  } catch { return []; }
-}
+import { tavilyAdvancedSearch } from '../../lib/tavily';
 
 function buildViralQueries(category: string, city: string): string[] {
   return [
@@ -71,7 +51,7 @@ export async function detectViralSignals(req: Request, res: Response) {
 
     // ── Scan social platforms ────────────────────────────────────────────────
     const queries = buildViralQueries(category, city);
-    const rawResults = await Promise.all(queries.map(q => tavilySearch(q, 5)));
+    const rawResults = await Promise.all(queries.map(q => tavilyAdvancedSearch(q, 5)));
     const allResults = rawResults.flat();
 
     // De-duplicate

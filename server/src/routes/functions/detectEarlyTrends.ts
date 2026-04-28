@@ -21,29 +21,9 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 
-const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
-const SERP_API_KEY   = process.env.SERP_API_KEY   || '';
+import { tavilyAdvancedSearch } from '../../lib/tavily';
 
-// ── Tavily helper ──────────────────────────────────────────────────────────────
-async function tavilySearch(query: string, maxResults = 6): Promise<any[]> {
-  if (!TAVILY_API_KEY) return [];
-  try {
-    const res = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        api_key: TAVILY_API_KEY,
-        query,
-        search_depth: 'advanced',
-        max_results: maxResults,
-        include_answer: false,
-      }),
-    });
-    if (!res.ok) return [];
-    const data: any = await res.json();
-    return data.results || [];
-  } catch { return []; }
-}
+const SERP_API_KEY = process.env.SERP_API_KEY || '';
 
 // ── Google Trends velocity (SerpAPI) ──────────────────────────────────────────
 // Returns growth % for last 7 days vs prior week, plus volume estimate.
@@ -154,7 +134,7 @@ export async function detectEarlyTrends(req: Request, res: Response) {
 
     // ── 2. Social platform scanning ─────────────────────────────────────────
     const socialQueries = buildSocialQueries(category, city, relevant_services || '');
-    const socialResults = await Promise.all(socialQueries.map(q => tavilySearch(q, 4)));
+    const socialResults = await Promise.all(socialQueries.map(q => tavilyAdvancedSearch(q, 4)));
     const allSocial = socialResults.flat();
 
     // De-duplicate by URL
@@ -170,7 +150,7 @@ export async function detectEarlyTrends(req: Request, res: Response) {
       `"${name}" OR "${category} ${city}" new launch opening 2025`,
       `${category} ${city} opens Israel new`,
     ];
-    const competitorResults = (await Promise.all(competitorQueries.map(q => tavilySearch(q, 3)))).flat();
+    const competitorResults = (await Promise.all(competitorQueries.map(q => tavilyAdvancedSearch(q, 3)))).flat();
 
     // ── 4. Build AI prompt ──────────────────────────────────────────────────
     const socialContext = uniqueSocial.slice(0, 18)

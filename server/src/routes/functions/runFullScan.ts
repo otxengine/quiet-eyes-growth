@@ -77,6 +77,20 @@ export async function runFullScan(req: Request, res: Response) {
     // automationLog query failure → continue scan (don't block on cooldown check)
   }
 
+  // detectEarlyTrends is expensive (12 Tavily + 5 SerpAPI) — skip if ran within 48h
+  let earlyTrendsHandler: Function = detectEarlyTrends;
+  try {
+    const last48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const recentET = await prisma.automationLog.findFirst({
+      where: { agent_name: 'detectEarlyTrends', linked_business: businessProfileId, created_at: { gt: last48h } },
+      orderBy: { created_at: 'desc' },
+    });
+    if (recentET) {
+      earlyTrendsHandler = (_req: Request, res: Response) =>
+        res.json({ skipped: true, reason: 'detectEarlyTrends ran within 48h — trends do not change hourly' });
+    }
+  } catch (_) {}
+
   // Full pipeline — ordered from data collection → analysis → learning → cleanup
   const pipeline: Array<[string, Function]> = [
     // ── Data Collection ──────────────────────────────────────────
@@ -93,7 +107,7 @@ export async function runFullScan(req: Request, res: Response) {
     ['findSocialLeads',             findSocialLeads],
     // ── Trend Intelligence ───────────────────────────────────────
     ['detectTrends',                detectTrends],
-    ['detectEarlyTrends',           detectEarlyTrends],
+    ['detectEarlyTrends',           earlyTrendsHandler],
     ['detectViralSignals',          detectViralSignals],
     // ── Predictive + Alerts ──────────────────────────────────────
     ['runPredictions',              runPredictions],
