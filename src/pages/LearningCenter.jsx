@@ -17,7 +17,7 @@ import { useOutletContext } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { base44 } from '@/api/base44Client';
-import PlanGate from '@/components/subscription/PlanGate';
+import { Navigate } from 'react-router-dom';
 
 // Use the same backend URL as the rest of the app (VITE_API_URL already includes /api)
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/+$/, '');
@@ -75,10 +75,20 @@ function StatCard({ label, value, sub, color = '#6366f1' }) {
   );
 }
 
+function useIsAdmin() {
+  try {
+    const email = window.__clerk?.user?.primaryEmailAddress?.emailAddress || '';
+    return email === 'contact@otxenginee.io' || email.endsWith('@otx.ai') || email.endsWith('@quieteyes.ai');
+  } catch { return false; }
+}
+
 export default function LearningCenter() {
+  const isAdmin = useIsAdmin();
   const { businessProfile } = useOutletContext();
   const bpId = businessProfile?.id;
   const qc   = useQueryClient();
+
+  if (!isAdmin) return <Navigate to="/" replace />;
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['learningDashboard', bpId],
@@ -135,7 +145,6 @@ export default function LearningCenter() {
   );
 
   return (
-    <PlanGate requires="growth" featureName="מרכז הלמידה">
     <div style={{ padding: '24px 32px', maxWidth: 1100, margin: '0 auto', direction: 'rtl' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
@@ -350,6 +359,5 @@ export default function LearningCenter() {
         </>
       )}
     </div>
-    </PlanGate>
   );
 }

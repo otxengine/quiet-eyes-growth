@@ -32,7 +32,6 @@ const navItems = [
   {
     group: 'מערכת',
     items: [
-      { path: '/learning', label: 'מרכז למידה', icon: Sparkles },
       { path: '/data-sources', label: 'מקורות מידע', icon: Database },
       { path: '/integrations', label: 'אינטגרציות', icon: Plug },
       { path: '/subscription', label: 'מנוי', icon: Crown },
@@ -142,6 +141,24 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate }
         )}
 
         {/* Admin-only: agents page */}
+        {isAdmin && (
+          <div className="px-2 mb-1">
+            <Link
+              to="/learning"
+              onClick={() => onNavigate && onNavigate()}
+              className={`flex items-center gap-2.5 h-8 rounded-md transition-all duration-150 text-[12px] relative ${collapsed ? 'justify-center px-0' : 'px-2.5'}`}
+              style={{
+                background: location.pathname === '/learning' ? 'hsl(var(--sidebar-accent-active))' : 'transparent',
+                color: location.pathname === '/learning' ? 'hsl(var(--sidebar-accent-foreground))' : 'hsl(var(--sidebar-foreground-muted))',
+              }}
+              onMouseEnter={e => { if (location.pathname !== '/learning') { e.currentTarget.style.background = 'hsl(var(--sidebar-accent))'; e.currentTarget.style.color = 'hsl(var(--sidebar-accent-foreground))'; } }}
+              onMouseLeave={e => { if (location.pathname !== '/learning') { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'hsl(var(--sidebar-foreground-muted))'; } }}
+            >
+              <Sparkles className="w-[14px] h-[14px] flex-shrink-0 opacity-60" />
+              {!collapsed && <span className="flex-1 font-medium text-[11px] opacity-70">מרכז למידה (admin)</span>}
+            </Link>
+          </div>
+        )}
         {isAdmin && (
           <div className="px-2 mb-1">
             <Link

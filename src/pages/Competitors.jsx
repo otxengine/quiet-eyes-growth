@@ -5,6 +5,8 @@ import { base44 } from '@/api/base44Client';
 import { otxSupabase } from '@/lib/otx-supabase';
 import { Users, Loader2, MapPin, ExternalLink, Activity, MessageSquare, X, Zap, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
+import { usePlan } from '@/lib/usePlan';
+import { getLimits } from '@/lib/planConfig';
 import CompetitorScoreRow from '@/components/competitors/CompetitorScoreRow';
 import CompetitorDetailCard from '@/components/competitors/CompetitorDetailCard';
 import StrategicRecommendations from '@/components/intelligence/StrategicRecommendations';
@@ -197,6 +199,9 @@ export default function Competitors() {
   const competitorChanges = _changesResult.changes;
   const otxBizId = _changesResult.bizId;
 
+  const { plan } = usePlan();
+  const planLimits = getLimits(plan);
+
   const { data: competitors = [] } = useQuery({
     queryKey: ['competitorsPage', bpId],
     queryFn: () => base44.entities.Competitor.filter({ linked_business: bpId }),
@@ -277,7 +282,12 @@ export default function Competitors() {
         _fromBase44: true,
       }));
 
-  const filtered = competitors.filter(comp => {
+  const visibleCompetitors = planLimits.competitors_max === Infinity
+    ? competitors
+    : competitors.slice(0, planLimits.competitors_max);
+  const hiddenCount = competitors.length - visibleCompetitors.length;
+
+  const filtered = visibleCompetitors.filter(comp => {
     if (activeFilter === 'rising') return comp.trend_direction === 'up';
     if (activeFilter === 'declining') return comp.trend_direction === 'down';
     if (activeFilter === 'tagged') return comp.tags && comp.tags.trim().length > 0;
@@ -483,6 +493,16 @@ export default function Competitors() {
                   otxBizId={otxBizId}
                 />
               ))
+            )}
+            {hiddenCount > 0 && (
+              <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50 px-5 py-4 text-center">
+                <p className="text-[12px] text-amber-800 font-medium">
+                  {hiddenCount} מתחרים נוספים מוסתרים בתוכנית הנוכחית ({planLimits.competitors_max} מתחרים מקסימום)
+                </p>
+                <a href="/subscription" className="mt-2 inline-block text-[11px] font-semibold text-amber-700 underline underline-offset-2">
+                  שדרג תוכנית לצפות בכולם →
+                </a>
+              </div>
             )}
           </div>
         </>

@@ -9,6 +9,7 @@ import WeeklyReportsTab from '@/components/intelligence/WeeklyReportsTab';
 import ScanOverlay from '@/components/dashboard/ScanOverlay';
 import PlanGate from '@/components/subscription/PlanGate';
 import { usePlan } from '@/lib/usePlan';
+import { getLimits } from '@/lib/planConfig';
 
 const tabs = [
   { key: 'all', label: 'הכל' },
@@ -36,7 +37,9 @@ export default function Intelligence() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('all');
   const [showScan, setShowScan] = useState(false);
-  const { can } = usePlan();
+  const { can, plan } = usePlan();
+  const planLimits = getLimits(plan);
+  const signalsMax = planLimits.signals_max;
 
   const { data: allSignals = [] } = useQuery({
     queryKey: ['intelligenceSignals', bpId],
@@ -167,9 +170,19 @@ export default function Intelligence() {
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {filtered.map((signal) => (
+              {(signalsMax === Infinity ? filtered : filtered.slice(0, signalsMax)).map((signal) => (
                 <SignalCard key={signal.id} signal={signal} businessProfile={businessProfile} />
               ))}
+              {signalsMax !== Infinity && filtered.length > signalsMax && (
+                <div className="px-5 py-4 text-center bg-amber-50 border-t border-amber-100">
+                  <p className="text-[12px] text-amber-800 font-medium">
+                    עוד {filtered.length - signalsMax} תובנות מוסתרות (מגבלת תוכנית: {signalsMax})
+                  </p>
+                  <a href="/subscription" className="mt-1 inline-block text-[11px] font-semibold text-amber-700 underline underline-offset-2">
+                    שדרג לצפות בכולן →
+                  </a>
+                </div>
+              )}
             </div>
           )}
         </div>
