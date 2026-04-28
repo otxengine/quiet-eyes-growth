@@ -51,7 +51,7 @@ function useIsAdmin() {
   // Check via Clerk user metadata or email domain
   try {
     const email = window.__clerk?.user?.primaryEmailAddress?.emailAddress || '';
-    return email.endsWith('@otx.ai') || email.endsWith('@quieteyes.ai');
+    return email === 'contact@otxenginee.io' || email.endsWith('@otx.ai') || email.endsWith('@quieteyes.ai');
   } catch { return false; }
 }
 
