@@ -65,8 +65,22 @@ JSON בלבד: {"results":[{"topics":["נושא1"],"sentiments":{"נושא1":"po
   }
 }
 
+const SOURCE_QUERIES: Record<string, (name: string, city: string) => string> = {
+  facebook:    (n, c) => `"${n}" ביקורות OR reviews site:facebook.com ${c}`,
+  instagram:   (n, c) => `"${n}" comments OR תגובות site:instagram.com`,
+  tripadvisor: (n, c) => `"${n}" site:tripadvisor.com OR site:tripadvisor.co.il`,
+  waze:        (n, c) => `"${n}" site:waze.com ${c}`,
+  tiktok:      (n, c) => `"${n}" site:tiktok.com`,
+  wolt:        (n, c) => `"${n}" ביקורות site:wolt.com`,
+};
+const SOURCE_PLATFORM_LABELS: Record<string, string> = {
+  facebook: 'Facebook', instagram: 'Instagram', tripadvisor: 'TripAdvisor',
+  waze: 'Waze', tiktok: 'TikTok', wolt: 'Wolt',
+};
+
 export async function collectReviews(req: Request, res: Response) {
   const { businessProfileId } = req.body;
+  const requestedSources: string[] = req.body.sources || [];
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
   const startTime = new Date().toISOString();
@@ -255,6 +269,74 @@ export async function collectReviews(req: Request, res: Response) {
       }
     }
 
+    // ── Multi-source Tavily scan (facebook, instagram, tripadvisor, etc.) ────
+    const sourcesToScan = requestedSources.filter(s => s !== 'google' && SOURCE_QUERIES[s]);
+    let sourcesScanCount = 0;
+    for (const source of sourcesToScan) {
+      const query = SOURCE_QUERIES[source](name, city);
+      const platformLabel = SOURCE_PLATFORM_LABELS[source] || source;
+      const tavilyHits = await tavilySearch(query, 6);
+      const newHits = tavilyHits.filter(r => {
+        const content = r.content || r.snippet || '';
+        return content.length >= 20 && !existingTexts.has(content.substring(0, 50));
+      });
+      if (newHits.length === 0) continue;
+
+      const itemsStr = newHits
+        .map((r, i) => `[${i}] מ-${r.url}: "${(r.content || r.snippet || '').substring(0, 300)}"`)
+        .join('\n');
+      let parsed: any[] = [];
+      try {
+        const result = await invokeLLM({
+          prompt: `עבור כל קטע טקסט, האם יש ביקורת על "${name}"? חלץ: text (עד 300 תווים), rating (1-5 או 0), reviewer_name, is_review (true/false).\n${itemsStr}\nJSON בלבד: {"results":[{...},...]}, מערך באותו אורך ובאותו סדר.`,
+          response_json_schema: { type: 'object' },
+          model: 'haiku',
+          maxTokens: 1200,
+        });
+        parsed = result?.results || [];
+      } catch { parsed = []; }
+
+      const pending: Array<{ p: any; url: string }> = [];
+      for (let i = 0; i < newHits.length; i++) {
+        const p = parsed[i];
+        if (!p?.is_review || !p.text || p.text.length < 10) continue;
+        if (existingTexts.has(p.text.substring(0, 50))) continue;
+        pending.push({ p, url: newHits[i].url || '' });
+      }
+      const topics = await batchExtractTopics(pending.map(({ p }) => ({
+        text: p.text,
+        sentiment: (p.rating || 0) >= 4 ? 'positive' : (p.rating || 0) <= 2 ? 'negative' : 'neutral',
+      })));
+      for (let i = 0; i < pending.length; i++) {
+        const { p, url } = pending[i];
+        const { topics: t, topic_sentiment } = topics[i];
+        const rating = p.rating || 0;
+        const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
+        try {
+          await prisma.review.create({
+            data: {
+              platform: platformLabel,
+              rating,
+              text: p.text.substring(0, 500),
+              reviewer_name: p.reviewer_name || 'לקוח',
+              sentiment,
+              response_status: 'pending',
+              source_url: url || null,
+              source_origin: 'tavily',
+              is_verified: false,
+              created_at: new Date().toISOString(),
+              linked_business: businessProfileId,
+              topics: t,
+              topic_sentiment,
+            },
+          });
+          existingTexts.add(p.text.substring(0, 50));
+          newReviews++;
+          sourcesScanCount++;
+        } catch { continue; }
+      }
+    }
+
     // ── Tavily fallback from raw signals ─────────────────────────────────────
     const rawSignals = await prisma.rawSignal.findMany({
       where: { linked_business: businessProfileId, source_origin: 'tavily' },
@@ -333,8 +415,8 @@ export async function collectReviews(req: Request, res: Response) {
     }
 
     await writeAutomationLog('collectReviews', businessProfileId, startTime, newReviews);
-    console.log(`collectReviews done: ${newReviews} new reviews (${googleAdded} from Google)`);
-    return res.json({ new_reviews: newReviews, google_reviews_added: googleAdded });
+    console.log(`collectReviews done: ${newReviews} new reviews (${googleAdded} from Google, ${sourcesScanCount} from other sources)`);
+    return res.json({ new_reviews: newReviews, google_reviews_added: googleAdded, sources_scanned: sourcesToScan.length + (googleAdded > 0 ? 1 : 0) });
   } catch (err: any) {
     console.error('collectReviews error:', err.message);
     await writeAutomationLog('collectReviews', businessProfileId, startTime, 0, 'failed', err.message);

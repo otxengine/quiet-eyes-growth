@@ -8,6 +8,7 @@ import ReviewCard from '@/components/reputation/ReviewCard';
 import AddReviewModal from '@/components/reputation/AddReviewModal';
 import RequestReviewModal from '@/components/reputation/RequestReviewModal';
 import AiInsightBox from '@/components/ai/AiInsightBox';
+import AiInsightsBar from '@/components/ai/AiInsightsBar';
 import ScheduledReviewRequests from '@/components/reputation/ScheduledReviewRequests';
 
 export default function Reputation() {
@@ -136,6 +137,10 @@ export default function Reputation() {
 
   return (
     <div className="space-y-5">
+      <AiInsightsBar
+        title="תובנות AI — מוניטין"
+        prompt={`נתח מגמות ביקורות של עסק: מהם הנושאים החוזרים בביקורות שליליות, מה הסנטימנט הכללי, ומה הפעולה הכי יעילה לשיפור הדירוג הממוצע.`}
+      />
       <div className="flex items-center justify-between">
         <h1 className="text-[16px] font-bold text-foreground tracking-tight">מוניטין</h1>
         <div className="flex items-center gap-2">

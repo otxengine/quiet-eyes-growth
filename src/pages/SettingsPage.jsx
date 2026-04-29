@@ -97,10 +97,8 @@ import SettingsLeadCriteria from '@/components/settings/SettingsLeadCriteria';
 import SettingsAlerts from '@/components/settings/SettingsAlerts';
 import SettingsPushNotifications from '@/components/settings/SettingsPushNotifications';
 import SettingsChannels from '@/components/settings/SettingsChannels';
-import SettingsLearnBusiness from '@/components/settings/SettingsLearnBusiness.jsx';
 import SettingsDataSources from '@/components/settings/SettingsDataSources.jsx';
 import SettingsAutoRespond from '@/components/settings/SettingsAutoRespond.jsx';
-import SettingsWhatsAppAlerts from '@/components/settings/SettingsWhatsAppAlerts.jsx';
 
 export default function SettingsPage() {
   const { businessProfile } = useOutletContext();
@@ -260,12 +258,6 @@ export default function SettingsPage() {
         onToggle={(key, val) => { setForm(f => ({ ...f, [key]: val })); saveField({ [key]: val }); }}
         onFieldChange={(key, val) => { setForm(f => ({ ...f, [key]: val })); saveField({ [key]: val }); }}
       />
-      <SettingsWhatsAppAlerts
-        form={form}
-        onToggle={(key, val) => { setForm(f => ({ ...f, [key]: val })); saveField({ [key]: val }); }}
-        onFieldChange={(key, val) => { setForm(f => ({ ...f, [key]: val })); saveField({ [key]: val }); }}
-      />
-      <SettingsLearnBusiness businessProfile={businessProfile} />
 
       {/* Autonomy Level */}
       <AutonomySelector businessProfile={businessProfile} onSave={saveField} />

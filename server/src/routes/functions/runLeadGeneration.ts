@@ -107,6 +107,16 @@ export async function runLeadGeneration(req: Request, res: Response) {
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
     const { name, category, city, relevant_services } = profile;
+    const leadCriteria = (profile as any).lead_criteria
+      ? JSON.parse((profile as any).lead_criteria)
+      : {};
+    const leadCriteriaContext = [
+      leadCriteria.min_budget ? `תקציב מינימלי: ${leadCriteria.min_budget}` : '',
+      leadCriteria.relevant_services ? `שירותים: ${leadCriteria.relevant_services}` : '',
+      leadCriteria.preferred_area ? `אזור: ${leadCriteria.preferred_area}` : '',
+      leadCriteria.lead_intent_signals ? `סימני כוונה: ${leadCriteria.lead_intent_signals}` : '',
+      leadCriteria.lead_quality_notes ? `הערות איכות: ${leadCriteria.lead_quality_notes}` : '',
+    ].filter(Boolean).join('. ');
 
     // Load winner DNA to bias scoring toward past closed deals
     const sectorKnowledge = await prisma.sectorKnowledge.findFirst({
@@ -141,6 +151,7 @@ URL: ${signal.url}
 תוכן: "${(signal.content || '').substring(0, 400)}"
 
 האם זה מראה שמישהו מחפש שירות של "${category}" באזור "${city}" בישראל?
+${leadCriteriaContext ? `קריטריוני ליד לעסק זה: ${leadCriteriaContext}.` : ''}
 אם כן, חלץ מהטקסט בלבד (לא להמציא):
 - name: שם האדם אם מוזכר, אחרת "לקוח פוטנציאלי"
 - service_needed: השירות שמחפש (עד 5 מילים)
@@ -156,7 +167,7 @@ URL: ${signal.url}
         if (!extraction?.has_intent || extraction.has_intent === false) continue;
 
         const { score, reasoning } = calculateLeadScore(extraction, city, winnerDna);
-        if (score < 30) continue;
+        if (score < 25) continue;
 
         const now = new Date().toISOString();
         await prisma.lead.create({

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { adminClient as base44 } from '@/api/adminClient';
 import { Loader2, Zap, ChevronLeft, AlertCircle, CheckCircle2, Activity, Crown, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { PLAN_LABELS, PLAN_COLORS, PLAN_ORDER } from '@/lib/usePlan';
@@ -184,13 +184,15 @@ export default function AdminDashboard({ skipAdminCheck = false }) {
   // ── Update subscription plan ──────────────────────────────────
   const updatePlan = async (bizId, newPlan) => {
     setSavingPlan(bizId);
+    // Optimistic update — reflect change immediately in UI
+    qc.setQueryData(['admin_businesses'], (old = []) =>
+      old.map(b => b.id === bizId ? { ...b, subscription_plan: newPlan } : b)
+    );
     try {
       await base44.entities.BusinessProfile.update(bizId, { subscription_plan: newPlan });
-      qc.invalidateQueries({ queryKey: ['admin_businesses'] });
-      qc.invalidateQueries({ queryKey: ['subscriptionStatus'] });
-      qc.invalidateQueries({ queryKey: ['businessProfiles'] });
       toast.success(`תוכנית עודכנה ל-${PLAN_LABELS[newPlan]} ✓`);
     } catch (e) {
+      qc.invalidateQueries({ queryKey: ['admin_businesses'] }); // revert on error
       toast.error('שגיאה בעדכון: ' + e.message);
     }
     setSavingPlan(null);

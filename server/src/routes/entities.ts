@@ -151,10 +151,12 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
   if (!model) return res.status(404).json({ error: `Unknown entity: ${req.params.entity}` });
 
   try {
-    const record = await model.update({
-      where: { id: req.params.id },
-      data: req.body,
-    });
+    const where: any = { id: req.params.id };
+    if (!isAdminKeyRequest(req)) {
+      const userId = getUserId(req);
+      if (userId) where.created_by = userId;
+    }
+    const record = await model.update({ where, data: req.body });
     res.json(record);
   } catch (err: any) {
     console.error(`PATCH /entities/${req.params.entity}/${req.params.id}:`, err.message);
@@ -168,7 +170,12 @@ router.delete('/:entity/:id', async (req: Request, res: Response) => {
   if (!model) return res.status(404).json({ error: `Unknown entity: ${req.params.entity}` });
 
   try {
-    await model.delete({ where: { id: req.params.id } });
+    const where: any = { id: req.params.id };
+    if (!isAdminKeyRequest(req)) {
+      const userId = getUserId(req);
+      if (userId) where.created_by = userId;
+    }
+    await model.delete({ where });
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

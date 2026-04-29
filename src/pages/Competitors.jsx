@@ -7,6 +7,7 @@ import { Users, Loader2, MapPin, ExternalLink, Activity, MessageSquare, X, FileT
 import { toast } from 'sonner';
 import { usePlan } from '@/lib/usePlan';
 import { getLimits } from '@/lib/planConfig';
+import AiInsightsBar from '@/components/ai/AiInsightsBar';
 import CompetitorScoreRow from '@/components/competitors/CompetitorScoreRow';
 import CompetitorDetailCard from '@/components/competitors/CompetitorDetailCard';
 import ComposerDrawer from '@/components/modals/ComposerDrawer';
@@ -163,10 +164,11 @@ export default function Competitors() {
     }
   };
 
-  const { data: _changesResult = { changes: [], bizId: null }, isLoading: loadingChanges } = useQuery({
+  const { data: _changesResult = { changes: [], bizId: null }, isLoading: loadingChanges, dataUpdatedAt: changesUpdatedAt, refetch: refetchChanges } = useQuery({
     queryKey: ['competitorChanges', bpId],
     queryFn: () => fetchCompetitorChanges(businessProfile),
     enabled: !!bpId,
+    staleTime: 5 * 60 * 1000,
   });
   const competitorChanges = _changesResult.changes;
   const otxBizId = _changesResult.bizId;
@@ -273,6 +275,10 @@ export default function Competitors() {
   return (
     <>
     <div className="space-y-5">
+      <AiInsightsBar
+        title="תובנות AI — ניתוח תחרותי"
+        prompt={`נתח את הנוף התחרותי של העסק: אלו מתחרים מהווים את האיום הגדול ביותר, מה ההזדמנות הכי ברורה להבדלה, ומה הפעולה הדחופה ביותר לחיזוק המיצוב.`}
+      />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[16px] font-bold text-foreground tracking-tight">מתחרים</h1>
@@ -295,12 +301,27 @@ export default function Competitors() {
 
       {/* OTX Competitor Changes section — data from agent */}
       <div className="card-base fade-in-up">
-        <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
+        <div className="px-5 py-3.5 border-b border-border flex items-center justify-between gap-2 flex-wrap">
           <h3 className="font-semibold text-foreground text-[13px] flex items-center gap-2">
             <Activity className="w-4 h-4 text-primary opacity-60" />
             שינויים שזוהו אצל המתחרים
           </h3>
-          <span className="text-[10px] text-foreground-muted">{mergedChanges.length} רשומות</span>
+          <div className="flex items-center gap-2">
+            {changesUpdatedAt > 0 && (
+              <span className="text-[10px] text-foreground-muted">
+                עודכן לאחרונה: {Math.round((Date.now() - changesUpdatedAt) / 60000)} דקות
+              </span>
+            )}
+            <span className="text-[10px] text-foreground-muted">{mergedChanges.length} רשומות</span>
+            <button
+              onClick={() => refetchChanges()}
+              disabled={loadingChanges}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-medium border border-border hover:border-foreground-muted text-foreground-muted hover:text-foreground transition-colors disabled:opacity-40"
+            >
+              {loadingChanges ? <Loader2 className="w-3 h-3 animate-spin" /> : <Activity className="w-3 h-3" />}
+              סרוק שינויים
+            </button>
+          </div>
         </div>
         {loadingChanges ? (
           <div className="flex items-center justify-center py-10 gap-2">

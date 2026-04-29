@@ -11,6 +11,7 @@ function daysAgo(dateStr) {
 import PlanGate from '@/components/subscription/PlanGate';
 import RetentionCustomerList from '@/components/retention/RetentionCustomerList';
 import AiInsightBox from '@/components/ai/AiInsightBox';
+import AiInsightsBar from '@/components/ai/AiInsightsBar';
 import SurveyResponseModal from '@/components/surveys/SurveyResponseModal';
 import ActionPopup from '@/components/ui/ActionPopup';
 
@@ -87,6 +88,10 @@ export default function Retention() {
   return (
     <PlanGate requires="growth" featureName="שימור לקוחות">
     <div className="space-y-5">
+      <AiInsightsBar
+        title="תובנות AI — שימור לקוחות"
+        prompt={`נתח דפוסי נטישה של לקוחות: אלו לקוחות בסיכון הגבוה ביותר, מה הסיבה הנפוצה לאובדן לקוחות, ומה הפעולה האחת שתשפיע הכי הרבה על שמירת לקוחות.`}
+      />
       <h1 className="text-[16px] font-bold text-foreground tracking-tight">שימור</h1>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

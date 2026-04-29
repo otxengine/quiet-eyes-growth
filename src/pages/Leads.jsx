@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Plus, Target, Sparkles, Loader2, LayoutGrid, List, RotateCcw, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import { toast } from 'sonner';
+import AiInsightsBar from '@/components/ai/AiInsightsBar';
 import LeadCard from '@/components/leads/LeadCard';
 import AddLeadModal from '@/components/leads/AddLeadModal';
 import PipelineView from '@/components/leads/PipelineView';
@@ -225,6 +226,10 @@ export default function Leads() {
           onClose={() => setShowScan(false)}
         />
       )}
+      <AiInsightsBar
+        title="תובנות AI — צינור הלידים"
+        prompt={`הנה נתוני לידים של עסק. נתח את בריאות צינור הלידים: כמה חמים לעומת קרים, האם יש מחסום בשלב מסוים, ומה הפעולה הכי דחופה לשיפור שיעור הסגירה.`}
+      />
       <div className="flex items-center justify-between">
         <h1 className="text-[16px] font-bold text-foreground tracking-tight">לידים</h1>
         <div className="flex gap-2.5">

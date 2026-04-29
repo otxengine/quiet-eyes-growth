@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Calendar, Loader2, Zap, Clock, TrendingUp } from 'lucide-react';
 import ActionPopup from '@/components/ui/ActionPopup';
+import AiInsightsBar from '@/components/ai/AiInsightsBar';
 import { toast } from 'sonner';
 
 const EVENT_TABS = [
@@ -449,7 +450,7 @@ export default function Events() {
   function extractEventDate(item) {
     // Static events have a structured event_date field — use it directly
     if (item.event_date) return new Date(item.event_date).getTime();
-    // DB events: try metadata, then text regex, then creation date
+    // DB events: try metadata, then text regex, then urgency_hours, then push to end
     const text = item._type === 'alert' ? (item.description || '') : (item.summary || '');
     const m = text.match(/(\d{1,2})[./](\d{1,2})[./](\d{4})/);
     if (m) return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1])).getTime();
@@ -457,14 +458,24 @@ export default function Events() {
       const meta = JSON.parse(item._type === 'alert' ? (item.source_agent || '{}') : (item.source_description || '{}'));
       if (meta.urgency_hours) return Date.now() + Number(meta.urgency_hours) * 3600000;
     } catch {}
-    return new Date(item.created_date || item.detected_at || 0).getTime();
+    // No date info — push to end of list rather than sorting by creation time
+    return Date.now() + 365 * 86400000;
   }
 
   // Merge: DB items + static events, dedup by title, keep only future events from static
   const dbItems = [
     ...eventAlerts.map(a => ({ ...a, _type: 'alert' })),
     ...eventSignals.map(s => ({ ...s, _type: 'signal' })),
-  ];
+  ].filter(item => {
+    // Filter out DB items that are clearly stale (creation date >24h ago and no parseable date)
+    const created = new Date(item.created_date || item.detected_at || 0).getTime();
+    if (created < Date.now() - 86400000) {
+      const text = item._type === 'alert' ? (item.description || '') : (item.summary || '');
+      const hasDate = /(\d{1,2})[./](\d{1,2})[./](\d{4})/.test(text);
+      if (!hasDate) return false;
+    }
+    return true;
+  });
 
   const dbTitlesLower = new Set(dbItems.map(i => (i._type === 'alert' ? i.title : i.agent_name || '').toLowerCase()));
 
@@ -519,6 +530,10 @@ export default function Events() {
 
   return (
     <div className="space-y-5">
+      <AiInsightsBar
+        title="תובנות AI — הזדמנויות עסקיות"
+        prompt={`נתח את לוח האירועים הקרובים לעסק: אלו חגים, עונות או אירועים ספורטיביים מציגים את ההזדמנות הכי גדולה לגידול במכירות, ואיזה קמפיין לבצע לפני כל אחד.`}
+      />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[16px] font-bold text-foreground tracking-tight">אירועים והזדמנויות</h1>

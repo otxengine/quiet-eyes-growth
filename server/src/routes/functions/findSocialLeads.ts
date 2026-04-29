@@ -27,6 +27,21 @@ export async function findSocialLeads(req: Request, res: Response) {
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
     const { name, category, city } = profile;
+    const leadCriteria = (profile as any).lead_criteria
+      ? JSON.parse((profile as any).lead_criteria)
+      : {};
+    const minBudget = leadCriteria.min_budget || '';
+    const relevantServices = leadCriteria.relevant_services || '';
+    const preferredArea = leadCriteria.preferred_area || city;
+    const intentSignals = leadCriteria.lead_intent_signals || '';
+    const qualityNotes = leadCriteria.lead_quality_notes || '';
+    const leadCriteriaContext = [
+      minBudget ? `תקציב מינימלי: ${minBudget}` : '',
+      relevantServices ? `שירותים רלוונטיים: ${relevantServices}` : '',
+      preferredArea ? `אזור: ${preferredArea}` : '',
+      intentSignals ? `סימני כוונה: ${intentSignals}` : '',
+      qualityNotes ? `הערות: ${qualityNotes}` : '',
+    ].filter(Boolean).join('. ');
 
     // Load learned business context for personalized messaging
     const bizCtx = await loadBusinessContext(businessProfileId);
@@ -48,12 +63,14 @@ export async function findSocialLeads(req: Request, res: Response) {
       return res.json({ leads_created: 0, note: 'Tavily rate limit reached — upgrade plan' });
     }
 
-    // Keep query count low to preserve Tavily credits (4 queries × 5 results = 20 calls max)
+    // 6 queries — 2 extra using lead criteria context
     const queries = [
       `${category} ${city} מחפש המלצה`,
       `"צריך ${category}" OR "מחפש ${category}" ${city}`,
       `${category} ${city} recommendation looking for`,
       `${category} near ${city} need help hire`,
+      `"${relevantServices || category}" ${preferredArea} מחפש`,
+      `"${relevantServices || category}" ${preferredArea} recommendation`,
     ];
 
     let leadsCreated = 0;
@@ -83,11 +100,14 @@ export async function findSocialLeads(req: Request, res: Response) {
         .join('\n---\n');
       try {
         const batchResult = await invokeLLM({
-          prompt: `You are a lead qualification expert. For each item determine if it represents a REAL PERSON actively looking to hire/buy a service (not a business, directory, article, ad, or review).
+          prompt: `You are a lead qualification expert for the Israeli business "${name}" (${category}, ${city}).
+${leadCriteriaContext ? `Business wants leads matching: ${leadCriteriaContext}.` : ''}
+
+For each item determine if it represents a REAL PERSON actively looking to hire/buy a service (not a business, directory, article, ad, or review).
 
 ${itemsStr}
 
-Return JSON only: {"results":[{"is_lead":true,"service_needed":"","urgency":"","budget_mentioned":"","person_name":"","platform":"facebook|instagram|forum|web"},...]}, same length and order.
+Return JSON only: {"results":[{"is_lead":true,"service_needed":"","urgency":"","budget_mentioned":"","person_name":"","platform":"facebook|instagram|forum|web","score_reasoning":"one sentence why this is/isn't a good lead"},...]}, same length and order.
 
 Set is_lead=false if: business directory, contractor site, news/blog, business review, advertisement, no specific person expressing a need.`,
           response_json_schema: { type: 'object' },
@@ -143,7 +163,7 @@ JSON בלבד: {"messages":["הודעה0","הודעה1",...]}, אותו אורך
       if (intentMatches >= 2) score += 8;
       else if (intentMatches === 1) score += 4;
       score = Math.min(score, 98);
-      if (score < 45) continue; // skip low-confidence leads entirely
+      if (score < 35) continue; // skip low-confidence leads entirely
 
       // Determine action type: 'call' for immediate urgency leads
       const alertActionType = (extracted.urgency === 'immediate' || extracted.urgency === 'urgent')
@@ -164,6 +184,7 @@ JSON בלבד: {"messages":["הודעה0","הודעה1",...]}, אותו אורך
             budget_range: extracted.budget_mentioned || null,
             status: score >= 75 ? 'hot' : score >= 55 ? 'warm' : 'new',
             score,
+            score_reasoning: extracted.score_reasoning || null,
             freshness_score: 100,
             discovered_at: new Date().toISOString(),
             lifecycle_stage: 'new',
