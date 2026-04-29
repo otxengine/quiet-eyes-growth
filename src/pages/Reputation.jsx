@@ -290,6 +290,11 @@ export default function Reputation() {
             { key: 'tripadvisor', label: 'TripAdvisor', icon: '🦉' },
             { key: 'waze',        label: 'Waze',        icon: '🗺️' },
             { key: 'tiktok',      label: 'TikTok',      icon: '🎵' },
+            { key: 'wolt',        label: 'Wolt',        icon: '🛵' },
+            { key: '10bis',       label: '10BIS',       icon: '🍽️' },
+            { key: 'easy',        label: 'easy.co.il',  icon: '🔍' },
+            { key: 'booking',     label: 'Booking',     icon: '🏨' },
+            { key: 'forums',      label: 'פורומים',     icon: '💬' },
           ].map(src => {
             const active = selectedSources.includes(src.key);
             return (

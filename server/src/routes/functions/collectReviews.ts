@@ -72,10 +72,15 @@ const SOURCE_QUERIES: Record<string, (name: string, city: string) => string> = {
   waze:        (n, c) => `"${n}" site:waze.com ${c}`,
   tiktok:      (n, c) => `"${n}" site:tiktok.com`,
   wolt:        (n, c) => `"${n}" ביקורות site:wolt.com`,
+  '10bis':     (n, c) => `"${n}" ביקורות site:10bis.co.il OR "${n}" ${c} 10bis`,
+  easy:        (n, c) => `"${n}" ביקורות OR חוות דעת site:easy.co.il`,
+  booking:     (n, c) => `"${n}" reviews site:booking.com OR site:booking.co.il`,
+  forums:      (n, c) => `"${n}" חוות דעת OR ביקורות OR המלצה site:tapuz.co.il OR site:zap.co.il OR "${n}" פורום ${c}`,
 };
 const SOURCE_PLATFORM_LABELS: Record<string, string> = {
   facebook: 'Facebook', instagram: 'Instagram', tripadvisor: 'TripAdvisor',
   waze: 'Waze', tiktok: 'TikTok', wolt: 'Wolt',
+  '10bis': '10BIS', easy: 'easy.co.il', booking: 'Booking.com', forums: 'פורומים',
 };
 
 export async function collectReviews(req: Request, res: Response) {

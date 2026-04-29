@@ -105,6 +105,7 @@ export default function SettingsPage() {
   const [form, setForm] = useState({
     name: '', category: '', city: '', full_address: '', description: '', target_market: '',
     tone_preference: 'friendly', min_budget: '', relevant_services: '', preferred_area: '',
+    lead_intent_signals: '', lead_quality_notes: '',
     weekly_report: true, hot_lead_alerts: true, monthly_summary: false,
     push_email_alerts: false, push_whatsapp_alerts: false, push_whatsapp_number: '', push_min_score: 80,
     auto_respond_enabled: false, auto_respond_min_rating: 5, auto_respond_notify: true,
@@ -133,6 +134,7 @@ export default function SettingsPage() {
         description: businessProfile.description || '', target_market: businessProfile.target_market || '',
         tone_preference: businessProfile.tone_preference || 'friendly', min_budget: businessProfile.min_budget || '',
         relevant_services: businessProfile.relevant_services || '', preferred_area: businessProfile.preferred_area || '',
+        lead_intent_signals: businessProfile.lead_intent_signals || '', lead_quality_notes: businessProfile.lead_quality_notes || '',
         weekly_report: businessProfile.weekly_report !== false, hot_lead_alerts: businessProfile.hot_lead_alerts !== false,
         monthly_summary: businessProfile.monthly_summary === true,
         push_email_alerts: businessProfile.push_email_alerts === true,
@@ -202,7 +204,7 @@ export default function SettingsPage() {
       <h1 className="text-[16px] font-bold text-foreground tracking-tight">הגדרות</h1>
       <SettingsBusinessDetails form={form} setForm={setForm} onSave={handleSaveAll} saving={saving} />
       <SettingsTone form={form} onToneChange={(tone) => { setForm({ ...form, tone_preference: tone }); saveField({ tone_preference: tone }); toast.success('הטון עודכן ✓'); }} />
-      <SettingsLeadCriteria form={form} setForm={setForm} onSave={() => saveField({ min_budget: form.min_budget, relevant_services: form.relevant_services, preferred_area: form.preferred_area })} />
+      <SettingsLeadCriteria form={form} setForm={setForm} onSave={() => saveField({ min_budget: form.min_budget, relevant_services: form.relevant_services, preferred_area: form.preferred_area, lead_intent_signals: form.lead_intent_signals, lead_quality_notes: form.lead_quality_notes })} />
       <SettingsChannels
         form={form}
         setForm={setForm}

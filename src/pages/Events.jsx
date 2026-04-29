@@ -5,6 +5,7 @@ import { base44 } from '@/api/base44Client';
 import { Calendar, Loader2, Zap, Clock, TrendingUp } from 'lucide-react';
 import ActionPopup from '@/components/ui/ActionPopup';
 import AiInsightsBar from '@/components/ai/AiInsightsBar';
+import EventDetailModal from '@/components/events/EventDetailModal';
 import { toast } from 'sonner';
 
 const EVENT_TABS = [
@@ -331,7 +332,7 @@ function getCountdown(input, isDate = false) {
   return { text: `${Math.ceil(days / 7)} שבועות`, urgent: false };
 }
 
-function EventCard({ item, businessProfile, type }) {
+function EventCard({ item, businessProfile, type, onCardClick }) {
   const [popup, setPopup] = useState(false);
 
   let title, description, tags;
@@ -375,7 +376,10 @@ function EventCard({ item, businessProfile, type }) {
   };
 
   return (
-    <div className={`card-base p-4 fade-in-up border-r-4 ${countdown?.urgent ? 'border-r-red-400 bg-red-50/30' : 'border-r-blue-300'}`}>
+    <div
+      className={`card-base p-4 fade-in-up border-r-4 cursor-pointer ${countdown?.urgent ? 'border-r-red-400 bg-red-50/30' : 'border-r-blue-300'}`}
+      onClick={() => onCardClick && onCardClick(item, type)}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
@@ -407,7 +411,7 @@ function EventCard({ item, businessProfile, type }) {
           )}
         </div>
         <button
-          onClick={() => setPopup(true)}
+          onClick={e => { e.stopPropagation(); setPopup(true); }}
           className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-medium bg-foreground text-background hover:opacity-90 transition-all"
         >
           <Zap className="w-3.5 h-3.5" />
@@ -432,6 +436,7 @@ export default function Events() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('all');
   const [scanning, setScanning] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState(null);
 
   const { data: eventAlerts = [], isLoading: loadingAlerts } = useQuery({
     queryKey: ['eventAlerts', bpId],
@@ -604,9 +609,19 @@ export default function Events() {
               item={item}
               type={item._type}
               businessProfile={businessProfile}
+              onCardClick={(ev, t) => setSelectedEvent({ item: ev, type: t })}
             />
           ))}
         </div>
+      )}
+
+      {selectedEvent && (
+        <EventDetailModal
+          item={selectedEvent.item}
+          type={selectedEvent.type}
+          businessProfile={businessProfile}
+          onClose={() => setSelectedEvent(null)}
+        />
       )}
     </div>
   );

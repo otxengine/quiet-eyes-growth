@@ -132,6 +132,7 @@ export default function Competitors() {
   const bpId = businessProfile?.id;
   const queryClient = useQueryClient();
   const [scanning,      setScanning]     = useState(false);
+  const [autoScanning,  setAutoScanning] = useState(false);
   const [activeFilter,  setActiveFilter] = useState('all');
   const [selectedComp,  setSelectedComp] = useState(null);
   const [activeDrawer,  setActiveDrawer] = useState(null); // { type, props }
@@ -233,6 +234,28 @@ export default function Competitors() {
     window.__quieteyes_scan = handleScan;
     return () => { delete window.__quieteyes_scan; };
   }, [bpId]);
+
+  const silentScanChanges = async () => {
+    if (!bpId || autoScanning) return;
+    setAutoScanning(true);
+    try {
+      await base44.functions.invoke('collectWebSignals', { businessProfileId: bpId });
+      await base44.functions.invoke('runCompetitorIdentification', { businessProfileId: bpId });
+      await base44.functions.invoke('runMarketIntelligence', { businessProfileId: bpId });
+      localStorage.setItem(`lastChangeScan_${bpId}`, String(Date.now()));
+      queryClient.invalidateQueries({ queryKey: ['competitorsPage'] });
+      queryClient.invalidateQueries({ queryKey: ['competitorSignals'] });
+      queryClient.invalidateQueries({ queryKey: ['competitorChanges', bpId] });
+    } catch {}
+    setAutoScanning(false);
+  };
+
+  useEffect(() => {
+    if (loadingChanges || mergedChanges.length > 0 || competitors.length === 0 || autoScanning) return;
+    const lastScan = localStorage.getItem(`lastChangeScan_${bpId}`);
+    const hoursAgo = lastScan ? (Date.now() - Number(lastScan)) / 3600000 : 999;
+    if (hoursAgo > 3) silentScanChanges();
+  }, [mergedChanges.length, competitors.length, loadingChanges, bpId]);
 
   // Competitor move signals from base44 — used as fallback when OTX has no data
   const competitorSignals = signals.filter(s => s.category === 'competitor_move');

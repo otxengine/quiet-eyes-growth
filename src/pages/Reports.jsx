@@ -86,24 +86,42 @@ export default function Reports() {
     try {
       const positiveReviews = reviews.filter(r => r.sentiment === 'positive').length;
       const negativeReviews = reviews.filter(r => r.sentiment === 'negative').length;
+
+      // Fetch social engagement data
+      let posts = [], campaigns = [];
+      try {
+        [posts, campaigns] = await Promise.all([
+          base44.entities.OrganicPost.filter({ linked_business: bpId }, null, 50),
+          base44.entities.Campaign.filter({ linked_business: bpId }, null, 20),
+        ]);
+      } catch (_) {}
+      const totalLikes    = posts.reduce((s, p) => s + (p.engagement_likes || 0), 0);
+      const totalComments = posts.reduce((s, p) => s + (p.engagement_comments || 0), 0);
+      const totalReach    = posts.reduce((s, p) => s + (p.reach || 0), 0);
+      const socialContext = posts.length > 0
+        ? `פעילות ברשתות חברתיות: ${posts.length} פוסטים, ${totalLikes} לייקים, ${totalComments} תגובות, ${totalReach} חשיפות.`
+        : '';
+
       const res = await base44.integrations.Core.InvokeLLM({
         model: 'haiku',
-        prompt: `אתה יועץ עסקי בכיר. הפק דוח ביצועים מקיף.
+        prompt: `אתה יועץ עסקי בכיר. הפק דוח ביצועים מקיף שיגרום למשתמש להרגיש ערך אמיתי מהמערכת.
 עסק: "${businessProfile?.name}" (${businessProfile?.category}, ${businessProfile?.city}).
-נתונים: לידים: ${leads.length} (${hotLeads} חמים, ${completedLeads} הושלמו, המרה: ${conversionRate}%), ביקורות: ${reviews.length} (${positiveReviews} חיוביות, ${negativeReviews} שליליות), מתחרים: ${competitors.length}, תובנות שוק: ${signals.length}.
+נתונים: לידים: ${leads.length} (${hotLeads} חמים, ${completedLeads} הושלמו, המרה: ${conversionRate}%), ביקורות: ${reviews.length} (${positiveReviews} חיוביות, ${negativeReviews} שליליות), מתחרים: ${competitors.length}, תובנות שוק: ${signals.length}. ${socialContext}
 
 JSON בלבד:
 {
-  "executive_summary": "סיכום מנהלים 3-4 משפטים",
+  "executive_summary": "סיכום מנהלים 3-4 משפטים עם נתונים ספציפיים",
   "health_score": 7,
   "roi_estimate": "₪12,000",
   "roi_reasoning": "הסבר קצר לאומדן",
-  "top_wins": ["הישג 1", "הישג 2", "הישג 3"],
+  "social_insight": "תובנה 1-2 משפטים על הפעילות ברשתות חברתיות ומה ניתן לשפר",
+  "top_wins": ["הישג 1 עם נתון ספציפי", "הישג 2", "הישג 3"],
   "improvement_areas": ["שיפור 1", "שיפור 2"],
   "recommendation": "ההמלצה החשובה ביותר לחודש הבא"
 }`,
       });
-      setFullReport(parseLLMJson(res));
+      const parsed = parseLLMJson(res);
+      setFullReport({ ...parsed, _social: { posts: posts.length, likes: totalLikes, comments: totalComments, reach: totalReach } });
     } catch {
       toast.error('שגיאה ביצירת דוח — נסה שוב');
     }
@@ -418,6 +436,22 @@ JSON בלבד:
                 <MetricCard label="אחוז המרה"    value={`${conversionRate}%`} sub="לידים שנסגרו"              color="amber" />
                 <MetricCard label="מתחרים"       value={competitors.length} sub="מזוהים"                       color="gray" />
               </div>
+
+              {/* Social engagement */}
+              {fullReport._social && (
+                <div className="rounded-xl border border-blue-100 bg-blue-50/40 px-5 py-4">
+                  <p className="text-[12px] font-bold text-blue-700 mb-3">פעילות ברשתות חברתיות</p>
+                  <div className="grid grid-cols-4 gap-2 mb-3">
+                    <MetricCard label="פוסטים"   value={fullReport._social.posts}    color="indigo" />
+                    <MetricCard label="לייקים"    value={fullReport._social.likes}    color="indigo" />
+                    <MetricCard label="תגובות"    value={fullReport._social.comments} color="indigo" />
+                    <MetricCard label="חשיפות"    value={fullReport._social.reach}    color="indigo" />
+                  </div>
+                  {fullReport.social_insight && (
+                    <p className="text-[11px] text-blue-700 leading-relaxed">{fullReport.social_insight}</p>
+                  )}
+                </div>
+              )}
 
               {/* Top wins */}
               {fullReport.top_wins?.length > 0 && (

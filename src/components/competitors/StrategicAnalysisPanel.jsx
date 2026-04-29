@@ -9,7 +9,7 @@ import ActionPopup from '@/components/ui/ActionPopup';
 const PANEL_TABS = [
   { key: 'swot',     label: 'SWOT' },
   { key: 'strategy', label: 'אסטרטגיה' },
-  { key: 'battle',   label: 'כרטיס קרב' },
+  { key: 'battle',   label: 'השוואת מתחרה' },
 ];
 
 // ─── SWOT Tab ────────────────────────────────────────────────────────────────
@@ -253,10 +253,10 @@ ${competitor.notes ? `מידע: ${competitor.notes}` : ''}
       });
       if (res?.data?.battlecard || res?.battlecard) {
         setBattlecard(res?.data?.battlecard || res?.battlecard);
-        toast.success('כרטיס קרב עודכן ✓');
+        toast.success('השוואת מתחרה עודכן ✓');
       }
     } catch (_) {
-      toast.error('שגיאה ביצירת כרטיס קרב');
+      toast.error('שגיאה ביצירת השוואת מתחרה');
     }
     setLoading(false);
   };
@@ -265,11 +265,11 @@ ${competitor.notes ? `מידע: ${competitor.notes}` : ''}
     return (
       <div className="space-y-4">
         <div className="py-6 text-center">
-          <p className="text-[12px] text-foreground-muted mb-3">אין כרטיס קרב עבור {competitor.name} עדיין</p>
+          <p className="text-[12px] text-foreground-muted mb-3">אין השוואת מתחרה עבור {competitor.name} עדיין</p>
           <button onClick={generate} disabled={loading}
             className="flex items-center gap-2 px-4 py-2 bg-foreground text-background text-[12px] font-medium rounded-lg hover:opacity-90 transition-opacity mx-auto disabled:opacity-60">
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
-            {loading ? 'מייצר...' : 'צור כרטיס קרב'}
+            {loading ? 'מייצר...' : 'צור השוואת מתחרה'}
           </button>
         </div>
         <div className="border-t border-border pt-4">

@@ -53,7 +53,11 @@ const clerkEnabled = clerkKey && !clerkKey.includes('your_key_here') &&
                      clerkPubKey && !clerkPubKey.includes('your_key_here');
 if (clerkEnabled) {
   const { clerkMiddleware } = require('@clerk/express');
-  app.use(clerkMiddleware({ publishableKey: clerkPubKey }));
+  // Skip Clerk middleware for admin key requests — prevents session cookie interference
+  app.use((req: any, res: any, next: any) => {
+    if (req.headers['x-admin-key']) return next();
+    clerkMiddleware({ publishableKey: clerkPubKey })(req, res, next);
+  });
   console.log('Clerk auth enabled');
 } else {
   console.log('Clerk not configured — running in dev mode (all requests as dev-user)');
