@@ -19,14 +19,15 @@ function isAdminEmail(email) {
   return ADMIN_EMAILS.includes(e) || ADMIN_DOMAINS.some(d => e.endsWith(d));
 }
 
-// Sets up window.__clerk so base44 client can get auth tokens
-function TokenSetup() {
+// Sets up window.__clerk and signals when token is ready
+function TokenSetup({ onReady }) {
   const clerk = useClerk();
   useEffect(() => {
     if (!clerk.session) return;
     window.__clerk = clerk;
     clerk.session.getToken().then(token => {
       if (token) window.__clerk_session_token = token;
+      onReady();
     });
     const interval = setInterval(() => {
       clerk.session?.getToken().then(token => {
@@ -41,6 +42,12 @@ function TokenSetup() {
 function AdminApp() {
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
+  const [tokenReady, setTokenReady] = useState(false);
+
+  const email =
+    user?.primaryEmailAddress?.emailAddress ||
+    user?.emailAddresses?.[0]?.emailAddress ||
+    '';
 
   if (!isLoaded) {
     return (
@@ -50,12 +57,6 @@ function AdminApp() {
       </div>
     );
   }
-
-  // Try all possible email paths in Clerk
-  const email =
-    user?.primaryEmailAddress?.emailAddress ||
-    user?.emailAddresses?.[0]?.emailAddress ||
-    '';
 
   if (!isAdminEmail(email)) {
     return (
@@ -74,6 +75,8 @@ function AdminApp() {
 
   return (
     <BrowserRouter>
+      {/* Must render before AdminDashboard so token is set before queries fire */}
+      <TokenSetup onReady={() => setTokenReady(true)} />
       <div className="min-h-screen bg-background" dir="rtl">
         <header style={{ height: 48, borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', background: '#fff' }}>
           <span style={{ fontSize: 13, fontWeight: 700 }}>OTX Admin</span>
@@ -83,7 +86,14 @@ function AdminApp() {
           </div>
         </header>
         <main style={{ padding: '16px 24px' }}>
-          <AdminDashboard skipAdminCheck />
+          {tokenReady ? (
+            <AdminDashboard skipAdminCheck />
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: 10 }}>
+              <div style={{ width: 20, height: 20, border: '3px solid #f0f0f0', borderTopColor: '#111', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              <span style={{ fontSize: 12, color: '#999' }}>מאמת הרשאות...</span>
+            </div>
+          )}
         </main>
       </div>
     </BrowserRouter>
@@ -98,7 +108,6 @@ ReactDOM.createRoot(document.getElementById('admin-root')).render(
   >
     <QueryClientProvider client={queryClientInstance}>
       <SignedIn>
-        <TokenSetup />
         <AdminApp />
       </SignedIn>
       <SignedOut>
