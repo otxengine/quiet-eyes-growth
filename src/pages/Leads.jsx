@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Plus, Target, Sparkles, Loader2, LayoutGrid, List, RotateCcw, ChevronDown, ChevronUp, Info } from 'lucide-react';
@@ -81,9 +81,9 @@ function LeadQualityGuide({ businessProfile }) {
             </div>
           )}
           {!hasCriteria && (
-            <a href="/settings" className="inline-flex items-center gap-1.5 mt-1 text-[11px] font-medium text-blue-600 hover:underline">
+            <Link to="/settings" className="inline-flex items-center gap-1.5 mt-1 text-[11px] font-medium text-blue-600 hover:underline">
               → עבור להגדרות והגדר קריטריונים
-            </a>
+            </Link>
           )}
         </div>
       )}

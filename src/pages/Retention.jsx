@@ -1,8 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Heart, Star, ClipboardList, AlertTriangle } from 'lucide-react';
+import { Heart, Star, ClipboardList, AlertTriangle, Loader2, TrendingDown, Clock, MessageSquare } from 'lucide-react';
+
+function daysAgo(dateStr) {
+  if (!dateStr) return null;
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+}
 import PlanGate from '@/components/subscription/PlanGate';
 import RetentionCustomerList from '@/components/retention/RetentionCustomerList';
 import AiInsightBox from '@/components/ai/AiInsightBox';
@@ -13,7 +18,9 @@ export default function Retention() {
   const { businessProfile } = useOutletContext();
   const bpId = businessProfile?.id;
   const [selectedSurvey, setSelectedSurvey] = useState(null);
-  const [retentionPopup, setRetentionPopup] = useState(null); // ITEM 7: ActionPopup for at-risk
+  const [retentionPopup, setRetentionPopup] = useState(null);
+  const [winBackLoading, setWinBackLoading] = useState(false);
+  const [winBackMessage, setWinBackMessage] = useState('');
 
   const { data: leads = [] } = useQuery({
     queryKey: ['retentionLeads', bpId],
@@ -32,6 +39,32 @@ export default function Retention() {
     queryFn: () => base44.entities.CustomerSurvey.filter({ linked_business: bpId }, '-created_date', 50),
     enabled: !!bpId,
   });
+
+  const churnLeads = useMemo(() =>
+    leads
+      .filter(l => l.status === 'lost' || l.status === 'cold')
+      .map(l => ({ ...l, daysSince: daysAgo(l.updated_at || l.created_date) }))
+      .sort((a, b) => (b.daysSince || 0) - (a.daysSince || 0))
+      .slice(0, 6),
+    [leads]
+  );
+
+  const generateWinBack = async () => {
+    setWinBackLoading(true);
+    setWinBackMessage('');
+    try {
+      const names = churnLeads.slice(0, 3).map(l => l.name || 'לקוח').join(', ');
+      const res = await base44.integrations.Core.InvokeLLM({
+        model: 'haiku',
+        prompt: `אתה מנהל שיווק. עסק: "${businessProfile?.name}" (${businessProfile?.category}).
+לקוחות בסיכון נטישה: ${names || 'מספר לקוחות'}.
+כתוב מסר WhatsApp קצר ואישי להחזרת לקוח שלא רכש זמן רב. בעברית, 3-4 משפטים, מקצועי ואנושי.
+החזר רק את הטקסט עצמו.`,
+      });
+      setWinBackMessage(typeof res === 'string' ? res.trim() : '');
+    } catch (_) {}
+    setWinBackLoading(false);
+  };
 
   const completedLeads = leads.filter(l => l.status === 'completed');
   const lostLeads = leads.filter(l => l.status === 'lost');
@@ -182,6 +215,49 @@ export default function Retention() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {churnLeads.length > 0 && (
+        <div className="card-base p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <TrendingDown className="w-4 h-4 text-danger" />
+              <h3 className="text-[13px] font-semibold text-foreground">סיכון נטישה — דירוג ({churnLeads.length})</h3>
+            </div>
+            <button onClick={generateWinBack} disabled={winBackLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium bg-foreground text-background rounded-lg hover:opacity-90 transition-all disabled:opacity-60">
+              {winBackLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <MessageSquare className="w-3 h-3" />}
+              {winBackLoading ? 'מייצר...' : 'מסר החזרה'}
+            </button>
+          </div>
+          <div className="space-y-2">
+            {churnLeads.map(lead => (
+              <div key={lead.id} className="flex items-center gap-3 p-3 rounded-lg bg-secondary border border-border">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${
+                  (lead.daysSince || 0) > 60 ? 'bg-red-100 text-red-600' :
+                  (lead.daysSince || 0) > 30 ? 'bg-amber-100 text-amber-600' :
+                  'bg-blue-100 text-blue-600'
+                }`}>
+                  {lead.daysSince ?? '?'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-medium text-foreground">{lead.name || 'לקוח'}</p>
+                  <p className="text-[10px] text-foreground-muted">{lead.service_needed || 'שירות לא צוין'} · {lead.status === 'lost' ? 'אבד' : 'קר'}</p>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Clock className="w-3 h-3 text-foreground-muted" />
+                  <span className="text-[10px] text-foreground-muted">{lead.daysSince != null ? `${lead.daysSince} ימים` : '—'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          {winBackMessage && (
+            <div className="mt-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+              <p className="text-[10px] text-primary font-medium mb-1.5">📱 מסר להחזרת לקוח (WhatsApp):</p>
+              <p className="text-[12px] text-foreground leading-relaxed whitespace-pre-line">{winBackMessage}</p>
+            </div>
+          )}
         </div>
       )}
 

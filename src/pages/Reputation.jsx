@@ -23,6 +23,23 @@ export default function Reputation() {
   const [sendingRequests, setSendingRequests] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
+  const [selectedSources, setSelectedSources] = useState(['google', 'facebook', 'instagram', 'tripadvisor']);
+
+  const handleSendRequests = async () => {
+    if (!bpId) return;
+    setSendingRequests(true);
+    setMoreMenuOpen(false);
+    toast.info('שולח בקשות ביקורת ללקוחות מרוצים...');
+    try {
+      const res = await base44.functions.invoke('reviewRequestAutomation', { businessProfileId: bpId });
+      const { requests_sent = 0 } = res?.data || {};
+      queryClient.invalidateQueries({ queryKey: ['reviewRequests', bpId] });
+      toast.success(requests_sent > 0 ? `${requests_sent} בקשות נשלחו ✓` : 'אין לקוחות כשירים כרגע');
+    } catch {
+      toast.error('שגיאה בשליחת בקשות');
+    }
+    setSendingRequests(false);
+  };
 
   // FIX 7: Sentiment analysis
   const handleAnalyzeSentiment = async () => {
@@ -41,10 +58,13 @@ export default function Reputation() {
   const handleCollectReviews = async () => {
     setScanning(true);
     try {
-      const res = await base44.functions.invoke('scanAllReviews', { businessProfileId: bpId });
-      const { new_reviews = 0, google_reviews_added = 0 } = res.data || {};
+      const res = await base44.functions.invoke('scanAllReviews', {
+        businessProfileId: bpId,
+        sources: selectedSources,
+      });
+      const { new_reviews = 0 } = res.data || {};
       if (new_reviews > 0) {
-        toast.success(`נמצאו ${new_reviews} ביקורות חדשות${google_reviews_added > 0 ? ` (${google_reviews_added} מגוגל)` : ''}`);
+        toast.success(`נמצאו ${new_reviews} ביקורות חדשות מ-${selectedSources.length} מקורות ✓`);
       } else {
         toast.info('לא נמצאו ביקורות חדשות');
       }
@@ -154,7 +174,7 @@ export default function Reputation() {
             {moreMenuOpen && (
               <div className="absolute left-0 top-full mt-1 z-50 bg-card border border-border rounded-xl shadow-lg py-1 min-w-[200px]">
                 <button
-                  onClick={() => { setSendingRequests(true); setMoreMenuOpen(false); base44.functions.invoke('reviewRequestAutomation', { businessProfileId: bpId }).then(res => { const { requests_sent = 0 } = res?.data || {}; queryClient.invalidateQueries({ queryKey: ['reviewRequests', bpId] }); toast.success(requests_sent > 0 ? `${requests_sent} בקשות נשלחו ✓` : 'אין לקוחות כשירים כרגע'); }).catch(() => toast.error('שגיאה בשליחת בקשות')).finally(() => setSendingRequests(false)); }}
+                  onClick={handleSendRequests}
                   disabled={sendingRequests}
                   className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[12px] text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
                 >
@@ -253,6 +273,37 @@ export default function Reputation() {
 ביקורות אחרונות: ${reviews.slice(0, 15).map(r => `[${r.sentiment}/${r.rating}⭐] "${(r.text || '').slice(0, 80)}"`).join('; ')}.
 סכם את הנושאים החוזרים (חיובי/שלילי), זהה נקודות חוזק וחולשה, והמלץ 3 פעולות לשיפור המוניטין. בעברית, Markdown.`}
       />
+
+      {/* Source selector */}
+      <div className="card-base px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-medium text-foreground-muted">מקורות סריקה:</span>
+          {[
+            { key: 'google',      label: 'Google',      icon: '📍' },
+            { key: 'facebook',    label: 'Facebook',    icon: '📘' },
+            { key: 'instagram',   label: 'Instagram',   icon: '📸' },
+            { key: 'tripadvisor', label: 'TripAdvisor', icon: '🦉' },
+            { key: 'waze',        label: 'Waze',        icon: '🗺️' },
+            { key: 'tiktok',      label: 'TikTok',      icon: '🎵' },
+          ].map(src => {
+            const active = selectedSources.includes(src.key);
+            return (
+              <button key={src.key}
+                onClick={() => setSelectedSources(prev =>
+                  active ? prev.filter(s => s !== src.key) : [...prev, src.key]
+                )}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all ${
+                  active
+                    ? 'bg-primary text-background border-primary'
+                    : 'bg-white text-foreground-muted border-border hover:border-foreground-muted'
+                }`}
+              >
+                {src.icon} {src.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <div>
         <h2 className="text-[14px] font-semibold text-foreground mb-3">ביקורות ({reviews.length})</h2>

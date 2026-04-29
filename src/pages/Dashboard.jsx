@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { AlertTriangle } from 'lucide-react';
+import { parseLLMJson } from '@/lib/utils';
+import { AlertTriangle, Database, BookOpen } from 'lucide-react';
 import { useScanQuota } from '@/lib/useScanQuota';
 import { PLAN_LABELS } from '@/lib/usePlan';
 
@@ -15,6 +16,107 @@ import QuickLookColumn from '@/components/dashboard/QuickLookColumn';
 import BottomActionBar from '@/components/dashboard/BottomActionBar';
 import ScanOverlay from '@/components/dashboard/ScanOverlay';
 import AutoActionsPanel from '@/components/dashboard/AutoActionsPanel';
+
+const DATA_SOURCES = [
+  { key: 'google',      label: 'Google Maps',  icon: '📍', always: true  },
+  { key: 'facebook',    label: 'Facebook',     icon: '📘', always: true  },
+  { key: 'instagram',   label: 'Instagram',    icon: '📸', always: true  },
+  { key: 'wolt',        label: 'Wolt',         icon: '🛵', always: false },
+  { key: 'tripadvisor', label: 'TripAdvisor',  icon: '🦉', always: false },
+  { key: 'booking',     label: 'Booking.com',  icon: '🏨', always: false },
+  { key: '10bis',       label: '10bis',        icon: '🍔', always: false },
+  { key: 'easycil',     label: 'easy.co.il',   icon: '🌐', always: false },
+];
+
+function DataSourcesStatus({ businessProfile }) {
+  const activeSources = businessProfile?.active_sources || [];
+  return (
+    <div className="card-base p-4 mb-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Database className="w-4 h-4 text-primary opacity-60" />
+        <h3 className="text-[13px] font-semibold text-foreground">מקורות מידע פעילים</h3>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {DATA_SOURCES.map(src => {
+          const isActive = src.always || activeSources.includes(src.key);
+          return (
+            <div key={src.key} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-[11px] ${
+              isActive ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-50 border-gray-200 text-gray-400'
+            }`}>
+              <span>{src.icon}</span>
+              <span className="font-medium truncate">{src.label}</span>
+              <span className="mr-auto text-[9px] flex-shrink-0">{isActive ? '✓' : '—'}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LearningCenter({ businessProfile }) {
+  const [tips, setTips]       = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    if (businessProfile?.id && !tips && !loading) generateTips();
+  }, [businessProfile?.id]);
+
+  const generateTips = async () => {
+    setLoading(true);
+    try {
+      const res = await base44.integrations.Core.InvokeLLM({
+        model: 'haiku',
+        prompt: `אתה יועץ עסקי. עסק: "${businessProfile?.name}" (${businessProfile?.category}, ${businessProfile?.city}).
+הצע 3 טיפים עסקיים קצרים ומעשיים, מותאמים לסוג העסק. JSON בלבד:
+{"tips":[
+  {"title":"כותרת קצרה","tip":"טיפ מעשי חד-משפטי","icon":"💡"},
+  {"title":"...","tip":"...","icon":"📈"},
+  {"title":"...","tip":"...","icon":"🎯"}
+]}`,
+      });
+      const parsed = parseLLMJson(res);
+      if (parsed?.tips?.length) setTips(parsed.tips);
+    } catch (_) {}
+    setLoading(false);
+  };
+
+  if (loading) {
+    return (
+      <div className="card-base p-4 mb-4 animate-pulse">
+        <div className="h-3.5 bg-gray-100 rounded w-28 mb-3" />
+        <div className="h-16 bg-gray-100 rounded" />
+      </div>
+    );
+  }
+  if (!tips?.length) return null;
+
+  const tip = tips[current];
+  return (
+    <div className="card-base p-4 mb-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <BookOpen className="w-4 h-4 text-primary opacity-60" />
+          <h3 className="text-[13px] font-semibold text-foreground">טיפ של היום</h3>
+        </div>
+        <div className="flex gap-1">
+          {tips.map((_, i) => (
+            <button key={i} onClick={() => setCurrent(i)}
+              className={`w-1.5 h-1.5 rounded-full transition-all ${i === current ? 'bg-primary' : 'bg-gray-200 hover:bg-gray-300'}`} />
+          ))}
+        </div>
+      </div>
+      <div className="flex items-start gap-3 p-3 rounded-xl bg-secondary">
+        <span className="text-[20px] flex-shrink-0 leading-none mt-0.5">{tip.icon}</span>
+        <div>
+          <p className="text-[12px] font-semibold text-foreground mb-0.5">{tip.title}</p>
+          <p className="text-[11px] text-foreground-muted leading-relaxed">{tip.tip}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const { businessProfile } = useOutletContext();
@@ -171,6 +273,12 @@ export default function Dashboard() {
 
       {/* ROW 4: Bottom Action Bar */}
       <BottomActionBar stats={stats} hasWeeklyReport={weeklyReports.length > 0} />
+
+      {/* ROW 5: Learning Center */}
+      <LearningCenter businessProfile={businessProfile} />
+
+      {/* ROW 6: Data Sources Status */}
+      <DataSourcesStatus businessProfile={businessProfile} />
 
       {/* Scan Overlay */}
       {showScan && (

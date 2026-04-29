@@ -3,7 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { ChevronDown, ChevronUp, Loader2, Lightbulb, Target, TrendingUp, Shield } from 'lucide-react';
 import ActionPopup from '@/components/ui/ActionPopup';
 
-const CATEGORY_META = {
+export const CATEGORY_META = {
   competitive: { icon: Target,      label: 'תחרותי',   color: 'text-indigo-600', bg: 'bg-indigo-50',  border: 'border-indigo-100' },
   opportunity: { icon: TrendingUp,  label: 'הזדמנות',  color: 'text-green-600',  bg: 'bg-green-50',   border: 'border-green-100'  },
   defensive:   { icon: Shield,      label: 'הגנתי',    color: 'text-amber-600',  bg: 'bg-amber-50',   border: 'border-amber-100'  },

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -317,23 +317,12 @@ const STATIC_EVENTS = [
   },
 ];
 
-function getCountdownFromDate(eventDateStr) {
-  if (!eventDateStr) return null;
-  const eventTime = new Date(eventDateStr).getTime();
-  const now = Date.now();
-  const diffMs = eventTime - now;
-  if (diffMs < 0) return null; // already passed
-  const hours = Math.ceil(diffMs / 3600000);
-  if (hours <= 24) return { text: `${hours} שעות`, urgent: true };
-  const days = Math.ceil(hours / 24);
-  if (days <= 3) return { text: `${days} ימים`, urgent: true };
-  if (days <= 14) return { text: `${days} ימים`, urgent: false };
-  return { text: `${Math.ceil(days / 7)} שבועות`, urgent: false };
-}
-
-function getCountdownText(urgencyHours) {
-  if (!urgencyHours) return null;
-  const hours = Number(urgencyHours);
+function getCountdown(input, isDate = false) {
+  if (!input) return null;
+  const hours = isDate
+    ? Math.ceil((new Date(input).getTime() - Date.now()) / 3600000)
+    : Number(input);
+  if (hours <= 0) return null;
   if (hours <= 24) return { text: `${hours} שעות`, urgent: true };
   const days = Math.ceil(hours / 24);
   if (days <= 3) return { text: `${days} ימים`, urgent: true };
@@ -361,8 +350,8 @@ function EventCard({ item, businessProfile, type }) {
   }
 
   const countdown = type === 'static'
-    ? getCountdownFromDate(item.event_date)
-    : getCountdownText(meta.urgency_hours);
+    ? getCountdown(item.event_date, true)
+    : getCountdown(meta.urgency_hours);
 
   const category = type === 'static' ? item.category : classifyEvent(title, description, tags);
 
@@ -488,12 +477,18 @@ export default function Events() {
   const allItems = [...dbItems, ...staticFiltered]
     .sort((a, b) => extractEventDate(a) - extractEventDate(b));
 
-  function getCategory(item) {
-    if (item._type === 'static') return item.category;
-    const title = item._type === 'alert' ? item.title : (item.agent_name || '');
-    const desc = item._type === 'alert' ? item.description : item.summary;
-    return classifyEvent(title, desc, item.tags || []);
-  }
+  const categoryMap = useMemo(() => {
+    const map = new Map();
+    allItems.forEach(item => {
+      if (item._type === 'static') { map.set(item.id, item.category); return; }
+      const title = item._type === 'alert' ? item.title : (item.agent_name || '');
+      const desc  = item._type === 'alert' ? item.description : item.summary;
+      map.set(item.id, classifyEvent(title, desc, item.tags || []));
+    });
+    return map;
+  }, [allItems]);
+
+  const getCategory = (item) => categoryMap.get(item.id) || 'other';
 
   const filtered = activeTab === 'all'
     ? allItems

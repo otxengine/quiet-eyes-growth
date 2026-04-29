@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { parseLLMJson } from '@/lib/utils';
+import { CATEGORY_META } from '@/components/intelligence/StrategicRecommendations';
 import { Loader2, Shield, TrendingUp, MessageSquare, Target, Zap, Lightbulb, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { toast } from 'sonner';
 import ActionPopup from '@/components/ui/ActionPopup';
@@ -42,13 +44,7 @@ ${competitor.notes ? `מידע נוסף: ${competitor.notes}` : ''}
   "threats": ["איום 1", "איום 2", "איום 3"]
 }`,
       });
-      let parsed = null;
-      try {
-        const src = typeof res === 'string' ? res : JSON.stringify(res);
-        const match = src.match(/\{[\s\S]*\}/);
-        if (match) parsed = JSON.parse(match[0]);
-      } catch (_) {}
-      setSwot(parsed);
+      setSwot(parseLLMJson(res));
       setLoaded(true);
     } catch (_) {
       setLoaded(true);
@@ -95,14 +91,7 @@ ${competitor.notes ? `מידע נוסף: ${competitor.notes}` : ''}
   );
 }
 
-// ─── Strategy Tab (reuses StrategicRecommendations logic inline) ─────────────
-
-const CATEGORY_META = {
-  competitive: { icon: Target,     label: 'תחרותי',  color: 'text-indigo-600', bg: 'bg-indigo-50',  border: 'border-indigo-100' },
-  opportunity: { icon: TrendingUp, label: 'הזדמנות', color: 'text-green-600',  bg: 'bg-green-50',   border: 'border-green-100'  },
-  defensive:   { icon: Shield,     label: 'הגנתי',   color: 'text-amber-600',  bg: 'bg-amber-50',   border: 'border-amber-100'  },
-  general:     { icon: Lightbulb,  label: 'כללי',    color: 'text-blue-600',   bg: 'bg-blue-50',    border: 'border-blue-100'   },
-};
+// ─── Strategy Tab ────────────────────────────────────────────────────────────
 
 function StrategyItem({ item, businessProfile, index }) {
   const [expanded, setExpanded] = useState(false);
@@ -184,13 +173,7 @@ function StrategyTab({ competitor, businessProfile, competitors, signals }) {
   "time_minutes": 20
 }]}`,
       });
-      let parsed = null;
-      try {
-        const src = typeof res === 'string' ? res : JSON.stringify(res);
-        const match = src.match(/\{[\s\S]*\}/);
-        if (match) parsed = JSON.parse(match[0]);
-      } catch (_) {}
-      setItems(parsed?.recommendations || []);
+      setItems(parseLLMJson(res)?.recommendations || []);
       setLoaded(true);
     } catch (_) {
       setItems([]);
@@ -233,6 +216,33 @@ function BattleTab({ competitor, businessProfile }) {
   const [battlecard, setBattlecard] = useState(() => {
     try { return competitor.battlecard_content ? JSON.parse(competitor.battlecard_content) : null; } catch { return null; }
   });
+  const [priceData, setPriceData]     = useState(null);
+  const [priceLoading, setPriceLoading] = useState(false);
+
+  const detectPrices = async () => {
+    setPriceLoading(true);
+    try {
+      const res = await base44.integrations.Core.InvokeLLM({
+        model: 'haiku',
+        prompt: `אתה אנליסט תחרותי. זהה מחירים ושירותים עבור העסק: "${competitor.name}".
+${competitor.notes ? `מידע: ${competitor.notes}` : ''}
+ענף: ${businessProfile?.category || 'לא ידוע'}, עיר: ${businessProfile?.city || 'לא ידועה'}.
+בהתבסס על הידע שלך, הצע רשימת שירותים ומחירים אופייניים לעסק מסוג זה. JSON בלבד:
+{
+  "price_range": "₪XX-₪XXX",
+  "services": [
+    {"name": "שם השירות", "price": "₪XX"},
+    {"name": "שירות נוסף", "price": "₪XX-₪XX"}
+  ],
+  "notes": "הערה קצרה על מדיניות המחירים"
+}`,
+      });
+      setPriceData(parseLLMJson(res));
+    } catch (_) {
+      toast.error('שגיאה בזיהוי מחירים');
+    }
+    setPriceLoading(false);
+  };
 
   const generate = async () => {
     setLoading(true);
@@ -253,13 +263,46 @@ function BattleTab({ competitor, businessProfile }) {
 
   if (!battlecard) {
     return (
-      <div className="py-8 text-center">
-        <p className="text-[12px] text-foreground-muted mb-3">אין כרטיס קרב עבור {competitor.name} עדיין</p>
-        <button onClick={generate} disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-foreground text-background text-[12px] font-medium rounded-lg hover:opacity-90 transition-opacity mx-auto disabled:opacity-60">
-          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
-          {loading ? 'מייצר...' : 'צור כרטיס קרב'}
-        </button>
+      <div className="space-y-4">
+        <div className="py-6 text-center">
+          <p className="text-[12px] text-foreground-muted mb-3">אין כרטיס קרב עבור {competitor.name} עדיין</p>
+          <button onClick={generate} disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-foreground text-background text-[12px] font-medium rounded-lg hover:opacity-90 transition-opacity mx-auto disabled:opacity-60">
+            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+            {loading ? 'מייצר...' : 'צור כרטיס קרב'}
+          </button>
+        </div>
+        <div className="border-t border-border pt-4">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-[11px] font-semibold text-foreground">מחירים ושירותים</h4>
+            <button onClick={detectPrices} disabled={priceLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-medium bg-secondary border border-border rounded-lg hover:bg-secondary/80 transition-all disabled:opacity-60">
+              {priceLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : '🔍'}
+              {priceLoading ? 'מזהה...' : 'זהה מחירים ותפריט'}
+            </button>
+          </div>
+          {priceData && (
+            <div className="space-y-2">
+              {priceData.price_range && (
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-secondary border border-border">
+                  <span className="text-[10px] text-foreground-muted">טווח מחירים:</span>
+                  <span className="text-[12px] font-semibold text-foreground">{priceData.price_range}</span>
+                </div>
+              )}
+              {priceData.services?.length > 0 && (
+                <div className="rounded-lg border border-border overflow-hidden">
+                  {priceData.services.map((s, i) => (
+                    <div key={i} className="flex items-center justify-between px-3 py-2 border-b border-border last:border-0 bg-white">
+                      <span className="text-[11px] text-foreground">{s.name}</span>
+                      <span className="text-[11px] font-medium text-foreground-secondary">{s.price || '—'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {priceData.notes && <p className="text-[10px] text-foreground-muted italic">{priceData.notes}</p>}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -344,6 +387,44 @@ function BattleTab({ competitor, businessProfile }) {
           </div>
         </div>
       )}
+
+      {/* Price / Menu detection */}
+      <div className="border-t border-border pt-4 mt-2">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-[11px] font-semibold text-foreground">מחירים ושירותים</h4>
+          <button onClick={detectPrices} disabled={priceLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-medium bg-secondary border border-border rounded-lg hover:bg-secondary/80 transition-all disabled:opacity-60">
+            {priceLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : '🔍'}
+            {priceLoading ? 'מזהה...' : 'זהה מחירים ותפריט'}
+          </button>
+        </div>
+        {priceData && (
+          <div className="space-y-2">
+            {priceData.price_range && (
+              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-secondary border border-border">
+                <span className="text-[10px] text-foreground-muted">טווח מחירים:</span>
+                <span className="text-[12px] font-semibold text-foreground">{priceData.price_range}</span>
+              </div>
+            )}
+            {priceData.services?.length > 0 && (
+              <div className="rounded-lg border border-border overflow-hidden">
+                <div className="px-3 py-2 bg-secondary border-b border-border">
+                  <p className="text-[10px] font-semibold text-foreground-muted">שירותים / תפריט</p>
+                </div>
+                {priceData.services.map((s, i) => (
+                  <div key={i} className="flex items-center justify-between px-3 py-2 border-b border-border last:border-0 bg-white">
+                    <span className="text-[11px] text-foreground">{s.name}</span>
+                    <span className="text-[11px] font-medium text-foreground-secondary">{s.price || '—'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {priceData.notes && (
+              <p className="text-[10px] text-foreground-muted italic">{priceData.notes}</p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -385,10 +466,11 @@ export default function StrategicAnalysisPanel({ competitor, businessProfile, co
       {/* Tab content */}
       <div className="p-4">
         {activeTab === 'swot' && (
-          <SwotTab competitor={competitor} businessProfile={businessProfile} />
+          <SwotTab key={competitor.id} competitor={competitor} businessProfile={businessProfile} />
         )}
         {activeTab === 'strategy' && (
           <StrategyTab
+            key={competitor.id}
             competitor={competitor}
             businessProfile={businessProfile}
             competitors={competitors}
@@ -396,7 +478,7 @@ export default function StrategicAnalysisPanel({ competitor, businessProfile, co
           />
         )}
         {activeTab === 'battle' && (
-          <BattleTab competitor={competitor} businessProfile={businessProfile} />
+          <BattleTab key={competitor.id} competitor={competitor} businessProfile={businessProfile} />
         )}
       </div>
     </div>

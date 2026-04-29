@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { parseLLMJson } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
   FileBarChart, Loader2, TrendingUp, TrendingDown, Minus,
-  Star, Zap, AlertTriangle, CheckCircle, Target, Users,
+  Star, Zap, AlertTriangle, CheckCircle, Target, Users, Printer,
 } from 'lucide-react';
 
 import MonthCompareCards from '@/components/reports/MonthCompareCards';
@@ -18,6 +19,7 @@ const TABS = [
   { id: 'weekly',      label: 'דוח שבועי',   icon: '📅' },
   { id: 'competitors', label: 'מתחרים',       icon: '⚔️' },
   { id: 'leads',       label: 'לידים',        icon: '🎯' },
+  { id: 'full',        label: 'דוח מלא',      icon: '⭐' },
 ];
 
 const TREND_ICON = {
@@ -54,8 +56,10 @@ export default function Reports() {
   const bpId = businessProfile?.id;
 
   const [activeTab, setActiveTab] = useState('weekly');
-  const [weeklyReport, setWeeklyReport] = useState(null); // { report, stats }
+  const [weeklyReport, setWeeklyReport] = useState(null);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
+  const [fullReport, setFullReport] = useState(null);
+  const [fullLoading, setFullLoading] = useState(false);
 
   const { data: signals = [] }     = useQuery({ queryKey: ['reportSignals', bpId],     queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId }, '-detected_at', 200), enabled: !!bpId });
   const { data: leads = [] }       = useQuery({ queryKey: ['reportLeads', bpId],       queryFn: () => base44.entities.Lead.filter({ linked_business: bpId }, '-created_date', 200), enabled: !!bpId });
@@ -75,6 +79,36 @@ export default function Reports() {
     return acc;
   }, {});
   const topSources = Object.entries(leadSources).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  async function handleGenerateFullReport() {
+    if (!bpId) return;
+    setFullLoading(true);
+    try {
+      const positiveReviews = reviews.filter(r => r.sentiment === 'positive').length;
+      const negativeReviews = reviews.filter(r => r.sentiment === 'negative').length;
+      const res = await base44.integrations.Core.InvokeLLM({
+        model: 'haiku',
+        prompt: `אתה יועץ עסקי בכיר. הפק דוח ביצועים מקיף.
+עסק: "${businessProfile?.name}" (${businessProfile?.category}, ${businessProfile?.city}).
+נתונים: לידים: ${leads.length} (${hotLeads} חמים, ${completedLeads} הושלמו, המרה: ${conversionRate}%), ביקורות: ${reviews.length} (${positiveReviews} חיוביות, ${negativeReviews} שליליות), מתחרים: ${competitors.length}, תובנות שוק: ${signals.length}.
+
+JSON בלבד:
+{
+  "executive_summary": "סיכום מנהלים 3-4 משפטים",
+  "health_score": 7,
+  "roi_estimate": "₪12,000",
+  "roi_reasoning": "הסבר קצר לאומדן",
+  "top_wins": ["הישג 1", "הישג 2", "הישג 3"],
+  "improvement_areas": ["שיפור 1", "שיפור 2"],
+  "recommendation": "ההמלצה החשובה ביותר לחודש הבא"
+}`,
+      });
+      setFullReport(parseLLMJson(res));
+    } catch {
+      toast.error('שגיאה ביצירת דוח — נסה שוב');
+    }
+    setFullLoading(false);
+  }
 
   async function handleGenerateWeeklyReport() {
     if (!bpId) return;
@@ -330,6 +364,106 @@ export default function Reports() {
           <div className="pt-2 space-y-4">
             <ConversionFunnel leads={leads} reviews={reviews} />
           </div>
+        </div>
+      )}
+
+      {/* ── TAB: Full Report ── */}
+      {activeTab === 'full' && (
+        <div className="space-y-4">
+          {!fullReport ? (
+            <div className="rounded-2xl border border-dashed border-purple-200 bg-purple-50/40 p-8 text-center">
+              <p className="text-[14px] font-semibold text-gray-700 mb-1">דוח ביצועים מלא</p>
+              <p className="text-[11px] text-gray-400 mb-5">לידים · ביקורות · מתחרים · הכנסות משוערות · המלצות</p>
+              <button onClick={handleGenerateFullReport} disabled={fullLoading}
+                className="inline-flex items-center gap-2 px-6 py-2.5 bg-purple-600 text-white rounded-xl text-[13px] font-semibold hover:bg-purple-700 transition-all disabled:opacity-70">
+                {fullLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : '⭐'}
+                {fullLoading ? 'מנתח...' : 'צור דוח מלא'}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Header + print */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-[15px] font-bold text-gray-800">{businessProfile?.name}</span>
+                  {fullReport.health_score != null && <ScoreBadge score={fullReport.health_score} />}
+                </div>
+                <button onClick={() => window.print()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[11px] text-gray-500 hover:bg-gray-50 transition-colors">
+                  <Printer className="w-3.5 h-3.5" /> הדפס
+                </button>
+              </div>
+
+              {/* Executive summary */}
+              {fullReport.executive_summary && (
+                <div className="rounded-xl border border-gray-100 bg-white px-5 py-4">
+                  <p className="text-[10px] text-gray-400 mb-1 font-medium uppercase tracking-wide">סיכום מנהלים</p>
+                  <p className="text-[12px] text-gray-700 leading-relaxed">{fullReport.executive_summary}</p>
+                </div>
+              )}
+
+              {/* ROI */}
+              {fullReport.roi_estimate && (
+                <div className="rounded-xl bg-green-50 border border-green-100 px-5 py-4">
+                  <p className="text-[10px] text-green-500 font-medium mb-0.5">הכנסה משוערת מהמערכת</p>
+                  <p className="text-[26px] font-bold text-green-700 leading-none">{fullReport.roi_estimate}</p>
+                  {fullReport.roi_reasoning && <p className="text-[11px] text-green-600 mt-1">{fullReport.roi_reasoning}</p>}
+                </div>
+              )}
+
+              {/* Metrics grid */}
+              <div className="grid grid-cols-2 gap-2">
+                <MetricCard label="סך לידים"    value={leads.length}      sub={`${hotLeads} חמים`}             color="indigo" />
+                <MetricCard label="ביקורות"      value={reviews.length}    sub={`${reviews.filter(r=>r.sentiment==='positive').length} חיוביות`} color="green" />
+                <MetricCard label="אחוז המרה"    value={`${conversionRate}%`} sub="לידים שנסגרו"              color="amber" />
+                <MetricCard label="מתחרים"       value={competitors.length} sub="מזוהים"                       color="gray" />
+              </div>
+
+              {/* Top wins */}
+              {fullReport.top_wins?.length > 0 && (
+                <div className="rounded-xl border border-gray-100 bg-white px-5 py-4">
+                  <p className="text-[12px] font-bold text-gray-700 mb-2.5">הישגים מרכזיים</p>
+                  <div className="space-y-1.5">
+                    {fullReport.top_wins.map((w, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-gray-600">{w}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Improvement areas */}
+              {fullReport.improvement_areas?.length > 0 && (
+                <div className="rounded-xl border border-amber-100 bg-amber-50/50 px-5 py-4">
+                  <p className="text-[12px] font-bold text-amber-700 mb-2.5">תחומים לשיפור</p>
+                  <div className="space-y-1.5">
+                    {fullReport.improvement_areas.map((a, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-amber-700">{a}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Top recommendation */}
+              {fullReport.recommendation && (
+                <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-5 py-4">
+                  <p className="text-[10px] text-indigo-400 font-medium mb-1">המלצה מרכזית לחודש הבא</p>
+                  <p className="text-[13px] text-indigo-800 font-semibold">{fullReport.recommendation}</p>
+                </div>
+              )}
+
+              <button onClick={handleGenerateFullReport} disabled={fullLoading}
+                className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-[12px] hover:bg-gray-50 transition-all disabled:opacity-50">
+                {fullLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : '↻'}
+                {fullLoading ? 'מחדש...' : 'צור דוח מחדש'}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

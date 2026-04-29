@@ -4,6 +4,17 @@ import { base44 } from '@/api/base44Client';
 import { Star, Loader2, RefreshCw, ExternalLink, ShieldCheck, ShieldX } from 'lucide-react';
 import AiConfidenceBadge from '@/components/ai/AiConfidenceBadge';
 
+const PLATFORM_ICON = {
+  'Google Maps':  '📍',
+  'Facebook':     '📘',
+  'Instagram':    '📸',
+  'TripAdvisor':  '🦉',
+  'Waze':         '🗺️',
+  'TikTok':       '🎵',
+  'Booking.com':  '🏨',
+  'Wolt':         '🛵',
+};
+
 const sentimentBorder = {
   positive: 'border-l-[#10b981]',
   negative: 'border-l-[#dc2626]',
@@ -193,7 +204,7 @@ export default function ReviewCard({ review, businessProfile, compact = false })
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-1">
           <StarRating rating={review.rating} />
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] text-[#bbbbbb] bg-[#f8f8f8] px-1.5 py-0.5 rounded">{review.platform === 'Google Maps' ? '📍 Google Maps' : review.platform}</span>
+            <span className="text-[10px] text-[#bbbbbb] bg-[#f8f8f8] px-1.5 py-0.5 rounded">{PLATFORM_ICON[review.platform] || '📋'} {review.platform}</span>
             {review.source_url ? (
               <>
                 <a href={review.source_url} target="_blank" rel="noopener noreferrer"
