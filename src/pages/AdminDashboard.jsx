@@ -5,7 +5,7 @@ import { base44 } from '@/api/base44Client';
 import { Loader2, Zap, ChevronLeft, AlertCircle, CheckCircle2, Activity, Crown, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { PLAN_LABELS, PLAN_COLORS, PLAN_ORDER } from '@/lib/usePlan';
-import { COST_PER_SCAN, COST_PER_POST } from '@/lib/planConfig';
+import { agentCost } from '@/lib/planConfig';
 
 function useIsAdmin() {
   try {
@@ -681,88 +681,96 @@ export default function AdminDashboard({ skipAdminCheck = false }) {
 
         const usageRows = allBusinesses.map(biz => {
           const bizLogs = allLogs.filter(l => l.linked_business === biz.id);
-          const scansMonth = bizLogs.filter(l => l.automation_name === 'runFullScan' && (l.start_time || '') >= monthStartISO).length;
-          const postsMonth = bizLogs.filter(l => l.automation_name === 'generatePost' && (l.start_time || '') >= monthStartISO).length;
-          const totalRuns  = bizLogs.filter(l => (l.start_time || '') >= monthStartISO).length;
-          const estCost    = +(scansMonth * COST_PER_SCAN + postsMonth * COST_PER_POST).toFixed(2);
-          const lastRun    = bizLogs[0]?.start_time || null;
-          const isChurn    = !lastRun || lastRun < sevenDaysAgo;
-          return { biz, scansMonth, postsMonth, totalRuns, estCost, lastRun, isChurn };
+          const monthLogs = bizLogs.filter(l => (l.start_time || '') >= monthStartISO);
+          const totalRuns = monthLogs.length;
+          // Cost per agent run using AGENT_COSTS map
+          const estCost = +monthLogs.reduce((sum, l) => sum + agentCost(l.automation_name), 0).toFixed(2);
+          // Agent breakdown: { agentName -> { runs, cost } }
+          const agentBreak = {};
+          for (const l of monthLogs) {
+            if (!agentBreak[l.automation_name]) agentBreak[l.automation_name] = { runs: 0, cost: 0 };
+            agentBreak[l.automation_name].runs++;
+            agentBreak[l.automation_name].cost = +(agentBreak[l.automation_name].cost + agentCost(l.automation_name)).toFixed(3);
+          }
+          const lastRun = bizLogs[0]?.start_time || null;
+          const isChurn = !lastRun || lastRun < sevenDaysAgo;
+          return { biz, totalRuns, estCost, agentBreak, lastRun, isChurn };
         }).sort((a, b) => b.estCost - a.estCost);
 
         const totalCost  = +usageRows.reduce((s, r) => s + r.estCost, 0).toFixed(2);
+        const totalRuns  = usageRows.reduce((s, r) => s + r.totalRuns, 0);
         const churnCount = usageRows.filter(r => r.isChurn).length;
-        const totalScans = usageRows.reduce((s, r) => s + r.scansMonth, 0);
+        const activeCount = usageRows.filter(r => !r.isChurn).length;
 
         return (
           <div className="space-y-4">
             {/* Summary KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <StatCard label='עלות חודשית מוערכת' value={`$${totalCost}`} color="text-primary" />
-              <StatCard label='סריקות החודש (סה"כ)' value={totalScans} color="text-blue-600" />
-              <StatCard label="משתמשי סיכון (churn)" value={churnCount} color="text-red-500" />
-              <StatCard label="עלות לסריקה" value={`$${COST_PER_SCAN}`} color="text-foreground-muted" />
+              <StatCard label='ריצות Agent החודש' value={totalRuns} color="text-blue-600" />
+              <StatCard label="פעילים החודש" value={activeCount} color="text-green-600" />
+              <StatCard label="סיכון נטישה" value={churnCount} color="text-red-500" />
             </div>
 
             {/* Per-user table */}
             <div className="card-base overflow-hidden">
               <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-                <h3 className="text-[13px] font-semibold text-foreground">שימוש ועלויות לפי משתמש — {new Date().toLocaleString('he-IL', { month: 'long', year: 'numeric' })}</h3>
+                <h3 className="text-[13px] font-semibold text-foreground">
+                  עלויות פר משתמש — {new Date().toLocaleString('he-IL', { month: 'long', year: 'numeric' })}
+                </h3>
                 <span className="text-[10px] text-foreground-muted">{usageRows.length} עסקים</span>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-[11px]">
-                  <thead>
-                    <tr className="border-b border-border bg-secondary/30">
-                      <th className="px-4 py-2.5 text-right font-medium text-foreground-muted">עסק</th>
-                      <th className="px-4 py-2.5 text-center font-medium text-foreground-muted">תוכנית</th>
-                      <th className="px-4 py-2.5 text-center font-medium text-foreground-muted">סריקות</th>
-                      <th className="px-4 py-2.5 text-center font-medium text-foreground-muted">ריצות</th>
-                      <th className="px-4 py-2.5 text-center font-medium text-foreground-muted">עלות מוערכת</th>
-                      <th className="px-4 py-2.5 text-center font-medium text-foreground-muted">ריצה אחרונה</th>
-                      <th className="px-4 py-2.5 text-center font-medium text-foreground-muted">סטטוס</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {usageRows.map(({ biz, scansMonth, totalRuns, estCost, lastRun, isChurn }) => {
-                      const plan = biz.subscription_plan || 'free_trial';
-                      return (
-                        <tr key={biz.id} className={`hover:bg-secondary/20 transition-colors ${isChurn ? 'bg-red-50/40' : ''}`}>
-                          <td className="px-4 py-2.5">
-                            <p className="font-semibold text-foreground truncate max-w-[160px]">{biz.name}</p>
-                            <p className="text-[9px] text-foreground-muted opacity-60">{biz.created_by}</p>
-                          </td>
-                          <td className="px-4 py-2.5 text-center">
-                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold text-white" style={{ background: PLAN_COLORS[plan] }}>
-                              {PLAN_LABELS[plan]}
+              <div className="divide-y divide-border">
+                {usageRows.map(({ biz, totalRuns, estCost, agentBreak, lastRun, isChurn }) => {
+                  const plan = biz.subscription_plan || 'free_trial';
+                  const topAgents = Object.entries(agentBreak)
+                    .sort((a, b) => b[1].cost - a[1].cost)
+                    .slice(0, 5);
+                  return (
+                    <div key={biz.id} className={`px-5 py-3.5 ${isChurn ? 'bg-red-50/30' : ''}`}>
+                      {/* Row header */}
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${isChurn ? 'bg-red-400' : 'bg-green-400'}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-semibold text-foreground truncate">{biz.name}</p>
+                          <p className="text-[10px] text-foreground-muted opacity-60">{biz.created_by}</p>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold text-white shrink-0" style={{ background: PLAN_COLORS[plan] }}>
+                          {PLAN_LABELS[plan]}
+                        </span>
+                        <div className="text-right shrink-0">
+                          <p className={`text-[15px] font-bold ${estCost > 2 ? 'text-amber-600' : estCost > 0 ? 'text-foreground' : 'text-foreground-muted'}`}>
+                            ${estCost.toFixed(2)}
+                          </p>
+                          <p className="text-[9px] text-foreground-muted">{totalRuns} ריצות</p>
+                        </div>
+                        {isChurn && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold bg-red-50 text-red-600 border border-red-100 shrink-0">
+                            ⚠ לא פעיל
+                          </span>
+                        )}
+                      </div>
+                      {/* Agent breakdown */}
+                      {topAgents.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5 pr-5">
+                          {topAgents.map(([name, { runs, cost }]) => (
+                            <span key={name} className="text-[9px] px-1.5 py-0.5 rounded-full bg-secondary border border-border text-foreground-muted">
+                              {name} × {runs} — ${cost.toFixed(2)}
                             </span>
-                          </td>
-                          <td className="px-4 py-2.5 text-center font-semibold text-foreground">{scansMonth}</td>
-                          <td className="px-4 py-2.5 text-center text-foreground-muted">{totalRuns}</td>
-                          <td className="px-4 py-2.5 text-center">
-                            <span className={`font-bold ${estCost > 1 ? 'text-amber-600' : 'text-foreground'}`}>
-                              ${estCost.toFixed(2)}
+                          ))}
+                          {Object.keys(agentBreak).length > 5 && (
+                            <span className="text-[9px] text-foreground-muted opacity-50">
+                              +{Object.keys(agentBreak).length - 5} נוספים
                             </span>
-                          </td>
-                          <td className="px-4 py-2.5 text-center text-foreground-muted text-[10px]">
-                            {lastRun ? fmtDate(lastRun) : '—'}
-                          </td>
-                          <td className="px-4 py-2.5 text-center">
-                            {isChurn ? (
-                              <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold bg-red-50 text-red-600 border border-red-100">
-                                ⚠ לא פעיל
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold bg-green-50 text-green-600 border border-green-100">
-                                פעיל
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                          )}
+                        </div>
+                      )}
+                      {topAgents.length === 0 && (
+                        <p className="mt-1 pr-5 text-[10px] text-foreground-muted opacity-40">אין פעילות החודש · ריצה אחרונה: {lastRun ? fmtDate(lastRun) : 'אף פעם'}</p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
