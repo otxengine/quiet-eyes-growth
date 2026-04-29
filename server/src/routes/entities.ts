@@ -96,12 +96,23 @@ router.get('/:entity', async (req: Request, res: Response) => {
     const userId = getUserId(req);
     const where = buildWhere(filter);
 
-    const ADMIN_EMAILS = ['contact@otxengine.io'];
-    const isAdmin = userId && (ADMIN_EMAILS.includes(userId) || userId.endsWith('@otx.ai') || userId.endsWith('@quieteyes.ai'));
-
     // Enforce tenant isolation for BusinessProfile — skip for admins so they see all businesses
-    if (req.params.entity === 'BusinessProfile' && userId && !isAdmin) {
-      where.created_by = userId;
+    if (req.params.entity === 'BusinessProfile' && userId) {
+      let isAdmin = false;
+      try {
+        const { clerkClient } = require('@clerk/express');
+        const clerkUser = await clerkClient.users.getUser(userId);
+        const email = clerkUser.emailAddresses
+          .find((e: any) => e.id === clerkUser.primaryEmailAddressId)
+          ?.emailAddress || '';
+        const ADMIN_EMAILS = ['contact@otxengine.io'];
+        const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai'];
+        isAdmin = ADMIN_EMAILS.includes(email) || ADMIN_DOMAINS.some((d: string) => email.endsWith(d));
+      } catch { /* if Clerk lookup fails, treat as non-admin */ }
+
+      if (!isAdmin) {
+        where.created_by = userId;
+      }
     }
 
     const records = await model.findMany({
