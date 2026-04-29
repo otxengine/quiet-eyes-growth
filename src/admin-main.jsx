@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ClerkProvider, SignedIn, SignedOut, SignIn, useUser, useClerk } from '@clerk/clerk-react';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -17,6 +17,25 @@ function isAdminEmail(email) {
   if (!email) return false;
   const e = email.toLowerCase().trim();
   return ADMIN_EMAILS.includes(e) || ADMIN_DOMAINS.some(d => e.endsWith(d));
+}
+
+// Sets up window.__clerk so base44 client can get auth tokens
+function TokenSetup() {
+  const clerk = useClerk();
+  useEffect(() => {
+    if (!clerk.session) return;
+    window.__clerk = clerk;
+    clerk.session.getToken().then(token => {
+      if (token) window.__clerk_session_token = token;
+    });
+    const interval = setInterval(() => {
+      clerk.session?.getToken().then(token => {
+        if (token) window.__clerk_session_token = token;
+      });
+    }, 50_000);
+    return () => clearInterval(interval);
+  }, [clerk.session]);
+  return null;
 }
 
 function AdminApp() {
@@ -79,6 +98,7 @@ ReactDOM.createRoot(document.getElementById('admin-root')).render(
   >
     <QueryClientProvider client={queryClientInstance}>
       <SignedIn>
+        <TokenSetup />
         <AdminApp />
       </SignedIn>
       <SignedOut>
