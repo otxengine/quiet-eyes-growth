@@ -55,6 +55,7 @@ model BusinessProfile {
   monitor_competitors_social Boolean? @default(true)
   onboarding_completed       Boolean? @default(false)
   plan_id                    String?  @default("free")
+  subscription_plan          String?
   subscription_status        String?  @default("none")
   stripe_customer_id         String?
   subscription_started_at    String?

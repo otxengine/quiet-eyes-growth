@@ -4,7 +4,7 @@ services:
     name: quiet-eyes-backend
     runtime: node
     rootDir: server
-    buildCommand: npm ci && npx prisma generate && npm run build
+    buildCommand: npm ci && npx prisma db push && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
