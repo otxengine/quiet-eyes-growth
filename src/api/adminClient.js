@@ -94,13 +94,17 @@ export const adminClient = { entities, functions, integrations };
 
 export async function verifyAdminKey(key) {
   try {
-    const res = await fetch(`${API_BASE}/entities/me`, {
+    const res = await fetch(`${API_BASE}/admin-verify`, {
       headers: { 'x-admin-key': key, 'Content-Type': 'application/json' },
     });
-    if (!res.ok) return false;
-    const data = await res.json();
-    return data?.id === 'admin';
-  } catch {
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      console.warn('[admin-verify]', res.status, body);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn('[admin-verify] network error:', e);
     return false;
   }
 }

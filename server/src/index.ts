@@ -38,7 +38,17 @@ app.use(cors({
     cb(new Error(`CORS: ${origin} not allowed`));
   },
   credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key', 'x-dev-user'],
 }));
+
+// Dedicated admin key verification — placed before Clerk and body parser
+app.get('/api/admin-verify', (req: any, res: any) => {
+  const key = req.headers['x-admin-key'];
+  const secret = process.env.ADMIN_SECRET || '';
+  if (!secret) return res.status(503).json({ error: 'ADMIN_SECRET not configured on server' });
+  if (key !== secret) return res.status(401).json({ error: 'bad_key' });
+  return res.json({ ok: true });
+});
 
 // Capture raw body for Meta webhook signature verification.
 // Must be registered BEFORE express.json() so we get the unmodified Buffer.
