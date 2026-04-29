@@ -96,10 +96,11 @@ router.get('/:entity', async (req: Request, res: Response) => {
     const userId = getUserId(req);
     const where = buildWhere(filter);
 
-    // BUG 3: Enforce tenant isolation — BusinessProfile must always be scoped to the
-    // authenticated user. If the request doesn't already pass created_by, inject it.
-    // This prevents seed/test data from leaking into other tenants' sessions.
-    if (req.params.entity === 'BusinessProfile' && userId) {
+    const ADMIN_EMAILS = ['contact@otxengine.io'];
+    const isAdmin = userId && (ADMIN_EMAILS.includes(userId) || userId.endsWith('@otx.ai') || userId.endsWith('@quieteyes.ai'));
+
+    // Enforce tenant isolation for BusinessProfile — skip for admins so they see all businesses
+    if (req.params.entity === 'BusinessProfile' && userId && !isAdmin) {
       where.created_by = userId;
     }
 
