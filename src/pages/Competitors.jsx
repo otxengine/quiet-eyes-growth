@@ -3,44 +3,15 @@ import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { otxSupabase } from '@/lib/otx-supabase';
-import { Users, Loader2, MapPin, ExternalLink, Activity, MessageSquare, X, Zap, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { Users, Loader2, MapPin, ExternalLink, Activity, MessageSquare, X, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePlan } from '@/lib/usePlan';
 import { getLimits } from '@/lib/planConfig';
 import CompetitorScoreRow from '@/components/competitors/CompetitorScoreRow';
 import CompetitorDetailCard from '@/components/competitors/CompetitorDetailCard';
-import StrategicRecommendations from '@/components/intelligence/StrategicRecommendations';
 import ComposerDrawer from '@/components/modals/ComposerDrawer';
 import ReplyDrawer from '@/components/modals/ReplyDrawer';
-import BattlecardPanel from '@/components/competitors/BattlecardPanel';
-
-function CompetitorWithBattlecard({ comp, businessProfile, signals, businessProfileId, otxBizId }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="rounded-xl overflow-hidden">
-      <CompetitorDetailCard
-        competitor={comp}
-        businessName={businessProfile?.name}
-        signals={signals}
-        businessProfileId={businessProfileId}
-        otxBizId={otxBizId}
-      />
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-medium text-foreground-muted border border-t-0 border-border bg-secondary hover:bg-secondary/70 transition-colors"
-      >
-        <FileText className="w-3.5 h-3.5" />
-        {open ? 'הסתר פרופיל מתחרה' : 'פרופיל מתחרה'}
-        {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-      </button>
-      {open && (
-        <div className="border border-t-0 border-border rounded-b-xl p-4 bg-card">
-          <BattlecardPanel competitor={comp} businessProfile={businessProfile} />
-        </div>
-      )}
-    </div>
-  );
-}
+import StrategicAnalysisPanel from '@/components/competitors/StrategicAnalysisPanel';
 
 // Map base44 category names to OTX sector names
 function categoryToSector(category) {
@@ -159,9 +130,10 @@ export default function Competitors() {
   const { businessProfile } = useOutletContext();
   const bpId = businessProfile?.id;
   const queryClient = useQueryClient();
-  const [scanning,     setScanning]     = useState(false);
-  const [activeFilter, setActiveFilter] = useState('all');
-  const [activeDrawer,   setActiveDrawer]   = useState(null); // { type, props }
+  const [scanning,      setScanning]     = useState(false);
+  const [activeFilter,  setActiveFilter] = useState('all');
+  const [selectedComp,  setSelectedComp] = useState(null);
+  const [activeDrawer,  setActiveDrawer] = useState(null); // { type, props }
   const [dismissedAlerts, setDismissedAlerts] = useState(() => {
     try { return new Set(JSON.parse(sessionStorage.getItem('dismissed_competitor_alerts') || '[]')); }
     catch { return new Set(); }
@@ -462,13 +434,6 @@ export default function Competitors() {
 
           <CompetitorScoreRow business={businessProfile} avgRating={avgRating} reviewCount={reviews.length} competitors={competitors} />
 
-          <StrategicRecommendations
-            businessProfile={businessProfile}
-            competitors={competitors}
-            signals={signals.filter(s => s.category === 'competitor_move')}
-            title="המלצות אסטרטגיות מול מתחרים"
-          />
-
           <div className="flex gap-0.5 border-b border-border">
             {filterTabs.map((tab) => (
               <button key={tab.key} onClick={() => setActiveFilter(tab.key)}
@@ -479,19 +444,38 @@ export default function Competitors() {
             ))}
           </div>
 
+          {selectedComp && (
+            <StrategicAnalysisPanel
+              competitor={selectedComp}
+              businessProfile={businessProfile}
+              competitors={competitors}
+              signals={signals.filter(s => s.category === 'competitor_move')}
+              onClose={() => setSelectedComp(null)}
+            />
+          )}
+
           <div className="space-y-3">
             {filtered.length === 0 ? (
               <p className="text-[12px] text-[#999999] text-center py-8">אין מתחרים בפילטר הנוכחי</p>
             ) : (
               filtered.map((comp) => (
-                <CompetitorWithBattlecard
+                <div
                   key={comp.id}
-                  comp={comp}
-                  businessProfile={businessProfile}
-                  signals={signals}
-                  businessProfileId={bpId}
-                  otxBizId={otxBizId}
-                />
+                  onClick={() => setSelectedComp(prev => prev?.id === comp.id ? null : comp)}
+                  className={`rounded-xl overflow-hidden cursor-pointer transition-all ${selectedComp?.id === comp.id ? 'ring-2 ring-primary/40' : ''}`}
+                >
+                  <CompetitorDetailCard
+                    competitor={comp}
+                    businessName={businessProfile?.name}
+                    signals={signals}
+                    businessProfileId={bpId}
+                    otxBizId={otxBizId}
+                  />
+                  <div className={`w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-medium border border-t-0 border-border transition-colors ${selectedComp?.id === comp.id ? 'bg-primary/5 text-primary' : 'bg-secondary text-foreground-muted hover:bg-secondary/70'}`}>
+                    <FileText className="w-3.5 h-3.5" />
+                    {selectedComp?.id === comp.id ? 'הסתר ניתוח אסטרטגי' : 'SWOT · אסטרטגיה · קרב'}
+                  </div>
+                </div>
               ))
             )}
             {hiddenCount > 0 && (

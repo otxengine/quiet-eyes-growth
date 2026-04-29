@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
-import { getUserId } from '../middleware/auth';
+import { getUserId, isAdminKeyRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -73,6 +73,9 @@ function buildOrderBy(sort?: string): Record<string, 'asc' | 'desc'> | undefined
 
 // GET /api/entities/me — current user info
 router.get('/me', (req: Request, res: Response) => {
+  if (isAdminKeyRequest(req)) {
+    return res.json({ id: 'admin', email: 'admin' });
+  }
   try {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
@@ -93,26 +96,22 @@ router.get('/:entity', async (req: Request, res: Response) => {
     const sort = req.query.sort as string | undefined;
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 200;
 
+    // Admin key bypasses all tenant isolation
+    if (isAdminKeyRequest(req)) {
+      const records = await model.findMany({
+        where: buildWhere(filter),
+        orderBy: buildOrderBy(sort),
+        take: Math.min(limit, 1000),
+      });
+      return res.json(records);
+    }
+
     const userId = getUserId(req);
     const where = buildWhere(filter);
 
-    // Enforce tenant isolation for BusinessProfile — skip for admins so they see all businesses
+    // Enforce tenant isolation for BusinessProfile
     if (req.params.entity === 'BusinessProfile' && userId) {
-      let isAdmin = false;
-      try {
-        const { clerkClient } = require('@clerk/express');
-        const clerkUser = await clerkClient.users.getUser(userId);
-        const email = clerkUser.emailAddresses
-          .find((e: any) => e.id === clerkUser.primaryEmailAddressId)
-          ?.emailAddress || '';
-        const ADMIN_EMAILS = ['contact@otxengine.io'];
-        const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai'];
-        isAdmin = ADMIN_EMAILS.includes(email) || ADMIN_DOMAINS.some((d: string) => email.endsWith(d));
-      } catch { /* if Clerk lookup fails, treat as non-admin */ }
-
-      if (!isAdmin) {
-        where.created_by = userId;
-      }
+      where.created_by = userId;
     }
 
     const records = await model.findMany({

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Plus, Target, Sparkles, Loader2, LayoutGrid, List, RotateCcw } from 'lucide-react';
+import { Plus, Target, Sparkles, Loader2, LayoutGrid, List, RotateCcw, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import LeadCard from '@/components/leads/LeadCard';
 import AddLeadModal from '@/components/leads/AddLeadModal';
@@ -32,6 +32,64 @@ const leadsScanSteps = [
   { key: 'leads',  label: 'מייצר לידים חדשים...',     fn: 'runLeadGeneration', resultKey: 'leads_generated' },
   { key: 'social', label: 'סורק לידים ברשתות חברתיות...', fn: 'findSocialLeads',    resultKey: 'leads_created' },
 ];
+
+function LeadQualityGuide({ businessProfile }) {
+  const [open, setOpen] = useState(false);
+  const hasCriteria = businessProfile?.relevant_services || businessProfile?.min_budget || businessProfile?.lead_intent_signals || businessProfile?.lead_quality_notes;
+
+  return (
+    <div className="card-base border border-blue-100 bg-blue-50/30">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 text-right"
+      >
+        <div className="flex items-center gap-2">
+          <Info className="w-4 h-4 text-blue-500" />
+          <span className="text-[12px] font-semibold text-blue-700">
+            {hasCriteria ? 'קריטריוני ליד מוגדרים — הסוכן יסנן בהתאם' : 'טרם הוגדרו קריטריונים ללידים — הסוכן יחפש בצורה כללית'}
+          </span>
+          {!hasCriteria && (
+            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-700 border border-amber-200">
+              מומלץ להגדיר
+            </span>
+          )}
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-blue-400" /> : <ChevronDown className="w-4 h-4 text-blue-400" />}
+      </button>
+      {open && (
+        <div className="px-4 pb-4 space-y-2 border-t border-blue-100">
+          <p className="text-[11px] text-blue-600 pt-2">
+            ליד איכותי נחשב — לפי ההגדרות שלך בהגדרות ← קריטריונים ללידים:
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+            {[
+              { label: 'תקציב מינימום', value: businessProfile?.min_budget },
+              { label: 'שירותים רלוונטיים', value: businessProfile?.relevant_services },
+              { label: 'אזור מועדף', value: businessProfile?.preferred_area },
+              { label: 'סימני כוונת קנייה', value: businessProfile?.lead_intent_signals },
+            ].map(item => item.value && (
+              <div key={item.label} className="bg-white rounded-lg p-2.5 border border-blue-100">
+                <p className="text-[9px] font-semibold text-blue-400 mb-0.5">{item.label}</p>
+                <p className="text-[11px] text-foreground line-clamp-2">{item.value}</p>
+              </div>
+            ))}
+          </div>
+          {businessProfile?.lead_quality_notes && (
+            <div className="bg-white rounded-lg p-2.5 border border-blue-100">
+              <p className="text-[9px] font-semibold text-blue-400 mb-0.5">הגדרת ליד איכותי</p>
+              <p className="text-[11px] text-foreground">{businessProfile.lead_quality_notes}</p>
+            </div>
+          )}
+          {!hasCriteria && (
+            <a href="/settings" className="inline-flex items-center gap-1.5 mt-1 text-[11px] font-medium text-blue-600 hover:underline">
+              → עבור להגדרות והגדר קריטריונים
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Leads() {
   const { businessProfile } = useOutletContext();
@@ -72,7 +130,14 @@ export default function Leads() {
       const t2 = setTimeout(() => addLog('מנתח ומדרג לידים...'), 12000);
       const t3 = setTimeout(() => addLog('מסנן כפילויות...'), 20000);
 
-      const res = await base44.functions.invoke('findSocialLeads', { businessProfileId: bpId });
+      const leadCriteria = {
+        min_budget: businessProfile?.min_budget,
+        relevant_services: businessProfile?.relevant_services,
+        preferred_area: businessProfile?.preferred_area,
+        lead_intent_signals: businessProfile?.lead_intent_signals,
+        lead_quality_notes: businessProfile?.lead_quality_notes,
+      };
+      const res = await base44.functions.invoke('findSocialLeads', { businessProfileId: bpId, lead_criteria: leadCriteria });
       clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
 
       const count = res?.data?.leads_created ?? res?.leads_created ?? 0;
@@ -231,6 +296,8 @@ export default function Leads() {
           </div>
         ))}
       </div>
+
+      <LeadQualityGuide businessProfile={businessProfile} />
 
       <AiInsightBox
         title="המלצות לטיפול בלידים — הפעולה הבאה"

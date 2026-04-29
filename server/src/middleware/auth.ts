@@ -2,6 +2,12 @@ import { Request, Response, NextFunction } from 'express';
 
 const clerkKey = process.env.CLERK_SECRET_KEY || '';
 const CLERK_ENABLED = clerkKey && !clerkKey.includes('your_key_here');
+const ADMIN_SECRET = process.env.ADMIN_SECRET || '';
+
+export function isAdminKeyRequest(req: Request): boolean {
+  if (!ADMIN_SECRET) return false;
+  return req.headers['x-admin-key'] === ADMIN_SECRET;
+}
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!CLERK_ENABLED) return next();

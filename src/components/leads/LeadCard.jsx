@@ -122,7 +122,10 @@ export default function LeadCard({ lead, businessProfile, onOpenDetail }) {
   return (
     <div className="bg-white rounded-[10px] border border-[#f0f0f0] hover:border-[#dddddd] transition-colors">
       <div className="p-3 flex items-center gap-3 cursor-pointer" onClick={() => setExpanded(!expanded)}>
-        <div className={`w-[26px] h-[26px] rounded-md flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${scoreStyle(lead.score)}`}>{lead.score}</div>
+        <div
+          className={`w-[26px] h-[26px] rounded-md flex items-center justify-center text-[10px] font-bold flex-shrink-0 cursor-help ${scoreStyle(lead.score)}`}
+          title={lead.score_reasoning ? `ניקוד: ${lead.score}\n${lead.score_reasoning}` : `ניקוד: ${lead.score}`}
+        >{lead.score}</div>
         <div className="flex-1 min-w-0">
           <span className="text-[13px] font-medium text-[#222222] block truncate">{lead.name}</span>
           <span className="text-[11px] text-[#999999] truncate block">{[lead.service_needed, lead.city].filter(Boolean).join(' · ')}</span>
