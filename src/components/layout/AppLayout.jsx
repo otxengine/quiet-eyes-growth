@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 
-const ADMIN_EMAILS = ['contact@otxenginee.io'];
+const ADMIN_EMAILS = ['contact@otxengine.io'];
 const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai'];
 function checkIsAdmin(email) {
   if (!email) return false;

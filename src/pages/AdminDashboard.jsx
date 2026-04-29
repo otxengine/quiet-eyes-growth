@@ -10,7 +10,7 @@ import { COST_PER_SCAN, COST_PER_POST } from '@/lib/planConfig';
 function useIsAdmin() {
   try {
     const email = window.__clerk?.user?.primaryEmailAddress?.emailAddress || '';
-    return email === 'contact@otxenginee.io' || email.endsWith('@otx.ai') || email.endsWith('@quieteyes.ai');
+    return email === 'contact@otxengine.io' || email.endsWith('@otx.ai') || email.endsWith('@quieteyes.ai');
   } catch { return false; }
 }
 

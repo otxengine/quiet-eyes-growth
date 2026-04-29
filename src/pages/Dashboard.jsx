@@ -3,6 +3,8 @@ import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { AlertTriangle } from 'lucide-react';
+import { useScanQuota } from '@/lib/useScanQuota';
+import { PLAN_LABELS } from '@/lib/usePlan';
 
 import OrchestratorPanel from '@/components/OrchestratorPanel';
 import MorningBriefing from '@/components/dashboard/MorningBriefing';
@@ -19,6 +21,7 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const bpId = businessProfile?.id;
   const [showScan, setShowScan] = useState(false);
+  const scanQuota = useScanQuota(bpId);
 
   // Check if agents ran recently
   const { data: recentLogs = [] } = useQuery({
@@ -104,16 +107,39 @@ export default function Dashboard() {
     queryClient.invalidateQueries({ queryKey: ['pendingReviews'] });
   };
 
-  // Expose scan trigger for TopBar
+  // Expose scan trigger for TopBar — blocked if quota exhausted
   React.useEffect(() => {
-    window.__quieteyes_scan = () => setShowScan(true);
+    window.__quieteyes_scan = () => {
+      if (scanQuota.isExhausted) {
+        import('sonner').then(({ toast }) =>
+          toast.error(`הגעת למגבלת הסריקות של תוכנית ${PLAN_LABELS[scanQuota.plan]} (${scanQuota.quota}/חודש). שדרג כדי להמשיך.`, { duration: 5000 })
+        );
+        return;
+      }
+      setShowScan(true);
+    };
     return () => { delete window.__quieteyes_scan; };
-  }, []);
+  }, [scanQuota.isExhausted, scanQuota.plan, scanQuota.quota]);
 
   return (
     <div className="flex flex-col">
       {/* Stale agents warning — hidden per UX spec */}
       {/* {agentsStale && (...)} */}
+
+      {/* Scan quota warning */}
+      {scanQuota.isExhausted && (
+        <div className="mb-3 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-2.5 text-[12px] text-amber-800">
+          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+          <span>מגבלת הסריקות של תוכנית <strong>{PLAN_LABELS[scanQuota.plan]}</strong> הגיעה לקצה ({scanQuota.quota} סריקות/חודש).</span>
+          <a href="/subscription" className="mr-auto font-semibold text-amber-700 underline underline-offset-2">שדרג תוכנית →</a>
+        </div>
+      )}
+      {!scanQuota.isExhausted && scanQuota.quota !== Infinity && scanQuota.pctUsed >= 75 && (
+        <div className="mb-3 px-4 py-2.5 rounded-xl bg-blue-50 border border-blue-200 flex items-center gap-2 text-[11px] text-blue-700">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          <span>השתמשת ב-{scanQuota.scansThisMonth} מתוך {scanQuota.quota} סריקות החודש. נשארו {scanQuota.remaining}.</span>
+        </div>
+      )}
 
       {/* OTX Orchestrator status strip */}
       <OrchestratorPanel />

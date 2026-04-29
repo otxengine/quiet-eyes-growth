@@ -2,7 +2,7 @@ import React from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 
-const ADMIN_EMAILS = ['contact@otxenginee.io'];
+const ADMIN_EMAILS = ['contact@otxengine.io'];
 const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai'];
 
 function checkIsAdmin(email) {

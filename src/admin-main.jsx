@@ -10,7 +10,7 @@ import '@/index.css';
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
-const ADMIN_EMAILS = ['contact@otxenginee.io'];
+const ADMIN_EMAILS = ['contact@otxengine.io'];
 const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai'];
 
 function isAdminEmail(email) {
