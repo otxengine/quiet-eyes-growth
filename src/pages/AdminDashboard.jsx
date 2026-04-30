@@ -184,15 +184,15 @@ export default function AdminDashboard({ skipAdminCheck = false }) {
   // ── Update subscription plan ──────────────────────────────────
   const updatePlan = async (bizId, newPlan) => {
     setSavingPlan(bizId);
-    // Optimistic update — reflect change immediately in UI
     qc.setQueryData(['admin_businesses'], (old = []) =>
-      old.map(b => b.id === bizId ? { ...b, subscription_plan: newPlan } : b)
+      old.map(b => b.id === bizId ? { ...b, subscription_plan: newPlan, plan_id: newPlan } : b)
     );
     try {
-      await base44.entities.BusinessProfile.update(bizId, { subscription_plan: newPlan });
+      // Write to both fields: subscription_plan (new) and plan_id (legacy, read by usePlan)
+      await base44.entities.BusinessProfile.update(bizId, { subscription_plan: newPlan, plan_id: newPlan });
       toast.success(`תוכנית עודכנה ל-${PLAN_LABELS[newPlan]} ✓`);
     } catch (e) {
-      qc.invalidateQueries({ queryKey: ['admin_businesses'] }); // revert on error
+      qc.invalidateQueries({ queryKey: ['admin_businesses'] });
       toast.error('שגיאה בעדכון: ' + e.message);
     }
     setSavingPlan(null);
@@ -342,7 +342,7 @@ export default function AdminDashboard({ skipAdminCheck = false }) {
           {/* Plan stats */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {PLAN_ORDER.map(planId => {
-              const count = allBusinesses.filter(b => (b.subscription_plan || 'free_trial') === planId).length;
+              const count = allBusinesses.filter(b => (b.subscription_plan || b.plan_id || 'free_trial') === planId).length;
               return (
                 <div key={planId} className="card-base p-4 border-t-4" style={{ borderTopColor: PLAN_COLORS[planId] }}>
                   <p className="text-[10px] font-semibold text-foreground-muted mb-1">{PLAN_LABELS[planId]}</p>
@@ -377,7 +377,7 @@ export default function AdminDashboard({ skipAdminCheck = false }) {
               {allBusinesses
                 .filter(b => !subSearch || b.name?.toLowerCase().includes(subSearch.toLowerCase()) || b.city?.includes(subSearch))
                 .map(biz => {
-                  const currentPlan = biz.subscription_plan || 'free_trial';
+                  const currentPlan = biz.subscription_plan || biz.plan_id || 'free_trial';
                   const isSaving    = savingPlan === biz.id;
                   const active      = activeIds.has(biz.id);
                   return (
@@ -444,7 +444,7 @@ export default function AdminDashboard({ skipAdminCheck = false }) {
                     {PLAN_LABELS[planId]}
                   </p>
                   <p className="text-[10px] text-foreground-muted mb-2">
-                    {allBusinesses.filter(b => (b.subscription_plan || 'free_trial') === planId).length} משתמשים פעילים
+                    {allBusinesses.filter(b => (b.subscription_plan || b.plan_id || 'free_trial') === planId).length} משתמשים פעילים
                   </p>
                   <p className="text-[9px] text-foreground-muted leading-relaxed">
                     {PLAN_FEATURES[planId]?.slice(0, 3).join(' · ')}
@@ -724,7 +724,7 @@ export default function AdminDashboard({ skipAdminCheck = false }) {
               </div>
               <div className="divide-y divide-border">
                 {usageRows.map(({ biz, totalRuns, estCost, agentBreak, lastRun, isChurn }) => {
-                  const plan = biz.subscription_plan || 'free_trial';
+                  const plan = biz.subscription_plan || biz.plan_id || 'free_trial';
                   const topAgents = Object.entries(agentBreak)
                     .sort((a, b) => b[1].cost - a[1].cost)
                     .slice(0, 5);

@@ -55,7 +55,7 @@ export function usePlan() {
 
   // Admin override takes priority over Stripe
   const bp = profiles?.find(p => p.onboarding_completed) || profiles?.[0];
-  const adminOverride = bp?.subscription_plan;
+  const adminOverride = bp?.subscription_plan || bp?.plan_id;
   const stripePlan    = subData?.plan;
 
   // Normalize legacy plan IDs
