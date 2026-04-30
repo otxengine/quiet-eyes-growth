@@ -269,6 +269,7 @@ app.listen(PORT, async () => {
     `);
     await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_otx_decisions_biz ON otx_decisions(business_id, created_at DESC)`);
     await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_agent_heartbeat_name ON agent_heartbeat(agent_name, last_ping_utc DESC)`);
+    await db.$executeRawUnsafe(`ALTER TABLE "BusinessProfile" ADD COLUMN IF NOT EXISTS subscription_plan TEXT`);
     console.log('Startup tables ready (agent_heartbeat, agent_data_bus, otx_decisions)');
   } catch (e: any) {
     console.warn('Startup table creation skipped:', e.message);
