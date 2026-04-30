@@ -38,7 +38,8 @@ export function usePlan() {
     queryKey: ['businessProfiles', user?.email],
     queryFn: () => base44.entities.BusinessProfile.filter({ created_by: user?.email }),
     enabled: !!user?.email,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   // Stripe subscription status

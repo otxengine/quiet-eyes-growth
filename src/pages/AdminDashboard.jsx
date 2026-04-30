@@ -189,11 +189,12 @@ export default function AdminDashboard({ skipAdminCheck = false }) {
     );
     try {
       // Write to both fields: subscription_plan (new) and plan_id (legacy, read by usePlan)
-      await base44.entities.BusinessProfile.update(bizId, { subscription_plan: newPlan, plan_id: newPlan });
-      toast.success(`תוכנית עודכנה ל-${PLAN_LABELS[newPlan]} ✓`);
+      const updated = await base44.entities.BusinessProfile.update(bizId, { subscription_plan: newPlan, plan_id: newPlan });
+      console.log('[admin] plan updated:', updated?.id, updated?.subscription_plan, updated?.plan_id);
+      toast.success(`תוכנית עודכנה ל-${PLAN_LABELS[newPlan]} — המשתמש יראה שינוי בפעם הבאה שיטעון ✓`);
     } catch (e) {
       qc.invalidateQueries({ queryKey: ['admin_businesses'] });
-      toast.error('שגיאה בעדכון: ' + e.message);
+      toast.error('שגיאה בעדכון: ' + (e.message || JSON.stringify(e)));
     }
     setSavingPlan(null);
   };
