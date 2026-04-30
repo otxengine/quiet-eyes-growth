@@ -270,6 +270,13 @@ app.listen(PORT, async () => {
     await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_otx_decisions_biz ON otx_decisions(business_id, created_at DESC)`);
     await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_agent_heartbeat_name ON agent_heartbeat(agent_name, last_ping_utc DESC)`);
     await db.$executeRawUnsafe(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS subscription_plan TEXT`);
+    // Fix: otx_recommendations missing trace_id column (added after initial table creation)
+    await db.$executeRawUnsafe(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS trace_id TEXT`);
+    // Fix: otx_pipeline_runs created with run_id PK but code inserts into column named id
+    await db.$executeRawUnsafe(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS id TEXT`);
+    await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS idx_otx_runs_id ON otx_pipeline_runs(id) WHERE id IS NOT NULL`);
+    // Fix: otx_policy_weights id column has no default — auto-generate from md5(random())
+    await db.$executeRawUnsafe(`ALTER TABLE otx_policy_weights ALTER COLUMN id SET DEFAULT md5(random()::text)`);
     console.log('Startup tables ready (agent_heartbeat, agent_data_bus, otx_decisions)');
   } catch (e: any) {
     console.warn('Startup table creation skipped:', e.message);

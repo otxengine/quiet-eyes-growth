@@ -230,7 +230,7 @@ export default function Subscription() {
     }
   }, []);
 
-  const rawPlan = subData?.plan || 'free_trial';
+  const rawPlan = subData?.plan || businessProfile?.subscription_plan || businessProfile?.plan_id || 'free_trial';
   const currentPlan = PLAN_ID_MAP[rawPlan] || 'free_trial';
   const currentPlanData = PLANS.find(p => p.id === currentPlan);
 
