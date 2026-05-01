@@ -226,139 +226,122 @@ app.get('/api/debug/:bpId', async (req, res) => {
 
 app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
-  // Create raw SQL tables that are referenced by agents but not in Prisma schema
-  try {
-    const { prisma: db } = await import('./db');
-    await db.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS agent_heartbeat (
-        id              SERIAL PRIMARY KEY,
-        agent_name      TEXT NOT NULL,
-        last_ping_utc   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        last_ingestion_utc TIMESTAMPTZ,
-        status          TEXT NOT NULL DEFAULT 'ok',
-        error_message   TEXT
-      )
-    `);
-    await db.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS agent_data_bus (
-        id           SERIAL PRIMARY KEY,
-        event_type   TEXT NOT NULL,
-        source_agent TEXT NOT NULL,
-        payload      JSONB,
-        status       TEXT NOT NULL DEFAULT 'pending',
-        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
-    await db.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS otx_decisions (
-        id                     TEXT PRIMARY KEY,
-        business_id            TEXT NOT NULL,
-        decision_type          TEXT NOT NULL,
-        title                  TEXT NOT NULL,
-        reasoning              TEXT,
-        confidence_score       NUMERIC(5,3),
-        business_fit_score     NUMERIC(5,3),
-        timing_fit_score       NUMERIC(5,3),
-        historical_success_score NUMERIC(5,3),
-        roi_score              NUMERIC(5,3),
-        status                 TEXT NOT NULL DEFAULT 'pending',
-        insight_id             TEXT,
-        trace_id               TEXT,
-        created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
-    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_otx_decisions_biz ON otx_decisions(business_id, created_at DESC)`);
-    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_agent_heartbeat_name ON agent_heartbeat(agent_name, last_ping_utc DESC)`);
-    await db.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS otx_competitor_snapshots (
-        id            TEXT PRIMARY KEY DEFAULT md5(random()::text),
-        competitor_id TEXT NOT NULL,
-        business_id   TEXT NOT NULL,
-        snapshot_json JSONB NOT NULL,
-        taken_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
-    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_comp_snapshots ON otx_competitor_snapshots(competitor_id, taken_at DESC)`);
-    await db.$executeRawUnsafe(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS subscription_plan TEXT`);
-    await db.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS media_assets (
-        id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-        created_date    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        linked_business TEXT,
-        image_base64    TEXT,
-        mime_type       TEXT DEFAULT 'image/jpeg',
-        source          TEXT DEFAULT 'uploaded',
-        description     TEXT,
-        used_in         TEXT
-      )
-    `);
-    await db.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS organic_posts (
-        id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-        created_date    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        linked_business TEXT,
-        signal_id       TEXT,
-        signal_summary  TEXT,
-        platform        TEXT,
-        post_type       TEXT NOT NULL DEFAULT 'post',
-        content         TEXT,
-        media_asset_id  TEXT,
-        image_url       TEXT,
-        status          TEXT NOT NULL DEFAULT 'draft',
-        published_at    TIMESTAMPTZ,
-        engagement_likes    INT DEFAULT 0,
-        engagement_comments INT DEFAULT 0,
-        reach               INT DEFAULT 0
-      )
-    `);
-    await db.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS campaigns (
-        id               TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-        created_date     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        linked_business  TEXT,
-        signal_id        TEXT,
-        signal_summary   TEXT,
-        title            TEXT NOT NULL DEFAULT '',
-        platform         TEXT,
-        objective        TEXT,
-        post_content     TEXT,
-        image_url        TEXT,
-        audience_json    TEXT,
-        daily_budget_ils NUMERIC,
-        campaign_days    INT,
-        total_budget_ils NUMERIC,
-        est_reach_low    INT,
-        est_reach_high   INT,
-        est_leads_low    INT,
-        est_leads_high   INT,
-        status           TEXT NOT NULL DEFAULT 'draft',
-        published_at     TIMESTAMPTZ,
-        actual_reach     INT,
-        actual_clicks    INT,
-        actual_leads     INT,
-        actual_spend_ils NUMERIC
-      )
-    `);
-    await db.$executeRawUnsafe(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS search_radius_km INT DEFAULT 15`);
-    await db.$executeRawUnsafe(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS additional_cities TEXT`);
-    await db.$executeRawUnsafe(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS branches TEXT`);
-    // Fix: otx_recommendations missing trace_id column (added after initial table creation)
-    await db.$executeRawUnsafe(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS trace_id TEXT`);
-    // Fix: otx_pipeline_runs created with run_id PK but code inserts into column named id
-    await db.$executeRawUnsafe(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS id TEXT`);
-    await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS idx_otx_runs_id ON otx_pipeline_runs(id) WHERE id IS NOT NULL`);
-    // Fix: otx_policy_weights id column has no default — auto-generate from md5(random())
-    await db.$executeRawUnsafe(`ALTER TABLE otx_policy_weights ALTER COLUMN id SET DEFAULT md5(random()::text)`);
-    // Fix: otx_policy_weights weight/success_rate can arrive as null from PolicyWeightUpdater
-    await db.$executeRawUnsafe(`ALTER TABLE otx_policy_weights ALTER COLUMN weight DROP NOT NULL`);
-    await db.$executeRawUnsafe(`ALTER TABLE otx_policy_weights ALTER COLUMN weight SET DEFAULT 0.5`);
-    await db.$executeRawUnsafe(`ALTER TABLE otx_policy_weights ALTER COLUMN success_rate DROP NOT NULL`);
-    await db.$executeRawUnsafe(`ALTER TABLE otx_policy_weights ALTER COLUMN success_rate SET DEFAULT 0.5`);
-    // Fix: otx_pipeline_runs missing summary column (INSERT uses it but original CREATE TABLE did not include it)
-    await db.$executeRawUnsafe(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS summary JSONB`);
-    console.log('Startup tables ready (agent_heartbeat, agent_data_bus, otx_decisions)');
-  } catch (e: any) {
-    console.warn('Startup table creation skipped:', e.message);
+  const { prisma: db } = await import('./db');
+
+  // Each statement is isolated — one failure does NOT prevent the rest
+  async function sql(query: string) {
+    try { await db.$executeRawUnsafe(query); } catch (e: any) { console.warn('startup SQL skipped:', e.message.split('\n')[0]); }
   }
+
+  await sql(`CREATE TABLE IF NOT EXISTS agent_heartbeat (
+    id              SERIAL PRIMARY KEY,
+    agent_name      TEXT NOT NULL,
+    last_ping_utc   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_ingestion_utc TIMESTAMPTZ,
+    status          TEXT NOT NULL DEFAULT 'ok',
+    error_message   TEXT
+  )`);
+  await sql(`CREATE TABLE IF NOT EXISTS agent_data_bus (
+    id           SERIAL PRIMARY KEY,
+    event_type   TEXT NOT NULL,
+    source_agent TEXT NOT NULL,
+    payload      JSONB,
+    status       TEXT NOT NULL DEFAULT 'pending',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await sql(`CREATE TABLE IF NOT EXISTS otx_decisions (
+    id                       TEXT PRIMARY KEY,
+    business_id              TEXT NOT NULL,
+    decision_type            TEXT NOT NULL,
+    title                    TEXT NOT NULL,
+    reasoning                TEXT,
+    confidence_score         NUMERIC(5,3),
+    business_fit_score       NUMERIC(5,3),
+    timing_fit_score         NUMERIC(5,3),
+    historical_success_score NUMERIC(5,3),
+    roi_score                NUMERIC(5,3),
+    status                   TEXT NOT NULL DEFAULT 'pending',
+    insight_id               TEXT,
+    trace_id                 TEXT,
+    created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_otx_decisions_biz ON otx_decisions(business_id, created_at DESC)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_agent_heartbeat_name ON agent_heartbeat(agent_name, last_ping_utc DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS otx_competitor_snapshots (
+    id            TEXT PRIMARY KEY DEFAULT md5(random()::text),
+    competitor_id TEXT NOT NULL,
+    business_id   TEXT NOT NULL,
+    snapshot_json JSONB NOT NULL,
+    taken_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_comp_snapshots ON otx_competitor_snapshots(competitor_id, taken_at DESC)`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS subscription_plan TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS search_radius_km INT DEFAULT 15`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS additional_cities TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS branches TEXT`);
+  await sql(`CREATE TABLE IF NOT EXISTS media_assets (
+    id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    created_date    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    linked_business TEXT,
+    image_base64    TEXT,
+    mime_type       TEXT DEFAULT 'image/jpeg',
+    source          TEXT DEFAULT 'uploaded',
+    description     TEXT,
+    used_in         TEXT
+  )`);
+  await sql(`CREATE TABLE IF NOT EXISTS organic_posts (
+    id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    created_date    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    linked_business TEXT,
+    signal_id       TEXT,
+    signal_summary  TEXT,
+    platform        TEXT,
+    post_type       TEXT NOT NULL DEFAULT 'post',
+    content         TEXT,
+    media_asset_id  TEXT,
+    image_url       TEXT,
+    status          TEXT NOT NULL DEFAULT 'draft',
+    published_at    TIMESTAMPTZ,
+    engagement_likes    INT DEFAULT 0,
+    engagement_comments INT DEFAULT 0,
+    reach               INT DEFAULT 0
+  )`);
+  await sql(`CREATE TABLE IF NOT EXISTS campaigns (
+    id               TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    created_date     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    linked_business  TEXT,
+    signal_id        TEXT,
+    signal_summary   TEXT,
+    title            TEXT NOT NULL DEFAULT '',
+    platform         TEXT,
+    objective        TEXT,
+    post_content     TEXT,
+    image_url        TEXT,
+    audience_json    TEXT,
+    daily_budget_ils NUMERIC,
+    campaign_days    INT,
+    total_budget_ils NUMERIC,
+    est_reach_low    INT,
+    est_reach_high   INT,
+    est_leads_low    INT,
+    est_leads_high   INT,
+    status           TEXT NOT NULL DEFAULT 'draft',
+    published_at     TIMESTAMPTZ,
+    actual_reach     INT,
+    actual_clicks    INT,
+    actual_leads     INT,
+    actual_spend_ils NUMERIC
+  )`);
+  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS trace_id TEXT`);
+  await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS id TEXT`);
+  await sql(`CREATE UNIQUE INDEX IF NOT EXISTS idx_otx_runs_id ON otx_pipeline_runs(id) WHERE id IS NOT NULL`);
+  await sql(`ALTER TABLE otx_policy_weights ALTER COLUMN id SET DEFAULT md5(random()::text)`);
+  await sql(`ALTER TABLE otx_policy_weights ALTER COLUMN weight DROP NOT NULL`);
+  await sql(`ALTER TABLE otx_policy_weights ALTER COLUMN weight SET DEFAULT 0.5`);
+  await sql(`ALTER TABLE otx_policy_weights ALTER COLUMN success_rate DROP NOT NULL`);
+  await sql(`ALTER TABLE otx_policy_weights ALTER COLUMN success_rate SET DEFAULT 0.5`);
+  await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS summary JSONB`);
+  console.log('Startup SQL complete');
+
   startScheduler();
 });

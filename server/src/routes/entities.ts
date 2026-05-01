@@ -147,8 +147,9 @@ router.post('/:entity', async (req: Request, res: Response) => {
 
 // PATCH /api/entities/:entity/:id — update
 router.patch('/:entity/:id', async (req: Request, res: Response) => {
-  const model = getModel(String(req.params.entity));
-  if (!model) return res.status(404).json({ error: `Unknown entity: ${req.params.entity}` });
+  const entity = String(req.params.entity);
+  const model = getModel(entity);
+  if (!model) return res.status(404).json({ error: `Unknown entity: ${entity}` });
 
   try {
     const where: any = { id: req.params.id };
@@ -156,10 +157,39 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
       const userId = getUserId(req);
       if (userId) where.created_by = userId;
     }
-    const record = await model.update({ where, data: req.body });
+
+    let data = { ...req.body };
+    let record: any;
+
+    try {
+      record = await model.update({ where, data });
+    } catch (prismaErr: any) {
+      // Prisma rejects fields added via raw ALTER TABLE that aren't in schema.prisma yet.
+      // Fall back to raw SQL SET for those fields so settings always save.
+      if (prismaErr.message?.includes('Unknown field') || prismaErr.message?.includes('Unknown argument')) {
+        const tableMap: Record<string, string> = {
+          BusinessProfile: 'business_profiles',
+        };
+        const table = tableMap[entity];
+        if (!table) throw prismaErr;
+
+        const setClauses = Object.entries(data)
+          .map(([k], i) => `"${k}" = $${i + 2}`)
+          .join(', ');
+        const values = [req.params.id, ...Object.values(data)];
+        await prisma.$executeRawUnsafe(
+          `UPDATE "${table}" SET ${setClauses} WHERE id = $1`,
+          ...values
+        );
+        record = await model.findUnique({ where: { id: req.params.id } });
+      } else {
+        throw prismaErr;
+      }
+    }
+
     res.json(record);
   } catch (err: any) {
-    console.error(`PATCH /entities/${req.params.entity}/${req.params.id}:`, err.message);
+    console.error(`PATCH /entities/${entity}/${req.params.id}:`, err.message);
     res.status(500).json({ error: err.message });
   }
 });
