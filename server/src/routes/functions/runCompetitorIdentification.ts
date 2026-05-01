@@ -304,7 +304,7 @@ ${contextBlock}
       competitors_found: competitors.length,
       new_competitors_created: created,
       existing_competitors_updated: updated,
-      out_of_scope_removed: toDelete.length,
+      out_of_scope_removed: idsToDelete.length,
       business_type: businessType,
       areas_scanned: allAreas,
     });
