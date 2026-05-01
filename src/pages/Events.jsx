@@ -15,6 +15,7 @@ const EVENT_TABS = [
   { key: 'sports',     label: 'ספורט' },
   { key: 'seasonal',   label: 'עונתי' },
   { key: 'commercial', label: 'מסחרי' },
+  { key: 'local',      label: 'אירועים מקומיים' },
 ];
 
 const HOLIDAY_KEYWORDS  = ['פסח', 'ראש השנה', 'סוכות', 'חנוכה', 'פורים', 'שבועות', 'יום כיפור', 'עצמאות', 'ירושלים', 'לג בעומר', 'ט"ו באב', 'שמחת תורה', 'holiday', 'jewish', 'yom_kippur', 'rosh_hashana'];
@@ -450,7 +451,13 @@ export default function Events() {
     enabled: !!bpId,
   });
 
-  const isLoading = loadingAlerts || loadingSignals;
+  const { data: localEventSignals = [], isLoading: loadingLocal } = useQuery({
+    queryKey: ['localEventSignals', bpId],
+    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'local_event' }, '-detected_at', 30),
+    enabled: !!bpId,
+  });
+
+  const isLoading = loadingAlerts || loadingSignals || loadingLocal;
 
   function extractEventDate(item) {
     // Static events have a structured event_date field — use it directly
@@ -471,6 +478,7 @@ export default function Events() {
   const dbItems = [
     ...eventAlerts.map(a => ({ ...a, _type: 'alert' })),
     ...eventSignals.map(s => ({ ...s, _type: 'signal' })),
+    ...localEventSignals.map(s => ({ ...s, _type: 'signal', _isLocal: true })),
   ].filter(item => {
     // Filter out DB items that are clearly stale (creation date >24h ago and no parseable date)
     const created = new Date(item.created_date || item.detected_at || 0).getTime();
@@ -482,11 +490,19 @@ export default function Events() {
     return true;
   });
 
-  const dbTitlesLower = new Set(dbItems.map(i => (i._type === 'alert' ? i.title : i.agent_name || '').toLowerCase()));
+  // Build a set of words from DB items to detect duplicates against static events
+  const dbTextLower = dbItems
+    .map(i => i._type === 'alert' ? (i.title || '') : ((i.agent_name || '') + ' ' + (i.summary || '')))
+    .join(' ')
+    .toLowerCase();
 
   const staticFiltered = STATIC_EVENTS.filter(e => {
-    const isPast = new Date(e.event_date).getTime() < Date.now() - 86400000; // skip if more than 1 day past
-    const isDup = dbTitlesLower.has(e.title.toLowerCase());
+    const isPast = new Date(e.event_date).getTime() < Date.now() - 86400000;
+    // Prefer static event over DB duplicate: if any keyword from this event's title
+    // appears in DB results, keep static (which has correct date) and skip the check.
+    // Only deduplicate if the FULL title matches a DB item title exactly.
+    const dbTitlesExact = new Set(dbItems.map(i => (i._type === 'alert' ? i.title : i.agent_name || '').toLowerCase()));
+    const isDup = dbTitlesExact.has(e.title.toLowerCase());
     return !isPast && !isDup;
   });
 
@@ -504,7 +520,10 @@ export default function Events() {
     return map;
   }, [allItems]);
 
-  const getCategory = (item) => categoryMap.get(item.id) || 'other';
+  const getCategory = (item) => {
+    if (item._isLocal) return 'local';
+    return categoryMap.get(item.id) || 'other';
+  };
 
   const filtered = activeTab === 'all'
     ? allItems
@@ -516,17 +535,24 @@ export default function Events() {
     sports:     allItems.filter(i => getCategory(i) === 'sports').length,
     seasonal:   allItems.filter(i => getCategory(i) === 'seasonal').length,
     commercial: allItems.filter(i => getCategory(i) === 'commercial').length,
+    local:      allItems.filter(i => getCategory(i) === 'local').length,
   };
 
   const handleScan = async () => {
     setScanning(true);
     toast.info('סורק אירועים קרובים...');
     try {
-      const res = await base44.functions.invoke('detectEvents', { businessProfileId: bpId });
-      const found = res?.data?.signals_created ?? 0;
+      const [evRes, localRes] = await Promise.allSettled([
+        base44.functions.invoke('detectEvents', { businessProfileId: bpId }),
+        base44.functions.invoke('findLocalEvents', { businessProfileId: bpId }),
+      ]);
+      const evFound = evRes.status === 'fulfilled' ? (evRes.value?.data?.signals_created ?? 0) : 0;
+      const localFound = localRes.status === 'fulfilled' ? (localRes.value?.data?.signals_created ?? 0) : 0;
       queryClient.invalidateQueries({ queryKey: ['eventAlerts', bpId] });
       queryClient.invalidateQueries({ queryKey: ['eventSignals', bpId] });
-      toast.success(found > 0 ? `נמצאו ${found} אירועים רלוונטיים ✓` : 'הסריקה הושלמה — בדוק שוב בעוד מספר שניות');
+      queryClient.invalidateQueries({ queryKey: ['localEventSignals', bpId] });
+      const total = evFound + localFound;
+      toast.success(total > 0 ? `נמצאו ${total} אירועים רלוונטיים ✓` : 'הסריקה הושלמה — בדוק שוב בעוד מספר שניות');
     } catch {
       toast.error('שגיאה בסריקת אירועים');
     }

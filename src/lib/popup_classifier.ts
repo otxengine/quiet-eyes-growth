@@ -24,7 +24,7 @@ export function isOrganicContent(type: PopupType): boolean {
 
 /** Returns true for signal types that should navigate to /marketing/create (paid campaign) */
 export function isPaidCampaign(type: PopupType): boolean {
-  return type === 'campaign' || type === 'pricing_action' || type === 'delivery_promo';
+  return type === 'campaign' || type === 'pricing_action';
 }
 
 export function classifyInsight(insight: {
@@ -99,7 +99,7 @@ export function popupTypeToActionType(t: PopupType): string {
     case 'campaign':       return 'promote';
     case 'whatsapp_blast': return 'social_post';
     case 'pricing_action': return 'promote';
-    case 'delivery_promo': return 'promote';
+    case 'delivery_promo': return 'platform_setup';
     case 'internal_task':  return 'task';
     case 'platform_setup': return 'platform_setup';
   }
@@ -177,7 +177,7 @@ export function getPlatformSetupConfig(text: string, label: string): {
   if (/wolt|וולט/.test(t)) {
     return {
       platform: 'Wolt Partners',
-      icon: '🚀',
+      icon: '🛵',
       url: 'https://explore.wolt.com/partners',
       steps: [
         'היכנס ל-Wolt Partners Portal',
@@ -186,6 +186,21 @@ export function getPlatformSetupConfig(text: string, label: string): {
         'העלה תפריט ותמונות',
         'חתום על הסכם שותפות',
         'הפעלה תוך 7-14 ימי עסקים ✓',
+      ],
+    };
+  }
+  if (/10bis|תן.?ביס/.test(t)) {
+    return {
+      platform: '10BIS',
+      icon: '🍽️',
+      url: 'https://www.10bis.co.il/next/restaurantRegister',
+      steps: [
+        'היכנס לאזור ההצטרפות של תן ביס',
+        'מלא פרטי עסק ותפריט',
+        'העלה תמונות ותיאורים',
+        'הגדר שעות משלוח ואזור',
+        'אמת את פרטי הבנק לתשלום',
+        'הפעלה תוך 5-10 ימי עסקים ✓',
       ],
     };
   }

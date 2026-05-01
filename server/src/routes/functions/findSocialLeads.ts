@@ -63,14 +63,18 @@ export async function findSocialLeads(req: Request, res: Response) {
       return res.json({ leads_created: 0, note: 'Tavily rate limit reached — upgrade plan' });
     }
 
-    // 6 queries — 2 extra using lead criteria context
+    const svc = relevantServices || category;
+    const area = preferredArea || city;
+    // Facebook groups + forums first (highest lead quality), then general web
     const queries = [
+      `site:facebook.com/groups "מחפש ${category}" OR "צריך ${category}" ${city}`,
+      `site:facebook.com "מחפש ${svc}" ${area}`,
+      `site:tapuz.co.il "מחפש ${category}" ${city}`,
+      `site:zap.co.il "מחפש ${svc}"`,
       `${category} ${city} מחפש המלצה`,
       `"צריך ${category}" OR "מחפש ${category}" ${city}`,
       `${category} ${city} recommendation looking for`,
-      `${category} near ${city} need help hire`,
-      `"${relevantServices || category}" ${preferredArea} מחפש`,
-      `"${relevantServices || category}" ${preferredArea} recommendation`,
+      `"${svc}" ${area} מחפש`,
     ];
 
     let leadsCreated = 0;
@@ -103,13 +107,21 @@ export async function findSocialLeads(req: Request, res: Response) {
           prompt: `You are a lead qualification expert for the Israeli business "${name}" (${category}, ${city}).
 ${leadCriteriaContext ? `Business wants leads matching: ${leadCriteriaContext}.` : ''}
 
-For each item determine if it represents a REAL PERSON actively looking to hire/buy a service (not a business, directory, article, ad, or review).
+For each item determine if it represents a REAL PERSON actively looking to hire/buy a service.
+
+STRICT RULES — set is_lead=false if ANY of these apply:
+- Business directory, contractor listing, or service provider page
+- News article, blog post, or general recommendation article
+- Business review page (e.g., Google Maps, Yelp, Tripadvisor listing)
+- Advertisement or sponsored content
+- No specific named or identifiable person expressing a current need
+- The text is about a business offering services (not a person seeking them)
+
+is_lead=true ONLY when: a real person (in a Facebook group, forum, WhatsApp group, or community post) is ACTIVELY asking for or searching for this specific service RIGHT NOW.
 
 ${itemsStr}
 
-Return JSON only: {"results":[{"is_lead":true,"service_needed":"","urgency":"","budget_mentioned":"","person_name":"","platform":"facebook|instagram|forum|web","score_reasoning":"one sentence why this is/isn't a good lead"},...]}, same length and order.
-
-Set is_lead=false if: business directory, contractor site, news/blog, business review, advertisement, no specific person expressing a need.`,
+Return JSON only: {"results":[{"is_lead":true,"service_needed":"","urgency":"low|this_week|soon|immediate","budget_mentioned":"","person_name":"","platform":"facebook_group|facebook|instagram|forum|tapuz|zap|web","source_type":"facebook_group|forum|social_post|web","score_reasoning":"one sentence"},...]}, same length and order.`,
           response_json_schema: { type: 'object' },
           model: 'haiku',
           maxTokens: 1200,
@@ -157,7 +169,9 @@ JSON בלבד: {"messages":["הודעה0","הודעה1",...]}, אותו אורך
       else if (extracted.urgency === 'soon' || extracted.urgency === 'this_week') score += 12;
       if (extracted.budget_mentioned) score += 15;
       if (extracted.person_name) score += 5;
-      if (url.includes('facebook.com')) score += 5;
+      if (extracted.source_type === 'facebook_group') score += 15;
+      else if (extracted.source_type === 'forum') score += 10;
+      else if (url.includes('facebook.com')) score += 5;
       if (text.includes('בדחיפות') || text.includes('מיד')) score += 10;
       const intentMatches = countIntent(text);
       if (intentMatches >= 2) score += 8;
@@ -175,10 +189,10 @@ JSON בלבד: {"messages":["הודעה0","הודעה1",...]}, אותו אורך
         await prisma.lead.create({
           data: {
             name: extracted.person_name || 'ליד מסושיאל',
-            source: extracted.platform || 'social_search',
+            source: extracted.source_type || extracted.platform || 'social_search',
             source_url: url || null,
             source_origin: 'tavily',
-            discovery_method: 'social_search',
+            discovery_method: extracted.source_type === 'facebook_group' ? 'facebook_group' : extracted.source_type === 'forum' ? 'forum' : 'social_search',
             service_needed: extracted.service_needed || category,
             urgency: extracted.urgency || 'this_week',
             budget_range: extracted.budget_mentioned || null,

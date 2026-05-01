@@ -1,8 +1,157 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Save, Loader2, Zap } from 'lucide-react';
+import { Save, Loader2, Zap, MapPin, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
+
+const RADIUS_OPTIONS = [5, 10, 15, 20, 30, 50];
+
+function SettingsSearchRadius({ businessProfile, onSave }) {
+  const [radius, setRadius] = useState(businessProfile?.search_radius_km || 15);
+  const [cities, setCities] = useState(businessProfile?.additional_cities || '');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setRadius(businessProfile?.search_radius_km || 15);
+    setCities(businessProfile?.additional_cities || '');
+  }, [businessProfile?.search_radius_km, businessProfile?.additional_cities]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onSave({ search_radius_km: radius, additional_cities: cities });
+      toast.success('טווח חיפוש עודכן ✓');
+    } catch { toast.error('שגיאה בשמירה'); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="card-base p-5">
+      <div className="flex items-center gap-2 mb-1">
+        <MapPin className="w-4 h-4 text-primary" />
+        <h2 className="text-[14px] font-semibold text-foreground">טווח חיפוש</h2>
+      </div>
+      <p className="text-[11px] text-foreground-muted mb-4">קבע עד כמה רחוק הסוכנים יחפשו לידים, מתחרים וסיגנלים</p>
+
+      {/* Radius pills */}
+      <div className="mb-4">
+        <p className="text-[11px] font-medium text-foreground mb-2">רדיוס חיפוש: <span className="text-primary font-bold">{radius} ק"מ</span></p>
+        <div className="flex gap-2 flex-wrap">
+          {RADIUS_OPTIONS.map(r => (
+            <button key={r} onClick={() => setRadius(r)}
+              className={`px-3 py-1 rounded-full text-[11px] font-medium border transition-all ${radius === r ? 'bg-primary text-primary-foreground border-primary' : 'bg-secondary text-foreground-muted border-border hover:border-foreground-muted'}`}>
+              {r} ק"מ
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Additional city */}
+      <div className="mb-4">
+        <label className="text-[11px] font-medium text-foreground block mb-1">עיר נוספת לסריקה (אופציונלי)</label>
+        <input value={cities} onChange={e => setCities(e.target.value)}
+          placeholder="לדוגמה: תל אביב, רמת גן"
+          className="w-full border border-border rounded-lg px-3 py-2 text-[12px] bg-secondary focus:outline-none focus:ring-1 focus:ring-primary" />
+        <p className="text-[10px] text-foreground-muted mt-1">הפרד ערים בפסיק</p>
+      </div>
+
+      <button onClick={handleSave} disabled={saving}
+        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-[11px] font-medium hover:opacity-90 transition-all disabled:opacity-60">
+        {saving && <Loader2 className="w-3 h-3 animate-spin" />}
+        {saving ? 'שומר...' : 'שמור הגדרות טווח'}
+      </button>
+    </div>
+  );
+}
+
+function SettingsBranches({ businessProfile, onSave }) {
+  const parseBranches = () => {
+    try { return JSON.parse(businessProfile?.branches || '[]'); } catch { return []; }
+  };
+  const [branches, setBranches] = useState(parseBranches);
+  const [adding, setAdding] = useState(false);
+  const [newBranch, setNewBranch] = useState({ name: '', address: '', city: '' });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setBranches(parseBranches()); }, [businessProfile?.branches]);
+
+  const handleAdd = () => {
+    if (!newBranch.name.trim()) return;
+    const updated = [...branches, { ...newBranch, id: Date.now() }];
+    setBranches(updated);
+    setNewBranch({ name: '', address: '', city: '' });
+    setAdding(false);
+  };
+
+  const handleRemove = (id) => setBranches(branches.filter(b => b.id !== id));
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onSave({ branches: JSON.stringify(branches) });
+      toast.success('סניפים עודכנו ✓');
+    } catch { toast.error('שגיאה בשמירה'); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="card-base p-5">
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2">
+          <MapPin className="w-4 h-4 text-primary" />
+          <h2 className="text-[14px] font-semibold text-foreground">סניפים</h2>
+        </div>
+        <button onClick={() => setAdding(v => !v)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary border border-border text-[11px] font-medium text-foreground-muted hover:text-foreground transition-colors">
+          <Plus className="w-3.5 h-3.5" /> הוסף סניף
+        </button>
+      </div>
+      <p className="text-[11px] text-foreground-muted mb-4">הגדר סניפים נוספים — הסוכנים יסרקו גם עבורם</p>
+
+      {branches.length > 0 && (
+        <div className="space-y-2 mb-3">
+          {branches.map(b => (
+            <div key={b.id} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg bg-secondary border border-border">
+              <div>
+                <p className="text-[12px] font-medium text-foreground">{b.name}</p>
+                {(b.address || b.city) && <p className="text-[10px] text-foreground-muted">{[b.address, b.city].filter(Boolean).join(', ')}</p>}
+              </div>
+              <button onClick={() => handleRemove(b.id)} className="text-foreground-muted hover:text-danger transition-colors">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {adding && (
+        <div className="bg-secondary/50 border border-border rounded-lg p-3 mb-3 space-y-2">
+          <input value={newBranch.name} onChange={e => setNewBranch(b => ({ ...b, name: e.target.value }))}
+            placeholder="שם הסניף"
+            className="w-full border border-border rounded-lg px-3 py-2 text-[12px] bg-white focus:outline-none focus:ring-1 focus:ring-primary" />
+          <input value={newBranch.address} onChange={e => setNewBranch(b => ({ ...b, address: e.target.value }))}
+            placeholder="כתובת"
+            className="w-full border border-border rounded-lg px-3 py-2 text-[12px] bg-white focus:outline-none focus:ring-1 focus:ring-primary" />
+          <input value={newBranch.city} onChange={e => setNewBranch(b => ({ ...b, city: e.target.value }))}
+            placeholder="עיר"
+            className="w-full border border-border rounded-lg px-3 py-2 text-[12px] bg-white focus:outline-none focus:ring-1 focus:ring-primary" />
+          <div className="flex gap-2">
+            <button onClick={handleAdd} className="px-3 py-1.5 bg-primary text-white rounded-lg text-[11px] font-medium hover:opacity-90 transition-all">הוסף</button>
+            <button onClick={() => setAdding(false)} className="px-3 py-1.5 bg-secondary border border-border rounded-lg text-[11px] font-medium text-foreground-muted hover:text-foreground transition-colors">בטל</button>
+          </div>
+        </div>
+      )}
+
+      {branches.length > 0 && (
+        <button onClick={handleSave} disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-[11px] font-medium hover:opacity-90 transition-all disabled:opacity-60">
+          {saving && <Loader2 className="w-3 h-3 animate-spin" />}
+          {saving ? 'שומר...' : 'שמור סניפים'}
+        </button>
+      )}
+    </div>
+  );
+}
 
 const AUTONOMY_OPTIONS = [
   {
@@ -263,6 +412,12 @@ export default function SettingsPage() {
 
       {/* Autonomy Level */}
       <AutonomySelector businessProfile={businessProfile} onSave={saveField} />
+
+      {/* Search Radius */}
+      <SettingsSearchRadius businessProfile={businessProfile} onSave={saveField} />
+
+      {/* Branches */}
+      <SettingsBranches businessProfile={businessProfile} onSave={saveField} />
 
       <SettingsAlerts form={form} onToggle={(key, val) => saveField({ [key]: val })} />
     </div>

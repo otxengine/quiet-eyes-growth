@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -6,8 +6,22 @@ import { parseLLMJson } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
   FileBarChart, Loader2, TrendingUp, TrendingDown, Minus,
-  Star, Zap, AlertTriangle, CheckCircle, Target, Users, Printer,
+  Star, Zap, AlertTriangle, CheckCircle, Target, Users, Printer, Download, Calendar,
 } from 'lucide-react';
+
+function exportCSV(filename, rows, headers) {
+  const escape = v => {
+    if (v == null) return '';
+    const s = String(v).replace(/"/g, '""');
+    return /[",\n]/.test(s) ? `"${s}"` : s;
+  };
+  const lines = [headers.join(','), ...rows.map(r => r.map(escape).join(','))];
+  const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
 
 import MonthCompareCards from '@/components/reports/MonthCompareCards';
 import MonthlyGrowthChart from '@/components/reports/MonthlyGrowthChart';
@@ -16,10 +30,11 @@ import SentimentBreakdown from '@/components/reports/SentimentBreakdown';
 import SignalCategoryChart from '@/components/reports/SignalCategoryChart';
 
 const TABS = [
-  { id: 'weekly',      label: 'דוח שבועי',   icon: '📅' },
-  { id: 'competitors', label: 'מתחרים',       icon: '⚔️' },
-  { id: 'leads',       label: 'לידים',        icon: '🎯' },
-  { id: 'full',        label: 'דוח מלא',      icon: '⭐' },
+  { id: 'weekly',      label: 'שבועי',    icon: '📅' },
+  { id: 'monthly',     label: 'חודשי',    icon: '📆' },
+  { id: 'competitors', label: 'מתחרים',   icon: '⚔️' },
+  { id: 'leads',       label: 'לידים',    icon: '🎯' },
+  { id: 'full',        label: 'דוח מלא',  icon: '⭐' },
 ];
 
 const TREND_ICON = {
@@ -60,25 +75,86 @@ export default function Reports() {
   const [weeklyLoading, setWeeklyLoading] = useState(false);
   const [fullReport, setFullReport] = useState(null);
   const [fullLoading, setFullLoading] = useState(false);
+  const [monthlyReport, setMonthlyReport] = useState(null);
+  const [monthlyLoading, setMonthlyLoading] = useState(false);
+
+  // Date range filter — defaults to last 30 days
+  const defaultTo = new Date().toISOString().slice(0, 10);
+  const defaultFrom = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const [dateFrom, setDateFrom] = useState(defaultFrom);
+  const [dateTo,   setDateTo]   = useState(defaultTo);
 
   const { data: signals = [] }     = useQuery({ queryKey: ['reportSignals', bpId],     queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId }, '-detected_at', 200), enabled: !!bpId });
   const { data: leads = [] }       = useQuery({ queryKey: ['reportLeads', bpId],       queryFn: () => base44.entities.Lead.filter({ linked_business: bpId }, '-created_date', 200), enabled: !!bpId });
   const { data: reviews = [] }     = useQuery({ queryKey: ['reportReviews', bpId],     queryFn: () => base44.entities.Review.filter({ linked_business: bpId }, '-created_date', 200), enabled: !!bpId });
   const { data: competitors = [] } = useQuery({ queryKey: ['reportCompetitors', bpId], queryFn: () => base44.entities.Competitor.filter({ linked_business: bpId }), enabled: !!bpId });
 
+  // Date-filtered data for date-sensitive tabs
+  const fromMs = new Date(dateFrom).getTime();
+  const toMs   = new Date(dateTo + 'T23:59:59').getTime();
+  const inRange = (isoStr) => { if (!isoStr) return true; const t = new Date(isoStr).getTime(); return t >= fromMs && t <= toMs; };
+  const filteredLeads   = leads.filter(l  => inRange(l.created_date  || l.discovered_at));
+  const filteredReviews = reviews.filter(r => inRange(r.created_date || r.review_date));
+  const filteredSignals = signals.filter(s => inRange(s.detected_at  || s.created_date));
+
   const totalData = signals.length + leads.length + reviews.length;
 
-  // Client-side lead stats (used in leads tab)
-  const hotLeads       = leads.filter(l => l.status === 'hot').length;
-  const completedLeads = leads.filter(l => l.status === 'completed').length;
-  const coldLeads      = leads.filter(l => l.status === 'cold').length;
-  const conversionRate = leads.length > 0 ? Math.round((completedLeads / leads.length) * 100) : 0;
-  const leadSources = leads.reduce((acc, l) => {
+  // Client-side lead stats — use filtered data when in leads tab, full data otherwise
+  const displayLeads   = filteredLeads;
+  const hotLeads       = displayLeads.filter(l => l.status === 'hot').length;
+  const completedLeads = displayLeads.filter(l => l.status === 'completed').length;
+  const coldLeads      = displayLeads.filter(l => l.status === 'cold').length;
+  const conversionRate = displayLeads.length > 0 ? Math.round((completedLeads / displayLeads.length) * 100) : 0;
+  const leadSources = displayLeads.reduce((acc, l) => {
     const src = l.source || 'אחר';
     acc[src] = (acc[src] || 0) + 1;
     return acc;
   }, {});
   const topSources = Object.entries(leadSources).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  async function handleGenerateMonthlyReport() {
+    if (!bpId || monthlyLoading) return;
+    setMonthlyLoading(true);
+    try {
+      const now = new Date();
+      const monthName = now.toLocaleDateString('he-IL', { month: 'long', year: 'numeric' });
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const monthLeads   = leads.filter(l  => new Date(l.created_date  || l.discovered_at || 0) >= new Date(monthStart));
+      const monthReviews = reviews.filter(r => new Date(r.created_date || r.review_date   || 0) >= new Date(monthStart));
+      const monthSignals = signals.filter(s => new Date(s.detected_at  || s.created_date  || 0) >= new Date(monthStart));
+      const hotMonthLeads = monthLeads.filter(l => l.status === 'hot').length;
+      const avgRating = monthReviews.length ? (monthReviews.reduce((s, r) => s + (r.rating || 0), 0) / monthReviews.length).toFixed(1) : null;
+      const topSignal = monthSignals.sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0];
+
+      const res = await base44.functions.invoke('invokeLLM', {
+        model: 'haiku',
+        response_json_schema: { type: 'object' },
+        prompt: `אתה יועץ עסקי. צור דוח חודשי לחודש ${monthName} עבור העסק "${businessProfile?.name}" (${businessProfile?.category}, ${businessProfile?.city}).
+נתוני החודש: לידים: ${monthLeads.length} (${hotMonthLeads} חמים), ביקורות: ${monthReviews.length}${avgRating ? ` (ממוצע ${avgRating})` : ''}, תובנות שוק: ${monthSignals.length}, מתחרים מזוהים: ${competitors.length}.
+${topSignal ? `תובנה בולטת: ${topSignal.summary}` : ''}
+JSON בלבד:
+{
+  "month_name": "${monthName}",
+  "summary": "סיכום 2-3 משפטים לחודש",
+  "highlights": ["הדגש 1 עם נתון", "הדגש 2"],
+  "improvement": "תחום אחד לשיפור בחודש הבא",
+  "next_action": "הפעולה האחת הכי חשובה לחודש הבא",
+  "score": 7
+}`,
+      });
+      const parsed = parseLLMJson(res?.data || res);
+      setMonthlyReport({ ...parsed, _stats: { leads: monthLeads.length, hotLeads: hotMonthLeads, reviews: monthReviews.length, signals: monthSignals.length, avgRating } });
+    } catch {
+      toast.error('שגיאה ביצירת דוח חודשי');
+    }
+    setMonthlyLoading(false);
+  }
+
+  useEffect(() => {
+    if (activeTab === 'monthly' && !monthlyReport && !monthlyLoading) {
+      handleGenerateMonthlyReport();
+    }
+  }, [activeTab]);
 
   async function handleGenerateFullReport() {
     if (!bpId) return;
@@ -159,15 +235,13 @@ JSON בלבד:
       <h1 className="text-[16px] font-bold text-foreground tracking-tight">דוחות וניתוח</h1>
 
       {/* Tab bar */}
-      <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
         {TABS.map(t => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[12px] font-medium transition-all ${
-              activeTab === t.id
-                ? 'bg-white text-indigo-700 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+            className={`flex-shrink-0 flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium transition-all ${
+              activeTab === t.id ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             <span>{t.icon}</span>
@@ -175,6 +249,21 @@ JSON בלבד:
           </button>
         ))}
       </div>
+
+      {/* Date range filter — shown for leads/competitors/full tabs */}
+      {['leads', 'competitors', 'full'].includes(activeTab) && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Calendar className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+          <span className="text-[11px] text-gray-500">מ:</span>
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+            className="border border-gray-200 rounded-lg px-2 py-1 text-[11px] text-gray-700 focus:outline-none focus:border-indigo-400" />
+          <span className="text-[11px] text-gray-500">עד:</span>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+            className="border border-gray-200 rounded-lg px-2 py-1 text-[11px] text-gray-700 focus:outline-none focus:border-indigo-400" />
+          <button onClick={() => { setDateFrom(defaultFrom); setDateTo(defaultTo); }}
+            className="text-[10px] text-indigo-500 hover:underline">אפס</button>
+        </div>
+      )}
 
       {/* ── TAB: Weekly Report ── */}
       {activeTab === 'weekly' && (
@@ -269,6 +358,102 @@ JSON בלבד:
         </div>
       )}
 
+      {/* ── TAB: Monthly Report ── */}
+      {activeTab === 'monthly' && (
+        <div className="space-y-4">
+          {monthlyLoading && !monthlyReport ? (
+            <div className="flex items-center justify-center py-16 gap-3">
+              <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
+              <span className="text-[13px] text-gray-500">מייצר דוח חודשי...</span>
+            </div>
+          ) : !monthlyReport ? (
+            <div className="rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/40 p-6 text-center">
+              <button onClick={handleGenerateMonthlyReport} disabled={monthlyLoading}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-[13px] font-semibold hover:bg-indigo-700 transition-all disabled:opacity-70">
+                {monthlyLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                {monthlyLoading ? 'מייצר...' : 'צור דוח חודשי'}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[15px] font-bold text-gray-800">{monthlyReport.month_name}</p>
+                  {monthlyReport.score != null && <ScoreBadge score={monthlyReport.score} />}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => {
+                    exportCSV(`דוח-חודשי-${monthlyReport.month_name}.csv`,
+                      [['לידים', 'לידים חמים', 'ביקורות', 'ממוצע דירוג', 'תובנות'],
+                       [monthlyReport._stats.leads, monthlyReport._stats.hotLeads, monthlyReport._stats.reviews, monthlyReport._stats.avgRating || '', monthlyReport._stats.signals]],
+                      ['מדד', 'ערך']);
+                  }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[11px] text-gray-500 hover:bg-gray-50 transition-colors">
+                    <Download className="w-3.5 h-3.5" /> ייצא CSV
+                  </button>
+                  <button onClick={() => window.print()} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[11px] text-gray-500 hover:bg-gray-50 transition-colors">
+                    <Printer className="w-3.5 h-3.5" /> הדפס
+                  </button>
+                </div>
+              </div>
+
+              {/* Stats grid */}
+              {monthlyReport._stats && (
+                <div className="grid grid-cols-2 gap-2">
+                  <MetricCard label="לידים החודש"  value={monthlyReport._stats.leads}    sub={`${monthlyReport._stats.hotLeads} חמים`} color="indigo" />
+                  <MetricCard label="ביקורות"       value={monthlyReport._stats.reviews}  sub={monthlyReport._stats.avgRating ? `ממוצע ${monthlyReport._stats.avgRating}` : undefined} color="green" />
+                  <MetricCard label="תובנות שוק"   value={monthlyReport._stats.signals}  color="amber" />
+                  <MetricCard label="מתחרים"        value={competitors.length}            sub="מזוהים" color="gray" />
+                </div>
+              )}
+
+              {/* Summary */}
+              {monthlyReport.summary && (
+                <div className="rounded-xl border border-gray-100 bg-white px-5 py-4">
+                  <p className="text-[10px] text-gray-400 mb-1 font-medium uppercase tracking-wide">סיכום חודשי</p>
+                  <p className="text-[12px] text-gray-700 leading-relaxed">{monthlyReport.summary}</p>
+                </div>
+              )}
+
+              {/* Highlights */}
+              {monthlyReport.highlights?.length > 0 && (
+                <div className="rounded-xl border border-green-100 bg-green-50/50 px-5 py-4">
+                  <p className="text-[12px] font-bold text-green-700 mb-2.5">הדגשי החודש</p>
+                  <div className="space-y-1.5">
+                    {monthlyReport.highlights.map((h, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-green-800">{h}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Improvement + next action */}
+              {monthlyReport.improvement && (
+                <div className="rounded-xl border border-amber-100 bg-amber-50/50 px-5 py-4">
+                  <p className="text-[10px] text-amber-500 font-medium mb-0.5">לשיפור</p>
+                  <p className="text-[12px] text-amber-800">{monthlyReport.improvement}</p>
+                </div>
+              )}
+              {monthlyReport.next_action && (
+                <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-5 py-4">
+                  <p className="text-[10px] text-indigo-400 font-medium mb-0.5">פעולה לחודש הבא</p>
+                  <p className="text-[13px] text-indigo-800 font-semibold">{monthlyReport.next_action}</p>
+                </div>
+              )}
+
+              <button onClick={() => { setMonthlyReport(null); handleGenerateMonthlyReport(); }} disabled={monthlyLoading}
+                className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-[12px] hover:bg-gray-50 transition-all disabled:opacity-50">
+                {monthlyLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : '↻'}
+                {monthlyLoading ? 'מחדש...' : 'צור דוח מחדש'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── TAB: Competitors ── */}
       {activeTab === 'competitors' && (
         <div className="space-y-3">
@@ -326,11 +511,20 @@ JSON בלבד:
       {/* ── TAB: Leads Breakdown ── */}
       {activeTab === 'leads' && (
         <div className="space-y-3">
+          {/* Export button */}
+          <div className="flex justify-end">
+            <button onClick={() => exportCSV('לידים.csv',
+              displayLeads.map(l => [l.name || '', l.score || '', l.source || '', l.status || '', l.service_needed || '', l.created_date || l.discovered_at || '']),
+              ['שם', 'ציון', 'מקור', 'סטטוס', 'שירות', 'תאריך'])}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[11px] text-gray-500 hover:bg-gray-50 transition-colors">
+              <Download className="w-3.5 h-3.5" /> ייצא CSV ({displayLeads.length})
+            </button>
+          </div>
           {/* Lead status metrics */}
           <div className="grid grid-cols-2 gap-2">
-            <MetricCard label="סך לידים"     value={leads.length}   color="indigo" />
-            <MetricCard label="לידים חמים"   value={hotLeads}        sub="ממתינים לטיפול" color="red"   />
-            <MetricCard label="הושלמו"        value={completedLeads} sub="סגירות מוצלחות" color="green" />
+            <MetricCard label="סך לידים"     value={displayLeads.length} color="indigo" />
+            <MetricCard label="לידים חמים"   value={hotLeads}             sub="ממתינים לטיפול" color="red"   />
+            <MetricCard label="הושלמו"        value={completedLeads}      sub="סגירות מוצלחות" color="green" />
             <MetricCard label="אחוז המרה"    value={`${conversionRate}%`} sub="לידים שהפכו ללקוחות" color="amber" />
           </div>
 
@@ -364,11 +558,11 @@ JSON בלבד:
           <div className="rounded-2xl border border-gray-100 bg-white px-5 py-4">
             <p className="text-[12px] font-bold text-gray-700 mb-3">סטטוס לידים</p>
             {[
-              { label: 'חמים',    count: hotLeads,                                              color: 'bg-red-400' },
-              { label: 'פעילים',  count: leads.filter(l => l.status === 'active').length,       color: 'bg-indigo-400' },
-              { label: 'קרים',    count: coldLeads,                                              color: 'bg-blue-300' },
-              { label: 'הושלמו',  count: completedLeads,                                         color: 'bg-green-400' },
-              { label: 'אבדו',    count: leads.filter(l => l.status === 'lost').length,          color: 'bg-gray-300' },
+              { label: 'חמים',    count: hotLeads,                                                       color: 'bg-red-400' },
+              { label: 'פעילים',  count: displayLeads.filter(l => l.status === 'active').length,   color: 'bg-indigo-400' },
+              { label: 'קרים',    count: coldLeads,                                                  color: 'bg-blue-300' },
+              { label: 'הושלמו',  count: completedLeads,                                             color: 'bg-green-400' },
+              { label: 'אבדו',    count: displayLeads.filter(l => l.status === 'lost').length,       color: 'bg-gray-300' },
             ].filter(s => s.count > 0).map(s => (
               <div key={s.label} className="flex items-center gap-3 mb-2">
                 <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s.color}`} />
@@ -380,7 +574,7 @@ JSON בלבד:
 
           {/* Charts */}
           <div className="pt-2 space-y-4">
-            <ConversionFunnel leads={leads} reviews={reviews} />
+            <ConversionFunnel leads={displayLeads} reviews={filteredReviews} />
           </div>
         </div>
       )}
@@ -406,6 +600,13 @@ JSON בלבד:
                   <span className="text-[15px] font-bold text-gray-800">{businessProfile?.name}</span>
                   {fullReport.health_score != null && <ScoreBadge score={fullReport.health_score} />}
                 </div>
+                <button onClick={() => {
+                  exportCSV('דוח-מלא.csv',
+                    [['לידים', leads.length], ['לידים חמים', hotLeads], ['אחוז המרה', `${conversionRate}%`], ['ביקורות', reviews.length], ['מתחרים', competitors.length], ['ציון בריאות', fullReport.health_score ?? ''], ['הכנסה משוערת', fullReport.roi_estimate ?? '']],
+                    ['מדד', 'ערך']);
+                }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[11px] text-gray-500 hover:bg-gray-50 transition-colors">
+                  <Download className="w-3.5 h-3.5" /> ייצא CSV
+                </button>
                 <button onClick={() => window.print()}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[11px] text-gray-500 hover:bg-gray-50 transition-colors">
                   <Printer className="w-3.5 h-3.5" /> הדפס

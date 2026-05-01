@@ -25,6 +25,7 @@ import { detectDeliveryChanges } from './routes/functions/detectDeliveryChanges'
 import { fetchSocialInsights } from './routes/functions/fetchSocialInsights';
 import { schedulePostPublisher } from './routes/functions/schedulePostPublisher';
 import { analyzeInstagramComments } from './routes/functions/analyzeInstagramComments';
+import { diffCompetitorSnapshot } from './routes/functions/diffCompetitorSnapshot';
 
 const logger = createLogger('Scheduler');
 
@@ -123,6 +124,11 @@ export function startScheduler() {
   // ── Every Sunday at 20:00 UTC: weekly content calendar ──────────────────────
   cron.schedule('0 20 * * 0', () => {
     runAgentForAll('ContentCalendarAgent', contentCalendarAgent);
+  });
+
+  // ── Every Wednesday at 04:00 UTC: competitor snapshot diff ───────────────────
+  cron.schedule('0 4 * * 3', () => {
+    runAgentForAll('DiffCompetitorSnapshot', diffCompetitorSnapshot);
   });
 
   // ── Every 30 min: execute semi_auto queued actions ───────────────────────────

@@ -42,6 +42,7 @@ import { detectCompetitorChanges } from './detectCompetitorChanges';
 import { getAudienceSegments } from './getAudienceSegments';
 import { analyzeCompetitorSocial } from './analyzeCompetitorSocial';
 import { detectEvents } from './detectEvents';
+import { findLocalEvents } from './findLocalEvents';
 import { detectDeliveryChanges } from './detectDeliveryChanges';
 import { analyzeSocialComments } from './analyzeSocialComments';
 import { generateImage } from './generateImage';
@@ -67,6 +68,8 @@ import { publishPost } from './publishPost';
 import { estimateCampaignMetrics } from './estimateCampaignMetrics';
 import { analyzeImageForPost } from './analyzeImageForPost';
 import { scanServicesAndPrices } from './scanServicesAndPrices';
+import { snapshotCompetitor } from './snapshotCompetitor';
+import { diffCompetitorSnapshot } from './diffCompetitorSnapshot';
 
 const router = Router();
 
@@ -113,6 +116,7 @@ const FUNCTION_MAP: Record<string, any> = {
   getAudienceSegments,
   analyzeCompetitorSocial,
   detectEvents,
+  findLocalEvents,
   detectDeliveryChanges,
   analyzeSocialComments,
   generateImage,
@@ -140,6 +144,8 @@ const FUNCTION_MAP: Record<string, any> = {
   estimateCampaignMetrics,
   analyzeImageForPost,
   scanServicesAndPrices,
+  snapshotCompetitor,
+  diffCompetitorSnapshot,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,

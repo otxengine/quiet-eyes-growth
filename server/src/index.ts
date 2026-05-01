@@ -269,7 +269,20 @@ app.listen(PORT, async () => {
     `);
     await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_otx_decisions_biz ON otx_decisions(business_id, created_at DESC)`);
     await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_agent_heartbeat_name ON agent_heartbeat(agent_name, last_ping_utc DESC)`);
+    await db.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS otx_competitor_snapshots (
+        id            TEXT PRIMARY KEY DEFAULT md5(random()::text),
+        competitor_id TEXT NOT NULL,
+        business_id   TEXT NOT NULL,
+        snapshot_json JSONB NOT NULL,
+        taken_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_comp_snapshots ON otx_competitor_snapshots(competitor_id, taken_at DESC)`);
     await db.$executeRawUnsafe(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS subscription_plan TEXT`);
+    await db.$executeRawUnsafe(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS search_radius_km INT DEFAULT 15`);
+    await db.$executeRawUnsafe(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS additional_cities TEXT`);
+    await db.$executeRawUnsafe(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS branches TEXT`);
     // Fix: otx_recommendations missing trace_id column (added after initial table creation)
     await db.$executeRawUnsafe(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS trace_id TEXT`);
     // Fix: otx_pipeline_runs created with run_id PK but code inserts into column named id

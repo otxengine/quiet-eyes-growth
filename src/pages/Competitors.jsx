@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -135,6 +135,7 @@ export default function Competitors() {
   const [autoScanning,  setAutoScanning] = useState(false);
   const [activeFilter,  setActiveFilter] = useState('all');
   const [selectedComp,  setSelectedComp] = useState(null);
+  const analysisPanelRef = useRef(null);
   const [activeDrawer,  setActiveDrawer] = useState(null); // { type, props }
   const [dismissedAlerts, setDismissedAlerts] = useState(() => {
     try { return new Set(JSON.parse(sessionStorage.getItem('dismissed_competitor_alerts') || '[]')); }
@@ -148,6 +149,12 @@ export default function Competitors() {
       return next;
     });
   };
+
+  useEffect(() => {
+    if (selectedComp && analysisPanelRef.current) {
+      setTimeout(() => analysisPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+    }
+  }, [selectedComp]);
 
   const openCounterResponse = (change) => {
     const isSocial = change.change_type === 'social';
@@ -489,13 +496,15 @@ export default function Competitors() {
           </div>
 
           {selectedComp && (
-            <StrategicAnalysisPanel
-              competitor={selectedComp}
-              businessProfile={businessProfile}
-              competitors={competitors}
-              signals={signals.filter(s => s.category === 'competitor_move')}
-              onClose={() => setSelectedComp(null)}
-            />
+            <div ref={analysisPanelRef}>
+              <StrategicAnalysisPanel
+                competitor={selectedComp}
+                businessProfile={businessProfile}
+                competitors={competitors}
+                signals={signals.filter(s => s.category === 'competitor_move')}
+                onClose={() => setSelectedComp(null)}
+              />
+            </div>
           )}
 
           <div className="space-y-3">

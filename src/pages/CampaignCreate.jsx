@@ -139,6 +139,9 @@ export default function CampaignCreate() {
   const [loadingAudience, setLoadingAudience] = useState(false);
   const [loadingForecast, setLoadingForecast] = useState(false);
   const [saving,          setSaving]          = useState(false);
+  const [ideaOpen,        setIdeaOpen]        = useState(false);
+  const [ideaText,        setIdeaText]        = useState('');
+  const [ideaLoading,     setIdeaLoading]     = useState(false);
 
   const [audienceData,  setAudienceData]  = useState(null);
   const [forecastData,  setForecastData]  = useState(null);
@@ -174,22 +177,63 @@ ${signalAction  ? `מטרת הקמפיין: ${signalAction}` : ''}
     if (businessProfile && !postContent) generatePost();
   }, [businessProfile]); // eslint-disable-line
 
+  // ── Plan from idea ────────────────────────────────────────────────────────
+
+  const planFromIdea = async () => {
+    if (!ideaText.trim() || ideaLoading) return;
+    setIdeaLoading(true);
+    try {
+      const res = await base44.functions.invoke('invokeLLM', {
+        model: 'haiku',
+        response_json_schema: { type: 'object' },
+        prompt: `אתה מומחה שיווק דיגיטלי. תכנן קמפיין ממומן עבור העסק "${businessProfile?.name}" (${businessProfile?.category}, ${businessProfile?.city}).
+רעיון הלקוח: "${ideaText}"
+פלטפורמה: ${platConfig.label}
+
+החזר JSON בלבד:
+{
+  "post_copy": "טקסט הפוסט — 3-4 משפטים בעברית עם קריאה לפעולה",
+  "headline": "כותרת מודעה קצרה עד 6 מילים",
+  "objective": "awareness|traffic|leads|conversions",
+  "audience_keywords": ["מילת קהל 1", "מילת קהל 2"],
+  "style_notes": "הערה קצרה על טון וסגנון"
+}`,
+      });
+      const parsed = res?.data || res;
+      if (parsed?.post_copy) setPostContent(parsed.post_copy);
+      if (parsed?.objective && OBJECTIVES.find(o => o.id === parsed.objective)) setObjective(parsed.objective);
+      setIdeaOpen(false);
+      toast.success('מילאנו את הטופס לפי הרעיון שלך ✓');
+    } catch {
+      toast.error('שגיאה בעיבוד הרעיון');
+    }
+    setIdeaLoading(false);
+  };
+
   // ── Load audience segments ────────────────────────────────────────────────
 
   const loadAudience = async () => {
     if (!bpId) return;
     setLoadingAudience(true);
     try {
-      const res = await base44.functions.invoke('getAudienceSegments', {
-        businessProfileId: bpId,
-        insight_text: signalSummary,
-        action_type: signalCat,
-      });
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000));
+      const res = await Promise.race([
+        base44.functions.invoke('getAudienceSegments', {
+          businessProfileId: bpId,
+          insight_text: signalSummary,
+          action_type: signalCat,
+        }),
+        timeout,
+      ]);
       const data = res?.data || res;
       setAudienceData(data);
       if (data?.segments?.length) setChosenSeg(data.segments[0]);
     } catch (e) {
-      toast.error('שגיאה בטעינת קהלי יעד');
+      if (e?.message === 'timeout') {
+        toast.info('לא ניתן לטעון קהל אוטומטית — הגדר ידנית');
+      } else {
+        toast.error('שגיאה בטעינת קהלי יעד');
+      }
     }
     setLoadingAudience(false);
   };
@@ -286,6 +330,42 @@ ${signalAction  ? `מטרת הקמפיין: ${signalAction}` : ''}
           </div>
         </div>
       )}
+
+      {/* ── AI Idea Input ── */}
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <button
+          onClick={() => setIdeaOpen(o => !o)}
+          className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-secondary/40 transition-colors"
+        >
+          <div className="flex items-center gap-2 text-right">
+            <Sparkles className="w-4 h-4 text-primary opacity-70" />
+            <div>
+              <p className="text-[13px] font-semibold text-foreground">💡 תאר את הרעיון שלך</p>
+              <p className="text-[11px] text-foreground-muted">AI יתכנן את הקמפיין לפי הרעיון</p>
+            </div>
+          </div>
+          {ideaOpen ? <ChevronUp className="w-4 h-4 text-foreground-muted" /> : <ChevronDown className="w-4 h-4 text-foreground-muted" />}
+        </button>
+        {ideaOpen && (
+          <div className="border-t border-border p-4 space-y-3">
+            <textarea
+              value={ideaText}
+              onChange={e => setIdeaText(e.target.value)}
+              rows={3}
+              placeholder="לדוגמה: רוצה לפרסם מבצע לסוף השנה — 20% הנחה על כל שירותי הצביעה לבתים בשכונות צפון תל אביב"
+              className="w-full text-[13px] text-foreground bg-secondary border border-border rounded-lg px-3 py-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed"
+            />
+            <button
+              onClick={planFromIdea}
+              disabled={ideaLoading || !ideaText.trim()}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-[12px] font-medium hover:opacity-90 transition-all disabled:opacity-50"
+            >
+              {ideaLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              {ideaLoading ? 'מתכנן...' : 'תכנן קמפיין'}
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* ── 1. Post content ── */}
       <SectionCard title="תוכן הפוסט" subtitle="ערוך את הטקסט או בקש תוכן חדש">

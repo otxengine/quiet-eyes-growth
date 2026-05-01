@@ -156,7 +156,7 @@ function StrategyTab({ competitor, businessProfile, competitors, signals }) {
         .map(c => `${c.name} (${c.trend_direction || '?'})`)
         .join('; ');
       const signalStr = signals.slice(0, 5).map(s => s.summary).join('; ');
-      const res = await base44.integrations.Core.InvokeLLM({
+      const res = await base44.functions.invoke('invokeLLM', {
         model: 'haiku',
         prompt: `אתה אסטרטג עסקי. העסק: "${businessProfile?.name}" (${businessProfile?.category}, ${businessProfile?.city}).
 המתחרה הממוקד: ${competitor.name}.
@@ -172,12 +172,15 @@ function StrategyTab({ competitor, businessProfile, competitors, signals }) {
   "action_label": "פעולה לביצוע",
   "time_minutes": 20
 }]}`,
+        response_json_schema: { type: 'object' },
       });
-      setItems(parseLLMJson(res)?.recommendations || []);
+      const parsed = parseLLMJson(res?.data || res);
+      setItems(parsed?.recommendations || []);
       setLoaded(true);
-    } catch (_) {
+    } catch (err) {
+      toast.error('שגיאה ביצירת אסטרטגיה — נסה שוב');
+      setLoaded(true);
       setItems([]);
-      setLoaded(true);
     }
     setLoading(false);
   };
@@ -201,10 +204,16 @@ function StrategyTab({ competitor, businessProfile, competitors, signals }) {
 
   return (
     <div className="space-y-2">
-      {!items?.length
-        ? <p className="text-[12px] text-foreground-muted text-center py-4">לא נמצאו המלצות — נסה שוב</p>
-        : items.map((item, i) => <StrategyItem key={i} item={item} businessProfile={businessProfile} index={i} />)
-      }
+      {!items?.length ? (
+        <div className="text-center py-6">
+          <p className="text-[12px] text-foreground-muted mb-3">לא נמצאו המלצות</p>
+          <button onClick={() => { setLoaded(false); generate(); }} disabled={loading}
+            className="flex items-center gap-2 px-3 py-1.5 bg-secondary border border-border text-[11px] font-medium rounded-lg hover:bg-secondary/80 transition-all mx-auto disabled:opacity-60">
+            {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Lightbulb className="w-3 h-3" />}
+            נסה שוב
+          </button>
+        </div>
+      ) : items.map((item, i) => <StrategyItem key={i} item={item} businessProfile={businessProfile} index={i} />)}
     </div>
   );
 }
