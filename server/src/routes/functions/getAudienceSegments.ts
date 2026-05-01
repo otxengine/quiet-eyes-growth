@@ -61,10 +61,12 @@ export async function getAudienceSegments(req: Request, res: Response) {
       ? `\n\nתובנה רלוונטית: "${insight_text}"${action_type ? ` (סוג: ${action_type})` : ''}`
       : '';
 
-    const result = await invokeLLM({
-      model: 'sonnet',
-      maxTokens: 3000,
-      prompt: `אתה מומחה פרסום ממומן לעסקים ישראלים. בנה 3 קהלי יעד מדויקים לפורמט Facebook Ads ו-Google Ads.
+    let result: any = null;
+    try {
+      result = await invokeLLM({
+        model: 'sonnet',
+        maxTokens: 3000,
+        prompt: `אתה מומחה פרסום ממומן לעסקים ישראלים. בנה 3 קהלי יעד מדויקים לפורמט Facebook Ads ו-Google Ads.
 
 עסק: "${profile.name}" — ${profile.category} ב${profile.city}
 שירותים: ${profile.relevant_services || 'לא צוינו'}
@@ -117,8 +119,11 @@ JSON:
     }
   ]
 }`,
-      response_json_schema: { type: 'object' },
-    });
+        response_json_schema: { type: 'object' },
+      });
+    } catch (llmErr: any) {
+      console.warn('[getAudienceSegments] LLM failed, using fallback:', llmErr.message);
+    }
 
     let segments = Array.isArray(result?.segments) ? result.segments : [];
 
