@@ -5,6 +5,7 @@ import { invokeLLM } from '../../lib/llm';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
+const CURRENT_YEAR = new Date().getFullYear();
 
 async function tavilySearch(query: string, maxResults = 5): Promise<any[]> {
   if (!TAVILY_API_KEY) return [];
@@ -20,25 +21,14 @@ async function tavilySearch(query: string, maxResults = 5): Promise<any[]> {
   } catch { return []; }
 }
 
-async function searchNearbyCompetitors(category: string, city: string): Promise<any[]> {
+async function googlePlacesSearch(query: string, city: string): Promise<any[]> {
   if (!GOOGLE_API_KEY) return [];
   try {
-    // Hebrew query works better for Israeli cities
-    const heCity = city; // already in Hebrew from DB
-    const input = encodeURIComponent(`${category} ${heCity} ישראל`);
+    const input = encodeURIComponent(`${query} ${city} ישראל`);
     const res = await fetch(`https://maps.googleapis.com/maps/api/place/textsearch/json?query=${input}&language=iw&region=il&key=${GOOGLE_API_KEY}`);
     const data: any = await res.json();
     return data.results?.slice(0, 10) || [];
   } catch { return []; }
-}
-
-/** Extract a cuisine/specialty keyword from the business name (e.g. "סושי" from "אומה סושי בר") */
-function extractSpecialty(name: string): string {
-  const keywords = ['סושי', 'פיצה', 'בורגר', 'שווארמה', 'פלאפל', 'גריל', 'סטייק', 'פסטה', 'מאפייה',
-                    'קפה', 'בית קפה', 'גלידה', 'סלט', 'מקסיקני', 'יפני', 'איטלקי', 'צרפתי', 'הודי', 'ערבי',
-                    'sushi', 'pizza', 'burger', 'steak', 'grill', 'cafe', 'bakery'];
-  const lower = name.toLowerCase();
-  return keywords.find(k => lower.includes(k.toLowerCase())) || '';
 }
 
 export async function runCompetitorIdentification(req: Request, res: Response) {
@@ -53,87 +43,110 @@ export async function runCompetitorIdentification(req: Request, res: Response) {
 
     const { name, category, city } = profile;
     const radiusKm: number = (profile as any).search_radius_km || 15;
-    const extraCities: string[] = ((profile as any).additional_cities || '')
+    const userExtraCities: string[] = ((profile as any).additional_cities || '')
       .split(',').map((c: string) => c.trim()).filter(Boolean);
 
-    // All areas to scan: primary city + additional cities
-    const searchAreas = [city, ...extraCities];
-    const specialty = extractSpecialty(name); // e.g. "סושי" from "אומה סושי בר"
+    // ── Step 1: Understand the business type + get nearby cities ──────────────
+    const contextResult = await invokeLLM({
+      model: 'haiku',
+      maxTokens: 400,
+      prompt: `עסק ישראלי: "${name}", קטגוריה: ${category}, עיר: ${city}
 
-    // Build targeted queries per area — Hebrew-first for better Israeli results
+1. מה הסוג המדויק של העסק? (למשל: "בר סושי יפני", "פיצרייה", "ספר לגברים")
+2. מה מילות החיפוש הכי טובות למצוא מתחרים ישירים באותו תחום? (3 ביטויים בעברית)
+3. אילו ערים נמצאות ברדיוס של ${radiusKm} ק"מ מ-${city} בישראל? (עד 5 ערים)
+
+החזר JSON: {
+  "business_type": "...",
+  "search_terms": ["...", "...", "..."],
+  "nearby_cities": ["...", "..."]
+}`,
+      response_json_schema: { type: 'object' },
+    });
+
+    const businessType: string = contextResult?.business_type || category;
+    const searchTerms: string[] = contextResult?.search_terms || [name, category];
+    const nearbyCities: string[] = contextResult?.nearby_cities || [];
+
+    // Combine: city + LLM-suggested nearby cities + user's additional cities, deduplicated
+    const allAreas = [...new Set([city, ...nearbyCities, ...userExtraCities])];
+
+    console.log(`runCompetitorIdentification: type="${businessType}", areas=${JSON.stringify(allAreas)}, terms=${JSON.stringify(searchTerms)}`);
+
+    // ── Step 2: Targeted searches — each term × each area ────────────────────
     const tavilyQueries: string[] = [];
-    for (const area of searchAreas) {
-      tavilyQueries.push(`מסעדות ${area} ביקורות מומלצות`);
-      tavilyQueries.push(`${area} מסעדות הכי טובות 2024`);
-      if (specialty) tavilyQueries.push(`${specialty} ${area}`);
-      tavilyQueries.push(`restaurants ${area} Israel best rated`);
+    for (const area of allAreas) {
+      for (const term of searchTerms) {
+        tavilyQueries.push(`${term} ${area} ישראל ${CURRENT_YEAR}`);
+      }
+      // Restaurant directory searches for the area
+      tavilyQueries.push(`site:rest.co.il ${searchTerms[0] || businessType} ${area}`);
     }
 
-    // Search Google Places + all Tavily queries in parallel
     const [googleResults, ...tavilyResultSets] = await Promise.all([
-      searchNearbyCompetitors(category, city),
+      googlePlacesSearch(searchTerms[0] || businessType, city),
       ...tavilyQueries.map(q => tavilySearch(q, 5)),
     ]);
     const tavilyResults = tavilyResultSets.flat();
-    console.log(`runCompetitorIdentification: ${googleResults.length} Google, ${tavilyResults.length} Tavily results for areas: ${searchAreas.join(', ')}, specialty: "${specialty}"`);
 
+    console.log(`runCompetitorIdentification: ${googleResults.length} Google, ${tavilyResults.length} Tavily results`);
+
+    // ── Step 3: LLM identifies DIRECT competitors only ───────────────────────
     const existingCompetitors = await prisma.competitor.findMany({ where: { linked_business: businessProfileId } });
     const existingNames = new Set(existingCompetitors.map(c => c.name.toLowerCase()));
 
-    const contextBlock = [
-      googleResults.length > 0 ? `תוצאות Google Places:\n${googleResults.map((p: any) =>
-        `- ${p.name}: דירוג ${p.rating || '?'} (${p.user_ratings_total || 0} ביקורות), ${p.formatted_address || city}`
-      ).join('\n')}` : '',
-      tavilyResults.length > 0 ? `תוצאות חיפוש:\n${tavilyResults.map((r: any) =>
-        `- כותרת: ${r.title}\n  תוכן: ${(r.content || '').substring(0, 200)}\n  URL: ${r.url}`
-      ).join('\n')}` : '',
-    ].filter(Boolean).join('\n\n');
+    const googleBlock = googleResults.length > 0
+      ? `Google Places:\n${googleResults.map((p: any) =>
+          `- ${p.name}: ${p.rating || '?'}★ (${p.user_ratings_total || 0} ביקורות) — ${p.formatted_address || city}`
+        ).join('\n')}`
+      : '';
 
-    const areasDesc = searchAreas.join(', ');
-    const competitorFields = `- name: שם המתחרה
-- rating: דירוג (1-5 או null)
-- review_count: מספר ביקורות או null
-- address: כתובת אם ידועה (כולל עיר)
-- strengths: חוזקות (עד 3, מופרד בפסיקים)
-- weaknesses: חולשות (עד 3)
-- price_range: טווח מחירים אם ידוע
-- source_urls: מערך URLים רלוונטיים
+    const tavilyBlock = tavilyResults.length > 0
+      ? `תוצאות חיפוש:\n${tavilyResults.map((r: any) =>
+          `- ${r.title}: ${(r.content || '').substring(0, 150)}`
+        ).join('\n')}`
+      : '';
 
-החזר JSON: {"competitors": [...]}`;
-
-    const specialtyLine = specialty ? ` (התמחות: ${specialty})` : '';
+    const contextBlock = [googleBlock, tavilyBlock].filter(Boolean).join('\n\n');
+    const areasDesc = allAreas.join(', ');
 
     const llmPrompt = contextBlock
-      ? `אתה מנתח תחרותי לעסקים ישראלים. המשימה שלך: חלץ שמות של עסקים מתחרים מהטקסט הבא.
+      ? `אתה מנתח תחרותי. זהה מתחרים ישירים לעסק "${name}" (${businessType}).
 
-עסק שלנו: "${name}"${specialtyLine}, קטגוריה: ${category}, אזור: ${areasDesc}
+מתחרה ישיר = אותו סוג עסק בדיוק. דוגמה: לסושי בר — רק מסעדות סושי/יפניות, לא פיצריות.
+אזורי סריקה: ${areasDesc} (${radiusKm} ק"מ מ-${city}).
 
 ${contextBlock}
 
-הוראות חשובות:
-1. חלץ כל שם של עסק/מסעדה/בר שמוזכר בטקסט — גם אם הוא לא מוגדר מפורשות כמתחרה
-2. כלול עסקים מכל הערים שסרקנו: ${areasDesc}
-3. אל תכלול את "${name}" עצמו
-4. אם אין נתונים מספיקים מהטקסט, השתמש בידע שלך על עסקים בתחום "${category}"${specialtyLine} באזורים: ${areasDesc}
-
-עבור כל מתחרה שזיהית:
-${competitorFields}`
-      : `אתה מנתח תחרותי לעסקים ישראלים.
-
-עסק: "${name}"${specialtyLine}, קטגוריה: ${category}, אזור: ${areasDesc}
-
-בהתבסס על הידע שלך על השוק הישראלי, ציין עד 6 עסקים מתחרים אמיתיים בתחום "${category}"${specialtyLine} באזורים: ${areasDesc}. השתמש בשמות אמיתיים ככל האפשר.
+מהרשימה, בחר רק עסקים שהם מתחרים ישירים ל-"${name}" (${businessType}).
+אל תכלול את "${name}" עצמו.
+אם אין מספיק נתונים מהחיפוש, השלם מהידע שלך על עסקים מסוג "${businessType}" באזורים: ${areasDesc}.
 
 עבור כל מתחרה:
-${competitorFields}`;
+- name: שם העסק
+- rating: דירוג (1-5 או null)
+- review_count: מספר ביקורות או null
+- address: כתובת כולל עיר
+- strengths: חוזקות (עד 3, מופרדות בפסיק)
+- weaknesses: חולשות (עד 3)
+- price_range: טווח מחירים אם ידוע
+- source_urls: ["url1", ...]
+
+החזר JSON: {"competitors": [...]}`
+      : `אתה מנתח תחרותי. רשום עד 6 מתחרים ישירים ל-"${name}" (${businessType}) באזורים: ${areasDesc}.
+מתחרה ישיר = אותו סוג עסק בדיוק. השתמש בשמות אמיתיים ככל האפשר.
+
+עבור כל מתחרה: name, rating, review_count, address (כולל עיר), strengths, weaknesses, price_range, source_urls.
+החזר JSON: {"competitors": [...]}`;
 
     const result = await invokeLLM({
+      model: 'sonnet',
       prompt: llmPrompt,
       response_json_schema: { type: 'object' },
-      maxTokens: 1500,
+      maxTokens: 2000,
     });
 
-    console.log(`runCompetitorIdentification LLM result: ${JSON.stringify(result).substring(0, 500)}`);
+    console.log(`runCompetitorIdentification LLM: ${JSON.stringify(result).substring(0, 600)}`);
     const competitors: any[] = result?.competitors || [];
     let created = 0;
     let updated = 0;
@@ -165,7 +178,7 @@ ${competitorFields}`;
         await prisma.competitor.create({
           data: {
             name: c.name,
-            category,
+            category: businessType,
             rating: c.rating || null,
             review_count: c.review_count || null,
             address: c.address || city,
@@ -184,12 +197,11 @@ ${competitorFields}`;
       }
     }
 
-    // Remove competitors outside the current search areas.
-    // Any competitor whose address doesn't mention any of the valid cities is out of scope.
+    // Remove competitors outside the current search scope (address doesn't match any area).
     const allCompetitors = await prisma.competitor.findMany({ where: { linked_business: businessProfileId } });
     const toDelete = allCompetitors.filter(comp => {
       const addr = (comp.address || '').toLowerCase();
-      return !searchAreas.some(area => addr.includes(area.toLowerCase()));
+      return !allAreas.some(area => addr.includes(area.toLowerCase()));
     });
     if (toDelete.length > 0) {
       await prisma.competitor.deleteMany({ where: { id: { in: toDelete.map(c => c.id) } } });
@@ -203,7 +215,8 @@ ${competitorFields}`;
       new_competitors_created: created,
       existing_competitors_updated: updated,
       out_of_scope_removed: toDelete.length,
-      areas_scanned: searchAreas,
+      business_type: businessType,
+      areas_scanned: allAreas,
     });
   } catch (err: any) {
     console.error('runCompetitorIdentification error:', err.message);
