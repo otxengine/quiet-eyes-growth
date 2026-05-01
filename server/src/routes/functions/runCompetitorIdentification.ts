@@ -21,6 +21,37 @@ async function tavilySearch(query: string, maxResults = 5): Promise<any[]> {
   } catch { return []; }
 }
 
+/** Geocode a city name to lat/lng using Google Geocoding API */
+async function geocodeCity(city: string): Promise<{ lat: number; lng: number } | null> {
+  if (!GOOGLE_API_KEY) return null;
+  try {
+    const input = encodeURIComponent(`${city} ישראל`);
+    const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${input}&language=iw&region=il&key=${GOOGLE_API_KEY}`);
+    const data: any = await res.json();
+    const loc = data.results?.[0]?.geometry?.location;
+    return loc ? { lat: loc.lat, lng: loc.lng } : null;
+  } catch { return null; }
+}
+
+/** Search Google Places within radius meters of a location */
+async function googleNearbySearch(query: string, lat: number, lng: number, radiusM: number): Promise<any[]> {
+  if (!GOOGLE_API_KEY) return [];
+  try {
+    const params = new URLSearchParams({
+      location: `${lat},${lng}`,
+      radius: String(Math.min(radiusM, 50000)), // Google max 50km
+      keyword: query,
+      language: 'iw',
+      region: 'il',
+      key: GOOGLE_API_KEY,
+    });
+    const res = await fetch(`https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params}`);
+    const data: any = await res.json();
+    return data.results?.slice(0, 15) || [];
+  } catch { return []; }
+}
+
+/** Fallback text search when no coordinates available */
 async function googlePlacesSearch(query: string, city: string): Promise<any[]> {
   if (!GOOGLE_API_KEY) return [];
   try {
@@ -73,21 +104,36 @@ export async function runCompetitorIdentification(req: Request, res: Response) {
 
     console.log(`runCompetitorIdentification: type="${businessType}", areas=${JSON.stringify(allAreas)}, terms=${JSON.stringify(searchTerms)}`);
 
-    // ── Step 2: Targeted searches — each term × each area ────────────────────
-    const tavilyQueries: string[] = [];
-    for (const area of allAreas) {
-      for (const term of searchTerms) {
-        tavilyQueries.push(`${term} ${area} ישראל ${CURRENT_YEAR}`);
-      }
-      // Restaurant directory searches for the area
-      tavilyQueries.push(`site:rest.co.il ${searchTerms[0] || businessType} ${area}`);
-    }
+    // ── Step 2: Google Places — radius-based search for precision ─────────────
+    // Geocode the primary city to get coordinates, then use nearbysearch with
+    // the exact radius so we don't pull in businesses 60km away.
+    const cityCoords = await geocodeCity(city);
+    const radiusM = radiusKm * 1000;
 
-    const [googleResults, ...tavilyResultSets] = await Promise.all([
-      googlePlacesSearch(searchTerms[0] || businessType, city),
-      ...tavilyQueries.map(q => tavilySearch(q, 5)),
+    const googleSearchPromises = cityCoords
+      ? searchTerms.map(term => googleNearbySearch(term, cityCoords.lat, cityCoords.lng, radiusM))
+      : [googlePlacesSearch(searchTerms[0] || businessType, city)];
+
+    // Also search user-requested additional cities by text (they're explicit requests)
+    const extraCitySearchPromises = userExtraCities.flatMap(area =>
+      searchTerms.map(term => tavilySearch(`${term} ${area} ישראל ${CURRENT_YEAR}`, 5))
+    );
+
+    // Tavily for the primary area (use city name for natural-language queries)
+    const tavilyQueries: string[] = [];
+    for (const term of searchTerms) {
+      tavilyQueries.push(`${term} ${city} ישראל ${CURRENT_YEAR}`);
+    }
+    tavilyQueries.push(`site:rest.co.il ${searchTerms[0] || businessType} ${city}`);
+
+    const [googleResultSets, tavilyResultSets, extraResults] = await Promise.all([
+      Promise.all(googleSearchPromises),
+      Promise.all(tavilyQueries.map(q => tavilySearch(q, 5))),
+      Promise.all(extraCitySearchPromises),
     ]);
-    const tavilyResults = tavilyResultSets.flat();
+
+    const googleResults = googleResultSets.flat();
+    const tavilyResults = [...tavilyResultSets.flat(), ...extraResults];
 
     console.log(`runCompetitorIdentification: ${googleResults.length} Google, ${tavilyResults.length} Tavily results`);
 
@@ -113,28 +159,21 @@ export async function runCompetitorIdentification(req: Request, res: Response) {
     const llmPrompt = contextBlock
       ? `אתה מנתח תחרותי. זהה מתחרים ישירים לעסק "${name}" (${businessType}).
 
-מתחרה ישיר = אותו סוג עסק בדיוק. דוגמה: לסושי בר — רק מסעדות סושי/יפניות, לא פיצריות.
-אזורי סריקה: ${areasDesc} (${radiusKm} ק"מ מ-${city}).
+כללים:
+1. מתחרה ישיר = אותו סוג עסק בדיוק. לסושי בר — רק מסעדות סושי/יפניות, לא פיצריות.
+2. גיאוגרפיה: כלול רק עסקים שנמצאים עד ${radiusKm} ק"מ מ-${city} (ערים מאושרות: ${areasDesc}). אל תכלול ערים רחוקות יותר.
+3. אל תכלול את "${name}" עצמו.
+4. אם הנתונים חלקיים, השלם מהידע שלך — אך שמור על הגבלת הרדיוס.
 
 ${contextBlock}
 
-מהרשימה, בחר רק עסקים שהם מתחרים ישירים ל-"${name}" (${businessType}).
-אל תכלול את "${name}" עצמו.
-אם אין מספיק נתונים מהחיפוש, השלם מהידע שלך על עסקים מסוג "${businessType}" באזורים: ${areasDesc}.
-
 עבור כל מתחרה:
-- name: שם העסק
-- rating: דירוג (1-5 או null)
-- review_count: מספר ביקורות או null
-- address: כתובת כולל עיר
-- strengths: חוזקות (עד 3, מופרדות בפסיק)
-- weaknesses: חולשות (עד 3)
-- price_range: טווח מחירים אם ידוע
-- source_urls: ["url1", ...]
+- name, rating, review_count, address (חובה לכלול עיר), strengths, weaknesses, price_range, source_urls
 
 החזר JSON: {"competitors": [...]}`
-      : `אתה מנתח תחרותי. רשום עד 6 מתחרים ישירים ל-"${name}" (${businessType}) באזורים: ${areasDesc}.
-מתחרה ישיר = אותו סוג עסק בדיוק. השתמש בשמות אמיתיים ככל האפשר.
+      : `אתה מנתח תחרותי. רשום עד 6 מתחרים ישירים ל-"${name}" (${businessType}).
+גיאוגרפיה: רק ערים עד ${radiusKm} ק"מ מ-${city} (${areasDesc}).
+מתחרה ישיר = אותו סוג עסק בדיוק. השתמש בשמות אמיתיים.
 
 עבור כל מתחרה: name, rating, review_count, address (כולל עיר), strengths, weaknesses, price_range, source_urls.
 החזר JSON: {"competitors": [...]}`;
@@ -147,7 +186,37 @@ ${contextBlock}
     });
 
     console.log(`runCompetitorIdentification LLM: ${JSON.stringify(result).substring(0, 600)}`);
-    const competitors: any[] = result?.competitors || [];
+    let competitors: any[] = result?.competitors || [];
+
+    // Hard distance filter: if we have city coordinates, remove competitors whose
+    // extracted city is NOT in the approved areas list and is likely out of range.
+    if (cityCoords && competitors.length > 0) {
+      const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      };
+
+      // Geocode each competitor city and check distance (in parallel, max 5)
+      const checked = await Promise.all(
+        competitors.slice(0, 10).map(async (c) => {
+          const addr = c.address || '';
+          // If address already contains a known area — allow it
+          if (allAreas.some(a => addr.toLowerCase().includes(a.toLowerCase()))) return c;
+          // Otherwise geocode and check distance
+          const coords = await geocodeCity(addr || c.name);
+          if (!coords) return c; // can't verify — keep it
+          const dist = haversineKm(cityCoords.lat, cityCoords.lng, coords.lat, coords.lng);
+          if (dist <= radiusKm + 5) return c; // 5km tolerance
+          console.log(`runCompetitorIdentification: dropping "${c.name}" — ${Math.round(dist)}km away (limit ${radiusKm}km)`);
+          return null;
+        })
+      );
+      competitors = checked.filter(Boolean) as any[];
+    }
     let created = 0;
     let updated = 0;
 

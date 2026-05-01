@@ -181,7 +181,10 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
           `UPDATE "${table}" SET ${setClauses} WHERE id = $1`,
           ...values
         );
-        record = await model.findUnique({ where: { id: req.params.id } });
+        const base = await model.findUnique({ where: { id: req.params.id } });
+        // Merge the raw-SQL fields back in — Prisma's findUnique omits columns
+        // not in its generated client (e.g. search_radius_km before schema regen).
+        record = { ...base, ...data };
       } else {
         throw prismaErr;
       }
