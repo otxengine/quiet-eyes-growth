@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { otxSupabase } from '@/lib/otx-supabase';
 import { Users, Loader2, MapPin, ExternalLink, Activity, MessageSquare, X, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePlan } from '@/lib/usePlan';
@@ -74,50 +73,10 @@ function formatHebrewDate(isoStr) {
   }).format(new Date(isoStr));
 }
 
-async function fetchCompetitorChanges(businessProfile) {
-  const sector = categoryToSector(businessProfile?.category);
-  const geo    = cityToGeo(businessProfile?.city);
-
-  // Step 1: find existing OTX business
-  let bizId = null;
-  try {
-    let q = otxSupabase.from('businesses').select('id');
-    if (sector) q = q.eq('sector', sector);
-    if (geo)    q = q.eq('geo_city', geo);
-    const { data: existing } = await q.limit(1).maybeSingle();
-    bizId = existing?.id ?? null;
-
-    // Step 2: if not found, create one so agents can populate it later
-    if (!bizId && businessProfile?.name) {
-      const { data: created } = await otxSupabase
-        .from('businesses')
-        .insert({
-          name:     businessProfile.name,
-          sector:   sector || 'local',
-          geo_city: geo    || (businessProfile.city || 'unknown'),
-        })
-        .select('id')
-        .single();
-      bizId = created?.id ?? null;
-    }
-  } catch (e) {
-    console.warn('[fetchCompetitorChanges] businesses lookup failed:', e.message);
-  }
-
-  if (!bizId) return { changes: [], bizId: null };
-
-  try {
-    const { data: changes } = await otxSupabase
-      .from('competitor_changes')
-      .select('id, business_id, competitor_name, change_type, change_summary, detected_at_utc, source_url, confidence_score, social_platform, post_url, sentiment, engagement_count, content_excerpt')
-      .eq('business_id', bizId)
-      .order('detected_at_utc', { ascending: false })
-      .limit(50);
-    return { changes: changes ?? [], bizId };
-  } catch (e) {
-    console.warn('[fetchCompetitorChanges] changes query failed:', e.message);
-    return { changes: [], bizId };
-  }
+// Competitor changes are sourced from MarketSignal (category=competitor_move) via the fallback in mergedChanges below.
+// The old OTX Supabase lookup has been removed — the 'businesses' table does not exist in this project.
+async function fetchCompetitorChanges(_businessProfile) {
+  return { changes: [], bizId: null };
 }
 
 const filterTabs = [

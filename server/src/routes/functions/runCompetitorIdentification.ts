@@ -23,11 +23,22 @@ async function tavilySearch(query: string, maxResults = 5): Promise<any[]> {
 async function searchNearbyCompetitors(category: string, city: string): Promise<any[]> {
   if (!GOOGLE_API_KEY) return [];
   try {
-    const input = encodeURIComponent(`${category} ${city}`);
-    const res = await fetch(`https://maps.googleapis.com/maps/api/place/textsearch/json?query=${input}&language=iw&key=${GOOGLE_API_KEY}`);
+    // Hebrew query works better for Israeli cities
+    const heCity = city; // already in Hebrew from DB
+    const input = encodeURIComponent(`${category} ${heCity} ישראל`);
+    const res = await fetch(`https://maps.googleapis.com/maps/api/place/textsearch/json?query=${input}&language=iw&region=il&key=${GOOGLE_API_KEY}`);
     const data: any = await res.json();
     return data.results?.slice(0, 10) || [];
   } catch { return []; }
+}
+
+/** Extract a cuisine/specialty keyword from the business name (e.g. "סושי" from "אומה סושי בר") */
+function extractSpecialty(name: string): string {
+  const keywords = ['סושי', 'פיצה', 'בורגר', 'שווארמה', 'פלאפל', 'גריל', 'סטייק', 'פסטה', 'מאפייה',
+                    'קפה', 'בית קפה', 'גלידה', 'סלט', 'מקסיקני', 'יפני', 'איטלקי', 'צרפתי', 'הודי', 'ערבי',
+                    'sushi', 'pizza', 'burger', 'steak', 'grill', 'cafe', 'bakery'];
+  const lower = name.toLowerCase();
+  return keywords.find(k => lower.includes(k.toLowerCase())) || '';
 }
 
 export async function runCompetitorIdentification(req: Request, res: Response) {
@@ -47,15 +58,24 @@ export async function runCompetitorIdentification(req: Request, res: Response) {
 
     // All areas to scan: primary city + additional cities
     const searchAreas = [city, ...extraCities];
+    const specialty = extractSpecialty(name); // e.g. "סושי" from "אומה סושי בר"
 
-    // Search each area in parallel
+    // Build targeted queries per area — Hebrew-first for better Israeli results
+    const tavilyQueries: string[] = [];
+    for (const area of searchAreas) {
+      tavilyQueries.push(`מסעדות ${area} ביקורות מומלצות`);
+      tavilyQueries.push(`${area} מסעדות הכי טובות 2024`);
+      if (specialty) tavilyQueries.push(`${specialty} ${area}`);
+      tavilyQueries.push(`restaurants ${area} Israel best rated`);
+    }
+
+    // Search Google Places + all Tavily queries in parallel
     const [googleResults, ...tavilyResultSets] = await Promise.all([
       searchNearbyCompetitors(category, city),
-      ...searchAreas.map(area =>
-        tavilySearch(`מתחרים ${category} ${area} דירוגים ביקורות`, 6)
-      ),
+      ...tavilyQueries.map(q => tavilySearch(q, 5)),
     ]);
     const tavilyResults = tavilyResultSets.flat();
+    console.log(`runCompetitorIdentification: ${googleResults.length} Google, ${tavilyResults.length} Tavily results for areas: ${searchAreas.join(', ')}, specialty: "${specialty}"`);
 
     const existingCompetitors = await prisma.competitor.findMany({ where: { linked_business: businessProfileId } });
     const existingNames = new Set(existingCompetitors.map(c => c.name.toLowerCase()));
@@ -81,29 +101,39 @@ export async function runCompetitorIdentification(req: Request, res: Response) {
 
 החזר JSON: {"competitors": [...]}`;
 
-    const llmPrompt = contextBlock
-      ? `אתה מנתח תחרותי לעסקים ישראלים.
+    const specialtyLine = specialty ? ` (התמחות: ${specialty})` : '';
 
-עסק: "${name}", קטגוריה: ${category}, אזור סריקה: ${areasDesc} (רדיוס ${radiusKm} ק"מ מ-${city})
+    const llmPrompt = contextBlock
+      ? `אתה מנתח תחרותי לעסקים ישראלים. המשימה שלך: חלץ שמות של עסקים מתחרים מהטקסט הבא.
+
+עסק שלנו: "${name}"${specialtyLine}, קטגוריה: ${category}, אזור: ${areasDesc}
 
 ${contextBlock}
 
-זהה מתחרים ישירים בלבד (אותה קטגוריה, באזורים: ${areasDesc}). כלול מתחרים מכל הערים שסרקנו. עבור כל מתחרה חלץ:
+הוראות חשובות:
+1. חלץ כל שם של עסק/מסעדה/בר שמוזכר בטקסט — גם אם הוא לא מוגדר מפורשות כמתחרה
+2. כלול עסקים מכל הערים שסרקנו: ${areasDesc}
+3. אל תכלול את "${name}" עצמו
+4. אם אין נתונים מספיקים מהטקסט, השתמש בידע שלך על עסקים בתחום "${category}"${specialtyLine} באזורים: ${areasDesc}
+
+עבור כל מתחרה שזיהית:
 ${competitorFields}`
       : `אתה מנתח תחרותי לעסקים ישראלים.
 
-עסק: "${name}", קטגוריה: ${category}, אזור סריקה: ${areasDesc} (רדיוס ${radiusKm} ק"מ)
+עסק: "${name}"${specialtyLine}, קטגוריה: ${category}, אזור: ${areasDesc}
 
-אין נתוני חיפוש חיצוניים. בהתבסס על הידע שלך על השוק הישראלי, זהה עד 5 מתחרים טיפוסיים בקטגוריה "${category}" באזורים: ${areasDesc}.
+בהתבסס על הידע שלך על השוק הישראלי, ציין עד 6 עסקים מתחרים אמיתיים בתחום "${category}"${specialtyLine} באזורים: ${areasDesc}. השתמש בשמות אמיתיים ככל האפשר.
 
-עבור כל מתחרה חלץ:
+עבור כל מתחרה:
 ${competitorFields}`;
 
     const result = await invokeLLM({
       prompt: llmPrompt,
       response_json_schema: { type: 'object' },
+      maxTokens: 1500,
     });
 
+    console.log(`runCompetitorIdentification LLM result: ${JSON.stringify(result).substring(0, 500)}`);
     const competitors: any[] = result?.competitors || [];
     let created = 0;
     let updated = 0;
