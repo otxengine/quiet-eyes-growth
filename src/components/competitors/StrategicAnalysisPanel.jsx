@@ -156,26 +156,20 @@ function StrategyTab({ competitor, businessProfile, competitors, signals }) {
         .map(c => `${c.name} (${c.trend_direction || '?'})`)
         .join('; ');
       const signalStr = signals.slice(0, 5).map(s => s.summary).join('; ');
-      const res = await base44.functions.invoke('invokeLLM', {
-        model: 'haiku',
+      const res = await base44.integrations.Core.InvokeLLM({
+        model: 'sonnet',
         prompt: `אתה אסטרטג עסקי. העסק: "${businessProfile?.name}" (${businessProfile?.category}, ${businessProfile?.city}).
 המתחרה הממוקד: ${competitor.name}.
 מתחרים: ${competitorStr || 'לא ידועים'}. סיגנלים: ${signalStr || 'אין'}.
 
-צור 3-4 המלצות אסטרטגיות ממוקדות במתחרה "${competitor.name}". JSON בלבד:
-{"recommendations":[{
-  "title": "כותרת קצרה",
-  "summary": "תקציר חד-משפטי",
-  "detail": "הסבר 2-3 משפטים",
-  "category": "competitive|opportunity|defensive|general",
-  "steps": ["צעד 1", "צעד 2"],
-  "action_label": "פעולה לביצוע",
-  "time_minutes": 20
-}]}`,
+צור 3 המלצות אסטרטגיות ממוקדות במתחרה "${competitor.name}". JSON בלבד:
+{"recommendations":[{"title":"כותרת","summary":"תקציר","detail":"הסבר","category":"competitive","steps":["צעד"],"action_label":"פעולה","time_minutes":20}]}`,
         response_json_schema: { type: 'object' },
       });
-      const parsed = parseLLMJson(res?.data || res);
-      setItems(parsed?.recommendations || []);
+      const items = Array.isArray(res?.recommendations) ? res.recommendations
+                  : Array.isArray(parseLLMJson(res)?.recommendations) ? parseLLMJson(res).recommendations
+                  : [];
+      setItems(items);
       setLoaded(true);
     } catch (err) {
       toast.error('שגיאה ביצירת אסטרטגיה — נסה שוב');
