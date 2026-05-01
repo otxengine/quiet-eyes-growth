@@ -177,6 +177,11 @@ ${signalAction  ? `מטרת הקמפיין: ${signalAction}` : ''}
     if (businessProfile && !postContent) generatePost();
   }, [businessProfile]); // eslint-disable-line
 
+  // Auto-load audience segments in the background when the page opens
+  useEffect(() => {
+    if (bpId && !audienceData) loadAudience();
+  }, [bpId]); // eslint-disable-line
+
   // ── Plan from idea ────────────────────────────────────────────────────────
 
   const planFromIdea = async () => {
