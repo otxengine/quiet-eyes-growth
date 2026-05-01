@@ -377,7 +377,7 @@ function extractVisualKeywordsSync(insightText: string, postText: string, sector
 }
 
 function buildDynamicImagePrompt(insightText: string, postText: string, sector: string, city: string): string {
-  const visualKeywords = extractVisualKeywords(insightText, postText, sector);
+  const visualKeywords = extractVisualKeywordsSync(insightText, postText, sector);
 
   // Strip non-ASCII to avoid DALL-E content policy issues
   const cleanInsight = insightText
