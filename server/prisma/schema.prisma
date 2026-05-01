@@ -102,6 +102,9 @@ model BusinessProfile {
   facebook_page_id           String?  // Facebook Page ID
   owner_name                 String?  // Contact person / business owner full name
   phone                      String?  // Business contact phone number
+  search_radius_km           Int?     @default(15)
+  additional_cities          String?
+  branches                   String?  // JSON array of branch objects
 
   @@map("business_profiles")
 }

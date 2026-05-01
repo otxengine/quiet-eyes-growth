@@ -349,6 +349,13 @@ app.listen(PORT, async () => {
     await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS idx_otx_runs_id ON otx_pipeline_runs(id) WHERE id IS NOT NULL`);
     // Fix: otx_policy_weights id column has no default — auto-generate from md5(random())
     await db.$executeRawUnsafe(`ALTER TABLE otx_policy_weights ALTER COLUMN id SET DEFAULT md5(random()::text)`);
+    // Fix: otx_policy_weights weight/success_rate can arrive as null from PolicyWeightUpdater
+    await db.$executeRawUnsafe(`ALTER TABLE otx_policy_weights ALTER COLUMN weight DROP NOT NULL`);
+    await db.$executeRawUnsafe(`ALTER TABLE otx_policy_weights ALTER COLUMN weight SET DEFAULT 0.5`);
+    await db.$executeRawUnsafe(`ALTER TABLE otx_policy_weights ALTER COLUMN success_rate DROP NOT NULL`);
+    await db.$executeRawUnsafe(`ALTER TABLE otx_policy_weights ALTER COLUMN success_rate SET DEFAULT 0.5`);
+    // Fix: otx_pipeline_runs missing summary column (INSERT uses it but original CREATE TABLE did not include it)
+    await db.$executeRawUnsafe(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS summary JSONB`);
     console.log('Startup tables ready (agent_heartbeat, agent_data_bus, otx_decisions)');
   } catch (e: any) {
     console.warn('Startup table creation skipped:', e.message);
