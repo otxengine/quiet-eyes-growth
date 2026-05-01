@@ -221,6 +221,9 @@ ${contextBlock}
       if (!c.name || c.name.toLowerCase() === name.toLowerCase()) continue;
       const nameKey = c.name.toLowerCase();
       const sourceUrls = (c.source_urls || []).filter((u: string) => u?.startsWith('http')).join(' | ');
+      // LLM may return arrays for these fields — Prisma expects strings
+      const strengths = Array.isArray(c.strengths) ? c.strengths.join(', ') : (c.strengths || '');
+      const weaknesses = Array.isArray(c.weaknesses) ? c.weaknesses.join(', ') : (c.weaknesses || '');
 
       if (existingNames.has(nameKey)) {
         const existing = existingCompetitors.find(e => e.name.toLowerCase() === nameKey);
@@ -230,8 +233,8 @@ ${contextBlock}
             data: {
               rating: c.rating || existing.rating,
               review_count: c.review_count || existing.review_count,
-              strengths: c.strengths || existing.strengths,
-              weaknesses: c.weaknesses || existing.weaknesses,
+              strengths: strengths || existing.strengths,
+              weaknesses: weaknesses || existing.weaknesses,
               price_range: c.price_range || existing.price_range,
               source_urls: sourceUrls || existing.source_urls,
               last_scanned: new Date().toISOString(),
@@ -248,8 +251,8 @@ ${contextBlock}
             rating: c.rating || null,
             review_count: c.review_count || null,
             address: c.address || city,
-            strengths: c.strengths || '',
-            weaknesses: c.weaknesses || '',
+            strengths: strengths,
+            weaknesses: weaknesses,
             price_range: c.price_range || '',
             source_urls: sourceUrls,
             last_scanned: new Date().toISOString(),
