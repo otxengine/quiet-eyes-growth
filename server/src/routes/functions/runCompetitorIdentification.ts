@@ -7,6 +7,15 @@ const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
 const CURRENT_YEAR = new Date().getFullYear();
 
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 async function tavilySearch(query: string, maxResults = 5): Promise<any[]> {
   if (!TAVILY_API_KEY) return [];
   try {
@@ -188,30 +197,18 @@ ${contextBlock}
     console.log(`runCompetitorIdentification LLM: ${JSON.stringify(result).substring(0, 600)}`);
     let competitors: any[] = result?.competitors || [];
 
-    // Hard distance filter: if we have city coordinates, remove competitors whose
-    // extracted city is NOT in the approved areas list and is likely out of range.
+    // Hard distance filter on incoming results
     if (cityCoords && competitors.length > 0) {
-      const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-        const R = 6371;
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLng = (lng2 - lng1) * Math.PI / 180;
-        const a = Math.sin(dLat / 2) ** 2 +
-          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      };
-
-      // Geocode each competitor city and check distance (in parallel, max 5)
       const checked = await Promise.all(
         competitors.slice(0, 10).map(async (c) => {
           const addr = c.address || '';
-          // If address already contains a known area — allow it
-          if (allAreas.some(a => addr.toLowerCase().includes(a.toLowerCase()))) return c;
-          // Otherwise geocode and check distance
           const coords = await geocodeCity(addr || c.name);
           if (!coords) return c; // can't verify — keep it
           const dist = haversineKm(cityCoords.lat, cityCoords.lng, coords.lat, coords.lng);
-          if (dist <= radiusKm + 5) return c; // 5km tolerance
-          console.log(`runCompetitorIdentification: dropping "${c.name}" — ${Math.round(dist)}km away (limit ${radiusKm}km)`);
+          // Allow: within radius, OR in user's explicit extra cities
+          const inExtraCity = userExtraCities.some(ec => addr.toLowerCase().includes(ec.toLowerCase()));
+          if (dist <= radiusKm + 3 || inExtraCity) return c;
+          console.log(`runCompetitorIdentification: dropping new "${c.name}" — ${Math.round(dist)}km away`);
           return null;
         })
       );
@@ -266,15 +263,39 @@ ${contextBlock}
       }
     }
 
-    // Remove competitors outside the current search scope (address doesn't match any area).
+    // ── Cleanup: remove existing competitors now outside the radius ───────────
+    // Uses actual Geocoding distance (not city-name matching) so radius changes
+    // take effect immediately on rescan.
     const allCompetitors = await prisma.competitor.findMany({ where: { linked_business: businessProfileId } });
-    const toDelete = allCompetitors.filter(comp => {
+    const idsToDelete: string[] = [];
+
+    for (const comp of allCompetitors) {
       const addr = (comp.address || '').toLowerCase();
-      return !allAreas.some(area => addr.includes(area.toLowerCase()));
-    });
-    if (toDelete.length > 0) {
-      await prisma.competitor.deleteMany({ where: { id: { in: toDelete.map(c => c.id) } } });
-      console.log(`runCompetitorIdentification: removed ${toDelete.length} out-of-scope competitors`);
+
+      // Always keep competitors in the primary city or user's explicit extra cities
+      const keepAreas = [city, ...userExtraCities];
+      if (keepAreas.some(a => addr.includes(a.toLowerCase()))) continue;
+
+      if (cityCoords) {
+        // Geocode the competitor and measure actual distance
+        const coords = await geocodeCity(comp.address || comp.name);
+        if (!coords) continue; // can't verify — keep it
+        const dist = haversineKm(cityCoords.lat, cityCoords.lng, coords.lat, coords.lng);
+        if (dist > radiusKm + 3) {
+          console.log(`Cleanup: removing "${comp.name}" — ${Math.round(dist)}km > ${radiusKm}km radius`);
+          idsToDelete.push(comp.id);
+        }
+      } else {
+        // No geocoding available — fall back to city name matching
+        if (!allAreas.some(area => addr.includes(area.toLowerCase()))) {
+          idsToDelete.push(comp.id);
+        }
+      }
+    }
+
+    if (idsToDelete.length > 0) {
+      await prisma.competitor.deleteMany({ where: { id: { in: idsToDelete } } });
+      console.log(`Cleanup: removed ${idsToDelete.length} out-of-scope competitors`);
     }
 
     await writeAutomationLog('runCompetitorIdentification', businessProfileId, startTime, created + updated);
