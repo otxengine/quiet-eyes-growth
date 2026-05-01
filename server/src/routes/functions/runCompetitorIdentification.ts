@@ -41,29 +41,39 @@ export async function runCompetitorIdentification(req: Request, res: Response) {
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
     const { name, category, city } = profile;
+    const radiusKm: number = (profile as any).search_radius_km || 15;
+    const extraCities: string[] = ((profile as any).additional_cities || '')
+      .split(',').map((c: string) => c.trim()).filter(Boolean);
 
-    const [googlePlaces, tavilyResults] = await Promise.all([
+    // All areas to scan: primary city + additional cities
+    const searchAreas = [city, ...extraCities];
+
+    // Search each area in parallel
+    const [googleResults, ...tavilyResultSets] = await Promise.all([
       searchNearbyCompetitors(category, city),
-      tavilySearch(`מתחרים ${category} ${city} דירוגים ביקורות`, 8),
+      ...searchAreas.map(area =>
+        tavilySearch(`מתחרים ${category} ${area} דירוגים ביקורות`, 6)
+      ),
     ]);
+    const tavilyResults = tavilyResultSets.flat();
 
     const existingCompetitors = await prisma.competitor.findMany({ where: { linked_business: businessProfileId } });
     const existingNames = new Set(existingCompetitors.map(c => c.name.toLowerCase()));
 
     const contextBlock = [
-      googlePlaces.length > 0 ? `תוצאות Google Places:\n${googlePlaces.map(p =>
+      googleResults.length > 0 ? `תוצאות Google Places:\n${googleResults.map((p: any) =>
         `- ${p.name}: דירוג ${p.rating || '?'} (${p.user_ratings_total || 0} ביקורות), ${p.formatted_address || city}`
       ).join('\n')}` : '',
-      tavilyResults.length > 0 ? `תוצאות חיפוש:\n${tavilyResults.map(r =>
+      tavilyResults.length > 0 ? `תוצאות חיפוש:\n${tavilyResults.map((r: any) =>
         `- כותרת: ${r.title}\n  תוכן: ${(r.content || '').substring(0, 200)}\n  URL: ${r.url}`
       ).join('\n')}` : '',
     ].filter(Boolean).join('\n\n');
 
-    // Build prompt — fallback to LLM sector knowledge when no external data available
+    const areasDesc = searchAreas.join(', ');
     const competitorFields = `- name: שם המתחרה
 - rating: דירוג (1-5 או null)
 - review_count: מספר ביקורות או null
-- address: כתובת אם ידועה
+- address: כתובת אם ידועה (כולל עיר)
 - strengths: חוזקות (עד 3, מופרד בפסיקים)
 - weaknesses: חולשות (עד 3)
 - price_range: טווח מחירים אם ידוע
@@ -74,17 +84,17 @@ export async function runCompetitorIdentification(req: Request, res: Response) {
     const llmPrompt = contextBlock
       ? `אתה מנתח תחרותי לעסקים ישראלים.
 
-עסק: "${name}", קטגוריה: ${category}, עיר: ${city}
+עסק: "${name}", קטגוריה: ${category}, אזור סריקה: ${areasDesc} (רדיוס ${radiusKm} ק"מ מ-${city})
 
 ${contextBlock}
 
-זהה מתחרים ישירים בלבד (אותה קטגוריה, אותה עיר/אזור). עבור כל מתחרה חלץ:
+זהה מתחרים ישירים בלבד (אותה קטגוריה, באזורים: ${areasDesc}). כלול מתחרים מכל הערים שסרקנו. עבור כל מתחרה חלץ:
 ${competitorFields}`
       : `אתה מנתח תחרותי לעסקים ישראלים.
 
-עסק: "${name}", קטגוריה: ${category}, עיר: ${city}
+עסק: "${name}", קטגוריה: ${category}, אזור סריקה: ${areasDesc} (רדיוס ${radiusKm} ק"מ)
 
-אין נתוני חיפוש חיצוניים. בהתבסס על הידע שלך על השוק הישראלי, זהה עד 5 מתחרים טיפוסיים בקטגוריה "${category}" באזור "${city}". השתמש בשמות אמיתיים אם ידועים לך, אחרת צור שמות אופייניים לסקטור.
+אין נתוני חיפוש חיצוניים. בהתבסס על הידע שלך על השוק הישראלי, זהה עד 5 מתחרים טיפוסיים בקטגוריה "${category}" באזורים: ${areasDesc}.
 
 עבור כל מתחרה חלץ:
 ${competitorFields}`;
@@ -144,9 +154,27 @@ ${competitorFields}`;
       }
     }
 
+    // Remove competitors outside the current search areas.
+    // Any competitor whose address doesn't mention any of the valid cities is out of scope.
+    const allCompetitors = await prisma.competitor.findMany({ where: { linked_business: businessProfileId } });
+    const toDelete = allCompetitors.filter(comp => {
+      const addr = (comp.address || '').toLowerCase();
+      return !searchAreas.some(area => addr.includes(area.toLowerCase()));
+    });
+    if (toDelete.length > 0) {
+      await prisma.competitor.deleteMany({ where: { id: { in: toDelete.map(c => c.id) } } });
+      console.log(`runCompetitorIdentification: removed ${toDelete.length} out-of-scope competitors`);
+    }
+
     await writeAutomationLog('runCompetitorIdentification', businessProfileId, startTime, created + updated);
-    console.log(`runCompetitorIdentification done: ${created} created, ${updated} updated`);
-    return res.json({ competitors_found: competitors.length, new_competitors_created: created, existing_competitors_updated: updated });
+    console.log(`runCompetitorIdentification done: ${created} created, ${updated} updated, areas: ${areasDesc}`);
+    return res.json({
+      competitors_found: competitors.length,
+      new_competitors_created: created,
+      existing_competitors_updated: updated,
+      out_of_scope_removed: toDelete.length,
+      areas_scanned: searchAreas,
+    });
   } catch (err: any) {
     console.error('runCompetitorIdentification error:', err.message);
     await writeAutomationLog('runCompetitorIdentification', businessProfileId, startTime, 0, 'failed', err.message);
