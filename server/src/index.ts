@@ -280,6 +280,65 @@ app.listen(PORT, async () => {
     `);
     await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_comp_snapshots ON otx_competitor_snapshots(competitor_id, taken_at DESC)`);
     await db.$executeRawUnsafe(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS subscription_plan TEXT`);
+    await db.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS media_assets (
+        id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        created_date    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        linked_business TEXT,
+        image_base64    TEXT,
+        mime_type       TEXT DEFAULT 'image/jpeg',
+        source          TEXT DEFAULT 'uploaded',
+        description     TEXT,
+        used_in         TEXT
+      )
+    `);
+    await db.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS organic_posts (
+        id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        created_date    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        linked_business TEXT,
+        signal_id       TEXT,
+        signal_summary  TEXT,
+        platform        TEXT,
+        post_type       TEXT NOT NULL DEFAULT 'post',
+        content         TEXT,
+        media_asset_id  TEXT,
+        image_url       TEXT,
+        status          TEXT NOT NULL DEFAULT 'draft',
+        published_at    TIMESTAMPTZ,
+        engagement_likes    INT DEFAULT 0,
+        engagement_comments INT DEFAULT 0,
+        reach               INT DEFAULT 0
+      )
+    `);
+    await db.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS campaigns (
+        id               TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        created_date     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        linked_business  TEXT,
+        signal_id        TEXT,
+        signal_summary   TEXT,
+        title            TEXT NOT NULL DEFAULT '',
+        platform         TEXT,
+        objective        TEXT,
+        post_content     TEXT,
+        image_url        TEXT,
+        audience_json    TEXT,
+        daily_budget_ils NUMERIC,
+        campaign_days    INT,
+        total_budget_ils NUMERIC,
+        est_reach_low    INT,
+        est_reach_high   INT,
+        est_leads_low    INT,
+        est_leads_high   INT,
+        status           TEXT NOT NULL DEFAULT 'draft',
+        published_at     TIMESTAMPTZ,
+        actual_reach     INT,
+        actual_clicks    INT,
+        actual_leads     INT,
+        actual_spend_ils NUMERIC
+      )
+    `);
     await db.$executeRawUnsafe(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS search_radius_km INT DEFAULT 15`);
     await db.$executeRawUnsafe(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS additional_cities TEXT`);
     await db.$executeRawUnsafe(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS branches TEXT`);
