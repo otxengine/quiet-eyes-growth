@@ -62,6 +62,8 @@ export async function getAudienceSegments(req: Request, res: Response) {
       : '';
 
     const result = await invokeLLM({
+      model: 'sonnet',
+      maxTokens: 3000,
       prompt: `אתה מומחה פרסום ממומן לעסקים ישראלים. בנה 3 קהלי יעד מדויקים לפורמט Facebook Ads ו-Google Ads.
 
 עסק: "${profile.name}" — ${profile.category} ב${profile.city}
@@ -80,45 +82,66 @@ ${reviewSamples || 'אין ביקורות עדיין'}
 לידים:
 ${leadSamples || 'אין לידים עדיין'}
 
-בנה 3 קהלי יעד שונים — כל אחד עם טרגטינג מוכן להדבקה בפלטפורמות הפרסום. JSON בלבד:
+חובה להחזיר בדיוק 3 קהלי יעד שונים. אפילו אם אין נתונים, השתמש בידע שלך על הסקטור.
+JSON:
 {
   "segments": [
     {
-      "segment_name": "שם קצר ותיאורי (עד 4 מילים)",
+      "segment_name": "שם קצר (עד 4 מילים)",
       "description": "תיאור הקהל — עד 15 מילה",
       "age_min": 24,
       "age_max": 45,
-      "genders": "נשים וגברים|נשים בלבד|גברים בלבד",
-      "income_level": "low|mid|high",
+      "genders": "נשים וגברים",
+      "income_level": "mid",
       "conversion_probability": 0.35,
-      "estimated_size": "small|medium|large",
+      "estimated_size": "medium",
       "estimated_audience_range": "15,000–55,000",
       "facebook_targeting": {
-        "interests": ["שם עניין ב-Facebook 1","עניין 2","עניין 3","עניין 4"],
-        "behaviors": ["התנהגות Facebook 1","התנהגות 2"],
-        "custom_audience": "תיאור Custom Audience מומלץ",
-        "lookalike_source": "מה להשתמש כ-seed ל-Lookalike",
-        "exclusions": ["מה לא לכלול בטרגטינג"]
+        "interests": ["עניין 1","עניין 2","עניין 3"],
+        "behaviors": ["התנהגות 1"],
+        "custom_audience": "תיאור",
+        "lookalike_source": "seed",
+        "exclusions": ["מה לא לכלול"]
       },
       "google_targeting": {
-        "keywords": ["ביטוי חיפוש 1","ביטוי 2","ביטוי 3"],
-        "negative_keywords": ["מילת שלילה 1"],
-        "in_market_audiences": ["קהל in-market 1","קהל 2"],
-        "custom_intent": "תיאור Custom Intent Audience"
+        "keywords": ["ביטוי 1","ביטוי 2"],
+        "negative_keywords": ["שלילה 1"],
+        "in_market_audiences": ["קהל 1"],
+        "custom_intent": "תיאור"
       },
-      "best_channels": ["Facebook","Instagram","Google"],
-      "best_posting_time": "יום ושעה אופטימלית",
-      "ad_creative_tip": "טיפ ספציפי לקריאייטיב לקהל זה",
-      "pain_point": "הכאב העיקרי של הקהל הזה",
-      "purchase_trigger": "מה גורם לרכישה"
+      "best_channels": ["Facebook","Instagram"],
+      "best_posting_time": "שישי 12:00",
+      "ad_creative_tip": "טיפ לקריאייטיב",
+      "pain_point": "כאב הקהל",
+      "purchase_trigger": "גורם לרכישה"
     }
   ]
-}
-חוק: כל פרופיל חייב להיות שונה. השתמש בשמות עניין ספציפיים שקיימים ב-Facebook Ads Manager.`,
+}`,
       response_json_schema: { type: 'object' },
     });
 
-    const segments = Array.isArray(result?.segments) ? result.segments : [];
+    let segments = Array.isArray(result?.segments) ? result.segments : [];
+
+    // Fallback: if LLM returned nothing, build generic segments from profile
+    if (segments.length === 0) {
+      segments = [
+        {
+          segment_name: `לקוחות ${profile.category} מקומיים`,
+          description: `תושבי ${profile.city} המחפשים ${profile.category}`,
+          age_min: 25, age_max: 55, genders: 'נשים וגברים',
+          income_level: 'mid', conversion_probability: 0.3,
+          estimated_size: 'medium', estimated_audience_range: '10,000–40,000',
+          facebook_targeting: { interests: [profile.category, profile.city, 'מסעדות'], behaviors: ['קונים מקוונים'], custom_audience: 'מבקרי האתר', lookalike_source: 'רשימת לקוחות', exclusions: [] },
+          google_targeting: { keywords: [`${profile.category} ${profile.city}`, profile.name], negative_keywords: [], in_market_audiences: ['מסעדות ואוכל'], custom_intent: profile.category },
+          best_channels: ['Facebook', 'Instagram', 'Google'],
+          best_posting_time: 'ראשון-חמישי 12:00–14:00',
+          ad_creative_tip: 'הצג תמונות מנות/שירות איכותיות עם CTA ברור',
+          pain_point: 'מחפשים אפשרות אוכל/שירות איכותית באזור',
+          purchase_trigger: 'מבצע או המלצה של חבר',
+        },
+      ];
+    }
+
     return res.json({ segments, data_quality: dataQuality });
   } catch (err: any) {
     console.error('[getAudienceSegments] error:', err.message);

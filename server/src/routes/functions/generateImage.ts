@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { prisma } from '../../db';
 import Anthropic from '@anthropic-ai/sdk';
+import { invokeLLM } from '../../lib/llm';
 
 const OPENAI_API_KEY      = process.env.OPENAI_API_KEY      || '';
 const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY || '';
@@ -325,7 +326,29 @@ function translateCustomPrompt(hebrewText: string): string {
   return result;
 }
 
-function extractVisualKeywords(insightText: string, postText: string, sector: string): string {
+/** Use LLM to extract 5 English visual keywords directly from the post text */
+async function extractKeywordsFromPost(postText: string, businessName: string, sector: string): Promise<string> {
+  if (postText.trim().length < 20) return '';
+  try {
+    const result = await invokeLLM({
+      model: 'haiku',
+      maxTokens: 80,
+      prompt: `Extract 5 English visual keywords for a stock photo search that matches this marketing post.
+Business: "${businessName}" (${sector})
+Post text: "${postText.slice(0, 300)}"
+Rules: English only, descriptive nouns/adjectives, suitable for photo search (e.g. "fresh sushi salmon roll restaurant").
+Return ONLY the keywords as a single line, space-separated. No JSON, no explanation.`,
+      response_json_schema: undefined,
+    });
+    // invokeLLM returns parsed JSON by default — if we get a string-like result, use it
+    const text = typeof result === 'string' ? result : JSON.stringify(result);
+    const cleaned = text.replace(/["{}\[\]]/g, '').replace(/\n/g, ' ').trim();
+    if (cleaned.length > 5) return cleaned.slice(0, 120);
+  } catch { /* fall through */ }
+  return '';
+}
+
+function extractVisualKeywordsSync(insightText: string, postText: string, sector: string): string {
   const combined = `${insightText} ${postText}`.toLowerCase();
 
   for (const entry of INSIGHT_TO_VISUAL) {
@@ -447,13 +470,20 @@ export async function generateImage(req: Request, res: Response) {
   const sector = categoryToSector(category);
 
   const hasCustom = custom_prompt.trim().length > 0;
+  const hasPost   = post_text.trim().length >= 20;
 
-  // Translate: dictionary first, then Claude fallback (async)
-  // Auto-mode: extract visual keywords from insight text (sync, no LLM needed)
+  // Priority: custom_prompt > post_text (LLM keywords) > hardcoded insight mapping
   const translatedCustom = hasCustom ? await translateForSearch(custom_prompt.trim()) : '';
-  const visualKeywords   = hasCustom
-    ? translatedCustom
-    : extractVisualKeywords(insightText, post_text, sector);
+  let visualKeywords: string;
+  if (hasCustom) {
+    visualKeywords = translatedCustom;
+  } else if (hasPost) {
+    // Extract keywords from the actual post content so the image matches what was written
+    const postKeywords = await extractKeywordsFromPost(post_text, category, sector);
+    visualKeywords = postKeywords || extractVisualKeywordsSync(insightText, post_text, sector);
+  } else {
+    visualKeywords = extractVisualKeywordsSync(insightText, post_text, sector);
+  }
 
   console.log('[generateImage] custom_prompt:', custom_prompt || '(none)');
   console.log('[generateImage] translatedCustom:', translatedCustom || '(none)');
