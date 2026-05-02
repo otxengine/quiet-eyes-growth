@@ -1,5 +1,6 @@
 import React from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Calendar, User, MapPin, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Clock, XCircle } from 'lucide-react';
 
@@ -29,6 +30,7 @@ function daysUntil(dateStr) {
 export default function TaskCard({ task, onStatusChange }) {
   const [expanded, setExpanded] = React.useState(false);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const status = statusConfig[task.status] || statusConfig.pending;
   const priority = priorityConfig[task.priority] || priorityConfig.medium;
   const StatusIcon = status.icon;
@@ -52,7 +54,10 @@ export default function TaskCard({ task, onStatusChange }) {
           <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-2 ${priority.dot}`} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <span className={`text-[13px] font-semibold ${task.status === 'done' ? 'text-foreground-muted line-through' : 'text-foreground'}`}>
+              <span
+                className={`text-[13px] font-semibold cursor-pointer hover:underline ${task.status === 'done' ? 'text-foreground-muted line-through' : 'text-foreground'}`}
+                onClick={(e) => { e.stopPropagation(); navigate(`/tasks/${task.id}`); }}
+              >
                 {task.title}
               </span>
               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${status.bg} ${status.color}`}>

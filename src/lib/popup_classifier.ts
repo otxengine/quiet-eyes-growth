@@ -6,16 +6,21 @@
  */
 
 export type PopupType =
-  | 'organic_post'     // פוסט אורגני (לא ממומן)
-  | 'story_post'       // סטורי אורגני
-  | 'social_post'      // פרסם פוסט / story (legacy)
-  | 'respond'          // הגב לביקורת / לקוח
-  | 'internal_task'    // משימה פנימית בעסק
-  | 'whatsapp_blast'   // שלח ל-WhatsApp
-  | 'campaign'         // קמפיין ממומן
-  | 'pricing_action'   // שינוי מחיר / מבצע
-  | 'delivery_promo'   // מבצע משלוח
-  | 'platform_setup';  // הגדרת פלטפורמה (גוגל מפס, פייסבוק, אינסטגרם)
+  | 'organic_post'          // פוסט אורגני (לא ממומן)
+  | 'story_post'            // סטורי אורגני
+  | 'social_post'           // פרסם פוסט / story (legacy)
+  | 'respond'               // הגב לביקורת / לקוח
+  | 'internal_task'         // משימה פנימית בעסק
+  | 'whatsapp_blast'        // שלח WhatsApp blast → navigate to /marketing?create=whatsapp
+  | 'campaign'              // קמפיין ממומן
+  | 'pricing_action'        // שינוי מחיר / מבצע (legacy)
+  | 'delivery_promo'        // מבצע משלוח
+  | 'platform_setup'        // הגדרת פלטפורמה
+  | 'competitor_response'   // מתחרה שינה מחיר/מבצע — popup with counter-strategy
+  | 'retention_whatsapp'    // לקוח ישן לא חזר — popup with WhatsApp message
+  | 'pricing_adjustment'    // שינוי מחיר/תפריט — popup with pricing comparison
+  | 'new_competitor_alert'  // מתחרה חדש → navigate to /competitors
+  | 'seasonal_promo';       // מבצע עונתי/חגי → navigate to /marketing/create?type=seasonal
 
 /** Returns true for signal types that should navigate to /marketing (organic content) */
 export function isOrganicContent(type: PopupType): boolean {
@@ -25,6 +30,12 @@ export function isOrganicContent(type: PopupType): boolean {
 /** Returns true for signal types that should navigate to /marketing/create (paid campaign) */
 export function isPaidCampaign(type: PopupType): boolean {
   return type === 'campaign' || type === 'pricing_action';
+}
+
+/** Returns true for types that navigate away (not open ActionPopup) */
+export function isNavigateAway(type: PopupType): boolean {
+  return isOrganicContent(type) || isPaidCampaign(type) ||
+    type === 'whatsapp_blast' || type === 'new_competitor_alert' || type === 'seasonal_promo';
 }
 
 export function classifyInsight(insight: {
@@ -48,13 +59,54 @@ export function classifyInsight(insight: {
   if (type === 'story_post' || type === 'story') return 'story_post';
   if (type === 'organic_post') return 'organic_post';
   if (type === 'social_post' || type === 'promote' || type === 'post_publish') return 'organic_post';
-  if (type === 'respond')     return 'respond';
-  if (type === 'campaign')    return 'campaign';
-  if (type === 'call')        return 'internal_task';
-  if (type === 'task')        return 'internal_task';
-  if (type === 'whatsapp_blast') return 'whatsapp_blast';
-  if (type === 'pricing_action') return 'pricing_action';
-  if (type === 'delivery_promo') return 'delivery_promo';
+  if (type === 'respond')             return 'respond';
+  if (type === 'campaign')            return 'campaign';
+  if (type === 'call')                return 'internal_task';
+  if (type === 'task')                return 'internal_task';
+  if (type === 'whatsapp_blast')      return 'whatsapp_blast';
+  if (type === 'pricing_action')      return 'pricing_action';
+  if (type === 'delivery_promo')      return 'delivery_promo';
+  if (type === 'competitor_response') return 'competitor_response';
+  if (type === 'retention_whatsapp')  return 'retention_whatsapp';
+  if (type === 'pricing_adjustment')  return 'pricing_adjustment';
+  if (type === 'new_competitor_alert') return 'new_competitor_alert';
+  if (type === 'seasonal_promo')      return 'seasonal_promo';
+
+  // ── NEW: specific detection rules (before general heuristics) ──────────────
+
+  // Seasonal / holiday promo
+  if (/חג|פסח|סוכות|ראש השנה|חנוכה|ניו יר|black.?friday|יום העצמאות|שבועות/.test(text + label) ||
+      category === 'local_event') {
+    return 'seasonal_promo';
+  }
+
+  // New competitor arriving in market
+  if (category === 'competitor_move' && /חדש|נפתח|פתח|הגיע לשוק|התחרות|מתחרה חדש/.test(text + label)) {
+    return 'new_competitor_alert';
+  }
+
+  // Competitor changed price / promotion (specific — not generic competitor_move)
+  if (category === 'competitor_move' && /מחיר|מבצע|הנחה|הוזיל|העלה|מחירים|תפריט|פרומו/.test(text + label)) {
+    return 'competitor_response';
+  }
+
+  // Retention / old customer hasn't returned
+  if (/לקוח.*לא חזר|שימור לקוח|retention|לא ביקר|חזרתיות|לקוח.*אבד|lapsed/.test(text + label) ||
+      category === 'retention') {
+    return 'retention_whatsapp';
+  }
+
+  // Pricing / menu change (from our own perspective)
+  if (/שינוי מחיר|לעדכן מחיר|מחיר חדש|להעלות מחיר|להוזיל|עדכון תפריט|תפריט חדש/.test(text + label)) {
+    return 'pricing_adjustment';
+  }
+
+  // WhatsApp blast → navigate to blast composer
+  if (/whatsapp.?blast|שלח.*whatsapp|הבזק.*ווטסאפ|blast.*whatsapp/.test(text + label)) {
+    return 'whatsapp_blast';
+  }
+
+  // ── Existing rules (unchanged) ─────────────────────────────────────────────
 
   // Platform setup detection — must come before general platform checks
   const setupPattern = /הרשם|הגדר|צור חשבון|פתח חשבון|הוסף עסק|setup|register|create account|claim|verify/i;
@@ -79,7 +131,7 @@ export function classifyInsight(insight: {
 
   // Signal category
   if (category === 'opportunity' || category === 'trend') return 'organic_post';
-  if (category === 'competitor_move') return 'internal_task';
+  if (category === 'competitor_move') return 'competitor_response';
 
   // Text-level signals
   if (/happy.?hour|קוקטייל|מבצע|sale|discount/.test(text)) return 'organic_post';
@@ -92,16 +144,21 @@ export function classifyInsight(insight: {
 /** Map classifyInsight result back to ActionPopup's existing action_type strings */
 export function popupTypeToActionType(t: PopupType): string {
   switch (t) {
-    case 'organic_post':   return 'social_post';
-    case 'story_post':     return 'social_post';
-    case 'social_post':    return 'social_post';
-    case 'respond':        return 'respond';
-    case 'campaign':       return 'promote';
-    case 'whatsapp_blast': return 'social_post';
-    case 'pricing_action': return 'promote';
-    case 'delivery_promo': return 'platform_setup';
-    case 'internal_task':  return 'task';
-    case 'platform_setup': return 'platform_setup';
+    case 'organic_post':          return 'social_post';
+    case 'story_post':            return 'social_post';
+    case 'social_post':           return 'social_post';
+    case 'respond':               return 'respond';
+    case 'campaign':              return 'promote';
+    case 'whatsapp_blast':        return 'social_post';
+    case 'pricing_action':        return 'promote';
+    case 'delivery_promo':        return 'platform_setup';
+    case 'internal_task':         return 'task';
+    case 'platform_setup':        return 'platform_setup';
+    case 'competitor_response':   return 'competitor_response';
+    case 'retention_whatsapp':    return 'retention_whatsapp';
+    case 'pricing_adjustment':    return 'pricing_adjustment';
+    case 'new_competitor_alert':  return 'task';
+    case 'seasonal_promo':        return 'promote';
   }
 }
 
@@ -223,9 +280,9 @@ export function getPlatformSetupConfig(text: string, label: string): {
 /** SWOT column type → best popup type */
 export function swotTypeToPopupType(swotKey: 'strengths' | 'weaknesses' | 'opportunities' | 'threats'): string {
   switch (swotKey) {
-    case 'strengths':     return 'social_post';  // highlight our strengths → post
-    case 'weaknesses':    return 'task';          // internal fix
-    case 'opportunities': return 'promote';       // campaign opportunity
-    case 'threats':       return 'task';          // internal defensive action
+    case 'strengths':     return 'social_post';
+    case 'weaknesses':    return 'task';
+    case 'opportunities': return 'promote';
+    case 'threats':       return 'task';
   }
 }

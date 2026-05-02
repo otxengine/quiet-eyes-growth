@@ -3,13 +3,24 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { ArrowLeft, Loader2, CheckCheck, ExternalLink, ListPlus, Sparkles, RefreshCw, Megaphone } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { classifyInsight, isOrganicContent, isPaidCampaign } from '@/lib/popup_classifier';
+import { classifyInsight, isOrganicContent, isPaidCampaign, isNavigateAway } from '@/lib/popup_classifier';
 import { toast } from 'sonner';
 import { SourceTypeBadge, PlatformBadge, SentimentBadge } from './SignalSourceBadge';
 import AiConfidenceBadge from '@/components/ai/AiConfidenceBadge';
 import DataFreshnessBadge from '@/components/ai/DataFreshnessBadge';
 import FeedbackBar from '@/components/ui/FeedbackBar';
 import ActionPopup from '@/components/ui/ActionPopup';
+
+const PLATFORM_BADGE = {
+  instagram: { icon: '📸', label: 'Instagram', cls: 'bg-pink-50 text-pink-600 border-pink-100' },
+  facebook:  { icon: '👤', label: 'Facebook',  cls: 'bg-blue-50 text-blue-600 border-blue-100' },
+  tiktok:    { icon: '🎵', label: 'TikTok',    cls: 'bg-gray-100 text-gray-700 border-gray-200' },
+  google:    { icon: '⭐', label: 'Google',    cls: 'bg-red-50 text-red-600 border-red-100' },
+  whatsapp:  { icon: '💬', label: 'WhatsApp',  cls: 'bg-green-50 text-green-600 border-green-100' },
+  wolt:      { icon: '🛵', label: 'Wolt',      cls: 'bg-sky-50 text-sky-600 border-sky-100' },
+  ten_bis:   { icon: '🍽️', label: 'תן ביס',   cls: 'bg-orange-50 text-orange-600 border-orange-100' },
+  website:   { icon: '🌐', label: 'אתר',       cls: 'bg-gray-50 text-gray-600 border-gray-200' },
+};
 
 const categoryConfig = {
   threat:          { borderClass: 'signal-border-threat',         label: 'איום' },
@@ -225,7 +236,11 @@ ACTION_TIME: [זמן ביצוע, למשל: "5 דקות"]
       <div className={`px-5 py-4 cursor-pointer ${config.borderClass}`} onClick={handleExpand}>
         <div className="flex items-start gap-3">
           <div className="flex-1 min-w-0">
-            <p className={`text-[13px] text-foreground leading-snug mb-1.5 ${!signal.is_read ? 'font-semibold' : 'font-medium'}`}>
+            <p
+              className={`text-[13px] text-foreground leading-snug mb-1.5 ${!signal.is_read ? 'font-semibold' : 'font-medium'} hover:underline cursor-pointer`}
+              onClick={(e) => { e.stopPropagation(); navigate(`/signals/${signal.id}`); }}
+              title="פתח פרטי תובנה"
+            >
               {signal.summary}
             </p>
             {signal.recommended_action && (
@@ -271,17 +286,28 @@ ACTION_TIME: [זמן ביצוע, למשל: "5 דקות"]
                 </button>
               )}
               {(() => {
-                // Show action type badge when metadata is available
+                // Show action type badge + platform badge when metadata is available
                 try {
                   const m = JSON.parse(signal.source_description || '{}');
-                  const ACTION_ICON = { social_post:'📣', respond:'💬', promote:'🎯', call:'📞', task:'✅' };
-                  if (m.action_label && m.action_type) {
-                    return (
-                      <span className="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full border border-indigo-100">
-                        {ACTION_ICON[m.action_type] || '⚡'} {m.action_label}
-                      </span>
-                    );
-                  }
+                  const ACTION_ICON = { social_post:'📣', respond:'💬', promote:'🎯', call:'📞', task:'✅', post_publish:'📣' };
+                  const platInfo = PLATFORM_BADGE[m.action_platform];
+                  return (
+                    <>
+                      {m.action_label && m.action_type && (
+                        <span className="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full border border-indigo-100">
+                          {ACTION_ICON[m.action_type] || '⚡'} {m.action_label}
+                        </span>
+                      )}
+                      {platInfo && (
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full border ${platInfo.cls}`}
+                          title={m.platform_reason || platInfo.label}
+                        >
+                          {platInfo.icon} {platInfo.label}
+                        </span>
+                      )}
+                    </>
+                  );
                 } catch {}
                 return null;
               })()}
@@ -314,6 +340,26 @@ ACTION_TIME: [זמן ביצוע, למשל: "5 דקות"]
                       category: signal.category || '',
                     });
                     navigate(`/marketing/create?${params.toString()}`);
+                  } else if (popupType === 'whatsapp_blast') {
+                    const params = new URLSearchParams({
+                      create: 'whatsapp',
+                      signalId: signal.id,
+                      summary: signal.summary || '',
+                    });
+                    navigate(`/marketing?${params.toString()}`);
+                  } else if (popupType === 'seasonal_promo') {
+                    const params = new URLSearchParams({
+                      type: 'seasonal',
+                      signalId: signal.id,
+                      event: signal.summary || '',
+                      summary: signal.summary || '',
+                    });
+                    navigate(`/marketing/create?${params.toString()}`);
+                  } else if (popupType === 'new_competitor_alert') {
+                    // Extract competitor name from summary if possible
+                    const compName = signal.summary?.match(/["״](.*?)["״]/)?.[1] || signal.summary || '';
+                    const params = new URLSearchParams({ newCompetitor: compName });
+                    navigate(`/competitors?${params.toString()}`);
                   } else {
                     setShowActionPopup(true);
                   }
@@ -360,6 +406,24 @@ ACTION_TIME: [זמן ביצוע, למשל: "5 דקות"]
       )}
       {expanded && (
         <div className="px-5 pb-4 mx-5 mb-3 rounded-xl bg-secondary border border-border space-y-4 p-4 fade-in-up">
+
+          {/* Platform recommendation (from agent guidance) */}
+          {(() => {
+            try {
+              const m = JSON.parse(signal.source_description || '{}');
+              const platInfo = PLATFORM_BADGE[m.action_platform];
+              if (!platInfo || !m.platform_reason) return null;
+              return (
+                <div className={`flex items-start gap-3 px-3 py-2.5 rounded-xl border ${platInfo.cls}`}>
+                  <span className="text-xl flex-shrink-0">{platInfo.icon}</span>
+                  <div>
+                    <p className="text-[11px] font-semibold mb-0.5">למה דווקא {platInfo.label}?</p>
+                    <p className="text-[11px] opacity-80">{m.platform_reason}</p>
+                  </div>
+                </div>
+              );
+            } catch { return null; }
+          })()}
 
           {/* Reasoning chain */}
           {signal.reasoning_chain && (

@@ -47,6 +47,8 @@ JSON בלבד:
   "recommended_action": "פועל ציווי + פעולה ספציפית",
   "action_label": "3-4 מילים עם פועל",
   "action_type": "social_post|promote|task|call",
+  "action_platform": "instagram|facebook|tiktok|google|whatsapp|wolt|ten_bis|website|general",
+  "platform_reason": "משפט אחד מדוע פלטפורמה זו מתאימה לעסק ולתובנה זו",
   "prefilled_text": "טקסט מוכן לשימוש ישיר בעברית — 30-50 מילים",
   "time_minutes": 15,
   "confidence": 65,
@@ -65,12 +67,14 @@ JSON בלבד:
         if (!insight.summary || existingSumsCold.has(insight.summary)) continue;
         if ((insight.confidence ?? 100) < 40) continue; // skip low-confidence insights
         const actionMeta = JSON.stringify({
-          action_label:  insight.action_label || 'פתח משימה',
-          action_type:   insight.action_type || 'task',
-          prefilled_text: insight.prefilled_text || '',
-          time_minutes:  insight.time_minutes || 15,
-          urgency_hours: insight.urgency_hours || 48,
-          impact_reason: insight.impact_reason || '',
+          action_label:    insight.action_label || 'פתח משימה',
+          action_type:     insight.action_type || 'task',
+          action_platform: insight.action_platform || '',
+          platform_reason: insight.platform_reason || '',
+          prefilled_text:  insight.prefilled_text || '',
+          time_minutes:    insight.time_minutes || 15,
+          urgency_hours:   insight.urgency_hours || 48,
+          impact_reason:   insight.impact_reason || '',
         });
         await prisma.marketSignal.create({
           data: {
@@ -112,8 +116,10 @@ ${contextBlock}
 2. כל recommended_action חייבת להתחיל בפועל ציווי ספציפי ("פרסם", "הגב", "התקשר", "שלח")
 3. action_label חייב להיות קצר, ספציפי, עם פועל (מקסימום 5 מילים)
 4. action_type: אחד מ: social_post / respond / promote / call / task
-5. prefilled_text: טקסט מוכן לפעולה (פוסט/תגובה/הצעה) בעברית — 30-80 מילים
-6. time_minutes: זמן ביצוע ריאלי (5-60 דקות)
+5. action_platform: הפלטפורמה הכי מתאימה לפעולה זו — בחר: instagram (תוכן ויזואלי, קהל 18-40, מסעדות/יופי/אופנה) | facebook (אירועים, קהל מקומי, 30+) | tiktok (תוכן ויראלי, קהל 16-30) | google (ביקורות, SEO מקומי) | whatsapp (תקשורת ישירה, בלאסטים) | wolt / ten_bis (פרומו משלוחים) | general (כאשר כל הפלטפורמות רלוונטיות)
+6. platform_reason: משפט אחד בעברית — מדוע פלטפורמה זו מתאימה לעסק זה ולתובנה זו
+7. prefilled_text: טקסט מוכן לפעולה (פוסט/תגובה/הצעה) בעברית — 30-80 מילים
+8. time_minutes: זמן ביצוע ריאלי (5-60 דקות)
 
 החזר JSON בדיוק:
 {"insights":[{
@@ -123,6 +129,8 @@ ${contextBlock}
   "recommended_action": "פעולה ספציפית בעברית",
   "action_label": "פועל + עצם קצר",
   "action_type": "social_post|respond|promote|call|task",
+  "action_platform": "instagram|facebook|tiktok|google|whatsapp|wolt|ten_bis|general",
+  "platform_reason": "מדוע פלטפורמה זו — משפט אחד",
   "prefilled_text": "טקסט מוכן לשימוש...",
   "time_minutes": 15,
   "confidence": 75,
@@ -145,12 +153,14 @@ ${contextBlock}
       const sourceUrls = (insight.source_urls || []).filter((u: string) => u?.startsWith('http'));
       // Store action metadata in source_description as JSON for use by UI
       const actionMeta = JSON.stringify({
-        action_label:  insight.action_label || insight.recommended_action?.split(' ').slice(0, 4).join(' ') || 'פתח משימה',
-        action_type:   insight.action_type || 'task',
-        prefilled_text: insight.prefilled_text || '',
-        time_minutes:  insight.time_minutes || 15,
-        urgency_hours: insight.urgency_hours || 24,
-        impact_reason: insight.impact_reason || '',
+        action_label:    insight.action_label || insight.recommended_action?.split(' ').slice(0, 4).join(' ') || 'פתח משימה',
+        action_type:     insight.action_type || 'task',
+        action_platform: insight.action_platform || '',
+        platform_reason: insight.platform_reason || '',
+        prefilled_text:  insight.prefilled_text || '',
+        time_minutes:    insight.time_minutes || 15,
+        urgency_hours:   insight.urgency_hours || 24,
+        impact_reason:   insight.impact_reason || '',
       });
       await prisma.marketSignal.create({
         data: {

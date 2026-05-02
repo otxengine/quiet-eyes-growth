@@ -43,6 +43,8 @@ import OTXDashboard from '@/pages/OTXDashboard';
 import LearningCenter from '@/pages/LearningCenter.jsx';
 import Marketing from '@/pages/Marketing.jsx';
 import CampaignCreate from '@/pages/CampaignCreate.jsx';
+import SignalDetail from '@/pages/SignalDetail.jsx';
+import TaskDetail from '@/pages/TaskDetail.jsx';
 import AdminDashboard from '@/pages/AdminDashboard.jsx';
 import AdminLayout from '@/components/layout/AdminLayout';
 import DevUserSwitcher from '@/components/DevUserSwitcher';
@@ -159,6 +161,8 @@ const AuthenticatedApp = () => {
         <Route path="/learning" element={<LearningCenter />} />
         <Route path="/marketing" element={<Marketing />} />
         <Route path="/marketing/create" element={<CampaignCreate />} />
+        <Route path="/signals/:signalId" element={<SignalDetail />} />
+        <Route path="/tasks/:taskId" element={<TaskDetail />} />
       </Route>
 
       <Route path="/sign-in/*" element={

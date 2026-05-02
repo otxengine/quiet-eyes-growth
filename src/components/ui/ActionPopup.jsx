@@ -367,7 +367,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
     try {
       await base44.entities.Task.create({
         title: actionLabel,
-        description: `${text}\n\nמקור: ${signal.summary}`,
+        description: `[signal:${signal.id}]\n${text}\n\nמקור: ${signal.summary}`,
         status: 'pending',
         priority: signal.impact_level === 'high' ? 'high' : 'medium',
         source_type: 'alert',
@@ -1216,7 +1216,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           try {
             await base44.entities.Task.create({
               title: taskTitle,
-              description: signal.summary,
+              description: `[signal:${signal.id}]\n${signal.summary}`,
               status: 'pending',
               priority: 'high',
               source_type: 'alert',
@@ -1311,7 +1311,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           try {
             await base44.entities.Task.create({
               title: 'מעקב אחרי לקוח שלא חזר',
-              description: `נשלחה הודעת WhatsApp:\n${retentionMsg}\n\nמקור: ${signal.summary}`,
+              description: `[signal:${signal.id}]\nנשלחה הודעת WhatsApp:\n${retentionMsg}\n\nמקור: ${signal.summary}`,
               status: 'pending',
               priority: 'medium',
               source_type: 'alert',
@@ -1378,7 +1378,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           try {
             await base44.entities.Task.create({
               title: `לעדכן מחיר / תפריט — ${(signal.summary || '').slice(0, 60)}`,
-              description: signal.summary,
+              description: `[signal:${signal.id}]\n${signal.summary}`,
               status: 'pending',
               priority: 'medium',
               source_type: 'alert',
