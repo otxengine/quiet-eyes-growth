@@ -9,7 +9,7 @@ import {
   Sparkles, RotateCcw, Database
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { fetchBusinessSnapshot, snapshotToPromptContext } from '@/lib/businessSnapshot';
+import { fetchBusinessSnapshot, snapshotToPromptContext, logCompletedAction } from '@/lib/businessSnapshot';
 import { getActionsForInsight, getRelevantSnapshotContext } from '@/lib/insightActions';
 import ActionChip from '@/components/insights/ActionChip';
 
@@ -323,7 +323,7 @@ ${platformCapabilities}
                     {msg.role === 'assistant' && msg.actions?.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-1.5 max-w-[88%] justify-end">
                         {msg.actions.map((action, ai) => (
-                          <ActionChip key={ai} action={action} bpId={bpId} size="sm" />
+                          <ActionChip key={ai} action={action} bpId={bpId} insightId={id} size="sm" />
                         ))}
                       </div>
                     )}
@@ -478,10 +478,13 @@ export default function InsightDetail() {
     mutationFn: () => kind === 'alert'
       ? base44.entities.ProactiveAlert.update(entityId, { is_acted_on: true })
       : base44.entities.Action.update(entityId, { status: 'completed' }),
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: [kind === 'alert' ? 'proactiveAlert' : 'action', entityId] });
       queryClient.invalidateQueries({ queryKey: ['proactiveAlerts'] });
       queryClient.invalidateQueries({ queryKey: ['activeInsights'] });
+      queryClient.invalidateQueries({ queryKey: ['businessSnapshot', bpId] });
+      // Log outcome so agents won't suggest this again + invalidate snapshot
+      await logCompletedAction(bpId, 'insight_completed', title, id);
       toast.success('סומן כהושלם ✓');
     },
   });
@@ -578,7 +581,7 @@ export default function InsightDetail() {
           </div>
           <div className="flex flex-wrap gap-2">
             {quickActions.map((action) => (
-              <ActionChip key={action.key} action={action} bpId={bpId} size="md" />
+              <ActionChip key={action.key} action={action} bpId={bpId} insightId={id} size="md" />
             ))}
           </div>
         </div>

@@ -36,7 +36,7 @@ function saveCache(bpId, data) {
  * Builds a structured snapshot from raw entity data.
  * This is the "what the business has / doesn't have" map.
  */
-function buildSnapshot(bp, socialAccounts, competitors, healthScore, reviews, tasks, signals) {
+function buildSnapshot(bp, socialAccounts, competitors, healthScore, reviews, tasks, signals, outcomes) {
   // Connected social platforms
   const connectedPlatforms = (socialAccounts || [])
     .filter(a => a.status === 'active' || a.is_connected)
@@ -103,6 +103,14 @@ function buildSnapshot(bp, socialAccounts, competitors, healthScore, reviews, ta
 
     // Signals
     unread_signals: unreadSignals,
+
+    // Recent completed actions — used to prevent repeat suggestions
+    recent_outcomes: (outcomes || []).slice(0, 20).map(o => ({
+      action_type:        o.action_type || '',
+      description:        o.outcome_description || '',
+      insight_id:         o.linked_action || null,
+      ts:                 o.created_at || o.created_date || '',
+    })),
   };
 }
 
@@ -142,6 +150,17 @@ export function snapshotToPromptContext(snapshot) {
     lines.push(`ציון בריאות עסקית: ${snapshot.health_score}/100`);
   }
 
+  // Completed actions — critical: tells agents what NOT to suggest again
+  if (snapshot.recent_outcomes?.length > 0) {
+    const descs = snapshot.recent_outcomes
+      .filter(o => o.description)
+      .slice(0, 10)
+      .map(o => o.description);
+    if (descs.length > 0) {
+      lines.push(`פעולות שכבר בוצעו (אל תציע שוב): ${descs.join(', ')}`);
+    }
+  }
+
   return lines.join('\n');
 }
 
@@ -157,7 +176,7 @@ export async function fetchBusinessSnapshot(bpId) {
   if (cached) return cached;
 
   try {
-    const [bp, socialAccounts, competitors, healthScores, reviews, tasks, signals] = await Promise.allSettled([
+    const [bp, socialAccounts, competitors, healthScores, reviews, tasks, signals, outcomes] = await Promise.allSettled([
       base44.entities.BusinessProfile.get(bpId),
       base44.entities.SocialAccount.filter({ linked_business: bpId }),
       base44.entities.Competitor.filter({ linked_business: bpId }, null, 20),
@@ -165,16 +184,18 @@ export async function fetchBusinessSnapshot(bpId) {
       base44.entities.Review.filter({ linked_business: bpId }, '-created_date', 50),
       base44.entities.Task.filter({ linked_business: bpId, status: 'pending' }, '-created_date', 30),
       base44.entities.MarketSignal.filter({ linked_business: bpId, is_read: false }, '-detected_at', 10),
+      base44.entities.OutcomeLog.filter({ linked_business: bpId }, '-created_at', 20),
     ]);
 
     const snapshot = buildSnapshot(
-      bp.status         === 'fulfilled' ? bp.value         : null,
+      bp.status             === 'fulfilled' ? bp.value             : null,
       socialAccounts.status === 'fulfilled' ? socialAccounts.value : [],
       competitors.status    === 'fulfilled' ? competitors.value    : [],
       healthScores.status   === 'fulfilled' ? healthScores.value   : [],
       reviews.status        === 'fulfilled' ? reviews.value        : [],
       tasks.status          === 'fulfilled' ? tasks.value          : [],
       signals.status        === 'fulfilled' ? signals.value        : [],
+      outcomes.status       === 'fulfilled' ? outcomes.value       : [],
     );
 
     saveCache(bpId, snapshot);
@@ -187,4 +208,31 @@ export async function fetchBusinessSnapshot(bpId) {
 /** Force-invalidate the cache for a business (e.g. after user connects a platform) */
 export function invalidateSnapshot(bpId) {
   try { sessionStorage.removeItem(cacheKey(bpId)); } catch {}
+}
+
+/**
+ * Log a completed action to OutcomeLog + invalidate snapshot cache.
+ * Call this whenever the user executes a meaningful action from an insight.
+ *
+ * @param {string} bpId - businessProfileId
+ * @param {string} actionType - short key e.g. 'createTask', 'registered_wolt', 'responded_review'
+ * @param {string} description - human-readable e.g. "נרשם לוולט", "הגיב לביקורת שלילית"
+ * @param {string|null} insightId - the insight ID this action came from (for tracing)
+ */
+export async function logCompletedAction(bpId, actionType, description, insightId = null) {
+  if (!bpId) return;
+  try {
+    await base44.entities.OutcomeLog.create({
+      action_type:         actionType,
+      was_accepted:        true,
+      outcome_description: description,
+      linked_business:     bpId,
+      linked_action:       insightId || undefined,
+      impact_score:        1,
+    });
+  } catch {
+    // Non-critical — log failure silently
+  }
+  // Always invalidate so next insight load re-fetches fresh state
+  invalidateSnapshot(bpId);
 }

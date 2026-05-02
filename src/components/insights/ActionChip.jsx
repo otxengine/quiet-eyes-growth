@@ -8,6 +8,7 @@ import {
   TrendingUp, Heart, Globe, Eye, BarChart2, Settings, Truck,
   MessageCircle, Loader2, CheckCheck, ExternalLink,
 } from 'lucide-react';
+import { logCompletedAction } from '@/lib/businessSnapshot';
 
 const ICON_MAP = {
   ClipboardList, Star, MessageSquare, Megaphone, Zap, Users, UserPlus,
@@ -19,12 +20,13 @@ const ICON_MAP = {
  * ActionChip — executes a single action from insightActions.js
  *
  * Props:
- *   action   — { label, type, icon, url, href, fn, params }
- *   bpId     — businessProfileId for execute actions
- *   size     — 'sm' | 'md' (default 'md')
- *   onDone   — callback after successful execute
+ *   action     — { label, type, icon, url, href, fn, params }
+ *   bpId       — businessProfileId for execute actions
+ *   insightId  — insight id for outcome tracing (optional)
+ *   size       — 'sm' | 'md' (default 'md')
+ *   onDone     — callback after successful execute
  */
-export default function ActionChip({ action, bpId, size = 'md', onDone }) {
+export default function ActionChip({ action, bpId, insightId, size = 'md', onDone }) {
   const navigate     = useNavigate();
   const queryClient  = useQueryClient();
   const [loading, setLoading]   = useState(false);
@@ -41,12 +43,16 @@ export default function ActionChip({ action, bpId, size = 'md', onDone }) {
 
     // ── navigate: internal route ──
     if (action.type === 'navigate') {
+      // Log navigation as a completed action so agents know the user went there
+      logCompletedAction(bpId, 'navigate', action.label, insightId);
       navigate(action.url);
       return;
     }
 
     // ── external: open URL ──
     if (action.type === 'external') {
+      // Log so agents know this was acted on (e.g. "opened Google Business registration")
+      logCompletedAction(bpId, 'external_link', action.label, insightId);
       window.open(action.href, '_blank', 'noopener');
       return;
     }
@@ -56,16 +62,18 @@ export default function ActionChip({ action, bpId, size = 'md', onDone }) {
       setLoading(true);
       try {
         await base44.entities.Task.create({
-          title:          action.params?.title       || 'משימה חדשה',
-          description:    action.params?.description || '',
-          status:         'pending',
-          priority:       action.params?.priority    || 'medium',
-          source_type:    'alert',
+          title:           action.params?.title       || 'משימה חדשה',
+          description:     action.params?.description || '',
+          status:          'pending',
+          priority:        action.params?.priority    || 'medium',
+          source_type:     'alert',
           linked_business: bpId || '',
         });
         setDone(true);
         toast.success('המשימה נוצרה ✓');
         queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        // Log + invalidate snapshot so agents know a task was created
+        await logCompletedAction(bpId, 'createTask', `נוצרה משימה: ${action.params?.title || ''}`, insightId);
         onDone?.('createTask');
       } catch {
         toast.error('שגיאה ביצירת המשימה');
