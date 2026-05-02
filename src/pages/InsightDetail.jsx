@@ -98,84 +98,75 @@ function StatusTimeline({ status, isActedOn }) {
 
 // ── AI Agent Advisor ─────────────────────────────────────────────────────────
 
+// Minimal JSON schema — keeps response under 500 tokens
+const GUIDANCE_SCHEMA = {
+  type: 'object',
+  properties: {
+    steps:     { type: 'array', items: { type: 'string' }, description: '3-4 action steps' },
+    quick_win: { type: 'string', description: 'one action doable in 2 min' },
+    tip:       { type: 'string', description: 'pro tip' },
+  },
+  required: ['steps', 'quick_win'],
+};
+
 function AgentAdvisor({ insight, businessProfile }) {
-  const [guidance, setGuidance]   = useState(null);
-  const [loading, setLoading]     = useState(false);
-  const [open, setOpen]           = useState(false);
-  const [followUp, setFollowUp]   = useState('');
-  const [chat, setChat]           = useState([]);
+  const [guidance, setGuidance]       = useState(null);
+  const [loading, setLoading]         = useState(false);
+  const [open, setOpen]               = useState(false);
+  const [question, setQuestion]       = useState('');
+  const [chat, setChat]               = useState([]);
   const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = React.useRef(null);
+
+  React.useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chat, chatLoading]);
+
+  const bpName = businessProfile?.name || '';
+  const bpCat  = businessProfile?.category || '';
 
   const generateGuidance = async () => {
     setLoading(true);
     setOpen(true);
     try {
-      const bpContext = businessProfile
-        ? `עסק: "${businessProfile.name}" (${businessProfile.category || 'קטגוריה לא ידועה'}, ${businessProfile.city || 'עיר לא ידועה'}).`
-        : '';
       const res = await base44.integrations.Core.InvokeLLM({
         model: 'haiku',
-        prompt: `אתה יועץ עסקי מומחה לעסקים קטנים ובינוניים ישראלים. ענה תמיד בעברית.
-
-${bpContext}
-
-תובנה/המלצה שהמערכת זיהתה:
-כותרת: "${insight.title}"
-תיאור: "${insight.description || 'אין תיאור'}"
-סוג: ${insight.typeLabel}
-עדיפות: ${insight.priority}
-${insight.stepsText ? `שלבים מוצעים: ${insight.stepsText}` : ''}
-
-צור מדריך ביצוע מעשי ומפורט. החזר JSON בלבד:
-{
-  "headline": "כותרת מעוררת פעולה (עד 8 מילים)",
-  "why_now": "למה חשוב לפעול דווקא עכשיו — משפט אחד חד",
-  "steps": [
-    { "title": "כותרת הצעד", "detail": "הסבר מעשי — מה עושים בדיוק, כולל כלים/פלטפורמות", "duration": "5 דקות" }
-  ],
-  "quick_win": "פעולה אחת שניתן לעשות תוך 2 דקות שתיצור תוצאה מיידית",
-  "obstacles": ["מכשול אפשרי 1", "מכשול אפשרי 2"],
-  "success_metric": "איך תדע שהצלחת — מדד מדיד",
-  "pro_tip": "טיפ מקצועי שרוב בעלי עסקים מפספסים"
-}`,
+        response_json_schema: GUIDANCE_SCHEMA,
+        prompt: `יועץ עסקי לעסקים ישראלים. ענה בעברית.
+עסק: "${bpName}" ${bpCat ? `(${bpCat})` : ''}.
+תובנה: "${insight.title}". ${insight.description ? `תיאור: ${insight.description.slice(0, 120)}` : ''}
+סוג: ${insight.typeLabel}. עדיפות: ${insight.priority}.
+צור מדריך ביצוע קצר ומעשי.`,
       });
 
-      let parsed = null;
-      try {
-        const src = typeof res === 'string' ? res : JSON.stringify(res);
-        const match = src.match(/\{[\s\S]*\}/);
-        if (match) parsed = JSON.parse(match[0]);
-      } catch {}
-
+      // res is already parsed JSON (object) when response_json_schema is provided
+      const parsed = res && typeof res === 'object' && res.steps ? res : null;
       setGuidance(parsed);
-      if (parsed) {
-        setChat([{ role: 'assistant', text: `הכנתי עבורך מדריך מותאם אישית לתובנה זו. יש לך שאלות? אפשר לשאול אותי כאן.` }]);
-      }
+      if (!parsed) toast.error('לא הצלחתי לייצר הדרכה — נסה שוב');
     } catch {
       toast.error('שגיאה בטעינת ההדרכה');
     }
     setLoading(false);
   };
 
-  const sendFollowUp = async () => {
-    const q = followUp.trim();
-    if (!q) return;
-    setFollowUp('');
+  const sendQuestion = async () => {
+    const q = question.trim();
+    if (!q || chatLoading) return;
+    setQuestion('');
     setChat(prev => [...prev, { role: 'user', text: q }]);
     setChatLoading(true);
     try {
-      const bpContext = businessProfile ? `עסק: "${businessProfile.name}"` : '';
+      // Plain text — no JSON schema, cheaper
       const res = await base44.integrations.Core.InvokeLLM({
         model: 'haiku',
-        prompt: `אתה יועץ עסקי לעסקים ישראלים. ענה בעברית. ${bpContext}
-תובנה: "${insight.title}" (${insight.description || ''})
-שאלת המשתמש: "${q}"
-ענה בצורה קצרה, מעשית, וישירה — 2-4 משפטים.`,
+        prompt: `יועץ עסקי לעסקים ישראלים. ענה בעברית בקצרה (2-3 משפטים).
+עסק: "${bpName}". תובנה: "${insight.title}".
+שאלה: "${q}"`,
       });
-      const text = typeof res === 'string' ? res : (res?.text || res?.content || JSON.stringify(res));
+      const text = typeof res === 'string' ? res : JSON.stringify(res);
       setChat(prev => [...prev, { role: 'assistant', text }]);
     } catch {
-      setChat(prev => [...prev, { role: 'assistant', text: 'מצטער, לא הצלחתי לענות כרגע. נסה שוב.' }]);
+      setChat(prev => [...prev, { role: 'assistant', text: 'שגיאה — נסה שוב.' }]);
     }
     setChatLoading(false);
   };
@@ -189,121 +180,88 @@ ${insight.stepsText ? `שלבים מוצעים: ${insight.stepsText}` : ''}
         className="w-full flex items-center justify-between px-5 py-3.5 border-b border-border hover:bg-secondary/30 transition-colors"
       >
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+          <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
             <Bot className="w-4 h-4 text-primary" />
           </div>
           <div className="text-right">
             <p className="text-[13px] font-semibold text-foreground">סוכן ייעוץ AI</p>
-            <p className="text-[10px] text-foreground-muted">הדרכה מותאמת אישית לתובנה זו</p>
+            <p className="text-[10px] text-foreground-muted">הדרכה + שאלות בזמן אמת</p>
           </div>
         </div>
         {loading
           ? <Loader2 className="w-4 h-4 animate-spin text-foreground-muted" />
           : !guidance
-            ? <span className="text-[11px] font-semibold text-primary flex items-center gap-1"><Sparkles className="w-3.5 h-3.5" /> קבל הדרכה ←</span>
+            ? <span className="text-[11px] font-semibold text-primary flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5" /> קבל הדרכה ←
+              </span>
             : open
               ? <ChevronUp className="w-4 h-4 text-foreground-muted" />
-              : <ChevronDown className="w-4 h-4 text-foreground-muted" />}
+              : <ChevronDown className="w-4 h-4 text-foreground-muted" />
+        }
       </button>
 
-      {/* Guidance content */}
-      {open && guidance && (
-        <div className="p-5 space-y-5">
+      {open && (
+        <div className="p-5 space-y-4">
 
-          {/* Headline + why now */}
-          <div>
-            <h3 className="text-[15px] font-bold text-foreground mb-1">{guidance.headline}</h3>
-            {guidance.why_now && (
-              <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-100 mt-2">
-                <Clock className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
-                <p className="text-[11px] text-amber-700 font-medium">{guidance.why_now}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Quick Win */}
-          {guidance.quick_win && (
-            <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-green-50 border border-green-100">
-              <Zap className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-[11px] font-bold text-green-700 mb-0.5">ניצחון מהיר — עשה עכשיו</p>
-                <p className="text-[12px] text-green-600">{guidance.quick_win}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Steps */}
-          {guidance.steps?.length > 0 && (
-            <div>
-              <p className="text-[11px] font-semibold text-foreground-muted mb-2">שלבי ביצוע מפורטים</p>
-              <div className="space-y-2.5">
-                {guidance.steps.map((step, i) => (
-                  <div key={i} className="flex items-start gap-3 p-3 rounded-xl border border-border bg-secondary/30">
-                    <span className="w-5 h-5 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
-                      {i + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-[12px] font-semibold text-foreground">{step.title}</p>
-                        {step.duration && (
-                          <span className="text-[9px] text-foreground-muted whitespace-nowrap flex-shrink-0">⏱ {step.duration}</span>
-                        )}
-                      </div>
-                      {step.detail && (
-                        <p className="text-[11px] text-foreground-secondary mt-0.5 leading-relaxed">{step.detail}</p>
-                      )}
-                    </div>
+          {/* Guidance — shown after generation */}
+          {guidance && (
+            <>
+              {/* Quick Win */}
+              {guidance.quick_win && (
+                <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-green-50 border border-green-100">
+                  <Zap className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[10px] font-bold text-green-700 mb-0.5">ניצחון מהיר — עשה עכשיו</p>
+                    <p className="text-[12px] text-green-600 leading-relaxed">{guidance.quick_win}</p>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                </div>
+              )}
 
-          {/* Two-column: obstacles + success */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {guidance.obstacles?.length > 0 && (
-              <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-100">
-                <p className="text-[11px] font-semibold text-red-700 mb-1.5">מכשולים אפשריים</p>
-                <ul className="space-y-1">
-                  {guidance.obstacles.map((o, i) => (
-                    <li key={i} className="flex items-start gap-1.5 text-[11px] text-red-600">
-                      <span className="mt-1 w-1 h-1 rounded-full bg-red-400 flex-shrink-0" />
-                      {o}
-                    </li>
+              {/* Steps */}
+              {guidance.steps?.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold text-foreground-muted">שלבי ביצוע</p>
+                  {guidance.steps.map((step, i) => (
+                    <div key={i} className="flex items-start gap-3 p-3 rounded-xl border border-border bg-secondary/20">
+                      <span className="w-5 h-5 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                        {i + 1}
+                      </span>
+                      <p className="text-[12px] text-foreground leading-relaxed">{step}</p>
+                    </div>
                   ))}
-                </ul>
-              </div>
-            )}
-            {guidance.success_metric && (
-              <div className="px-4 py-3 rounded-xl bg-blue-50 border border-blue-100">
-                <p className="text-[11px] font-semibold text-blue-700 mb-1">מדד הצלחה</p>
-                <p className="text-[11px] text-blue-600 leading-relaxed">{guidance.success_metric}</p>
-              </div>
-            )}
-          </div>
+                </div>
+              )}
 
-          {/* Pro tip */}
-          {guidance.pro_tip && (
-            <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-purple-50 border border-purple-100">
-              <Sparkles className="w-4 h-4 text-purple-500 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-[10px] font-bold text-purple-600 mb-0.5">טיפ מקצועי</p>
-                <p className="text-[12px] text-purple-700 leading-relaxed">{guidance.pro_tip}</p>
-              </div>
-            </div>
+              {/* Pro tip */}
+              {guidance.tip && (
+                <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-purple-50 border border-purple-100">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-[12px] text-purple-700 leading-relaxed">{guidance.tip}</p>
+                </div>
+              )}
+
+              <button
+                onClick={() => { setGuidance(null); setChat([]); generateGuidance(); }}
+                className="flex items-center gap-1 text-[10px] text-foreground-muted hover:text-foreground transition-all"
+              >
+                <RotateCcw className="w-3 h-3" /> חדש הדרכה
+              </button>
+              <div className="border-t border-border" />
+            </>
           )}
 
-          {/* Chat Q&A */}
-          <div className="border-t border-border pt-4">
+          {/* Chat — always visible once panel is open */}
+          <div>
             <p className="text-[11px] font-semibold text-foreground-muted mb-3 flex items-center gap-1.5">
               <Bot className="w-3.5 h-3.5" /> שאל את הסוכן
             </p>
 
+            {/* Messages */}
             {chat.length > 0 && (
-              <div className="space-y-2 mb-3 max-h-56 overflow-y-auto">
+              <div className="space-y-2 mb-3 max-h-52 overflow-y-auto pr-1">
                 {chat.map((msg, i) => (
                   <div key={i} className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'}`}>
-                    <div className={`max-w-[85%] px-3 py-2 rounded-xl text-[11px] leading-relaxed
+                    <div className={`max-w-[88%] px-3 py-2 rounded-2xl text-[12px] leading-relaxed
                       ${msg.role === 'user'
                         ? 'bg-primary text-white rounded-br-sm'
                         : 'bg-secondary text-foreground rounded-bl-sm border border-border'}`}>
@@ -313,41 +271,56 @@ ${insight.stepsText ? `שלבים מוצעים: ${insight.stepsText}` : ''}
                 ))}
                 {chatLoading && (
                   <div className="flex justify-end">
-                    <div className="px-3 py-2 rounded-xl bg-secondary border border-border">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-foreground-muted" />
+                    <div className="px-4 py-2.5 rounded-2xl rounded-bl-sm bg-secondary border border-border">
+                      <span className="flex gap-1">
+                        {[0,1,2].map(d => (
+                          <span key={d} className="w-1.5 h-1.5 rounded-full bg-foreground-muted animate-bounce"
+                            style={{ animationDelay: `${d * 0.15}s` }} />
+                        ))}
+                      </span>
                     </div>
                   </div>
                 )}
+                <div ref={chatEndRef} />
               </div>
             )}
 
+            {/* Suggested questions — shown before first chat */}
+            {chat.length === 0 && !guidance && (
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {[
+                  'מה הצעד הראשון הכי חשוב?',
+                  'כמה זמן ייקח?',
+                  'מה הסיכונים?',
+                ].map(q => (
+                  <button key={q} onClick={() => setQuestion(q)}
+                    className="text-[10px] px-2.5 py-1 rounded-full border border-border bg-secondary hover:bg-secondary/80 text-foreground-muted transition-all">
+                    {q}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Input */}
             <div className="flex items-center gap-2">
               <input
                 type="text"
-                value={followUp}
-                onChange={e => setFollowUp(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendFollowUp()}
+                value={question}
+                onChange={e => setQuestion(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendQuestion()}
                 placeholder="שאל שאלה על ביצוע התובנה..."
                 className="flex-1 text-[12px] border border-border rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 placeholder:text-foreground-muted"
                 dir="rtl"
               />
               <button
-                onClick={sendFollowUp}
-                disabled={!followUp.trim() || chatLoading}
-                className="p-2 rounded-xl bg-primary text-white hover:opacity-90 disabled:opacity-40 transition-all"
+                onClick={sendQuestion}
+                disabled={!question.trim() || chatLoading}
+                className="p-2 rounded-xl bg-primary text-white hover:opacity-90 disabled:opacity-40 transition-all flex-shrink-0"
               >
                 <Send className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
-
-          {/* Regenerate */}
-          <button
-            onClick={() => { setGuidance(null); setChat([]); generateGuidance(); }}
-            className="flex items-center gap-1.5 text-[10px] text-foreground-muted hover:text-foreground transition-all"
-          >
-            <RotateCcw className="w-3 h-3" /> חדש הדרכה
-          </button>
         </div>
       )}
     </div>
