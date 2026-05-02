@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {
@@ -8,50 +8,44 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const NAV_GROUPS = [
+// 2-level structure: standalone items always visible, groups collapsible
+const NAV_STRUCTURE = [
+  { type: 'item',  path: '/',      label: 'מרכז פיקוד',   icon: LayoutGrid, badgeKey: 'unreadSignals' },
   {
-    key: 'intel',
-    label: 'מודיעין עסקי',
-    collapsible: true,
+    type: 'group', key: 'intel', label: 'מודיעין', icon: Eye,
     items: [
-      { path: '/',            label: 'מרכז פיקוד',   icon: LayoutGrid, badgeKey: 'unreadSignals' },
-      { path: '/signals',     label: 'תובנות שוק',   icon: Eye },
-      { path: '/competitors', label: 'מתחרים',       icon: Users },
-      { path: '/events',      label: 'אירועים',      icon: Calendar },
-      { path: '/leads',       label: 'לידים',        icon: CheckCircle, badgeKey: 'hotLeads' },
+      { path: '/signals',     label: 'תובנות שוק', icon: Eye },
+      { path: '/competitors', label: 'מתחרים',     icon: Users },
+      { path: '/events',      label: 'אירועים',    icon: Calendar },
+    ],
+  },
+  { type: 'item',  path: '/leads', label: 'לידים', icon: CheckCircle, badgeKey: 'hotLeads' },
+  {
+    type: 'group', key: 'manage', label: 'שיווק וניהול', icon: Megaphone,
+    items: [
+      { path: '/marketing',  label: 'מרכז שיווק',   icon: Megaphone },
+      { path: '/reviews',    label: 'מוניטין',      icon: Star, badgeKey: 'pendingReviews' },
+      { path: '/retention',  label: 'שימור לקוחות', icon: Heart },
+      { path: '/tasks',      label: 'משימות',       icon: ClipboardList },
+      { path: '/reports',    label: 'דוחות',        icon: FileBarChart },
     ],
   },
   {
-    key: 'manage',
-    label: 'ניהול ושיווק',
-    collapsible: true,
+    type: 'group', key: 'system', label: 'הגדרות', icon: Settings,
     items: [
-      { path: '/reviews',     label: 'מוניטין',          icon: Star, badgeKey: 'pendingReviews' },
-      { path: '/retention',   label: 'שימור לקוחות',    icon: Heart },
-      { path: '/marketing',   label: 'מרכז שיווק',      icon: Megaphone },
-      { path: '/tasks',       label: 'משימות',           icon: ClipboardList },
-      { path: '/reports',     label: 'דוחות',            icon: FileBarChart },
-    ],
-  },
-  {
-    key: 'system',
-    label: 'מערכת',
-    collapsible: false,
-    items: [
-      { path: '/data-sources',  label: 'מקורות מידע', icon: Database },
-      { path: '/integrations',  label: 'אינטגרציות',  icon: Plug },
-      { path: '/subscription',  label: 'מנוי',        icon: Crown },
-      { path: '/settings',      label: 'הגדרות',      icon: Settings },
+      { path: '/settings',     label: 'הגדרות',      icon: Settings },
+      { path: '/data-sources', label: 'מקורות מידע', icon: Database },
+      { path: '/integrations', label: 'אינטגרציות',  icon: Plug },
+      { path: '/subscription', label: 'מנוי',        icon: Crown },
     ],
   },
 ];
 
 function getDefaultOpen(key) {
   try {
-    const stored = localStorage.getItem(`sidebar_group_${key}`);
-    if (stored !== null) return stored === 'true';
+    return localStorage.getItem(`sidebar_group_${key}`) === 'true';
   } catch {}
-  return window.innerWidth >= 768;
+  return false;
 }
 
 function useIsAdmin() {
@@ -61,7 +55,7 @@ function useIsAdmin() {
   } catch { return false; }
 }
 
-function NavLink({ item, collapsed, isActive, onNavigate }) {
+function NavLink({ item, collapsed, isActive, onNavigate, indented = false }) {
   const Icon = item.icon;
   return (
     <Link
@@ -70,7 +64,7 @@ function NavLink({ item, collapsed, isActive, onNavigate }) {
       title={collapsed ? item.label : undefined}
       className={cn(
         'flex items-center gap-2.5 h-8 rounded-md transition-all duration-150 text-[12px] relative',
-        collapsed ? 'justify-center px-0' : 'px-2.5',
+        collapsed ? 'justify-center px-0' : indented ? 'px-2.5 pr-5' : 'px-2.5',
       )}
       style={{
         background: isActive ? 'hsl(var(--sidebar-accent-active))' : 'transparent',
@@ -117,8 +111,17 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate }
   const [openGroups, setOpenGroups] = useState(() => ({
     intel:  getDefaultOpen('intel'),
     manage: getDefaultOpen('manage'),
-    system: true,
+    system: getDefaultOpen('system'),
   }));
+
+  // Auto-expand group when a child route is active
+  useEffect(() => {
+    NAV_STRUCTURE.forEach(node => {
+      if (node.type === 'group' && node.items.some(i => i.path === location.pathname)) {
+        setOpenGroups(prev => prev[node.key] ? prev : { ...prev, [node.key]: true });
+      }
+    });
+  }, [location.pathname]);
 
   const toggleGroup = (key) => {
     setOpenGroups(prev => {
@@ -129,7 +132,7 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate }
   };
 
   const adminLinks = [
-    { path: '/admin-dashboard', label: 'Admin Dashboard', icon: ShieldAlert },
+    { path: '/admin-dashboard', label: 'Admin Dashboard',   icon: ShieldAlert },
     { path: '/learning',        label: 'מרכז למידה (admin)', icon: Sparkles },
     { path: '/agents',          label: 'סוכנים (admin)',     icon: Bot },
   ];
@@ -182,53 +185,82 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate }
                 </Link>
               );
             })}
+            <div className="mx-2 my-1" style={{ borderTop: '1px solid hsl(var(--sidebar-border) / 0.5)' }} />
           </div>
         )}
 
-        {NAV_GROUPS.map((group, gi) => {
-          const isOpen = !group.collapsible || openGroups[group.key];
-          return (
-            <div key={group.key} className={cn('mb-1', gi > 0 && 'mt-2')}>
-              {/* Group header */}
-              {!collapsed && (
-                group.collapsible ? (
-                  <button
-                    onClick={() => toggleGroup(group.key)}
-                    className="w-full flex items-center justify-between px-4 py-1 mb-0.5 text-[9px] font-semibold uppercase tracking-widest transition-colors hover:opacity-80"
-                    style={{ color: 'hsl(var(--sidebar-foreground-muted))' }}
-                  >
-                    <span>{group.label}</span>
-                    <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isOpen ? '' : '-rotate-90'}`} />
-                  </button>
-                ) : (
-                  <div className="px-4 py-1 mb-0.5 text-[9px] font-semibold uppercase tracking-widest" style={{ color: 'hsl(var(--sidebar-foreground-muted))' }}>
-                    {group.label}
-                  </div>
-                )
-              )}
+        <ul className="px-2 space-y-0.5">
+          {NAV_STRUCTURE.map((node, idx) => {
+            if (node.type === 'item') {
+              const isActive = location.pathname === node.path;
+              const badgeCount = node.badgeKey ? (badges[node.badgeKey] || 0) : 0;
+              const showDivider = idx > 0;
+              return (
+                <React.Fragment key={node.path}>
+                  {showDivider && !collapsed && (
+                    <li><div className="my-1" style={{ borderTop: '1px solid hsl(var(--sidebar-border) / 0.4)' }} /></li>
+                  )}
+                  <li>
+                    <NavLink item={{ ...node, badgeCount }} collapsed={collapsed} isActive={isActive} onNavigate={onNavigate} />
+                  </li>
+                </React.Fragment>
+              );
+            }
 
-              {/* Items — show all when collapsed (icons only), or respect open/close when expanded */}
-              {(collapsed || isOpen) && (
-                <ul className="px-2 space-y-0.5">
-                  {group.items.map((item) => {
-                    const isActive = location.pathname === item.path;
-                    const badgeCount = item.badgeKey ? (badges[item.badgeKey] || 0) : 0;
-                    return (
-                      <li key={item.path}>
-                        <NavLink item={{ ...item, badgeCount }} collapsed={collapsed} isActive={isActive} onNavigate={onNavigate} />
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
+            // Group node
+            const isOpen = openGroups[node.key];
+            const GroupIcon = node.icon;
+            const childBadge = node.items.reduce((sum, item) => sum + (item.badgeKey ? (badges[item.badgeKey] || 0) : 0), 0);
 
-              {/* Divider after collapsible groups */}
-              {!group.collapsible && gi > 0 && (
-                <div className="mx-4 mb-1" style={{ borderTop: '1px solid hsl(var(--sidebar-border))' }} />
-              )}
-            </div>
-          );
-        })}
+            return (
+              <React.Fragment key={node.key}>
+                {!collapsed && (
+                  <li>
+                    <div className="my-1" style={{ borderTop: '1px solid hsl(var(--sidebar-border) / 0.4)' }} />
+                  </li>
+                )}
+
+                {/* Group header button */}
+                {!collapsed && (
+                  <li>
+                    <button
+                      onClick={() => toggleGroup(node.key)}
+                      className="w-full flex items-center gap-2.5 h-8 rounded-md px-2.5 text-[12px] font-medium transition-all duration-150 relative"
+                      style={{ color: 'hsl(var(--sidebar-foreground-muted))' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--sidebar-accent))'; e.currentTarget.style.color = 'hsl(var(--sidebar-accent-foreground))'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'hsl(var(--sidebar-foreground-muted))'; }}
+                    >
+                      <GroupIcon className="w-[14px] h-[14px] flex-shrink-0 opacity-60" />
+                      <span className="flex-1 text-right">{node.label}</span>
+                      {/* Badge dot on header when collapsed or group is closed */}
+                      {!isOpen && childBadge > 0 && (
+                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: 'hsl(var(--sidebar-primary))' }} />
+                      )}
+                      <ChevronDown className={`w-3 h-3 flex-shrink-0 transition-transform duration-200 ${isOpen ? '' : '-rotate-90'}`} />
+                    </button>
+                  </li>
+                )}
+
+                {/* Group children — always shown in collapsed icon mode */}
+                {(collapsed || isOpen) && node.items.map(item => {
+                  const isActive = location.pathname === item.path;
+                  const badgeCount = item.badgeKey ? (badges[item.badgeKey] || 0) : 0;
+                  return (
+                    <li key={item.path}>
+                      <NavLink
+                        item={{ ...item, badgeCount }}
+                        collapsed={collapsed}
+                        isActive={isActive}
+                        onNavigate={onNavigate}
+                        indented={!collapsed}
+                      />
+                    </li>
+                  );
+                })}
+              </React.Fragment>
+            );
+          })}
+        </ul>
 
         {/* Logout */}
         <div className="px-2 mt-3 pt-3" style={{ borderTop: '1px solid hsl(var(--sidebar-border))' }}>
