@@ -382,6 +382,105 @@ ${signalContext?.summary ? `הקשר: "${signalContext.summary}"` : ''}
   );
 }
 
+// ── WhatsApp Blast Drawer ─────────────────────────────────────────────────────
+
+function WhatsAppBlastDrawer({ businessProfile, signalContext, onClose }) {
+  const [msg,     setMsg]     = useState('');
+  const [loading, setLoading] = useState(false);
+  const [copied,  setCopied]  = useState(false);
+
+  useEffect(() => {
+    generateMessage();
+  }, []); // eslint-disable-line
+
+  async function generateMessage() {
+    setLoading(true);
+    const fallback = `שלום! 😊\nיש לנו חדשות מיוחדות ב-${businessProfile?.name || 'העסק שלנו'}!\nמוזמנ/ת לבקר — מחכים לך! 🙌`;
+    try {
+      const result = await base44.integrations.Core.InvokeLLM({
+        model: 'haiku',
+        prompt: `כתוב הודעת WhatsApp שיווקית קצרה לבלסט (הפצה המונית).
+עסק: "${businessProfile?.name || ''}"${signalContext?.summary ? `\nהקשר: ${signalContext.summary}` : ''}
+כלול: כותרת מושכת + הצעת ערך + CTA ברור.
+עברית, ידידותי עם אמוג'י, עד 4 שורות. ללא כותרות.`,
+      });
+      setMsg((typeof result === 'string' && result.trim()) ? result.trim() : fallback);
+    } catch {
+      setMsg(fallback);
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-t-2xl w-full max-w-lg shadow-2xl" dir="rtl" style={{ maxHeight: '85vh', overflowY: 'auto' }}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">💬</span>
+            <div>
+              <p className="text-[14px] font-bold text-gray-800">WhatsApp Blast</p>
+              <p className="text-[11px] text-gray-400">שלח הודעה שיווקית ללקוחות</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          {signalContext?.summary && (
+            <div className="bg-green-50 border border-green-100 rounded-xl px-4 py-2.5">
+              <p className="text-[11px] font-semibold text-green-700 mb-0.5">הקשר:</p>
+              <p className="text-[12px] text-green-900">{signalContext.summary}</p>
+            </div>
+          )}
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[12px] font-semibold text-gray-700">הודעה:</p>
+              <button onClick={generateMessage} disabled={loading}
+                className="flex items-center gap-1.5 px-2.5 py-1 border border-gray-200 text-gray-500 rounded-lg text-[11px] hover:bg-gray-50 disabled:opacity-50">
+                <Sparkles className="w-3 h-3" />
+                {loading ? 'יוצר...' : 'צור מחדש'}
+              </button>
+            </div>
+            {loading ? (
+              <div className="flex items-center justify-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                <Loader2 className="w-5 h-5 animate-spin text-gray-400 ml-2" />
+                <span className="text-[12px] text-gray-400">יוצר הודעה...</span>
+              </div>
+            ) : (
+              <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={5} dir="rtl"
+                className="w-full px-3 py-2.5 text-[13px] border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-green-200"
+                placeholder="הודעת WhatsApp..." />
+            )}
+            <p className="text-[10px] text-gray-400 mt-1">{msg.length} / 4096 תווים</p>
+          </div>
+
+          <div className="space-y-2.5">
+            <a href={`https://wa.me/?text=${encodeURIComponent(msg)}`}
+              target="_blank" rel="noopener noreferrer"
+              className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#25D366] text-white rounded-xl text-[14px] font-bold hover:bg-[#1fb855] transition-all">
+              💬 פתח WhatsApp ושלח
+            </a>
+            <button onClick={async () => {
+              await navigator.clipboard.writeText(msg).catch(() => {});
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            }}
+              className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-[13px] hover:bg-gray-50 transition-all">
+              {copied ? '✓ הועתק' : '📋 העתק הודעה'}
+            </button>
+          </div>
+
+          <p className="text-[11px] text-gray-400 text-center">
+            WhatsApp Blast עובד דרך הפתחת WhatsApp Web — העתק את ההודעה ושלח ישירות.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Marketing Page ───────────────────────────────────────────────────────
 
 const TABS = [
@@ -399,10 +498,12 @@ export default function Marketing() {
   const [searchParams] = useSearchParams();
 
   const bpId = businessProfile?.id;
-  const [activeTab,     setActiveTab]     = useState('paid');
-  const [paidFilter,    setPaidFilter]    = useState('all');
-  const [showOrgCreate, setShowOrgCreate] = useState(false);
-  const [organicCtx,    setOrganicCtx]    = useState(null);
+  const [activeTab,       setActiveTab]       = useState('paid');
+  const [paidFilter,      setPaidFilter]      = useState('all');
+  const [showOrgCreate,   setShowOrgCreate]   = useState(false);
+  const [organicCtx,      setOrganicCtx]      = useState(null);
+  const [showWaBlast,     setShowWaBlast]     = useState(false);
+  const [waBlastCtx,      setWaBlastCtx]      = useState(null);
 
   // Auto-open organic drawer if URL says so
   useEffect(() => {
@@ -415,6 +516,13 @@ export default function Marketing() {
         type:     searchParams.get('type')     || 'post',
       });
       setShowOrgCreate(true);
+    }
+    if (searchParams.get('create') === 'whatsapp') {
+      setWaBlastCtx({
+        signalId: searchParams.get('signalId') || '',
+        summary:  searchParams.get('summary')  || '',
+      });
+      setShowWaBlast(true);
     }
   }, []); // eslint-disable-line
 
@@ -544,6 +652,15 @@ export default function Marketing() {
           signalContext={organicCtx}
           onClose={() => { setShowOrgCreate(false); setOrganicCtx(null); }}
           onSaved={() => queryClient.invalidateQueries({ queryKey: ['organicPosts', bpId] })}
+        />
+      )}
+
+      {/* WhatsApp blast drawer */}
+      {showWaBlast && (
+        <WhatsAppBlastDrawer
+          businessProfile={businessProfile}
+          signalContext={waBlastCtx}
+          onClose={() => { setShowWaBlast(false); setWaBlastCtx(null); }}
         />
       )}
     </div>

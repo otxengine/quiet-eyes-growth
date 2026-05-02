@@ -325,6 +325,24 @@ ${signalAction  ? `מטרת הקמפיין: ${signalAction}` : ''}
         </div>
       </div>
 
+      {/* Seasonal mode banner */}
+      {searchParams.get('type') === 'seasonal' && (
+        <div className="flex items-start gap-3 px-4 py-3 bg-purple-50 border border-purple-200 rounded-xl">
+          <span className="text-2xl flex-shrink-0">🎉</span>
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-0.5">
+              <p className="text-[12px] font-bold text-purple-800">מבצע עונתי / חגי</p>
+              {searchParams.get('event') && (
+                <span className="px-2 py-0.5 text-[10px] font-bold bg-purple-200 text-purple-800 rounded-full">
+                  {searchParams.get('event').slice(0, 40)}
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-purple-700">הקמפיין ממוטב לאירוע העונתי — המלל והקהל הותאמו אוטומטית</p>
+          </div>
+        </div>
+      )}
+
       {/* Signal banner */}
       {signalSummary && (
         <div className="flex items-start gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">

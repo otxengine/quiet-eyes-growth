@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { X, Copy, CheckCheck, Sparkles, Loader2, Image, Users, Send, Phone, MessageSquare, Target } from 'lucide-react';
 import { toast } from 'sonner';
@@ -26,7 +27,10 @@ const ACTION_TYPE_CONFIG = {
   promote:        { label: 'מבצע / קידום מכירות',    icon: '🎯' },
   call:           { label: 'שיחת טלפון / פגישה',     icon: '📞' },
   task:           { label: 'משימה פנימית',            icon: '✅' },
-  platform_setup: { label: 'הגדרת פלטפורמה דיגיטלית', icon: '🔧' },
+  platform_setup:        { label: 'הגדרת פלטפורמה דיגיטלית', icon: '🔧' },
+  competitor_response:   { label: 'תגובה לשינוי מתחרה',       icon: '⚔️' },
+  retention_whatsapp:    { label: 'החזרת לקוח ישן',            icon: '💬' },
+  pricing_adjustment:    { label: 'עדכון מחיר / תפריט',        icon: '💰' },
 };
 
 // Per-type step definitions
@@ -36,13 +40,18 @@ const STEPS_BY_TYPE = {
   respond:        ['תגובה', 'שיגור'],
   call:           ['הכנה',  'שיחה'],
   task:           ['פרטים', 'בצע'],
-  platform_setup: ['הגדרה'],
+  platform_setup:       ['הגדרה'],
+  competitor_response:  ['ניתוח', 'סיום'],
+  retention_whatsapp:   ['הודעה', 'שלח'],
+  pricing_adjustment:   ['השוואה', 'פעולה'],
 };
 
 // Image generation is handled server-side via base44.functions.invoke('generateImage')
 // to avoid CORS/403 issues with third-party APIs from the browser.
 
 export default function ActionPopup({ signal, businessProfile, onClose }) {
+  const navigate = useNavigate();
+
   const [step,     setStep]     = useState(0); // 0=content, 1=image, 2=audience, 3=publish
   const [text,     setText]     = useState('');
   const [copied,   setCopied]   = useState(false);
@@ -89,6 +98,12 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
 
   // Platform setup — completed steps checklist
   const [completedSteps, setCompletedSteps] = useState([]);
+
+  // Competitor response + pricing adjustment — chosen action
+  const [compResponseChoice,  setCompResponseChoice]  = useState(null); // 'adjust_price'|'counter_promo'|'monitor'|'task'|'campaign'|'whatsapp'
+  // Retention whatsapp — AI message
+  const [retentionMsg,        setRetentionMsg]        = useState('');
+  const [retentionMsgLoading, setRetentionMsgLoading] = useState(false);
 
   const meta = (() => {
     try { return JSON.parse(signal.source_description || '{}'); } catch { return {}; }
@@ -143,10 +158,16 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
     setPublishing(false);
     setPublishResult(null);
     setCompletedSteps([]);
+    setCompResponseChoice(null);
+    setRetentionMsg('');
+    setRetentionMsgLoading(false);
 
     // For social posts: kick off the multi-brain pipeline automatically
     if (['social_post', 'promote'].includes(rawActionType)) {
       runSmartGeneration();
+    }
+    if (rawActionType === 'retention_whatsapp') {
+      generateRetentionMessage();
     }
   }, [signal.id]);
 
@@ -239,6 +260,27 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
       }
     } catch { toast.error('שגיאה — נסה שוב'); }
     setCallPointsLoading(false);
+  }
+
+  // ── Generate WhatsApp retention message ──
+  async function generateRetentionMessage() {
+    if (!businessProfile?.id) return;
+    setRetentionMsgLoading(true);
+    const fallback = `שלום! 😊\nלא ראינו אותך אצלנו זמן מה — מתגעגעים!\nיש לנו חדשות ומבצעים שיעניינו אותך.\nמוזמן/ת לבקר — נשמח לראותך! 🙌`;
+    try {
+      const result = await base44.integrations.Core.InvokeLLM({
+        model: 'haiku',
+        prompt: `כתוב הודעת WhatsApp קצרה ואישית לשימור לקוח שלא ביקר זמן מה.
+עסק: "${businessProfile?.name || ''}"
+נושא: ${signal.summary}
+כלול: פנייה אישית חמה + הצעת ערך קטנה + CTA ברור לביקור/הזמנה.
+עברית, ידידותי, 3-4 שורות קצרות, עם אמוג'י. ללא כותרות.`,
+      });
+      setRetentionMsg((typeof result === 'string' && result.trim()) ? result.trim() : fallback);
+    } catch {
+      setRetentionMsg(fallback);
+    }
+    setRetentionMsgLoading(false);
   }
 
   useEffect(() => {
@@ -1129,11 +1171,241 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
     </>
   ) : null;
 
+  // ── STEP: Competitor Response (תגובה לשינוי מתחרה) ──
+  const COMP_OPTIONS = [
+    { key: 'adjust_price',  emoji: '💰', label: 'התאם מחיר בהתאם',     desc: 'צור משימה לעדכון מחיר תוך 3 ימים' },
+    { key: 'counter_promo', emoji: '🎯', label: 'השק מבצע נגדי',        desc: 'צור קמפיין עם הצעה מתחרה' },
+    { key: 'monitor',       emoji: '👁️', label: 'עקוב ואל תגיב עדיין', desc: 'צור משימה לעקוב שבוע נוסף' },
+  ];
+
+  const stepCompetitorResponse = (
+    <>
+      <div className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3 mb-4">
+        <p className="text-[11px] font-semibold text-orange-700 mb-1">מה השתנה אצל המתחרה:</p>
+        <p className="text-[12px] text-orange-900">{signal.summary}</p>
+      </div>
+      <p className="text-[11px] font-semibold text-gray-600 mb-2">בחר את תגובת העסק:</p>
+      <div className="space-y-2 mb-4">
+        {COMP_OPTIONS.map(opt => (
+          <button key={opt.key} onClick={() => setCompResponseChoice(opt.key)}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-right transition-all ${
+              compResponseChoice === opt.key
+                ? 'bg-indigo-50 border-indigo-400'
+                : 'bg-white border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/30'
+            }`}>
+            <span className="text-xl">{opt.emoji}</span>
+            <div>
+              <p className="text-[13px] font-semibold text-gray-800">{opt.label}</p>
+              <p className="text-[11px] text-gray-500">{opt.desc}</p>
+            </div>
+          </button>
+        ))}
+      </div>
+      <button
+        onClick={async () => {
+          if (!compResponseChoice) { toast.error('בחר פעולה'); return; }
+          if (compResponseChoice === 'counter_promo') {
+            onClose();
+            navigate(`/marketing/create?context=counter_promo&signalId=${signal.id}`);
+            return;
+          }
+          const taskTitle = compResponseChoice === 'adjust_price'
+            ? `לעדכן מחיר בהתאם למתחרה — ${(signal.summary || '').slice(0, 60)}`
+            : `לעקוב אחרי מתחרה שבוע נוסף — ${(signal.summary || '').slice(0, 60)}`;
+          setCreating(true);
+          try {
+            await base44.entities.Task.create({
+              title: taskTitle,
+              description: signal.summary,
+              status: 'pending',
+              priority: 'high',
+              source_type: 'alert',
+              linked_business: businessProfile?.id || '',
+            });
+            toast.success('המשימה נוצרה ✓');
+            setStep(1);
+          } catch { toast.error('שגיאה ביצירת המשימה'); }
+          setCreating(false);
+        }}
+        disabled={creating || !compResponseChoice}
+        className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-[13px] font-semibold hover:bg-indigo-700 transition-all disabled:opacity-50"
+      >
+        {creating ? <Loader2 className="w-4 h-4 animate-spin inline mr-1" /> : null}
+        בצע פעולה ←
+      </button>
+    </>
+  );
+
+  const stepCompetitorResponseDone = (
+    <div className="text-center py-6">
+      <div className="text-4xl mb-3">✅</div>
+      <p className="text-[14px] font-semibold text-gray-800 mb-2">
+        {compResponseChoice === 'counter_promo' ? 'מועבר לבניית קמפיין נגדי' : 'המשימה נוצרה בהצלחה'}
+      </p>
+      <p className="text-[12px] text-gray-500 mb-4">{(signal.summary || '').slice(0, 80)}</p>
+      <button onClick={onClose} className="px-6 py-2 bg-gray-100 text-gray-700 rounded-xl text-[13px] hover:bg-gray-200 transition-all">סגור</button>
+    </div>
+  );
+
+  // ── STEP: Retention WhatsApp — message composer ──
+  const stepRetentionWhatsapp = (
+    <>
+      <div className="bg-green-50 border border-green-100 rounded-xl px-4 py-3 mb-3">
+        <p className="text-[11px] font-semibold text-green-700 mb-1">מצב:</p>
+        <p className="text-[12px] text-green-900">{signal.summary}</p>
+      </div>
+      <p className="text-[11px] font-semibold text-gray-600 mb-2">הודעת WhatsApp מותאמת:</p>
+      {retentionMsgLoading ? (
+        <div className="flex items-center justify-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+          <Loader2 className="w-5 h-5 animate-spin text-gray-400 ml-2" />
+          <span className="text-[12px] text-gray-400">יוצר הודעה...</span>
+        </div>
+      ) : (
+        <textarea
+          value={retentionMsg}
+          onChange={e => setRetentionMsg(e.target.value)}
+          rows={5}
+          className="w-full px-3 py-2.5 text-[12px] border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-green-200"
+          placeholder="הודעת WhatsApp..."
+          dir="rtl"
+        />
+      )}
+      <div className="flex gap-2 mt-2 mb-3">
+        <button onClick={generateRetentionMessage} disabled={retentionMsgLoading}
+          className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg text-[11px] hover:bg-gray-50 transition-all disabled:opacity-50">
+          <Sparkles className="w-3 h-3" />
+          {retentionMsgLoading ? 'יוצר...' : 'צור מחדש'}
+        </button>
+      </div>
+      <button onClick={() => setStep(1)} disabled={!retentionMsg.trim()}
+        className="w-full py-2.5 bg-[#25D366] text-white rounded-xl text-[13px] font-semibold hover:bg-[#1fb855] transition-all disabled:opacity-50">
+        המשך לשליחה ←
+      </button>
+    </>
+  );
+
+  const stepRetentionSend = (
+    <>
+      <div className="bg-green-50 border border-green-100 rounded-xl px-4 py-3 mb-4">
+        <p className="text-[10px] text-green-600 font-semibold mb-1">הודעה לשליחה:</p>
+        <p className="text-[12px] text-green-900 whitespace-pre-line">{retentionMsg}</p>
+      </div>
+      <div className="space-y-3">
+        <a href={`https://wa.me/?text=${encodeURIComponent(retentionMsg)}`}
+          target="_blank" rel="noopener noreferrer"
+          className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#25D366] text-white rounded-xl text-[13px] font-bold hover:bg-[#1fb855] transition-all">
+          💬 פתח WhatsApp ושלח
+        </a>
+        <button onClick={async () => {
+          await navigator.clipboard.writeText(retentionMsg).catch(() => {});
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+          toast.success('הועתק ✓');
+        }}
+          className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-[12px] hover:bg-gray-50 transition-all">
+          {copied ? <CheckCheck className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+          {copied ? 'הועתק ✓' : 'העתק הודעה'}
+        </button>
+        <button onClick={async () => {
+          setCreating(true);
+          try {
+            await base44.entities.Task.create({
+              title: 'מעקב אחרי לקוח שלא חזר',
+              description: `נשלחה הודעת WhatsApp:\n${retentionMsg}\n\nמקור: ${signal.summary}`,
+              status: 'pending',
+              priority: 'medium',
+              source_type: 'alert',
+              linked_business: businessProfile?.id || '',
+            });
+            toast.success('משימת מעקב נוצרה ✓');
+            setDone(true);
+          } catch { toast.error('שגיאה ביצירת המשימה'); }
+          setCreating(false);
+        }} disabled={creating}
+          className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-[12px] hover:bg-gray-50 transition-all disabled:opacity-70">
+          {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
+          צור משימת מעקב תגובות
+        </button>
+      </div>
+    </>
+  );
+
+  // ── STEP: Pricing Adjustment (השוואת מחירים) ──
+  const PRICING_OPTIONS = [
+    { key: 'task',     emoji: '📋', label: 'עדכן מחיר / תפריט',          desc: 'צור משימה לעדכון המחירים' },
+    { key: 'campaign', emoji: '🎯', label: 'פרסם מבצע מחיר',             desc: 'צור קמפיין עם הנחה או מבצע' },
+    { key: 'whatsapp', emoji: '💬', label: 'הודע ללקוחות ב-WhatsApp',    desc: 'שלח הודעה על עדכון המחיר' },
+  ];
+
+  const stepPricingAdjustment = (
+    <>
+      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 mb-4">
+        <p className="text-[11px] font-semibold text-blue-700 mb-1">המצב הנוכחי:</p>
+        <p className="text-[12px] text-blue-900">{signal.summary}</p>
+      </div>
+      <p className="text-[11px] font-semibold text-gray-600 mb-2">בחר פעולה:</p>
+      <div className="space-y-2 mb-4">
+        {PRICING_OPTIONS.map(opt => (
+          <button key={opt.key} onClick={() => setCompResponseChoice(opt.key)}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-right transition-all ${
+              compResponseChoice === opt.key
+                ? 'bg-indigo-50 border-indigo-400'
+                : 'bg-white border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/30'
+            }`}>
+            <span className="text-xl">{opt.emoji}</span>
+            <div>
+              <p className="text-[13px] font-semibold text-gray-800">{opt.label}</p>
+              <p className="text-[11px] text-gray-500">{opt.desc}</p>
+            </div>
+          </button>
+        ))}
+      </div>
+      <button
+        onClick={async () => {
+          if (!compResponseChoice) { toast.error('בחר פעולה'); return; }
+          if (compResponseChoice === 'campaign') {
+            onClose();
+            navigate(`/marketing/create?context=pricing_promo&signalId=${signal.id}`);
+            return;
+          }
+          if (compResponseChoice === 'whatsapp') {
+            const msg = `שלום! 😊\nרצינו ליידע אותך על עדכון מחירים ב-${businessProfile?.name || 'העסק שלנו'}.\n${signal.summary}`;
+            window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+            setDone(true);
+            return;
+          }
+          setCreating(true);
+          try {
+            await base44.entities.Task.create({
+              title: `לעדכן מחיר / תפריט — ${(signal.summary || '').slice(0, 60)}`,
+              description: signal.summary,
+              status: 'pending',
+              priority: 'medium',
+              source_type: 'alert',
+              linked_business: businessProfile?.id || '',
+            });
+            toast.success('המשימה נוצרה ✓');
+            setDone(true);
+          } catch { toast.error('שגיאה ביצירת המשימה'); }
+          setCreating(false);
+        }}
+        disabled={creating || !compResponseChoice}
+        className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-[13px] font-semibold hover:bg-indigo-700 transition-all disabled:opacity-50"
+      >
+        {creating ? <Loader2 className="w-4 h-4 animate-spin inline mr-1" /> : null}
+        בצע פעולה ←
+      </button>
+    </>
+  );
+
   // Dynamic step content array based on action type
   const stepContents = (() => {
-    if (actionType === 'platform_setup') return [stepPlatformSetup];
-    if (actionType === 'respond') return [stepRespond, stepRespondPublish];
-    if (actionType === 'call')    return [stepCall, stepCallAction];
+    if (actionType === 'platform_setup')      return [stepPlatformSetup];
+    if (actionType === 'respond')             return [stepRespond, stepRespondPublish];
+    if (actionType === 'call')                return [stepCall, stepCallAction];
+    if (actionType === 'competitor_response') return [stepCompetitorResponse, stepCompetitorResponseDone];
+    if (actionType === 'retention_whatsapp')  return [stepRetentionWhatsapp, stepRetentionSend];
+    if (actionType === 'pricing_adjustment')  return [stepPricingAdjustment];
     // social_post / promote / task — full 4-step flow
     return [stepContent, stepImage, stepAudience, stepPublish];
   })();

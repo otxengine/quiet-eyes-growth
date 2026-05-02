@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Users, Loader2, MapPin, ExternalLink, Activity, MessageSquare, X, FileText } from 'lucide-react';
 import { toast } from 'sonner';
@@ -90,6 +91,7 @@ export default function Competitors() {
   const { businessProfile } = useOutletContext();
   const bpId = businessProfile?.id;
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const [scanning,      setScanning]     = useState(false);
   const [autoScanning,  setAutoScanning] = useState(false);
   const [activeFilter,  setActiveFilter] = useState('all');
@@ -260,6 +262,19 @@ export default function Competitors() {
     const hoursAgo = lastScan ? (Date.now() - Number(lastScan)) / 3600000 : 999;
     if (hoursAgo > 3) silentScanChanges();
   }, [mergedChanges.length, competitors.length, loadingChanges, bpId]);
+
+  // Handle ?newCompetitor= URL param — show toast + highlight matching competitor
+  useEffect(() => {
+    const newCompName = searchParams.get('newCompetitor');
+    if (!newCompName) return;
+    toast.info(`מתחרה חדש זוהה: ${newCompName}`, { duration: 6000 });
+    if (competitors.length > 0) {
+      const match = competitors.find(c =>
+        (c.name || '').toLowerCase().includes(newCompName.toLowerCase())
+      );
+      if (match) setSelectedComp(match);
+    }
+  }, [searchParams, competitors.length]); // eslint-disable-line
 
   return (
     <>
