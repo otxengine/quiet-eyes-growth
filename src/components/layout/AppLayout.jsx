@@ -49,6 +49,7 @@ const pageTitles = {
   '/integrations': 'אינטגרציות',
   '/settings': 'הגדרות',
   '/social': 'רשתות חברתיות',
+  '/insights': 'תובנות',
 };
 
 export default function AppLayout() {
@@ -124,17 +125,30 @@ export default function AppLayout() {
 
   const { data: hotLeads } = useQuery({
     queryKey: ['hotLeads', businessProfile?.id],
-    queryFn: () => base44.entities.Lead.filter({ 
-      linked_business: businessProfile?.id, 
-      status: 'hot' 
+    queryFn: () => base44.entities.Lead.filter({
+      linked_business: businessProfile?.id,
+      status: 'hot'
     }),
     enabled: !!businessProfile?.id
+  });
+
+  const { data: activeInsightAlerts } = useQuery({
+    queryKey: ['activeInsights', businessProfile?.id],
+    queryFn: () => base44.entities.ProactiveAlert.filter({
+      linked_business: businessProfile?.id,
+      is_dismissed: false,
+      is_acted_on: false,
+    }),
+    enabled: !!businessProfile?.id,
+    refetchInterval: 120000,
   });
 
   // FIX 4: Only count items that arrived AFTER the user last visited the relevant page
   const signalsLastSeen = pageVisits['/signals'] || 0;
   const reviewsLastSeen = pageVisits['/reviews'] || 0;
   const leadsLastSeen   = pageVisits['/leads'] || 0;
+
+  const insightsLastSeen = pageVisits['/insights'] || 0;
 
   const badges = {
     unreadSignals: (unreadSignals || []).filter(
@@ -145,6 +159,9 @@ export default function AppLayout() {
     ).length,
     hotLeads: (hotLeads || []).filter(
       l => new Date(l.created_at || l.created_date || 0).getTime() > leadsLastSeen
+    ).length,
+    activeInsights: (activeInsightAlerts || []).filter(
+      a => new Date(a.created_date || a.created_at || 0).getTime() > insightsLastSeen
     ).length,
   };
 

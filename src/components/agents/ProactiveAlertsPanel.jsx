@@ -232,6 +232,12 @@ export default function ProactiveAlertsPanel({ bpId }) {
                       className="btn-subtle flex items-center gap-1 text-[10px] font-medium text-foreground-muted hover:text-foreground transition-all">
                       <ClipboardList className="w-3 h-3" /> הפוך למשימה
                     </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); navigate(`/insights/alert-${alert.id}`); }}
+                      className="flex items-center gap-1 text-[10px] font-medium text-foreground-muted hover:text-primary transition-all"
+                    >
+                      פתח תובנה מלאה
+                    </button>
                     <FeedbackWidget
                       agentName={alert.source_agent || 'generateProactiveAlerts'}
                       outputType="alert"

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { ChevronDown, ChevronUp, Loader2, Lightbulb, Target, TrendingUp, Shield } from 'lucide-react';
+import { ChevronDown, ChevronUp, Loader2, Lightbulb, Target, TrendingUp, Shield, ExternalLink } from 'lucide-react';
 import ActionPopup from '@/components/ui/ActionPopup';
+import { useNavigate } from 'react-router-dom';
 
 export const CATEGORY_META = {
   competitive: { icon: Target,      label: 'תחרותי',   color: 'text-indigo-600', bg: 'bg-indigo-50',  border: 'border-indigo-100' },
@@ -13,6 +14,7 @@ export const CATEGORY_META = {
 function StrategyCard({ item, businessProfile, index }) {
   const [expanded,    setExpanded]    = useState(false);
   const [popupSignal, setPopupSignal] = useState(null);
+  const navigate = useNavigate();
 
   const meta = CATEGORY_META[item.category] || CATEGORY_META.general;
   const Icon = meta.icon;
@@ -62,25 +64,35 @@ function StrategyCard({ item, businessProfile, index }) {
             </div>
           )}
 
-          {item.action_label && (
-            <button
-              onClick={() => setPopupSignal({
-                id: `strategy_card_${index}`,
-                summary: item.title,
-                recommended_action: item.action_label,
-                source_description: JSON.stringify({
-                  action_label: item.action_label,
-                  action_type: 'task',
-                  prefilled_text: `${item.title}\n\n${item.detail}\n\nצעדים:\n${(item.steps || []).map((s, i) => `${i + 1}. ${s}`).join('\n')}`,
-                  time_minutes: item.time_minutes || 30,
-                }),
-                impact_level: item.category === 'competitive' ? 'high' : 'medium',
-              })}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium ${meta.color} ${meta.bg} border ${meta.border} hover:opacity-80 transition-all`}
-            >
-              {item.action_label} ←
-            </button>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {item.action_label && (
+              <button
+                onClick={() => setPopupSignal({
+                  id: `strategy_card_${index}`,
+                  summary: item.title,
+                  recommended_action: item.action_label,
+                  source_description: JSON.stringify({
+                    action_label: item.action_label,
+                    action_type: 'task',
+                    prefilled_text: `${item.title}\n\n${item.detail}\n\nצעדים:\n${(item.steps || []).map((s, i) => `${i + 1}. ${s}`).join('\n')}`,
+                    time_minutes: item.time_minutes || 30,
+                  }),
+                  impact_level: item.category === 'competitive' ? 'high' : 'medium',
+                })}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium ${meta.color} ${meta.bg} border ${meta.border} hover:opacity-80 transition-all`}
+              >
+                {item.action_label} ←
+              </button>
+            )}
+            {item.action_id && (
+              <button
+                onClick={() => navigate(`/insights/action-${item.action_id}`)}
+                className="flex items-center gap-1 text-[10px] font-medium text-foreground-muted hover:text-primary transition-all"
+              >
+                <ExternalLink className="w-3 h-3" /> עמוד מלא
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

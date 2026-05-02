@@ -45,6 +45,8 @@ import Marketing from '@/pages/Marketing.jsx';
 import CampaignCreate from '@/pages/CampaignCreate.jsx';
 import SignalDetail from '@/pages/SignalDetail.jsx';
 import TaskDetail from '@/pages/TaskDetail.jsx';
+import Insights from '@/pages/Insights.jsx';
+import InsightDetail from '@/pages/InsightDetail.jsx';
 import AdminDashboard from '@/pages/AdminDashboard.jsx';
 import AdminLayout from '@/components/layout/AdminLayout';
 import DevUserSwitcher from '@/components/DevUserSwitcher';
@@ -163,6 +165,8 @@ const AuthenticatedApp = () => {
         <Route path="/marketing/create" element={<CampaignCreate />} />
         <Route path="/signals/:signalId" element={<SignalDetail />} />
         <Route path="/tasks/:taskId" element={<TaskDetail />} />
+        <Route path="/insights" element={<Insights />} />
+        <Route path="/insights/:id" element={<InsightDetail />} />
       </Route>
 
       <Route path="/sign-in/*" element={
