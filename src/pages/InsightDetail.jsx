@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { fetchBusinessSnapshot, snapshotToPromptContext, logCompletedAction } from '@/lib/businessSnapshot';
-import { getActionsForInsight, getRelevantSnapshotContext } from '@/lib/insightActions';
+import { getActionsForInsight, getActionByKey, getRelevantSnapshotContext } from '@/lib/insightActions';
 import ActionChip from '@/components/insights/ActionChip';
 
 // ── Meta configs ────────────────────────────────────────────────────────────
@@ -111,35 +111,47 @@ const GUIDANCE_SCHEMA = {
   required: ['steps', 'quick_win'],
 };
 
-// Chat response schema — text + optional action buttons
-const CHAT_SCHEMA = {
-  type: 'object',
-  properties: {
-    text:    { type: 'string' },
-    actions: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          label: { type: 'string' },
-          type:  { type: 'string', enum: ['navigate', 'execute', 'external'] },
-          url:   { type: 'string' },
-          href:  { type: 'string' },
-          fn:    { type: 'string' },
-          icon:  { type: 'string' },
-          params: { type: 'object' },
-        },
-        required: ['label', 'type'],
-      },
-    },
-  },
-  required: ['text'],
-};
+/**
+ * Detect which action keys are relevant based on chat response text.
+ * Deterministic — no LLM needed, never fails.
+ */
+function detectActionsFromText(text, typeKey, snapshot, insight) {
+  const t = (text || '').toLowerCase();
+  const keys = [];
 
-function AgentAdvisor({ insight, snapshot, bpId }) {
+  if (t.includes('פוסט') || t.includes('תוכן') || t.includes('שיווק') || t.includes('פרסם'))
+    keys.push('draft_post');
+  if (t.includes('קמפיין') || t.includes('פרסום ממומן') || t.includes('מודעה'))
+    keys.push('create_campaign');
+  if (t.includes('ביקורת') || t.includes('ענה') || t.includes('תגובה לביקורת'))
+    keys.push('respond_review');
+  if (t.includes('משימה') || t.includes('לבצע') || t.includes('לטפל'))
+    keys.push('create_task');
+  if (t.includes('מתחרה') || t.includes('מתחרים') || t.includes('תחרות'))
+    keys.push('view_competitors');
+  if (t.includes('ליד') || t.includes('לקוח פוטנציאלי'))
+    keys.push('view_leads');
+  if (t.includes('שימור') || t.includes('לקוחות קיימים') || t.includes('חזרה לעסק'))
+    keys.push('view_retention');
+  if (t.includes('וואטסאפ') || t.includes('whatsapp'))
+    keys.push('whatsapp_blast');
+
+  // Fallback: take first 2 actions from the insight type
+  if (keys.length === 0) {
+    const defaults = getActionsForInsight(typeKey, snapshot, insight, 2);
+    return defaults;
+  }
+
+  // Build action objects from detected keys, filtered by snapshot conditions
+  return keys
+    .slice(0, 2)
+    .map(key => getActionByKey(key, snapshot, insight))
+    .filter(Boolean);
+}
+
+function AgentAdvisor({ insight, snapshot, bpId, insightId }) {
   const [guidance, setGuidance]       = useState(null);
   const [loading, setLoading]         = useState(false);
-  const [open, setOpen]               = useState(false);
   const [question, setQuestion]       = useState('');
   const [chat, setChat]               = useState([]);
   const [chatLoading, setChatLoading] = useState(false);
@@ -149,21 +161,19 @@ function AgentAdvisor({ insight, snapshot, bpId }) {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chat, chatLoading]);
 
-  // Rich context — prevents irrelevant suggestions
   const snapshotCtx = snapshotToPromptContext(snapshot);
 
   const generateGuidance = async () => {
     setLoading(true);
-    setOpen(true);
     try {
       const res = await base44.integrations.Core.InvokeLLM({
         model: 'haiku',
         response_json_schema: GUIDANCE_SCHEMA,
-        prompt: `יועץ עסקי לעסקים ישראלים. ענה בעברית. הצע פעולות ספציפיות בהתאם למה שהעסק כבר עשה ומה חסר.
-${snapshotCtx}
-תובנה: "${insight.title}". ${insight.description ? insight.description.slice(0, 150) : ''}
+        prompt: `יועץ עסקי לעסקים ישראלים. ענה בעברית. הצע פעולות ספציפיות בהתאם למצב העסק.
+${snapshotCtx ? snapshotCtx.slice(0, 300) : ''}
+תובנה: "${insight.title}". ${(insight.description || '').slice(0, 120)}
 סוג: ${insight.typeLabel}. עדיפות: ${insight.priority}.
-הנחיה: אם פלטפורמה כבר מחוברת — אל תציע לחבר אותה. הצע צעדים מעשיים שניתן לבצע ישירות.`,
+כלל: אל תציע לחבר פלטפורמות שכבר פעילות. הצע צעדים מעשיים ישירים.`,
       });
       const parsed = res && typeof res === 'object' && res.steps ? res : null;
       setGuidance(parsed);
@@ -174,19 +184,6 @@ ${snapshotCtx}
     setLoading(false);
   };
 
-  // Platform capabilities list for the chat agent
-  const platformCapabilities = [
-    'create_task: צור משימה במערכת',
-    'navigate:/tasks: עבור לעמוד משימות',
-    'navigate:/reviews: עבור לעמוד ביקורות',
-    'navigate:/marketing: צור פוסט/קמפיין',
-    'navigate:/competitors: עמוד מתחרים',
-    'navigate:/retention: שימור לקוחות',
-    'navigate:/leads: לידים חמים',
-    'navigate:/social: חבר רשתות חברתיות',
-    'navigate:/integrations: הגדרות אינטגרציות',
-  ].join('\n');
-
   const sendQuestion = async () => {
     const q = question.trim();
     if (!q || chatLoading) return;
@@ -194,113 +191,112 @@ ${snapshotCtx}
     setChat(prev => [...prev, { role: 'user', text: q }]);
     setChatLoading(true);
     try {
-      const res = await base44.integrations.Core.InvokeLLM({
+      // Plain text — reliable, within 700 token haiku limit
+      const text = await base44.integrations.Core.InvokeLLM({
         model: 'haiku',
-        response_json_schema: CHAT_SCHEMA,
-        prompt: `אתה סוכן עסקי שיודע לנווט בפלטפורמת OTX. ענה בעברית.
-מצב העסק:
-${snapshotCtx}
-
-תובנה נוכחית: "${insight.title}"
-
-יכולות הפלטפורמה שלך:
-${platformCapabilities}
-
-שאלת המשתמש: "${q}"
-
-ענה תשובה קצרה ומעשית (text) + הוסף עד 2 כפתורי פעולה (actions) שניתן לבצע ישירות בפלטפורמה.
-אם המשתמש שואל על פלטפורמה שכבר מחוברת — אל תציע לחבר אותה שוב.`,
+        prompt: `סוכן עסקי ישראלי. ענה בעברית, קצר ומעשי (2-3 משפטים), ספציפי לעסק.
+${snapshotCtx ? snapshotCtx.slice(0, 250) : ''}
+תובנה: "${insight.title}"
+שאלה: "${q}"
+ענה עם פעולה ישירה שניתן לבצע — לא עצות כלליות.`,
       });
 
-      const msg = res && typeof res === 'object' && res.text
-        ? res
-        : { text: typeof res === 'string' ? res : 'לא הצלחתי לענות. נסה שוב.', actions: [] };
+      const responseText = typeof text === 'string' ? text : JSON.stringify(text);
 
-      setChat(prev => [...prev, { role: 'assistant', ...msg }]);
-    } catch {
-      setChat(prev => [...prev, { role: 'assistant', text: 'שגיאה — נסה שוב.', actions: [] }]);
+      // Attach deterministic action chips based on response content
+      const actions = detectActionsFromText(responseText, insight.typeKey, snapshot, insight);
+
+      setChat(prev => [...prev, { role: 'assistant', text: responseText, actions }]);
+    } catch (err) {
+      setChat(prev => [...prev, {
+        role: 'assistant',
+        text: 'מצטער, לא הצלחתי לענות. נסה לשאול שוב.',
+        actions: getActionsForInsight(insight.typeKey || 'general', snapshot, insight, 2),
+      }]);
     }
     setChatLoading(false);
   };
 
   return (
     <div className="card-base overflow-hidden">
-      {/* Header */}
-      <button
-        onClick={guidance ? () => setOpen(v => !v) : generateGuidance}
-        disabled={loading}
-        className="w-full flex items-center justify-between px-5 py-3.5 border-b border-border hover:bg-secondary/30 transition-colors"
-      >
+      {/* Header — always shows, generate button if no guidance yet */}
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
             <Bot className="w-4 h-4 text-primary" />
           </div>
           <div className="text-right">
             <p className="text-[13px] font-semibold text-foreground">סוכן ייעוץ AI</p>
-            <p className="text-[10px] text-foreground-muted">הדרכה + שאלות בזמן אמת</p>
+            <p className="text-[10px] text-foreground-muted">
+              {snapshot ? `${snapshot.connected_platforms.length} פלטפורמות ידועות · הדרכה מותאמת` : 'הדרכה + פעולות ישירות'}
+            </p>
           </div>
         </div>
-        {loading
-          ? <Loader2 className="w-4 h-4 animate-spin text-foreground-muted" />
-          : !guidance
-            ? <span className="text-[11px] font-semibold text-primary flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5" /> קבל הדרכה ←
-              </span>
-            : open
-              ? <ChevronUp className="w-4 h-4 text-foreground-muted" />
-              : <ChevronDown className="w-4 h-4 text-foreground-muted" />
-        }
-      </button>
-
-      {open && (
-        <div className="p-5 space-y-4">
-
-          {/* Guidance — shown after generation */}
+        <div className="flex items-center gap-2">
           {guidance && (
-            <>
-              {/* Quick Win */}
-              {guidance.quick_win && (
-                <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-green-50 border border-green-100">
-                  <Zap className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-[10px] font-bold text-green-700 mb-0.5">ניצחון מהיר — עשה עכשיו</p>
-                    <p className="text-[12px] text-green-600 leading-relaxed">{guidance.quick_win}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Steps */}
-              {guidance.steps?.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-[11px] font-semibold text-foreground-muted">שלבי ביצוע</p>
-                  {guidance.steps.map((step, i) => (
-                    <div key={i} className="flex items-start gap-3 p-3 rounded-xl border border-border bg-secondary/20">
-                      <span className="w-5 h-5 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
-                        {i + 1}
-                      </span>
-                      <p className="text-[12px] text-foreground leading-relaxed">{step}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Pro tip */}
-              {guidance.tip && (
-                <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-purple-50 border border-purple-100">
-                  <Sparkles className="w-3.5 h-3.5 text-purple-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-[12px] text-purple-700 leading-relaxed">{guidance.tip}</p>
-                </div>
-              )}
-
-              <button
-                onClick={() => { setGuidance(null); setChat([]); generateGuidance(); }}
-                className="flex items-center gap-1 text-[10px] text-foreground-muted hover:text-foreground transition-all"
-              >
-                <RotateCcw className="w-3 h-3" /> חדש הדרכה
-              </button>
-              <div className="border-t border-border" />
-            </>
+            <button
+              onClick={() => { setGuidance(null); setChat([]); generateGuidance(); }}
+              className="flex items-center gap-1 text-[10px] text-foreground-muted hover:text-foreground transition-all p-1"
+              title="חדש הדרכה"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
           )}
+          <button
+            onClick={generateGuidance}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-white text-[11px] font-semibold hover:opacity-90 disabled:opacity-50 transition-all"
+          >
+            {loading
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <Sparkles className="w-3.5 h-3.5" />}
+            {loading ? 'טוען...' : guidance ? 'עדכן הדרכה' : 'קבל הדרכה'}
+          </button>
+        </div>
+      </div>
+
+      <div className="p-5 space-y-4">
+
+        {/* Guidance — shown after generation */}
+        {guidance && (
+          <>
+            {/* Quick Win */}
+            {guidance.quick_win && (
+              <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-green-50 border border-green-100">
+                <Zap className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[10px] font-bold text-green-700 mb-0.5">ניצחון מהיר — עשה עכשיו</p>
+                  <p className="text-[12px] text-green-600 leading-relaxed">{guidance.quick_win}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Steps */}
+            {guidance.steps?.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-foreground-muted">שלבי ביצוע</p>
+                {guidance.steps.map((step, i) => (
+                  <div key={i} className="flex items-start gap-3 p-3 rounded-xl border border-border bg-secondary/20">
+                    <span className="w-5 h-5 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                      {i + 1}
+                    </span>
+                    <p className="text-[12px] text-foreground leading-relaxed">{step}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Pro tip */}
+            {guidance.tip && (
+              <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-purple-50 border border-purple-100">
+                <Sparkles className="w-3.5 h-3.5 text-purple-500 flex-shrink-0 mt-0.5" />
+                <p className="text-[12px] text-purple-700 leading-relaxed">{guidance.tip}</p>
+              </div>
+            )}
+
+            <div className="border-t border-border" />
+          </>
+        )}
 
           {/* Chat — always visible once panel is open */}
           <div>
@@ -323,7 +319,7 @@ ${platformCapabilities}
                     {msg.role === 'assistant' && msg.actions?.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-1.5 max-w-[88%] justify-end">
                         {msg.actions.map((action, ai) => (
-                          <ActionChip key={ai} action={action} bpId={bpId} insightId={id} size="sm" />
+                          <ActionChip key={ai} action={action} bpId={bpId} insightId={insightId} size="sm" />
                         ))}
                       </div>
                     )}
@@ -382,7 +378,6 @@ ${platformCapabilities}
             </div>
           </div>
         </div>
-      )}
     </div>
   );
 }
@@ -513,7 +508,7 @@ export default function InsightDetail() {
     );
   }
 
-  const insightForAgent = { title, description, typeLabel: typeMeta.label, priority, stepsText };
+  const insightForAgent = { title, description, typeLabel: typeMeta.label, priority, stepsText, typeKey };
 
   // Quick actions from ActionRouter — filtered by snapshot
   const quickActions = getActionsForInsight(typeKey, snapshot, insightForAgent, 4);
@@ -610,7 +605,7 @@ export default function InsightDetail() {
       )}
 
       {/* ── C. AI Agent Advisor ── */}
-      <AgentAdvisor insight={insightForAgent} snapshot={snapshot} bpId={bpId} />
+      <AgentAdvisor insight={insightForAgent} snapshot={snapshot} bpId={bpId} insightId={id} />
 
       {/* ── D. שלבי ביצוע ── */}
       {steps.length > 0 && (

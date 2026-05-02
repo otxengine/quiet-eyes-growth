@@ -240,6 +240,18 @@ const INSIGHT_ACTION_MAP = {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
+ * Returns a single action object by key, filtered by snapshot condition.
+ * Returns null if the action doesn't exist or its condition fails.
+ */
+export function getActionByKey(key, snapshot, insight = {}) {
+  const factory = ACTION_DEFS[key];
+  if (!factory) return null;
+  const action = factory(insight);
+  if (action.condition && !action.condition(snapshot)) return null;
+  return { key, ...action };
+}
+
+/**
  * Returns an array of action objects for the given insight type,
  * filtered by what's relevant given the business snapshot.
  *
