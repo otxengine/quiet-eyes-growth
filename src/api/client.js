@@ -101,6 +101,12 @@ function makeEntityClient(entityName) {
     async delete(id) {
       return apiFetch(`/entities/${entityName}/${id}`, { method: 'DELETE' });
     },
+
+    /** get(id) — fetch a single record by ID (via filter) */
+    async get(id) {
+      const results = await apiFetch(`/entities/${entityName}?filter=${encodeURIComponent(JSON.stringify({ id }))}`);
+      return Array.isArray(results) ? (results[0] || null) : results;
+    },
   };
 }
 
