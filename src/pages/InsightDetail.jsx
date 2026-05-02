@@ -6,9 +6,12 @@ import {
   Lightbulb, Zap, Target, TrendingUp, AlertTriangle, Trophy,
   ArrowRight, CheckCircle2, Circle, ClipboardList, ChevronLeft,
   Loader2, Clock, CheckCheck, Bot, Send, ChevronDown, ChevronUp,
-  Sparkles, RotateCcw
+  Sparkles, RotateCcw, Database
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { fetchBusinessSnapshot, snapshotToPromptContext } from '@/lib/businessSnapshot';
+import { getActionsForInsight, getRelevantSnapshotContext } from '@/lib/insightActions';
+import ActionChip from '@/components/insights/ActionChip';
 
 // ── Meta configs ────────────────────────────────────────────────────────────
 
@@ -98,18 +101,42 @@ function StatusTimeline({ status, isActedOn }) {
 
 // ── AI Agent Advisor ─────────────────────────────────────────────────────────
 
-// Minimal JSON schema — keeps response under 500 tokens
 const GUIDANCE_SCHEMA = {
   type: 'object',
   properties: {
-    steps:     { type: 'array', items: { type: 'string' }, description: '3-4 action steps' },
-    quick_win: { type: 'string', description: 'one action doable in 2 min' },
-    tip:       { type: 'string', description: 'pro tip' },
+    steps:     { type: 'array', items: { type: 'string' } },
+    quick_win: { type: 'string' },
+    tip:       { type: 'string' },
   },
   required: ['steps', 'quick_win'],
 };
 
-function AgentAdvisor({ insight, businessProfile }) {
+// Chat response schema — text + optional action buttons
+const CHAT_SCHEMA = {
+  type: 'object',
+  properties: {
+    text:    { type: 'string' },
+    actions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          label: { type: 'string' },
+          type:  { type: 'string', enum: ['navigate', 'execute', 'external'] },
+          url:   { type: 'string' },
+          href:  { type: 'string' },
+          fn:    { type: 'string' },
+          icon:  { type: 'string' },
+          params: { type: 'object' },
+        },
+        required: ['label', 'type'],
+      },
+    },
+  },
+  required: ['text'],
+};
+
+function AgentAdvisor({ insight, snapshot, bpId }) {
   const [guidance, setGuidance]       = useState(null);
   const [loading, setLoading]         = useState(false);
   const [open, setOpen]               = useState(false);
@@ -122,8 +149,8 @@ function AgentAdvisor({ insight, businessProfile }) {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chat, chatLoading]);
 
-  const bpName = businessProfile?.name || '';
-  const bpCat  = businessProfile?.category || '';
+  // Rich context — prevents irrelevant suggestions
+  const snapshotCtx = snapshotToPromptContext(snapshot);
 
   const generateGuidance = async () => {
     setLoading(true);
@@ -132,14 +159,12 @@ function AgentAdvisor({ insight, businessProfile }) {
       const res = await base44.integrations.Core.InvokeLLM({
         model: 'haiku',
         response_json_schema: GUIDANCE_SCHEMA,
-        prompt: `יועץ עסקי לעסקים ישראלים. ענה בעברית.
-עסק: "${bpName}" ${bpCat ? `(${bpCat})` : ''}.
-תובנה: "${insight.title}". ${insight.description ? `תיאור: ${insight.description.slice(0, 120)}` : ''}
+        prompt: `יועץ עסקי לעסקים ישראלים. ענה בעברית. הצע פעולות ספציפיות בהתאם למה שהעסק כבר עשה ומה חסר.
+${snapshotCtx}
+תובנה: "${insight.title}". ${insight.description ? insight.description.slice(0, 150) : ''}
 סוג: ${insight.typeLabel}. עדיפות: ${insight.priority}.
-צור מדריך ביצוע קצר ומעשי.`,
+הנחיה: אם פלטפורמה כבר מחוברת — אל תציע לחבר אותה. הצע צעדים מעשיים שניתן לבצע ישירות.`,
       });
-
-      // res is already parsed JSON (object) when response_json_schema is provided
       const parsed = res && typeof res === 'object' && res.steps ? res : null;
       setGuidance(parsed);
       if (!parsed) toast.error('לא הצלחתי לייצר הדרכה — נסה שוב');
@@ -149,6 +174,19 @@ function AgentAdvisor({ insight, businessProfile }) {
     setLoading(false);
   };
 
+  // Platform capabilities list for the chat agent
+  const platformCapabilities = [
+    'create_task: צור משימה במערכת',
+    'navigate:/tasks: עבור לעמוד משימות',
+    'navigate:/reviews: עבור לעמוד ביקורות',
+    'navigate:/marketing: צור פוסט/קמפיין',
+    'navigate:/competitors: עמוד מתחרים',
+    'navigate:/retention: שימור לקוחות',
+    'navigate:/leads: לידים חמים',
+    'navigate:/social: חבר רשתות חברתיות',
+    'navigate:/integrations: הגדרות אינטגרציות',
+  ].join('\n');
+
   const sendQuestion = async () => {
     const q = question.trim();
     if (!q || chatLoading) return;
@@ -156,17 +194,31 @@ function AgentAdvisor({ insight, businessProfile }) {
     setChat(prev => [...prev, { role: 'user', text: q }]);
     setChatLoading(true);
     try {
-      // Plain text — no JSON schema, cheaper
       const res = await base44.integrations.Core.InvokeLLM({
         model: 'haiku',
-        prompt: `יועץ עסקי לעסקים ישראלים. ענה בעברית בקצרה (2-3 משפטים).
-עסק: "${bpName}". תובנה: "${insight.title}".
-שאלה: "${q}"`,
+        response_json_schema: CHAT_SCHEMA,
+        prompt: `אתה סוכן עסקי שיודע לנווט בפלטפורמת OTX. ענה בעברית.
+מצב העסק:
+${snapshotCtx}
+
+תובנה נוכחית: "${insight.title}"
+
+יכולות הפלטפורמה שלך:
+${platformCapabilities}
+
+שאלת המשתמש: "${q}"
+
+ענה תשובה קצרה ומעשית (text) + הוסף עד 2 כפתורי פעולה (actions) שניתן לבצע ישירות בפלטפורמה.
+אם המשתמש שואל על פלטפורמה שכבר מחוברת — אל תציע לחבר אותה שוב.`,
       });
-      const text = typeof res === 'string' ? res : JSON.stringify(res);
-      setChat(prev => [...prev, { role: 'assistant', text }]);
+
+      const msg = res && typeof res === 'object' && res.text
+        ? res
+        : { text: typeof res === 'string' ? res : 'לא הצלחתי לענות. נסה שוב.', actions: [] };
+
+      setChat(prev => [...prev, { role: 'assistant', ...msg }]);
     } catch {
-      setChat(prev => [...prev, { role: 'assistant', text: 'שגיאה — נסה שוב.' }]);
+      setChat(prev => [...prev, { role: 'assistant', text: 'שגיאה — נסה שוב.', actions: [] }]);
     }
     setChatLoading(false);
   };
@@ -258,15 +310,23 @@ function AgentAdvisor({ insight, businessProfile }) {
 
             {/* Messages */}
             {chat.length > 0 && (
-              <div className="space-y-2 mb-3 max-h-52 overflow-y-auto pr-1">
+              <div className="space-y-3 mb-3 max-h-64 overflow-y-auto pr-1">
                 {chat.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'}`}>
+                  <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-start' : 'items-end'}`}>
                     <div className={`max-w-[88%] px-3 py-2 rounded-2xl text-[12px] leading-relaxed
                       ${msg.role === 'user'
                         ? 'bg-primary text-white rounded-br-sm'
                         : 'bg-secondary text-foreground rounded-bl-sm border border-border'}`}>
                       {msg.text}
                     </div>
+                    {/* ActionChips embedded in assistant messages */}
+                    {msg.role === 'assistant' && msg.actions?.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5 max-w-[88%] justify-end">
+                        {msg.actions.map((action, ai) => (
+                          <ActionChip key={ai} action={action} bpId={bpId} size="sm" />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
                 {chatLoading && (
@@ -356,6 +416,14 @@ export default function InsightDetail() {
   const kind     = id?.startsWith('action-') ? 'action' : 'alert';
   const entityId = id?.replace(/^(alert|action)-/, '');
 
+  // Load business snapshot (cached 15 min) — context for all agents
+  const { data: snapshot, isLoading: snapshotLoading } = useQuery({
+    queryKey: ['businessSnapshot', bpId],
+    queryFn: () => fetchBusinessSnapshot(bpId),
+    enabled: !!bpId,
+    staleTime: 15 * 60 * 1000,
+  });
+
   const { data: alert, isLoading: loadingAlert, error: alertError } = useQuery({
     queryKey: ['proactiveAlert', entityId],
     queryFn: () => base44.entities.ProactiveAlert.get(entityId),
@@ -442,8 +510,10 @@ export default function InsightDetail() {
     );
   }
 
-  // Insight object passed to AgentAdvisor
   const insightForAgent = { title, description, typeLabel: typeMeta.label, priority, stepsText };
+
+  // Quick actions from ActionRouter — filtered by snapshot
+  const quickActions = getActionsForInsight(typeKey, snapshot, insightForAgent, 4);
 
   return (
     <div className="max-w-2xl mx-auto space-y-4 pb-12" dir="rtl">
@@ -487,6 +557,33 @@ export default function InsightDetail() {
         </div>
       </div>
 
+      {/* ── Quick Actions Bar ── */}
+      {quickActions.length > 0 && (
+        <div className="card-base px-5 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[11px] font-semibold text-foreground-muted flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5 text-primary opacity-60" />
+              פעולות מהירות
+            </p>
+            {snapshotLoading && (
+              <span className="flex items-center gap-1 text-[10px] text-foreground-muted">
+                <Database className="w-3 h-3 animate-pulse" /> לומד את העסק...
+              </span>
+            )}
+            {snapshot && !snapshotLoading && (
+              <span className="text-[10px] text-foreground-muted opacity-60">
+                {snapshot.connected_platforms.length} פלטפורמות פעילות
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {quickActions.map((action) => (
+              <ActionChip key={action.key} action={action} bpId={bpId} size="md" />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── B. למה זה חשוב ── */}
       {(description || reasoning || impact) && (
         <div className="card-base p-5 space-y-3">
@@ -510,7 +607,7 @@ export default function InsightDetail() {
       )}
 
       {/* ── C. AI Agent Advisor ── */}
-      <AgentAdvisor insight={insightForAgent} businessProfile={businessProfile} />
+      <AgentAdvisor insight={insightForAgent} snapshot={snapshot} bpId={bpId} />
 
       {/* ── D. שלבי ביצוע ── */}
       {steps.length > 0 && (
