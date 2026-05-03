@@ -52,9 +52,9 @@ export default function BusinessMemoryCard({ bpId }) {
   let agentWeights = {};
   try { agentWeights = JSON.parse(memory.agent_weights || '{}'); } catch {}
   const agentItems = Object.entries(agentWeights)
-    .sort(([, a], [, b]) => (b as number) - (a as number))
+    .sort(([, a], [, b]) => (Number(b) - Number(a)))
     .slice(0, 5)
-    .map(([k, v]) => `${k} (${Math.round((v as number) * 100)}%)`);
+    .map(([k, v]) => `${k} (${Math.round(Number(v) * 100)}%)`);
 
   const hasAnyData = rejected.length > 0 || accepted.length > 0 || channels.length > 0 || timingItems.length > 0 || agentItems.length > 0 || memory.preferred_tone || memory.feedback_summary;
 
