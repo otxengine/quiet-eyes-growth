@@ -8,6 +8,7 @@ import { useScanQuota } from '@/lib/useScanQuota';
 import { PLAN_LABELS } from '@/lib/usePlan';
 
 import OrchestratorPanel from '@/components/OrchestratorPanel';
+import TodaysFocus from '@/components/dashboard/TodaysFocus';
 import MorningBriefing from '@/components/dashboard/MorningBriefing';
 import ContextStatCards from '@/components/dashboard/ContextStatCards';
 import UrgentActions from '@/components/dashboard/UrgentActions';
@@ -165,6 +166,13 @@ export default function Dashboard() {
     enabled: !!bpId,
   });
 
+  const { data: proactiveAlerts = [] } = useQuery({
+    queryKey: ['proactiveAlerts', bpId],
+    queryFn: () => base44.entities.ProactiveAlert.filter({ linked_business: bpId, is_dismissed: false }, '-created_at', 10),
+    enabled: !!bpId,
+    refetchInterval: 60000,
+  });
+
   // Computed stats
   const pendingReviews = allReviews.filter(r => r.response_status === 'pending');
   const negativeReviews = pendingReviews.filter(r => r.sentiment === 'negative' || (r.rating && r.rating <= 2));
@@ -245,6 +253,15 @@ export default function Dashboard() {
 
       {/* OTX Orchestrator status strip */}
       <OrchestratorPanel />
+
+      {/* ROW 0: Today's Focus */}
+      <TodaysFocus
+        bpId={bpId}
+        alerts={proactiveAlerts}
+        reviews={allReviews}
+        leads={allLeads}
+        tasks={[]}
+      />
 
       {/* ROW 1: Morning Briefing */}
       <MorningBriefing businessProfile={businessProfile} stats={stats} />

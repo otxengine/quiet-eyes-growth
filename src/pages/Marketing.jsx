@@ -481,11 +481,92 @@ function WhatsAppBlastDrawer({ businessProfile, signalContext, onClose }) {
   );
 }
 
+// ── Content Calendar ─────────────────────────────────────────────────────────
+
+const DAY_LABELS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
+
+function CalendarView({ posts }) {
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  // Build week starting Sunday
+  const today = new Date();
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() - today.getDay() + weekOffset * 7);
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(startOfWeek);
+    d.setDate(startOfWeek.getDate() + i);
+    return d;
+  });
+
+  const postsByDay = {};
+  posts.forEach(post => {
+    const dateStr = (post.published_at || post.created_date || '').slice(0, 10);
+    if (!dateStr) return;
+    if (!postsByDay[dateStr]) postsByDay[dateStr] = [];
+    postsByDay[dateStr].push(post);
+  });
+
+  const weekLabel = `${days[0].toLocaleDateString('he-IL', { day: 'numeric', month: 'long' })} – ${days[6].toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+  const todayStr = today.toISOString().slice(0, 10);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <button onClick={() => setWeekOffset(w => w - 1)}
+          className="px-3 py-1.5 rounded-lg border border-border text-[11px] text-foreground-muted hover:bg-secondary transition-all">
+          → שבוע קודם
+        </button>
+        <span className="text-[12px] font-semibold text-foreground">{weekLabel}</span>
+        <button onClick={() => setWeekOffset(w => w + 1)}
+          className="px-3 py-1.5 rounded-lg border border-border text-[11px] text-foreground-muted hover:bg-secondary transition-all">
+          שבוע הבא ←
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-1.5">
+        {days.map((day, i) => {
+          const dateKey = day.toISOString().slice(0, 10);
+          const dayPosts = postsByDay[dateKey] || [];
+          const isToday = dateKey === todayStr;
+          return (
+            <div key={dateKey} className={`min-h-[120px] rounded-xl border p-2 flex flex-col gap-1 ${isToday ? 'border-primary bg-primary/5' : 'border-border bg-secondary/30'}`}>
+              <div className={`text-center mb-1 ${isToday ? 'font-bold text-primary' : 'text-foreground-muted'}`}>
+                <div className="text-[9px]">{DAY_LABELS[i]}'</div>
+                <div className="text-[13px] font-semibold">{day.getDate()}</div>
+              </div>
+              {dayPosts.map(p => {
+                const platCfg = ORGANIC_PLATFORMS.find(pl => pl.id === p.platform);
+                return (
+                  <div key={p.id} className="rounded-lg px-1.5 py-1 text-[9px] leading-tight truncate" style={{ background: platCfg?.color + '22', color: platCfg?.color || '#555' }}>
+                    {platCfg?.icon} {p.content?.slice(0, 30) || '(פוסט)'}
+                  </div>
+                );
+              })}
+              {dayPosts.length === 0 && (
+                <div className="flex-1 flex items-center justify-center">
+                  <span className="text-[9px] text-foreground-muted/30">—</span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {posts.length === 0 && (
+        <div className="text-center py-8 text-[12px] text-foreground-muted">
+          אין פוסטים לוח השנה — צור פוסט אורגני כדי שיופיע כאן
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Marketing Page ───────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'paid',    label: 'ממומן',   icon: '💰' },
-  { id: 'organic', label: 'אורגני',  icon: '🌱' },
+  { id: 'paid',     label: 'ממומן',      icon: '💰' },
+  { id: 'organic',  label: 'אורגני',     icon: '🌱' },
+  { id: 'calendar', label: 'לוח שנה',    icon: '📅' },
 ];
 
 const PAID_TABS = ['all', 'draft', 'published', 'active', 'completed'];
@@ -544,7 +625,7 @@ export default function Marketing() {
   const { data: organicPosts = [], isLoading: loadingOrganic } = useQuery({
     queryKey: ['organicPosts', bpId],
     queryFn: () => base44.entities.OrganicPost.filter({ linked_business: bpId }, '-created_date', 50),
-    enabled: !!bpId && activeTab === 'organic',
+    enabled: !!bpId && (activeTab === 'organic' || activeTab === 'calendar'),
   });
 
   const deleteOrganic = useMutation({
@@ -563,13 +644,15 @@ export default function Marketing() {
           </h1>
           <p className="text-sm text-foreground-muted mt-0.5">פוסטים, סטוריז וקמפיינים ממומנים</p>
         </div>
-        <button
-          onClick={() => activeTab === 'paid' ? navigate('/marketing/create') : setShowOrgCreate(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg text-[13px] font-semibold hover:opacity-90 transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          {activeTab === 'paid' ? 'קמפיין חדש' : 'פוסט חדש'}
-        </button>
+        {activeTab !== 'calendar' && (
+          <button
+            onClick={() => activeTab === 'paid' ? navigate('/marketing/create') : setShowOrgCreate(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg text-[13px] font-semibold hover:opacity-90 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            {activeTab === 'paid' ? 'קמפיין חדש' : 'פוסט חדש'}
+          </button>
+        )}
       </div>
 
       {/* Main tabs */}
@@ -643,6 +726,11 @@ export default function Marketing() {
             </div>
           )}
         </>
+      )}
+
+      {/* Calendar tab */}
+      {activeTab === 'calendar' && (
+        <CalendarView posts={organicPosts} />
       )}
 
       {/* Organic create drawer */}

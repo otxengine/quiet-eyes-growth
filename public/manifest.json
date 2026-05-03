@@ -1,9 +1,44 @@
 {
-  "name": "OTX",
+  "name": "OTX — Growth Intelligence",
   "short_name": "OTX",
+  "description": "מודיעין צמיחה בזמן אמת לעסקים ישראליים",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#ffffff",
   "theme_color": "#111111",
-  "icons": []
+  "lang": "he",
+  "dir": "rtl",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/logo.jpeg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.jpeg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "לוח בקרה",
+      "short_name": "Dashboard",
+      "description": "פתח את לוח הבקרה",
+      "url": "/",
+      "icons": [{ "src": "/logo.jpeg", "sizes": "192x192" }]
+    },
+    {
+      "name": "לידים",
+      "short_name": "Leads",
+      "description": "הלידים שלי",
+      "url": "/leads",
+      "icons": [{ "src": "/logo.jpeg", "sizes": "192x192" }]
+    }
+  ]
 }

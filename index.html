@@ -6,6 +6,12 @@
     <meta name="robots" content="index, follow" />
     <link rel="icon" type="image/jpeg" href="/logo.jpeg" />
     <link rel="manifest" href="/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="OTX" />
+    <link rel="apple-touch-icon" href="/logo.jpeg" />
+    <meta name="theme-color" content="#111111" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <title>OTX — מודיעין צמיחה בזמן אמת לעסקים ישראליים</title>
@@ -29,6 +35,17 @@
       }
     }
     </script>
+    <style>
+      @media print {
+        body { background: white !important; }
+        nav, aside, header, .no-print,
+        [data-sidebar], [data-topbar],
+        button:not(.print-keep) { display: none !important; }
+        main, .print-content { width: 100% !important; max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+        .card-base { break-inside: avoid; border: 1px solid #ddd !important; box-shadow: none !important; }
+        @page { margin: 1.5cm; }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

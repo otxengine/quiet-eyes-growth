@@ -41,6 +41,7 @@ import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import ChatWidget from '@/components/chat/ChatWidget';
 import { cn } from '@/lib/utils';
+import { registerServiceWorker } from '@/lib/pushNotifications';
 
 const pageTitles = {
   '/': 'מרכז פיקוד',
@@ -102,6 +103,9 @@ export default function AppLayout() {
   const stillLoading = loadingUser || (!!user?.email && loadingProfiles);
 
   const fromOnboarding = location.state?.fromOnboarding;
+
+  // Register service worker once on mount
+  useEffect(() => { registerServiceWorker(); }, []);
 
   // Redirect to onboarding if no business profile found
   useEffect(() => {
