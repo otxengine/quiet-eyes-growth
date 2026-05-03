@@ -11,7 +11,7 @@ const TIME_COLOR = { immediate: 'bg-red-100 text-red-700', immediate_action: 'bg
 const TIME_LABEL = { immediate: 'מיידי', immediate_action: 'מיידי', weeks: 'שבועות', months: 'חודשים' };
 
 function GapCard({ signal }) {
-  const tags = (signal.tags || '').split(',').reduce((acc: any, t: string) => {
+  const tags = (signal.tags || '').split(',').reduce((acc, t) => {
     const [k, v] = t.split(':');
     acc[k?.trim()] = v?.trim() || k?.trim();
     return acc;

@@ -13,7 +13,7 @@ export default function SentimentVelocityCard({ bpId }) {
   const memRecord = memory?.[0];
   if (!memRecord?.channel_preferences) return null;
 
-  let velocity: any = null;
+  let velocity = null;
   try { velocity = JSON.parse(memRecord.channel_preferences); } catch { return null; }
 
   if (!velocity?.measured_at || velocity.sentiment_now === null) return null;
