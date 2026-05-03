@@ -171,6 +171,20 @@ ${contentStyle ? `סגנון תוכן מועדף: ${contentStyle}` : ''}
           },
         });
 
+        // Also create an OrganicPost draft
+        const postContent = [post.hook, post.body, post.hashtags].filter(Boolean).join('\n\n');
+        const platform = preferredChannels.split(',')[0]?.trim() || 'instagram';
+        await prisma.organicPost.create({
+          data: {
+            linked_business: businessProfileId,
+            platform,
+            post_type: post.format?.includes('ריל') ? 'reel' : 'post',
+            content: postContent,
+            signal_summary: `[${dayName}] ${post.topic} | ${post.post_type || 'כללי'} | ${post.best_time || '18:00'}`,
+            status: 'draft',
+          },
+        });
+
         tasksCreated++;
       } catch (_) {}
     }

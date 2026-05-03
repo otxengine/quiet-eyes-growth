@@ -65,6 +65,7 @@ const pageTitles = {
   '/settings': 'הגדרות',
   '/social': 'רשתות חברתיות',
   '/insights': 'תובנות',
+  '/strategy': 'אסטרטגיה חודשית',
   '/otx': 'OTX Dashboard',
 };
 

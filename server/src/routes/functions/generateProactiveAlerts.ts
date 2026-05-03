@@ -87,7 +87,37 @@ ${isNewBusiness ? `זהו עסק חדש ללא נתוני לקוחות עדיי�
       response_json_schema: { type: 'object' },
     });
 
-    const alerts: any[] = result?.alerts || [];
+    const rawAlerts: any[] = result?.alerts || [];
+
+    // Memory suppression — filter alerts matching rejected patterns
+    const rejectedPatterns: string[] = (bizCtx as any)?.rejected_patterns
+      ? ((bizCtx as any).rejected_patterns as string).split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean)
+      : [];
+
+    const filteredAlerts = rawAlerts.filter(alert => {
+      if (!alert.title) return false;
+      const text = `${alert.title} ${alert.description || ''}`.toLowerCase();
+      return !rejectedPatterns.some(p => p && text.includes(p));
+    });
+
+    // Insight clustering — group by alert_type, keep highest-priority per type
+    const priorityOrder: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
+    const byType: Record<string, any[]> = {};
+    for (const alert of filteredAlerts) {
+      const t = alert.alert_type || 'general';
+      if (!byType[t]) byType[t] = [];
+      byType[t].push(alert);
+    }
+    const alerts = Object.values(byType).map(group => {
+      if (group.length === 1) return group[0];
+      group.sort((a: any, b: any) => (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0));
+      const best = { ...group[0] };
+      if (group.length > 1) {
+        best.description = `${best.description || ''} (כולל ${group.length - 1} תופעות דומות נוספות)`.trim();
+      }
+      return best;
+    });
+
     let created = 0;
 
     for (const alert of alerts) {

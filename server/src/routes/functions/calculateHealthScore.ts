@@ -94,6 +94,14 @@ export async function calculateHealthScore(req: Request, res: Response) {
     if (seoScore < 50) improvements.push({ area: 'seo', text: `ציון SEO מקומי נמוך (${seoScore}/100) — הוסף ביקורות Google`, priority: 'high' });
     if (reviewsNeeded > 0) improvements.push({ area: 'seo', text: `${reviewsNeeded} ביקורות נוספות לTop 3 בGoogle`, priority: 'medium' });
 
+    // Competitive positioning rank
+    if (competitors.length > 0) {
+      const sortedRatings = competitors.map(c => c.rating || 0).sort((a, b) => b - a);
+      const rank = sortedRatings.filter(r => r > avgRating).length + 1;
+      const total = competitors.length + 1;
+      improvements.unshift({ area: 'rank', text: `דירוג תחרותי: #${rank} מתוך ${total} בתחום`, priority: 'info', rank, total });
+    }
+
     const scoreData = {
       linked_business: businessProfileId,
       overall_score: overallScore,

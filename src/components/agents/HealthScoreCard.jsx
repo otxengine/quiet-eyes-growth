@@ -69,6 +69,9 @@ export default function HealthScoreCard({ bpId }) {
   let improvements = [];
   try { improvements = JSON.parse(health.improvements || '[]'); } catch (_) {}
 
+  const rankItem = improvements.find(i => i.area === 'rank');
+  const regularImprovements = improvements.filter(i => i.area !== 'rank');
+
   return (
     <div className="card-base p-5">
       <div className="flex items-center justify-between mb-4">
@@ -101,9 +104,22 @@ export default function HealthScoreCard({ bpId }) {
         </div>
       </div>
 
-      {improvements.length > 0 && (
+      {/* Competitive rank badge */}
+      {rankItem && (
+        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-100 mb-2">
+          <div className="flex items-center gap-2">
+            <Users className="w-3.5 h-3.5 text-indigo-500" />
+            <span className="text-[11px] text-indigo-700 font-medium">דירוג תחרותי</span>
+          </div>
+          <span className="text-[12px] font-bold text-indigo-700">
+            #{rankItem.rank} מתוך {rankItem.total}
+          </span>
+        </div>
+      )}
+
+      {regularImprovements.length > 0 && (
         <div className="border-t border-border pt-3 space-y-1.5">
-          {improvements.slice(0, 3).map((imp, i) => (
+          {regularImprovements.slice(0, 3).map((imp, i) => (
             <div key={i} className="flex items-start gap-2 text-[11px]">
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${
                 imp.priority === 'critical' ? 'bg-danger' : imp.priority === 'high' ? 'bg-warning' : 'bg-success'

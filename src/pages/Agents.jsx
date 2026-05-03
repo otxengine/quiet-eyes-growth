@@ -12,6 +12,8 @@ import ProactiveAlertsPanel from '@/components/agents/ProactiveAlertsPanel';
 import PredictionCard from '@/components/agents/PredictionCard';
 import AiInsightBox from '@/components/ai/AiInsightBox';
 import DataQualityDashboard from '@/components/agents/DataQualityDashboard';
+import BusinessMemoryCard from '@/components/agents/BusinessMemoryCard';
+import RiskMatrix from '@/components/agents/RiskMatrix';
 
 const agentConfigs = [
   {
@@ -351,6 +353,8 @@ export default function Agents() {
         </div>
         <div className="space-y-4">
           <HealthScoreCard bpId={bpId} />
+          <BusinessMemoryCard bpId={bpId} />
+          <RiskMatrix bpId={bpId} />
           <DataQualityDashboard bpId={bpId} />
         </div>
       </div>

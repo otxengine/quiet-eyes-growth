@@ -70,6 +70,7 @@ import { analyzeImageForPost } from './analyzeImageForPost';
 import { scanServicesAndPrices } from './scanServicesAndPrices';
 import { snapshotCompetitor } from './snapshotCompetitor';
 import { diffCompetitorSnapshot } from './diffCompetitorSnapshot';
+import { generateMonthlyStrategy } from './generateMonthlyStrategy';
 
 const router = Router();
 
@@ -146,6 +147,7 @@ const FUNCTION_MAP: Record<string, any> = {
   scanServicesAndPrices,
   snapshotCompetitor,
   diffCompetitorSnapshot,
+  generateMonthlyStrategy,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,
