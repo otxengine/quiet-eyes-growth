@@ -49,6 +49,7 @@ import Insights from '@/pages/Insights.jsx';
 import InsightDetail from '@/pages/InsightDetail.jsx';
 import MarketAnalysis from '@/pages/MarketAnalysis.jsx';
 import Strategy from '@/pages/Strategy.jsx';
+import DemandGap from '@/pages/DemandGap.jsx';
 import AdminDashboard from '@/pages/AdminDashboard.jsx';
 import AdminLayout from '@/components/layout/AdminLayout';
 import DevUserSwitcher from '@/components/DevUserSwitcher';
@@ -171,6 +172,7 @@ const AuthenticatedApp = () => {
         <Route path="/insights/:id" element={<InsightDetail />} />
         <Route path="/market-analysis" element={<MarketAnalysis />} />
         <Route path="/strategy" element={<Strategy />} />
+        <Route path="/demand-gap" element={<DemandGap />} />
         <Route path="*" element={<PageNotFound />} />
       </Route>
 

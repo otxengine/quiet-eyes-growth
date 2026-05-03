@@ -71,6 +71,14 @@ import { scanServicesAndPrices } from './scanServicesAndPrices';
 import { snapshotCompetitor } from './snapshotCompetitor';
 import { diffCompetitorSnapshot } from './diffCompetitorSnapshot';
 import { generateMonthlyStrategy } from './generateMonthlyStrategy';
+import { marketMemoryEngine } from './marketMemoryEngine';
+import { demandGapEngine } from './demandGapEngine';
+import { competitorMoveTracker } from './competitorMoveTracker';
+import { microMomentDetector } from './microMomentDetector';
+import { lostLeadRecovery } from './lostLeadRecovery';
+import { pricingIntelligence } from './pricingIntelligence';
+import { revenueForecaster } from './revenueForecaster';
+import { sentimentVelocityMonitor } from './sentimentVelocityMonitor';
 
 const router = Router();
 
@@ -148,6 +156,14 @@ const FUNCTION_MAP: Record<string, any> = {
   snapshotCompetitor,
   diffCompetitorSnapshot,
   generateMonthlyStrategy,
+  marketMemoryEngine,
+  demandGapEngine,
+  competitorMoveTracker,
+  microMomentDetector,
+  lostLeadRecovery,
+  pricingIntelligence,
+  revenueForecaster,
+  sentimentVelocityMonitor,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,

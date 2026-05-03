@@ -13,6 +13,7 @@ import CompetitorDetailCard from '@/components/competitors/CompetitorDetailCard'
 import ComposerDrawer from '@/components/modals/ComposerDrawer';
 import ReplyDrawer from '@/components/modals/ReplyDrawer';
 import StrategicAnalysisPanel from '@/components/competitors/StrategicAnalysisPanel';
+import CompetitorTimeline from '@/components/intelligence/CompetitorTimeline';
 
 // Map base44 category names to OTX sector names
 function categoryToSector(category) {
@@ -520,6 +521,8 @@ export default function Competitors() {
       )}
 
       </> /* end main section */}
+
+      <CompetitorTimeline bpId={businessProfile?.id} />
 
     </div>
 

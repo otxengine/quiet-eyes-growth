@@ -17,6 +17,7 @@ import QuickLookColumn from '@/components/dashboard/QuickLookColumn';
 import BottomActionBar from '@/components/dashboard/BottomActionBar';
 import ScanOverlay from '@/components/dashboard/ScanOverlay';
 import AutoActionsPanel from '@/components/dashboard/AutoActionsPanel';
+import SentimentVelocityCard from '@/components/dashboard/SentimentVelocityCard';
 
 const DATA_SOURCES = [
   { key: 'google',      label: 'Google Maps',  icon: '📍', always: true  },
@@ -280,7 +281,10 @@ export default function Dashboard() {
           signals={allSignals}
           competitors={competitors}
         />
-        <MarketIntelColumn signals={allSignals} />
+        <div className="space-y-4">
+          <SentimentVelocityCard bpId={bpId} />
+          <MarketIntelColumn signals={allSignals} />
+        </div>
         <QuickLookColumn
           competitors={competitors}
           leads={allLeads}

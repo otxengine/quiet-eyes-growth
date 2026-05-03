@@ -66,6 +66,7 @@ const pageTitles = {
   '/social': 'רשתות חברתיות',
   '/insights': 'תובנות',
   '/strategy': 'אסטרטגיה חודשית',
+  '/demand-gap': 'פערי ביקוש',
   '/otx': 'OTX Dashboard',
 };
 
