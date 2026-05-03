@@ -97,17 +97,17 @@ const ACTION_DEFS = {
 
   connect_facebook: () => ({
     label: 'חבר פייסבוק',
-    icon: 'Facebook',
+    icon: 'Share2',
     type: 'navigate',
-    url: '/social?platform=facebook',
+    url: '/integrations?platform=facebook_page',
     condition: (snap) => !snap?.has_facebook,
   }),
 
   connect_instagram: () => ({
     label: 'חבר אינסטגרם',
-    icon: 'Instagram',
+    icon: 'Camera',
     type: 'navigate',
-    url: '/social?platform=instagram',
+    url: '/integrations?platform=instagram_business',
     condition: (snap) => !snap?.has_instagram,
   }),
 

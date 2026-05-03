@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
@@ -195,6 +195,18 @@ export default function Integrations() {
   const { businessProfile } = useOutletContext();
   const bp = businessProfile;
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const highlightPlatform = searchParams.get('platform');
+  const platformRefs = useRef({});
+
+  // Auto-scroll to highlighted platform card when arriving from a link
+  useEffect(() => {
+    if (!highlightPlatform) return;
+    const t = setTimeout(() => {
+      platformRefs.current[highlightPlatform]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [highlightPlatform]);
 
   // Fetch SocialAccount records for this business
   const { data: socialAccounts = [] } = useQuery({
@@ -289,13 +301,18 @@ export default function Integrations() {
         <p className="text-[11px] text-foreground-muted">לחץ "חבר" — יפתח חלון אישור קצר, וזהו. לאחר מכן OTX פועל אוטומטית.</p>
         <div className="space-y-2">
           {SOCIAL_PLATFORMS.map(platform => (
-            <SocialPlatformCard
+            <div
               key={platform.id}
-              platform={platform}
-              connection={connections[platform.id]}
-              onConnect={() => connectSocial(platform.id)}
-              onDisconnect={() => disconnectSocial(platform.id)}
-            />
+              ref={el => { platformRefs.current[platform.id] = el; }}
+              className={highlightPlatform === platform.id ? 'ring-2 ring-primary/40 rounded-xl transition-all' : ''}
+            >
+              <SocialPlatformCard
+                platform={platform}
+                connection={connections[platform.id]}
+                onConnect={() => connectSocial(platform.id)}
+                onDisconnect={() => disconnectSocial(platform.id)}
+              />
+            </div>
           ))}
         </div>
       </div>

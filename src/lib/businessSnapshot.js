@@ -68,8 +68,8 @@ function buildSnapshot(bp, socialAccounts, competitors, healthScore, reviews, ta
     name:        bp?.name        || '',
     category:    bp?.category    || '',
     city:        bp?.city        || '',
-    has_website: !!(bp?.website),
-    website:     bp?.website     || null,
+    has_website: !!(bp?.website || bp?.website_url),
+    website:     bp?.website || bp?.website_url || null,
     description: bp?.description || '',
     phone:       bp?.phone       || null,
 

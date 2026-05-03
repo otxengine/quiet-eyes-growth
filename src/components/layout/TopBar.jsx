@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Bell, Menu, Eye, Star, CheckCircle, LogOut, Radar } from 'lucide-react';
+import { Bell, Menu, Eye, Star, CheckCircle, LogOut, Radar, Lightbulb } from 'lucide-react';
 import LocationSwitcher from './LocationSwitcher';
 
 export default function TopBar({ pageTitle, user, badges = {}, onMenuClick, showMenuButton, businessProfileId, selectedLocationId, onLocationChange }) {
@@ -9,7 +9,7 @@ export default function TopBar({ pageTitle, user, badges = {}, onMenuClick, show
   const [bellOpen, setBellOpen] = useState(false);
   const bellRef = useRef(null);
   const navigate = useNavigate();
-  const totalCount = (badges.unreadSignals || 0) + (badges.pendingReviews || 0) + (badges.hotLeads || 0);
+  const totalCount = (badges.unreadSignals || 0) + (badges.pendingReviews || 0) + (badges.hotLeads || 0) + (badges.activeInsights || 0);
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -20,9 +20,10 @@ export default function TopBar({ pageTitle, user, badges = {}, onMenuClick, show
   }, []);
 
   const notifItems = [
-    { count: badges.unreadSignals || 0, label: 'תובנות חדשות', icon: Eye, path: '/signals' },
-    { count: badges.pendingReviews || 0, label: 'ביקורות ממתינות', icon: Star, path: '/reviews' },
-    { count: badges.hotLeads || 0, label: 'לידים חמים היום', icon: CheckCircle, path: '/leads' },
+    { count: badges.unreadSignals  || 0, label: 'סיגנלים חדשים',   icon: Eye,       path: '/signals'  },
+    { count: badges.pendingReviews || 0, label: 'ביקורות ממתינות', icon: Star,       path: '/reviews'  },
+    { count: badges.hotLeads       || 0, label: 'לידים חמים היום', icon: CheckCircle,path: '/leads'    },
+    { count: badges.activeInsights || 0, label: 'תובנות פעילות',   icon: Lightbulb,  path: '/insights' },
   ];
 
   return (

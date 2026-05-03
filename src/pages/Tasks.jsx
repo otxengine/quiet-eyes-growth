@@ -30,12 +30,14 @@ export default function Tasks() {
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const fromAlert = params.get('from_alert');
-    if (fromAlert) {
+    const fromInsight = params.get('from_insight');
+    const sourceId = fromAlert || fromInsight;
+    if (sourceId) {
       setPrefill({
         title: params.get('title') || '',
         description: params.get('desc') || '',
         priority: params.get('priority') || 'medium',
-        source_alert_id: fromAlert,
+        source_alert_id: sourceId,
       });
       setShowAddModal(true);
       window.history.replaceState({}, '', '/tasks');

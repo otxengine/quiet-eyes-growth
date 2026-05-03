@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Heart, Star, ClipboardList, AlertTriangle, Loader2, TrendingDown, Clock, MessageSquare } from 'lucide-react';
+import { Heart, Star, ClipboardList, AlertTriangle, Loader2, TrendingDown, Clock, MessageSquare, Copy, CheckCheck } from 'lucide-react';
+import { toast } from 'sonner';
 
 function daysAgo(dateStr) {
   if (!dateStr) return null;
@@ -22,6 +23,7 @@ export default function Retention() {
   const [retentionPopup, setRetentionPopup] = useState(null);
   const [winBackLoading, setWinBackLoading] = useState(false);
   const [winBackMessage, setWinBackMessage] = useState('');
+  const [winBackCopied, setWinBackCopied] = useState(false);
 
   const { data: leads = [] } = useQuery({
     queryKey: ['retentionLeads', bpId],
@@ -259,7 +261,22 @@ export default function Retention() {
           </div>
           {winBackMessage && (
             <div className="mt-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
-              <p className="text-[10px] text-primary font-medium mb-1.5">📱 מסר להחזרת לקוח (WhatsApp):</p>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[10px] text-primary font-medium">📱 מסר להחזרת לקוח (WhatsApp):</p>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(winBackMessage).then(() => {
+                      setWinBackCopied(true);
+                      toast.success('הועתק ✓');
+                      setTimeout(() => setWinBackCopied(false), 2000);
+                    });
+                  }}
+                  className="flex items-center gap-1 text-[10px] text-foreground-muted hover:text-foreground transition-all px-2 py-0.5 rounded border border-border bg-white"
+                >
+                  {winBackCopied ? <CheckCheck className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                  {winBackCopied ? 'הועתק' : 'העתק'}
+                </button>
+              </div>
               <p className="text-[12px] text-foreground leading-relaxed whitespace-pre-line">{winBackMessage}</p>
             </div>
           )}

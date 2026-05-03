@@ -47,6 +47,7 @@ import SignalDetail from '@/pages/SignalDetail.jsx';
 import TaskDetail from '@/pages/TaskDetail.jsx';
 import Insights from '@/pages/Insights.jsx';
 import InsightDetail from '@/pages/InsightDetail.jsx';
+import MarketAnalysis from '@/pages/MarketAnalysis.jsx';
 import AdminDashboard from '@/pages/AdminDashboard.jsx';
 import AdminLayout from '@/components/layout/AdminLayout';
 import DevUserSwitcher from '@/components/DevUserSwitcher';
@@ -167,6 +168,8 @@ const AuthenticatedApp = () => {
         <Route path="/tasks/:taskId" element={<TaskDetail />} />
         <Route path="/insights" element={<Insights />} />
         <Route path="/insights/:id" element={<InsightDetail />} />
+        <Route path="/market-analysis" element={<MarketAnalysis />} />
+        <Route path="*" element={<PageNotFound />} />
       </Route>
 
       <Route path="/sign-in/*" element={

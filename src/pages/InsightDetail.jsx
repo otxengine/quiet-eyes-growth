@@ -341,8 +341,8 @@ ${snapshotCtx ? snapshotCtx.slice(0, 250) : ''}
               </div>
             )}
 
-            {/* Suggested questions — shown before first chat */}
-            {chat.length === 0 && !guidance && (
+            {/* Suggested questions — shown before first chat message */}
+            {chat.length === 0 && (
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {[
                   'מה הצעד הראשון הכי חשוב?',

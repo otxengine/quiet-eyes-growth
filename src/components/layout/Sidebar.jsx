@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import {
   LayoutGrid, Eye, Users, Star, CheckCircle, Heart, Settings,
   ChevronRight, ChevronLeft, ChevronDown, LogOut, FileBarChart,
-  ClipboardList, Database, Bot, Plug, Crown, Sparkles, Calendar, Megaphone, ShieldAlert, Lightbulb
+  ClipboardList, Database, Bot, Plug, Crown, Sparkles, Calendar, Megaphone, ShieldAlert, Lightbulb, TrendingUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -14,10 +14,11 @@ const NAV_STRUCTURE = [
   {
     type: 'group', key: 'intel', label: 'מודיעין', icon: Eye,
     items: [
-      { path: '/signals',     label: 'תובנות שוק', icon: Eye },
-      { path: '/competitors', label: 'מתחרים',     icon: Users },
-      { path: '/events',      label: 'אירועים',    icon: Calendar },
-      { path: '/insights',    label: 'תובנות',     icon: Lightbulb, badgeKey: 'activeInsights' },
+      { path: '/signals',          label: 'תובנות שוק',  icon: Eye },
+      { path: '/competitors',     label: 'מתחרים',      icon: Users },
+      { path: '/events',          label: 'אירועים',     icon: Calendar },
+      { path: '/insights',        label: 'תובנות',      icon: Lightbulb, badgeKey: 'activeInsights' },
+      { path: '/market-analysis', label: 'ניתוח שוק',   icon: TrendingUp },
     ],
   },
   { type: 'item',  path: '/leads', label: 'לידים', icon: CheckCircle, badgeKey: 'hotLeads' },
@@ -44,9 +45,10 @@ const NAV_STRUCTURE = [
 
 function getDefaultOpen(key) {
   try {
-    return localStorage.getItem(`sidebar_group_${key}`) === 'true';
+    const stored = localStorage.getItem(`sidebar_group_${key}`);
+    if (stored !== null) return stored === 'true';
   } catch {}
-  return false;
+  return true; // open by default on first visit
 }
 
 function useIsAdmin() {

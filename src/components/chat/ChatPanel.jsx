@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
-import { X, Send, Loader2, MessageSquare } from 'lucide-react';
+import { X, Send, Loader2, MessageSquare, Trash2 } from 'lucide-react';
 import ChatMessage from './ChatMessage';
 
 // Storage key is scoped to the specific business so histories never bleed between accounts.
@@ -119,6 +119,11 @@ ${history}
     }
   };
 
+  const clearHistory = () => {
+    setMessages([]);
+    saveMessages([], bpId);
+  };
+
   return (
     <div
       className="fixed z-50 bg-white rounded-xl border border-[#eeeeee] shadow-lg flex flex-col overflow-hidden"
@@ -145,9 +150,16 @@ ${history}
             )}
           </div>
         </div>
-        <button onClick={onClose} className="p-1.5 rounded-md hover:bg-[#f5f5f5] transition-colors">
-          <X className="w-4 h-4 text-[#999999]" />
-        </button>
+        <div className="flex items-center gap-1">
+          {messages.length > 0 && (
+            <button onClick={clearHistory} title="נקה שיחה" className="p-1.5 rounded-md hover:bg-[#f5f5f5] transition-colors">
+              <Trash2 className="w-3.5 h-3.5 text-[#bbbbbb] hover:text-red-400 transition-colors" />
+            </button>
+          )}
+          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-[#f5f5f5] transition-colors">
+            <X className="w-4 h-4 text-[#999999]" />
+          </button>
+        </div>
       </div>
 
       {/* Messages */}

@@ -6,14 +6,14 @@ import { toast } from 'sonner';
 import {
   ClipboardList, Star, MessageSquare, Megaphone, Zap, Users, UserPlus,
   TrendingUp, Heart, Globe, Eye, BarChart2, Settings, Truck,
-  MessageCircle, Loader2, CheckCheck, ExternalLink,
+  MessageCircle, Loader2, CheckCheck, ExternalLink, Camera, Share2,
 } from 'lucide-react';
 import { logCompletedAction } from '@/lib/businessSnapshot';
 
 const ICON_MAP = {
   ClipboardList, Star, MessageSquare, Megaphone, Zap, Users, UserPlus,
   TrendingUp, Heart, Globe, Eye, BarChart2, Settings, Truck,
-  MessageCircle, ExternalLink,
+  MessageCircle, ExternalLink, Camera, Share2,
 };
 
 /**

@@ -49,9 +49,19 @@ function ActionButton({ alert, actionMeta, bpId, onActed }) {
     if (!actionMeta?.prefilled_text || !bpId) return;
     setPublishing(true);
     try {
+      // Get auth token (same logic as api/client.js)
+      let authToken = null;
+      if (window.__clerk?.session) {
+        try { authToken = await window.__clerk.session.getToken(); } catch {}
+      }
+      if (!authToken) authToken = window.__clerk_session_token || localStorage.getItem('clerk_session_token');
+      const authHeaders = authToken
+        ? { Authorization: `Bearer ${authToken}` }
+        : { 'x-dev-user': localStorage.getItem('dev_user_id') || 'dev-user' };
+
       const res = await fetch(`${SERVER_BASE}/api/functions/publishPost`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           businessProfileId: bpId,
           caption: actionMeta.prefilled_text,

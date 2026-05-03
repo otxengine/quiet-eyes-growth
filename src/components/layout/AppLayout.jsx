@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
+import { toast } from 'sonner';
+import { useScanQuota } from '@/lib/useScanQuota';
+import { PLAN_LABELS } from '@/lib/usePlan';
+import ScanOverlay from '@/components/dashboard/ScanOverlay';
 
 const ADMIN_EMAILS = ['contact@otxengine.io'];
 const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai'];
@@ -12,7 +16,8 @@ function checkIsAdmin(email) {
   return ADMIN_EMAILS.includes(e) || ADMIN_DOMAINS.some(d => e.endsWith(d));
 }
 
-// FIX 4: Track page visits in sessionStorage so badge counts clear after visiting the relevant page
+// Track page visits in sessionStorage so badge counts clear after visiting the relevant page
+// Sub-paths (e.g. /insights/:id) also mark the parent path as visited
 function usePageVisits(pathname) {
   const [visits, setVisits] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('otx_page_visits') || '{}'); }
@@ -20,7 +25,12 @@ function usePageVisits(pathname) {
   });
   useEffect(() => {
     setVisits(prev => {
-      const updated = { ...prev, [pathname]: Date.now() };
+      const now = Date.now();
+      const updated = { ...prev, [pathname]: now };
+      // Mark parent routes visited so badges clear on sub-pages too
+      if (pathname.startsWith('/insights/')) updated['/insights'] = now;
+      if (pathname.startsWith('/tasks/'))    updated['/tasks']    = now;
+      if (pathname.startsWith('/signals/'))  updated['/signals']  = now;
       sessionStorage.setItem('otx_page_visits', JSON.stringify(updated));
       return updated;
     });
@@ -37,11 +47,15 @@ const pageTitles = {
   '/dashboard': 'מרכז פיקוד',
   '/signals': 'העיניים — מודיעין שוק',
   '/competitors': 'מתחרים',
+  '/events': 'אירועים',
   '/reviews': 'מוניטין',
   '/leads': 'לידים',
   '/retention': 'שימור לקוחות',
   '/reports': 'דוחות וניתוח',
   '/tasks': 'משימות',
+  '/marketing': 'מרכז שיווק',
+  '/marketing/create': 'יצירת קמפיין',
+  '/market-analysis': 'ניתוח שוק',
   '/data-sources': 'מקורות מידע',
   '/subscription': 'ניהול מנוי',
   '/agents': 'סוכנים',
@@ -50,14 +64,17 @@ const pageTitles = {
   '/settings': 'הגדרות',
   '/social': 'רשתות חברתיות',
   '/insights': 'תובנות',
+  '/otx': 'OTX Dashboard',
 };
 
 export default function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedLocationId, setSelectedLocationId] = useState(null);
+  const [showGlobalScan, setShowGlobalScan] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const pageVisits = usePageVisits(location.pathname);
 
   // Use reactive auth context for reliable admin detection
@@ -103,6 +120,27 @@ export default function AppLayout() {
       navigate('/onboarding');
     }
   }, [businessProfile, stillLoading, isLoadingAuth, user, userError, navigate, location.pathname, fromOnboarding, isAdmin]);
+
+  // Global scan overlay — works on all pages (Dashboard overrides with its own when active)
+  const scanQuota = useScanQuota(businessProfile?.id);
+  const isOnDashboard = ['/', '/dashboard'].includes(location.pathname);
+
+  useEffect(() => {
+    if (isOnDashboard) return; // Dashboard registers its own handler
+    const handler = () => {
+      if (scanQuota.isExhausted) {
+        toast.error(
+          `הגעת למגבלת הסריקות של תוכנית ${PLAN_LABELS[scanQuota.plan]} (${scanQuota.quota}/חודש). שדרג כדי להמשיך.`,
+          { duration: 5000 }
+        );
+        return;
+      }
+      setShowGlobalScan(true);
+    };
+    // setTimeout ensures Dashboard's cleanup (delete) runs first on navigation
+    const t = setTimeout(() => { window.__quieteyes_scan = handler; }, 0);
+    return () => clearTimeout(t);
+  }, [isOnDashboard, scanQuota.isExhausted, scanQuota.plan, scanQuota.quota, location.pathname]);
 
   // Fetch badge counts
   const { data: unreadSignals } = useQuery({
@@ -165,7 +203,12 @@ export default function AppLayout() {
     ).length,
   };
 
-  const pageTitle = pageTitles[location.pathname] || 'OTX';
+  // Dynamic page title: exact match first, then prefix-based for sub-routes
+  const pageTitle = pageTitles[location.pathname]
+    || (location.pathname.startsWith('/insights/') ? 'תובנה' : null)
+    || (location.pathname.startsWith('/tasks/')    ? 'פרטי משימה' : null)
+    || (location.pathname.startsWith('/signals/')  ? 'פרטי סיגנל' : null)
+    || 'OTX';
 
   if (loadingProfiles) {
     return (
@@ -225,6 +268,18 @@ export default function AppLayout() {
         </main>
       </div>
       <ChatWidget businessProfile={businessProfile} />
+
+      {/* Global Scan Overlay — active on all non-Dashboard pages */}
+      {showGlobalScan && businessProfile && (
+        <ScanOverlay
+          businessProfile={businessProfile}
+          onComplete={() => {
+            setShowGlobalScan(false);
+            queryClient.invalidateQueries(); // refresh all queries after scan
+          }}
+          onClose={() => setShowGlobalScan(false)}
+        />
+      )}
     </div>
   );
 }
