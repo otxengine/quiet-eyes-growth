@@ -6,8 +6,8 @@ import { AlertTriangle } from 'lucide-react';
 import { useScanQuota } from '@/lib/useScanQuota';
 import { PLAN_LABELS } from '@/lib/usePlan';
 
+import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import DailyFocus from '@/components/dashboard/DailyFocus';
-import KpiStrip from '@/components/dashboard/KpiStrip';
 import MorningBriefing from '@/components/dashboard/MorningBriefing';
 import MarketIntelColumn from '@/components/dashboard/MarketIntelColumn';
 import SentimentVelocityCard from '@/components/dashboard/SentimentVelocityCard';
@@ -21,7 +21,6 @@ export default function Dashboard() {
   const [showScan, setShowScan] = useState(false);
   const scanQuota = useScanQuota(bpId);
 
-  // Core data queries
   const { data: allSignals = [] } = useQuery({
     queryKey: ['allSignals', bpId],
     queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId }, '-detected_at', 50),
@@ -46,48 +45,29 @@ export default function Dashboard() {
     enabled: !!bpId,
   });
 
-  const { data: pendingActionsRaw = [] } = useQuery({
-    queryKey: ['autoActionsPending', bpId],
-    queryFn: async () => {
-      try {
-        const res = await base44.entities.AutoAction.filter({ linked_business: bpId, status: 'pending' }, '-created_date', 10);
-        return Array.isArray(res) ? res : [];
-      } catch {
-        return [];
-      }
-    },
-    enabled: !!bpId,
-  });
-  const pendingActions = Array.isArray(pendingActionsRaw) ? pendingActionsRaw : [];
-
-  // Computed stats for KpiStrip
+  // Computed stats
   const pendingReviews   = allReviews.filter(r => r.response_status === 'pending');
+  const negativeReviews  = pendingReviews.filter(r => r.sentiment === 'negative' || (r.rating && r.rating <= 2));
   const hotLeads         = allLeads.filter(l => l.status === 'hot');
   const unreadSignals    = allSignals.filter(s => !s.is_read);
   const thisMonth        = new Date().toISOString().slice(0, 7);
+  const weekAgo          = new Date(Date.now() - 7 * 24 * 3600000).toISOString();
   const closedThisMonth  = allLeads.filter(l =>
     (l.lifecycle_stage === 'closed_won' || l.status === 'completed') &&
     (l.closed_at || l.created_at || '').startsWith(thisMonth)
   );
   const monthRevenue = closedThisMonth.reduce((sum, l) => sum + (l.closed_value || l.total_value || 0), 0);
+  const competitorChanges = competitors.filter(c => c.price_changed_at && c.price_changed_at >= weekAgo);
 
   const stats = {
-    pendingReviews: pendingReviews.length,
-    negativeReviews: pendingReviews.filter(r => r.sentiment === 'negative' || (r.rating && r.rating <= 2)).length,
-    hotLeads: hotLeads.length,
-    unreadSignals: unreadSignals.length,
+    pendingReviews:    pendingReviews.length,
+    negativeReviews:   negativeReviews.length,
+    hotLeads:          hotLeads.length,
+    unreadSignals:     unreadSignals.length,
     highImpactSignals: unreadSignals.filter(s => s.impact_level === 'high').length,
-    competitorChanges: competitors.filter(c => {
-      const weekAgo = new Date(Date.now() - 7 * 24 * 3600000).toISOString();
-      return c.price_changed_at && c.price_changed_at >= weekAgo;
-    }).length,
+    competitorChanges: competitorChanges.length,
     monthRevenue,
-  };
-
-  const refreshAll = () => {
-    ['allSignals','competitors','allReviews','allLeads','morningBriefing','autoActionsPending'].forEach(k =>
-      queryClient.invalidateQueries({ queryKey: [k] })
-    );
+    closedThisMonth:   closedThisMonth.length,
   };
 
   // Expose scan trigger for TopBar
@@ -103,6 +83,12 @@ export default function Dashboard() {
     };
     return () => { delete window.__quieteyes_scan; };
   }, [scanQuota.isExhausted, scanQuota.plan, scanQuota.quota]);
+
+  const refreshAll = () => {
+    ['allSignals', 'competitors', 'allReviews', 'allLeads', 'morningBriefing'].forEach(k =>
+      queryClient.invalidateQueries({ queryKey: [k] })
+    );
+  };
 
   return (
     <div className="flex flex-col">
@@ -121,28 +107,31 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* KPI strip — 4 clickable numbers */}
-      <KpiStrip stats={stats} />
+      {/* ── Hero header: greeting + score + 4 KPIs ─────────────────────── */}
+      <DashboardHeader businessProfile={businessProfile} stats={stats} />
 
-      {/* Hero: action-oriented to-do list */}
-      <DailyFocus
-        reviews={allReviews}
-        leads={allLeads}
-        signals={allSignals}
-        competitors={competitors}
-        pendingActions={pendingActions}
-      />
+      {/* ── Main 2-col layout ───────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
 
-      {/* Morning briefing — collapsible AI summary */}
-      <MorningBriefing businessProfile={businessProfile} stats={stats} />
+        {/* LEFT: action to-do list */}
+        <div className="lg:col-span-7">
+          <DailyFocus
+            reviews={allReviews}
+            leads={allLeads}
+            signals={allSignals}
+            competitors={competitors}
+            pendingActions={[]}
+          />
+          {/* Auto-actions below focus list on left */}
+          <AutoActionsPanel bpId={bpId} />
+        </div>
 
-      {/* Auto-actions needing approval */}
-      <AutoActionsPanel bpId={bpId} />
-
-      {/* Bottom two-column: market intel + sentiment */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <MarketIntelColumn signals={allSignals} />
-        <SentimentVelocityCard bpId={bpId} />
+        {/* RIGHT: intelligence panel */}
+        <div className="lg:col-span-5 flex flex-col gap-4">
+          <MorningBriefing businessProfile={businessProfile} stats={stats} />
+          <MarketIntelColumn signals={allSignals} />
+          <SentimentVelocityCard bpId={bpId} />
+        </div>
       </div>
 
       {/* Scan Overlay */}

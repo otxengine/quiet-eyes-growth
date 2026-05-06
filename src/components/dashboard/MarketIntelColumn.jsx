@@ -48,7 +48,7 @@ export default function MarketIntelColumn({ signals }) {
         <button onClick={() => navigate('/signals')} className="text-[10px] text-foreground-muted hover:text-foreground mr-auto transition-colors">הכל ←</button>
       </div>
 
-      <div className="flex-1 overflow-y-auto divide-y divide-border" style={{ maxHeight: '320px' }}>
+      <div className="flex-1 overflow-y-auto divide-y divide-border" style={{ maxHeight: '240px' }}>
         {display.length === 0 ? (
           <div className="flex items-center justify-center h-full py-10">
             <p className="text-[11px] text-foreground-muted">אין תובנות חדשות</p>

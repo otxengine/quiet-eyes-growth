@@ -288,7 +288,7 @@ export default function DailyFocus({ reviews, leads, signals, competitors, pendi
   });
 
   const items = rawItems.filter(i => !doneIds.has(i.id));
-  const MAX_DEFAULT = 5;
+  const MAX_DEFAULT = 4;
   const display = showAll ? items : items.slice(0, MAX_DEFAULT);
   const hiddenCount = items.length - MAX_DEFAULT;
 
