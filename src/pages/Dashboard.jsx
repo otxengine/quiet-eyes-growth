@@ -46,13 +46,19 @@ export default function Dashboard() {
     enabled: !!bpId,
   });
 
-  const { data: pendingActions = [] } = useQuery({
+  const { data: pendingActionsRaw = [] } = useQuery({
     queryKey: ['autoActionsPending', bpId],
-    queryFn: () => base44.entities.AutoAction
-      ? base44.entities.AutoAction.filter({ linked_business: bpId, status: 'pending' }, '-created_date', 10)
-      : Promise.resolve([]),
+    queryFn: async () => {
+      try {
+        const res = await base44.entities.AutoAction.filter({ linked_business: bpId, status: 'pending' }, '-created_date', 10);
+        return Array.isArray(res) ? res : [];
+      } catch {
+        return [];
+      }
+    },
     enabled: !!bpId,
   });
+  const pendingActions = Array.isArray(pendingActionsRaw) ? pendingActionsRaw : [];
 
   // Computed stats for KpiStrip
   const pendingReviews   = allReviews.filter(r => r.response_status === 'pending');

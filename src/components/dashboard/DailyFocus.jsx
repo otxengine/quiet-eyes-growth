@@ -237,7 +237,7 @@ export default function DailyFocus({ reviews, leads, signals, competitors, pendi
     });
 
   // P0 — Auto-actions pending approval
-  (pendingActions || []).slice(0, 2).forEach(a => rawItems.push({
+  (Array.isArray(pendingActions) ? pendingActions : []).slice(0, 2).forEach(a => rawItems.push({
     id:    a.id,
     type:  'auto_action',
     priority: 0,
