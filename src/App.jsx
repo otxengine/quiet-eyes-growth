@@ -176,16 +176,6 @@ const AuthenticatedApp = () => {
         <Route path="*" element={<PageNotFound />} />
       </Route>
 
-      <Route path="/sign-in/*" element={
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <SignIn routing="path" path="/sign-in" />
-        </div>
-      } />
-      <Route path="/sign-up/*" element={
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <SignUp routing="path" path="/sign-up" />
-        </div>
-      } />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

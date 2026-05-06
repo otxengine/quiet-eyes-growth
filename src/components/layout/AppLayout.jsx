@@ -104,7 +104,7 @@ export default function AppLayout() {
 
   const stillLoading = loadingUser || (!!user?.email && loadingProfiles);
 
-  const fromOnboarding = location.state?.fromOnboarding;
+  const fromOnboarding = location.state?.fromOnboarding || sessionStorage.getItem('otx_just_onboarded') === '1';
 
   // Register service worker once on mount
   useEffect(() => { registerServiceWorker(); }, []);
@@ -114,8 +114,13 @@ export default function AppLayout() {
     if (stillLoading) return;
     if (isLoadingAuth) return; // wait for auth to resolve before checking admin
     if (location.pathname.startsWith('/onboarding')) return;
-    if (fromOnboarding) return;
     if (isAdmin) return; // admins skip onboarding entirely
+    // If the profile loaded successfully, clear the onboarding guard flag
+    if (businessProfile) {
+      sessionStorage.removeItem('otx_just_onboarded');
+      return;
+    }
+    if (fromOnboarding) return;
     // If user loaded but no profile — go to onboarding
     if (user && !businessProfile) {
       navigate('/onboarding');
