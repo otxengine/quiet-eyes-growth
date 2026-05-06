@@ -229,7 +229,55 @@ export async function cleanupAndLearn(req: Request, res: Response) {
       stats.alerts_dismissed += pastEventIds.length;
     }
 
-    // 4. Cap undismissed alerts to max 10 — dismiss lowest-priority oldest ones
+    // 3b. Semantic dedup within same alert_type in last 48h — keep newest/highest priority
+    const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
+    const recentActive = await prisma.proactiveAlert.findMany({
+      where: {
+        linked_business: businessProfileId,
+        is_dismissed: false,
+        created_at: { gte: fortyEightHoursAgo },
+      },
+      select: { id: true, alert_type: true, title: true, priority: true, created_at: true },
+      orderBy: { created_at: 'desc' },
+    });
+
+    // Group by alert_type — within each group, keep 1 per normalized title prefix (60 chars)
+    const typeGroups: Record<string, typeof recentActive> = {};
+    for (const a of recentActive) {
+      const t = a.alert_type || 'general';
+      if (!typeGroups[t]) typeGroups[t] = [];
+      typeGroups[t].push(a);
+    }
+
+    const semanticDupIds: string[] = [];
+    const dupPriorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+    for (const group of Object.values(typeGroups)) {
+      const seenKeys = new Map<string, string>(); // fuzzyKey → kept id
+      // Sort: best priority first, then newest
+      const sorted48 = [...group].sort((a, b) => {
+        const pa = dupPriorityRank[a.priority || 'low'] ?? 3;
+        const pb = dupPriorityRank[b.priority || 'low'] ?? 3;
+        return pa !== pb ? pa - pb : new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+      for (const a of sorted48) {
+        const key = (a.title || '').toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 60);
+        if (seenKeys.has(key)) {
+          semanticDupIds.push(a.id);
+        } else {
+          seenKeys.set(key, a.id);
+        }
+      }
+    }
+
+    if (semanticDupIds.length > 0) {
+      await prisma.proactiveAlert.updateMany({
+        where: { id: { in: semanticDupIds } },
+        data: { is_dismissed: true },
+      });
+      stats.alerts_dismissed += semanticDupIds.length;
+    }
+
+    // 4. Cap undismissed alerts to max 7 — dismiss lowest-priority oldest ones
     const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
     const activeAlerts = await prisma.proactiveAlert.findMany({
       where: { linked_business: businessProfileId, is_dismissed: false },
@@ -237,7 +285,7 @@ export async function cleanupAndLearn(req: Request, res: Response) {
       orderBy: { created_at: 'desc' },
     });
 
-    if (activeAlerts.length > 10) {
+    if (activeAlerts.length > 7) {
       // Sort: critical first, then high, medium, low — within same priority newest first
       const sorted = [...activeAlerts].sort((a, b) => {
         const pa = priorityRank[a.priority || 'low'] ?? 3;
@@ -245,7 +293,7 @@ export async function cleanupAndLearn(req: Request, res: Response) {
         if (pa !== pb) return pa - pb;
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
-      const toDismiss = sorted.slice(10).map(a => a.id);
+      const toDismiss = sorted.slice(7).map(a => a.id);
       if (toDismiss.length > 0) {
         await prisma.proactiveAlert.updateMany({
           where: { id: { in: toDismiss } },

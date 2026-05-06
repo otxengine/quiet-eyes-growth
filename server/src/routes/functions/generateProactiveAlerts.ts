@@ -26,6 +26,13 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
 
     const existingTitles = new Set(pendingAlerts.map(a => a.title));
 
+    // Fuzzy dedup keys: normalize first 50 chars per alert_type within last 72h
+    const seventyTwoHoursAgo = new Date(Date.now() - 72 * 3600000).toISOString();
+    const recentAlerts = pendingAlerts.filter(a => (a.created_at || '') >= seventyTwoHoursAgo);
+    const recentFuzzyKeys = new Set(
+      recentAlerts.map(a => `${a.alert_type}:${(a.title || '').toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 50)}`)
+    );
+
     const negativeReviews = recentReviews.filter(r => r.sentiment === 'negative' || (r.rating || 5) <= 2);
     const avgRating = recentReviews.length > 0
       ? (recentReviews.reduce((s, r) => s + (r.rating || 4), 0) / recentReviews.length).toFixed(1)
@@ -122,6 +129,9 @@ ${isNewBusiness ? `זהו עסק חדש ללא נתוני לקוחות עדיי�
 
     for (const alert of alerts) {
       if (!alert.title || existingTitles.has(alert.title)) continue;
+      // Fuzzy dedup: same alert_type + similar title within 72h
+      const fuzzyKey = `${alert.alert_type}:${(alert.title as string).toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 50)}`;
+      if (recentFuzzyKeys.has(fuzzyKey)) continue;
 
       // Store action metadata in source_agent as JSON (unified with MarketSignal format)
       const actionMeta = JSON.stringify({
@@ -149,6 +159,7 @@ ${isNewBusiness ? `זהו עסק חדש ללא נתוני לקוחות עדיי�
         },
       });
       existingTitles.add(alert.title);
+      recentFuzzyKeys.add(fuzzyKey);
       created++;
     }
 

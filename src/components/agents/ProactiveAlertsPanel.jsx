@@ -148,6 +148,9 @@ export default function ProactiveAlertsPanel({ bpId }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [popupSignal, setPopupSignal] = useState(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkDismissing, setBulkDismissing] = useState(false);
 
   const { data: alerts = [] } = useQuery({
     queryKey: ['proactiveAlerts', bpId],
@@ -169,6 +172,32 @@ export default function ProactiveAlertsPanel({ bpId }) {
     onSuccess: (url) => { if (url) navigate(url); queryClient.invalidateQueries({ queryKey: ['proactiveAlerts'] }); },
   });
 
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDismiss = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkDismissing(true);
+    try {
+      await Promise.all([...selectedIds].map(id =>
+        base44.entities.ProactiveAlert.update(id, { is_dismissed: true })
+      ));
+      queryClient.invalidateQueries({ queryKey: ['proactiveAlerts'] });
+      setSelectedIds(new Set());
+      setSelectMode(false);
+    } catch {
+      toast.error('שגיאה במחיקה');
+    }
+    setBulkDismissing(false);
+  };
+
+  const exitSelectMode = () => { setSelectMode(false); setSelectedIds(new Set()); };
+
   const sorted = [...alerts].sort((a, b) => (priorityOrder[a.priority] ?? 3) - (priorityOrder[b.priority] ?? 3));
 
   if (sorted.length === 0) return null;
@@ -186,79 +215,130 @@ export default function ProactiveAlertsPanel({ bpId }) {
       <div className="flex items-center gap-2 mb-4">
         <Bell className="w-4 h-4 text-foreground-muted" />
         <h3 className="text-[13px] font-semibold text-foreground">התראות פרואקטיביות</h3>
-        <span className="text-[10px] px-2 py-0.5 rounded-full bg-foreground text-background font-semibold mr-auto">{sorted.length}</span>
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-foreground text-background font-semibold">{sorted.length}</span>
+
+        <div className="flex items-center gap-2 mr-auto">
+          {selectMode ? (
+            <>
+              {selectedIds.size > 0 && (
+                <button
+                  onClick={handleBulkDismiss}
+                  disabled={bulkDismissing}
+                  className="flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-all disabled:opacity-60"
+                >
+                  {bulkDismissing ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                  מחק נבחרים ({selectedIds.size})
+                </button>
+              )}
+              <button
+                onClick={exitSelectMode}
+                className="text-[10px] text-foreground-muted hover:text-foreground transition-all px-2 py-1"
+              >
+                ביטול
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setSelectMode(true)}
+              className="text-[10px] text-foreground-muted hover:text-foreground transition-all px-2 py-1 rounded-lg hover:bg-secondary"
+            >
+              בחר
+            </button>
+          )}
+        </div>
       </div>
       <div className="space-y-2">
         {sorted.map(alert => {
           const config = typeConfig[alert.alert_type] || typeConfig.action_needed;
           const Icon = config.icon;
           const actionMeta = parseActionMeta(alert.source_agent);
+          const isSelected = selectedIds.has(alert.id);
 
           return (
-            <div key={alert.id} className={`rounded-xl p-4 ${config.bg} border border-transparent hover:border-border-hover transition-all duration-150`}>
+            <div
+              key={alert.id}
+              onClick={selectMode ? () => toggleSelect(alert.id) : undefined}
+              className={`rounded-xl p-4 border transition-all duration-150 ${
+                selectMode
+                  ? isSelected
+                    ? 'bg-primary/10 border-primary cursor-pointer'
+                    : `${config.bg} border-border/40 cursor-pointer hover:border-primary/40`
+                  : `${config.bg} border-transparent hover:border-border-hover`
+              }`}
+            >
               <div className="flex items-start gap-2.5">
-                <Icon className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: config.color }} />
+                {selectMode ? (
+                  <div className={`w-4 h-4 rounded border-2 flex-shrink-0 mt-0.5 flex items-center justify-center transition-all ${isSelected ? 'bg-primary border-primary' : 'border-border'}`}>
+                    {isSelected && <CheckCheck className="w-2.5 h-2.5 text-white" />}
+                  </div>
+                ) : (
+                  <Icon className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: config.color }} />
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px] font-semibold text-foreground leading-snug">{alert.title}</p>
                   {alert.description && <p className="text-[11px] text-foreground-secondary mt-1 leading-relaxed">{alert.description}</p>}
 
-                  {/* Inline action with prefilled text */}
-                  <ActionButton
-                    alert={alert}
-                    actionMeta={actionMeta}
-                    bpId={bpId}
-                    onActed={() => actMutation.mutate({ id: alert.id, url: null })}
-                  />
-
-                  <div className="flex items-center gap-2.5 mt-2">
-                    {alert.suggested_action && !actionMeta?.prefilled_text && (
-                      <span className="text-[11px] text-foreground-secondary">{alert.suggested_action}</span>
-                    )}
-                    {actionMeta?.action_label && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          actMutation.mutate({ id: alert.id, url: null });
-                          setPopupSignal({
-                            id: alert.id,
-                            summary: alert.description || alert.title,
-                            recommended_action: actionMeta.action_label,
-                            source_description: JSON.stringify({
-                              action_label: actionMeta.action_label,
-                              action_type: actionMeta.action_type || 'task',
-                              prefilled_text: actionMeta.prefilled_text || '',
-                              time_minutes: actionMeta.action_type === 'call' ? 10 : actionMeta.action_type === 'social_post' ? 15 : 20,
-                              urgency_hours: actionMeta.urgency_hours || 24,
-                            }),
-                            impact_level: alert.priority === 'high' || alert.priority === 'critical' ? 'high' : 'medium',
-                          });
-                        }}
-                        className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 transition-all"
-                      >
-                        <Zap className="w-3 h-3" /> פעל עכשיו
-                      </button>
-                    )}
-                    <button onClick={(e) => { e.stopPropagation(); navigate(`/tasks?from_alert=${alert.id}&title=${encodeURIComponent(actionMeta?.action_label || alert.suggested_action || alert.title)}&desc=${encodeURIComponent(alert.description || '')}&priority=${alert.priority === 'critical' ? 'critical' : alert.priority === 'high' ? 'high' : 'medium'}`); }}
-                      className="btn-subtle flex items-center gap-1 text-[10px] font-medium text-foreground-muted hover:text-foreground transition-all">
-                      <ClipboardList className="w-3 h-3" /> הפוך למשימה
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); navigate(`/insights/alert-${alert.id}`); }}
-                      className="flex items-center gap-1 text-[10px] font-medium text-foreground-muted hover:text-primary transition-all"
-                    >
-                      פתח תובנה מלאה
-                    </button>
-                    <FeedbackWidget
-                      agentName={alert.source_agent || 'generateProactiveAlerts'}
-                      outputType="alert"
-                      businessProfileId={bpId}
-                      compact={true}
-                    />
-                  </div>
+                  {!selectMode && (
+                    <>
+                      <ActionButton
+                        alert={alert}
+                        actionMeta={actionMeta}
+                        bpId={bpId}
+                        onActed={() => actMutation.mutate({ id: alert.id, url: null })}
+                      />
+                      <div className="flex items-center gap-2.5 mt-2">
+                        {alert.suggested_action && !actionMeta?.prefilled_text && (
+                          <span className="text-[11px] text-foreground-secondary">{alert.suggested_action}</span>
+                        )}
+                        {actionMeta?.action_label && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              actMutation.mutate({ id: alert.id, url: null });
+                              setPopupSignal({
+                                id: alert.id,
+                                summary: alert.description || alert.title,
+                                recommended_action: actionMeta.action_label,
+                                source_description: JSON.stringify({
+                                  action_label: actionMeta.action_label,
+                                  action_type: actionMeta.action_type || 'task',
+                                  prefilled_text: actionMeta.prefilled_text || '',
+                                  time_minutes: actionMeta.action_type === 'call' ? 10 : actionMeta.action_type === 'social_post' ? 15 : 20,
+                                  urgency_hours: actionMeta.urgency_hours || 24,
+                                }),
+                                impact_level: alert.priority === 'high' || alert.priority === 'critical' ? 'high' : 'medium',
+                              });
+                            }}
+                            className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 transition-all"
+                          >
+                            <Zap className="w-3 h-3" /> פעל עכשיו
+                          </button>
+                        )}
+                        <button onClick={(e) => { e.stopPropagation(); navigate(`/tasks?from_alert=${alert.id}&title=${encodeURIComponent(actionMeta?.action_label || alert.suggested_action || alert.title)}&desc=${encodeURIComponent(alert.description || '')}&priority=${alert.priority === 'critical' ? 'critical' : alert.priority === 'high' ? 'high' : 'medium'}`); }}
+                          className="btn-subtle flex items-center gap-1 text-[10px] font-medium text-foreground-muted hover:text-foreground transition-all">
+                          <ClipboardList className="w-3 h-3" /> הפוך למשימה
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); navigate(`/insights/alert-${alert.id}`); }}
+                          className="flex items-center gap-1 text-[10px] font-medium text-foreground-muted hover:text-primary transition-all"
+                        >
+                          פתח תובנה מלאה
+                        </button>
+                        <FeedbackWidget
+                          agentName={alert.source_agent || 'generateProactiveAlerts'}
+                          outputType="alert"
+                          businessProfileId={bpId}
+                          compact={true}
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
-                <button onClick={() => dismissMutation.mutate(alert.id)} className="p-1 rounded-md text-foreground-muted/40 hover:text-foreground-muted hover:bg-white/50 transition-all">
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                {!selectMode && (
+                  <button onClick={() => dismissMutation.mutate(alert.id)} className="p-1 rounded-md text-foreground-muted/40 hover:text-foreground-muted hover:bg-white/50 transition-all">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           );

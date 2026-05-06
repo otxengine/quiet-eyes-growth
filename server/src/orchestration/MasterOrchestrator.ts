@@ -100,10 +100,12 @@ function countItems(result: unknown): number {
 // ─── Main pipeline ────────────────────────────────────────────────────────────
 
 export interface OrchestratorOptions {
-  mode:        'full' | 'partial' | 'signal_only' | 'decision_only';
+  mode:        'full' | 'partial' | 'signal_only' | 'decision_only' | 'event_triggered';
   triggeredBy: 'schedule' | 'manual' | 'event' | 'webhook';
   skipStages?: PipelineStage[];
   forceRun?:  boolean;
+  sourceEventType?: string;   // for event_triggered mode — which event activated this run
+  ruleId?:         string;    // for traceability — which routing rule matched
 }
 
 export async function runPipeline(

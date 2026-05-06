@@ -606,7 +606,7 @@ export interface PipelineRun {
   run_id:        string;
   business_id:   string;
   trace_id:      string;
-  mode:          'full' | 'partial' | 'signal_only' | 'decision_only';
+  mode:          'full' | 'partial' | 'signal_only' | 'decision_only' | 'event_triggered';
   triggered_by:  'schedule' | 'manual' | 'event' | 'webhook';
   started_at:    string;
   completed_at?: string;

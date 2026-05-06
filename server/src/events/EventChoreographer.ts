@@ -30,10 +30,65 @@ import {
   MemoryUpdatedPayload,
   ForecastUpdatedPayload,
   ExecutionApprovalRequiredPayload,
+  CompetitorChangePayload,
+  DemandSpikePayload,
+  ChurnRiskDetectedPayload,
 } from './contracts';
 import { createLogger } from '../infra/logger';
+import { resolveRoute } from '../routing/RoutingRuleTable';
 
 const logger = createLogger('EventChoreographer');
+
+// ─── Event-triggered pipeline runner ─────────────────────────────────────────
+// Lazy import to avoid circular dependency (MasterOrchestrator → EventBus → EventChoreographer)
+// Per-business cooldown: max 1 event-triggered run per event type per 3 minutes
+const eventCooldowns = new Map<string, number>(); // `${businessId}:${eventType}` → timestamp
+
+async function triggerEventPipeline(
+  eventType: OTXEventType,
+  businessId: string,
+  payload: Record<string, unknown>,
+  traceId: string,
+): Promise<void> {
+  const cooldownKey = `${businessId}:${eventType}`;
+  const last = eventCooldowns.get(cooldownKey) ?? 0;
+  if (Date.now() - last < 3 * 60_000) {
+    logger.debug(`[EventChoreographer] cooldown active for ${eventType}`, { businessId });
+    return;
+  }
+  eventCooldowns.set(cooldownKey, Date.now());
+
+  const resolution = resolveRoute(eventType, payload);
+  if (!resolution) {
+    logger.debug(`[EventChoreographer] no routing rule matched for ${eventType}`, { businessId });
+    return;
+  }
+
+  logger.info(`[EventChoreographer] routing rule matched: ${resolution.rule.id}`, {
+    eventType,
+    businessId,
+    stages_to_run:  resolution.stages_to_run,
+    stages_to_skip: resolution.stages_to_skip,
+    trace_id: traceId,
+  });
+
+  try {
+    // Lazy import to break circular dep
+    const { runPipeline } = await import('../orchestration/MasterOrchestrator');
+    await runPipeline(businessId, {
+      mode:            'event_triggered',
+      triggeredBy:     'event',
+      skipStages:      resolution.stages_to_skip,
+      forceRun:        false,
+      sourceEventType: eventType,
+      ruleId:          resolution.rule.id,
+    });
+  } catch (err: any) {
+    logger.error(`[EventChoreographer] event-triggered pipeline failed`, {
+      eventType, businessId, error: err.message,
+    });
+  }
+}
 
 // ─── Handler Contract ─────────────────────────────────────────────────────────
 
@@ -84,24 +139,26 @@ function register<T>(contract: HandlerContract<T>): void {
 const chainA_signalToOpportunity: HandlerContract<SignalClassifiedPayload> = {
   name:        'signal_classified→opportunity_detector',
   trigger:     'signal.classified',
-  description: 'When a signal is classified with sufficient relevance, attempt opportunity detection.',
+  description: 'When a signal is classified with sufficient relevance, activate relevant pipeline stages via routing rule table.',
   chain:       'A',
   onError:     'log',
   condition:   (event) => {
     const p = event.payload;
-    // Only forward signals with meaningful relevance + confidence
     return p.relevance_score >= 0.3 && p.confidence >= 0.3;
   },
   handler: async (event) => {
-    // The OpportunityDetector is invoked by MasterOrchestrator in its
-    // 'opportunities' stage — here we log the linkage for traceability.
-    logger.debug('Chain A: signal classified → opportunity pipeline', {
-      signal_id: event.payload.signal_id,
+    const p = event.payload;
+    logger.debug('Chain A: signal classified → routing rule evaluation', {
+      signal_id: p.signal_id,
       trace_id:  event.trace_id,
-      relevance: event.payload.relevance_score,
+      relevance: p.relevance_score,
     });
-    // Downstream: MasterOrchestrator polls signals then runs detectOpportunities()
-    // This handler is the explicit contract that the linkage exists.
+    await triggerEventPipeline(
+      'signal.classified',
+      event.entity_id,
+      p as unknown as Record<string, unknown>,
+      event.trace_id,
+    );
   },
 };
 
@@ -152,41 +209,54 @@ const chainB_eventToOpportunity: HandlerContract = {
 const chainC_forecastToDecision: HandlerContract<ForecastUpdatedPayload> = {
   name:        'forecast_updated→trigger_context',
   trigger:     'forecast.updated',
-  description: 'Significant forecast updates should trigger context rebuild and re-fusion.',
+  description: 'Significant forecast updates trigger context rebuild and re-fusion via routing rule table.',
   chain:       'C',
   onError:     'log',
   condition:   (event) => {
-    // Only trigger when forecast has high confidence
     return event.payload.confidence >= 0.55 && event.payload.expected_demand_score >= 0.4;
   },
   handler: async (event) => {
-    logger.info('Chain C: forecast update warrants pipeline re-run', {
-      forecast_id: event.payload.forecast_id,
-      business_id: event.payload.business_id,
-      confidence:  event.payload.confidence,
+    const p = event.payload;
+    logger.info('Chain C: forecast update → routing rule evaluation', {
+      forecast_id: p.forecast_id,
+      business_id: p.business_id,
+      confidence:  p.confidence,
       trace_id:    event.trace_id,
     });
-    // MasterOrchestrator picks up on this via scheduled runs or explicit trigger
-    // In production: enqueue a high-priority run for this business
+    await triggerEventPipeline(
+      'forecast.updated',
+      event.entity_id,
+      p as unknown as Record<string, unknown>,
+      event.trace_id,
+    );
   },
 };
 
 const chainC_insightFused: HandlerContract<InsightFusedPayload> = {
   name:        'insight_fused→decision_gate',
   trigger:     'insight.fused',
-  description: 'Fused insight is the gate to decision creation; log urgency for monitoring.',
+  description: 'Critical fused insights fast-track to decide+dispatch via routing rule table.',
   chain:       'C',
   onError:     'log',
   condition:   (event) => event.payload.confidence >= 0.30,
   handler: async (event) => {
     const p = event.payload;
-    logger.info('Chain C: insight fused → awaiting decision', {
+    logger.info('Chain C: insight fused → routing rule evaluation', {
       insight_id:   p.fused_insight_id,
       urgency:      p.urgency,
       primary_type: p.primary_type,
       confidence:   p.confidence,
       trace_id:     event.trace_id,
     });
+    // Only critical insights trigger a new pipeline run (non-critical already in a running pipeline)
+    if (p.urgency === 'critical') {
+      await triggerEventPipeline(
+        'insight.fused',
+        event.entity_id,
+        p as unknown as Record<string, unknown>,
+        event.trace_id,
+      );
+    }
   },
 };
 
@@ -231,18 +301,23 @@ const chainC_recommendationGenerated: HandlerContract<RecommendationGeneratedPay
 const chainD_executionCompleted: HandlerContract<ExecutionCompletedPayload> = {
   name:        'execution_completed→learning_trigger',
   trigger:     'execution.completed',
-  description: 'Completed executions always feed back into the learning cycle.',
+  description: 'Completed executions trigger the learning stage via routing rule table.',
   chain:       'D',
   onError:     'log',
   condition:   (_event) => true,
   handler: async (event) => {
-    logger.info('Chain D: execution completed → learning cycle', {
-      task_id:    event.payload.execution_task_id,
-      status:     event.payload.result_status,
-      trace_id:   event.trace_id,
+    const p = event.payload;
+    logger.info('Chain D: execution completed → learning cycle via routing', {
+      task_id:  p.execution_task_id,
+      status:   p.result_status,
+      trace_id: event.trace_id,
     });
-    // PolicyWeightUpdater.runPolicyUpdateCycle() is called by OutcomeTracker
-    // after outcome is recorded.
+    await triggerEventPipeline(
+      'execution.completed',
+      event.entity_id,
+      p as unknown as Record<string, unknown>,
+      event.trace_id,
+    );
   },
 };
 
@@ -309,21 +384,102 @@ const approvalRequiredContract: HandlerContract<ExecutionApprovalRequiredPayload
 // ─── Threat handling contract ─────────────────────────────────────────────────
 
 const threatDetectedContract: HandlerContract<ThreatDetectedPayload> = {
-  name:        'threat_detected→escalate_high_risk',
+  name:        'threat_detected→route_and_escalate',
   trigger:     'threat.detected',
-  description: 'High-risk threats (score >= 0.7) are escalated for immediate review.',
+  description: 'New threats are routed via rule table; high-risk threats trigger immediate pipeline dispatch.',
   chain:       'multi',
   onError:     'dead_letter',
-  condition:   (event) => event.payload.risk_score >= 0.7 && event.payload.is_new,
+  condition:   (event) => event.payload.is_new,
   handler: async (event) => {
-    logger.warn('HIGH-RISK THREAT DETECTED — escalating', {
-      threat_id:  event.payload.threat_id,
-      type:       event.payload.type,
-      risk_score: event.payload.risk_score,
-      urgency:    event.payload.urgency,
+    const p = event.payload;
+    logger.warn('Threat detected → routing rule evaluation', {
+      threat_id:  p.threat_id,
+      type:       p.type,
+      risk_score: p.risk_score,
+      urgency:    p.urgency,
       trace_id:   event.trace_id,
     });
-    // In production: trigger P0 pipeline run and notify on-call
+    await triggerEventPipeline(
+      'threat.detected',
+      event.entity_id,
+      p as unknown as Record<string, unknown>,
+      event.trace_id,
+    );
+  },
+};
+
+// ─── Competitor change → routing ──────────────────────────────────────────────
+const competitorChangeContract: HandlerContract<CompetitorChangePayload> = {
+  name:        'competitor_change→route',
+  trigger:     'competitor.change.detected',
+  description: 'Competitor changes are evaluated by rule table and route to relevant pipeline stages.',
+  chain:       'A',
+  onError:     'log',
+  condition:   (_event) => true,
+  handler: async (event) => {
+    const p = event.payload;
+    logger.info('Competitor change detected → routing', {
+      competitor_id: p.competitor_id,
+      change_type:   p.change_type,
+      severity:      p.severity,
+      trace_id:      event.trace_id,
+    });
+    await triggerEventPipeline(
+      'competitor.change.detected',
+      event.entity_id,
+      p as unknown as Record<string, unknown>,
+      event.trace_id,
+    );
+  },
+};
+
+// ─── Demand spike → routing ───────────────────────────────────────────────────
+const demandSpikeContract: HandlerContract<DemandSpikePayload> = {
+  name:        'demand_spike→route',
+  trigger:     'demand.spike.detected',
+  description: 'Demand spikes trigger forecast + decide + dispatch via rule table.',
+  chain:       'C',
+  onError:     'log',
+  condition:   (event) => event.payload.spike_factor >= 1.3,
+  handler: async (event) => {
+    const p = event.payload;
+    logger.info('Demand spike → routing', {
+      business_id:  p.business_id,
+      spike_factor: p.spike_factor,
+      cause:        p.cause,
+      trace_id:     event.trace_id,
+    });
+    await triggerEventPipeline(
+      'demand.spike.detected',
+      event.entity_id,
+      p as unknown as Record<string, unknown>,
+      event.trace_id,
+    );
+  },
+};
+
+// ─── Churn risk → routing ─────────────────────────────────────────────────────
+const churnRiskContract: HandlerContract<ChurnRiskDetectedPayload> = {
+  name:        'churn_risk→route',
+  trigger:     'churn.risk.detected',
+  description: 'High churn risk activates retention-focused pipeline stages via rule table.',
+  chain:       'multi',
+  onError:     'log',
+  condition:   (event) => event.payload.risk_level === 'high' || event.payload.risk_score >= 0.6,
+  handler: async (event) => {
+    const p = event.payload;
+    logger.info('Churn risk → routing', {
+      business_id: p.business_id,
+      risk_level:  p.risk_level,
+      risk_score:  p.risk_score,
+      trace_id:    event.trace_id,
+    });
+    await triggerEventPipeline(
+      'churn.risk.detected',
+      event.entity_id,
+      p as unknown as Record<string, unknown>,
+      event.trace_id,
+    );
   },
 };
 
@@ -381,6 +537,11 @@ export function registerAllHandlers(): void {
   // Cross-chain
   register(approvalRequiredContract);
   register(threatDetectedContract);
+
+  // Event-driven routing contracts (new — activate real pipeline stages)
+  register(competitorChangeContract);
+  register(demandSpikeContract);
+  register(churnRiskContract);
 
   logger.info(`EventChoreographer: ${registeredContracts.length} contracts registered`);
 }
