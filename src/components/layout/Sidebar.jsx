@@ -14,13 +14,11 @@ const NAV_STRUCTURE = [
   {
     type: 'group', key: 'intel', label: 'מודיעין', icon: Eye,
     items: [
-      { path: '/signals',          label: 'תובנות שוק',  icon: Eye },
-      { path: '/competitors',     label: 'מתחרים',      icon: Users },
-      { path: '/events',          label: 'אירועים',     icon: Calendar },
-      { path: '/insights',        label: 'תובנות',      icon: Lightbulb, badgeKey: 'activeInsights' },
-      { path: '/strategy',        label: 'אסטרטגיה',    icon: Target },
-      { path: '/demand-gap',      label: 'פערי ביקוש',  icon: SearchCheck },
-      { path: '/market-analysis', label: 'ניתוח שוק',   icon: TrendingUp },
+      { path: '/competitors',  label: 'מתחרים',    icon: Users },
+      { path: '/events',       label: 'אירועים',   icon: Calendar },
+      { path: '/insights',     label: 'תובנות',    icon: Lightbulb, badgeKey: 'activeInsights' },
+      { path: '/strategy',     label: 'אסטרטגיה',  icon: Target },
+      { path: '/demand-gap',   label: 'פערי ביקוש', icon: SearchCheck },
     ],
   },
   { type: 'item',  path: '/leads', label: 'לידים', icon: CheckCircle, badgeKey: 'hotLeads' },

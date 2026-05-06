@@ -3,72 +3,176 @@ import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
-import { Search, Zap, TrendingUp, Loader2, RefreshCw, ChevronRight, Clock } from 'lucide-react';
+import {
+  Search, Zap, TrendingUp, Loader2, RefreshCw,
+  ChevronLeft, Clock, Star, ArrowUpRight,
+} from 'lucide-react';
 
-const IMPACT_COLOR = { high: 'text-red-600 bg-red-50', medium: 'text-amber-600 bg-amber-50', low: 'text-green-600 bg-green-50' };
-const IMPACT_LABEL = { high: 'גבוה', medium: 'בינוני', low: 'נמוך' };
-const TIME_COLOR = { immediate: 'bg-red-100 text-red-700', immediate_action: 'bg-red-100 text-red-700', weeks: 'bg-amber-100 text-amber-700', months: 'bg-blue-100 text-blue-700' };
-const TIME_LABEL = { immediate: 'מיידי', immediate_action: 'מיידי', weeks: 'שבועות', months: 'חודשים' };
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function GapCard({ signal }) {
+const IMPACT_STYLES = {
+  high:   { badge: 'bg-red-100 text-red-700',    bar: '#ef4444', label: 'השפעה גבוהה'   },
+  medium: { badge: 'bg-amber-100 text-amber-700', bar: '#f59e0b', label: 'השפעה בינונית' },
+  low:    { badge: 'bg-green-100 text-green-700', bar: '#10b981', label: 'השפעה נמוכה'   },
+};
+const TIME_STYLES = {
+  immediate:        { badge: 'bg-red-100 text-red-700',   label: 'מיידי'    },
+  immediate_action: { badge: 'bg-red-100 text-red-700',   label: 'מיידי'    },
+  weeks:            { badge: 'bg-amber-100 text-amber-700', label: 'שבועות'   },
+  months:           { badge: 'bg-blue-100 text-blue-700',  label: 'חודשים'   },
+};
+
+function parseGapTags(signal) {
   const tags = (signal.tags || '').split(',').reduce((acc, t) => {
     const [k, v] = t.split(':');
-    acc[k?.trim()] = v?.trim() || k?.trim();
+    if (k) acc[k.trim()] = (v ?? k).trim();
     return acc;
   }, {});
+  const score = Math.min(100, Math.max(0, parseInt(tags.score || '50')));
+  const timeKey = tags.demand_gap || 'weeks';
+  return { score, timeKey };
+}
 
-  const score = parseInt(tags.score || '50');
-  const timeLabel = TIME_LABEL[tags.demand_gap] || TIME_LABEL[tags[1]] || 'שבועות';
-  const timeCls = TIME_COLOR[tags.demand_gap] || TIME_COLOR.weeks;
+// ─── Revenue Forecast Banner ──────────────────────────────────────────────────
 
+function ForecastBanner({ forecast, onRefresh, loading }) {
+  if (!forecast) return null;
   return (
-    <div className="card-base p-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-          <Search className="w-4 h-4 text-primary" />
+    <div className="card-base p-5 border-r-4 border-green-500">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-green-600" />
+          <span className="text-[13px] font-semibold text-foreground">תחזית הכנסות חודשית</span>
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${IMPACT_COLOR[signal.impact_level] || IMPACT_COLOR.medium}`}>
-              השפעה {IMPACT_LABEL[signal.impact_level] || 'בינונית'}
-            </span>
-            {timeLabel && (
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1 ${timeCls}`}>
-                <Clock className="w-2.5 h-2.5" /> {timeLabel}
-              </span>
-            )}
-            {score > 0 && (
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
-                ציון {score}
-              </span>
-            )}
-          </div>
-
-          <p className="text-[13px] font-semibold text-foreground mb-1">{signal.summary}</p>
-
-          {signal.source_description && (
-            <p className="text-[11px] text-foreground-muted mb-2">{signal.source_description}</p>
-          )}
-
-          {signal.recommended_action && (
-            <div className="flex items-start gap-1.5 mt-2 p-2.5 rounded-lg bg-primary/5 border border-primary/10">
-              <ChevronRight className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
-              <p className="text-[11px] text-primary font-medium">{signal.recommended_action}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Score bar */}
-        <div className="flex flex-col items-center gap-1 flex-shrink-0">
-          <div className="w-1.5 h-12 bg-secondary rounded-full overflow-hidden">
-            <div className="w-full rounded-full bg-primary transition-all duration-700"
-              style={{ height: `${score}%`, marginTop: `${100 - score}%` }} />
-          </div>
-        </div>
+        <button onClick={onRefresh} disabled={loading}
+          className="text-[10px] text-foreground-muted hover:text-foreground transition-colors flex items-center gap-1">
+          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+          עדכן
+        </button>
       </div>
+
+      <div className="grid grid-cols-3 gap-3 mb-3">
+        {[
+          { label: 'שמרני',  val: forecast.conservative_forecast, color: 'text-foreground' },
+          { label: 'ריאלי',  val: forecast.realistic_forecast,    color: 'text-green-600'  },
+          { label: 'אופטימי', val: forecast.optimistic_forecast,   color: 'text-blue-600'  },
+        ].map(({ label, val, color }) => (
+          <div key={label} className="text-center p-2.5 rounded-xl bg-secondary/50">
+            <p className="text-[9px] text-foreground-muted mb-0.5">{label}</p>
+            <p className={`text-[18px] font-bold ${color}`}>
+              {val > 0 ? `₪${(val / 1000).toFixed(0)}K` : '—'}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {forecast.expected_deals > 0 && (
+        <div className="flex items-center gap-3 text-[11px] text-foreground-muted">
+          <span>{forecast.expected_deals} עסקאות צפויות</span>
+          {forecast.recommended_actions?.[0] && (
+            <span className="text-green-700 font-medium">· {forecast.recommended_actions[0]}</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
+
+// ─── Top Opportunity highlight ────────────────────────────────────────────────
+
+function TopOpportunity({ signal }) {
+  const { score, timeKey } = parseGapTags(signal);
+  const time = TIME_STYLES[timeKey] || TIME_STYLES.weeks;
+  return (
+    <div className="card-base p-5 border-2 border-primary/30 bg-primary/3">
+      <div className="flex items-center gap-2 mb-3">
+        <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+        <span className="text-[12px] font-bold text-foreground">הזדמנות מובילה</span>
+        <span className={`mr-auto text-[9px] font-bold px-2 py-0.5 rounded-full ${time.badge}`}>
+          <Clock className="w-2.5 h-2.5 inline ml-0.5" />{time.label}
+        </span>
+      </div>
+      <p className="text-[14px] font-bold text-foreground mb-1.5">{signal.summary}</p>
+      {signal.source_description && (
+        <p className="text-[11px] text-foreground-muted mb-3">{signal.source_description}</p>
+      )}
+      {signal.recommended_action && (
+        <div className="flex items-start gap-2 p-3 rounded-xl bg-primary/10 border border-primary/15">
+          <ArrowUpRight className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+          <p className="text-[12px] text-primary font-semibold">{signal.recommended_action}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Gap Card ─────────────────────────────────────────────────────────────────
+
+function GapCard({ signal }) {
+  const { score, timeKey } = parseGapTags(signal);
+  const impact = IMPACT_STYLES[signal.impact_level] || IMPACT_STYLES.medium;
+  const time   = TIME_STYLES[timeKey] || TIME_STYLES.weeks;
+
+  return (
+    <div className="card-base p-4 hover:shadow-md transition-shadow flex flex-col gap-3">
+      {/* Score bar */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
+          <div className="h-full rounded-full transition-all duration-700"
+            style={{ width: `${score}%`, background: impact.bar }} />
+        </div>
+        <span className="text-[10px] font-bold text-foreground-muted w-7 text-left">{score}</span>
+      </div>
+
+      {/* Badges */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${impact.badge}`}>{impact.label}</span>
+        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${time.badge}`}>
+          <Clock className="w-2.5 h-2.5" />{time.label}
+        </span>
+      </div>
+
+      {/* Content */}
+      <div>
+        <p className="text-[12px] font-semibold text-foreground leading-snug mb-1">{signal.summary}</p>
+        {signal.source_description && (
+          <p className="text-[10px] text-foreground-muted line-clamp-2">{signal.source_description}</p>
+        )}
+      </div>
+
+      {/* Action */}
+      {signal.recommended_action && (
+        <div className="flex items-start gap-1.5 p-2 rounded-lg bg-secondary/60 border border-border/50">
+          <ChevronLeft className="w-3 h-3 text-foreground-muted flex-shrink-0 mt-0.5" />
+          <p className="text-[10px] text-foreground-muted leading-snug">{signal.recommended_action}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Empty state ──────────────────────────────────────────────────────────────
+
+function EmptyState({ scanning, onScan }) {
+  return (
+    <div className="card-base p-10 text-center">
+      <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+        <Search className="w-7 h-7 text-primary" />
+      </div>
+      <p className="text-[14px] font-bold text-foreground mb-2">טרם נמצאו פערי ביקוש</p>
+      <p className="text-[11px] text-foreground-muted mb-6 max-w-xs mx-auto leading-relaxed">
+        הסוכן יסרוק אותות שוק, מתחרים ומגמות כדי לזהות ביקושים באזורך שאין להם מענה מקומי
+      </p>
+      <button onClick={onScan} disabled={scanning}
+        className="flex items-center gap-2 px-6 py-3 bg-foreground text-background rounded-xl text-[12px] font-semibold hover:opacity-90 transition-all mx-auto disabled:opacity-60">
+        {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+        {scanning ? 'סורק...' : 'זהה פערי ביקוש'}
+      </button>
+    </div>
+  );
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function DemandGap() {
   const { businessProfile } = useOutletContext();
@@ -76,14 +180,14 @@ export default function DemandGap() {
   const queryClient = useQueryClient();
   const [scanning, setScanning] = useState(false);
 
-  const { data: gaps, isLoading } = useQuery({
+  const { data: gaps = [], isLoading } = useQuery({
     queryKey: ['demandGaps', bpId],
     queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, source_type: 'demand_gap' }),
     enabled: !!bpId,
     select: data => [...(data || [])].sort((a, b) => {
-      const scoreA = parseInt((a.tags || '').match(/score:(\d+)/)?.[1] || '50');
-      const scoreB = parseInt((b.tags || '').match(/score:(\d+)/)?.[1] || '50');
-      return scoreB - scoreA;
+      const sA = parseInt((a.tags || '').match(/score:(\d+)/)?.[1] || '50');
+      const sB = parseInt((b.tags || '').match(/score:(\d+)/)?.[1] || '50');
+      return sB - sA;
     }),
   });
 
@@ -98,44 +202,35 @@ export default function DemandGap() {
     enabled: !!bpId,
   });
 
-  const handleScan = async () => {
+  const runScan = async (fn) => {
     if (!bpId) return;
     setScanning(true);
     try {
-      await base44.functions.invoke('demandGapEngine', { businessProfileId: bpId });
-      await queryClient.invalidateQueries({ queryKey: ['demandGaps', bpId] });
-      toast.success('ניתוח פערי ביקוש הושלם');
+      await base44.functions.invoke(fn, { businessProfileId: bpId });
+      await queryClient.invalidateQueries({ queryKey: fn === 'demandGapEngine' ? ['demandGaps', bpId] : ['revenueForecast', bpId] });
+      toast.success(fn === 'demandGapEngine' ? 'ניתוח פערי ביקוש הושלם' : 'תחזית הכנסות עודכנה');
     } catch {
       toast.error('שגיאה בניתוח');
     }
     setScanning(false);
   };
 
-  const handleForecast = async () => {
-    if (!bpId) return;
-    setScanning(true);
-    try {
-      await base44.functions.invoke('revenueForecaster', { businessProfileId: bpId });
-      await queryClient.invalidateQueries({ queryKey: ['revenueForecast', bpId] });
-      toast.success('תחזית הכנסות עודכנה');
-    } catch {
-      toast.error('שגיאה בתחזית');
-    }
-    setScanning(false);
-  };
+  const highCount = gaps.filter(g => g.impact_level === 'high').length;
+  const [top, ...rest] = gaps;
 
   return (
-    <div className="max-w-2xl space-y-4">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-[16px] font-bold text-foreground">פערי ביקוש</h1>
-          <p className="text-[12px] text-foreground-muted mt-0.5">
-            ביקושים באזורך שאין להם מענה מקומי מספיק
-          </p>
+          <h1 className="text-[16px] font-bold text-foreground flex items-center gap-2">
+            <Search className="w-4 h-4 text-primary" />
+            פערי ביקוש
+          </h1>
+          <p className="text-[11px] text-foreground-muted mt-0.5">ביקושים באזורך שאין להם מענה מקומי מספיק</p>
         </div>
         <button
-          onClick={handleScan}
+          onClick={() => runScan('demandGapEngine')}
           disabled={scanning}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-foreground text-background text-[11px] font-semibold hover:opacity-90 transition-all disabled:opacity-60"
         >
@@ -144,94 +239,59 @@ export default function DemandGap() {
         </button>
       </div>
 
-      {/* Revenue Forecast Banner */}
-      {forecast && (
-        <div className="card-base p-4 border-r-4 border-green-500 bg-green-50/30">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-green-600" />
-              <span className="text-[12px] font-semibold text-foreground">תחזית הכנסות</span>
-            </div>
-            <button onClick={handleForecast} disabled={scanning}
-              className="text-[10px] text-foreground-muted hover:text-foreground transition-colors">
-              {scanning ? '...' : 'עדכן'}
-            </button>
-          </div>
-          <div className="flex gap-4 mt-2">
-            <div>
-              <p className="text-[9px] text-foreground-muted">שמרני</p>
-              <p className="text-[14px] font-bold text-foreground">₪{(forecast.conservative_forecast || 0).toLocaleString()}</p>
-            </div>
-            <div>
-              <p className="text-[9px] text-foreground-muted">ריאלי</p>
-              <p className="text-[14px] font-bold text-green-600">₪{(forecast.realistic_forecast || 0).toLocaleString()}</p>
-            </div>
-            <div>
-              <p className="text-[9px] text-foreground-muted">אופטימי</p>
-              <p className="text-[14px] font-bold text-foreground">₪{(forecast.optimistic_forecast || 0).toLocaleString()}</p>
-            </div>
-            {forecast.expected_deals > 0 && (
-              <div>
-                <p className="text-[9px] text-foreground-muted">עסקאות</p>
-                <p className="text-[14px] font-bold text-foreground">{forecast.expected_deals}</p>
-              </div>
-            )}
-          </div>
-          {forecast.recommended_actions?.length > 0 && (
-            <p className="text-[10px] text-green-700 mt-2">
-              {forecast.recommended_actions[0]}
-            </p>
-          )}
-        </div>
-      )}
+      {/* Forecast banner */}
+      <ForecastBanner
+        forecast={forecast}
+        onRefresh={() => runScan('revenueForecaster')}
+        loading={scanning}
+      />
 
-      {/* Demand Gaps List */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-5 h-5 animate-spin text-foreground-muted" />
-        </div>
-      ) : !gaps || gaps.length === 0 ? (
-        <div className="card-base p-8 text-center">
-          <Search className="w-10 h-10 text-foreground-muted opacity-20 mx-auto mb-3" />
-          <p className="text-[13px] font-semibold text-foreground mb-1">טרם נמצאו פערי ביקוש</p>
-          <p className="text-[11px] text-foreground-muted mb-5">
-            הסוכן יסרוק אותות שוק, מתחרים ומגמות כדי למצוא הזדמנויות לא מנוצלות
-          </p>
-          <button onClick={handleScan} disabled={scanning}
-            className="flex items-center gap-2 px-5 py-2.5 bg-foreground text-background rounded-lg text-[12px] font-semibold hover:opacity-90 transition-all mx-auto disabled:opacity-60">
-            {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-            {scanning ? 'סורק...' : 'זהה פערי ביקוש'}
-          </button>
-        </div>
-      ) : (
-        <>
-          <div className="flex items-center gap-2">
-            <span className="text-[12px] font-semibold text-foreground">{gaps.length} הזדמנויות זוהו</span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-semibold">
-              {gaps.filter(g => g.impact_level === 'high').length} בעדיפות גבוהה
-            </span>
-          </div>
-          <div className="space-y-3">
-            {gaps.map(gap => (
-              <GapCard key={gap.id} signal={gap} />
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* Forecast section when no gaps yet */}
-      {!forecast && (!gaps || gaps.length === 0) && (
+      {/* No forecast prompt */}
+      {!forecast && (
         <div className="card-base p-4 flex items-center justify-between">
           <div>
             <p className="text-[12px] font-semibold text-foreground">תחזית הכנסות חודשית</p>
             <p className="text-[10px] text-foreground-muted">AI ינתח את הצינור ויחזה הכנסות</p>
           </div>
-          <button onClick={handleForecast} disabled={scanning}
+          <button onClick={() => runScan('revenueForecaster')} disabled={scanning}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[11px] font-medium text-foreground-muted hover:text-foreground transition-all disabled:opacity-60">
             {scanning ? <Loader2 className="w-3 h-3 animate-spin" /> : <TrendingUp className="w-3 h-3" />}
             הפק תחזית
           </button>
         </div>
+      )}
+
+      {/* Gaps list */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-5 h-5 animate-spin text-foreground-muted" />
+        </div>
+      ) : gaps.length === 0 ? (
+        <EmptyState scanning={scanning} onScan={() => runScan('demandGapEngine')} />
+      ) : (
+        <>
+          {/* Summary stats */}
+          <div className="flex items-center gap-3">
+            <span className="text-[12px] font-semibold text-foreground">{gaps.length} הזדמנויות זוהו</span>
+            {highCount > 0 && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-bold">
+                {highCount} דחופות
+              </span>
+            )}
+          </div>
+
+          {/* Top opportunity highlight */}
+          {top && <TopOpportunity signal={top} />}
+
+          {/* Rest in 2-col grid */}
+          {rest.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {rest.map(gap => (
+                <GapCard key={gap.id} signal={gap} />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
