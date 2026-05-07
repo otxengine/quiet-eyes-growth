@@ -165,9 +165,20 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
     try {
       record = await model.update({ where, data });
     } catch (prismaErr: any) {
+      // P2025 = record not found. Happens when agents create records without
+      // created_by (MarketSignal, ProactiveAlert, etc.) — retry by ID only.
+      if (prismaErr.code === 'P2025') {
+        try {
+          record = await model.update({ where: { id: req.params.id }, data });
+        } catch (innerErr: any) {
+          if (innerErr.code === 'P2025') {
+            return res.status(404).json({ error: 'Record not found' });
+          }
+          throw innerErr;
+        }
       // Prisma rejects fields added via raw ALTER TABLE that aren't in schema.prisma yet.
       // Fall back to raw SQL SET for those fields so settings always save.
-      if (prismaErr.message?.includes('Unknown field') || prismaErr.message?.includes('Unknown argument')) {
+      } else if (prismaErr.message?.includes('Unknown field') || prismaErr.message?.includes('Unknown argument')) {
         const tableMap: Record<string, string> = {
           BusinessProfile: 'business_profiles',
         };
@@ -183,8 +194,6 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
           ...values
         );
         const base = await model.findUnique({ where: { id: req.params.id } });
-        // Merge the raw-SQL fields back in — Prisma's findUnique omits columns
-        // not in its generated client (e.g. search_radius_km before schema regen).
         record = { ...base, ...data };
       } else {
         throw prismaErr;
