@@ -145,6 +145,29 @@ async function apifyTikTokHashtags(hashtags: string[], maxItems = 30): Promise<a
   return results;
 }
 
+// ─── Strip lone surrogate code units (causes JSON 400 from Anthropic) ────────
+// TikTok descriptions often contain Japanese/emoji with broken UTF-16 surrogates.
+function sanitizeText(text: string, maxLen = 200): string {
+  if (!text) return '';
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c >= 0xD800 && c <= 0xDBFF) {          // high surrogate
+      const next = text.charCodeAt(i + 1);
+      if (next >= 0xDC00 && next <= 0xDFFF) {  // valid pair → keep both
+        out += text[i] + text[i + 1];
+        i++;
+      }
+      // else lone high surrogate → drop
+    } else if (c >= 0xDC00 && c <= 0xDFFF) {
+      // lone low surrogate → drop
+    } else {
+      out += text[i];
+    }
+  }
+  return out.slice(0, maxLen).trim();
+}
+
 // ─── Compute pattern resonance score per video ───────────────────────────────
 //
 // Hashtag scraper returns top/popular videos (not necessarily recent).
@@ -195,14 +218,14 @@ function computeMetrics(raw: any): VideoMetrics | null {
     // Range: log10(5K)=3.7 × 0.01 × 100 = 3.7 (low) to log10(10M)=7 × 0.15 × 100 = 105 (capped at 100)
     const pattern_score = Math.min(100, Math.round(Math.log10(plays) * engagement_rate * 100));
 
-    const hashtags: string[] = (raw.hashtags || []).map((h: any) => h.name || h).filter(Boolean);
-    const music = raw.music?.title || raw.musicMeta?.musicName || '';
+    const hashtags: string[] = (raw.hashtags || []).map((h: any) => sanitizeText(h.name || h, 50)).filter(Boolean);
+    const music = sanitizeText(raw.music?.title || raw.musicMeta?.musicName || '', 100);
     const url = raw.webVideoUrl || raw.shareUrl ||
       `https://tiktok.com/@${raw.authorMeta?.name || 'unknown'}/video/${raw.id}`;
 
     return {
       id: raw.id || '',
-      description: (raw.text || raw.desc || '').slice(0, 200),
+      description: sanitizeText(raw.text || raw.desc || '', 200),
       createTime,
       plays,
       likes,
@@ -346,23 +369,22 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
       }
     }
 
-    // ── 1b. Apify B: own TikTok profile (if URL set) — understand existing content ──
+    // ── 1b. Apify B: own TikTok profile (non-blocking — only for LLM context) ──
     let ownVideosCtx = '';
     if (hasApifyKey() && tiktokUrl) {
       const username = (tiktokUrl.match(/@([\w.]+)/) || [])[1];
       if (username) {
-        const ownVideos = await runApifyActor(
-          'clockworks~tiktok-profile-scraper',
-          { profiles: [username], resultsPerPage: 10 },
-          60_000, 10,
-        );
+        const ownVideos = await Promise.race([
+          runApifyActor('clockworks~tiktok-profile-scraper', { profiles: [username], resultsPerPage: 10 }, 90_000, 10),
+          new Promise<any[]>(r => setTimeout(() => r([]), 45_000)), // 45s soft timeout — don't block LLM
+        ]);
         if (ownVideos.length > 0) {
           ownVideosCtx = `\n=== תוכן TikTok קיים של העסק (@${username}) ===\n` +
             ownVideos.slice(0, 6).map((v: any, i: number) => {
-              const plays    = v.stats?.playCount ?? v.playCount ?? 0;
-              const likes    = v.stats?.diggCount ?? v.diggCount ?? 0;
-              const eng      = plays > 0 ? ((likes / plays) * 100).toFixed(1) : '0';
-              const desc     = (v.text || v.desc || '').slice(0, 80);
+              const plays = v.stats?.playCount ?? v.playCount ?? 0;
+              const likes = v.stats?.diggCount ?? v.diggCount ?? 0;
+              const eng   = plays > 0 ? ((likes / plays) * 100).toFixed(1) : '0';
+              const desc  = sanitizeText(v.text || v.desc || '', 80);
               return `${i + 1}. "${desc}" — ${plays.toLocaleString()} צפיות, ${eng}% eng`;
             }).join('\n') +
             '\n(אל תמליץ על תוכן דומה למה שכבר נעשה)';
@@ -392,7 +414,7 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
     }).slice(0, 12);
 
     const tavilyContext = uniqueTavily
-      .map(r => `[${r.url}]\n${(r.title || '')} — ${(r.content || '').slice(0, 200)}`)
+      .map(r => `[${r.url}]\n${sanitizeText(r.title || '', 100)} — ${sanitizeText(r.content || '', 200)}`)
       .join('\n---\n');
 
     if (dataSource === 'tavily') dataSource = uniqueTavily.length > 0 ? 'tavily' : 'none';
