@@ -5,14 +5,8 @@ import { loadBusinessContext } from '../../lib/businessContext';
 import { invokeLLM } from '../../lib/llm';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
-import { tiktokSectorTrendAgent } from './tiktokSectorTrendAgent';
-import { tiktokAudienceAgent } from './tiktokAudienceAgent';
 
 // Dummy res that swallows output — used when firing sub-agents inline
-function silentRes() {
-  return { json: () => {}, status: () => ({ json: () => {} }) } as any;
-}
-
 const GRAPH_BASE = 'https://graph.facebook.com/v19.0';
 
 export async function collectSocialSignals(req: Request, res: Response) {
@@ -353,11 +347,6 @@ JSON בלבד:
 
     await writeAutomationLog('collectSocialSignals', businessProfileId, startTime, newSignals);
     console.log(`collectSocialSignals done: ${newSignals} new signals, ${negativeSignalsFound} negative → MarketSignal`);
-
-    // ── Fire TikTok agents inline (non-blocking, each has its own delta guard) ──
-    // Runs on every social scan — delta guards (8h/24h) prevent over-running.
-    void tiktokSectorTrendAgent({ ...req, body: { ...req.body, force: true } } as any, silentRes()).catch(() => {});
-    void tiktokAudienceAgent({ ...req, body: { ...req.body, force: true } } as any, silentRes()).catch(() => {});
 
     return res.json({ new_signals: newSignals, phase3_signals: phase3Signals, negative_alerts: negativeSignalsFound });
   } catch (err: any) {

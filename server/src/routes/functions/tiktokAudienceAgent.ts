@@ -265,7 +265,8 @@ JSON בלבד:
             avg_sector_engagement: `${(avgEng * 100).toFixed(1)}%`,
           }),
           detected_at: new Date().toISOString(),
-          is_read: false,
+          is_read:      false,
+          is_dismissed: false,
         },
       });
       created++;

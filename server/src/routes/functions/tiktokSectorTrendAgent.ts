@@ -570,6 +570,7 @@ JSON בלבד:
           source_urls:        trend.evidence?.detail?.startsWith('http') ? trend.evidence.detail : '',
           source_description: meta,
           is_read:            false,
+          is_dismissed:       false,
           detected_at:        new Date().toISOString(),
         },
       });
