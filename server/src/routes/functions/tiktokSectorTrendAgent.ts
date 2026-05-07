@@ -38,17 +38,62 @@ const MIN_INTERVAL_MS = 8 * 60 * 60 * 1000; // 8 שעות
 // ─── Sector knowledge (Hebrew → TikTok hashtag sets) ─────────────────────────
 
 const SECTOR_HASHTAGS: Record<string, string[]> = {
-  'מסעדה':   ['מסעדה', 'אוכל', 'food_israel', 'restaurant_israel', 'שף', 'מנה_חדשה', 'כשר'],
-  'קפה':     ['קפה', 'cafe_israel', 'לאטה', 'coffee', 'בית_קפה', 'קפה_ישראל'],
-  'מאפייה':  ['מאפייה', 'לחם', 'bakery_israel', 'עוגה', 'בצק', 'אפייה'],
-  'כושר':    ['כושר', 'fitness_israel', 'אימון', 'gym_israel', 'ספורט', 'workout', 'בריאות'],
-  'יופי':    ['יופי', 'beauty_israel', 'מספרה', 'טיפוח', 'מניקור', 'פדיקור', 'איפור', 'skincare'],
-  'ספא':     ['ספא', 'spa_israel', 'עיסוי', 'טיפולי_פנים', 'relax', 'wellness'],
-  'חנות':    ['עסק_קטן_ישראל', 'חנות', 'קניות', 'מוצרים', 'shopping_israel'],
-  'שיניים':  ['שיניים', 'dental_israel', 'חיוך', 'רופא_שיניים', 'לבן'],
-  'חינוך':   ['חינוך', 'לימודים', 'מורה', 'students_israel', 'קורס'],
-  'נדלן':    ['נדלן', 'דירה', 'real_estate_israel', 'בית', 'השקעות'],
+  // מסעדות
+  'מסעדה':        ['מסעדה', 'אוכל', 'food_israel', 'restaurant_israel', 'שף', 'מנה_חדשה'],
+  'סושי':         ['סושי', 'sushi_israel', 'sushi', 'אוכל_יפני', 'מסעדה', 'food_israel'],
+  'בר סושי':      ['סושי', 'sushi_israel', 'sushi', 'אוכל_יפני', 'מסעדה', 'food_israel'],
+  'סושי בר':      ['סושי', 'sushi_israel', 'sushi', 'אוכל_יפני', 'מסעדה', 'food_israel'],
+  'יפני':         ['אוכל_יפני', 'סושי', 'sushi', 'ramen_israel', 'מסעדה'],
+  'פיצה':         ['פיצה', 'pizza_israel', 'pizza', 'אוכל', 'food_israel'],
+  'המבורגר':      ['המבורגר', 'burger_israel', 'burger', 'אוכל', 'food_israel'],
+  'שווארמה':      ['שווארמה', 'shawarma_israel', 'אוכל_רחוב', 'food_israel'],
+  'קינוחים':      ['קינוחים', 'dessert_israel', 'עוגות', 'גלידה', 'אוכל'],
+  'בר':           ['בר', 'bar_israel', 'קוקטייל', 'נאיטלייף', 'ירושלים'],
+  // קפה ומאפייה
+  'קפה':          ['קפה', 'cafe_israel', 'לאטה', 'coffee', 'בית_קפה', 'קפה_ישראל'],
+  'מאפייה':       ['מאפייה', 'לחם', 'bakery_israel', 'עוגה', 'בצק', 'אפייה'],
+  'פטיסרי':       ['פטיסרי', 'עוגות', 'bakery_israel', 'קינוחים', 'אפייה'],
+  // כושר ובריאות
+  'כושר':         ['כושר', 'fitness_israel', 'אימון', 'gym_israel', 'ספורט', 'workout', 'בריאות'],
+  'חדר כושר':     ['כושר', 'fitness_israel', 'אימון', 'gym_israel', 'workout'],
+  'יוגה':         ['יוגה', 'yoga_israel', 'מדיטציה', 'wellness', 'בריאות'],
+  'פילאטיס':      ['פילאטיס', 'pilates_israel', 'כושר', 'fitness_israel'],
+  // יופי וטיפוח
+  'יופי':         ['יופי', 'beauty_israel', 'מספרה', 'טיפוח', 'מניקור', 'פדיקור', 'איפור', 'skincare'],
+  'מספרה':        ['מספרה', 'haircut_israel', 'שיער', 'beauty_israel', 'איפור'],
+  'קוסמטיקה':     ['קוסמטיקה', 'beauty_israel', 'skincare', 'טיפוח', 'פנים'],
+  'ציפורניים':    ['מניקור', 'פדיקור', 'nails_israel', 'beauty_israel', 'ציפורניים'],
+  // ספא ורווחה
+  'ספא':          ['ספא', 'spa_israel', 'עיסוי', 'טיפולי_פנים', 'relax', 'wellness'],
+  // קניות
+  'חנות':         ['עסק_קטן_ישראל', 'חנות', 'קניות', 'מוצרים', 'shopping_israel'],
+  'אופנה':        ['אופנה', 'fashion_israel', 'בגדים', 'shopping_israel', 'סטייל'],
+  // בריאות
+  'שיניים':       ['שיניים', 'dental_israel', 'חיוך', 'רופא_שיניים'],
+  'רפואה':        ['בריאות', 'health_israel', 'רפואה', 'wellness'],
+  // חינוך
+  'חינוך':        ['חינוך', 'לימודים', 'מורה', 'students_israel', 'קורס'],
+  // נדל"ן
+  'נדלן':         ['נדלן', 'דירה', 'real_estate_israel', 'בית', 'השקעות'],
+  "נדל\"ן":       ['נדלן', 'דירה', 'real_estate_israel', 'בית', 'השקעות'],
 };
+
+// Fuzzy match: if category doesn't match exactly, try prefix/keyword match
+function resolveHashtags(category: string): string[] {
+  if (SECTOR_HASHTAGS[category]) return SECTOR_HASHTAGS[category];
+  // Try case-insensitive substring match
+  const lower = category.toLowerCase();
+  for (const [key, tags] of Object.entries(SECTOR_HASHTAGS)) {
+    if (lower.includes(key) || key.includes(lower)) return tags;
+  }
+  // Generic food fallback if category sounds like food
+  const foodKeywords = ['אוכל', 'מנה', 'מסעדה', 'בר', 'שף', 'בישול', 'קינוח'];
+  if (foodKeywords.some(k => lower.includes(k) || category.includes(k))) {
+    return ['אוכל', 'food_israel', 'מסעדה', 'restaurant_israel', 'שף'];
+  }
+  // Final fallback: use category itself + generic Israel food
+  return [category, 'food_israel', 'israel', 'עסק_קטן_ישראל'];
+}
 
 const CAT_EN: Record<string, string> = {
   'מסעדה': 'restaurant', 'קפה': 'cafe', 'מאפייה': 'bakery',
@@ -255,7 +300,8 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
 
     const { name, category, city, relevant_services = '', tone_preference = 'friendly' } = profile;
     const catEn = CAT_EN[category] || category;
-    const sectorHashtags = SECTOR_HASHTAGS[category] || [category, catEn];
+    const sectorHashtags = resolveHashtags(category);
+    console.log(`[tiktokSectorTrendAgent] category="${category}" → hashtags: ${sectorHashtags.slice(0, 4).join(', ')}`);
 
     // ── 1. Apify: hashtag scraping with real engagement data ─────────────────
     let videoMetrics: VideoMetrics[] = [];

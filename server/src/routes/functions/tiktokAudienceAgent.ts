@@ -24,18 +24,41 @@ import { tavilySearch } from '../../lib/tavily';
 
 const MIN_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h
 
+// Shared with tiktokSectorTrendAgent — same hashtag resolution logic
 const SECTOR_HASHTAGS: Record<string, string[]> = {
-  'מסעדה':   ['מסעדה', 'אוכל', 'food_israel', 'restaurant_israel', 'שף'],
-  'קפה':     ['קפה', 'cafe_israel', 'לאטה', 'coffee', 'בית_קפה'],
-  'מאפייה':  ['מאפייה', 'לחם', 'bakery_israel', 'עוגה', 'אפייה'],
-  'כושר':    ['כושר', 'fitness_israel', 'אימון', 'gym_israel', 'workout'],
-  'יופי':    ['יופי', 'beauty_israel', 'מספרה', 'טיפוח', 'מניקור', 'איפור'],
-  'ספא':     ['ספא', 'spa_israel', 'עיסוי', 'wellness'],
-  'חנות':    ['עסק_קטן_ישראל', 'חנות', 'קניות'],
-  'שיניים':  ['שיניים', 'dental_israel', 'חיוך'],
-  'חינוך':   ['חינוך', 'לימודים', 'קורס'],
-  'נדלן':    ['נדלן', 'דירה', 'real_estate_israel'],
+  'מסעדה':    ['מסעדה', 'אוכל', 'food_israel', 'restaurant_israel', 'שף'],
+  'סושי':     ['סושי', 'sushi_israel', 'sushi', 'אוכל_יפני', 'מסעדה', 'food_israel'],
+  'בר סושי':  ['סושי', 'sushi_israel', 'sushi', 'אוכל_יפני', 'מסעדה', 'food_israel'],
+  'סושי בר':  ['סושי', 'sushi_israel', 'sushi', 'אוכל_יפני', 'מסעדה', 'food_israel'],
+  'יפני':     ['אוכל_יפני', 'סושי', 'sushi', 'מסעדה'],
+  'פיצה':     ['פיצה', 'pizza_israel', 'pizza', 'אוכל', 'food_israel'],
+  'המבורגר':  ['המבורגר', 'burger_israel', 'burger', 'food_israel'],
+  'קפה':      ['קפה', 'cafe_israel', 'לאטה', 'coffee', 'בית_קפה'],
+  'מאפייה':   ['מאפייה', 'לחם', 'bakery_israel', 'עוגה', 'אפייה'],
+  'כושר':     ['כושר', 'fitness_israel', 'אימון', 'gym_israel', 'workout'],
+  'יוגה':     ['יוגה', 'yoga_israel', 'wellness', 'בריאות'],
+  'יופי':     ['יופי', 'beauty_israel', 'מספרה', 'טיפוח', 'מניקור', 'איפור'],
+  'מספרה':    ['מספרה', 'haircut_israel', 'שיער', 'beauty_israel'],
+  'ספא':      ['ספא', 'spa_israel', 'עיסוי', 'wellness'],
+  'חנות':     ['עסק_קטן_ישראל', 'חנות', 'קניות'],
+  'אופנה':    ['אופנה', 'fashion_israel', 'בגדים', 'shopping_israel'],
+  'שיניים':   ['שיניים', 'dental_israel', 'חיוך'],
+  'חינוך':    ['חינוך', 'לימודים', 'קורס'],
+  'נדלן':     ['נדלן', 'דירה', 'real_estate_israel'],
 };
+
+function resolveHashtags(category: string): string[] {
+  if (SECTOR_HASHTAGS[category]) return SECTOR_HASHTAGS[category];
+  const lower = category.toLowerCase();
+  for (const [key, tags] of Object.entries(SECTOR_HASHTAGS)) {
+    if (lower.includes(key) || key.includes(lower)) return tags;
+  }
+  const foodKeywords = ['אוכל', 'מנה', 'מסעדה', 'בר', 'שף', 'בישול'];
+  if (foodKeywords.some(k => lower.includes(k) || category.includes(k))) {
+    return ['אוכל', 'food_israel', 'מסעדה', 'restaurant_israel', 'שף'];
+  }
+  return [category, 'food_israel', 'israel', 'עסק_קטן_ישראל'];
+}
 
 const CAT_EN: Record<string, string> = {
   'מסעדה': 'restaurant', 'קפה': 'cafe', 'מאפייה': 'bakery',
@@ -58,7 +81,8 @@ export async function tiktokAudienceAgent(req: Request, res: Response) {
 
     const { name, category, city } = profile;
     const catEn = CAT_EN[category] || category;
-    const sectorHashtags = SECTOR_HASHTAGS[category] || [category, catEn];
+    const sectorHashtags = resolveHashtags(category);
+    console.log(`[tiktokAudienceAgent] category="${category}" → hashtags: ${sectorHashtags.slice(0, 4).join(', ')}`);
 
     // ── 1. TikTok sector video data (reuse tiktokSectorTrendAgent cache) ──
     const apifyCacheKey = `apify_tiktok_hashtags:${sectorHashtags.slice(0, 3).join(',')}`;
