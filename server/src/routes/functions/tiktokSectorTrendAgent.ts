@@ -219,21 +219,30 @@ function computeMetrics(raw: any): VideoMetrics | null {
   } catch { return null; }
 }
 
-// ─── Build Tavily fallback queries ────────────────────────────────────────────
+// ─── Build Tavily queries — profile-aware ────────────────────────────────────
 
-function buildSectorQueries(category: string, city: string, services: string, catEn: string): string[] {
+function buildSectorQueries(
+  category: string,
+  city: string,
+  services: string,
+  catEn: string,
+  customKeywords: string,
+): string[] {
   const year = new Date().getFullYear();
-  const serviceTerms = (services || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 2);
+  const serviceTerms = (services || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 3);
+  const customTerms  = (customKeywords || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 2);
 
   return [
-    // Hebrew sector content patterns
+    // Hebrew — sector-specific patterns
     `TikTok ${category} ישראל שבוע שעבר ויראלי תוכן ${year}`,
     `${category} טיקטוק מה עובד ישראל מגמה ${year}`,
-    // English sector patterns
+    // English — sector patterns
     `TikTok trending content format ${catEn} Israel ${year} views`,
     `TikTok ${catEn} Israel viral video format this week`,
-    // Service-specific (most targeted)
-    ...(serviceTerms.map(s => `TikTok ${s} Israel trending ${year}`)),
+    // Service-specific queries (most targeted — based on this business's actual services)
+    ...serviceTerms.map(s => `TikTok "${s}" Israel trending ${year} views`),
+    // Custom keyword queries (business-specific terms)
+    ...customTerms.map(k => `TikTok ${k} Israel content viral`),
     // City-local
     `TikTok ${catEn} ${city} Israel going viral`,
     // Content pattern research
@@ -298,12 +307,25 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
     const profile = await prisma.businessProfile.findFirst({ where: { id: businessProfileId } });
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
-    const { name, category, city, relevant_services = '', tone_preference = 'friendly' } = profile;
+    const {
+      name,
+      category,
+      city,
+      relevant_services   = '',
+      tone_preference     = 'friendly',
+      description         = '',
+      target_market       = '',
+      custom_keywords     = '',
+    } = profile;
+
+    const tiktokUrl: string | null     = (profile as any).tiktok_url    || null;
+    const tiktokEnabled: boolean       = (profile as any).channels_tiktok_enabled ?? true;
+
     const catEn = CAT_EN[category] || category;
     const sectorHashtags = resolveHashtags(category);
     console.log(`[tiktokSectorTrendAgent] category="${category}" → hashtags: ${sectorHashtags.slice(0, 4).join(', ')}`);
 
-    // ── 1. Apify: hashtag scraping with real engagement data ─────────────────
+    // ── 1. Apify A: sector hashtag scraping (trend detection) ─────────────
     let videoMetrics: VideoMetrics[] = [];
     let dataSource = 'tavily';
 
@@ -314,8 +336,8 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
       videoMetrics = rawVideos
         .map(computeMetrics)
         .filter((v): v is VideoMetrics => v !== null)
-        .filter(v => v.plays > 5000)       // only videos with meaningful reach
-        .filter(v => v.pattern_score > 2)  // only meaningful resonance
+        .filter(v => v.plays > 5000)
+        .filter(v => v.pattern_score > 2)
         .sort((a, b) => b.pattern_score - a.pattern_score);
 
       if (videoMetrics.length > 0) {
@@ -324,7 +346,31 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
       }
     }
 
-    // ── 1b. Extract trending sounds from sector videos ────────────────────
+    // ── 1b. Apify B: own TikTok profile (if URL set) — understand existing content ──
+    let ownVideosCtx = '';
+    if (hasApifyKey() && tiktokUrl) {
+      const username = (tiktokUrl.match(/@([\w.]+)/) || [])[1];
+      if (username) {
+        const ownVideos = await runApifyActor(
+          'clockworks~tiktok-profile-scraper',
+          { profiles: [username], resultsPerPage: 10 },
+          60_000, 10,
+        );
+        if (ownVideos.length > 0) {
+          ownVideosCtx = `\n=== תוכן TikTok קיים של העסק (@${username}) ===\n` +
+            ownVideos.slice(0, 6).map((v: any, i: number) => {
+              const plays    = v.stats?.playCount ?? v.playCount ?? 0;
+              const likes    = v.stats?.diggCount ?? v.diggCount ?? 0;
+              const eng      = plays > 0 ? ((likes / plays) * 100).toFixed(1) : '0';
+              const desc     = (v.text || v.desc || '').slice(0, 80);
+              return `${i + 1}. "${desc}" — ${plays.toLocaleString()} צפיות, ${eng}% eng`;
+            }).join('\n') +
+            '\n(אל תמליץ על תוכן דומה למה שכבר נעשה)';
+        }
+      }
+    }
+
+    // ── 1c. Extract trending sounds from sector videos ────────────────────
     const topSounds = extractTopSounds(videoMetrics);
     const soundBlock = topSounds.length > 0
       ? `\n=== SOUNDS פופולריים בסקטור ===\n${topSounds.map((s, i) =>
@@ -332,10 +378,10 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
         ).join('\n')}`
       : '';
 
-    // ── 2. Tavily fallback / supplement: sector-specific TikTok content ───────
-    const tavilyQueries = buildSectorQueries(category, city, relevant_services, catEn);
+    // ── 2. Tavily — profile-aware queries ─────────────────────────────────
+    const tavilyQueries = buildSectorQueries(category, city, relevant_services, catEn, custom_keywords);
     const tavilyResults = (
-      await Promise.all(tavilyQueries.slice(0, 5).map(q => tavilyAdvancedSearch(q, 3)))
+      await Promise.all(tavilyQueries.slice(0, 6).map(q => tavilyAdvancedSearch(q, 3)))
     ).flat();
 
     const seenUrls = new Set<string>();
@@ -351,42 +397,56 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
 
     if (dataSource === 'tavily') dataSource = uniqueTavily.length > 0 ? 'tavily' : 'none';
 
-    // ── 3. Build AI prompt ─────────────────────────────────────────────────
+    // ── 3. Build profile-aware AI prompt ──────────────────────────────────
     const toneMap: Record<string, string> = {
-      casual: 'קליל, מצחיק, עם אנרגיה',
-      warm: 'חם, אנושי, אמיתי',
-      professional: 'מקצועי אך נגיש',
+      casual:       'קליל, מצחיק, עם אנרגיה — מתאים לדמוגרפיה צעירה',
+      warm:         'חם, אנושי, אמיתי — storytelling',
+      professional: 'מקצועי אך נגיש — בונה אמון',
+      friendly:     'ידידותי ואנרגטי',
     };
-    const toneInstruction = toneMap[tone_preference] || 'קליל ואנרגטי';
+    const toneInstruction = toneMap[tone_preference] || 'ידידותי ואנרגטי';
+
+    // Profile-specific context for LLM
+    const profileCtx = [
+      description  ? `תיאור העסק: ${description}` : '',
+      target_market ? `קהל יעד: ${target_market}` : '',
+      relevant_services ? `שירותים/מוצרים עיקריים: ${relevant_services}` : '',
+      custom_keywords   ? `מילות מפתח של העסק: ${custom_keywords}` : '',
+      tiktokEnabled ? '' : '⚠️ TikTok לא מוגדר כערוץ פעיל — תן המלצות לאופן הפעלה',
+    ].filter(Boolean).join('\n');
 
     const videoBlock = formatVideoBlock(videoMetrics);
     const hasRealData = videoBlock.length > 0;
 
     const prompt = `אתה אנליסט TikTok מומחה לעסקים קטנים ישראלים בסקטור "${category}".
-המשימה: מצא 2-4 **תבניות תוכן עולות** שמתאימות לעסק הספציפי הזה.
+המשימה: מצא 2-4 **תבניות תוכן עולות** שמתאימות בדיוק לעסק הספציפי הזה.
 
-עסק: "${name}" — ${category} ב${city}
-שירותים/מוצרים: ${relevant_services || 'לא צוין'}
+=== פרופיל העסק ===
+שם: "${name}" | קטגוריה: ${category} | עיר: ${city}
+${profileCtx}
 טון מועדף: ${toneInstruction}
 
-${hasRealData ? `=== נתוני ENGAGEMENT אמיתיים מ-TikTok (7 ימים אחרונים) ===\n${videoBlock}` : ''}
+${ownVideosCtx}
+
+${hasRealData ? `=== נתוני ENGAGEMENT אמיתיים מ-TikTok (סרטוני הסקטור) ===\n${videoBlock}` : ''}
 ${soundBlock}
 
-${tavilyContext ? `=== תוכן TikTok מהסקטור (חיפוש אינטרנט) ===\n${tavilyContext.slice(0, 2500)}` : ''}
+${tavilyContext ? `=== תוכן TikTok מהסקטור (מחקר אינטרנט) ===\n${tavilyContext.slice(0, 2500)}` : ''}
 
-=== תבניות תוכן TikTok שיש לבדוק אם רלוונטיות ===
+=== תבניות תוכן TikTok לבחינה ===
 ${CONTENT_PATTERNS.map((p, i) => `${i + 1}. ${p}`).join('\n')}
 
-הוראות חשובות:
-• כלול רק תבניות שיש להן **ראיה ספציפית** בנתונים (URL, מספרים, או תיאור מדויק)
-• כל תבנית חייבת להסביר **למה היא עובדת בסקטור הזה** ספציפית — לא כלל
-• script חייב להיות **מוכן לצילום**, לא עקרוני — כולל מה בדיוק לאמור
-• opportunity_window_hours — כמה שעות נשארו לרוץ על הגל הזה לפני שזה mainstream
+כללי:
+• כל script חייב להתאים ספציפית ל"${name}" — לא תבנית גנרית
+• שלב את השירותים הספציפיים: ${relevant_services || category}
+• script מוכן לצילום — מה בדיוק לאמור/להראות, לא עקרוני
+• opportunity_window_hours — כמה שעות נשארו לרוץ על הגל לפני שהוא mainstream
 
 JSON בלבד:
 {"trends": [{
   "pattern_name": "שם תבנית התוכן — עד 5 מילים בעברית",
-  "why_it_works_in_sector": "הסבר ספציפי לסקטור — למה דווקא ${category} מקבל engagement גבוה בפורמט הזה",
+  "why_it_works_in_sector": "הסבר ספציפי לסקטור ולעסק הזה — לא כללי",
+  "service_spotlight": "איזה שירות/מוצר ספציפי של העסק להציג בסרטון הזה",
   "evidence": {
     "source": "apify_video|tavily_url|observed_pattern",
     "detail": "ציטוט/URL/מספרים ספציפיים שמוכיחים את הטרנד",
@@ -455,6 +515,7 @@ JSON בלבד:
         action_type:     'tiktok_content',
         action_label:    `צלם עכשיו: ${trend.pattern_name}`,
         pattern_name:    trend.pattern_name,
+        service_spotlight: trend.service_spotlight,
         why_it_works:    trend.why_it_works_in_sector,
         evidence:        trend.evidence,
         content_script:  trend.content_script,
