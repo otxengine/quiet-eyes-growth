@@ -44,7 +44,8 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
 
         if (step.fn) {
           try {
-            const res = await base44.functions.invoke(step.fn, params);
+            const stepParams = step.force ? { ...params, force: true } : params;
+            const res = await base44.functions.invoke(step.fn, stepParams);
             finalResults[step.key] = res.data?.[step.resultKey] || 0;
           } catch (e) {
             console.error(`${step.fn} failed:`, e);

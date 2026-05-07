@@ -356,8 +356,8 @@ JSON בלבד:
 
     // ── Fire TikTok agents inline (non-blocking, each has its own delta guard) ──
     // Runs on every social scan — delta guards (8h/24h) prevent over-running.
-    void tiktokSectorTrendAgent(req, silentRes()).catch(() => {});
-    void tiktokAudienceAgent(req, silentRes()).catch(() => {});
+    void tiktokSectorTrendAgent({ ...req, body: { ...req.body, force: true } } as any, silentRes()).catch(() => {});
+    void tiktokAudienceAgent({ ...req, body: { ...req.body, force: true } } as any, silentRes()).catch(() => {});
 
     return res.json({ new_signals: newSignals, phase3_signals: phase3Signals, negative_alerts: negativeSignalsFound });
   } catch (err: any) {

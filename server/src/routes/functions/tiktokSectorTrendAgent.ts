@@ -320,8 +320,8 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
-  // ── Delta guard: 8h minimum ───────────────────────────────────────────────
-  if (shouldSkipAgent(businessProfileId, 'tiktokSectorTrendAgent', MIN_INTERVAL_MS)) {
+  // ── Delta guard: 8h minimum (bypassed with force:true) ───────────────────
+  if (!req.body.force && shouldSkipAgent(businessProfileId, 'tiktokSectorTrendAgent', MIN_INTERVAL_MS)) {
     return res.json({ trends_created: 0, skipped: true, reason: 'ran_recently' });
   }
 

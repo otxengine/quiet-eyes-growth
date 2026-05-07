@@ -70,7 +70,7 @@ export async function tiktokAudienceAgent(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
-  if (shouldSkipAgent(businessProfileId, 'tiktokAudienceAgent', MIN_INTERVAL_MS)) {
+  if (!req.body.force && shouldSkipAgent(businessProfileId, 'tiktokAudienceAgent', MIN_INTERVAL_MS)) {
     return res.json({ signals_created: 0, skipped: true, reason: 'ran_recently' });
   }
 

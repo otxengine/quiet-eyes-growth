@@ -19,6 +19,7 @@ const tabs = [
   { key: 'mention', label: 'אזכורים' },
   { key: 'event', label: 'אירועים' },
   { key: 'competitor_intel', label: 'מודיעין תחרותי' },
+  { key: 'tiktok', label: 'TikTok' },
   { key: 'reports', label: 'דוחות' },
 ];
 
@@ -29,6 +30,8 @@ const intelligenceScanSteps = [
   { key: 'trends',       label: 'מגלה מגמות עולות...',          fn: 'detectTrends',         resultKey: 'trends_detected' },
   { key: 'early_trends', label: 'מגלה טרנדים מוקדמים...',       fn: 'detectEarlyTrends',    resultKey: 'trends_created' },
   { key: 'viral',        label: 'סורק סיגנלים ויראלים...',      fn: 'detectViralSignals',   resultKey: 'signals_created' },
+  { key: 'tiktok_trends', label: 'מנתח טרנדים TikTok...',         fn: 'tiktokSectorTrendAgent', resultKey: 'trends_created', force: true },
+  { key: 'tiktok_audience', label: 'ממפה קהל יעד TikTok...',      fn: 'tiktokAudienceAgent',  resultKey: 'signals_created', force: true },
 ];
 
 export default function Intelligence() {
@@ -68,8 +71,10 @@ export default function Intelligence() {
   const competitorSocial = rawSignals.filter(s => s.signal_type === 'competitor_social');
 
   const mentions = weekSignals.filter(s => s.category === 'mention');
+  const tiktokSignals = allSignals.filter(s => s.category === 'tiktok_sector_trend' || s.category === 'tiktok_audience' || s.category === 'tiktok_post_performance');
   const filtered = activeTab === 'all' ? allSignals
     : activeTab === 'reports' ? []
+    : activeTab === 'tiktok' ? tiktokSignals
     : activeTab === 'competitor_intel' ? allSignals.filter(s => s.category === 'competitor_move' || s.category === 'competitor')
     : allSignals.filter(s => s.category === activeTab);
 
@@ -86,6 +91,7 @@ export default function Intelligence() {
     { label: 'אזכורים חברתיים', value: socialMentions.length, icon: MessageSquare, color: 'text-purple-500' },
     { label: 'מודיעין תחרותי', value: competitorMoves.length, icon: Users, color: 'text-[#6366f1]', sub: `${competitorSocial.length} אותות` },
     { label: 'אירועים', value: eventSignals.length, icon: Calendar, color: 'text-[#0ea5e9]' },
+    { label: 'TikTok', value: tiktokSignals.length, icon: TrendingUp, color: 'text-[#ff0050]' },
   ];
 
   return (
@@ -132,7 +138,7 @@ export default function Intelligence() {
             }`}>
             {tab.label}
             {!['all', 'reports'].includes(tab.key) && (() => {
-              const countMap = { threat: threats.length, opportunity: opportunities.length, trend: trends.length, competitor_intel: competitorMoves.length, mention: mentions.length, event: eventSignals.length };
+              const countMap = { threat: threats.length, opportunity: opportunities.length, trend: trends.length, competitor_intel: competitorMoves.length, mention: mentions.length, event: eventSignals.length, tiktok: tiktokSignals.length };
               const count = countMap[tab.key] || 0;
               return count > 0 ? <span className="mr-1 text-[9px] font-bold text-foreground-muted">({count})</span> : null;
             })()}
