@@ -2,41 +2,14 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { runApifyActor, hasApifyKey } from '../../lib/apify';
 
 const FACEBOOK_API_BASE = 'https://graph.facebook.com/v19.0';
-const APIFY_KEY         = process.env.APIFY_API_KEY || '';
 
 async function fbGet(path: string, token: string): Promise<any> {
   const res = await fetch(`${FACEBOOK_API_BASE}${path}?access_token=${token}`);
   if (!res.ok) return null;
   return res.json();
-}
-
-// ── Apify helper — run actor and wait for result ──────────────────────────────
-async function apifyRun(actor: string, input: any): Promise<any[]> {
-  if (!APIFY_KEY) return [];
-  try {
-    const startRes = await fetch(
-      `https://api.apify.com/v2/acts/${actor}/runs?token=${APIFY_KEY}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) },
-    );
-    if (!startRes.ok) { console.warn(`[Apify] start failed (${actor}):`, startRes.status); return []; }
-    const runId = ((await startRes.json()) as any)?.data?.id;
-    if (!runId) return [];
-
-    for (let i = 0; i < 12; i++) {
-      await new Promise(r => setTimeout(r, 5000));
-      const statusData = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_KEY}`).then(r => r.json() as Promise<any>);
-      const status = statusData?.data?.status;
-      if (status === 'SUCCEEDED') {
-        const datasetId = statusData?.data?.defaultDatasetId;
-        const items = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_KEY}&limit=50`).then(r => r.json() as Promise<any>);
-        return Array.isArray(items) ? items : [];
-      }
-      if (['FAILED', 'ABORTED', 'TIMED-OUT'].includes(status)) { console.warn(`[Apify] run ended with ${status}`); return []; }
-    }
-    return [];
-  } catch (e: any) { console.warn(`[Apify] exception (${actor}):`, e.message); return []; }
 }
 
 // ── Shared sentiment analysis + signal creation ───────────────────────────────
@@ -176,9 +149,9 @@ export async function analyzeSocialComments(req: Request, res: Response) {
 
     // ── Path B: Apify scraper — uses facebook_url entered during onboarding ───
     const facebookUrl: string | null = (profile as any).facebook_url || null;
-    if (APIFY_KEY && facebookUrl) {
+    if (hasApifyKey() && facebookUrl) {
       console.log(`[analyzeSocialComments] No OAuth — falling back to Apify for ${facebookUrl}`);
-      const items = await apifyRun('apify~facebook-posts-scraper', {
+      const items = await runApifyActor('apify~facebook-posts-scraper', {
         startUrls: [{ url: facebookUrl }],
         maxPosts: 10,
         maxPostComments: 20,

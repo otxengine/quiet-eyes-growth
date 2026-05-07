@@ -10,9 +10,9 @@ const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 // In-memory flag: once we hit a 433, stop all further Tavily calls this process lifetime
 let rateLimitHit = false;
 
-// 60-minute result cache — key: "depth:query:maxResults"
+// 4-hour result cache — key: "depth:query:maxResults"
 const _cache = new Map<string, { results: any[]; expiresAt: number }>();
-const CACHE_TTL = 60 * 60 * 1000;
+const CACHE_TTL = 4 * 60 * 60 * 1000;
 
 function _getCached(key: string): any[] | null {
   const entry = _cache.get(key);

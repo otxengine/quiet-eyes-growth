@@ -26,6 +26,9 @@ import { fetchSocialInsights } from './routes/functions/fetchSocialInsights';
 import { schedulePostPublisher } from './routes/functions/schedulePostPublisher';
 import { analyzeInstagramComments } from './routes/functions/analyzeInstagramComments';
 import { diffCompetitorSnapshot } from './routes/functions/diffCompetitorSnapshot';
+import { tiktokSectorTrendAgent } from './routes/functions/tiktokSectorTrendAgent';
+import { tiktokAudienceAgent } from './routes/functions/tiktokAudienceAgent';
+import { tiktokPostTracker } from './routes/functions/tiktokPostTracker';
 
 const logger = createLogger('Scheduler');
 
@@ -95,13 +98,14 @@ async function runForAll(
 export function startScheduler() {
   logger.info('Starting background scheduler');
 
-  // ── Every hour: full intelligence pipeline ──────────────────────────────────
-  cron.schedule('0 * * * *', () => {
-    runForAll('HourlyPipeline', 'full', []);
+  // ── Every 4 hours: full intelligence pipeline (was: every 1h = 24x/day) ─────
+  // 4h cadence = 6 runs/day — still fresh enough for local business intelligence
+  cron.schedule('0 */4 * * *', () => {
+    runForAll('QuadHourlyPipeline', 'full', []);
   });
 
-  // ── Every 6 hours: signal_only (leads + freshness) ──────────────────────────
-  cron.schedule('0 */6 * * *', () => {
+  // ── Every 12 hours: signal_only (leads + freshness) (was: every 6h) ─────────
+  cron.schedule('0 */12 * * *', () => {
     runForAll('LeadGenCycle', 'signal_only');
     runAgentForAll('GoogleRankMonitor', googleRankMonitor);
     runAgentForAll('SmartLeadNurture', smartLeadNurture);
@@ -129,6 +133,18 @@ export function startScheduler() {
   // ── Every Wednesday at 04:00 UTC: competitor snapshot diff ───────────────────
   cron.schedule('0 4 * * 3', () => {
     runAgentForAll('DiffCompetitorSnapshot', diffCompetitorSnapshot);
+  });
+
+  // ── Every 8 hours: TikTok sector trend detection ───────────────────────────
+  // Agent has internal 8h delta guard — safe to call more frequently
+  cron.schedule('0 */8 * * *', () => {
+    runAgentForAll('TikTokSectorTrendAgent', tiktokSectorTrendAgent);
+    runAgentForAll('TikTokAudienceAgent', tiktokAudienceAgent);   // 24h internal guard
+  });
+
+  // ── Every 12 hours: track published TikTok post performance ───────────────
+  cron.schedule('0 */12 * * *', () => {
+    runAgentForAll('TikTokPostTracker', tiktokPostTracker);
   });
 
   // ── Every 30 min: execute semi_auto queued actions ───────────────────────────

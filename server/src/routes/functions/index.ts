@@ -79,6 +79,9 @@ import { lostLeadRecovery } from './lostLeadRecovery';
 import { pricingIntelligence } from './pricingIntelligence';
 import { revenueForecaster } from './revenueForecaster';
 import { sentimentVelocityMonitor } from './sentimentVelocityMonitor';
+import { tiktokSectorTrendAgent } from './tiktokSectorTrendAgent';
+import { tiktokAudienceAgent } from './tiktokAudienceAgent';
+import { tiktokPostTracker } from './tiktokPostTracker';
 
 const router = Router();
 
@@ -164,6 +167,9 @@ const FUNCTION_MAP: Record<string, any> = {
   pricingIntelligence,
   revenueForecaster,
   sentimentVelocityMonitor,
+  tiktokSectorTrendAgent,
+  tiktokAudienceAgent,
+  tiktokPostTracker,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,

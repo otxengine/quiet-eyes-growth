@@ -1,46 +1,35 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { tavilySearch } from '../../lib/tavily';          // shared cache (4h TTL)
+import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 
-const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
-
-async function tavilySearch(query: string, maxResults = 5): Promise<any[]> {
-  if (!TAVILY_API_KEY) return [];
-  try {
-    const res = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: TAVILY_API_KEY, query, search_depth: 'advanced', max_results: maxResults, include_answer: false }),
-    });
-    if (!res.ok) {
-      console.error('Tavily error:', res.status, await res.text());
-      return [];
-    }
-    const data: any = await res.json();
-    return data.results || [];
-  } catch (e: any) {
-    console.error('tavilySearch exception:', e.message);
-    return [];
-  }
-}
+// Minimum interval between full web-signal collections per business
+const MIN_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 export async function collectWebSignals(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
+  // ── Delta guard: skip if last run was <6h ago ─────────────────────────────
+  if (shouldSkipAgent(businessProfileId, 'collectWebSignals', MIN_INTERVAL_MS)) {
+    return res.json({ new_signals: 0, skipped: true, reason: 'ran_recently' });
+  }
+
   const startTime = new Date().toISOString();
   try {
-    // Fetch profile from DB — don't rely on req.body for name/category/city
-    const profiles = await prisma.businessProfile.findMany({ where: { id: businessProfileId } });
-    const profile = profiles[0];
+    const profile = await prisma.businessProfile.findFirst({ where: { id: businessProfileId } });
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
-    const { name, category, city, custom_keywords, custom_urls } = profile;
+    const { name, category, city, custom_keywords } = profile;
 
-    const existingSignals = await prisma.rawSignal.findMany({ where: { linked_business: businessProfileId } });
+    const existingSignals = await prisma.rawSignal.findMany({
+      where: { linked_business: businessProfileId },
+      select: { url: true },
+    });
     const existingUrls = new Set(existingSignals.map(s => s.url).filter(Boolean));
 
-    // City/category → English for Tavily (works better than Hebrew)
+    // City/category → English (Tavily works better with English)
     const cityEn: Record<string, string> = {
       'תל אביב': 'Tel Aviv', 'ירושלים': 'Jerusalem', 'חיפה': 'Haifa',
       'בני ברק': 'Bnei Brak', 'ראשון לציון': 'Rishon LeZion', 'נתניה': 'Netanya',
@@ -53,31 +42,22 @@ export async function collectWebSignals(req: Request, res: Response) {
     const cityStr = cityEn[city] || city;
     const catStr = categoryEn[category] || category;
 
+    // 3 core queries (was 6+) — basic depth (3x cheaper than advanced)
     const queries = [
-      `"${name}" reviews ratings Israel`,
-      `${catStr} ${cityStr} Israel reviews 2025`,
-      `${catStr} ${cityStr} best recommendations`,
-      `"${name}" ${cityStr} Israel`,
+      `"${name}" reviews ${cityStr} Israel`,
+      `${catStr} ${cityStr} best recommendations 2025`,
+      `${catStr} ${cityStr} Israel`,
     ];
 
-    // Add English translations of Hebrew custom keywords
     if (custom_keywords) {
-      const kws = custom_keywords.split(',').map((k: string) => k.trim()).filter(Boolean).slice(0, 2);
-      for (const kw of kws) queries.push(`${kw} ${cityStr} Israel`);
-    }
-    // Also try custom URLs directly
-    if (custom_urls) {
-      const urls = custom_urls.split('\n').map((u: string) => u.trim()).filter((u: string) => u.startsWith('http')).slice(0, 3);
-      for (const url of urls) {
-        const siteQuery = `site:${new URL(url).hostname} ${name} OR ${catStr} ${cityStr}`;
-        queries.push(siteQuery);
-      }
+      const kws = custom_keywords.split(',').map((k: string) => k.trim()).filter(Boolean).slice(0, 1);
+      for (const kw of kws) queries.push(`${kw} ${cityStr}`);
     }
 
     let newSignals = 0;
     for (const query of queries) {
-      const results = await tavilySearch(query, 5);
-      console.log(`Tavily query "${query}": ${results.length} results`);
+      // tavilySearch uses basic depth + 4h in-memory cache
+      const results = await tavilySearch(query, 4);
       for (const r of results) {
         if (!r.url || existingUrls.has(r.url)) continue;
         await prisma.rawSignal.create({
@@ -96,8 +76,8 @@ export async function collectWebSignals(req: Request, res: Response) {
       }
     }
 
+    setLastRun(businessProfileId, 'collectWebSignals');
     await writeAutomationLog('collectWebSignals', businessProfileId, startTime, newSignals);
-    console.log(`collectWebSignals done: ${newSignals} new signals for "${profile.name}"`);
     return res.json({ new_signals: newSignals });
   } catch (err: any) {
     console.error('collectWebSignals error:', err.message);

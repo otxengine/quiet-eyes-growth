@@ -41,8 +41,8 @@ const logger = createLogger('MasterOrchestrator');
 
 // ─── Dedup guard (in-memory, per process) ────────────────────────────────────
 
-const RUNNING = new Set<string>();   // businessId currently running
-const RUN_COOLDOWN_MS = 5 * 60_000; // 5 minutes between full runs
+const RUNNING = new Set<string>();         // businessId currently running
+const RUN_COOLDOWN_MS = 4 * 60 * 60_000;  // 4 hours between full runs (matches scheduler)
 const lastRun = new Map<string, number>();
 
 // ─── Stage executor with timing ───────────────────────────────────────────────

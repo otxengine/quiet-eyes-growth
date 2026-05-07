@@ -3,8 +3,8 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { tavilySearch } from '../../lib/tavily';
+import { runApifyActor, hasApifyKey } from '../../lib/apify';
 
-const APIFY_API_KEY = process.env.APIFY_API_KEY || '';
 const GRAPH_BASE = 'https://open-api.tiktok.com';
 
 const CITY_EN: Record<string, string> = {
@@ -36,39 +36,13 @@ async function fetchTikTokUserVideos(accessToken: string, openId: string): Promi
 }
 
 async function apifyTikTokProfile(username: string): Promise<any[]> {
-  if (!APIFY_API_KEY || !username) return [];
-  try {
-    const startRes = await fetch(
-      `https://api.apify.com/v2/acts/clockworks~tiktok-profile-scraper/runs?token=${APIFY_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profiles: [username], resultsPerPage: 10 }),
-      },
-    );
-    if (!startRes.ok) { console.warn('[TikTok Apify] start failed:', startRes.status); return []; }
-    const runData: any = await startRes.json();
-    const runId = runData?.data?.id;
-    if (!runId) return [];
-
-    for (let i = 0; i < 12; i++) {
-      await new Promise(r => setTimeout(r, 5000));
-      const statusRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_API_KEY}`);
-      const statusData: any = await statusRes.json();
-      const status = statusData?.data?.status;
-      if (status === 'SUCCEEDED') {
-        const datasetId = statusData?.data?.defaultDatasetId;
-        const itemsRes = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_API_KEY}&limit=20`);
-        const items: any = await itemsRes.json();
-        return Array.isArray(items) ? items : [];
-      }
-      if (['FAILED', 'ABORTED', 'TIMED-OUT'].includes(status)) {
-        console.warn('[TikTok Apify] run ended with:', status);
-        return [];
-      }
-    }
-    return [];
-  } catch (e: any) { console.warn('[TikTok Apify] exception:', e.message); return []; }
+  if (!hasApifyKey() || !username) return [];
+  return runApifyActor(
+    'clockworks~tiktok-profile-scraper',
+    { profiles: [username], resultsPerPage: 10 },
+    60_000,
+    20,
+  );
 }
 
 export async function analyzeTikTokContent(req: Request, res: Response) {

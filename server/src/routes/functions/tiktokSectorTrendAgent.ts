@@ -1,0 +1,508 @@
+/**
+ * tiktokSectorTrendAgent — מזהה טרנדים עולים ב-TikTok ספציפית לסקטור של העסק.
+ *
+ * ההבדל מה-agents הקיימים:
+ *   • analyzeTikTokContent   → מנתח את הסרטונים של העסק עצמו
+ *   • detectViralSignals     → מזהה תוכן ויראלי כללי בכל הפלטפורמות
+ *   • detectEarlyTrends      → טרנדים כלליים לפני שהם מגיעים לפיק
+ *   • tiktokSectorTrendAgent → תבניות תוכן עולות ספציפית לסקטור:
+ *       "Before/After של ניקוי פנים מקבל 5x engagement השבוע"
+ *       "בתי קפה שמראים את תהליך הכנת הלאטה — 2M+ views ממוצע"
+ *
+ * מקורות נתונים (לפי סדר עדיפות):
+ *   1. Apify TikTok Scraper — hashtag + keyword scraping עם engagement metrics אמיתיים
+ *   2. Tavily — גיבוי כשאין Apify, חיפוש תוכן TikTok ספציפי לסקטור
+ *
+ * פלט לכל טרנד:
+ *   • שם תבנית התוכן בעברית
+ *   • למה זה עובד בסקטור הזה ספציפית
+ *   • ראיה: סרטון/hashtag ספציפי עם מספרים
+ *   • script מוכן: hook (3 שניות) + גוף (20-30 שניות) + CTA
+ *   • hashtags + שעת פרסום אופטימלית
+ *   • חלון הזדמנויות בשעות
+ *
+ * שמירה: MarketSignal עם category="tiktok_sector_trend"
+ * Delta guard: מינימום 8 שעות בין ריצות
+ */
+
+import { Request, Response } from 'express';
+import { prisma } from '../../db';
+import { invokeLLM } from '../../lib/llm';
+import { writeAutomationLog } from '../../lib/automationLog';
+import { tavilyAdvancedSearch } from '../../lib/tavily';
+import { shouldSkipAgent, setLastRun, cacheGet, cacheSet, TTL } from '../../lib/agentCache';
+import { runApifyActor, hasApifyKey } from '../../lib/apify';
+
+const MIN_INTERVAL_MS = 8 * 60 * 60 * 1000; // 8 שעות
+
+// ─── Sector knowledge (Hebrew → TikTok hashtag sets) ─────────────────────────
+
+const SECTOR_HASHTAGS: Record<string, string[]> = {
+  'מסעדה':   ['מסעדה', 'אוכל', 'food_israel', 'restaurant_israel', 'שף', 'מנה_חדשה', 'כשר'],
+  'קפה':     ['קפה', 'cafe_israel', 'לאטה', 'coffee', 'בית_קפה', 'קפה_ישראל'],
+  'מאפייה':  ['מאפייה', 'לחם', 'bakery_israel', 'עוגה', 'בצק', 'אפייה'],
+  'כושר':    ['כושר', 'fitness_israel', 'אימון', 'gym_israel', 'ספורט', 'workout', 'בריאות'],
+  'יופי':    ['יופי', 'beauty_israel', 'מספרה', 'טיפוח', 'מניקור', 'פדיקור', 'איפור', 'skincare'],
+  'ספא':     ['ספא', 'spa_israel', 'עיסוי', 'טיפולי_פנים', 'relax', 'wellness'],
+  'חנות':    ['עסק_קטן_ישראל', 'חנות', 'קניות', 'מוצרים', 'shopping_israel'],
+  'שיניים':  ['שיניים', 'dental_israel', 'חיוך', 'רופא_שיניים', 'לבן'],
+  'חינוך':   ['חינוך', 'לימודים', 'מורה', 'students_israel', 'קורס'],
+  'נדלן':    ['נדלן', 'דירה', 'real_estate_israel', 'בית', 'השקעות'],
+};
+
+const CAT_EN: Record<string, string> = {
+  'מסעדה': 'restaurant', 'קפה': 'cafe', 'מאפייה': 'bakery',
+  'כושר': 'fitness gym', 'יופי': 'beauty salon', 'ספא': 'spa',
+  'חנות': 'local shop', 'שיניים': 'dental clinic', 'חינוך': 'education', 'נדלן': 'real estate',
+};
+
+// ─── Content pattern types (for LLM context) ─────────────────────────────────
+
+const CONTENT_PATTERNS = [
+  'Before/After transformation',
+  'Day in my life at [business]',
+  'Behind the scenes / making-of',
+  'Customer reaction / testimonial',
+  'Tutorial / how-to',
+  'Trending sound + category',
+  'Challenge adaptation',
+  'Staff / team personality',
+  'Product/Service showcase with text overlay',
+  'Comparison: us vs competitors',
+  'Q&A / myth-busting',
+  'Time-lapse of process',
+  'Humor / relatable situation',
+];
+
+// ─── Apify: TikTok hashtag scraper (with 4h cache) ──────────────────────────
+
+async function apifyTikTokHashtags(hashtags: string[], maxItems = 30): Promise<any[]> {
+  if (!hasApifyKey()) return [];
+
+  const cacheKey = `apify_tiktok_hashtags:${hashtags.slice(0, 3).join(',')}`;
+  const cached = cacheGet<any[]>(cacheKey);
+  if (cached) { console.log('[tiktokSectorTrendAgent] Apify cache hit'); return cached; }
+
+  const results = await runApifyActor(
+    'clockworks~tiktok-hashtag-scraper',
+    {
+      hashtags:              hashtags.slice(0, 5), // max 5 hashtags per run
+      resultsPerPage:        maxItems,
+      maxItems,
+      shouldDownloadVideos:  false,
+      shouldDownloadCovers:  false,
+    },
+    90_000,
+    maxItems,
+  );
+
+  if (results.length > 0) cacheSet(cacheKey, results, TTL.API_RESULT);
+  return results;
+}
+
+// ─── Compute pattern resonance score per video ───────────────────────────────
+//
+// Hashtag scraper returns top/popular videos (not necessarily recent).
+// Instead of velocity (good for real-time), we use "pattern_score":
+//   → measures how much RESONANCE a content pattern has in the sector
+//   → log10(plays) × engagement_rate × 100
+//   → Rewards: high reach AND high engagement (likes+comments / plays)
+//   → A video with 225K plays + 8.3% engagement scores higher than
+//      a video with 1M plays + 0.5% engagement
+//
+// This tells us: "content patterns that actually connect with this audience"
+
+interface VideoMetrics {
+  id: string;
+  description: string;
+  createTime: number;
+  plays: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  music: string;
+  hashtags: string[];
+  url: string;
+  // computed
+  days_old: number;
+  plays_per_day: number;
+  engagement_rate: number;
+  pattern_score: number; // 0-100, resonance = reach × engagement
+}
+
+function computeMetrics(raw: any): VideoMetrics | null {
+  try {
+    const createTime = raw.createTime || raw.createTimestamp || 0;
+    const now = Math.floor(Date.now() / 1000);
+    const days_old = Math.max(0.5, (now - createTime) / 86400);
+
+    const plays    = raw.stats?.playCount    ?? raw.playCount    ?? 0;
+    const likes    = raw.stats?.diggCount    ?? raw.diggCount    ?? raw.stats?.likeCount ?? 0;
+    const comments = raw.stats?.commentCount ?? raw.commentCount ?? 0;
+    const shares   = raw.stats?.shareCount   ?? raw.shareCount   ?? 0;
+
+    if (plays < 5000) return null; // ignore tiny videos
+
+    const plays_per_day   = plays / days_old;
+    const engagement_rate = plays > 0 ? (likes + comments) / plays : 0;
+
+    // pattern_score: log10(plays) × engagement_rate × 100
+    // Range: log10(5K)=3.7 × 0.01 × 100 = 3.7 (low) to log10(10M)=7 × 0.15 × 100 = 105 (capped at 100)
+    const pattern_score = Math.min(100, Math.round(Math.log10(plays) * engagement_rate * 100));
+
+    const hashtags: string[] = (raw.hashtags || []).map((h: any) => h.name || h).filter(Boolean);
+    const music = raw.music?.title || raw.musicMeta?.musicName || '';
+    const url = raw.webVideoUrl || raw.shareUrl ||
+      `https://tiktok.com/@${raw.authorMeta?.name || 'unknown'}/video/${raw.id}`;
+
+    return {
+      id: raw.id || '',
+      description: (raw.text || raw.desc || '').slice(0, 200),
+      createTime,
+      plays,
+      likes,
+      comments,
+      shares,
+      music,
+      hashtags,
+      url,
+      days_old:        Math.round(days_old * 10) / 10,
+      plays_per_day:   Math.round(plays_per_day),
+      engagement_rate: Math.round(engagement_rate * 1000) / 1000,
+      pattern_score,
+    };
+  } catch { return null; }
+}
+
+// ─── Build Tavily fallback queries ────────────────────────────────────────────
+
+function buildSectorQueries(category: string, city: string, services: string, catEn: string): string[] {
+  const year = new Date().getFullYear();
+  const serviceTerms = (services || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 2);
+
+  return [
+    // Hebrew sector content patterns
+    `TikTok ${category} ישראל שבוע שעבר ויראלי תוכן ${year}`,
+    `${category} טיקטוק מה עובד ישראל מגמה ${year}`,
+    // English sector patterns
+    `TikTok trending content format ${catEn} Israel ${year} views`,
+    `TikTok ${catEn} Israel viral video format this week`,
+    // Service-specific (most targeted)
+    ...(serviceTerms.map(s => `TikTok ${s} Israel trending ${year}`)),
+    // City-local
+    `TikTok ${catEn} ${city} Israel going viral`,
+    // Content pattern research
+    `best performing TikTok content type ${catEn} small business Israel`,
+  ];
+}
+
+// ─── Extract trending sounds from sector videos ───────────────────────────────
+
+interface SoundMetrics {
+  title: string;
+  usage_count: number;
+  avg_pattern_score: number;
+}
+
+function extractTopSounds(videos: VideoMetrics[]): SoundMetrics[] {
+  const soundMap = new Map<string, { total_score: number; count: number }>();
+  for (const v of videos) {
+    const title = v.music?.trim();
+    if (!title || title === '—' || title.length < 3) continue;
+    const existing = soundMap.get(title) || { total_score: 0, count: 0 };
+    soundMap.set(title, { total_score: existing.total_score + v.pattern_score, count: existing.count + 1 });
+  }
+  return Array.from(soundMap.entries())
+    .map(([title, { total_score, count }]) => ({
+      title,
+      usage_count: count,
+      avg_pattern_score: Math.round(total_score / count),
+    }))
+    .filter(s => s.usage_count >= 2) // only sounds appearing in 2+ videos
+    .sort((a, b) => b.avg_pattern_score - a.avg_pattern_score)
+    .slice(0, 5);
+}
+
+// ─── Format video data for LLM prompt ────────────────────────────────────────
+
+function formatVideoBlock(videos: VideoMetrics[]): string {
+  if (videos.length === 0) return '';
+  return videos
+    .slice(0, 15)
+    .map((v, i) =>
+      `${i + 1}. [resonance=${v.pattern_score}/100] "${v.description.slice(0, 100)}"\n` +
+      `   📊 ${v.plays.toLocaleString()} צפיות | eng ${(v.engagement_rate * 100).toFixed(1)}% | ${v.plays_per_day.toLocaleString()} views/day\n` +
+      `   🎵 ${v.music || '—'} | #tags: ${v.hashtags.slice(0, 4).join(' ')} | 🔗 ${v.url}`
+    )
+    .join('\n\n');
+}
+
+// ─── Main agent ───────────────────────────────────────────────────────────────
+
+export async function tiktokSectorTrendAgent(req: Request, res: Response) {
+  const { businessProfileId } = req.body;
+  if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+  // ── Delta guard: 8h minimum ───────────────────────────────────────────────
+  if (shouldSkipAgent(businessProfileId, 'tiktokSectorTrendAgent', MIN_INTERVAL_MS)) {
+    return res.json({ trends_created: 0, skipped: true, reason: 'ran_recently' });
+  }
+
+  const startTime = new Date().toISOString();
+  try {
+    const profile = await prisma.businessProfile.findFirst({ where: { id: businessProfileId } });
+    if (!profile) return res.status(404).json({ error: 'No business profile' });
+
+    const { name, category, city, relevant_services = '', tone_preference = 'friendly' } = profile;
+    const catEn = CAT_EN[category] || category;
+    const sectorHashtags = SECTOR_HASHTAGS[category] || [category, catEn];
+
+    // ── 1. Apify: hashtag scraping with real engagement data ─────────────────
+    let videoMetrics: VideoMetrics[] = [];
+    let dataSource = 'tavily';
+
+    if (hasApifyKey()) {
+      console.log(`[tiktokSectorTrendAgent] Running Apify for hashtags: ${sectorHashtags.slice(0, 3).join(', ')}`);
+      const rawVideos = await apifyTikTokHashtags(sectorHashtags, 40);
+
+      videoMetrics = rawVideos
+        .map(computeMetrics)
+        .filter((v): v is VideoMetrics => v !== null)
+        .filter(v => v.plays > 5000)       // only videos with meaningful reach
+        .filter(v => v.pattern_score > 2)  // only meaningful resonance
+        .sort((a, b) => b.pattern_score - a.pattern_score);
+
+      if (videoMetrics.length > 0) {
+        dataSource = 'apify_hashtag';
+        console.log(`[tiktokSectorTrendAgent] Apify: ${videoMetrics.length} videos with velocity data`);
+      }
+    }
+
+    // ── 1b. Extract trending sounds from sector videos ────────────────────
+    const topSounds = extractTopSounds(videoMetrics);
+    const soundBlock = topSounds.length > 0
+      ? `\n=== SOUNDS פופולריים בסקטור ===\n${topSounds.map((s, i) =>
+          `${i + 1}. "${s.title}" — ${s.usage_count} סרטונים, avg resonance ${s.avg_pattern_score}/100`
+        ).join('\n')}`
+      : '';
+
+    // ── 2. Tavily fallback / supplement: sector-specific TikTok content ───────
+    const tavilyQueries = buildSectorQueries(category, city, relevant_services, catEn);
+    const tavilyResults = (
+      await Promise.all(tavilyQueries.slice(0, 5).map(q => tavilyAdvancedSearch(q, 3)))
+    ).flat();
+
+    const seenUrls = new Set<string>();
+    const uniqueTavily = tavilyResults.filter(r => {
+      if (!r.url || seenUrls.has(r.url)) return false;
+      seenUrls.add(r.url);
+      return true;
+    }).slice(0, 12);
+
+    const tavilyContext = uniqueTavily
+      .map(r => `[${r.url}]\n${(r.title || '')} — ${(r.content || '').slice(0, 200)}`)
+      .join('\n---\n');
+
+    if (dataSource === 'tavily') dataSource = uniqueTavily.length > 0 ? 'tavily' : 'none';
+
+    // ── 3. Build AI prompt ─────────────────────────────────────────────────
+    const toneMap: Record<string, string> = {
+      casual: 'קליל, מצחיק, עם אנרגיה',
+      warm: 'חם, אנושי, אמיתי',
+      professional: 'מקצועי אך נגיש',
+    };
+    const toneInstruction = toneMap[tone_preference] || 'קליל ואנרגטי';
+
+    const videoBlock = formatVideoBlock(videoMetrics);
+    const hasRealData = videoBlock.length > 0;
+
+    const prompt = `אתה אנליסט TikTok מומחה לעסקים קטנים ישראלים בסקטור "${category}".
+המשימה: מצא 2-4 **תבניות תוכן עולות** שמתאימות לעסק הספציפי הזה.
+
+עסק: "${name}" — ${category} ב${city}
+שירותים/מוצרים: ${relevant_services || 'לא צוין'}
+טון מועדף: ${toneInstruction}
+
+${hasRealData ? `=== נתוני ENGAGEMENT אמיתיים מ-TikTok (7 ימים אחרונים) ===\n${videoBlock}` : ''}
+${soundBlock}
+
+${tavilyContext ? `=== תוכן TikTok מהסקטור (חיפוש אינטרנט) ===\n${tavilyContext.slice(0, 2500)}` : ''}
+
+=== תבניות תוכן TikTok שיש לבדוק אם רלוונטיות ===
+${CONTENT_PATTERNS.map((p, i) => `${i + 1}. ${p}`).join('\n')}
+
+הוראות חשובות:
+• כלול רק תבניות שיש להן **ראיה ספציפית** בנתונים (URL, מספרים, או תיאור מדויק)
+• כל תבנית חייבת להסביר **למה היא עובדת בסקטור הזה** ספציפית — לא כלל
+• script חייב להיות **מוכן לצילום**, לא עקרוני — כולל מה בדיוק לאמור
+• opportunity_window_hours — כמה שעות נשארו לרוץ על הגל הזה לפני שזה mainstream
+
+JSON בלבד:
+{"trends": [{
+  "pattern_name": "שם תבנית התוכן — עד 5 מילים בעברית",
+  "why_it_works_in_sector": "הסבר ספציפי לסקטור — למה דווקא ${category} מקבל engagement גבוה בפורמט הזה",
+  "evidence": {
+    "source": "apify_video|tavily_url|observed_pattern",
+    "detail": "ציטוט/URL/מספרים ספציפיים שמוכיחים את הטרנד",
+    "avg_plays_per_day": 0,
+    "engagement_rate_pct": 0.0
+  },
+  "content_script": {
+    "hook_3sec": "המשפט הראשון בדיוק — מה אומרים/מראים ב-3 שניות הראשונות",
+    "body_20sec": "מה בדיוק להראות/לאמור בגוף הסרטון — שלבים קצרים",
+    "cta": "מה לאמור ב-5 שניות האחרונות",
+    "visual_direction": "מה בדיוק לצלם — תיאור סצנה קצר",
+    "music_suggestion": "סוג מוזיקה / אם יש sound ספציפי — ציין"
+  },
+  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"],
+  "recommended_sound": "שם sound/סוג מוזיקה ספציפי שמומלץ לתבנית הזו",
+  "best_posting_time": "שעה אופטימלית ויום בשבוע",
+  "opportunity_window_hours": 48,
+  "velocity": "exploding|fast_rising|steady_rising",
+  "estimated_reach_multiplier": 2.5,
+  "confidence": 65
+}],
+"sector_sounds": [{"title": "שם ה-sound", "why_use_it": "למה להשתמש בו בסקטור הזה"}]}`;
+
+    const result = await invokeLLM({
+      prompt,
+      response_json_schema: { type: 'object' },
+      model: 'sonnet',
+      maxTokens: 800,
+      skipCache: true, // always fresh analysis
+    });
+
+    const rawTrends: any[] = result?.trends || [];
+
+    // Filter: only trends with real evidence + confidence
+    const validTrends = rawTrends.filter(t =>
+      t.pattern_name &&
+      t.content_script?.hook_3sec &&
+      t.evidence?.detail &&
+      (t.confidence || 0) >= 55
+    );
+
+    // ── 4. Dedup against existing signals ─────────────────────────────────
+    const existing = await prisma.marketSignal.findMany({
+      where: {
+        linked_business: businessProfileId,
+        category: 'tiktok_sector_trend',
+        detected_at: { gte: new Date(Date.now() - 48 * 3600000).toISOString() }, // 48h dedup window
+      },
+      select: { summary: true },
+    });
+    const existingNames = new Set(existing.map(s => s.summary));
+
+    // ── 5. Save signals ────────────────────────────────────────────────────
+    let created = 0;
+    for (const trend of validTrends) {
+      const summaryKey = `TikTok סקטור: ${trend.pattern_name}`;
+      if (existingNames.has(summaryKey)) continue;
+
+      const velocityImpact: Record<string, string> = {
+        exploding: 'high',
+        fast_rising: 'high',
+        steady_rising: 'medium',
+      };
+
+      const meta = JSON.stringify({
+        action_type:     'tiktok_content',
+        action_label:    `צלם עכשיו: ${trend.pattern_name}`,
+        pattern_name:    trend.pattern_name,
+        why_it_works:    trend.why_it_works_in_sector,
+        evidence:        trend.evidence,
+        content_script:  trend.content_script,
+        hashtags:        trend.hashtags,
+        recommended_sound:           trend.recommended_sound,
+        sector_top_sounds:           topSounds,
+        best_posting_time:           trend.best_posting_time,
+        opportunity_window_hours:    trend.opportunity_window_hours,
+        velocity:                    trend.velocity,
+        estimated_reach_multiplier:  trend.estimated_reach_multiplier,
+        data_source:                 dataSource,
+        is_tiktok_sector_trend:      true,
+        time_minutes:                30, // estimated filming time
+        prefilled_text: [
+          trend.content_script.hook_3sec,
+          trend.content_script.body_20sec,
+          trend.content_script.cta,
+          (trend.hashtags || []).join(' '),
+        ].filter(Boolean).join('\n\n'),
+      });
+
+      await prisma.marketSignal.create({
+        data: {
+          linked_business:    businessProfileId,
+          summary:            summaryKey,
+          impact_level:       velocityImpact[trend.velocity] || 'medium',
+          category:           'tiktok_sector_trend',
+          recommended_action: `${trend.content_script?.hook_3sec || ''} | פרסם ${trend.best_posting_time || 'היום'} | חלון: ${trend.opportunity_window_hours || 48}ש'`,
+          confidence:         trend.confidence || 70,
+          source_urls:        trend.evidence?.detail?.startsWith('http') ? trend.evidence.detail : '',
+          source_description: meta,
+          is_read:            false,
+          detected_at:        new Date().toISOString(),
+        },
+      });
+
+      existingNames.add(summaryKey);
+      created++;
+    }
+
+    // ── 6. ProactiveAlert for "exploding" trends ──────────────────────────
+    const explodingTrend = validTrends.find(t => t.velocity === 'exploding');
+    if (explodingTrend) {
+      const existingAlert = await prisma.proactiveAlert.findFirst({
+        where: {
+          linked_business: businessProfileId,
+          alert_type: 'tiktok_opportunity',
+          created_date: { gte: new Date(Date.now() - 24 * 3600000).toISOString() },
+        },
+      });
+
+      if (!existingAlert) {
+        await prisma.proactiveAlert.create({
+          data: {
+            linked_business:  businessProfileId,
+            title:            `🔥 TikTok: ${explodingTrend.pattern_name} — חלון ${explodingTrend.opportunity_window_hours}ש'`,
+            description:      explodingTrend.why_it_works_in_sector,
+            alert_type:       'tiktok_opportunity',
+            priority:         'high',
+            is_dismissed:     false,
+            is_acted_on:      false,
+            suggested_action: JSON.stringify({
+              hook:       explodingTrend.content_script?.hook_3sec,
+              body:       explodingTrend.content_script?.body_20sec,
+              cta:        explodingTrend.content_script?.cta,
+              visual:     explodingTrend.content_script?.visual_direction,
+              music:      explodingTrend.content_script?.music_suggestion,
+              hashtags:   explodingTrend.hashtags,
+              post_at:    explodingTrend.best_posting_time,
+              window_h:   explodingTrend.opportunity_window_hours,
+              evidence:   explodingTrend.evidence?.detail,
+              reach_mult: explodingTrend.estimated_reach_multiplier,
+            }),
+            created_at: new Date().toISOString(),
+          },
+        });
+      }
+    }
+
+    setLastRun(businessProfileId, 'tiktokSectorTrendAgent');
+    await writeAutomationLog('tiktokSectorTrendAgent', businessProfileId, startTime, created);
+
+    return res.json({
+      trends_created:     created,
+      data_source:        dataSource,
+      videos_analyzed:    videoMetrics.length,
+      tavily_results:     uniqueTavily.length,
+      exploding_count:    validTrends.filter(t => t.velocity === 'exploding').length,
+      fast_rising_count:  validTrends.filter(t => t.velocity === 'fast_rising').length,
+    });
+
+  } catch (err: any) {
+    console.error('[tiktokSectorTrendAgent] error:', err.message);
+    await writeAutomationLog('tiktokSectorTrendAgent', businessProfileId, startTime, 0, 'failed', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+}

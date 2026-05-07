@@ -1,11 +1,13 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { cacheGet, cacheSet, TTL, hashPrompt } from './agentCache';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' });
 
 export interface LLMOptions {
   response_json_schema?: any;
   model?: string;    // 'haiku' | 'sonnet' | 'opus' or full model ID
-  maxTokens?: number; // override default (haiku=512, others=4096)
+  maxTokens?: number; // override default
+  skipCache?: boolean; // set true only for real-time / user-facing calls
 }
 
 const MODEL_MAP: Record<string, string> = {
@@ -14,17 +16,49 @@ const MODEL_MAP: Record<string, string> = {
   opus:   'claude-opus-4-6',
 };
 
+// Hard output caps per model — keeps token burn predictable
+const MAX_TOKENS_DEFAULT: Record<string, number> = {
+  haiku:  350,  // was 700 — halved
+  sonnet: 500,  // was 1200 — cut 60%
+  opus:   600,
+};
+
 /**
  * Drop-in replacement for base44 InvokeLLM.
  * Returns parsed JSON if response_json_schema is provided, otherwise raw text.
- * model: 'haiku' (fast, cheap), 'sonnet' (default), 'opus' (deep analysis)
- * Automatically falls back to OpenAI GPT-4o when Anthropic fails (and vice versa).
+ * model: 'haiku' (fast, cheap — DEFAULT), 'sonnet' (analysis), 'opus' (deep)
+ * Automatically falls back to OpenAI GPT-4o-mini when Anthropic fails.
+ * Caches responses for 4 hours to avoid duplicate AI calls across pipeline runs.
  */
 export async function invokeLLM(options: { prompt: string } & LLMOptions): Promise<any> {
-  const { prompt, response_json_schema, model, maxTokens: maxTokensOverride } = options;
+  const { prompt, response_json_schema, model, maxTokens: maxTokensOverride, skipCache } = options;
 
-  const modelId = MODEL_MAP[model || ''] || model || 'claude-haiku-4-5-20251001';
-  const maxTokens = maxTokensOverride ?? (model === 'sonnet' || model === 'opus' ? 1200 : 700);
+  const modelKey = model || 'haiku'; // default to Haiku (cheapest)
+  const modelId = MODEL_MAP[modelKey] || model || 'claude-haiku-4-5-20251001';
+  const maxTokens = maxTokensOverride ?? MAX_TOKENS_DEFAULT[modelKey] ?? 350;
+
+  // ── LLM response cache (4h TTL) ───────────────────────────────────────────
+  if (!skipCache) {
+    const cacheKey = `llm:${modelKey}:${hashPrompt(prompt)}`;
+    const cached = cacheGet(cacheKey);
+    if (cached !== null) {
+      return cached;
+    }
+
+    const result = await _invokeLLMRaw(prompt, modelId, maxTokens, response_json_schema);
+    cacheSet(cacheKey, result, TTL.LLM_RESPONSE);
+    return result;
+  }
+
+  return _invokeLLMRaw(prompt, modelId, maxTokens, response_json_schema);
+}
+
+async function _invokeLLMRaw(
+  prompt: string,
+  modelId: string,
+  maxTokens: number,
+  response_json_schema: any,
+): Promise<any> {
 
   // Try Anthropic first
   if (process.env.ANTHROPIC_API_KEY) {
@@ -35,7 +69,7 @@ export async function invokeLLM(options: { prompt: string } & LLMOptions): Promi
     }
   }
 
-  // Fallback: OpenAI GPT-4o
+  // Fallback: OpenAI GPT-4o-mini (cheaper than GPT-4o)
   if (process.env.OPENAI_API_KEY) {
     try {
       return await _callOpenAI(prompt, response_json_schema);

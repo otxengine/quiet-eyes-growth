@@ -4,54 +4,9 @@ import { prisma } from '../../db';
 import { loadBusinessContext } from '../../lib/businessContext';
 import { invokeLLM } from '../../lib/llm';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
+import { runApifyActor, hasApifyKey } from '../../lib/apify';
 
-const APIFY_API_KEY = process.env.APIFY_API_KEY || '';
-const GRAPH_BASE    = 'https://graph.facebook.com/v19.0';
-
-async function runApifyActor(actorId: string, input: any, maxWaitMs = 90_000): Promise<any[]> {
-  if (!APIFY_API_KEY) return [];
-  try {
-    // Start the actor run
-    const startRes = await fetch(`https://api.apify.com/v2/acts/${actorId}/runs?token=${APIFY_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    });
-    if (!startRes.ok) {
-      console.warn(`[Apify] ${actorId} start failed: ${startRes.status}`);
-      return [];
-    }
-    const runData: any = await startRes.json();
-    const runId = runData?.data?.id;
-    if (!runId) return [];
-
-    // Poll for completion (max maxWaitMs, 5s intervals)
-    const maxPolls = Math.floor(maxWaitMs / 5000);
-    for (let i = 0; i < maxPolls; i++) {
-      await new Promise(r => setTimeout(r, 5000));
-      const statusRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_API_KEY}`);
-      const statusData: any = await statusRes.json();
-      const status = statusData?.data?.status;
-      if (status === 'SUCCEEDED') {
-        const datasetId = statusData?.data?.defaultDatasetId;
-        const itemsRes = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_API_KEY}&limit=50`);
-        const items: any = await itemsRes.json();
-        return Array.isArray(items) ? items : [];
-      }
-      if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
-        console.warn(`[Apify] ${actorId} run ${runId} ended with ${status}`);
-        return [];
-      }
-    }
-    console.warn(`[Apify] ${actorId} polling timed out after ${maxWaitMs}ms`);
-    return [];
-  } catch (e: any) {
-    console.warn(`[Apify] ${actorId} exception:`, e.message);
-    return [] as any[];
-  }
-}
-
-// tavilySearch imported from lib/tavily (shared rate-limit flag)
+const GRAPH_BASE = 'https://graph.facebook.com/v19.0';
 
 export async function collectSocialSignals(req: Request, res: Response) {
   const { businessProfileId } = req.body;
@@ -66,14 +21,14 @@ export async function collectSocialSignals(req: Request, res: Response) {
     const { name, category, city } = profile;
     const facebook_url: string | null  = (profile as any).facebook_url  || null;
     const instagram_url: string | null = (profile as any).instagram_url || null;
-    console.log(`[collectSocialSignals] settings → facebook_url=${facebook_url || 'none'} instagram_url=${instagram_url || 'none'} apify=${!!APIFY_API_KEY}`);
+    console.log(`[collectSocialSignals] settings → facebook_url=${facebook_url || 'none'} instagram_url=${instagram_url || 'none'} apify=${hasApifyKey()}`);
     const existingSignals = await prisma.rawSignal.findMany({ where: { linked_business: businessProfileId } });
     const existingUrls = new Set(existingSignals.map(s => s.url).filter(Boolean));
 
     let newSignals = 0;
 
     // ── Facebook via Apify ──────────────────────────────────────────────────────
-    if (APIFY_API_KEY && facebook_url) {
+    if (hasApifyKey() && facebook_url) {
       const posts = await runApifyActor('apify~facebook-posts-scraper', {
         startUrls: [{ url: facebook_url }],
         maxPosts: 10,
@@ -104,7 +59,7 @@ export async function collectSocialSignals(req: Request, res: Response) {
     }
 
     // ── Instagram via Apify ─────────────────────────────────────────────────────
-    if (APIFY_API_KEY && instagram_url) {
+    if (hasApifyKey() && instagram_url) {
       const posts = await runApifyActor('apify~instagram-scraper', {
         directUrls: [instagram_url],
         resultsType: 'posts',

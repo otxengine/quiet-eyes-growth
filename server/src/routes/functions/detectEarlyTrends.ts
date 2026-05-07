@@ -20,6 +20,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 
 import { tavilyAdvancedSearch } from '../../lib/tavily';
 
@@ -69,33 +70,34 @@ async function fetchTrendsVelocity(keyword: string, geo = 'IL'): Promise<{
   } catch { return null; }
 }
 
-// ── Social platform trend queries ─────────────────────────────────────────────
+// ── Social platform trend queries (reduced from 10 → 5 to cut Tavily cost) ───
 function buildSocialQueries(category: string, city: string, services: string): string[] {
-  const catEn = category.replace(/[^\x00-\x7F]/g, '').trim() || category;
   return [
-    // TikTok early signals
-    `site:tiktok.com trending ${category} Israel ${new Date().getFullYear()}`,
-    `TikTok viral ${category} ${city} trend 2025`,
-    // Instagram Reels trends
-    `Instagram Reels trending ${category} Israel`,
-    `Instagram hashtag growing ${category} ${city}`,
+    // TikTok + Instagram combined
+    `TikTok OR Instagram viral trending ${category} Israel ${new Date().getFullYear()}`,
     // Reddit early adopters
-    `Reddit r/Israel OR r/tel_aviv "${category}" rising`,
-    `Reddit "${category}" "${city}" popular new`,
-    // YouTube Shorts
-    `YouTube Shorts trending ${category} Israel 2025`,
-    // Israeli food/lifestyle early signals
+    `Reddit r/Israel "${category}" rising OR popular new`,
+    // Israeli news / lifestyle
     `${category} ${city} טרנד עולה 2025`,
-    `${category} ישראל מגמה חדשה רשתות חברתיות`,
-    // Niche early-adopter communities
-    `${services || category} Israel micro trend blog forum`,
+    // Competitor / market moves
+    `${category} ${city} opens new Israel`,
+    // Niche communities
+    `${services || category} Israel trend blog forum`,
   ];
 }
+
+// Minimum interval: trend signals don't change faster than 12h
+const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000;
 
 // ── Main agent ─────────────────────────────────────────────────────────────────
 export async function detectEarlyTrends(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+  // ── Delta guard ───────────────────────────────────────────────────────────
+  if (shouldSkipAgent(businessProfileId, 'detectEarlyTrends', MIN_INTERVAL_MS)) {
+    return res.json({ trends_created: 0, skipped: true, reason: 'ran_recently' });
+  }
 
   const startTime = new Date().toISOString();
   try {
@@ -254,6 +256,7 @@ JSON בלבד:
       created++;
     }
 
+    setLastRun(businessProfileId, 'detectEarlyTrends');
     await writeAutomationLog('detectEarlyTrends', businessProfileId, startTime, created);
 
     return res.json({
