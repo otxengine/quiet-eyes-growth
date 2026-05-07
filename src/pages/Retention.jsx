@@ -64,7 +64,12 @@ export default function Retention() {
 כתוב מסר WhatsApp קצר ואישי להחזרת לקוח שלא רכש זמן רב. בעברית, 3-4 משפטים, מקצועי ואנושי.
 החזר רק את הטקסט עצמו.`,
       });
-      setWinBackMessage(typeof res === 'string' ? res.trim() : '');
+      // InvokeLLM returns parsed object or string — extract text
+      const rawText = typeof res === 'string' ? res
+        : typeof res === 'object' && res !== null
+          ? (res.text || res.message || res.content || res.result || Object.values(res).find(v => typeof v === 'string') || '')
+          : '';
+      setWinBackMessage(rawText.trim());
     } catch (_) {}
     setWinBackLoading(false);
   };

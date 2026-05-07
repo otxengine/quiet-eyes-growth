@@ -27,7 +27,11 @@ const categoryConfig = {
   opportunity:     { borderClass: 'signal-border-opportunity',    label: 'הזדמנות' },
   trend:           { borderClass: 'signal-border-trend',          label: 'מגמה' },
   mention:         { borderClass: 'signal-border-mention',        label: 'אזכור' },
-  competitor_move: { borderClass: 'signal-border-competitor_move', label: 'מתחרים' },
+  competitor_move:        { borderClass: 'signal-border-competitor_move', label: 'מתחרים' },
+  tiktok_sector_trend:   { borderClass: 'signal-border-trend',          label: 'TikTok טרנד' },
+  tiktok_audience:       { borderClass: 'signal-border-trend',          label: 'TikTok קהל' },
+  tiktok_post_performance: { borderClass: 'signal-border-mention',      label: 'TikTok ביצועים' },
+  event:                 { borderClass: 'signal-border-trend',          label: 'אירוע' },
 };
 
 const impactLabels = {

@@ -14,6 +14,7 @@ const NAV_STRUCTURE = [
   {
     type: 'group', key: 'intel', label: 'מודיעין', icon: Eye,
     items: [
+      { path: '/signals',      label: 'מודיעין שוק', icon: TrendingUp, badgeKey: 'unreadSignals' },
       { path: '/competitors',  label: 'מתחרים',    icon: Users },
       { path: '/events',       label: 'אירועים',   icon: Calendar },
       { path: '/insights',     label: 'תובנות',    icon: Lightbulb, badgeKey: 'activeInsights' },

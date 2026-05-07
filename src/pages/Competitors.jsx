@@ -75,10 +75,39 @@ function formatHebrewDate(isoStr) {
   }).format(new Date(isoStr));
 }
 
-// Competitor changes are sourced from MarketSignal (category=competitor_move) via the fallback in mergedChanges below.
-// The old OTX Supabase lookup has been removed — the 'businesses' table does not exist in this project.
-async function fetchCompetitorChanges(_businessProfile) {
-  return { changes: [], bizId: null };
+// Competitor changes — loads from MarketSignal competitor_move category
+async function fetchCompetitorChanges(businessProfile) {
+  if (!businessProfile?.id) return { changes: [], bizId: null };
+  try {
+    const { base44 } = await import('@/api/base44Client');
+    const signals = await base44.entities.MarketSignal.filter(
+      { linked_business: businessProfile.id, category: 'competitor_move' },
+      '-detected_at',
+      50
+    );
+    const changes = signals.map(s => {
+      let parsed = {};
+      try { parsed = JSON.parse(s.source_description || '{}'); } catch {}
+      return {
+        id: s.id,
+        competitor_name: parsed.competitor_name || s.agent_name || 'מתחרה',
+        change_type: parsed.change_type || 'website',
+        change_summary: s.summary,
+        detected_at_utc: s.detected_at || s.created_date,
+        source_url: s.source_urls || parsed.source_url || null,
+        confidence_score: (s.confidence || 70) / 100,
+        social_platform: parsed.social_platform || null,
+        post_url: parsed.post_url || null,
+        sentiment: parsed.sentiment || null,
+        engagement_count: parsed.engagement_count || null,
+        content_excerpt: parsed.content_excerpt || null,
+        _fromBase44: true,
+      };
+    });
+    return { changes, bizId: null };
+  } catch {
+    return { changes: [], bizId: null };
+  }
 }
 
 const filterTabs = [
@@ -319,7 +348,12 @@ export default function Competitors() {
             )}
             <span className="text-[10px] text-foreground-muted">{mergedChanges.length} רשומות</span>
             <button
-              onClick={() => refetchChanges()}
+              onClick={async () => {
+                try {
+                  await base44.functions.invoke('competitorMoveTracker', { businessProfileId: bpId });
+                  refetchChanges();
+                } catch {}
+              }}
               disabled={loadingChanges}
               className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-medium border border-border hover:border-foreground-muted text-foreground-muted hover:text-foreground transition-colors disabled:opacity-40"
             >

@@ -196,7 +196,7 @@ JSON בלבד:
   "recommendation": "ההמלצה החשובה ביותר לחודש הבא"
 }`,
       });
-      const parsed = parseLLMJson(res);
+      const parsed = parseLLMJson(res?.data || res);
       setFullReport({ ...parsed, _social: { posts: posts.length, likes: totalLikes, comments: totalComments, reach: totalReach } });
     } catch {
       toast.error('שגיאה ביצירת דוח — נסה שוב');
