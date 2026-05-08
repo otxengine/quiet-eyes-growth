@@ -37,6 +37,9 @@ export async function demandGapEngine(req: Request, res: Response) {
     const sectorCtx = getSectorContext(profile.category);
 
     const result = await invokeLLM({
+      model: 'sonnet',
+      maxTokens: 1400,
+      skipCache: true,
       prompt: `אתה מנוע זיהוי פערי ביקוש לעסקים ישראלים.
 עסק: "${profile.name}" (${profile.category} ב${profile.city})
 ${profile.description ? `תיאור: ${profile.description}` : ''}

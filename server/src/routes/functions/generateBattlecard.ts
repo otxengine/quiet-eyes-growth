@@ -57,7 +57,7 @@ Create a competitive battlecard in Hebrew. Return ONLY valid JSON:
 
 ALL IN HEBREW. Practical, conversational tone.`;
 
-    const result = await invokeLLM({ prompt, response_json_schema: { type: 'object' } });
+    const result = await invokeLLM({ prompt, response_json_schema: { type: 'object' }, model: 'sonnet', maxTokens: 1400, skipCache: true });
     if (!result) return res.status(500).json({ error: 'Failed to generate battlecard' });
 
     const confidence = result.confidence_score || 50;

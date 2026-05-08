@@ -50,6 +50,9 @@ export async function generateMonthlyStrategy(req: Request, res: Response) {
     ].filter(Boolean).join('\n');
 
     const result = await invokeLLM({
+      model: 'sonnet',
+      maxTokens: 1800,
+      skipCache: true,
       prompt: `אתה יועץ עסקי אסטרטגי לעסקים ישראלים. צור תכנית אסטרטגית חודשית ל${todayDate}.
 ${ctxPrompt}
 ${sectorCtx}
