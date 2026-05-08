@@ -88,11 +88,14 @@ async function _callAnthropic(
   response_json_schema: any,
 ): Promise<any> {
 
-  const messages: Anthropic.MessageParam[] = [{ role: 'user', content: prompt }];
-
   const systemPrompt = response_json_schema
-    ? 'You are a JSON-only assistant. Your entire response must be a single valid JSON object — starting with { and ending with }. No preamble, no explanation, no markdown fences. ALL string values must be in Hebrew unless the field explicitly requires English.'
+    ? 'You are a JSON-only assistant. Respond with a single valid JSON object only. No preamble, no explanation, no markdown fences. ALL string values must be in Hebrew unless the field explicitly requires English.'
     : 'You are a helpful assistant.';
+
+  // Assistant prefill: inject opening brace so Claude MUST continue with valid JSON
+  const messages: Anthropic.MessageParam[] = response_json_schema
+    ? [{ role: 'user', content: prompt }, { role: 'assistant', content: '{' }]
+    : [{ role: 'user', content: prompt }];
 
   const response = await anthropic.messages.create({
     model: modelId,
@@ -101,15 +104,17 @@ async function _callAnthropic(
     messages,
   });
 
-  const text = ((response.content || [])[0] as any)?.text || '';
+  const rawText = ((response.content || [])[0] as any)?.text || '';
 
   if (response_json_schema) {
+    // Prepend the prefilled '{' that we injected
+    const text = '{' + rawText;
     console.log('[LLM] Anthropic raw (300 chars):', text.substring(0, 300), '| stop_reason:', response.stop_reason);
     const parsed = _parseJson(text);
     if (!parsed) console.error('[LLM] _parseJson failed on above text');
     return parsed;
   }
-  return text;
+  return rawText;
 }
 
 async function _callOpenAI(prompt: string, response_json_schema: any, maxTokens = 1600): Promise<any> {
