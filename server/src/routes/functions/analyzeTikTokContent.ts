@@ -4,7 +4,9 @@ import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { tavilySearch } from '../../lib/tavily';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
+import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 
+const MIN_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 const GRAPH_BASE = 'https://open-api.tiktok.com';
 
 const CITY_EN: Record<string, string> = {
@@ -48,6 +50,9 @@ async function apifyTikTokProfile(username: string): Promise<any[]> {
 export async function analyzeTikTokContent(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+  if (shouldSkipAgent(businessProfileId, 'analyzeTikTokContent', MIN_INTERVAL_MS)) {
+    return res.json({ videos_analyzed: 0, skipped: true, reason: 'ran_recently' });
+  }
 
   const startTime = new Date().toISOString();
   try {
@@ -177,6 +182,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       created++;
     }
 
+    setLastRun(businessProfileId, 'analyzeTikTokContent');
     await writeAutomationLog('analyzeTikTokContent', businessProfileId, startTime, created);
     console.log(`analyzeTikTokContent done: ${created} signals | source: ${dataSource} | videos: ${videos.length}`);
     return res.json({ items_created: created, data_source: dataSource, videos_analyzed: videos.length });

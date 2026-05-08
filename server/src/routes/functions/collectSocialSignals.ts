@@ -5,13 +5,18 @@ import { loadBusinessContext } from '../../lib/businessContext';
 import { invokeLLM } from '../../lib/llm';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
+import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 
 // Dummy res that swallows output — used when firing sub-agents inline
 const GRAPH_BASE = 'https://graph.facebook.com/v19.0';
+const MIN_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours — Apify calls are expensive
 
 export async function collectSocialSignals(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+  if (shouldSkipAgent(businessProfileId, 'collectSocialSignals', MIN_INTERVAL_MS)) {
+    return res.json({ new_signals: 0, skipped: true, reason: 'ran_recently' });
+  }
 
   const startTime = new Date().toISOString();
   try {
@@ -345,6 +350,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       negativeSignalsFound++;
     }
 
+    setLastRun(businessProfileId, 'collectSocialSignals');
     await writeAutomationLog('collectSocialSignals', businessProfileId, startTime, newSignals);
     console.log(`collectSocialSignals done: ${newSignals} new signals, ${negativeSignalsFound} negative → MarketSignal`);
 

@@ -17,6 +17,9 @@ import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { tavilyAdvancedSearch, isTavilyRateLimited } from '../../lib/tavily';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
+import { shouldSkipAgent, setLastRun, cacheGet, cacheSet, TTL } from '../../lib/agentCache';
+
+const MIN_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 // Derives TikTok hashtags from Hebrew business category (mirrors tiktokSectorTrendAgent logic)
 function deriveHashtags(category: string): string[] {
@@ -62,6 +65,10 @@ export async function detectViralSignals(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
+  if (shouldSkipAgent(businessProfileId, 'detectViralSignals', MIN_INTERVAL_MS)) {
+    return res.json({ signals_created: 0, skipped: true, reason: 'ran_recently' });
+  }
+
   const startTime = new Date().toISOString();
   try {
     const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
@@ -75,6 +82,13 @@ export async function detectViralSignals(req: Request, res: Response) {
     let apifyItems: any[] = [];
 
     if (hasApifyKey()) {
+      // Reuse cached results from tiktokSectorTrendAgent if run recently (same hashtags, same actor)
+      const apifyCacheKey = `apify_tiktok_hashtags:${sectorHashtags.slice(0, 3).join(',')}`;
+      const cachedApify = cacheGet<any[]>(apifyCacheKey);
+      if (cachedApify) {
+        apifyItems = cachedApify;
+        console.log(`[detectViralSignals] Apify cache hit: ${apifyItems.length} videos`);
+      } else {
       try {
         apifyItems = await runApifyActor(
           'clockworks~tiktok-hashtag-scraper',
@@ -88,10 +102,12 @@ export async function detectViralSignals(req: Request, res: Response) {
           90_000,
           20,
         );
+        if (apifyItems.length > 0) cacheSet(apifyCacheKey, apifyItems, TTL.API_RESULT);
         console.log(`[detectViralSignals] Apify TikTok: ${apifyItems.length} videos from hashtags: ${sectorHashtags.slice(0, 4).join(', ')}`);
       } catch (e: any) {
         console.warn('[detectViralSignals] Apify failed:', e.message);
       }
+      } // end else (no cache)
     }
 
     // ── Source 2: Tavily web search fallback (only if Apify returned nothing) ─
@@ -249,6 +265,7 @@ Return ONLY valid JSON:
       created++;
     }
 
+    setLastRun(businessProfileId, 'detectViralSignals');
     await writeAutomationLog('detectViralSignals', businessProfileId, startTime, created);
 
     return res.json({

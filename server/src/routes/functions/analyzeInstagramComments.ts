@@ -3,6 +3,9 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
+import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+
+const MIN_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 const GRAPH_BASE = 'https://graph.facebook.com/v19.0';
 
@@ -81,6 +84,9 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
 export async function analyzeInstagramComments(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+  if (shouldSkipAgent(businessProfileId, 'analyzeInstagramComments', MIN_INTERVAL_MS)) {
+    return res.json({ comments_analyzed: 0, skipped: true, reason: 'ran_recently' });
+  }
 
   const startTime = new Date().toISOString();
   try {
@@ -124,6 +130,7 @@ export async function analyzeInstagramComments(req: Request, res: Response) {
         data: { last_sync: new Date().toISOString() },
       }).catch(() => {});
 
+      setLastRun(businessProfileId, 'analyzeInstagramComments');
       await writeAutomationLog('analyzeInstagramComments', businessProfileId, startTime, result.commentsAnalyzed);
       console.log(`analyzeInstagramComments done (OAuth): ${result.commentsAnalyzed} comments, ${result.negativeCount} negative`);
       return res.json({ comments_analyzed: result.commentsAnalyzed, negative_count: result.negativeCount, urgent_alerts: result.urgentAlerts });
@@ -157,6 +164,7 @@ export async function analyzeInstagramComments(req: Request, res: Response) {
       }
 
       const result = await analyzeAndSave(profile, businessProfileId, allComments);
+      setLastRun(businessProfileId, 'analyzeInstagramComments');
       await writeAutomationLog('analyzeInstagramComments', businessProfileId, startTime, result.commentsAnalyzed);
       console.log(`analyzeInstagramComments done (Apify): ${result.commentsAnalyzed} comments, ${result.negativeCount} negative`);
       return res.json({ comments_analyzed: result.commentsAnalyzed, negative_count: result.negativeCount, urgent_alerts: result.urgentAlerts, source: 'apify' });

@@ -3,6 +3,9 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
+import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+
+const MIN_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 const FACEBOOK_API_BASE = 'https://graph.facebook.com/v19.0';
 
@@ -89,6 +92,9 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
 export async function analyzeSocialComments(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+  if (shouldSkipAgent(businessProfileId, 'analyzeSocialComments', MIN_INTERVAL_MS)) {
+    return res.json({ comments_analyzed: 0, skipped: true, reason: 'ran_recently' });
+  }
 
   const startTime = new Date().toISOString();
   try {
@@ -136,6 +142,7 @@ export async function analyzeSocialComments(req: Request, res: Response) {
         data: { last_sync: new Date().toISOString() },
       }).catch(() => {});
 
+      setLastRun(businessProfileId, 'analyzeSocialComments');
       await writeAutomationLog('analyzeSocialComments', businessProfileId, startTime, signalsCreated);
       return res.json({
         comments_analyzed: allComments.length,
@@ -174,6 +181,7 @@ export async function analyzeSocialComments(req: Request, res: Response) {
       }
 
       const { signalsCreated, analysis } = await analyzeAndSave(profile, businessProfileId, allComments);
+      setLastRun(businessProfileId, 'analyzeSocialComments');
       await writeAutomationLog('analyzeSocialComments', businessProfileId, startTime, signalsCreated);
       console.log(`analyzeSocialComments done (Apify): ${allComments.length} comments, ${signalsCreated} signals`);
       return res.json({

@@ -3,7 +3,9 @@ import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
 import { tavilySearch } from '../../lib/tavily';
+import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 
+const MIN_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours — Google Places API quota
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
 
 async function findPlaceId(name: string, city: string): Promise<string | null> {
@@ -87,6 +89,9 @@ export async function collectReviews(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   const requestedSources: string[] = req.body.sources || [];
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+  if (!req.body.force && shouldSkipAgent(businessProfileId, 'collectReviews', MIN_INTERVAL_MS)) {
+    return res.json({ new_reviews: 0, skipped: true, reason: 'ran_recently' });
+  }
 
   const startTime = new Date().toISOString();
   try {
@@ -419,6 +424,7 @@ export async function collectReviews(req: Request, res: Response) {
       }
     }
 
+    setLastRun(businessProfileId, 'collectReviews');
     await writeAutomationLog('collectReviews', businessProfileId, startTime, newReviews);
     console.log(`collectReviews done: ${newReviews} new reviews (${googleAdded} from Google, ${sourcesScanCount} from other sources)`);
     return res.json({ new_reviews: newReviews, google_reviews_added: googleAdded, sources_scanned: sourcesToScan.length + (googleAdded > 0 ? 1 : 0) });
