@@ -69,9 +69,34 @@ export async function cleanupInsights(req: Request, res: Response) {
     // Refresh active list after stale dismissal
     const afterStale = active.filter(a => !tooDismissIds.includes(a.id));
 
+    // ── 1b. SPORTS SPECIFICITY: if a specific matchup alert exists ("X נגד Y"),
+    //     dismiss all generic sports alerts for the same event type (no "נגד")
+    //     e.g., "גמר ליגת האלופות 2026 — בעוד 23 ימים" gets dismissed when
+    //     "ארסנל נגד פריז — גמר ליגת האלופות" already exists ──────────────────
+    const sportsAlerts = afterStale.filter(a =>
+      a.alert_type === 'market_opportunity' && (a.title || '').includes('⚽')
+    );
+    const specificMatchAlerts = sportsAlerts.filter(a => (a.title || '').includes('נגד'));
+    if (specificMatchAlerts.length > 0) {
+      const genericSports = sportsAlerts.filter(
+        a => !(a.title || '').includes('נגד') && !tooDismissIds.includes(a.id)
+      );
+      for (const g of genericSports) {
+        tooDismissIds.push(g.id);
+        dismissed++;
+      }
+      if (genericSports.length > 0) {
+        await prisma.proactiveAlert.updateMany({
+          where: { id: { in: genericSports.map(g => g.id) } },
+          data: { is_dismissed: true },
+        });
+      }
+    }
+    const afterSports = afterStale.filter(a => !tooDismissIds.includes(a.id));
+
     // ── 2. DEDUP: per alert_type, keep only best version of near-identical titles ──
-    const byType: Record<string, typeof afterStale> = {};
-    for (const alert of afterStale) {
+    const byType: Record<string, typeof afterSports> = {};
+    for (const alert of afterSports) {
       const t = alert.alert_type || 'general';
       if (!byType[t]) byType[t] = [];
       byType[t].push(alert);
@@ -117,7 +142,7 @@ export async function cleanupInsights(req: Request, res: Response) {
     }
 
     // ── 3. CAP: enforce MAX_ACTIVE hard limit ──────────────────────────────────
-    const afterDedup = afterStale.filter(a => !dedupDismissIds.includes(a.id));
+    const afterDedup = afterSports.filter(a => !dedupDismissIds.includes(a.id));
     if (afterDedup.length > MAX_ACTIVE) {
       // Sort: lowest priority first (dismiss these), then oldest first within priority
       const sorted = [...afterDedup].sort((a, b) => {
