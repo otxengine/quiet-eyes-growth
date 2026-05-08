@@ -44,7 +44,7 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
       prisma.marketSignal.findMany({ where: { linked_business: businessProfileId, category: 'demand_gap' }, orderBy: { detected_at: 'desc' }, take: 5 }),
       prisma.lead.findMany({ where: { linked_business: businessProfileId, status: { in: ['lost', 'cold'] } }, orderBy: { created_date: 'desc' }, take: 10 }),
       // Specific competitor moves from last 7 days for context
-      prisma.marketSignal.findMany({ where: { linked_business: businessProfileId, category: 'competitor_move', detected_at: { gte: new Date(Date.now() - 7 * 86400000) } }, orderBy: { detected_at: 'desc' }, take: 5 }),
+      prisma.marketSignal.findMany({ where: { linked_business: businessProfileId, category: 'competitor_move', detected_at: { gte: new Date(Date.now() - 7 * 86400000).toISOString() } }, orderBy: { detected_at: 'desc' }, take: 5 }),
     ]);
 
     const existingTitles = new Set(pendingAlerts.map(a => a.title));

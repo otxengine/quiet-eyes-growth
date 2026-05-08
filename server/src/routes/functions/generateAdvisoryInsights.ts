@@ -76,7 +76,7 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
       }),
       // Competitor intelligence
       prisma.marketSignal.findMany({
-        where: { linked_business: businessProfileId, category: 'competitor_move', detected_at: { gte: thirtyDaysAgo } },
+        where: { linked_business: businessProfileId, category: 'competitor_move', detected_at: { gte: thirtyDaysAgo.toISOString() } },
         orderBy: { detected_at: 'desc' },
         take: 10,
       }),
