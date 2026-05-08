@@ -24,7 +24,7 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
       prisma.proactiveAlert.findMany({ where: { linked_business: businessProfileId, is_dismissed: false } }),
       prisma.marketSignal.findFirst({ where: { linked_business: businessProfileId, category: 'tiktok_audience' }, orderBy: { detected_at: 'desc' } }),
       prisma.marketSignal.findMany({ where: { linked_business: businessProfileId, category: 'demand_gap' }, orderBy: { detected_at: 'desc' }, take: 5 }),
-      prisma.lead.findMany({ where: { linked_business: businessProfileId, status: { in: ['lost', 'cold'] } }, orderBy: { updated_at: 'desc' }, take: 10 }),
+      prisma.lead.findMany({ where: { linked_business: businessProfileId, status: { in: ['lost', 'cold'] } }, orderBy: { created_date: 'desc' }, take: 10 }),
     ]);
 
     const existingTitles = new Set(pendingAlerts.map(a => a.title));
