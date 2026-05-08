@@ -96,10 +96,10 @@ async function _callAnthropic(
       response = await anthropic.messages.create({
         model: modelId,
         max_tokens: maxTokens,
-        system: 'You are a helpful assistant. ALL string values in your output must be in Hebrew unless the field explicitly requires English.',
+        system: 'You are a helpful assistant. Analyze the user request and call the output_result tool with ALL the fields described in the prompt. Every field must be populated — do not return an empty object. ALL string values must be in Hebrew unless the field explicitly requires English.',
         tools: [{
           name: 'output_result',
-          description: 'Output the structured result as JSON',
+          description: 'Call this tool with the complete JSON output described in the prompt. You MUST populate all fields — never return empty input.',
           input_schema: { type: 'object' as const },
         }],
         tool_choice: { type: 'any' as const },
