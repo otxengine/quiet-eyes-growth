@@ -65,7 +65,7 @@ export async function getAudienceSegments(req: Request, res: Response) {
     try {
       result = await invokeLLM({
         model: 'sonnet',
-        maxTokens: 2200,
+        maxTokens: 1500,
         prompt: `אתה מומחה לפרסום ממומן בשוק הישראלי עם ניסיון ב-Meta Ads וגוגל. בנה 3 סגמנטים ממוקדים ומבוססי נתונים.
 
 עסק: "${profile.name}" | תחום: ${profile.category} | עיר: ${profile.city}
