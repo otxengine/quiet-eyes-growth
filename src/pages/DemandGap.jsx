@@ -213,8 +213,9 @@ export default function DemandGap() {
       await base44.functions.invoke(fn, { businessProfileId: bpId });
       await queryClient.invalidateQueries({ queryKey: fn === 'demandGapEngine' ? ['demandGaps', bpId] : ['revenueForecast', bpId] });
       toast.success(fn === 'demandGapEngine' ? 'ניתוח פערי ביקוש הושלם' : 'תחזית הכנסות עודכנה');
-    } catch {
-      toast.error('שגיאה בניתוח');
+    } catch (err) {
+      console.error(`${fn} error:`, err);
+      toast.error(`שגיאה: ${err?.message || 'נסה שוב'}`);
     }
     setScanning(false);
   };

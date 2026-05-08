@@ -68,6 +68,10 @@ Identify 3-5 concrete demand gaps — real unmet local demand. Return ONLY a JSO
       response_json_schema: { type: 'object' },
     });
 
+    if (!result || typeof result !== 'object') {
+      throw new Error('AI did not return valid JSON — please retry');
+    }
+    console.log('[demandGapEngine] LLM result keys:', Object.keys(result), '| gaps:', result.gaps?.length ?? 'none');
     const gaps: any[] = result?.gaps || [];
     let created = 0;
 
