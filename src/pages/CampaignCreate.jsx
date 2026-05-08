@@ -144,6 +144,7 @@ export default function CampaignCreate() {
   const [ideaLoading,     setIdeaLoading]     = useState(false);
 
   const [audienceData,  setAudienceData]  = useState(null);
+  const [audienceError, setAudienceError] = useState('');
   const [forecastData,  setForecastData]  = useState(null);
   const [error,         setError]         = useState('');
 
@@ -227,6 +228,7 @@ ${signalAction ? `מטרת הקמפיין: ${signalAction}` : ''}
   const loadAudience = async () => {
     if (!bpId) return;
     setLoadingAudience(true);
+    setAudienceError('');
     try {
       const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25000));
       const res = await Promise.race([
@@ -241,11 +243,11 @@ ${signalAction ? `מטרת הקמפיין: ${signalAction}` : ''}
       setAudienceData(data);
       if (data?.segments?.length) setChosenSeg(data.segments[0]);
     } catch (e) {
-      if (e?.message === 'timeout') {
-        toast.info('לא ניתן לטעון קהל אוטומטית — הגדר ידנית');
-      } else {
-        toast.error('שגיאה בטעינת קהלי יעד');
-      }
+      const msg = e?.message === 'timeout'
+        ? 'פג זמן הטעינה (timeout 25s)'
+        : (e?.message || 'שגיאה לא ידועה');
+      setAudienceError(msg);
+      console.error('[loadAudience] error:', e);
     }
     setLoadingAudience(false);
   };
@@ -609,14 +611,22 @@ ${signalAction ? `מטרת הקמפיין: ${signalAction}` : ''}
       <SectionCard title="קהל יעד" subtitle="טרגטינג מוכן לפייסבוק / גוגל" defaultOpen={false}>
         <div className="p-4">
           {!audienceData && (
-            <button
-              onClick={loadAudience}
-              disabled={loadingAudience}
-              className="flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg text-[12px] font-semibold hover:opacity-90 transition-all"
-            >
-              {loadingAudience ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
-              {loadingAudience ? 'טוען קהלי יעד...' : 'טען קהלי יעד'}
-            </button>
+            <div className="space-y-3">
+              <button
+                onClick={loadAudience}
+                disabled={loadingAudience}
+                className="flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg text-[12px] font-semibold hover:opacity-90 transition-all"
+              >
+                {loadingAudience ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+                {loadingAudience ? 'טוען קהלי יעד...' : 'טען קהלי יעד'}
+              </button>
+              {audienceError && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-right">
+                  <p className="text-[11px] font-semibold text-red-700 mb-1">שגיאה ביצירת קהל יעד</p>
+                  <p className="text-[11px] text-red-600 font-mono break-all">{audienceError}</p>
+                </div>
+              )}
+            </div>
           )}
 
           {audienceData?.segments?.length > 0 && (
