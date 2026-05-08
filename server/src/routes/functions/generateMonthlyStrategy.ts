@@ -84,6 +84,11 @@ ${contextBlock}
       response_json_schema: { type: 'object' },
     });
 
+    if (!result || typeof result !== 'object') {
+      throw new Error('AI לא החזיר JSON תקין — נסה שוב');
+    }
+    console.log('[generateMonthlyStrategy] LLM result keys:', Object.keys(result));
+
     // Store as a special ProactiveAlert (reuse suggested_action for the full JSON)
     const strategyContent = JSON.stringify(result);
     const actionMeta = JSON.stringify({
