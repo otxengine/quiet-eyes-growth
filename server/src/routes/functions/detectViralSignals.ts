@@ -96,6 +96,7 @@ export async function detectViralSignals(req: Request, res: Response) {
 
     // ── Source 2: Tavily web search fallback (only if Apify returned nothing) ─
     let tavilyContext = '';
+    let resultsScanned = apifyItems.length;
     if (apifyItems.length === 0 && !isTavilyRateLimited()) {
       const queries = buildViralQueries(category, city);
       const rawResults = await Promise.all(queries.slice(0, 5).map(q => tavilyAdvancedSearch(q, 4)));
@@ -106,6 +107,7 @@ export async function detectViralSignals(req: Request, res: Response) {
         seen.add(r.url);
         return true;
       });
+      resultsScanned = unique.length;
       tavilyContext = unique.slice(0, 15)
         .map(r => `[${r.url}]\n${(r.content || r.title || '').slice(0, 250)}`)
         .join('\n---\n');
@@ -230,7 +232,7 @@ Return ONLY valid JSON:
 
     return res.json({
       signals_created: created,
-      results_scanned: unique.length,
+      results_scanned: resultsScanned,
       exploding: validSignals.filter(s => s.velocity === 'exploding').length,
       platforms: [...new Set(validSignals.map(s => s.platform))],
     });
