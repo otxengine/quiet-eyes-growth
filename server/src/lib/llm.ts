@@ -105,7 +105,11 @@ async function _callAnthropic(
   const text = (response.content[0] as any).text || '';
 
   if (response_json_schema) {
-    return _parseJson(text);
+    const parsed = _parseJson(text);
+    if (parsed === null) {
+      console.error('[LLM] _parseJson returned null. stop_reason:', response.stop_reason, '| raw output (500 chars):\n', text.substring(0, 500));
+    }
+    return parsed;
   }
   return text;
 }
