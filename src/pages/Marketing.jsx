@@ -712,7 +712,7 @@ export default function Marketing() {
       await base44.functions.invoke('tiktokAudienceAgent', { businessProfileId: bpId, force: true });
       await refetchAudience();
       toast.success('קהל יעד עודכן ✓');
-    } catch { toast.error('שגיאה בניתוח קהל יעד'); }
+    } catch (err) { console.error('runAudienceAgent error:', err); toast.error(`שגיאה בניתוח קהל יעד: ${err?.message || 'נסה שוב'}`); }
     setAudienceLoading(false);
   };
 
@@ -757,7 +757,7 @@ ${audienceCtx}
       });
       setAudiencePlan(res?.segments ? res : null);
       if (!res?.segments) toast.error('לא הצלחנו לייצר תוכנית — נסה שוב');
-    } catch { toast.error('שגיאה ביצירת תוכנית קהל יעד'); }
+    } catch (err) { console.error('generateAudiencePlan error:', err); toast.error(`שגיאה: ${err?.message || 'נסה שוב'}`); }
     setPlanLoading(false);
   };
 
