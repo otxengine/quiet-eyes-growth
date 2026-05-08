@@ -4,6 +4,8 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
 import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
 import { insightAutoResolve } from './insightAutoResolve';
+import { getSectorInsightBlock } from '../../lib/sectorInsightConfig';
+import { getSectorContentStrategy } from '../../lib/sectorPrompts';
 
 export async function generateProactiveAlerts(req: Request, res: Response) {
   const { businessProfileId } = req.body;
@@ -20,7 +22,7 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
 
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600000).toISOString();
 
-    const [recentReviews, hotLeads, signals, competitors, pendingAlerts, audienceSignal, demandGaps, lostLeads] = await Promise.all([
+    const [recentReviews, hotLeads, signals, competitors, pendingAlerts, audienceSignal, demandGaps, lostLeads, recentCompetitorMoves] = await Promise.all([
       prisma.review.findMany({ where: { linked_business: businessProfileId }, orderBy: { created_date: 'desc' }, take: 20 }),
       prisma.lead.findMany({ where: { linked_business: businessProfileId, status: 'hot' }, orderBy: { created_date: 'desc' }, take: 15 }),
       prisma.marketSignal.findMany({ where: { linked_business: businessProfileId }, orderBy: { detected_at: 'desc' }, take: 20 }),
@@ -29,6 +31,8 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
       prisma.marketSignal.findFirst({ where: { linked_business: businessProfileId, category: 'tiktok_audience' }, orderBy: { detected_at: 'desc' } }),
       prisma.marketSignal.findMany({ where: { linked_business: businessProfileId, category: 'demand_gap' }, orderBy: { detected_at: 'desc' }, take: 5 }),
       prisma.lead.findMany({ where: { linked_business: businessProfileId, status: { in: ['lost', 'cold'] } }, orderBy: { created_date: 'desc' }, take: 10 }),
+      // Specific competitor moves from last 7 days for context
+      prisma.marketSignal.findMany({ where: { linked_business: businessProfileId, category: 'competitor_move', detected_at: { gte: new Date(Date.now() - 7 * 86400000) } }, orderBy: { detected_at: 'desc' }, take: 5 }),
     ]);
 
     const existingTitles = new Set(pendingAlerts.map(a => a.title));
@@ -73,30 +77,69 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
       } catch {}
     }
 
+    // Rich lead context — include days waiting and service requested
+    const hotLeadDetails = hotLeads.slice(0, 5).map(l => {
+      const daysAgo = l.created_date
+        ? Math.floor((Date.now() - new Date(l.created_date).getTime()) / 86400000)
+        : null;
+      return `${l.name || 'ליד'} (שירות: ${l.service_needed || 'לא צוין'}${daysAgo !== null ? `, מחכה ${daysAgo} ימים` : ''})`;
+    });
+
+    // Rich review context — include actual negative review texts
+    const negativeReviewTexts = negativeReviews.slice(0, 3).map(r =>
+      `  ⚠ "${(r.text || '').substring(0, 100)}" (${r.rating || '?'}★, מ: ${r.reviewer_name || 'אנונימי'})`
+    );
+
+    // Recent competitor moves — specific actions
+    const competitorMoveTexts = recentCompetitorMoves.slice(0, 3).map(s =>
+      `  → ${s.summary}`
+    );
+
     const contextBlock = [
       `עסק: ${profile.name} (${profile.category}, ${profile.city})`,
       profile.description ? `תיאור: ${profile.description}` : '',
       profile.relevant_services ? `שירותים: ${profile.relevant_services}` : '',
+
+      // Reviews — with actual text
       recentReviews.length > 0
-        ? `ביקורות: ${recentReviews.length} סה"כ | ממוצע ${avgRating}⭐ | ${negativeReviews.length} שליליות${negativeReviews[0]?.text ? ` | ביקורת שלילית אחרונה: "${negativeReviews[0].text.substring(0, 80)}"` : ''}`
+        ? [
+            `ביקורות: ${recentReviews.length} סה"כ | ממוצע ${avgRating}⭐ | ${negativeReviews.length} שליליות`,
+            negativeReviewTexts.length > 0 ? `ביקורות שליליות אחרונות:\n${negativeReviewTexts.join('\n')}` : '',
+          ].filter(Boolean).join('\n')
         : 'ביקורות: אין עדיין',
+
+      // Hot leads — with details
       hotLeads.length > 0
-        ? `לידים חמים (${hotLeads.length}): ${hotLeads.slice(0, 3).map(l => `${l.name || 'ליד'} — ${l.service_needed || 'שירות לא צוין'}`).join(', ')}`
+        ? `לידים חמים (${hotLeads.length}):\n${hotLeadDetails.map(l => `  • ${l}`).join('\n')}`
         : 'לידים חמים: אין',
+
       lostLeads.length > 0
-        ? `לידים שאבדו / קרים: ${lostLeads.length} | דוגמאות: ${lostLeads.slice(0, 3).map(l => l.name || 'לקוח').join(', ')}`
+        ? `לידים שאבדו / קרים: ${lostLeads.length}`
         : '',
+
+      // Competitor moves — specific
+      recentCompetitorMoves.length > 0
+        ? `מהלכי מתחרים (7 ימים אחרונים):\n${competitorMoveTexts.join('\n')}`
+        : '',
+
       signals.length > 0
-        ? `אותות שוק עדכניים:\n${signals.slice(0, 6).map(s => `  • [${s.category || 'שוק'}] ${s.summary}`).join('\n')}`
+        ? `אותות שוק:\n${signals.slice(0, 5).map(s => `  • [${s.category || 'שוק'}] ${s.summary}`).join('\n')}`
         : '',
+
       demandGaps.length > 0
-        ? `פערי ביקוש שזוהו:\n${demandGaps.slice(0, 3).map(g => `  • ${g.summary}`).join('\n')}`
+        ? `פערי ביקוש:\n${demandGaps.slice(0, 3).map(g => `  • ${g.summary}`).join('\n')}`
         : '',
+
       competitors.length > 0
         ? `מתחרים (${competitors.length}): ${competitors.slice(0, 5).map(c => `${c.name}(${c.rating || '?'}⭐)`).join(', ')}`
         : 'מתחרים: לא זוהו',
-      audienceInfo ? `\nקהל יעד: ${audienceInfo}` : '',
+
+      audienceInfo ? `קהל יעד: ${audienceInfo}` : '',
     ].filter(Boolean).join('\n');
+
+    // Sector-specific intelligence blocks
+    const sectorInsightBlock = getSectorInsightBlock(profile.category);
+    const sectorContentBlock = getSectorContentStrategy(profile.category);
 
     const todayDate = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -113,13 +156,17 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
 
     const result = await invokeLLM({
       model: 'sonnet',
-      maxTokens: 2000,
+      maxTokens: 2500,
       skipCache: true,
       prompt: `You are a senior proactive monitoring system for small Israeli businesses. Today: ${todayDate}.
-Your task: identify the most concrete opportunities and risks from the data, and recommend actions the user can take within minutes.
+Your task: identify the MOST CONCRETE and SECTOR-SPECIFIC opportunities and risks. Every insight must reference a real data point (reviewer name, lead name, competitor name, specific number).
 Return ONLY valid JSON. ALL string values must be in Hebrew.
 
 ${ctxPrompt}
+${sectorInsightBlock}
+
+${sectorContentBlock}
+
 === נתוני העסק ===
 ${contextBlock}
 ${recentlyDoneBlock}
