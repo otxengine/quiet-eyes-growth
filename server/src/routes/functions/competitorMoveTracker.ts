@@ -62,6 +62,7 @@ export async function competitorMoveTracker(req: Request, res: Response) {
     });
 
     const result = await invokeLLM({
+      maxTokens: 600,
       prompt: `You are a competitive analyst for the business "${profile.name}" (${profile.category}, ${profile.city}).
 
 Competitors with their current data:

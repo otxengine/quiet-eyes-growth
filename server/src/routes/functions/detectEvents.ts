@@ -435,10 +435,9 @@ export async function detectEvents(req: Request, res: Response) {
         byEventName.get(baseName)!.push({ id: alert.id, created_at: alert.created_at });
       }
       for (const [, group] of byEventName) {
-        if (group.length < 2) continue;
-        // Keep newest, dismiss the rest
-        group.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-        staleIds.push(...group.slice(1).map(g => g.id));
+        if (group.length === 0) continue;
+        // Dismiss ALL old-format entries — Phase 5 will re-create with stable title
+        staleIds.push(...group.map(g => g.id));
       }
 
       if (staleIds.length > 0) {

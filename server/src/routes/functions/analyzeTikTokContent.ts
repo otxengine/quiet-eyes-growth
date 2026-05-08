@@ -120,6 +120,7 @@ export async function analyzeTikTokContent(req: Request, res: Response) {
       : '';
 
     const result = await invokeLLM({
+      maxTokens: 450,
       prompt: `You are a TikTok expert for small Israeli businesses. Analyze for "${name}" (${category}, ${city}).
 
 ${ownVideosCtx}

@@ -96,7 +96,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       });
     }
 
-    const result = await invokeLLM({ prompt, response_json_schema: { type: 'object' } });
+    const result = await invokeLLM({ model: 'haiku', maxTokens: 600, prompt, response_json_schema: { type: 'object' } });
 
     if (result && monthRevenue > 0 && !result.month_revenue) {
       result.month_revenue = monthRevenue;

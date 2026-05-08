@@ -174,6 +174,7 @@ export async function collectSocialSignals(req: Request, res: Response) {
           .join('\n');
 
         const influencerAnalysis = await invokeLLM({
+          maxTokens: 400,
           prompt: `You are an Israeli digital marketing expert. Identify influencers relevant to the sector.
 Sector: ${category}, Region: ${cityStr}
 
