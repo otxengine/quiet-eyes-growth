@@ -29,23 +29,26 @@ export async function snapshotCompetitor(req: Request, res: Response) {
     }
 
     const res2 = await invokeLLM({
-      model: 'haiku',
-      prompt: `נתח את המידע הבא על המתחרה "${competitor.name}" (${category} ב${city}).
-מידע שנמצא:
-${webData.slice(0, 2000) || 'לא נמצא מידע ספציפי'}
-${competitor.notes ? `מידע ידוע: ${competitor.notes}` : ''}
-דירוג נוכחי: ${competitor.rating || 'לא ידוע'}.
+      model: 'sonnet',
+      maxTokens: 500,
+      prompt: `חלץ מידע עסקי מובנה על המתחרה "${competitor.name}" (${category} ב${city}) מהמידע שנמצא ברשת.
 
-החזר JSON בלבד:
+מידע שנמצא:
+${webData.slice(0, 2500) || 'לא נמצא מידע ספציפי'}
+${competitor.notes ? `מידע ידוע מקודם: ${competitor.notes}` : ''}
+דירוג נוכחי: ${competitor.rating || 'לא ידוע'}
+
+חלץ רק מידע שמופיע במפורש. אל תמציא נתונים.
+
+JSON בלבד:
 {
-  "prices": [{"item": "שם שירות", "price": "מחיר"}],
-  "promotions": ["מבצע פעיל 1"],
+  "prices": [{"item": "שם שירות/מוצר ספציפי", "price": "מחיר ספציפי"}],
+  "promotions": ["מבצע פעיל ספציפי"],
   "rating": null,
   "review_count": null,
-  "description": "תיאור קצר של העסק",
-  "last_activity": "תיאור פעילות אחרונה"
-}
-אם אין מידע ספציפי על מחיר/מבצע — החזר מערכים ריקים. אל תמציא נתונים.`,
+  "description": "תיאור קצר של מה שהעסק מציע",
+  "last_activity": "תיאור פעילות אחרונה שנמצאה"
+}`,
       response_json_schema: { type: 'object' },
     });
 

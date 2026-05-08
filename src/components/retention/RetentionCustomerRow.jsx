@@ -21,10 +21,24 @@ export default function RetentionCustomerRow({ customer, businessProfile }) {
     const tone = businessProfile?.tone_preference || 'friendly';
     const bName = businessProfile?.name || '';
     const focusInstruction = focus ? `\nAdditional focus: ${templateFocus[focus]}` : '';
+    const focusGuide = focus === 'חסרת לנו!' ? 'הדגש שהלקוח חסר לך — אנושי ואמיתי, לא שיווקי'
+      : focus === 'הצעה מיוחדת' ? 'הצע הטבה ספציפית לחזרה — מבצע / שירות מיוחד / עדיפות'
+      : focus === 'חדש אצלנו' ? 'ספר על חדשות/שיפורים ספציפיים שיעניינו אותם'
+      : 'הזמן לחזור עם נימוק אנושי';
     const result = await base44.integrations.Core.InvokeLLM({
-      prompt: `Write a customer retention WhatsApp message for an Israeli small business.
-Business: ${bName}, Tone: ${tone}, Customer: ${customer.name}, Reason: ${customer.detail}${focusInstruction}
-Write 2-3 sentences max. Natural conversational Hebrew.`
+      model: 'sonnet',
+      maxTokens: 250,
+      prompt: `אתה מומחה לשימור לקוחות בעסקים קטנים ישראלים. כתוב הודעת WhatsApp שתגרום ללקוח לחזור.
+
+עסק: ${bName} | תחום: ${businessProfile?.category || ''} | טון: ${tone}
+לקוח: ${customer.name} | סיבת הנטישה: ${customer.detail}
+מיקוד ההודעה: ${focusGuide}${focusInstruction}
+
+מבנה (3 שורות מקסימום):
+- שורה 1: פנייה אישית בשם עם תחושה שחסר לנו
+- שורה 2: הסיבה הספציפית לחזור עכשיו (קשורה למיקוד)
+- שורה 3: CTA קל ולא מחייב
+עברית טבעית, עם אמוג'י בצנעה. ללא "שלום לקוח יקר".`
     });
     setMessageText(result);
     setGenerating(false);

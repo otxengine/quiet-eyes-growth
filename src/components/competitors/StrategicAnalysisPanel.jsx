@@ -26,25 +26,39 @@ function SwotTab({ competitor, businessProfile }) {
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded]   = useState(false);
 
-  const generate = async () => {
-    if (loaded) return;
+  const generate = async (force = false) => {
+    if (!force && loaded) return;
     setLoading(true);
+    setLoaded(false);
     try {
       const res = await base44.integrations.Core.InvokeLLM({
-        model: 'haiku',
-        prompt: `אתה אנליסט עסקי. העסק שלנו: "${businessProfile?.name}" (${businessProfile?.category}, ${businessProfile?.city}).
-המתחרה הנבדק: "${competitor.name}" (דירוג: ${competitor.rating || '?'}, מגמה: ${competitor.trend_direction || '?'}).
+        model: 'sonnet',
+        maxTokens: 700,
+        prompt: `אתה אנליסט מודיעין תחרותי בכיר לעסקים קטנים ישראלים. כתוב SWOT ריאלי ומדויק — לא גנרי.
+
+העסק שלנו: "${businessProfile?.name}" | תחום: ${businessProfile?.category} | עיר: ${businessProfile?.city}
+${businessProfile?.description ? `תיאור: ${businessProfile.description}` : ''}
+
+מתחרה לניתוח: "${competitor.name}"
+דירוג: ${competitor.rating || '?'}/5 | מגמה: ${competitor.trend_direction || '?'}
+${competitor.strengths ? `חוזקות ידועות: ${competitor.strengths}` : ''}
+${competitor.weaknesses ? `חולשות ידועות: ${competitor.weaknesses}` : ''}
 ${competitor.notes ? `מידע נוסף: ${competitor.notes}` : ''}
 
-צור ניתוח SWOT עבור המתחרה "${competitor.name}" מנקודת המבט שלנו. JSON בלבד:
+כל פריט חייב:
+- להיות ספציפי לעסק זה ולסקטור (לא "שירות טוב" — אלא "מספר ביקורות גבוה + דירוג 4.7")
+- ה-Opportunities וה-Weaknesses — לנבוע מחולשות שאנחנו יכולים לנצל
+
+JSON בלבד:
 {
-  "strengths": ["חוזקה 1", "חוזקה 2", "חוזקה 3"],
-  "weaknesses": ["חולשה 1", "חולשה 2", "חולשה 3"],
-  "opportunities": ["הזדמנות 1", "הזדמנות 2", "הזדמנות 3"],
-  "threats": ["איום 1", "איום 2", "איום 3"]
+  "strengths": ["חוזקה ספציפית 1", "חוזקה 2", "חוזקה 3"],
+  "weaknesses": ["חולשה ספציפית 1 — הניסוח מסביר למה זה חולשה", "חולשה 2", "חולשה 3"],
+  "opportunities": ["הזדמנות לנו — איך לנצל חולשה שלהם", "הזדמנות 2", "הזדמנות 3"],
+  "threats": ["איום ספציפי שהם מציבים לנו", "איום 2", "איום 3"]
 }`,
+        response_json_schema: { type: 'object' },
       });
-      setSwot(parseLLMJson(res));
+      setSwot(res?.strengths ? res : parseLLMJson(res));
       setLoaded(true);
     } catch (_) {
       setLoaded(true);
@@ -56,7 +70,7 @@ ${competitor.notes ? `מידע נוסף: ${competitor.notes}` : ''}
     return (
       <div className="py-8 text-center">
         <p className="text-[12px] text-foreground-muted mb-3">לחץ להפיק ניתוח SWOT עבור {competitor.name}</p>
-        <button onClick={generate} disabled={loading}
+        <button onClick={() => generate()} disabled={loading}
           className="flex items-center gap-2 px-4 py-2 bg-foreground text-background text-[12px] font-medium rounded-lg hover:opacity-90 transition-opacity mx-auto disabled:opacity-60">
           {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
           {loading ? 'מנתח...' : 'צור ניתוח SWOT'}
@@ -66,7 +80,16 @@ ${competitor.notes ? `מידע נוסף: ${competitor.notes}` : ''}
   }
 
   if (!swot) {
-    return <p className="text-[12px] text-foreground-muted text-center py-6">לא הצלחנו לייצר ניתוח — נסה שוב</p>;
+    return (
+      <div className="text-center py-6">
+        <p className="text-[12px] text-foreground-muted mb-3">לא הצלחנו לייצר ניתוח</p>
+        <button onClick={() => generate(true)} disabled={loading}
+          className="flex items-center gap-2 px-3 py-1.5 bg-secondary border border-border text-[11px] font-medium rounded-lg hover:bg-secondary/80 transition-all mx-auto disabled:opacity-60">
+          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+          נסה שוב
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -148,9 +171,10 @@ function StrategyTab({ competitor, businessProfile, competitors, signals }) {
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded]   = useState(false);
 
-  const generate = async () => {
-    if (loaded) return;
+  const generate = async (force = false) => {
+    if (!force && loaded) return;
     setLoading(true);
+    setLoaded(false);
     try {
       const competitorStr = competitors.slice(0, 6)
         .map(c => `${c.name} (${c.trend_direction || '?'})`)
@@ -166,10 +190,10 @@ function StrategyTab({ competitor, businessProfile, competitors, signals }) {
 {"recommendations":[{"title":"כותרת","summary":"תקציר","detail":"הסבר","category":"competitive","steps":["צעד"],"action_label":"פעולה","time_minutes":20}]}`,
         response_json_schema: { type: 'object' },
       });
-      const items = Array.isArray(res?.recommendations) ? res.recommendations
-                  : Array.isArray(parseLLMJson(res)?.recommendations) ? parseLLMJson(res).recommendations
-                  : [];
-      setItems(items);
+      const parsed = Array.isArray(res?.recommendations) ? res.recommendations
+                   : Array.isArray(parseLLMJson(res)?.recommendations) ? parseLLMJson(res).recommendations
+                   : [];
+      setItems(parsed);
       setLoaded(true);
     } catch (err) {
       toast.error('שגיאה ביצירת אסטרטגיה — נסה שוב');
@@ -183,7 +207,7 @@ function StrategyTab({ competitor, businessProfile, competitors, signals }) {
     return (
       <div className="py-8 text-center">
         <p className="text-[12px] text-foreground-muted mb-3">לחץ להפיק המלצות אסטרטגיות מול {competitor.name}</p>
-        <button onClick={generate} disabled={loading}
+        <button onClick={() => generate()} disabled={loading}
           className="flex items-center gap-2 px-4 py-2 bg-foreground text-background text-[12px] font-medium rounded-lg hover:opacity-90 transition-opacity mx-auto disabled:opacity-60">
           {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lightbulb className="w-3.5 h-3.5" />}
           {loading ? 'מייצר...' : 'צור אסטרטגיה'}
@@ -201,7 +225,7 @@ function StrategyTab({ competitor, businessProfile, competitors, signals }) {
       {!items?.length ? (
         <div className="text-center py-6">
           <p className="text-[12px] text-foreground-muted mb-3">לא נמצאו המלצות</p>
-          <button onClick={() => { setLoaded(false); generate(); }} disabled={loading}
+          <button onClick={() => generate(true)} disabled={loading}
             className="flex items-center gap-2 px-3 py-1.5 bg-secondary border border-border text-[11px] font-medium rounded-lg hover:bg-secondary/80 transition-all mx-auto disabled:opacity-60">
             {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Lightbulb className="w-3 h-3" />}
             נסה שוב
@@ -226,18 +250,24 @@ function BattleTab({ competitor, businessProfile }) {
     setPriceLoading(true);
     try {
       const res = await base44.integrations.Core.InvokeLLM({
-        model: 'haiku',
-        prompt: `אתה אנליסט תחרותי. זהה מחירים ושירותים עבור העסק: "${competitor.name}".
-${competitor.notes ? `מידע: ${competitor.notes}` : ''}
-ענף: ${businessProfile?.category || 'לא ידוע'}, עיר: ${businessProfile?.city || 'לא ידועה'}.
-בהתבסס על הידע שלך, הצע רשימת שירותים ומחירים אופייניים לעסק מסוג זה. JSON בלבד:
+        model: 'sonnet',
+        maxTokens: 500,
+        prompt: `אתה אנליסט מחירים תחרותי לשוק הישראלי. הצג תמחור ריאלי ומדויק לסקטור זה.
+
+מתחרה: "${competitor.name}" | ענף: ${businessProfile?.category || 'לא ידוע'} | עיר: ${businessProfile?.city || 'לא ידועה'}
+${competitor.notes ? `מידע ידוע: ${competitor.notes}` : ''}
+${competitor.strengths ? `חוזקות: ${competitor.strengths}` : ''}
+
+צור ניתוח תמחור מציאותי לשוק הישראלי לסקטור זה. JSON בלבד:
 {
-  "price_range": "₪XX-₪XXX",
+  "price_range": "₪XX-₪XXX (טווח ריאלי לשוק הישראלי)",
   "services": [
-    {"name": "שם השירות", "price": "₪XX"},
-    {"name": "שירות נוסף", "price": "₪XX-₪XX"}
+    {"name": "שם השירות הנפוץ ביותר", "price": "₪XX"},
+    {"name": "שירות פרמיום", "price": "₪XX-₪XX"},
+    {"name": "חבילה / מנוי", "price": "₪XX/חודש"}
   ],
-  "notes": "הערה קצרה על מדיניות המחירים"
+  "positioning": "low_cost|mid_range|premium",
+  "notes": "תובנה אחת על מדיניות המחירים שלהם מול השוק"
 }`,
       });
       setPriceData(parseLLMJson(res));
@@ -466,12 +496,12 @@ export default function StrategicAnalysisPanel({ competitor, businessProfile, co
         ))}
       </div>
 
-      {/* Tab content */}
+      {/* Tab content — all tabs stay mounted to preserve state across tab switches */}
       <div className="p-4">
-        {activeTab === 'swot' && (
+        <div className={activeTab !== 'swot' ? 'hidden' : ''}>
           <SwotTab key={competitor.id} competitor={competitor} businessProfile={businessProfile} />
-        )}
-        {activeTab === 'strategy' && (
+        </div>
+        <div className={activeTab !== 'strategy' ? 'hidden' : ''}>
           <StrategyTab
             key={competitor.id}
             competitor={competitor}
@@ -479,10 +509,10 @@ export default function StrategicAnalysisPanel({ competitor, businessProfile, co
             competitors={competitors}
             signals={signals}
           />
-        )}
-        {activeTab === 'battle' && (
+        </div>
+        <div className={activeTab !== 'battle' ? 'hidden' : ''}>
           <BattleTab key={competitor.id} competitor={competitor} businessProfile={businessProfile} />
-        )}
+        </div>
       </div>
     </div>
   );

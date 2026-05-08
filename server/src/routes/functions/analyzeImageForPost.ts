@@ -30,9 +30,9 @@ export async function analyzeImageForPost(req: Request, res: Response) {
     // Strip data URL prefix if present
     const base64Data = imageBase64.replace(/^data:[^;]+;base64,/, '');
 
-    // Claude Vision — Haiku is cheapest model with vision support
+    // Claude Vision — Sonnet for richer image understanding and better post copy
     const msg = await anthropic.messages.create({
-      model:      'claude-haiku-4-5-20251001',
+      model:      'claude-sonnet-4-6',
       max_tokens: 350,
       system:     'Return ONLY valid JSON. No markdown, no explanation.',
       messages: [{
@@ -46,7 +46,8 @@ export async function analyzeImageForPost(req: Request, res: Response) {
             type: 'text',
             text: `Business: "${profile.name}" (${profile.category}, ${profile.city}). Platform: ${platform}.
 Analyze this image and return JSON:
-{"description":"what is shown (max 12 words)","suggested_post":"Hebrew social post 2-3 sentences + CTA","audience_hint":"who this appeals to (5 words)","tone":"casual|professional|festive"}`,
+{"description":"specific description of what is shown (max 15 words)","suggested_post":"engaging Hebrew social post 2-3 sentences with Hook + value + CTA tailored to this specific image content","audience_hint":"specific audience this image appeals to (5-7 words)","tone":"casual|professional|festive"}
+Make the suggested_post reference specific elements visible in the image.`,
           },
         ],
       }],

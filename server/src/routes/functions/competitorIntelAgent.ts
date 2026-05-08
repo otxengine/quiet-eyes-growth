@@ -99,31 +99,33 @@ export async function competitorIntelAgent(req: Request, res: Response) {
 
         // ── 3b. LLM: extract weakness patterns + cross-reference events ───────
         const insight: any = await invokeLLM({
-          model: 'haiku',
-          prompt: `אתה אנליסט תחרותי. ספק תובנה אסטרטגית חדה לבעל עסק ישראלי.
+          model: 'sonnet',
+          maxTokens: 700,
+          prompt: `אתה אנליסט מודיעין תחרותי בכיר לעסקים קטנים ישראלים. המשימה: לזהות חלון הזדמנויות ספציפי שנובע מחולשת המתחרה ולהפוך אותו לפעולה מיידית.
 
-העסק שלי: "${name}" (${category}, ${city})
+העסק שלי: "${name}" | תחום: ${category} | עיר: ${city}
 מתחרה: "${compName}"
-דירוג מתחרה: ${compRating != null ? compRating + '/5' : 'לא ידוע'} (${compReviewCount != null ? compReviewCount + ' ביקורות' : '? ביקורות'})
+דירוג: ${compRating != null ? compRating + '/5' : 'לא ידוע'} (${compReviewCount != null ? compReviewCount + ' ביקורות' : '? ביקורות'})
 חולשות ידועות: ${compWeaknesses || 'לא ידועות'}
 חוזקות: ${compStrengths || 'לא ידועות'}
-הערות נוספות: ${compNotes || 'אין'}
-${freshReviewsText ? `\nביקורות אחרונות ממקורות חיצוניים:\n${freshReviewsText.slice(0, 600)}` : ''}
-${eventsContext ? `\nאירועים קרובים שצפויים לגרום לעומס/ביקוש מוגבר: ${eventsContext}` : ''}
+הערות: ${compNotes || 'אין'}
+${freshReviewsText ? `\nממצאים חדשים מהרשת (ביקורות/אזכורים):\n${freshReviewsText.slice(0, 800)}` : ''}
+${eventsContext ? `\nאירועים קרובים שצפויים לגרום לעומס: ${eventsContext}` : ''}
 
-בהתבסס על המידע:
-1. זהה את החולשה הכי גדולה של ${compName} שאתה יכול לנצל
-2. אם יש אירועים קרובים — כיצד החולשה הזו תתגלה במיוחד באירוע?
-3. מה הפעולה הספציפית שהעסק שלי צריך לעשות עכשיו?
+ניתוח נדרש:
+1. מהי החולשה הספציפית של ${compName} שהכי בולטת מהנתונים?
+2. אם יש אירוע קרוב — כיצד החולשה הזו תפגע בו?
+3. מה הפעולה הממוקדת ביותר שיכולה לגנוב לקוחות מ-${compName} עכשיו?
+4. כתוב prefilled_text שמשתמש בחולשה של המתחרה כ-Hook (מבלי לציין שמו ישירות)
 
-החזר JSON בדיוק:
+JSON בלבד:
 {
-  "insight_title": "כותרת קצרה עד 8 מילים",
-  "insight_body": "תובנה ספציפית ומעשית בעברית — 2-3 משפטים. הזכר את שם המתחרה ואת החולשה הספציפית. אם יש אירוע קרוב — הסבר איך זה קשור.",
-  "action": "פעולה אחת ממוקדת שהעסק צריך לעשות עכשיו — עד 10 מילים",
-  "prefilled_text": "טקסט מוכן לפרסום/הודעה לקהל לקוחות (2-3 שורות, בעברית, ללא אזכור המתחרה בשמו)",
+  "insight_title": "כותרת ספציפית עד 8 מילים — עם שם חולשה / מספר / פעולה",
+  "insight_body": "2-3 משפטים: חולשה ספציפית של ${compName} + הקשר לאירוע אם רלוונטי + למה זה הזדמנות עכשיו",
+  "action": "פועל ציווי + ערוץ + תוכן ספציפי — עד 12 מילים",
+  "prefilled_text": "טקסט מוכן לפרסום (2-3 שורות עברית) — מדגיש את היתרון שלנו מול החולשה, ללא אזכור המתחרה בשמו",
   "impact": "high|medium",
-  "relevant_event": "שם האירוע הקרוב הרלוונטי ביותר, או null אם אין"
+  "relevant_event": "שם האירוע הרלוונטי, או null"
 }`,
           response_json_schema: { type: 'object' },
         });

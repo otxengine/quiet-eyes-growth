@@ -127,18 +127,20 @@ export default function Reports() {
       const topSignal = monthSignals.sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0];
 
       const res = await base44.functions.invoke('invokeLLM', {
-        model: 'haiku',
+        model: 'sonnet',
+        maxTokens: 500,
         response_json_schema: { type: 'object' },
         prompt: `אתה יועץ עסקי. צור דוח חודשי לחודש ${monthName} עבור העסק "${businessProfile?.name}" (${businessProfile?.category}, ${businessProfile?.city}).
 נתוני החודש: לידים: ${monthLeads.length} (${hotMonthLeads} חמים), ביקורות: ${monthReviews.length}${avgRating ? ` (ממוצע ${avgRating})` : ''}, תובנות שוק: ${monthSignals.length}, מתחרים מזוהים: ${competitors.length}.
 ${topSignal ? `תובנה בולטת: ${topSignal.summary}` : ''}
+כתוב תובנות ספציפיות לנתונים — לא משפטים גנריים.
 JSON בלבד:
 {
   "month_name": "${monthName}",
-  "summary": "סיכום 2-3 משפטים לחודש",
-  "highlights": ["הדגש 1 עם נתון", "הדגש 2"],
-  "improvement": "תחום אחד לשיפור בחודש הבא",
-  "next_action": "הפעולה האחת הכי חשובה לחודש הבא",
+  "summary": "סיכום 2-3 משפטים עם מספרים ספציפיים מהנתונים",
+  "highlights": ["הדגש 1 עם נתון מדויק", "הדגש 2 עם נתון מדויק"],
+  "improvement": "תחום אחד לשיפור — ספציפי לנתונים",
+  "next_action": "הפעולה הכי חשובה לחודש הבא — ספציפית",
   "score": 7
 }`,
       });
@@ -179,21 +181,28 @@ JSON בלבד:
         : '';
 
       const res = await base44.integrations.Core.InvokeLLM({
-        model: 'haiku',
-        prompt: `אתה יועץ עסקי בכיר. הפק דוח ביצועים מקיף שיגרום למשתמש להרגיש ערך אמיתי מהמערכת.
-עסק: "${businessProfile?.name}" (${businessProfile?.category}, ${businessProfile?.city}).
-נתונים: לידים: ${leads.length} (${hotLeads} חמים, ${completedLeads} הושלמו, המרה: ${conversionRate}%), ביקורות: ${reviews.length} (${positiveReviews} חיוביות, ${negativeReviews} שליליות), מתחרים: ${competitors.length}, תובנות שוק: ${signals.length}. ${socialContext}
+        model: 'sonnet',
+        maxTokens: 800,
+        prompt: `אתה יועץ עסקי בכיר לעסקים קטנים ישראלים. הפק דוח ביצועים שמראה ערך אמיתי ועם תובנות מעשיות.
+
+עסק: "${businessProfile?.name}" | תחום: ${businessProfile?.category} | עיר: ${businessProfile?.city}
+
+נתונים:
+• לידים: ${leads.length} סה"כ | ${hotLeads} חמים | ${completedLeads} הושלמו | המרה: ${conversionRate}%
+• ביקורות: ${reviews.length} (${positiveReviews} חיוביות, ${negativeReviews} שליליות)
+• מתחרים: ${competitors.length} | תובנות שוק: ${signals.length}
+${socialContext ? `• ${socialContext}` : ''}
 
 JSON בלבד:
 {
-  "executive_summary": "סיכום מנהלים 3-4 משפטים עם נתונים ספציפיים",
+  "executive_summary": "3-4 משפטים עם מספרים ספציפיים — מה הושג, מה המגמה, מה הכי חשוב עכשיו",
   "health_score": 7,
-  "roi_estimate": "₪12,000",
-  "roi_reasoning": "הסבר קצר לאומדן",
-  "social_insight": "תובנה 1-2 משפטים על הפעילות ברשתות חברתיות ומה ניתן לשפר",
-  "top_wins": ["הישג 1 עם נתון ספציפי", "הישג 2", "הישג 3"],
-  "improvement_areas": ["שיפור 1", "שיפור 2"],
-  "recommendation": "ההמלצה החשובה ביותר לחודש הבא"
+  "roi_estimate": "₪XX,XXX",
+  "roi_reasoning": "הסבר ספציפי לאומדן — לפי המרה × ערך ממוצע לעסקה",
+  "social_insight": "תובנה אחת על פעילות הרשתות + הצעה ספציפית לשיפור",
+  "top_wins": ["הישג ספציפי עם מספר 1", "הישג 2", "הישג 3"],
+  "improvement_areas": ["אזור שיפור ספציפי + פעולה מוצעת", "אזור שיפור 2"],
+  "recommendation": "ההמלצה החשובה ביותר לחודש הבא — ספציפית עם ערוץ ומה לעשות"
 }`,
       });
       const parsed = parseLLMJson(res?.data || res);

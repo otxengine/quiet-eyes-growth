@@ -58,6 +58,7 @@ export async function findLocalEvents(req: Request, res: Response) {
     try {
       const analysis: any = await invokeLLM({
         model: 'haiku',
+        maxTokens: 400,
         prompt: `זהה אירועים מקומיים ממשיים בטקסט הבא: הופעות, כנסים, פסטיבלים, ירידים, שווקים, תערוכות, אירועי ספורט — כל אירוע שיכול לייצר תנועה של אנשים לאזור ${city}.
 
 טקסט:

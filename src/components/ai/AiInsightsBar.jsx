@@ -18,7 +18,7 @@ export default function AiInsightsBar({ prompt, title = 'תובנות AI' }) {
 
 ענה בעברית עם בדיוק 3 נקודות תובנה קצרות (משפט אחד כל אחת).
 JSON בלבד: {"insights": ["תובנה1", "תובנה2", "תובנה3"]}`;
-      const result = await base44.integrations.Core.InvokeLLM({ prompt: fullPrompt });
+      const result = await base44.integrations.Core.InvokeLLM({ prompt: fullPrompt, model: 'sonnet', maxTokens: 400 });
       const parsed = parseLLMJson(result);
       setInsights(parsed?.insights || [result]);
     } catch {

@@ -202,21 +202,23 @@ export default function SignalCard({ signal, businessProfile }) {
     setAnalysisError('');
     try {
       const result = await base44.integrations.Core.InvokeLLM({
-        model: 'haiku',
-        prompt: `אתה יועץ עסקי לעסקים קטנים בישראל.
-עסק: ${businessProfile?.name || ''} — ${businessProfile?.category || ''}, ${businessProfile?.city || ''}
-אות שהתקבל: "${signal.summary}"
+        model: 'sonnet',
+        maxTokens: 250,
+        prompt: `אתה יועץ עסקי AI לעסקים ישראלים. נתח את האות ותן תגובה חדה ומעשית.
+
+עסק: ${businessProfile?.name || ''} | תחום: ${businessProfile?.category || ''} | עיר: ${businessProfile?.city || ''}
+אות: "${signal.summary}"
 פעולה מומלצת: ${signal.recommended_action || 'לא צוינה'}
-רמת השפעה: ${signal.impact_level}
+השפעה: ${signal.impact_level} | קטגוריה: ${signal.category || ''}
 
 ענה בדיוק בפורמט הזה, 5 שורות בלבד:
 URGENCY: [דחוף/בינוני/נמוך]
-ONE_SENTENCE: [מה קרה ולמה זה חשוב — מקסימום 12 מילים]
-IMPACT_NUMBER: [מספר אחד עם הקשר, למשל: "3 לקוחות דיווחו" או "15% ירידה"]
-ACTION_LABEL: [פועל + יעד ספציפי — עד 5 מילים]
-ACTION_TIME: [זמן ביצוע, למשל: "5 דקות"]
+ONE_SENTENCE: [מה קרה ולמה זה חשוב — ספציפי עם מספר/שם, עד 12 מילים]
+IMPACT_NUMBER: [מספר קונקרטי עם הקשר — "30% יותר חיפושים" / "3 לקוחות דיווחו"]
+ACTION_LABEL: [פועל ציווי + ערוץ ספציפי — עד 5 מילים]
+ACTION_TIME: [זמן ביצוע ריאלי]
 
-אסור: פסקאות, כותרות, הסברים נוספים.`,
+אסור: פסקאות, הסברים, כותרות.`,
       });
       const parsed = parseInsight(result);
       setParsedInsight(parsed);

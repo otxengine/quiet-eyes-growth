@@ -101,39 +101,40 @@ export async function estimateCampaignMetrics(req: Request, res: Response) {
     let targeting: any = null;
     try {
       targeting = await invokeLLM({
-        model: 'haiku',
+        model: 'sonnet',
         maxTokens: 900,
-        prompt: `בנה טרגטינג מדויק לקמפיין ${platformLabel} עבור "${name}" (${category} ב${city}).
-מטרה: ${objectiveLabel} | תקציב יומי: ₪${budget}
+        prompt: `אתה מומחה ${platformLabel} Ads לשוק הישראלי. בנה טרגטינג מדויק ומבוסס נתונים.
 
-ביקורות (${reviews.length}):
-${reviewSample || 'אין'}
-
+עסק: "${name}" | תחום: ${category} | עיר: ${city}
+מטרת קמפיין: ${objectiveLabel} | תקציב יומי: ₪${budget}
 שירותים: ${profile.relevant_services || category}
 שוק יעד: ${profile.target_market || 'לא צוין'}
 
+ביקורות אמיתיות (${reviews.length}):
+${reviewSample || 'אין'}
+
 ${platform !== 'google' ? `החזר JSON בלבד:
 {
-  "fb_interests": ["עניין ספציפי ב-Facebook 1","עניין 2","עניין 3","עניין 4"],
-  "fb_behaviors": ["התנהגות Facebook 1","התנהגות 2"],
+  "fb_interests": ["עניין ספציפי ב-FB Ads Manager 1","עניין 2","עניין 3","עניין 4"],
+  "fb_behaviors": ["התנהגות FB ספציפית 1","התנהגות 2"],
   "age_min": 24,
   "age_max": 45,
   "genders": "נשים וגברים|נשים בלבד|גברים בלבד",
-  "geo_radius_km": 20,
+  "geo_radius_km": 15,
   "estimated_audience_min": 15000,
   "estimated_audience_max": 60000,
-  "lookalike_seed": "תיאור קהל seed ל-Lookalike Audience",
-  "retargeting_suggestion": "מה לרטרגט",
-  "custom_audience_tip": "טיפ לCustom Audience"
+  "lookalike_seed": "תיאור ספציפי של קהל seed — מי הם הלקוחות הכי טובים",
+  "retargeting_suggestion": "מה לרטרגט ועם איזה מסר",
+  "custom_audience_tip": "טיפ Custom Audience ספציפי לסקטור זה"
 }` : `החזר JSON בלבד:
 {
-  "keywords_exact": ["ביטוי מדויק 1","ביטוי מדויק 2","ביטוי מדויק 3"],
+  "keywords_exact": ["ביטוי מדויק בעברית 1","ביטוי 2","ביטוי 3"],
   "keywords_broad": ["ביטוי רחב 1","ביטוי רחב 2"],
   "keywords_negative": ["מילת שלילה 1","מילת שלילה 2"],
-  "in_market_audiences": ["קהל in-market 1","קהל in-market 2"],
-  "location_targeting": "${city} +20km",
-  "ad_schedule": "ימים א-ו 11:00-22:00",
-  "bid_strategy": "Maximize Conversions | Target CPA | Target ROAS"
+  "in_market_audiences": ["קהל in-market ספציפי 1","קהל 2"],
+  "location_targeting": "${city} +15km",
+  "ad_schedule": "ימים ושעות אופטימליים לסקטור זה",
+  "bid_strategy": "אסטרטגיית הצעת מחיר המומלצת ולמה"
 }`}`,
         response_json_schema: { type: 'object' },
       });

@@ -49,18 +49,21 @@ export default function EventDetailModal({ item, type, businessProfile, onClose 
     setLoading(true);
     try {
       const result = await base44.integrations.Core.InvokeLLM({
-        prompt: `אתה יועץ שיווקי לעסקים ישראלים.
-העסק: "${bizName}" (${bizCategory})
+        model: 'sonnet',
+        maxTokens: 400,
+        prompt: `אתה יועץ שיווקי לעסקים קטנים ישראלים. זהה את ההזדמנות הספציפית שהאירוע יוצר לעסק זה.
+
+העסק: "${bizName}" | תחום: ${bizCategory}
 האירוע: "${title}"
-תיאור: "${(description || '').substring(0, 300)}"
+תיאור: "${(description || '').substring(0, 400)}"
 ${countdown ? `זמן עד לאירוע: ${countdown}` : ''}
 
-ספק בעברית:
-1. "business_opportunity" — 1-2 משפטים: מה ההזדמנות הספציפית לעסק הזה
-2. "recommended_action" — פעולה אחת קונקרטית שמומלץ לבצע לפני האירוע
-3. "timing_tip" — מתי כדאי להתחיל להכין (למשל: "2 שבועות מראש")
-
-JSON בלבד: {"business_opportunity":"...","recommended_action":"...","timing_tip":"..."}`,
+ספק ניתוח מעשי ב-JSON בלבד:
+{
+  "business_opportunity": "מה ההזדמנות הספציפית לסקטור זה מהאירוע הזה — 1-2 משפטים עם מספר/היקף",
+  "recommended_action": "פעולה אחת ספציפית: פועל ציווי + ערוץ + תוכן/מסר (לא 'תפרסם משהו')",
+  "timing_tip": "מתי בדיוק להתחיל ולמה — תאריך/זמן ספציפי"
+}`,
       });
       try {
         const parsed = typeof result === 'string' ? JSON.parse(result.trim()) : result;

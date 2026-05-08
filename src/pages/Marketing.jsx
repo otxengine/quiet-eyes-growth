@@ -125,7 +125,7 @@ function OrganicCard({ post, onDelete }) {
 
 // ── Organic Post Create Drawer ────────────────────────────────────────────────
 
-function OrganicCreateDrawer({ businessProfile, signalContext, onClose, onSaved }) {
+function OrganicCreateDrawer({ businessProfile, signalContext, audienceData, recentSignals, onClose, onSaved }) {
   const queryClient = useQueryClient();
   const [platform, setPlatform]   = useState('instagram');
   const [postType, setPostType]   = useState(signalContext?.type || 'post');
@@ -152,16 +152,48 @@ function OrganicCreateDrawer({ businessProfile, signalContext, onClose, onSaved 
   const generateContent = useCallback(async () => {
     setGenContent(true);
     try {
+      const pa = audienceData?.primary_audience;
+      const audienceCtx = pa
+        ? `קהל יעד מאומת: גיל ${pa.age_range}, ${pa.gender_skew}. תחומי עניין: ${(pa.interests || []).join(', ')}. כאבים: ${(pa.pain_points || []).join(', ')}. Hooks שעובדים: ${(audienceData?.hooks_that_work || []).slice(0, 3).join(' | ')}.`
+        : '';
+
+      const platformGuide = {
+        instagram: 'Instagram: Hook חזק בשורה ראשונה, טקסט 80-120 מילה, ויזואלי ואמוציונלי, 5-8 האשטאגים (3 רחבים + 2 נישה + 1 עיר)',
+        facebook:  'Facebook: פוסט עם ערך אמיתי + שאלה שמניעה תגובות, 60-100 מילה, 2-3 האשטאגים בסוף',
+        tiktok:    'TikTok: Hook בשנייה הראשונה (שאלה חדה / עובדה מפתיעה), 50-80 מילה, ויראלי, 4-5 האשטאגים טרנדיים',
+      };
+
+      const signalBlock = recentSignals?.length
+        ? `מגמות שוק רלוונטיות:\n${recentSignals.slice(0, 4).map(s => `- ${s.summary}`).join('\n')}`
+        : '';
+
+      const isStory = postType === 'story';
+      const formatInstr = isStory
+        ? 'סטורי: 1-2 משפטים מנצחים + CTA ברור. קצר, ישיר, מניע לפעולה.'
+        : `פוסט מלא עם:\n1. Hook — שורה ראשונה שעוצרת גלילה (שאלה / עובדה / אמירה אמיצה)\n2. גוף — 60-100 מילה עם ערך אמיתי, שפה חיה, לא שיווקית\n3. CTA — קריאה לפעולה ספציפית בסוף\n4. האשטאגים לפי הנחיות הפלטפורמה`;
+
       const result = await base44.integrations.Core.InvokeLLM({
-        model: 'haiku',
-        prompt: `כתוב ${postType === 'story' ? 'טקסט לסטורי קצר (1-2 משפטים בלבד, מניע לפעולה)' : 'פוסט (3 משפטים + CTA)'} בעברית לעסק "${businessProfile.name}" (${businessProfile.category}).
-${signalContext?.summary ? `הקשר: "${signalContext.summary}"` : ''}
-פלטפורמה: ${platCfg.label}. רק הטקסט, ללא כותרות.`,
+        model: 'sonnet',
+        maxTokens: 600,
+        prompt: `אתה כותב תוכן מקצועי לרשתות חברתיות לעסקים ישראלים. הפוסט שתכתוב חייב להיות ברמה גבוהה מספיק לפרסום ישיר — ללא עריכה.
+
+עסק: "${businessProfile.name}" | תחום: ${businessProfile.category} | עיר: ${businessProfile.city || ''}
+${businessProfile.description ? `תיאור: ${businessProfile.description}` : ''}
+${signalContext?.summary ? `הקשר / תובנה: "${signalContext.summary}"` : ''}
+${audienceCtx ? `\n${audienceCtx}` : ''}
+${signalBlock ? `\n${signalBlock}` : ''}
+
+פלטפורמה: ${platCfg.label}
+${platformGuide[platform] || platformGuide.instagram}
+
+${formatInstr}
+
+כתוב רק את טקסט הפוסט הסופי — ללא כותרות, ללא הסברים, ללא מרכאות עוטפות.`,
       });
       setContent(typeof result === 'string' ? result.trim() : (result?.content || ''));
     } catch { toast.error('שגיאה ביצירת תוכן'); }
     setGenContent(false);
-  }, [businessProfile, postType, platCfg.label, signalContext]);
+  }, [businessProfile, postType, platCfg.label, platform, signalContext, audienceData, recentSignals]);
 
   // Generate AI image
   const handleGenImage = async () => {
@@ -384,7 +416,7 @@ ${signalContext?.summary ? `הקשר: "${signalContext.summary}"` : ''}
 
 // ── WhatsApp Blast Drawer ─────────────────────────────────────────────────────
 
-function WhatsAppBlastDrawer({ businessProfile, signalContext, onClose }) {
+function WhatsAppBlastDrawer({ businessProfile, signalContext, audienceData, onClose }) {
   const [msg,     setMsg]     = useState('');
   const [loading, setLoading] = useState(false);
   const [copied,  setCopied]  = useState(false);
@@ -397,12 +429,25 @@ function WhatsAppBlastDrawer({ businessProfile, signalContext, onClose }) {
     setLoading(true);
     const fallback = `שלום! 😊\nיש לנו חדשות מיוחדות ב-${businessProfile?.name || 'העסק שלנו'}!\nמוזמנ/ת לבקר — מחכים לך! 🙌`;
     try {
+      const pa = audienceData?.primary_audience;
+      const audienceHint = pa
+        ? `קהל: גיל ${pa.age_range}, ${pa.gender_skew}. כאבים: ${(pa.pain_points || []).slice(0, 2).join(', ')}.`
+        : '';
       const result = await base44.integrations.Core.InvokeLLM({
-        model: 'haiku',
-        prompt: `כתוב הודעת WhatsApp שיווקית קצרה לבלסט (הפצה המונית).
-עסק: "${businessProfile?.name || ''}"${signalContext?.summary ? `\nהקשר: ${signalContext.summary}` : ''}
-כלול: כותרת מושכת + הצעת ערך + CTA ברור.
-עברית, ידידותי עם אמוג'י, עד 4 שורות. ללא כותרות.`,
+        model: 'sonnet',
+        maxTokens: 300,
+        prompt: `אתה כותב הודעות WhatsApp שיווקיות לעסקים ישראלים. ההודעה חייבת להיות ברמה גבוהה — אנושית, ממוקדת, ומניעה לפעולה.
+
+עסק: "${businessProfile?.name || ''}" | תחום: ${businessProfile?.category || ''} | עיר: ${businessProfile?.city || ''}
+${signalContext?.summary ? `הקשר / הזדמנות: "${signalContext.summary}"` : ''}
+${audienceHint ? `${audienceHint}` : ''}
+
+כתוב הודעת WhatsApp בלסט (הפצה המונית ללקוחות):
+- שורה 1: פתיחה חמה / קריאה לתשומת לב עם אמוג'י
+- שורה 2-3: הצעת ערך ספציפית — מה מקבלים / למה עכשיו
+- שורה 4: CTA ברור וישיר (להזמין / לכתוב / לבקר)
+- סה"כ: 3-4 שורות קצרות, עברית ידידותית, בגוף ראשון מטעם העסק
+כתוב רק את ההודעה הסופית — ללא כותרות, ללא הסברים.`,
       });
       setMsg((typeof result === 'string' && result.trim()) ? result.trim() : fallback);
     } catch {
@@ -564,9 +609,10 @@ function CalendarView({ posts }) {
 // ── Main Marketing Page ───────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'paid',     label: 'ממומן',      icon: '💰' },
-  { id: 'organic',  label: 'אורגני',     icon: '🌱' },
-  { id: 'calendar', label: 'לוח שנה',    icon: '📅' },
+  { id: 'paid',      label: 'ממומן',     icon: '💰' },
+  { id: 'organic',   label: 'אורגני',    icon: '🌱' },
+  { id: 'audiences', label: 'קהל יעד',   icon: '🎯' },
+  { id: 'calendar',  label: 'לוח שנה',   icon: '📅' },
 ];
 
 const PAID_TABS = ['all', 'draft', 'published', 'active', 'completed'];
@@ -633,6 +679,88 @@ export default function Marketing() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['organicPosts', bpId] }); toast.success('נמחק'); },
   });
 
+  // ── Audience intelligence ──
+  const [audienceLoading, setAudienceLoading] = useState(false);
+  const [audiencePlan, setAudiencePlan] = useState(null);
+  const [planLoading, setPlanLoading] = useState(false);
+
+  const { data: audienceSignals = [], refetch: refetchAudience } = useQuery({
+    queryKey: ['audienceSignals', bpId],
+    queryFn: () => base44.entities.MarketSignal.filter(
+      { linked_business: bpId, category: 'tiktok_audience' },
+      '-detected_at', 5
+    ),
+    enabled: !!bpId && activeTab === 'audiences',
+  });
+
+  const { data: marketSignals = [] } = useQuery({
+    queryKey: ['marketSignalsForAudience', bpId],
+    queryFn: () => base44.entities.MarketSignal.filter(
+      { linked_business: bpId },
+      '-detected_at', 30
+    ),
+    enabled: !!bpId && activeTab === 'audiences',
+  });
+
+  const latestAudience = audienceSignals[0] ? (() => {
+    try { return JSON.parse(audienceSignals[0].source_description || '{}'); } catch { return null; }
+  })() : null;
+
+  const runAudienceAgent = async () => {
+    setAudienceLoading(true);
+    try {
+      await base44.functions.invoke('tiktokAudienceAgent', { businessProfileId: bpId, force: true });
+      await refetchAudience();
+      toast.success('קהל יעד עודכן ✓');
+    } catch { toast.error('שגיאה בניתוח קהל יעד'); }
+    setAudienceLoading(false);
+  };
+
+  const generateAudiencePlan = async () => {
+    setPlanLoading(true);
+    try {
+      const signalContext = marketSignals
+        .filter(s => ['tiktok_sector_trend', 'competitor_move', 'local_trend', 'demand_gap'].includes(s.category))
+        .slice(0, 8)
+        .map(s => s.summary)
+        .join('; ');
+      const audienceCtx = latestAudience?.primary_audience
+        ? `קהל ראשי: ${latestAudience.primary_audience.age_range}, ${latestAudience.primary_audience.gender_skew}. תחומי עניין: ${(latestAudience.primary_audience.interests || []).join(', ')}.`
+        : '';
+      const res = await base44.integrations.Core.InvokeLLM({
+        model: 'sonnet',
+        maxTokens: 700,
+        prompt: `אתה מומחה לפרסום ממוקד עבור עסקים קטנים ישראלים.
+עסק: "${businessProfile?.name}" (${businessProfile?.category}, ${businessProfile?.city}).
+${audienceCtx}
+אותות שוק ומודיעין שנאסף: ${signalContext || 'אין'}.
+
+בהתבסס על המידע שנאסף, צור תוכנית קהל יעד מפורטת. JSON בלבד:
+{
+  "segments": [
+    {
+      "name": "שם הסגמנט",
+      "description": "תיאור קצר",
+      "age": "טווח גיל",
+      "gender": "התפלגות מגדרית",
+      "interests": ["תחום 1","תחום 2","תחום 3"],
+      "pain_points": ["כאב 1","כאב 2"],
+      "best_channels": ["ערוץ 1","ערוץ 2"],
+      "message_angle": "זווית מסר מנצחת",
+      "budget_priority": "high|medium|low"
+    }
+  ],
+  "top_insight": "התובנה החשובה ביותר מהמודיעין שנאסף",
+  "recommended_first_campaign": "תיאור קמפיין ראשון מומלץ"
+}`,
+        response_json_schema: { type: 'object' },
+      });
+      setAudiencePlan(res?.segments ? res : null);
+      if (!res?.segments) toast.error('לא הצלחנו לייצר תוכנית — נסה שוב');
+    } catch { toast.error('שגיאה ביצירת תוכנית קהל יעד'); }
+    setPlanLoading(false);
+  };
+
   return (
     <PlanGate requires="growth" featureName="מרכז השיווק">
     <div className="p-4 md:p-6 max-w-5xl mx-auto" dir="rtl">
@@ -644,7 +772,7 @@ export default function Marketing() {
           </h1>
           <p className="text-sm text-foreground-muted mt-0.5">פוסטים, סטוריז וקמפיינים ממומנים</p>
         </div>
-        {activeTab !== 'calendar' && (
+        {activeTab !== 'calendar' && activeTab !== 'audiences' && (
           <button
             onClick={() => activeTab === 'paid' ? navigate('/marketing/create') : setShowOrgCreate(true)}
             className="flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg text-[13px] font-semibold hover:opacity-90 transition-all"
@@ -728,6 +856,177 @@ export default function Marketing() {
         </>
       )}
 
+      {/* Audiences tab */}
+      {activeTab === 'audiences' && (
+        <div className="space-y-4">
+          {/* Header actions */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[12px] text-foreground-muted">ניתוח קהל יעד מתוך מודיעין שוק שנאסף</p>
+              {latestAudience && audienceSignals[0]?.detected_at && (
+                <p className="text-[10px] text-foreground-muted/60 mt-0.5">
+                  עדכון אחרון: {new Date(audienceSignals[0].detected_at).toLocaleDateString('he-IL')}
+                </p>
+              )}
+            </div>
+            <button onClick={runAudienceAgent} disabled={audienceLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[11px] font-medium text-foreground-muted hover:text-foreground hover:bg-secondary transition-all disabled:opacity-60">
+              {audienceLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              {audienceLoading ? 'מנתח...' : 'רענן נתונים'}
+            </button>
+          </div>
+
+          {/* Collected intelligence — primary audience */}
+          {latestAudience?.primary_audience ? (
+            <div className="card-base p-5 space-y-4">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[13px] font-bold text-foreground">קהל ראשי — מבוסס TikTok & מודיעין</span>
+                <span className="text-[9px] px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-medium">AI</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-secondary">
+                  <p className="text-[9px] text-foreground-muted mb-1">גיל</p>
+                  <p className="text-[13px] font-bold text-foreground">{latestAudience.primary_audience.age_range}</p>
+                </div>
+                <div className="p-3 rounded-xl bg-secondary">
+                  <p className="text-[9px] text-foreground-muted mb-1">מגדר</p>
+                  <p className="text-[13px] font-bold text-foreground">{latestAudience.primary_audience.gender_skew}</p>
+                </div>
+              </div>
+              {latestAudience.primary_audience.interests?.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">תחומי עניין</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {latestAudience.primary_audience.interests.map((i, idx) => (
+                      <span key={idx} className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">{i}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {latestAudience.primary_audience.pain_points?.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">כאבים / מניעים לרכישה</p>
+                  <ul className="space-y-1">
+                    {latestAudience.primary_audience.pain_points.map((p, idx) => (
+                      <li key={idx} className="text-[11px] text-foreground-secondary flex items-start gap-1.5">
+                        <span className="text-amber-500 mt-0.5 flex-shrink-0">→</span>{p}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {latestAudience.primary_audience.why_they_follow && (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
+                  <p className="text-[10px] font-semibold text-amber-700 mb-1">למה הם עוקבים אחרי עסקים בקטגוריה שלנו</p>
+                  <p className="text-[11px] text-amber-900">{latestAudience.primary_audience.why_they_follow}</p>
+                </div>
+              )}
+              {latestAudience.hooks_that_work?.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">Hooks שעובדים בסקטור</p>
+                  <ul className="space-y-1">
+                    {latestAudience.hooks_that_work.slice(0, 3).map((h, idx) => (
+                      <li key={idx} className="text-[11px] text-foreground p-2 rounded-lg bg-secondary border border-border">"{h}"</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {latestAudience.best_posting_windows?.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">שעות פרסום אופטימליות</p>
+                  <div className="flex flex-col gap-1.5">
+                    {latestAudience.best_posting_windows.slice(0, 3).map((w, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-[11px]">
+                        <span className="font-medium text-foreground w-24 flex-shrink-0">{w.days}</span>
+                        <span className="text-primary font-bold">{w.time}</span>
+                        <span className="text-foreground-muted">{w.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {latestAudience.growth_strategy_30d && (
+                <div className="p-3 rounded-xl bg-green-50 border border-green-200">
+                  <p className="text-[10px] font-semibold text-green-700 mb-1">אסטרטגיית גדילה 30 יום</p>
+                  <p className="text-[11px] text-green-900 leading-relaxed">{latestAudience.growth_strategy_30d}</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="card-base p-8 text-center">
+              <p className="text-[13px] font-semibold text-foreground mb-2">אין נתוני קהל יעד עדיין</p>
+              <p className="text-[11px] text-foreground-muted mb-4">לחץ "רענן נתונים" להפעיל ניתוח קהל יעד מבוסס מודיעין שוק</p>
+              <button onClick={runAudienceAgent} disabled={audienceLoading}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg text-[12px] font-semibold hover:opacity-90 disabled:opacity-60">
+                {audienceLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <TrendingUp className="w-4 h-4" />}
+                {audienceLoading ? 'מנתח...' : 'נתח קהל יעד'}
+              </button>
+            </div>
+          )}
+
+          {/* AI Campaign Plan based on intelligence */}
+          <div className="card-base p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-[13px] font-bold text-foreground">תוכנית סגמנטים — מבוסס מודיעין</p>
+                <p className="text-[10px] text-foreground-muted mt-0.5">AI ימפה סגמנטים אידיאלים מתוך {marketSignals.length} אותות שוק שנאספו</p>
+              </div>
+              <button onClick={generateAudiencePlan} disabled={planLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-foreground text-background rounded-lg text-[11px] font-semibold hover:opacity-90 disabled:opacity-60">
+                {planLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                {planLoading ? 'מייצר...' : 'צור תוכנית'}
+              </button>
+            </div>
+            {audiencePlan ? (
+              <div className="space-y-3">
+                {audiencePlan.top_insight && (
+                  <div className="p-3 rounded-xl bg-blue-50 border border-blue-200">
+                    <p className="text-[10px] font-semibold text-blue-700 mb-1">תובנה מובילה מהמודיעין</p>
+                    <p className="text-[12px] text-blue-900">{audiencePlan.top_insight}</p>
+                  </div>
+                )}
+                {(audiencePlan.segments || []).map((seg, idx) => (
+                  <div key={idx} className="p-4 rounded-xl border border-border bg-secondary/30">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[12px] font-bold text-foreground">{seg.name}</p>
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${seg.budget_priority === 'high' ? 'bg-red-100 text-red-700' : seg.budget_priority === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                        {seg.budget_priority === 'high' ? 'עדיפות גבוהה' : seg.budget_priority === 'medium' ? 'עדיפות בינונית' : 'עדיפות נמוכה'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-foreground-muted mb-2">{seg.description}</p>
+                    <div className="flex gap-3 text-[10px] text-foreground-secondary mb-2">
+                      <span>👤 {seg.age}</span>
+                      <span>⚖️ {seg.gender}</span>
+                    </div>
+                    {seg.interests?.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {seg.interests.map((i, ii) => (
+                          <span key={ii} className="text-[9px] px-1.5 py-0.5 rounded-full bg-white border border-border text-foreground-muted">{i}</span>
+                        ))}
+                      </div>
+                    )}
+                    {seg.message_angle && (
+                      <p className="text-[11px] text-primary font-medium mt-2">💡 {seg.message_angle}</p>
+                    )}
+                    {seg.best_channels?.length > 0 && (
+                      <p className="text-[10px] text-foreground-muted mt-1">ערוצים: {seg.best_channels.join(', ')}</p>
+                    )}
+                  </div>
+                ))}
+                {audiencePlan.recommended_first_campaign && (
+                  <div className="p-3 rounded-xl bg-green-50 border border-green-200">
+                    <p className="text-[10px] font-semibold text-green-700 mb-1">קמפיין ראשון מומלץ</p>
+                    <p className="text-[12px] text-green-900">{audiencePlan.recommended_first_campaign}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-[11px] text-foreground-muted text-center py-4">לחץ "צור תוכנית" לקבל ניתוח סגמנטים מבוסס מודיעין שוק אמיתי שנאסף עבורך</p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Calendar tab */}
       {activeTab === 'calendar' && (
         <CalendarView posts={organicPosts} />
@@ -738,6 +1037,8 @@ export default function Marketing() {
         <OrganicCreateDrawer
           businessProfile={businessProfile}
           signalContext={organicCtx}
+          audienceData={latestAudience}
+          recentSignals={marketSignals?.slice(0, 6) || []}
           onClose={() => { setShowOrgCreate(false); setOrganicCtx(null); }}
           onSaved={() => queryClient.invalidateQueries({ queryKey: ['organicPosts', bpId] })}
         />
@@ -748,6 +1049,7 @@ export default function Marketing() {
         <WhatsAppBlastDrawer
           businessProfile={businessProfile}
           signalContext={waBlastCtx}
+          audienceData={latestAudience}
           onClose={() => { setShowWaBlast(false); setWaBlastCtx(null); }}
         />
       )}

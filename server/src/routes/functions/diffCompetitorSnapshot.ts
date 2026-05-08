@@ -31,8 +31,9 @@ export async function diffCompetitorSnapshot(req: Request, res: Response) {
             const webData = (await tavilySearch(`${competitor.name} ${city} מחיר מבצע`, 3))
               .map(r => `${r.title}: ${(r.content || '').slice(0, 200)}`).join('\n');
             const snap = await invokeLLM({
-              model: 'haiku',
-              prompt: `נתח מידע על "${competitor.name}" (${category} ב${city}):\n${webData.slice(0, 1500) || 'אין מידע'}\nJSON: {"prices":[],"promotions":[],"rating":null,"review_count":null,"description":"","last_activity":""}`,
+              model: 'sonnet',
+              maxTokens: 400,
+              prompt: `חלץ מידע עסקי מובנה על "${competitor.name}" (${category} ב${city}) מהטקסט הבא:\n${webData.slice(0, 2000) || 'אין מידע'}\nJSON: {"prices":[],"promotions":[],"rating":null,"review_count":null,"description":"","last_activity":""}`,
               response_json_schema: { type: 'object' },
             });
             await prisma.$executeRawUnsafe(
@@ -57,8 +58,9 @@ export async function diffCompetitorSnapshot(req: Request, res: Response) {
         // Update the new snapshot with fresh data if available
         if (freshData) {
           const updatedSnap = await invokeLLM({
-            model: 'haiku',
-            prompt: `עדכן מידע על "${competitor.name}":\n${freshData.slice(0, 1500)}\nJSON: {"prices":[],"promotions":[],"rating":null,"review_count":null,"description":"","last_activity":""}`,
+            model: 'sonnet',
+            maxTokens: 400,
+            prompt: `חלץ מידע עסקי מובנה על "${competitor.name}" מהמידע החדש:\n${freshData.slice(0, 2000)}\nJSON: {"prices":[],"promotions":[],"rating":null,"review_count":null,"description":"","last_activity":""}`,
             response_json_schema: { type: 'object' },
           });
           if (updatedSnap) {
@@ -71,16 +73,17 @@ export async function diffCompetitorSnapshot(req: Request, res: Response) {
 
         // Diff old vs new
         const diffResult = await invokeLLM({
-          model: 'haiku',
-          prompt: `השווה בין שני מצבים של המתחרה "${competitor.name}":
+          model: 'sonnet',
+          maxTokens: 500,
+          prompt: `אתה אנליסט מודיעין תחרותי. השווה בין שני מצבים של "${competitor.name}" וזהה שינויים ממשיים בלבד.
 
-ישן: ${JSON.stringify(oldJson).slice(0, 800)}
-חדש: ${JSON.stringify(newJson).slice(0, 800)}
+מצב ישן: ${JSON.stringify(oldJson).slice(0, 1000)}
+מצב חדש: ${JSON.stringify(newJson).slice(0, 1000)}
 
-מצא שינויים קונקרטיים בלבד — מחיר שהשתנה, מבצע חדש, שינוי דירוג.
+כלל: דווח רק על שינויים קונקרטיים ומוכחים (מחיר שהשתנה ממספר למספר, מבצע ספציפי, שינוי דירוג).
 אם אין שינוי ממשי — החזר {"changes":[]}.
 JSON בלבד:
-{"changes":[{"change_type":"price_change|new_promo|rating_change|new_offering","old_value":"","new_value":"","description":"תיאור קצר בעברית"}]}`,
+{"changes":[{"change_type":"price_change|new_promo|rating_change|new_offering","old_value":"ערך ישן","new_value":"ערך חדש","description":"תיאור ספציפי בעברית — עם מספרים"}]}`,
           response_json_schema: { type: 'object' },
         });
 

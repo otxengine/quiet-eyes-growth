@@ -76,34 +76,41 @@ export async function generateMarketAnalysis(req: Request, res: Response) {
       total_signals:    signals.length,
     };
 
-    const result = await invokeLLM({
-      model: 'haiku',
-      prompt: `אתה אנליסט שוק מומחה לעסקים ישראלים.
+    const topServices = leads
+      .filter(l => l.service_needed)
+      .reduce((acc: Record<string, number>, l) => { acc[l.service_needed!] = (acc[l.service_needed!] || 0) + 1; return acc; }, {});
+    const topServicesList = Object.entries(topServices).sort(([,a],[,b]) => b-a).slice(0, 3).map(([s]) => s);
 
-עסק: "${profile.name}" — ${profile.category} ב${profile.city}
+    const result = await invokeLLM({
+      model: 'sonnet',
+      maxTokens: 600,
+      prompt: `אתה אנליסט שוק בכיר לעסקים קטנים ישראלים. ניתוח זה יוצג לבעל העסק — כתוב תובנות ספציפיות ומדויקות, לא גנריות.
+
+עסק: "${profile.name}" | תחום: ${profile.category} | עיר: ${profile.city}
 שירותים: ${profile.relevant_services || 'לא צוינו'}
 שוק יעד: ${profile.target_market || 'לא צוין'}
 ${profile.description ? `תיאור: ${profile.description}` : ''}
 
-נתונים:
-• ${signals.length} סיגנלים שוק (${opportunities} הזדמנויות, ${threats} איומים)
-• ${leads.length} לידים | המרה: ${conversionRate}% | ${hotLeads} חמים
-• ${reviews.length} ביקורות${avgRating ? ` | ממוצע ${avgRating}⭐` : ''}
-• ${competitors.length} מתחרים: ${competitorNames.slice(0, 4).join(', ')}
+=== נתונים כמותיים ===
+• סיגנלים שוק: ${signals.length} (${opportunities} הזדמנויות, ${threats} איומים)
+• לידים: ${leads.length} סה"כ | ${hotLeads} חמים | המרה: ${conversionRate}%
+${topServicesList.length > 0 ? `• שירותים מבוקשים: ${topServicesList.join(', ')}` : ''}
+• ביקורות: ${reviews.length}${avgRating ? ` | ממוצע ${avgRating}⭐ | שביעות רצון: ${reviewSatisfaction}%` : ''}
+• מתחרים: ${competitorNames.slice(0, 5).join(', ')}
 
-הזדמנויות עיקריות:
-${trendingOpps.length > 0 ? trendingOpps.map(o => `• ${o}`).join('\n') : 'אין מספיק נתונים'}
+הזדמנויות מזוהות:
+${trendingOpps.length > 0 ? trendingOpps.map(o => `• ${o}`).join('\n') : '• אין מספיק נתונים עדיין'}
 
 JSON בלבד:
 {
   "market_size_estimate": "גדול|בינוני|קטן",
   "market_trend": "growing|stable|declining",
   "our_position": "leader|challenger|niche|new",
-  "top_opportunity": "הזדמנות מספר 1 — עד 15 מילה",
-  "biggest_threat": "האיום הגדול ביותר — עד 15 מילה",
-  "recommended_focus": "על מה להתמקד — עד 20 מילה",
-  "market_gaps": ["פער 1 — עד 8 מילים", "פער 2 — עד 8 מילים"],
-  "competitive_advantage": "היתרון שלנו — עד 10 מילים"
+  "top_opportunity": "הזדמנות מספר 1 — ספציפית עם שם שירות / פלטפורמה / קהל יעד",
+  "biggest_threat": "האיום הגדול ביותר — ספציפי ומדויק",
+  "recommended_focus": "על מה להתמקד ב-30 ימים הקרובים — עם ערוץ ספציפי",
+  "market_gaps": ["פער 1 — ספציפי לסקטור ולעיר", "פער 2 — הזדמנות שטרם מנוצלת"],
+  "competitive_advantage": "היתרון המשמעותי ביותר שלנו מול המתחרים — ממוקד"
 }`,
       response_json_schema: { type: 'object' },
     });

@@ -318,7 +318,8 @@ ${competitorSummaries.join('\n\n') || 'אין מתחרים לנתח'}
   "impact": "high|medium"
 }`,
         response_json_schema: { type: 'object' },
-        model: 'haiku',
+        model: 'sonnet',
+        maxTokens: 350,
       });
 
       if (analysis?.action) {

@@ -41,13 +41,19 @@ export default function RequestReviewModal({ businessProfile, onClose, onSent })
       humorous: `כתוב הודעה קלילה עם הומור קל ואימוג'ים. תהיה מצחיק אבל לא מוגזם.`,
     };
     const result = await base44.integrations.Core.InvokeLLM({
-      prompt: `כתוב הודעת WhatsApp קצרה בעברית לבקשת ביקורת מלקוח.
-שם הלקוח: ${form.customer_name}
-שם העסק: ${bpName}
-פלטפורמה: ${form.platform}
+      model: 'sonnet',
+      maxTokens: 250,
+      prompt: `אתה מומחה לניהול מוניטין לעסקים ישראלים. כתוב הודעת WhatsApp לבקשת ביקורת שתגרום ללקוח להגיב — אנושית, לא כמו תבנית.
+
+עסק: ${bpName} | לקוח: ${form.customer_name} | פלטפורמה: ${form.platform}
 ${toneInstructions[tone] || toneInstructions.friendly}
-ההודעה צריכה לכלול: פנייה אישית, תודה על הביקור, בקשה לביקורת קצרה, ומקום לקישור [קישור לביקורת].
-מקסימום 4 שורות. החזר רק את טקסט ההודעה, ללא הסברים.`,
+
+מבנה (4 שורות מקסימום):
+- שורה 1: פנייה אישית + תודה אמיתית על הביקור
+- שורה 2: הסבר קצר למה הביקורת שלהם חשובה
+- שורה 3: בקשה ספציפית וקלה
+- שורה 4: [קישור לביקורת]
+החזר רק את טקסט ההודעה.`,
     });
     setMessage(result.trim());
     setGenerating(false);

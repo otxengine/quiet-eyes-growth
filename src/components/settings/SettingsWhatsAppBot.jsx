@@ -34,6 +34,8 @@ export default function SettingsWhatsAppBot({ form, setForm, onSave, saving, bus
   const generateSmartDefaults = async () => {
     setGeneratingDefaults(true);
     const result = await base44.integrations.Core.InvokeLLM({
+      model: 'sonnet',
+      maxTokens: 500,
       prompt: `אתה יועץ שיווקי לעסקים קטנים בישראל.
 עסק: ${form.name || 'עסק'}, קטגוריה: ${form.category || 'כללי'}, עיר: ${form.city || ''}, שירותים: ${form.relevant_services || ''}, תקציב מינימום: ${form.min_budget || 'לא הוגדר'}, אזור מועדף: ${form.preferred_area || ''}
 

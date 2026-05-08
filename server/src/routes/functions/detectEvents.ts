@@ -434,9 +434,10 @@ export async function detectEvents(req: Request, res: Response) {
       try {
         const analysis: any = await invokeLLM({
           model: 'haiku',
+          maxTokens: 400,
           prompt: `זהה אירועים ממשיים בטקסט שיכולים להשפיע על עסק "${name}" (${category}, ${city}) בחודש הקרוב.
 
-${context.slice(0, 3000)}
+${context.slice(0, 3500)}
 
 החזר JSON:
 {
@@ -446,7 +447,7 @@ ${context.slice(0, 3000)}
     "type": "sports|concert|festival|fair|conference|cultural|commercial",
     "relevance": "high|medium|low",
     "audience_size": "large|medium|small",
-    "opportunity": "ההזדמנות הספציפית לעסק זה (${category}) — עד 10 מילים"
+    "opportunity": "ההזדמנות הספציפית לעסק זה (${category}) — פעולה מספריות אחת ספציפית עד 10 מילים"
   }]
 }
 כלול רק אירועים עם תאריך ממשי. ללא תאריך — דלג. אם אין — החזר {"events":[]}`,
@@ -499,18 +500,22 @@ ${context.slice(0, 3000)}
       try {
         const [ctaRes, actionRes] = await Promise.all([
           invokeLLM({
-            prompt: `כתוב פוסט שיווקי קצר בעברית (2-3 שורות) לעסק "${name}" (${category} ב${city}) לרגל "${event.name}".
+            model: 'sonnet',
+            maxTokens: 200,
+            prompt: `כתוב פוסט שיווקי בעברית (2-3 שורות) לעסק "${name}" (${category} ב${city}) לרגל "${event.name}" בעוד ${daysAway} ימים.
 
-הזדמנות ספציפית לסקטור זה: ${sectorCtx.opportunity}
-${event.type === 'sports' ? 'אירוע ספורט — חשוב על הצופים, האווירה, ההזמנות המוגברות.' : ''}
-${event.type === 'seasonal' ? 'אירוע עונתי — כוון לצורך העונתי הספציפי.' : ''}
-סגנון: ${toneInstruction}.
-כתוב רק את טקסט הפוסט.`,
+הזדמנות ספציפית לסקטור: ${sectorCtx.opportunity}
+${event.type === 'sports' ? 'אירוע ספורט — כוון לצופים, האווירה, הזמנות מוקדמות.' : ''}
+${event.type === 'seasonal' ? 'אירוע עונתי — כוון לצורך העונתי הספציפי של הלקוח.' : ''}
+מבנה: Hook (שורה 1) + ערך/מבצע (שורה 2) + CTA ספציפי (שורה 3).
+סגנון: ${toneInstruction}. כתוב רק את טקסט הפוסט.`,
           }),
           invokeLLM({
+            model: 'sonnet',
+            maxTokens: 80,
             prompt: `עסק: "${name}" (${category}). אירוע: "${event.name}" בעוד ${daysAway} ימים.
 הזדמנות: ${sectorCtx.opportunity}
-פעולה אחת ספציפית עכשיו — עד 8 מילים.`,
+פעולה אחת ספציפית שצריך לעשות עכשיו כדי למקסם הכנסות — עד 8 מילים.`,
           }),
         ]);
         prefilledText = typeof ctaRes === 'string' ? ctaRes.trim() : '';
@@ -582,11 +587,13 @@ ${event.type === 'seasonal' ? 'אירוע עונתי — כוון לצורך ה�
       let prefilledText = '';
       try {
         const ctaRes = await invokeLLM({
-          prompt: `כתוב פוסט שיווקי קצר (2 שורות) לעסק "${name}" (${category} ב${city}) לרגל "${event.name}".
+          model: 'sonnet',
+          maxTokens: 180,
+          prompt: `כתוב פוסט שיווקי בעברית (2-3 שורות) לעסק "${name}" (${category} ב${city}) לרגל "${event.name}".
 הזדמנות: ${event.opportunity || 'אירוע מקומי'}.
 ${event.type === 'sports' ? 'אירוע ספורט — כוון לצופים ולאווירה.' : ''}
 ${event.type === 'concert' ? 'הופעה — כוון לקהל שמגיע לאזור.' : ''}
-סגנון: ${toneInstruction}. כתוב רק את הטקסט.`,
+מבנה: Hook + ערך ספציפי + CTA. סגנון: ${toneInstruction}. כתוב רק את הטקסט.`,
         });
         prefilledText = typeof ctaRes === 'string' ? ctaRes.trim() : '';
       } catch (_) {}

@@ -120,7 +120,9 @@ ${history}
 שאלת המשתמש: ${message}`;
 
     const reply = await invokeLLM({
-      model: 'haiku',
+      model: 'sonnet',
+      maxTokens: 350,
+      skipCache: true,
       prompt: fullPrompt,
     });
 

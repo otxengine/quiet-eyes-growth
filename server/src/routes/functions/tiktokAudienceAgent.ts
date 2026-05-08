@@ -183,43 +183,50 @@ export async function tiktokAudienceAgent(req: Request, res: Response) {
 
     // ── 4. LLM audience synthesis ───────────────────────────────────────────
     const result = await invokeLLM({
-      model: 'haiku',
-      maxTokens: 700,
-      prompt: `אתה מומחה TikTok לעסקים קטנים ישראלים. נתח קהל יעד עבור "${name}" (${category}, ${city}).
+      model: 'sonnet',
+      maxTokens: 900,
+      prompt: `אתה מומחה TikTok ו-growth marketing לעסקים קטנים ישראלים. המשימה: לבנות פרופיל קהל יעד מדויק ש-${name} יוכל להשתמש בו לכל פיסת תוכן.
 
-נתוני engagement ממ-${videosAnalyzed} סרטוני סקטור ב-TikTok:
+עסק: "${name}" | תחום: ${category} | עיר: ${city}
+
+=== נתוני TikTok אמיתיים מ-${videosAnalyzed} סרטוני סקטור ===
 • engagement ממוצע בסקטור: ${(avgEng * 100).toFixed(1)}%
 • שעות שיא פעילות (שעון ישראל): ${topHours.join(', ') || 'לא זוהו'}
-• hashtags עם highest engagement: ${topHashtags.slice(0, 5).join(' | ') || 'לא זוהו'}
-• sounds פופולריים בסקטור: ${topSounds.slice(0, 3).join(' | ') || 'לא זוהו'}
+• hashtags עם highest engagement: ${topHashtags.slice(0, 6).join(' | ') || 'לא זוהו'}
+• sounds פופולריים: ${topSounds.slice(0, 3).join(' | ') || 'לא זוהו'}
 
-מחקר קהל מהאינטרנט:
-${tavilyCtx || 'לא נמצא מידע'}
+=== מחקר קהל מהאינטרנט ===
+${tavilyCtx || 'לא נמצא מידע ספציפי'}
+
+הנחיות:
+- hooks_that_work: 3 משפטי פתיחה שפועלים על הקהל הספציפי הזה (לא גנריים — ספציפיים לסקטור ולכאב)
+- growth_strategy_30d: 4 שלבים קונקרטיים עם שמות סוגי תוכן ספציפיים
+- pain_points: כאבים ספציפיים שמניעים אנשים לחפש את ${category} ב-TikTok
 
 JSON בלבד:
 {
   "primary_audience": {
-    "age_range": "18-35",
-    "gender_skew": "נשי 65% / גברי 35%",
-    "interests": ["עד 4 תחומי עניין"],
-    "pain_points": ["עד 3 בעיות שמניעות אותם לצפות"],
-    "why_they_follow": "למה הקהל הזה עוקב אחרי עסקי ${category}"
+    "age_range": "X-Y",
+    "gender_skew": "נשי X% / גברי Y%",
+    "interests": ["עד 4 תחומי עניין ספציפיים לסקטור"],
+    "pain_points": ["כאב 1 — ספציפי וקונקרטי", "כאב 2", "כאב 3"],
+    "why_they_follow": "סיבה פסיכולוגית עמוקה — למה הקהל הזה צורך תוכן ${category} ב-TikTok"
   },
   "secondary_audience": {
-    "age_range": "...",
-    "description": "תיאור קצר של קהל משני"
+    "age_range": "X-Y",
+    "description": "מי הם ומה הם מחפשים"
   },
   "best_posting_windows": [
-    { "days": "ראשון-רביעי", "time": "19:00-21:00", "reason": "שעת leisure prime time" },
-    { "days": "שישי", "time": "12:00-14:00", "reason": "לפני שבת" }
+    { "days": "ראשון-חמישי", "time": "19:00-21:00", "reason": "סיבה ספציפית לסקטור זה" },
+    { "days": "שישי-שבת", "time": "11:00-13:00", "reason": "סיבה ספציפית" }
   ],
   "hooks_that_work": [
-    "משפט פתיחה 1 שעובד על הקהל הזה",
-    "משפט פתיחה 2",
-    "משפט פתיחה 3"
+    "Hook 1 — ספציפי לכאב של הקהל",
+    "Hook 2 — שאלה מחדדת",
+    "Hook 3 — עובדה מפתיעה"
   ],
-  "content_to_avoid": "מה הקהל הזה לא אוהב — 1-2 משפטים",
-  "growth_strategy_30d": "אסטרטגיה מפורטת ל-30 ימים להגדלת קהל — 3-4 שלבים קונקרטיים"
+  "content_to_avoid": "מה הקהל הזה מדלג עליו — ספציפי",
+  "growth_strategy_30d": "שבוע 1: [מה לעשות] → שבוע 2: [מה לעשות] → שבוע 3-4: [scaling] — כל שלב עם סוג תוכן ספציפי"
 }`,
       response_json_schema: { type: 'object' },
     });

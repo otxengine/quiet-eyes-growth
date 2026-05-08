@@ -39,7 +39,14 @@ function ActionRow({ item, onDone }) {
     setBusy(true);
     try {
       const res = await base44.integrations.Core.InvokeLLM({
-        prompt: `כתוב תגובת מנהל מקצועית ואדיבה בעברית לביקורת זו. 2-3 שורות. טון מכבד.\n\nביקורת מאת ${item.meta?.reviewer || 'לקוח'}: "${(item.meta?.text || '').slice(0, 300)}"\n\nכתוב רק את התגובה.`,
+        model: 'sonnet',
+        maxTokens: 300,
+        prompt: `כתוב תגובת מנהל מקצועית ומשפיעה לביקורת. התגובה חייבת להיות ספציפית לביקורת — לא גנרית.
+
+ביקורת מאת ${item.meta?.reviewer || 'לקוח'}: "${(item.meta?.text || '').slice(0, 400)}"
+
+הנחיות: 2-3 שורות, פנה בשם, הכר את הנקודה הספציפית, הצע פתרון/הזמנה ישירה. ללא תירוצים.
+כתוב רק את התגובה.`,
       });
       const text = typeof res === 'string' ? res : '';
       setReply(text);

@@ -3,7 +3,7 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
-import { getSectorContext } from '../../lib/sectorPrompts';
+import { getSectorContentStrategy } from '../../lib/sectorPrompts';
 
 const DAYS_HE = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
@@ -35,22 +35,40 @@ export async function contentCalendarAgent(req: Request, res: Response) {
       ? 'טון חם ומוסמך, ספר סיפורים קצרים'
       : 'טון מקצועי ואמין, נתונים + ערך';
 
-    // Load recent signals for content ideas
+    // Load rich intelligence for high-quality content
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600000);
-    const [recentSignals, competitors, sectorKnowledge] = await Promise.all([
+    const [recentSignals, competitors, sectorKnowledge, audienceSignal, trendSignals, recentReviews] = await Promise.all([
       prisma.marketSignal.findMany({
         where: { linked_business: businessProfileId, created_date: { gte: sevenDaysAgo } },
         orderBy: { created_date: 'desc' },
-        take: 5,
+        take: 8,
       }),
       prisma.competitor.findMany({
         where: { linked_business: businessProfileId },
-        select: { name: true, strengths: true, weaknesses: true },
-        take: 3,
+        select: { name: true, strengths: true, weaknesses: true, category: true },
+        take: 5,
       }),
       prisma.sectorKnowledge.findFirst({
         where: { sector: category },
         orderBy: { created_date: 'desc' },
+      }),
+      // TikTok audience intelligence
+      prisma.marketSignal.findFirst({
+        where: { linked_business: businessProfileId, category: 'tiktok_audience' },
+        orderBy: { detected_at: 'desc' },
+      }),
+      // TikTok sector trends
+      prisma.marketSignal.findMany({
+        where: { linked_business: businessProfileId, category: 'tiktok_sector_trend' },
+        orderBy: { detected_at: 'desc' },
+        take: 3,
+      }),
+      // Recent positive reviews for social proof
+      prisma.review.findMany({
+        where: { linked_business: businessProfileId, sentiment: 'positive' },
+        orderBy: { created_date: 'desc' },
+        take: 3,
+        select: { text: true, reviewer_name: true, rating: true },
       }),
     ]);
 
@@ -71,13 +89,43 @@ export async function contentCalendarAgent(req: Request, res: Response) {
       return res.json({ message: 'Content calendar already generated this week', tasks_created: 0 });
     }
 
-    // Build context for the prompt
+    // Parse TikTok audience intelligence
+    let audienceCtx = '';
+    if (audienceSignal?.source_description) {
+      try {
+        const aud = JSON.parse(audienceSignal.source_description);
+        const pa = aud.primary_audience;
+        if (pa) {
+          audienceCtx = `קהל יעד מאומת (מבוסס TikTok + מחקר):
+• גיל: ${pa.age_range || '?'}, מגדר: ${pa.gender_skew || '?'}
+• תחומי עניין: ${(pa.interests || []).join(', ')}
+• מה מניע אותם לצרוך תוכן: ${pa.why_they_follow || '?'}
+• כאבים עיקריים: ${(pa.pain_points || []).join(', ')}
+• Hooks שעובדים: ${(aud.hooks_that_work || []).slice(0, 3).join(' | ')}
+• שעות פרסום שיא: ${(aud.best_posting_hours_il || []).join(', ')}`;
+        }
+      } catch {}
+    }
+
+    // Build context blocks
     const signalContext = recentSignals.length > 0
       ? `מגמות שוק השבוע:\n${recentSignals.map(s => `- ${s.summary}`).join('\n')}`
       : '';
 
+    const trendContext = trendSignals.length > 0
+      ? `טרנדים ב-TikTok לסקטור:\n${trendSignals.map(s => `- ${s.summary}`).join('\n')}`
+      : '';
+
     const competitorContext = competitors.length > 0
-      ? `מתחרים:\n${competitors.map(c => `- ${c.name}${c.weaknesses ? ` (חולשה: ${c.weaknesses.substring(0, 50)})` : ''}`).join('\n')}`
+      ? `מתחרים — הזדמנויות הבדלה:\n${competitors.map(c =>
+          `- ${c.name}${c.weaknesses ? ` | חולשה: ${c.weaknesses.substring(0, 60)}` : ''}`
+        ).join('\n')}`
+      : '';
+
+    const socialProof = recentReviews.length > 0
+      ? `ביקורות חיוביות לשימוש בפוסטים:\n${recentReviews.map(r =>
+          `- "${(r.text || '').substring(0, 100)}" — ${r.reviewer_name || 'לקוח מרוצה'}`
+        ).join('\n')}`
       : '';
 
     const sectorContext = sectorKnowledge?.trending_services
@@ -91,44 +139,64 @@ export async function contentCalendarAgent(req: Request, res: Response) {
       return d.toISOString().split('T')[0];
     });
 
-    const sectorCtx = getSectorContext(category);
+    const sectorStrategy = getSectorContentStrategy(category);
 
-    // Generate the content calendar
+    // Generate the content calendar with Sonnet for high quality output
     const descriptionLine = profile.description ? `תיאור העסק: ${profile.description}\n` : '';
 
     const calendarResult = await invokeLLM({
-      prompt: `אתה מנהל תוכן דיגיטלי לעסקים ישראלים. צור לוח תוכן שבועי עבור "${name}" (${category} ב${city}).
-${descriptionLine}${sectorCtx}
+      model: 'sonnet',
+      maxTokens: 3000,
+      skipCache: true,
+      prompt: `אתה מנהל תוכן דיגיטלי בכיר לעסקים ישראלים. המשימה: לוח תוכן שבועי שהמשתמש יוכל לסמוך עליו ולפרסם ישירות — ללא עריכה.
 
-${signalContext}
-${competitorContext}
-${sectorContext}
-${contentStyle ? `סגנון תוכן מועדף: ${contentStyle}` : ''}
+העסק: "${name}" (${category}, ${city})
+${descriptionLine}${sectorStrategy}
+
+${audienceCtx ? `=== מחקר קהל יעד ===\n${audienceCtx}\n===` : ''}
+${signalContext ? `\n${signalContext}` : ''}
+${trendContext ? `\n${trendContext}` : ''}
+${competitorContext ? `\n${competitorContext}` : ''}
+${socialProof ? `\n${socialProof}` : ''}
+${sectorContext ? `\n${sectorContext}` : ''}
+${contentStyle ? `\nסגנון תוכן מועדף: ${contentStyle}` : ''}
+
 ערוצים: ${preferredChannels}
-סגנון: ${toneInstruction}
+טון: ${toneInstruction}
 
-כללים:
-1. כל פוסט עם וו פתיחה חזק (שאלה / סטטיסטיקה / טיפ מהיר)
-2. גיוון: 2 חינוכיים, 2 מוצר/שירות, 1 עדות לקוח, 1 מאחורי הקלעים, 1 שאלה לקהל
-3. הגבל כל פוסט ל-60-80 מילים
-4. כלול 3-5 האשטאגים רלוונטיים
-5. הצע זמן פרסום אופטימלי (07:00-09:00 / 12:00-14:00 / 18:00-21:00)
+חוקי פוסט שחייבים לעבוד:
+1. כל פוסט חייב להתחיל ב-Hook של שורה אחת מנצחת (שאלה חדה / עובדה מפתיעה / אמירה אמיצה)
+2. גוף הפוסט: 80-130 מילים, ערך אמיתי, שפה חיה ואנושית — לא שיווקית
+3. CTA ברור בסוף כל פוסט (שאל שאלה / הזמן / שלח הודעה / בקר)
+4. האשטאגים: 3 רחבים (#קטגוריה) + 2 נישה ספציפיים לפוסט + 1 לוקאלי לעיר
+5. פיזור עמודי תוכן: 2 חינוכיים, 1 מאחורי קלעים, 1 עדות/לקוח, 1 מוצר/שירות, 1 ויראלי/שאלה, 1 מוטיבציה/ערך
+6. כל פוסט — פורמט מדויק: תמונה / ריל / קרוסל (3-5 שקפים) / סטורי
+7. זמן פרסום מבוסס קהל יעד — לא גנרי
+8. אם יש ביקורת חיובית ברשימה — שלב ציטוט אמיתי בפוסט העדות
 
-החזר JSON:
+החזר JSON בלבד:
 {
   "posts": [
     {
       "day_index": 0,
-      "topic": "נושא הפוסט",
-      "format": "תמונה|ריל|קרוסל|סטורי",
-      "hook": "פתיחה מושכת",
-      "body": "גוף הפוסט המלא בעברית",
-      "hashtags": "#האשטאג1 #האשטאג2",
-      "best_time": "18:00",
-      "post_type": "חינוכי|מוצר|עדות|מאחורי_הקלעים|שאלה"
+      "day_name": "ראשון",
+      "topic": "נושא ספציפי",
+      "format": "ריל|קרוסל|תמונה|סטורי",
+      "post_type": "חינוכי|מאחורי_קלעים|עדות|מוצר|ויראלי|מוטיבציה",
+      "target_audience_angle": "זווית קהל יעד ספציפית לפוסט זה",
+      "hook": "שורה ראשונה — Hook מנצח",
+      "body": "גוף הפוסט המלא בעברית — 80-130 מילים עם ערך אמיתי",
+      "cta": "קריאה לפעולה ספציפית",
+      "hashtags": "#האשטאג1 #האשטאג2 #האשטאג3 #נישה1 #נישה2 #עיר",
+      "best_time": "19:00",
+      "carousel_slides": null,
+      "visual_direction": "תיאור ויזואל מומלץ לפוסט"
     }
   ]
-}`,
+}
+
+אם format=קרוסל, מלא carousel_slides: ["טקסט שקף 1 (כותרת)", "תוכן שקף 2", "תוכן שקף 3", "CTA שקף אחרון"]
+`,
       response_json_schema: { type: 'object' },
     });
 
@@ -149,14 +217,20 @@ ${contentStyle ? `סגנון תוכן מועדף: ${contentStyle}` : ''}
 
         const taskDescription = [
           `📌 נושא: ${post.topic}`,
-          `🎯 פורמט: ${post.format || 'תמונה'} | שעת פרסום מומלצת: ${post.best_time || '18:00'}`,
+          `🎯 פורמט: ${post.format || 'תמונה'} | סוג: ${post.post_type || 'כללי'} | שעת פרסום: ${post.best_time || '18:00'}`,
+          post.target_audience_angle ? `👥 זווית קהל: ${post.target_audience_angle}` : '',
+          post.visual_direction ? `🖼 ויזואל: ${post.visual_direction}` : '',
           ``,
-          `📝 טקסט הפוסט:`,
+          `📝 טקסט הפוסט המלא:`,
           `${post.hook || ''}`,
+          ``,
           `${post.body || ''}`,
           ``,
+          `${post.cta ? `→ ${post.cta}` : ''}`,
+          ``,
           `${post.hashtags || ''}`,
-        ].join('\n');
+          post.carousel_slides?.length ? `\n📊 שקפי קרוסל:\n${post.carousel_slides.map((s: string, i: number) => `שקף ${i + 1}: ${s}`).join('\n')}` : '',
+        ].filter(Boolean).join('\n');
 
         await prisma.task.create({
           data: {
@@ -171,8 +245,8 @@ ${contentStyle ? `סגנון תוכן מועדף: ${contentStyle}` : ''}
           },
         });
 
-        // Also create an OrganicPost draft
-        const postContent = [post.hook, post.body, post.hashtags].filter(Boolean).join('\n\n');
+        // Also create an OrganicPost draft with full content
+        const postContent = [post.hook, post.body, post.cta ? `→ ${post.cta}` : '', post.hashtags].filter(Boolean).join('\n\n');
         const platform = preferredChannels.split(',')[0]?.trim() || 'instagram';
         await prisma.organicPost.create({
           data: {

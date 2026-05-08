@@ -64,15 +64,30 @@ export async function getAudienceSegments(req: Request, res: Response) {
     let result: any = null;
     try {
       result = await invokeLLM({
-        model: 'haiku',
-        maxTokens: 2000,
-        prompt: `פרסום ממומן ישראלי. בנה 3 קהלי יעד לפייסבוק/גוגל עבור: "${profile.name}" (${profile.category}, ${profile.city}).
-שירותים: ${profile.relevant_services || profile.category}. שוק: ${profile.target_market || 'כללי'}.${insightContext}
-נתונים: ${reviews.length} ביקורות, ${leads.length} לידים (${conversionRate}% המרה).
-ביקורות לדוגמה: ${reviewSamples || 'אין'}.
+        model: 'sonnet',
+        maxTokens: 2200,
+        prompt: `אתה מומחה לפרסום ממומן בשוק הישראלי עם ניסיון ב-Meta Ads וגוגל. בנה 3 סגמנטים ממוקדים ומבוססי נתונים.
 
-החזר JSON עם בדיוק 3 סגמנטים שונים:
-{"segments":[{"segment_name":"...","description":"...","age_min":25,"age_max":45,"genders":"נשים וגברים","income_level":"mid","conversion_probability":0.3,"estimated_size":"medium","estimated_audience_range":"10,000-40,000","facebook_targeting":{"interests":["...","..."],"behaviors":["..."],"custom_audience":"...","lookalike_source":"...","exclusions":[]},"google_targeting":{"keywords":["...","..."],"negative_keywords":["..."],"in_market_audiences":["..."],"custom_intent":"..."},"best_channels":["Facebook","Instagram"],"best_posting_time":"...","ad_creative_tip":"...","pain_point":"...","purchase_trigger":"..."}]}`,
+עסק: "${profile.name}" | תחום: ${profile.category} | עיר: ${profile.city}
+שירותים: ${profile.relevant_services || profile.category}
+שוק יעד: ${profile.target_market || 'כללי'}
+${profile.description ? `תיאור: ${profile.description}` : ''}
+${insightContext}
+
+נתונים אמיתיים:
+• ${reviews.length} ביקורות | ${leads.length} לידים | המרה: ${conversionRate}%
+${reviewSamples ? `ביקורות:\n${reviewSamples}` : ''}
+${leadSamples ? `לידים לדוגמה:\n${leadSamples}` : ''}
+${signalSamples ? `אותות שוק: ${signalSamples}` : ''}
+
+הוראות:
+- כל סגמנט חייב להיות שונה מהאחרים (גיל שונה / כוונת קנייה שונה / ערוץ שונה)
+- pain_point ו-purchase_trigger: ספציפיים לסקטור ולנתונים (לא גנריים)
+- Facebook interests: שמות ספציפיים של עמודים/תחומי עניין ב-Facebook Ads Manager
+- ad_creative_tip: מה לצלם/לכתוב ספציפי לסגמנט זה
+
+JSON עם בדיוק 3 סגמנטים:
+{"segments":[{"segment_name":"שם ייחודי","description":"תיאור ספציפי עם פסיכוגרפיה","age_min":25,"age_max":45,"genders":"נשים וגברים","income_level":"mid","conversion_probability":0.3,"estimated_size":"medium","estimated_audience_range":"10,000-40,000","facebook_targeting":{"interests":["עניין ספציפי 1","עניין 2","עניין 3"],"behaviors":["התנהגות 1"],"custom_audience":"תיאור Custom Audience","lookalike_source":"מקור Lookalike","exclusions":["מה לא לטרגט"]},"google_targeting":{"keywords":["ביטוי מדויק 1","ביטוי 2"],"negative_keywords":["שלילה 1"],"in_market_audiences":["in-market 1"],"custom_intent":"תיאור custom intent"},"best_channels":["Facebook","Instagram"],"best_posting_time":"ימים + שעות ספציפיים","ad_creative_tip":"מה לצלם ומה לכתוב — ספציפי","pain_point":"כאב ספציפי של הסגמנט","purchase_trigger":"מה מניע אותם לקנות עכשיו"}]}`,
         response_json_schema: { type: 'object' },
       });
     } catch (llmErr: any) {

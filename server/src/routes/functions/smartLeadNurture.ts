@@ -101,12 +101,22 @@ export async function smartLeadNurture(req: Request, res: Response) {
 
           const sectorCtx = getSectorContext(category);
           const messageResult = await invokeLLM({
-            prompt: `כתוב הודעת מעקב קצרה בוואטסאפ (2 שורות) מהעסק "${name}" (${category} ב${city}) ל${customerName}.
+            model: 'sonnet',
+            maxTokens: 250,
+            prompt: `אתה מומחה לתקשורת מכירות לעסקים קטנים ישראלים. כתוב הודעת WhatsApp מעקב שתגרום ל${customerName} לענות — אנושית, לא לוחצת, מעוררת עניין.
 
-הקשר: ${customerName} הביע עניין ב${serviceNeeded}, יצרנו קשר פעם ראשונה לפני מספר ימים, ועד כה לא ענה.
-גישה: ${angle}. ${toneInstruction}.
+עסק: "${name}" | תחום: ${category} | עיר: ${city}
+ליד: ${customerName} | עניין ב: ${serviceNeeded}
+ניסיון מעקב מספר: ${followupCount} | ימים מאז פנייה ראשונה: ${followupCount === 1 ? '2-3' : '5-7'}
+גישה נדרשת: ${angle}
+סגנון: ${toneInstruction}
 ${sectorCtx}
-אל תהיה לחצן. פנה בשם. משפט שאלה אחד בסוף.
+
+הנחיות:
+- שורה 1: פנייה אישית בשם + הקשר ספציפי (מה שרצו)
+- שורה 2: ערך קצר — סיבה אחת ממוקדת לחזור עכשיו (מבצע / זמינות / עדכון רלוונטי)
+- שורה 3: שאלה אחת קצרה שקל לענות עליה (כן/לא)
+- ללא לחץ, ללא "רק רציתי לבדוק", ללא סמיילי מיותרים
 כתוב רק את טקסט ההודעה.`,
           });
 

@@ -58,10 +58,11 @@ export async function scanServicesAndPrices(req: Request, res: Response) {
 
     const result = await invokeLLM({
       model:     'haiku',
-      maxTokens: 500,
-      prompt: `Extract services and prices from this website text for "${profile.name}" (${profile.category}).
-Return ONLY JSON: {"services":[{"name":"","price":"","category":""}]}
-Use empty string for unknown price. Max 15 items. Website text:
+      maxTokens: 350,
+      prompt: `Extract all services and prices from this website text for "${profile.name}" (${profile.category}, Israel).
+Extract only what is explicitly listed. Do not invent services or prices.
+Return ONLY JSON: {"services":[{"name":"service name in Hebrew","price":"price with ₪ symbol or empty string if unknown","category":"main category of this service"}]}
+Max 15 items. Website text:
 ${rawText}`,
       response_json_schema: { type: 'object' },
     });

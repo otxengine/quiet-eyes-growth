@@ -153,16 +153,17 @@ export async function tiktokPostTracker(req: Request, res: Response) {
         performance === 'at_benchmark'    ? `בממוצע ⚠️` : `מתחת לממוצע ❌`;
 
       const feedback = await invokeLLM({
-        model: 'haiku',
+        model: 'sonnet',
         maxTokens: 300,
-        prompt: `סרטון TikTok של "${profile.name}" (${profile.category}):
-תוכן: "${(post.content || '').slice(0, 200)}"
-ביצועים לאחר ${Math.round(ageHours)} שעות: ${plays.toLocaleString()} צפיות | ${(engRate * 100).toFixed(1)}% engagement | ${Math.round(playsPerDay).toLocaleString()} views/day
-בנצ'מרק סקטור: ${sectorAvgPlaysPerDay.toLocaleString()} views/day
-סטטוס: ${perfLabel}
+        prompt: `אתה אנליסט TikTok לעסקים ישראלים. תן המלצה טקטית ספציפית לשיפור ביצועי הסרטון.
 
-המלצה ספציפית לשיפור ב-1-2 משפטים.
-JSON בלבד: { "recommendation": "...", "boost_action": "comment_reply|reshare_story|boost_ad|none" }`,
+עסק: "${profile.name}" | תחום: ${profile.category}
+תוכן: "${(post.content || '').slice(0, 200)}"
+ביצועים: ${plays.toLocaleString()} צפיות | ${(engRate * 100).toFixed(1)}% engagement | ${Math.round(playsPerDay).toLocaleString()} views/day לאחר ${Math.round(ageHours)} שעות
+בנצ'מרק: ${sectorAvgPlaysPerDay.toLocaleString()} views/day | סטטוס: ${perfLabel}
+
+המלצה ספציפית + פעולה אחת (לא "שפר תוכן" — אלא "הגב ל-5 תגובות ראשונות תוך 30 דקות" או "שתף בסטורי עם Poll").
+JSON בלבד: { "recommendation": "המלצה ספציפית", "boost_action": "comment_reply|reshare_story|boost_ad|none" }`,
         response_json_schema: { type: 'object' },
       });
 

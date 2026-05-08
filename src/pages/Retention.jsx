@@ -58,11 +58,19 @@ export default function Retention() {
     try {
       const names = churnLeads.slice(0, 3).map(l => l.name || 'לקוח').join(', ');
       const res = await base44.integrations.Core.InvokeLLM({
-        model: 'haiku',
-        prompt: `אתה מנהל שיווק. עסק: "${businessProfile?.name}" (${businessProfile?.category}).
-לקוחות בסיכון נטישה: ${names || 'מספר לקוחות'}.
-כתוב מסר WhatsApp קצר ואישי להחזרת לקוח שלא רכש זמן רב. בעברית, 3-4 משפטים, מקצועי ואנושי.
-החזר רק את הטקסט עצמו.`,
+        model: 'sonnet',
+        maxTokens: 250,
+        prompt: `אתה מומחה שימור לקוחות לעסקים קטנים ישראלים. כתוב הודעת Win-Back שתגרום ללקוחות לחזור.
+
+עסק: "${businessProfile?.name}" | תחום: ${businessProfile?.category}
+לקוחות בסיכון נטישה: ${names || 'מספר לקוחות'}
+
+הודעת WhatsApp (3-4 שורות):
+- פנייה חמה בשם (אחד מהשמות)
+- ציין שחסרת — אנושי ולא שיווקי
+- סיבה ספציפית לחזור עכשיו (מבצע / חדשות / הזמנה)
+- CTA קל ולא מחייב
+עברית טבעית עם אמוג'י בצנעה. החזר רק את הטקסט.`,
       });
       // InvokeLLM returns parsed object or string — extract text
       const rawText = typeof res === 'string' ? res
@@ -85,11 +93,18 @@ export default function Retention() {
   const avgSatisfaction = respondedSurveys.length > 0 ? respondedSurveys.reduce((sum, s) => sum + (s.rating || 0), 0) / respondedSurveys.length : 0;
   const pendingSurveys = surveys.filter(s => !s.response_received);
 
+  // Retention metrics
+  const totalActive = leads.filter(l => !['lost', 'cold'].includes(l.status)).length;
+  const retentionRate = leads.length > 0 ? Math.round((completedLeads.length / leads.length) * 100) : 0;
+  const positiveReviews = reviews.filter(r => r.sentiment === 'positive' || r.rating >= 4);
+  const loyalLeads = leads.filter(l => l.status === 'completed' && daysAgo(l.updated_at || l.created_date) <= 30);
+  const warmLeads = leads.filter(l => ['new', 'contacted', 'qualified'].includes(l.status));
+
   const statCards = [
-    { label: 'לקוחות טופלו', value: completedLeads.length },
-    { label: 'בסיכון / אבודים', value: atRiskCount, change: atRiskCount > 0 ? `${atRiskCount}` : null, changeColor: 'text-danger' },
-    { label: 'לידים החודש', value: monthLeads.length },
-    { label: 'שביעות רצון', value: avgSatisfaction > 0 ? `${avgSatisfaction.toFixed(1)}/5` : '—', icon: Star },
+    { label: 'שיעור שימור', value: `${retentionRate}%`, change: retentionRate >= 60 ? null : 'נמוך', changeColor: 'text-danger' },
+    { label: 'לקוחות פעילים', value: totalActive },
+    { label: 'בסיכון / אבודים', value: atRiskCount, change: atRiskCount > 0 ? `${atRiskCount} לפעולה` : null, changeColor: 'text-danger' },
+    { label: 'שביעות רצון', value: avgSatisfaction > 0 ? `${avgSatisfaction.toFixed(1)}/5` : '—' },
   ];
 
   return (
@@ -109,6 +124,36 @@ export default function Retention() {
             {card.change && <p className={`text-[10px] font-semibold mt-1 ${card.changeColor}`}>{card.change}</p>}
           </div>
         ))}
+      </div>
+
+      {/* Funnel / Lifecycle breakdown */}
+      <div className="card-base p-5">
+        <h3 className="text-[13px] font-semibold text-foreground mb-3">מצב לקוחות — מחזור חיים</h3>
+        <div className="space-y-2">
+          {[
+            { label: 'חמים / בתהליך', count: warmLeads.length, color: 'bg-blue-500', pct: leads.length > 0 ? warmLeads.length / leads.length : 0, textColor: 'text-blue-700' },
+            { label: 'טופלו / מרוצים', count: completedLeads.length, color: 'bg-green-500', pct: leads.length > 0 ? completedLeads.length / leads.length : 0, textColor: 'text-green-700' },
+            { label: 'נאמנים (30 יום אחרונים)', count: loyalLeads.length, color: 'bg-violet-500', pct: leads.length > 0 ? loyalLeads.length / leads.length : 0, textColor: 'text-violet-700' },
+            { label: 'בסיכון / אבדו', count: lostLeads.length, color: 'bg-red-500', pct: leads.length > 0 ? lostLeads.length / leads.length : 0, textColor: 'text-red-700' },
+          ].map(({ label, count, color, pct, textColor }) => (
+            <div key={label} className="flex items-center gap-3">
+              <div className="w-28 flex-shrink-0 text-right">
+                <span className="text-[10px] text-foreground-muted">{label}</span>
+              </div>
+              <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
+                <div className={`h-full rounded-full ${color} transition-all duration-700`} style={{ width: `${Math.round(pct * 100)}%` }} />
+              </div>
+              <span className={`text-[11px] font-bold w-8 text-left flex-shrink-0 ${textColor}`}>{count}</span>
+            </div>
+          ))}
+        </div>
+        {reviews.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-border flex items-center gap-4 text-[10px] text-foreground-muted">
+            <span>⭐ {positiveReviews.length} ביקורות חיוביות</span>
+            <span>👎 {negativeReviews.length} ביקורות שליליות</span>
+            <span>📝 {reviews.length} סה"כ</span>
+          </div>
+        )}
       </div>
 
       <AiInsightBox

@@ -129,12 +129,15 @@ export default function UrgentActions({ reviews, leads, signals, competitors }) 
     setActionState(prev => ({ ...prev, [item.id]: { loading: true } }));
     try {
       const reply = await base44.integrations.Core.InvokeLLM({
-        prompt: `כתוב תגובת מנהל מקצועית ומכבדת בעברית לביקורת זו. 2-3 שורות מקסימום. טון אדיב, ללא הגנתיות.
+        model: 'sonnet',
+        maxTokens: 300,
+        prompt: `כתוב תגובת מנהל שתהפוך ביקורת שלילית להזדמנות — ספציפית, אנושית, ולא גנרית.
 
 ביקורת מאת ${item.reviewerName || 'לקוח'} ב${item.platform || 'פלטפורמה'}:
-"${(item.reviewText || '').substring(0, 300)}"
+"${(item.reviewText || '').substring(0, 400)}"
 
-כתוב רק את תגובת המנהל, ללא הסברים נוספים.`
+2-3 שורות: פנה בשם + הכר את הנקודה המדויקת + הצע פתרון קונקרטי + הזמן לשיחה ישירה.
+ללא תירוצים, ללא "אנו מצטערים" גנרי. כתוב רק את התגובה.`
       });
       setActionState(prev => ({ ...prev, [item.id]: { text: typeof reply === 'string' ? reply : '', loading: false } }));
     } catch (_) {

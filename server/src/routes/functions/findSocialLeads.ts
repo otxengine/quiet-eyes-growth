@@ -123,8 +123,8 @@ ${itemsStr}
 
 Return JSON only: {"results":[{"is_lead":true,"service_needed":"","urgency":"low|this_week|soon|immediate","budget_mentioned":"","person_name":"","platform":"facebook_group|facebook|instagram|forum|tapuz|zap|web","source_type":"facebook_group|forum|social_post|web","score_reasoning":"one sentence"},...]}, same length and order.`,
           response_json_schema: { type: 'object' },
-          model: 'haiku',
-          maxTokens: 1200,
+          model: 'sonnet',
+          maxTokens: 1400,
         });
         const results: any[] = batchResult?.results || [];
         for (let i = 0; i < chunk.length; i++) {
@@ -144,14 +144,17 @@ Return JSON only: {"results":[{"is_lead":true,"service_needed":"","urgency":"low
         .join('\n');
       try {
         const batchMsg = await invokeLLM({
-          prompt: `כתוב הודעת WhatsApp ראשונה בעברית (2-3 שורות) עבור העסק "${name}" (${category} ב${city}). ${toneInstruction}. פתח בשם אם ידוע. הזכר שירות ספציפי. סיים בהצעה לעזור.
+          prompt: `אתה מומחה מכירות לעסקים קטנים ישראלים. כתוב הודעת WhatsApp ראשונה שתגרום לליד להגיב — אנושית, ספציפית, לא מכירתית.
+עסק: "${name}" | תחום: ${category} | עיר: ${city} | סגנון: ${toneInstruction}
+
+עבור כל ליד — פתח בשם אם ידוע, הזכר את השירות שהם חיפשו ספציפית, הצע ערך קצר, סיים בשאלה קלה.
 
 ${msgItemsStr}
 
 JSON בלבד: {"messages":["הודעה0","הודעה1",...]}, אותו אורך ואותו סדר.`,
           response_json_schema: { type: 'object' },
-          model: 'haiku',
-          maxTokens: 1500,
+          model: 'sonnet',
+          maxTokens: 1800,
         });
         const msgs: string[] = batchMsg?.messages || [];
         for (let i = 0; i < qualified.length; i++) messagesArr[i] = msgs[i] || '';

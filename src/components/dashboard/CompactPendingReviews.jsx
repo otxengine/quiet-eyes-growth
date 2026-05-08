@@ -31,7 +31,7 @@ function DashboardReviewItem({ review, businessProfile }) {
     const prompt = isNeg
       ? `You are a customer service expert for "${bName}". Tone: ${tone}. A customer (${review.reviewer_name || 'לקוח'}) left a ${review.rating}-star review: "${review.text}". Write a professional 2-3 sentence response in Hebrew. Acknowledge the issue, apologize sincerely, offer a next step. Return ONLY the response.`
       : `You are writing a thank-you for "${bName}". Tone: ${tone}. Customer ${review.reviewer_name || 'לקוח'} left ${review.rating} stars: "${review.text}". Write a warm 2-sentence thank-you in Hebrew referencing their review. Return ONLY the response.`;
-    const result = await base44.integrations.Core.InvokeLLM({ prompt });
+    const result = await base44.integrations.Core.InvokeLLM({ prompt, model: 'sonnet', maxTokens: 300 });
     setResponseText(result?.trim() || '');
     setExpanded(true);
     setGenerating(false);

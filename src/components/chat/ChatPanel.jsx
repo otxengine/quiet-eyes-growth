@@ -85,13 +85,20 @@ export default function ChatPanel({ onClose, businessProfile }) {
           : '';
 
         const reply = await base44.integrations.Core.InvokeLLM({
-          prompt: `אתה עוזר AI של מערכת QuietEyes Intelligence — פלטפורמת מודיעין עסקי לעסקים קטנים בישראל.${bpContext}
-המערכת עוקבת אחר מתחרים, מנתחת ביקורות, מייצרת תובנות שוק, וסוכנים AI פועלים ברקע.
+          model: 'sonnet',
+          maxTokens: 600,
+          prompt: `אתה יועץ עסקי AI של מערכת QuietEyes — פלטפורמת מודיעין עסקי לעסקים קטנים ישראלים.${bpContext}
+המערכת עוקבת אחר מתחרים, מנתחת ביקורות, מייצרת תובנות שוק ופועלת דרך סוכנים AI ברקע.
+
+כללי תגובה:
+- ענה בעברית בלבד
+- תן תשובות ישירות, מעשיות, ספציפיות לעסק — לא עצות גנריות
+- אם השאלה קשורה לתחום המרקטינג/מתחרים/ביקורות — ציין פעולה קונקרטית אחת
+- אורך: 2-4 משפטים, אלא אם נשאל להסבר מפורט
 
 היסטוריית השיחה:
 ${history}
 
-ענה בעברית בלבד. היה ממוקד ותכליתי. עד 3 משפטים אלא אם נדרש יותר.
 שאלת המשתמש: ${text}`,
         });
         replyText = typeof reply === 'string' ? reply : (reply?.content || JSON.stringify(reply));

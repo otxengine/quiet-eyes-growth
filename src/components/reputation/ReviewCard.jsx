@@ -140,7 +140,7 @@ export default function ReviewCard({ review, businessProfile, compact = false })
     setExpanded(false);
     const prompt = buildPrompt(type, review, businessProfile);
     try {
-      const result = await base44.integrations.Core.InvokeLLM({ prompt });
+      const result = await base44.integrations.Core.InvokeLLM({ prompt, model: 'sonnet', maxTokens: 350 });
       if (!result || !result.trim()) {
         setError('לא הצלחנו לייצר תגובה. נסה שוב.');
         setGenerating(false);

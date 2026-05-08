@@ -130,19 +130,29 @@ export default function StrategicRecommendations({ businessProfile, competitors 
       const signalStr = signals.slice(0, 5).map(s => s.summary).join('; ');
 
       const res = await base44.integrations.Core.InvokeLLM({
-        model: 'haiku',
-        prompt: `אתה אסטרטג עסקי. העסק: "${businessProfile?.name}" (${businessProfile?.category}, ${businessProfile?.city}).
-מתחרים: ${competitorStr || 'לא ידועים'}.
-סיגנלים: ${signalStr || 'אין'}.
+        model: 'sonnet',
+        maxTokens: 1200,
+        prompt: `אתה אסטרטג עסקי בכיר לעסקים קטנים ישראלים. המלצותיך חייבות להיות ספציפיות, מבוססות נתונים, וישימות בשבוע הקרוב.
 
-צור 4 המלצות אסטרטגיות קצרות. JSON בלבד:
+עסק: "${businessProfile?.name}" | תחום: ${businessProfile?.category} | עיר: ${businessProfile?.city}
+${businessProfile?.description ? `תיאור: ${businessProfile.description}` : ''}
+
+מתחרים: ${competitorStr || 'לא זוהו'}
+אותות שוק: ${signalStr || 'אין עדיין'}
+
+צור 4-5 המלצות אסטרטגיות מגוונות (לא יותר מ-2 מאותה קטגוריה). כל המלצה חייבת:
+- לנבוע מהנתונים (מתחרה ספציפי / אות שוק ספציפי) — לא המלצה גנרית
+- לכלול צעדים שניתן לבצע תוך שבוע
+- ה-action_label חייב להיות פועל + עצם קצר
+
+JSON בלבד:
 {"recommendations":[{
-  "title": "כותרת קצרה 3-5 מילים",
-  "summary": "תקציר חד-משפטי",
-  "detail": "הסבר 2-3 משפטים",
+  "title": "כותרת 4-6 מילים ספציפיות",
+  "summary": "תקציר משפט אחד — עם מספר או שם ספציפי",
+  "detail": "הסבר 2-3 משפטים — מדוע עכשיו, מה ה-ROI הצפוי",
   "category": "competitive|opportunity|defensive|general",
-  "steps": ["צעד 1", "צעד 2", "צעד 3"],
-  "action_label": "פעולה לביצוע — עד 5 מילים",
+  "steps": ["צעד 1 ספציפי + ערוץ", "צעד 2 + מה לומר/לפרסם", "צעד 3 + מדד הצלחה"],
+  "action_label": "פועל + עצם (עד 4 מילים)",
   "time_minutes": 20
 }]}`,
       });

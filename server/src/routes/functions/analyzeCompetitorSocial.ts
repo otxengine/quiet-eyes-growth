@@ -56,21 +56,31 @@ export async function analyzeCompetitorSocial(req: Request, res: Response) {
           .join('\n\n');
 
         const analysis = await invokeLLM({
-          model: 'haiku',
-          prompt: `נתח את הנוכחות הדיגיטלית של המתחרה "${comp.name}".
-העסק שלנו: "${profile?.name}" (${profile?.category}, ${profile?.city})
+          model: 'sonnet',
+          maxTokens: 500,
+          prompt: `אתה אנליסט מודיעין תחרותי בכיר. נתח את הנוכחות הדיגיטלית של "${comp.name}" ומצא את נקודת הפגיעות שהעסק שלי יכול לנצל.
 
-תוכן שנמצא:
-${textBlob.slice(0, 2000)}
+העסק שלי: "${profile?.name}" | תחום: ${profile?.category} | עיר: ${profile?.city}
+מתחרה: "${comp.name}"
+
+ממצאים מהרשת:
+${textBlob.slice(0, 2500)}
+
+ניתוח נדרש:
+- מה הערוץ הדומיננטי שלהם? מה הם עושים טוב?
+- מהי החולשה הכי בולטת שניתן לראות מהתוכן?
+- מה הלקוחות מתלוננים עליהם? (מתוך הביקורות)
+- מה ההזדמנות הספציפית ביותר לנצל?
 
 JSON בלבד:
 {
-  "content_strategy": "אסטרטגיית תוכן — משפט אחד",
-  "strongest_channel": "instagram|facebook|google|unknown",
+  "content_strategy": "מה הם עושים ברשתות — משפט ספציפי עם דוגמאות",
+  "strongest_channel": "instagram|facebook|google|tiktok|unknown",
   "engagement_level": "low|medium|high",
-  "content_themes": ["נושא 1", "נושא 2"],
-  "our_opportunity": "הזדמנות ספציפית מול הנתונים — עד 20 מילה",
-  "recommended_action": "פועל + יעד — עד 8 מילים",
+  "content_themes": ["נושא 1 ספציפי", "נושא 2 ספציפי"],
+  "main_weakness": "החולשה הבולטת ביותר שלהם — עם ראייה מהנתונים",
+  "our_opportunity": "הזדמנות ספציפית ממוקדת — מה אנחנו יכולים לעשות שהם לא עושים",
+  "recommended_action": "פועל ציווי + ערוץ + תוכן — עד 10 מילים",
   "sentiment_from_reviews": "positive|negative|mixed|unknown"
 }`,
           response_json_schema: { type: 'object' },

@@ -80,10 +80,11 @@ export async function runMLLearningCycle(req: Request, res: Response) {
     }).filter(Boolean);
 
     const learningProfile = await invokeLLM({
-      model: 'haiku',
-      prompt: `אתה מערכת למידה עסקית. נתח משוב של משתמש מהמערכת ובנה פרופיל העדפות.
+      model: 'sonnet',
+      maxTokens: 500,
+      prompt: `אתה מערכת למידה עסקית חכמה. נתח דפוסי משוב ובנה פרופיל העדפות מדויק שישפר את כל הסוכנים.
 
-עסק: "${profile.name}" — ${profile.category}, ${profile.city}
+עסק: "${profile.name}" | תחום: ${profile.category} | עיר: ${profile.city}
 סה"כ משוב: ${feedbackEvents.length} (${positive.length} חיובי, ${negative.length} שלילי)
 
 תוכן שהמשתמש אהב (${likedTexts.length}):
@@ -92,13 +93,15 @@ ${likedTexts.join('\n') || 'אין עדיין'}
 תוכן שלא עבד (${dislikedTexts.length}):
 ${dislikedTexts.join('\n') || 'אין עדיין'}
 
-בנה פרופיל למידה. החזר JSON בלבד:
+מטרה: לזהות דפוסים קונקרטיים — לא "המשתמש מעדיף קצר", אלא "המשתמש מעדיף פוסטים עם emoji + שאלות פתיחה".
+
+JSON בלבד:
 {
   "preferred_tone": "formal|casual|data_heavy|simple",
-  "accepted_patterns": "תיאור קצר של סוגי תובנות שהמשתמש מעדיף",
-  "rejected_patterns": "תיאור קצר של מה שלא עובד",
-  "feedback_summary": "סיכום 1-2 משפטים של הלמידה",
-  "learning_confidence": 0.0_to_1.0
+  "accepted_patterns": "דפוסים ספציפיים שעובדים — מילים, מבנה, ערוצים",
+  "rejected_patterns": "דפוסים ספציפיים שלא עובדים — מה להימנע",
+  "feedback_summary": "סיכום 1-2 משפטים עם תובנה ספציפית",
+  "learning_confidence": 0.0
 }`,
       response_json_schema: { type: 'object' },
     });

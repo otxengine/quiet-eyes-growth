@@ -86,10 +86,10 @@ import { tiktokPostTracker } from './tiktokPostTracker';
 const router = Router();
 
 async function invokeLLMHandler(req: Request, res: Response) {
-  const { prompt, response_json_schema, model } = req.body;
+  const { prompt, response_json_schema, model, maxTokens } = req.body;
   if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
   try {
-    const result = await invokeLLM({ prompt, response_json_schema, model });
+    const result = await invokeLLM({ prompt, response_json_schema, model, maxTokens });
     return res.json(result);
   } catch (err: any) {
     return res.status(500).json({ error: err.message });

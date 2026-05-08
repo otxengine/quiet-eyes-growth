@@ -89,7 +89,7 @@ export async function runCompetitorIdentification(req: Request, res: Response) {
     // ── Step 1: Understand the business type + get nearby cities ──────────────
     const contextResult = await invokeLLM({
       model: 'haiku',
-      maxTokens: 400,
+      maxTokens: 250,
       prompt: `עסק ישראלי: "${name}", קטגוריה: ${category}, עיר: ${city}
 
 1. מה הסוג המדויק של העסק? (למשל: "בר סושי יפני", "פיצרייה", "ספר לגברים")

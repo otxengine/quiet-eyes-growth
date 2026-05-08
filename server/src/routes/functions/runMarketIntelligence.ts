@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { getSectorContext, getSectorContentStrategy } from '../../lib/sectorPrompts';
 
 export async function runMarketIntelligence(req: Request, res: Response) {
   const { businessProfileId } = req.body;
@@ -28,32 +29,42 @@ export async function runMarketIntelligence(req: Request, res: Response) {
       ? `\nמתחרים מזוהים:\n${competitors.slice(0, 5).map(c => `- ${c.name}: דירוג ${c.rating || '?'}, חוזקות: ${c.strengths || '?'}`).join('\n')}`
       : '';
 
+    const sectorCtx = getSectorContentStrategy(profile.category);
+
     // ── Cold-start: no raw signals yet — generate sector-level insights from context alone ──
     if (signals.length === 0) {
       const coldResult = await invokeLLM({
-        prompt: `אתה אנליסט מודיעין שוק לעסקים קטנים בישראל.
-עסק חדש ללא נתוני שוק עדיין. בנה תובנות ראשוניות רלוונטיות לסקטור ולעיר.
-
+        model: 'sonnet',
+        maxTokens: 1200,
+        prompt: `אתה אנליסט מודיעין שוק בכיר לעסקים קטנים בישראל.
 עסק: "${profile.name}" | תחום: ${profile.category} | עיר: ${profile.city}
-${profile.description ? `תיאור: ${profile.description}` : ''}${competitorContext}
-צור 3 תובנות אסטרטגיות ראשוניות ספציפיות לסקטור זה בישראל.
-כל תובנה חייבת להיות ספציפית לסקטור ולעיר — לא גנרית.
+${profile.description ? `תיאור: ${profile.description}` : ''}
+${profile.relevant_services ? `שירותים: ${profile.relevant_services}` : ''}
+${competitorContext}
+
+${sectorCtx}
+
+צור 4-5 תובנות שוק ראשוניות ספציפיות וישימות לסקטור זה ולעיר זו בישראל.
+כל תובנה חייבת:
+• לנבוע מהבנת הסקטור הספציפי (לא גנרית)
+• לכלול פעולה ממוקדת ש-${profile.name} יכול לבצע כבר מחר
+• prefilled_text ריאלי שהמשתמש יכול להעתיק ישירות
 
 JSON בלבד:
 {"insights":[{
-  "summary": "כותרת ספציפית לסקטור ולעיר",
+  "summary": "תובנה ספציפית לסקטור + עיר — עם מספר או שם",
   "impact_level": "high|medium|low",
-  "category": "opportunity|trend|threat|competitor_move",
-  "recommended_action": "פועל ציווי + פעולה ספציפית",
+  "category": "opportunity|trend|threat|competitor_move|demand_gap",
+  "recommended_action": "פועל ציווי + ערוץ + תוכן ספציפי",
   "action_label": "3-4 מילים עם פועל",
   "action_type": "social_post|promote|task|call",
   "action_platform": "instagram|facebook|tiktok|google|whatsapp|wolt|ten_bis|website|general",
-  "platform_reason": "משפט אחד מדוע פלטפורמה זו מתאימה לעסק ולתובנה זו",
-  "prefilled_text": "טקסט מוכן לשימוש ישיר בעברית — 30-50 מילים",
+  "platform_reason": "מדוע פלטפורמה זו מתאימה לסקטור זה — נימוק ספציפי",
+  "prefilled_text": "טקסט מוכן לשימוש ישיר בעברית — 40-70 מילים עם Hook + ערך + CTA",
   "time_minutes": 15,
-  "confidence": 65,
+  "confidence": 70,
   "urgency_hours": 48,
-  "impact_reason": "מה יקרה אם לא יפעלו עכשיו — משפט אחד"
+  "impact_reason": "נזק/רווח קונקרטי אם לא/כן יפעלו"
 }]}`,
         response_json_schema: { type: 'object' },
       });
@@ -103,11 +114,17 @@ JSON בלבד:
     ).join('\n---\n');
 
     const result = await invokeLLM({
-      prompt: `אתה אנליסט מודיעין שוק לעסקים קטנים בישראל. ניתח את האותות הבאים וצור תובנות ספציפיות ואקציונביליות.
+      model: 'sonnet',
+      maxTokens: 1500,
+      prompt: `אתה אנליסט מודיעין שוק בכיר לעסקים קטנים בישראל. ניתח את האותות הבאים וצור תובנות ספציפיות וישימות.
 
 עסק: "${profile.name}" | תחום: ${profile.category} | עיר: ${profile.city}
 ${profile.description ? `תיאור: ${profile.description}` : ''}
+${profile.relevant_services ? `שירותים: ${profile.relevant_services}` : ''}
 ${competitorContext}
+
+${sectorCtx}
+
 אותות גולמיים (${signals.length} אותות):
 ${contextBlock}
 

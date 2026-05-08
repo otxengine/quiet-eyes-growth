@@ -167,13 +167,23 @@ function AgentAdvisor({ insight, snapshot, bpId, insightId }) {
     setLoading(true);
     try {
       const res = await base44.integrations.Core.InvokeLLM({
-        model: 'haiku',
+        model: 'sonnet',
+        maxTokens: 700,
         response_json_schema: GUIDANCE_SCHEMA,
-        prompt: `יועץ עסקי לעסקים ישראלים. ענה בעברית. הצע פעולות ספציפיות בהתאם למצב העסק.
-${snapshotCtx ? snapshotCtx.slice(0, 300) : ''}
-תובנה: "${insight.title}". ${(insight.description || '').slice(0, 120)}
-סוג: ${insight.typeLabel}. עדיפות: ${insight.priority}.
-כלל: אל תציע לחבר פלטפורמות שכבר פעילות. הצע צעדים מעשיים ישירים.`,
+        prompt: `אתה יועץ עסקי בכיר לעסקים קטנים ישראלים. המשימה: להפוך את התובנה לתוכנית ביצוע ברורה.
+
+${snapshotCtx ? snapshotCtx.slice(0, 500) : ''}
+
+תובנה: "${insight.title}"
+תיאור: ${(insight.description || '').slice(0, 200)}
+סוג: ${insight.typeLabel} | עדיפות: ${insight.priority}
+${insight.impact_reason ? `השפעה: ${insight.impact_reason}` : ''}
+
+דרישות לשלבי הביצוע:
+- כל שלב: פועל ציווי + ערוץ/כלי ספציפי + תוכן מדויק (לא "עדכן", אלא "פרסם ב-Instagram פוסט על...")
+- שלב 1: הכי דחוף, ניתן לביצוע תוך שעה
+- שלבים 2-3: פעולות מעקב ב-24-48 שעות
+- כלל: אל תציע לחבר פלטפורמות שכבר פעילות`,
       });
       const parsed = res && typeof res === 'object' && res.steps ? res : null;
       setGuidance(parsed);
@@ -191,14 +201,21 @@ ${snapshotCtx ? snapshotCtx.slice(0, 300) : ''}
     setChat(prev => [...prev, { role: 'user', text: q }]);
     setChatLoading(true);
     try {
-      // Plain text — reliable, within 700 token haiku limit
       const text = await base44.integrations.Core.InvokeLLM({
-        model: 'haiku',
-        prompt: `סוכן עסקי ישראלי. ענה בעברית, קצר ומעשי (2-3 משפטים), ספציפי לעסק.
-${snapshotCtx ? snapshotCtx.slice(0, 250) : ''}
-תובנה: "${insight.title}"
-שאלה: "${q}"
-ענה עם פעולה ישירה שניתן לבצע — לא עצות כלליות.`,
+        model: 'sonnet',
+        maxTokens: 450,
+        prompt: `אתה יועץ עסקי AI לעסקים קטנים ישראלים. ענה בעברית, ישיר, מעשי, ספציפי לעסק.
+
+${snapshotCtx ? snapshotCtx.slice(0, 400) : ''}
+תובנה בדיון: "${insight.title}"
+${insight.description ? `הקשר: ${(insight.description).slice(0, 150)}` : ''}
+
+שאלת המשתמש: "${q}"
+
+הנחיות תגובה:
+- תן תשובה ישירה עם פעולה קונקרטית אחת לפחות
+- אם רלוונטי — ציין ערוץ ספציפי (Instagram, WhatsApp, Google) ומה לומר/לפרסם
+- 2-3 משפטים בלבד אלא אם נשאל להסבר מפורט`,
       });
 
       const responseText = typeof text === 'string' ? text : JSON.stringify(text);

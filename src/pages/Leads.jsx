@@ -112,9 +112,14 @@ export default function Leads() {
 
   const handleEnrich = async () => {
     setEnriching(true);
-    await base44.functions.invoke('enrichLeads', { businessProfileId: bpId });
+    const res = await base44.functions.invoke('enrichLeads', { businessProfileId: bpId });
+    const enriched = res?.data?.enriched ?? res?.enriched ?? 0;
     queryClient.invalidateQueries({ queryKey: ['leadsPage'] });
-    toast.success('הלידים הועשרו בהצלחה ✓');
+    if (enriched > 0) {
+      toast.success(`${enriched} לידים הועשרו ✓`);
+    } else {
+      toast.info('אין לידים שדורשים העשרה כרגע');
+    }
     setEnriching(false);
   };
 

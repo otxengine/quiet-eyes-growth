@@ -96,32 +96,42 @@ export async function generateWeeklyReport(req: Request, res: Response) {
       .slice(0, 3)
       .map(s => `• [${s.category}] ${s.summary.slice(0, 80)}`);
 
+    const topLeadServices = allLeads
+      .filter(l => (l.created_date || '') >= weekAgo && l.service_needed)
+      .map(l => l.service_needed)
+      .reduce((acc: Record<string, number>, s) => { acc[s!] = (acc[s!] || 0) + 1; return acc; }, {});
+    const topService = Object.entries(topLeadServices).sort(([,a],[,b]) => b-a)[0]?.[0] || '';
+
+    const competitorNames = competitors.map(c => `${c.name}(${c.rating ?? '?'}⭐)`).join(', ');
+
     const result = await invokeLLM({
-      model: 'haiku',
-      prompt: `אתה יועץ עסקי. כתוב דוח שבועי תמציתי לבעל העסק.
+      model: 'sonnet',
+      maxTokens: 800,
+      prompt: `אתה יועץ עסקי בכיר לעסקים קטנים ישראלים. כתוב דוח שבועי מנהלי — ישיר, ממוקד, עם תובנה אחת חדה שתניע לפעולה.
 
-עסק: "${profile.name}" — ${profile.category} ב${profile.city}
+עסק: "${profile.name}" | תחום: ${profile.category} | עיר: ${profile.city}
 ${profile.description ? `תיאור: ${profile.description}` : ''}
-נתוני השבוע:
-• ${weekSignals.length} תובנות חדשות (${opportunities} הזדמנויות, ${threats} איומים)
-• ${weekLeads.length} לידים חדשים | ${hotLeads} חמים כרגע
-• ${weekReviews.length} ביקורות חדשות${avgRating ? ` | ממוצע: ${avgRating}⭐` : ''}
-• ${competitorSignals.length} שינויים אצל מתחרים
 
-תובנות בעלות השפעה גבוהה:
-${topSignals.length > 0 ? topSignals.join('\n') : 'אין תובנות בעלות השפעה גבוהה'}
+=== נתוני השבוע ===
+• תובנות שוק: ${weekSignals.length} חדשות (${opportunities} הזדמנויות, ${threats} איומים)
+• לידים: ${weekLeads.length} חדשים | ${hotLeads} חמים כרגע | המרה כוללת: ${conversionRate}%
+• ביקורות: ${weekReviews.length} חדשות${avgRating ? ` | ממוצע: ${avgRating}⭐` : ''}
+• שינויים אצל מתחרים: ${competitorSignals.length}
+${competitorNames ? `• מתחרים: ${competitorNames}` : ''}
+${topService ? `• שירות מבוקש השבוע: ${topService}` : ''}
 
-אחוז המרת לידים: ${conversionRate}%
+תובנות בעלות השפעה גבוהה השבוע:
+${topSignals.length > 0 ? topSignals.join('\n') : '• אין תובנות בעלות השפעה גבוהה השבוע'}
 
 JSON בלבד:
 {
-  "summary": "2-3 משפטים על השבוע — ישיר ועסקי",
-  "highlight": "הדבר הכי חשוב שקרה השבוע — משפט אחד",
-  "next_week_action": "פעולה אחת ספציפית ומדידה לשבוע הבא — עד 10 מילים",
+  "summary": "2-3 משפטים על השבוע — ציין מספרים, שמות שירותים, ומגמה ברורה. לא גנרי.",
+  "highlight": "הדבר הכי חשוב שקרה השבוע — משפט אחד ספציפי עם מספר או שם",
+  "next_week_action": "פעולה אחת ספציפית + ערוץ + לוח זמנים (לא יותר מ-12 מילים)",
   "score": 0,
-  "score_reason": "למה הציון הזה"
+  "score_reason": "נימוק קצר לציון — מה קבע אותו (חיובי / שלילי)"
 }
-חוק score: מ-1 עד 10. 10 = שבוע מצוין עם הרבה הזדמנויות. 5 = ממוצע. 1 = שבוע קשה.`,
+חוק score: 1-10. 10=שבוע מצוין. 7+=מעל הממוצע. 5=ממוצע. 3-=שבוע קשה. הציון מבוסס על: כמות לידים, המרה, ביקורות, הזדמנויות שזוהו.`,
       response_json_schema: { type: 'object' },
     });
 

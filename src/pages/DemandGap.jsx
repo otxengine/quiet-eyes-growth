@@ -23,13 +23,17 @@ const TIME_STYLES = {
 };
 
 function parseGapTags(signal) {
-  const tags = (signal.tags || '').split(',').reduce((acc, t) => {
+  const parts = (signal.tags || '').split(',').map(t => t.trim());
+  const kv = {};
+  for (const t of parts) {
     const [k, v] = t.split(':');
-    if (k) acc[k.trim()] = (v ?? k).trim();
-    return acc;
-  }, {});
-  const score = Math.min(100, Math.max(0, parseInt(tags.score || '50')));
-  const timeKey = tags.demand_gap || 'weeks';
+    if (k) kv[k.trim()] = (v ?? k).trim();
+  }
+  const score = Math.min(100, Math.max(0, parseInt(kv.score || signal.confidence != null ? Math.round((signal.confidence || 0.5) * 100) : 50)));
+  // time_to_capture is stored as the 2nd tag (e.g., "demand_gap,weeks,score:75")
+  const timeRaw = parts[1] || 'weeks';
+  const timeMap = { 'מיידי': 'immediate', 'שבועות': 'weeks', 'חודשים': 'months', 'immediate': 'immediate', 'weeks': 'weeks', 'months': 'months' };
+  const timeKey = timeMap[timeRaw] || 'weeks';
   return { score, timeKey };
 }
 
@@ -182,7 +186,7 @@ export default function DemandGap() {
 
   const { data: gaps = [], isLoading } = useQuery({
     queryKey: ['demandGaps', bpId],
-    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, source_type: 'demand_gap' }),
+    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'demand_gap' }),
     enabled: !!bpId,
     select: data => [...(data || [])].sort((a, b) => {
       const sA = parseInt((a.tags || '').match(/score:(\d+)/)?.[1] || '50');

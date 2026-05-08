@@ -223,13 +223,26 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
     if (!businessProfile?.id) return;
     setToneLoading(true);
     try {
+      const toneGuide = tone === 'professional'
+        ? 'מקצועי ואמין — ללא אמוג\'י, משפטים מדויקים, הכרה בבעיה + הצעת פתרון ספציפי'
+        : tone === 'empathetic'
+        ? 'אמפתי וחם — הכרה מלאה בתחושת הלקוח, פנייה אישית בשם, הזמנה לשיחה ישירה'
+        : 'קצר וישיר — 2 משפטים בלבד: הכרה + פתרון. ללא מלל מיותר.';
       const result = await base44.integrations.Core.InvokeLLM({
-        model: 'haiku',
-        prompt: `כתוב תגובה לביקורת שלילית עבור העסק "${businessProfile?.name || ''}".
-ביקורת: "${signal.summary}"
-סגנון: ${tone === 'professional' ? 'מקצועי ורשמי, ללא אמוג\'י' : tone === 'empathetic' ? 'אמפתי וחם, עם הרגשה של אכפתיות אמיתית' : 'קצר ופשוט, 2-3 משפטים בלבד'}
+        model: 'sonnet',
+        maxTokens: 350,
+        prompt: `אתה מנהל מוניטין מקצועי לעסקים ישראלים. כתוב תגובה שתהפוך לקוח ממורמר ללקוח חוזר.
 
-כתוב רק את טקסט התגובה בעברית, ללא כותרות.`,
+עסק: "${businessProfile?.name || ''}" | תחום: ${businessProfile?.category || ''}
+ביקורת: "${signal.summary}"
+סגנון נדרש: ${toneGuide}
+
+חוקים:
+- פנה בשם אם ידוע
+- הכר בדיוק בנקודה הספציפית שציינו — לא תגובה גנרית
+- הצע פתרון קונקרטי / הזמן לפנות ישירות
+- 2-4 משפטים, ללא תירוצים
+כתוב רק את טקסט התגובה הסופי.`,
       });
       if (typeof result === 'string' && result.trim()) {
         setText(result.trim());
@@ -245,14 +258,16 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
     setCallPointsLoading(true);
     try {
       const result = await base44.integrations.Core.InvokeLLM({
-        model: 'haiku',
-        prompt: `צור 4 נקודות שיחה קצרות ועסקיות בעברית עבור שיחת טלפון.
+        model: 'sonnet',
+        maxTokens: 300,
+        prompt: `אתה מאמן מכירות לעסקים קטנים ישראלים. צור 4 נקודות שיחה ממוקדות שיובילו לסגירה או לפתרון.
 
-עסק: "${businessProfile?.name || ''}"
-נושא: ${signal.summary}
-פעולה מומלצת: ${signal.recommended_action || actionLabel}
+עסק: "${businessProfile?.name || ''}" | תחום: ${businessProfile?.category || ''}
+נושא השיחה: ${signal.summary}
+מטרה: ${signal.recommended_action || actionLabel}
 
-כל נקודה: משפט אחד, פועל ציווי, ספציפי. ללא מספור — רק הנקודות, כל אחת בשורה.`,
+כל נקודה: פועל ציווי + תוכן ספציפי (לא "בדוק מצב" — אלא "שאל: האם [שאלה ספציפית]?").
+4 נקודות בלבד, כל אחת בשורה נפרדת, ללא מספור.`,
       });
       if (typeof result === 'string') {
         setCallPoints(result.trim().split('\n').filter(Boolean).slice(0, 4));
@@ -269,12 +284,19 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
     const fallback = `שלום! 😊\nלא ראינו אותך אצלנו זמן מה — מתגעגעים!\nיש לנו חדשות ומבצעים שיעניינו אותך.\nמוזמן/ת לבקר — נשמח לראותך! 🙌`;
     try {
       const result = await base44.integrations.Core.InvokeLLM({
-        model: 'haiku',
-        prompt: `כתוב הודעת WhatsApp קצרה ואישית לשימור לקוח שלא ביקר זמן מה.
-עסק: "${businessProfile?.name || ''}"
-נושא: ${signal.summary}
-כלול: פנייה אישית חמה + הצעת ערך קטנה + CTA ברור לביקור/הזמנה.
-עברית, ידידותי, 3-4 שורות קצרות, עם אמוג'י. ללא כותרות.`,
+        model: 'sonnet',
+        maxTokens: 280,
+        prompt: `אתה מומחה לשימור לקוחות בעסקים קטנים ישראלים. כתוב הודעת WhatsApp שתגרום ללקוח לחזור — אנושית, ולא נראית כמו ספאם.
+
+עסק: "${businessProfile?.name || ''}" | תחום: ${businessProfile?.category || ''}
+הקשר: ${signal.summary}
+
+מבנה ההודעה (3-4 שורות):
+- שורה 1: פנייה אישית חמה עם שם (אם ידוע) + תחושה שחסרת אותם
+- שורה 2: סיבה ספציפית לחזור עכשיו (עדכון / מבצע / מוצר חדש — קשור לתחום)
+- שורה 3: CTA ברור וקל (הודעה / הזמנה / ביקור)
+עברית טבעית, עם אמוג'י בצנעה. ללא "שלום לקוח יקר".
+כתוב רק את ההודעה הסופית.`,
       });
       setRetentionMsg((typeof result === 'string' && result.trim()) ? result.trim() : fallback);
     } catch {

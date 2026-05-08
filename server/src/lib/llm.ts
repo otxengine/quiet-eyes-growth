@@ -18,9 +18,9 @@ const MODEL_MAP: Record<string, string> = {
 
 // Hard output caps per model — keeps token burn predictable
 const MAX_TOKENS_DEFAULT: Record<string, number> = {
-  haiku:  350,  // was 700 — halved
-  sonnet: 500,  // was 1200 — cut 60%
-  opus:   600,
+  haiku:  350,
+  sonnet: 900,  // raised: most sonnet calls need 600-900 for quality output
+  opus:   1200,
 };
 
 /**

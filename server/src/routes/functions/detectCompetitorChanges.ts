@@ -76,20 +76,21 @@ export async function detectCompetitorChanges(req: Request, res: Response) {
           .join('\n\n');
 
         const analysis = await invokeLLM({
-          model: 'haiku',
-          prompt: `נתח מידע שנאסף על המתחרה "${comp.name}":
+          model: 'sonnet',
+          maxTokens: 500,
+          prompt: `אתה אנליסט מודיעין תחרותי. נתח מידע שנאסף על המתחרה "${comp.name}" וזהה שינויים עסקיים ממשיים.
 
-${textBlob.slice(0, 2500)}
+${textBlob.slice(0, 3000)}
 
-זהה שינויים עסקיים. JSON בלבד:
+דווח רק על שינויים קונקרטיים שמופיעים במידע. JSON בלבד:
 {
-  "changes_found": true|false,
-  "price_change":    { "found": bool, "summary": "תיאור קצר מהאתר" },
-  "new_promotion":   { "found": bool, "summary": "פרטי המבצע" },
-  "new_menu_item":   { "found": bool, "summary": "שם המנה/שירות" },
-  "new_post":        { "found": bool, "summary": "על מה הפוסט" },
-  "review_delta":    { "found": bool, "summary": "מה אמרו לקוחות" },
-  "overall_summary": "תובנה עיקרית — עד 15 מילה"
+  "changes_found": true,
+  "price_change":    { "found": false, "summary": "תיאור ספציפי עם מספרים אם נמצא" },
+  "new_promotion":   { "found": false, "summary": "פרטי המבצע המדויקים" },
+  "new_menu_item":   { "found": false, "summary": "שם המנה/שירות החדש" },
+  "new_post":        { "found": false, "summary": "נושא הפוסט + engagement" },
+  "review_delta":    { "found": false, "summary": "ציטוט מביקורת + דירוג" },
+  "overall_summary": "תובנה תחרותית אחת — ספציפית ומדויקת, עד 15 מילים"
 }`,
           response_json_schema: { type: 'object' },
         }) as any;

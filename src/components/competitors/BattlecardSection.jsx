@@ -70,18 +70,18 @@ export default function BattlecardSection({ competitor, businessProfileId, ourRa
     setGeneratingMove(true);
     try {
       const result = await base44.integrations.Core.InvokeLLM({
-        prompt: `מתחרה: ${competitor.name}
-יתרונות שלנו: ${bc.our_advantages?.slice(0, 3).join(', ') || 'לא ידוע'}
+        model: 'sonnet',
+        maxTokens: 200,
+        prompt: `אתה אנליסט מודיעין תחרותי. זהה את הצעד הטקטי הטוב ביותר עכשיו.
+
+מתחרה: ${competitor.name} | דירוג שלהם: ${competitor.rating || '?'}/5${ourRating ? ` | דירוג שלנו: ${ourRating}/5` : ''}
+יתרונות שלנו עליהם: ${bc.our_advantages?.slice(0, 3).join(', ') || 'לא ידוע'}
 חולשות שלהם: ${bc.their_weaknesses?.slice(0, 3).join(', ') || 'לא ידוע'}
-דירוג שלהם: ${competitor.rating || 'לא ידוע'}/5${ourRating ? `\nדירוג שלנו: ${ourRating}/5` : ''}
 
-ענה בפורמט הזה בלבד:
-THE_MOVE: [הזדמנות ספציפית אחת עכשיו — משפט אחד, מקסימום 15 מילים]
+ענה בפורמט הזה בלבד (3 שורות, ללא שום דבר נוסף):
+THE_MOVE: [הזדמנות ספציפית אחת — ספציפי לחולשה שלהם, עד 15 מילים]
 ACTION_LABEL: [פועל + יעד, עד 4 מילים]
-WINDOW: [כמה זמן ההזדמנות פתוחה, למשל "48 שעות" או "השבוע"]
-
-אסור: פסקאות, הסברים, bullet points.`,
-        model: 'gemini_3_flash',
+WINDOW: [חלון זמן ריאלי — "24 שעות" / "השבוע" / "החודש"]`,
       });
       setTheMove(parseKeyValue(result));
     } catch (_) {}

@@ -48,7 +48,7 @@ ${itemsStr}
 JSON בלבד: {"results":[{"topics":["נושא1"],"sentiments":{"נושא1":"positive"}},...]}, מערך באותו אורך ובאותו סדר.`,
       response_json_schema: { type: 'object' },
       model: 'haiku',
-      maxTokens: 1200,
+      maxTokens: 900,
     });
 
     const results: any[] = result?.results || [];
@@ -228,7 +228,7 @@ export async function collectReviews(req: Request, res: Response) {
             prompt: `עבור כל קטע טקסט, האם יש ביקורת על "${name}"? חלץ: text (עד 300 תווים), rating (1-5 או 0), reviewer_name, platform, is_review (true/false).\n${itemsStr}\nJSON בלבד: {"results":[{...},...]}, מערך באותו אורך ובאותו סדר.`,
             response_json_schema: { type: 'object' },
             model: 'haiku',
-            maxTokens: 1500,
+            maxTokens: 1000,
           });
           tavilyParsed = batchResult?.results || [];
         } catch { tavilyParsed = []; }
@@ -296,7 +296,7 @@ export async function collectReviews(req: Request, res: Response) {
           prompt: `עבור כל קטע טקסט, האם יש ביקורת על "${name}"? חלץ: text (עד 300 תווים), rating (1-5 או 0), reviewer_name, is_review (true/false).\n${itemsStr}\nJSON בלבד: {"results":[{...},...]}, מערך באותו אורך ובאותו סדר.`,
           response_json_schema: { type: 'object' },
           model: 'haiku',
-          maxTokens: 1200,
+          maxTokens: 900,
         });
         parsed = result?.results || [];
       } catch { parsed = []; }
@@ -373,7 +373,7 @@ export async function collectReviews(req: Request, res: Response) {
           prompt: `עבור כל קטע, האם זו ביקורת על "${name}"? חלץ: text, rating (1-5 או 0), reviewer_name, platform, is_review.\n${signalsStr}\nJSON בלבד: {"results":[...]}, אותו אורך ואותו סדר.`,
           response_json_schema: { type: 'object' },
           model: 'haiku',
-          maxTokens: 1500,
+          maxTokens: 1000,
         });
         signalsParsed = batchResult?.results || [];
       } catch { signalsParsed = []; }

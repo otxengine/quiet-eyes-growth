@@ -156,14 +156,21 @@ export default function CampaignCreate() {
     setGeneratingPost(true);
     try {
       const result = await base44.integrations.Core.InvokeLLM({
-        model: 'haiku',
-        prompt: `כתוב פוסט שיווקי לרשת חברתית בעברית עבור עסק "${businessProfile.name}" (${businessProfile.category} ב${businessProfile.city}).
-${signalSummary ? `הזדמנות/מגמה: "${signalSummary}"` : ''}
-${signalAction  ? `מטרת הקמפיין: ${signalAction}` : ''}
-פלטפורמת פרסום: ${platConfig.label}
+        model: 'sonnet',
+        maxTokens: 400,
+        prompt: `אתה כותב פרסומות דיגיטליות מקצועי לשוק הישראלי. כתוב פוסט מודעה שיביא תוצאות — ברמה מספיק גבוהה לפרסום ישיר.
+
+עסק: "${businessProfile.name}" | תחום: ${businessProfile.category} | עיר: ${businessProfile.city}
+${signalSummary ? `הזדמנות/תובנה: "${signalSummary}"` : ''}
+${signalAction ? `מטרת הקמפיין: ${signalAction}` : ''}
+פלטפורמה: ${platConfig.label}
 מטרה: ${OBJECTIVES.find(o => o.id === objective)?.label || objective}
 
-כתוב 3-4 משפטים בלבד: טון חברותי, מניע לפעולה בסוף, אמוג'י אחד-שניים. ללא כותרות.`,
+מבנה הפוסט:
+- שורה 1: Hook שעוצר גלילה (שאלה / עובדה / הצעה)
+- 2-3 שורות: ערך ספציפי, לא שיווקי — מה מקבלים
+- שורה אחרונה: CTA ברור ומניע לפעולה
+עברית טבעית, עם אמוג'י בצנעה, ללא כותרות.`,
       });
       const text = typeof result === 'string' ? result.trim() : (result?.content || '');
       setPostContent(text);
@@ -189,19 +196,19 @@ ${signalAction  ? `מטרת הקמפיין: ${signalAction}` : ''}
     setIdeaLoading(true);
     try {
       const res = await base44.functions.invoke('invokeLLM', {
-        model: 'haiku',
+        model: 'sonnet',
         response_json_schema: { type: 'object' },
-        prompt: `אתה מומחה שיווק דיגיטלי. תכנן קמפיין ממומן עבור העסק "${businessProfile?.name}" (${businessProfile?.category}, ${businessProfile?.city}).
-רעיון הלקוח: "${ideaText}"
+        prompt: `אתה מומחה שיווק דיגיטלי ישראלי. תכנן קמפיין ממומן מנצח עבור "${businessProfile?.name}" (${businessProfile?.category}, ${businessProfile?.city}).
+רעיון: "${ideaText}"
 פלטפורמה: ${platConfig.label}
 
 החזר JSON בלבד:
 {
-  "post_copy": "טקסט הפוסט — 3-4 משפטים בעברית עם קריאה לפעולה",
-  "headline": "כותרת מודעה קצרה עד 6 מילים",
+  "post_copy": "טקסט פוסט מלא — Hook + ערך + CTA, 3-4 שורות עברית, עם אמוג'י",
+  "headline": "כותרת מודעה חדה עד 6 מילים",
   "objective": "awareness|traffic|leads|conversions",
-  "audience_keywords": ["מילת קהל 1", "מילת קהל 2"],
-  "style_notes": "הערה קצרה על טון וסגנון"
+  "audience_keywords": ["עניין ספציפי ב-FB 1", "עניין 2", "עניין 3"],
+  "style_notes": "טון וסגנון המותאם לרעיון ולפלטפורמה"
 }`,
       });
       const parsed = res?.data || res;

@@ -63,7 +63,7 @@ ${sectorCtx}
     "estimated_monthly_demand": "הערכת כמות חיפושים/שאלות בחודש (מספר)",
     "opportunity_score": 1-100,
     "action": "איך לנצל את ההזדמנות הזו — פעולה קונקרטית",
-    "time_to_capture": "מיידי|שבועות|חודשים"
+    "time_to_capture": "immediate OR weeks OR months (English only)"
   }]
 }`,
       response_json_schema: { type: 'object' },
