@@ -11,9 +11,10 @@ const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 let rateLimitUntil = 0; // epoch ms — 0 means not limited
 const RATE_LIMIT_COOLDOWN_MS = 60 * 60 * 1000; // 60 minutes
 
-// 4-hour result cache — key: "depth:query:maxResults"
+// 12-hour result cache — key: "depth:query:maxResults"
+// Shared across all businesses: identical queries return cached results within the same cycle
 const _cache = new Map<string, { results: any[]; expiresAt: number }>();
-const CACHE_TTL = 4 * 60 * 60 * 1000;
+const CACHE_TTL = 12 * 60 * 60 * 1000;
 
 function _getCached(key: string): any[] | null {
   const entry = _cache.get(key);

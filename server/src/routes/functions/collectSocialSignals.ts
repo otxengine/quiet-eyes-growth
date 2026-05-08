@@ -9,7 +9,7 @@ import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 
 // Dummy res that swallows output — used when firing sub-agents inline
 const GRAPH_BASE = 'https://graph.facebook.com/v19.0';
-const MIN_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours — Apify calls are expensive
+const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours — Apify calls are expensive
 
 export async function collectSocialSignals(req: Request, res: Response) {
   const { businessProfileId } = req.body;

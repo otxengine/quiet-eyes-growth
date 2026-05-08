@@ -5,7 +5,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 
-const MIN_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 const GRAPH_BASE = 'https://graph.facebook.com/v19.0';
 

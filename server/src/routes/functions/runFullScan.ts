@@ -57,8 +57,8 @@ export async function runFullScan(req: Request, res: Response) {
   const profileRows = await prisma.businessProfile.findMany({ where: { id: businessProfileId }, take: 1 });
   const profile = profileRows[0];
 
-  // Cooldown: prevent burning API budget with multiple full scans within 6 hours
-  const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+  // Cooldown: prevent burning API budget with multiple full scans within 12 hours
+  const sixHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
   try {
     const recentScan = await prisma.automationLog.findFirst({
       where: {
@@ -73,7 +73,7 @@ export async function runFullScan(req: Request, res: Response) {
       return res.json({
         success: false,
         cooldown: true,
-        message: `סריקה מלאה כבר בוצעה לאחרונה. הסריקה הבאה אפשרית ב-${nextScanAt.toLocaleTimeString('he-IL')}.`,
+        message: `סריקה מלאה כבר בוצעה לאחרונה. הסריקה הבאה אפשרית ב-${nextScanAt.toLocaleTimeString('he-IL')} (cooldown: 12 שעות).`,
         last_scan: recentScan.created_date,
         next_scan_at: nextScanAt.toISOString(),
       });

@@ -98,30 +98,25 @@ async function runForAll(
 export function startScheduler() {
   logger.info('Starting background scheduler');
 
-  // ── Every 4 hours: full intelligence pipeline (was: every 1h = 24x/day) ─────
-  // 4h cadence = 6 runs/day — still fresh enough for local business intelligence
-  cron.schedule('0 */4 * * *', () => {
-    runForAll('QuadHourlyPipeline', 'full', []);
-  });
-
-  // ── Every 12 hours: intelligence + social + TikTok cycle ────────────────────
-  cron.schedule('0 */12 * * *', () => {
-    runForAll('LeadGenCycle', 'signal_only');
+  // ── Every 12 hours at 06:00 + 18:00 UTC (09:00 + 21:00 Israel time) ─────────
+  // Full pipeline + all agents — 2 runs/day reduces API costs ~60% vs previous 4h cadence
+  cron.schedule('0 6,18 * * *', () => {
+    runForAll('TwiceDailyPipeline', 'full', []);
     runAgentForAll('GoogleRankMonitor', googleRankMonitor);
     runAgentForAll('SmartLeadNurture', smartLeadNurture);
     runAgentForAll('CompetitorIntel', competitorIntelAgent);
     runAgentForAll('DeliveryPlatformIntel', detectDeliveryChanges);
-    // ── Social agents (OAuth + Apify) ───────────────────────────────────────
+    // ── Social agents ────────────────────────────────────────────────────────
     runAgentForAll('FetchSocialInsights', fetchSocialInsights);
     runAgentForAll('SchedulePostPublisher', schedulePostPublisher);
     runAgentForAll('AnalyzeInstagramComments', analyzeInstagramComments);
-    // ── TikTok intelligence (internal delta guards protect from over-running) ─
+    // ── TikTok (internal cooldown guards prevent double-running) ─────────────
     runAgentForAll('TikTokSectorTrendAgent', tiktokSectorTrendAgent); // 8h guard
     runAgentForAll('TikTokAudienceAgent', tiktokAudienceAgent);       // 24h guard
     runAgentForAll('TikTokPostTracker', tiktokPostTracker);           // 12h guard
   });
 
-  // ── Every 24 hours at 03:00 UTC: decision_only (ML learning) ────────────────
+  // ── Every 24 hours at 03:00 UTC: ML learning + reviews + events ──────────────
   cron.schedule('0 3 * * *', () => {
     runForAll('DailyLearning', 'decision_only');
     runAgentForAll('AutoRespondToReviews', autoRespondToReviews);

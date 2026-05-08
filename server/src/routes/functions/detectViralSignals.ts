@@ -19,7 +19,7 @@ import { tavilyAdvancedSearch, isTavilyRateLimited } from '../../lib/tavily';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun, cacheGet, cacheSet, TTL } from '../../lib/agentCache';
 
-const MIN_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 // Derives TikTok hashtags from Hebrew business category (mirrors tiktokSectorTrendAgent logic)
 function deriveHashtags(category: string): string[] {

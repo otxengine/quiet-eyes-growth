@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
-import { tavilySearch } from '../../lib/tavily';          // shared cache (4h TTL)
+import { tavilySearch } from '../../lib/tavily';          // shared cache (12h TTL)
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 
 // Minimum interval between full web-signal collections per business
-const MIN_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 export async function collectWebSignals(req: Request, res: Response) {
   const { businessProfileId } = req.body;

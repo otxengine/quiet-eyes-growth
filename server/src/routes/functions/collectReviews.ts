@@ -5,7 +5,7 @@ import { invokeLLM } from '../../lib/llm';
 import { tavilySearch } from '../../lib/tavily';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 
-const MIN_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours — Google Places API quota
+const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours — Google Places API quota
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
 
 async function findPlaceId(name: string, city: string): Promise<string | null> {
