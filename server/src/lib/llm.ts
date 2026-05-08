@@ -88,57 +88,28 @@ async function _callAnthropic(
   response_json_schema: any,
 ): Promise<any> {
 
-  // When JSON is required, use tool_use to guarantee structured output
-  if (response_json_schema) {
-    const messages: Anthropic.MessageParam[] = [{ role: 'user', content: prompt }];
-    let response: any;
-    try {
-      response = await anthropic.messages.create({
-        model: modelId,
-        max_tokens: maxTokens,
-        system: 'You are a helpful assistant. Analyze the user request and call the output_result tool with ALL the fields described in the prompt. Every field must be populated — do not return an empty object. ALL string values must be in Hebrew unless the field explicitly requires English.',
-        tools: [{
-          name: 'output_result',
-          description: 'Call this tool with the complete JSON output described in the prompt. You MUST populate all fields — never return empty input.',
-          input_schema: { type: 'object' as const },
-        }],
-        tool_choice: { type: 'any' as const },
-        messages,
-      } as any);
-    } catch (toolErr: any) {
-      // tool_use failed — fall back to plain text + _parseJson
-      console.warn('[LLM] tool_use call failed, falling back to plain text:', toolErr.message);
-      const plainResp = await anthropic.messages.create({
-        model: modelId,
-        max_tokens: maxTokens,
-        system: 'You are a helpful assistant. Return ONLY valid JSON. No markdown, no explanation.',
-        messages,
-      });
-      const fallbackText = (plainResp.content[0] as any).text || '';
-      console.log('[LLM] plain fallback text (400 chars):', fallbackText.substring(0, 400));
-      return _parseJson(fallbackText);
-    }
-
-    const toolUse = (response.content || []).find((b: any) => b.type === 'tool_use');
-    if (toolUse) {
-      console.log('[LLM] tool_use success, input keys:', Object.keys(toolUse.input || {}));
-      return toolUse.input;
-    }
-    const textBlock = (response.content || []).find((b: any) => b.type === 'text');
-    const text = textBlock ? textBlock.text : '';
-    console.warn('[LLM] no tool_use block, stop_reason:', response.stop_reason, '| text (300 chars):', text.substring(0, 300));
-    return _parseJson(text);
-  }
-
-  // Plain text response
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: prompt }];
+
+  const systemPrompt = response_json_schema
+    ? 'You are a JSON-only assistant. Your entire response must be a single valid JSON object — starting with { and ending with }. No preamble, no explanation, no markdown fences. ALL string values must be in Hebrew unless the field explicitly requires English.'
+    : 'You are a helpful assistant.';
+
   const response = await anthropic.messages.create({
     model: modelId,
     max_tokens: maxTokens,
-    system: 'You are a helpful assistant.',
+    system: systemPrompt,
     messages,
   });
-  return (response.content[0] as any).text || '';
+
+  const text = ((response.content || [])[0] as any)?.text || '';
+
+  if (response_json_schema) {
+    console.log('[LLM] Anthropic raw (300 chars):', text.substring(0, 300), '| stop_reason:', response.stop_reason);
+    const parsed = _parseJson(text);
+    if (!parsed) console.error('[LLM] _parseJson failed on above text');
+    return parsed;
+  }
+  return text;
 }
 
 async function _callOpenAI(prompt: string, response_json_schema: any, maxTokens = 1600): Promise<any> {
