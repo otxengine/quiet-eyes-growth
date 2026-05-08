@@ -191,41 +191,9 @@ const CALENDAR_EVENTS: CalendarEvent[] = [
     defaultOpportunity: 'גמר ליגת האלופות — ביקוש מוגבר לכל עסק בשעות המשחק',
   },
 
-  {
-    name: 'מונדיאל 2026 — שלב הבקרות', nameEn: 'FIFA World Cup 2026 Group Stage', date: '2026-06-11',
-    type: 'sports', leadDays: 14,
-    sectors: [
-      { keywords: ['מסעדה', 'אוכל', 'food', 'restaurant', 'בר', 'bar', 'פאב', 'pub', 'קייטרינג'], boost: 'high', opportunity: 'פתיחת מונדיאל 2026 — מבצעי "ארוחת משחק" לכל יום, מסך גדול, הזמנות מוקדמות' },
-      { keywords: ['משלוח', 'delivery', 'wolt', 'שליחות'], boost: 'high', opportunity: 'שיא הזמנות משלוח בשעות משחקים — חזק את צי המשלוח' },
-      { keywords: ['ספורט', 'sports', 'כדורגל', 'football', 'קמעונאות', 'retail'], boost: 'high', opportunity: 'ציוד, חולצות, מוצרי מאהדים — ישראל במונדיאל לראשונה!' },
-      { keywords: ['אלקטרוניקה', 'electronics', 'מסכים', 'tv'], boost: 'high', opportunity: 'מסכים 4K לצפייה במונדיאל — שיא ביקוש שנתי' },
-      { keywords: ['מלון', 'hotel', 'תיירות', 'tourism', 'travel'], boost: 'high', opportunity: 'חבילות טיסה למשחקים בארה"ב — ישראל במונדיאל!' },
-    ],
-    defaultOpportunity: 'מונדיאל 2026 — ישראל משתתפת! שלב הבקרות מתחיל, אווירה לאומית',
-  },
-
-  {
-    name: 'מונדיאל 2026 — שלב נוקאאוט', nameEn: 'FIFA World Cup 2026 Knockout Stage', date: '2026-07-04',
-    type: 'sports', leadDays: 7,
-    sectors: [
-      { keywords: ['מסעדה', 'אוכל', 'food', 'restaurant', 'בר', 'bar', 'פאב', 'pub'], boost: 'high', opportunity: 'שלב הנוקאאוט — כל משחק הוא "הכל או כלום", צפייה משותפת בשיא, הזמנות גדולות' },
-      { keywords: ['משלוח', 'delivery', 'wolt', 'שליחות'], boost: 'high', opportunity: 'שיא הזמנות משלוח בשעות נוקאאוט — כל טעות עולה לקוחות' },
-      { keywords: ['ספורט', 'sports', 'כדורגל', 'football', 'קמעונאות', 'retail'], boost: 'high', opportunity: 'מוצרי מאהדים לנוקאאוט — ביקוש פי 2 מהבקרות' },
-    ],
-    defaultOpportunity: 'מונדיאל 2026 שלב נוקאאוט — עצימות שיא, כל עסק נהנה מהאווירה',
-  },
-
-  {
-    name: 'גמר מונדיאל 2026', nameEn: 'FIFA World Cup 2026 Final', date: '2026-07-19',
-    type: 'sports', leadDays: 10,
-    sectors: [
-      { keywords: ['מסעדה', 'אוכל', 'food', 'restaurant', 'בר', 'bar', 'פאב', 'pub', 'קייטרינג'], boost: 'high', opportunity: 'גמר מונדיאל — הערב הכי נצפה בשנה, אירוע צפייה בשיא, הזמנות שבוע מראש' },
-      { keywords: ['משלוח', 'delivery', 'wolt', 'שליחות'], boost: 'high', opportunity: 'גל הזמנות בשעת הגמר — ספק לפני כולם' },
-      { keywords: ['אלקטרוניקה', 'electronics', 'מסכים', 'tv'], boost: 'high', opportunity: 'מסכים וסאונד לגמר — שיא ביקוש שנתי אחרון' },
-      { keywords: ['בידור', 'entertainment', 'אירועים', 'events'], boost: 'high', opportunity: 'אירוע צפייה לגמר — מסיבת גמר, VIP, כרטיסים' },
-    ],
-    defaultOpportunity: 'גמר מונדיאל 2026 — האירוע הנצפה ביותר בעולם, שיא שיווקי',
-  },
+  // World Cup 2026 generic entries removed — specific matchups are discovered
+  // dynamically via Tavily in Phase 2b (buildSportsSpecificQueries) so that
+  // events show "Israel vs Argentina" rather than "World Cup Group Stage".
 
   {
     name: 'גמר ליגת העל 2025/26', nameEn: 'Israeli Premier League Championship', date: '2026-05-25',
@@ -334,6 +302,32 @@ const CALENDAR_EVENTS: CalendarEvent[] = [
     defaultOpportunity: 'אביב — עונת השדרוגים, הניקיון והשיפוץ',
   },
 ];
+
+// ── Build targeted queries to discover SPECIFIC upcoming sports matches ──────────
+// Returns queries that find real matchups with team names (e.g., "Israel vs Argentina")
+function buildSportsSpecificQueries(now: Date): string[] {
+  const queries: string[] = [];
+  const nowMs = now.getTime();
+
+  // Champions League Final — within 30 days of May 30
+  const clFinal = new Date('2026-05-30').getTime();
+  if (nowMs >= clFinal - 30 * 86400000 && nowMs <= clFinal + 86400000) {
+    queries.push('Champions League Final 2026 which two teams qualified who is playing date');
+    queries.push('גמר ליגת האלופות 2026 קבוצות מי שיחק תאריך');
+  }
+
+  // World Cup 2026 — within 60 days of opening match
+  const wcStart = new Date('2026-06-11').getTime();
+  const wcEnd   = new Date('2026-07-20').getTime();
+  if (nowMs >= wcStart - 60 * 86400000 && nowMs <= wcEnd) {
+    queries.push('Israel World Cup 2026 group stage matches schedule teams date');
+    queries.push('ישראל מונדיאל 2026 לוח משחקים קבוצות תאריכים שלב בקרות');
+    queries.push('FIFA World Cup 2026 upcoming matches next 2 weeks schedule specific teams');
+    queries.push('מונדיאל 2026 המשחקים הקרובים שבועות הבאים קבוצות');
+  }
+
+  return queries;
+}
 
 // ── Build sector-aware Tavily queries for dynamic event detection ───────────────
 function buildEventTavilyQueries(category: string, city: string): string[] {
@@ -455,10 +449,13 @@ export async function detectEvents(req: Request, res: Response) {
       return eventDate >= now && eventDate <= windowEnd;
     });
 
-    // ── Phase 2: Tavily search — sector-aware queries ─────────────────────────
+    // ── Phase 2: Tavily search — sector-aware + sports-specific queries ──────────
     let tavilyRawEvents: any[] = [];
     if (!isTavilyRateLimited()) {
-      const queries = buildEventTavilyQueries(category || '', city);
+      const queries = [
+        ...buildEventTavilyQueries(category || '', city),
+        ...buildSportsSpecificQueries(now),  // specific match schedule queries
+      ];
       const results = await Promise.all(
         queries.map(q => isTavilyRateLimited() ? Promise.resolve([]) : tavilySearch(q, 3))
       );
@@ -479,20 +476,22 @@ export async function detectEvents(req: Request, res: Response) {
 
       try {
         const analysis: any = await invokeLLM({
-          model: 'haiku',
-          maxTokens: 400,
-          prompt: `Identify real upcoming events in the text below that could affect the business "${name}" (${category}, ${city}).
-Return ONLY valid JSON. ALL string values must be in Hebrew.
+          model: 'sonnet',
+          maxTokens: 600,
+          prompt: `You are an events analyst. Identify REAL upcoming events from the text that could affect "${name}" (${category}, ${city}).
 
-${context.slice(0, 3500)}
+${context.slice(0, 4000)}
 
-IMPORTANT: For sports events, extract SPECIFIC matchups if available (e.g., "ספרד נגד גרמניה — מונדיאל 2026" NOT just "מונדיאל").
-For World Cup matches: include the specific teams and date.
+STRICT RULES:
+1. Sports events: You MUST include the specific competing teams in the name — "ספרד נגד ארגנטינה — מונדיאל 2026" or "PSG נגד ארסנל — גמר ליגת האלופות". NEVER create a generic "World Cup" or "Champions League" event without team names. If you cannot identify the specific teams, SKIP the event.
+2. For World Cup 2026: search the text for specific group-stage matchups involving Israel or other major teams. Include Israel's matches if found.
+3. Only events with a CONFIRMED date. No date = skip.
+4. Concerts/festivals: include the artist or festival name (not generic "concert").
 
 Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "events": [{
-    "name": "שם ספציפי — למשחק ספורט: 'קבוצה א נגד קבוצה ב'",
+    "name": "שם ספציפי — לספורט: 'קבוצה א נגד קבוצה ב — שם התחרות'",
     "date_estimate": "YYYY-MM-DD",
     "type": "sports|concert|festival|fair|conference|cultural|commercial",
     "relevance": "high|medium|low",
@@ -500,8 +499,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     "opportunity": "ההזדמנות הספציפית לעסק זה (${category}) — עד 10 מילים"
   }]
 }
-Rules: Only events with a real date. No date — skip. If none — return {"events":[]}.
-Prefer specific (Spain vs Germany) over generic (World Cup).`,
+If no events with specific details found — return {"events":[]}.`,
           response_json_schema: { type: 'object' },
         });
         extraEvents = (analysis?.events || []).filter(
@@ -537,6 +535,18 @@ Prefer specific (Spain vs Germany) over generic (World Cup).`,
       // (but still create a low-priority alert if it's a major holiday/sports event)
       const isHighValue = event.type === 'sports' || event.type === 'holiday' || event.type === 'national';
       if (sectorCtx.boost === 'low' && !isHighValue) continue;
+
+      // For sports: skip generic calendar entry if Phase 3 already found specific matchups
+      // for the same month — e.g., "Israel vs Argentina" replaces "World Cup Group Stage"
+      if (event.type === 'sports') {
+        const eventMonth = event.date.slice(0, 7); // YYYY-MM
+        const hasSpecificMatch = extraEvents.some(e =>
+          e.type === 'sports' &&
+          (e.name || '').includes('נגד') &&
+          (e.date_estimate || '').slice(0, 7) === eventMonth
+        );
+        if (hasSpecificMatch) continue;
+      }
 
       const daysAway = Math.ceil((new Date(event.date).getTime() - now.getTime()) / 86400000);
       const icon = event.type === 'sports' ? '⚽' : event.type === 'commercial' ? '🛍' : event.type === 'seasonal' ? '🌿' : '📅';
