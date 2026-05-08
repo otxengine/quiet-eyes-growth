@@ -55,7 +55,7 @@ async function logWeightUpdate(entry: WeightUpdateLog): Promise<void> {
          (id, business_id, agent_name, action_type, old_weight, new_weight,
           trigger_type, trigger_id, delta, reason, created_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::timestamptz)
-       ON CONFLICT DO NOTHING`,
+       ON CONFLICT (id) DO NOTHING`,
       entry.id, entry.business_id, entry.agent_name, entry.action_type,
       entry.old_weight, entry.new_weight, entry.trigger_type,
       entry.trigger_id, entry.delta, entry.reason,

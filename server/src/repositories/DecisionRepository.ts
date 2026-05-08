@@ -56,31 +56,34 @@ export class DecisionRepository {
 
   async saveDecision(decision: Decision): Promise<void> {
     try {
+      // Map Decision model fields to actual DB column names (otx_decisions schema)
+      const urgency = (decision.priority ?? 0) >= 8 ? 'critical'
+                    : (decision.priority ?? 0) >= 5 ? 'high'
+                    : (decision.priority ?? 0) >= 3 ? 'medium' : 'low';
+      const rationale = decision.reasoning || (decision as any).decision_reasoning || decision.title || '';
       await prisma.$executeRawUnsafe(
         `INSERT INTO otx_decisions
-          (id, business_id, insight_id, trace_id, action_type, title, reasoning,
-           priority, score, score_breakdown, confidence, expected_roi,
-           execution_mode, tags, context_snapshot, created_at, expires_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::int,$9::numeric,$10::jsonb,$11::numeric,
-                 $12::numeric,$13,$14::jsonb,$15,$16::timestamptz,$17::timestamptz)
+          (id, business_id, insight_id, trace_id, action_type, urgency, rationale,
+           final_score, roi_score, confidence_score, score_breakdown,
+           execution_mode, tags, context_snapshot, expires_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::numeric,$9::numeric,$10::numeric,$11::jsonb,
+                 $12,$13::text[],$14,$15::timestamptz)
          ON CONFLICT (id) DO NOTHING`,
         decision.id,
         decision.business_id,
-        decision.insight_id,
-        decision.trace_id,
+        decision.insight_id ?? (decision as any).fused_insight_id ?? null,
+        decision.trace_id ?? null,
         decision.action_type,
-        decision.title,
-        decision.reasoning,
-        decision.priority,
-        Math.round(decision.score),
-        JSON.stringify(decision.score_breakdown),
-        decision.confidence,
-        decision.expected_roi,
-        decision.execution_mode,
-        JSON.stringify(decision.tags),
-        decision.context_snapshot,
-        decision.created_at,
-        decision.expires_at,
+        urgency,
+        rationale,
+        decision.score ?? 0,
+        decision.expected_roi ?? null,
+        decision.confidence ?? null,
+        JSON.stringify(decision.score_breakdown ?? {}),
+        decision.execution_mode ?? 'suggest',
+        decision.tags ?? [],
+        decision.context_snapshot ?? null,
+        decision.expires_at ?? null,
       );
     } catch (e: any) {
       if (!e.message?.includes('does not exist')) throw e;

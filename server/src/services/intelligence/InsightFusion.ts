@@ -217,6 +217,8 @@ export async function fuseInsight(ctx: EnrichedContext): Promise<FusedInsight> {
   // Build LLM prompt
   const contextSummary = buildContextSummary(ctx);
   const result = await invokeLLM({
+    model: 'sonnet',
+    maxTokens: 600,
     prompt: `אתה מנתח עסקי ישראלי בכיר. נתח את הנתונים הבאים וזהה את ההזדמנות המרכזית ביותר לעסק.
 
 ${contextSummary}
