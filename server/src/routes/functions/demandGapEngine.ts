@@ -38,7 +38,7 @@ export async function demandGapEngine(req: Request, res: Response) {
 
     const result = await invokeLLM({
       prompt: `אתה מנוע זיהוי פערי ביקוש לעסקים ישראלים.
-עסק: "${profile.name}" (${profile.category} ב${profile.city}, רדיוס ${profile.search_radius_km || 15} ק"מ)
+עסק: "${profile.name}" (${profile.category} ב${profile.city})
 ${profile.description ? `תיאור: ${profile.description}` : ''}
 שירותים מוצעים: ${profile.relevant_services || 'לא צוין'}
 

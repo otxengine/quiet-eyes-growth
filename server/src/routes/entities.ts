@@ -205,7 +205,7 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
     // Auto-cleanup competitors when radius/cities settings change — fire and forget
     if (entity === 'BusinessProfile' &&
         ('search_radius_km' in req.body || 'additional_cities' in req.body)) {
-      cleanupCompetitorsByRadius(req.params.id).catch(() => {});
+      cleanupCompetitorsByRadius(String(req.params.id)).catch(() => {});
     }
   } catch (err: any) {
     console.error(`PATCH /entities/${entity}/${req.params.id}:`, err.message);

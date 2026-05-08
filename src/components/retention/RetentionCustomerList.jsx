@@ -6,36 +6,42 @@ import RetentionCustomerRow from './RetentionCustomerRow';
 
 function buildAtRiskList(leads, reviews) {
   const atRisk = [];
-  
-  // Lost leads
-  leads.filter(l => l.status === 'lost').forEach(l => {
+
+  // Negative reviews — always first priority
+  reviews.filter(r => r.sentiment === 'negative').forEach(r => {
     atRisk.push({
-      id: l.id,
-      name: l.name || 'ליד',
-      detail: `סטטוס: לא רלוונטי · מקור: ${l.source || '?'} · שירות: ${l.service_needed || '?'}`,
+      id: `review_${r.id}`,
+      name: r.reviewer_name || 'לקוח',
+      detail: `ביקורת שלילית · ${r.rating || '?'}⭐ · ${r.platform || 'Google'} · "${(r.text || '').slice(0, 60)}..."`,
       alertColor: 'danger',
+      sortDate: r.created_date || r.date || '2000-01-01',
     });
   });
 
-  // Negative reviews
-  reviews.filter(r => r.sentiment === 'negative').forEach(r => {
+  // Lost leads
+  leads.filter(l => l.status === 'lost').forEach(l => {
     atRisk.push({
-      id: r.id,
-      name: r.reviewer_name || 'לקוח',
-      detail: `ביקורת שלילית · ${r.rating || '?'}⭐ · ${r.platform || '?'} · "${(r.text || '').slice(0, 50)}..."`,
+      id: `lead_${l.id}`,
+      name: l.name || 'ליד',
+      detail: `ליד שאבד · שירות: ${l.service_needed || '?'} · מקור: ${l.source || '?'}`,
       alertColor: 'danger',
+      sortDate: l.created_date || '2000-01-01',
     });
   });
 
   // Cold leads that were once warm/hot
   leads.filter(l => l.status === 'cold' && l.score >= 40).forEach(l => {
     atRisk.push({
-      id: l.id,
+      id: `cold_${l.id}`,
       name: l.name || 'ליד',
       detail: `ליד קר (ציון ${l.score}) · שירות: ${l.service_needed || '?'} · ${l.city || ''}`,
       alertColor: 'warning',
+      sortDate: l.created_date || '2000-01-01',
     });
   });
+
+  // Sort by most recent first (reviews and leads interleaved)
+  atRisk.sort((a, b) => new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime());
 
   return atRisk.slice(0, 15);
 }
