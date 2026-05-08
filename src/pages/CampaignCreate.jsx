@@ -185,10 +185,15 @@ ${signalAction ? `מטרת הקמפיין: ${signalAction}` : ''}
     if (businessProfile && !postContent) generatePost();
   }, [businessProfile]); // eslint-disable-line
 
-  // Auto-load audience segments in the background when the page opens
+  // Reset audience when post content changes significantly (so user can regenerate)
+  const prevPostRef = useRef('');
   useEffect(() => {
-    if (bpId && !audienceData) loadAudience();
-  }, [bpId]); // eslint-disable-line
+    if (audienceData && postContent && Math.abs(postContent.length - prevPostRef.current.length) > 30) {
+      setAudienceData(null);
+      setChosenSeg(null);
+    }
+    prevPostRef.current = postContent;
+  }, [postContent]); // eslint-disable-line
 
   // ── Plan from idea ────────────────────────────────────────────────────────
 
@@ -236,6 +241,10 @@ ${signalAction ? `מטרת הקמפיין: ${signalAction}` : ''}
           businessProfileId: bpId,
           insight_text: signalSummary,
           action_type: signalCat,
+          post_content: postContent || '',
+          image_description: imageDesc || '',
+          platform,
+          objective,
         }),
         timeout,
       ]);
@@ -618,7 +627,7 @@ ${signalAction ? `מטרת הקמפיין: ${signalAction}` : ''}
                 className="flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg text-[12px] font-semibold hover:opacity-90 transition-all"
               >
                 {loadingAudience ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
-                {loadingAudience ? 'טוען קהלי יעד...' : 'טען קהלי יעד'}
+                {loadingAudience ? 'בונה קהל לפי הפוסט...' : postContent ? 'צור קהל יעד לפי הפוסט' : 'צור קהל יעד'}
               </button>
               {audienceError && (
                 <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-right">

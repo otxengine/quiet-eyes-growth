@@ -13,7 +13,7 @@ import { invokeLLM } from '../../lib/llm';
  * Returns: { segments, data_quality }
  */
 export async function getAudienceSegments(req: Request, res: Response) {
-  const { businessProfileId, insight_text, action_type } = req.body;
+  const { businessProfileId, insight_text, action_type, post_content, image_description, platform, objective } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
   try {
@@ -58,21 +58,33 @@ export async function getAudienceSegments(req: Request, res: Response) {
     const conversionRate  = leads.length > 0 ? Math.round((completedLeads / leads.length) * 100) : 0;
     const signalSamples   = signals.slice(0, 8).map(s => s.summary).join(', ');
     const insightContext  = insight_text
-      ? `\n\nתובנה רלוונטית: "${insight_text}"${action_type ? ` (סוג: ${action_type})` : ''}`
+      ? `\nתובנה: "${insight_text}"${action_type ? ` (${action_type})` : ''}`
       : '';
+    const postContext = post_content
+      ? `\nתוכן הפוסט: "${post_content.slice(0, 300)}"`
+      : '';
+    const imageContext = image_description
+      ? `\nתמונה: ${image_description.slice(0, 150)}`
+      : '';
+    const campaignContext = [
+      platform ? `פלטפורמה: ${platform}` : '',
+      objective ? `מטרה: ${objective}` : '',
+    ].filter(Boolean).join(' | ');
 
     let result: any = null;
     try {
       result = await invokeLLM({
         model: 'haiku',
         maxTokens: 900,
-        prompt: `פרסום ממומן ישראל — בנה 2 סגמנטי קהל יעד שונים.
+        prompt: `פרסום ממומן ישראל — בנה 2 סגמנטי קהל יעד שונים המותאמים לתוכן הפוסט.
 
 עסק: "${profile.name}" | ${profile.category} | ${profile.city}
-שירותים: ${profile.relevant_services || profile.category}${insightContext}
+שירותים: ${profile.relevant_services || profile.category}
+${campaignContext}${insightContext}${postContext}${imageContext}
 נתונים: ${reviews.length} ביקורות | ${leads.length} לידים | המרה ${conversionRate}%
 ${reviewSamples ? `ביקורות: ${reviews.slice(0,5).map(r=>`"${(r.text||'').slice(0,60)}"`).join(' | ')}` : ''}
 ${leadSamples ? `לידים: ${leads.slice(0,5).map(l=>(l.service_needed||l.name||'').slice(0,40)).join(', ')}` : ''}
+הנחיה: קהל היעד חייב לשקף מי יגיב לתוכן הפוסט הספציפי הזה — לא קהל יעד גנרי לעסק.
 
 החזר JSON בלבד:
 {"segments":[{"segment_name":"שם","description":"תיאור קצר","age_min":25,"age_max":45,"genders":"נשים וגברים","income_level":"mid","conversion_probability":0.3,"estimated_size":"medium","estimated_audience_range":"10,000-40,000","facebook_targeting":{"interests":["עניין 1","עניין 2","עניין 3"],"behaviors":["התנהגות"],"custom_audience":"Custom Audience","lookalike_source":"מקור","exclusions":[]},"google_targeting":{"keywords":["ביטוי 1","ביטוי 2"],"negative_keywords":[],"in_market_audiences":["קטגוריה"],"custom_intent":"כוונה"},"best_channels":["Facebook","Instagram"],"best_posting_time":"ראשון-חמישי 18:00-21:00","ad_creative_tip":"טיפ קריאייטיב","pain_point":"כאב","purchase_trigger":"טריגר"}]}`,
