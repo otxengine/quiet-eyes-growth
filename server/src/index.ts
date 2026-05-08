@@ -341,6 +341,101 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE otx_policy_weights ALTER COLUMN success_rate DROP NOT NULL`);
   await sql(`ALTER TABLE otx_policy_weights ALTER COLUMN success_rate SET DEFAULT 0.5`);
   await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS summary JSONB`);
+
+  // ── OTX v3 tables (missing from original startup block) ──────────────────
+  await sql(`CREATE TABLE IF NOT EXISTS meta_configurations (
+    id                      TEXT    PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    business_id             TEXT    NOT NULL UNIQUE,
+    sector                  TEXT    NOT NULL DEFAULT '',
+    auto_detected_kpis      JSONB   NOT NULL DEFAULT '{}',
+    signal_keywords         TEXT[]  NOT NULL DEFAULT '{}',
+    trend_thresholds        JSONB   NOT NULL DEFAULT '{}',
+    competitor_search_terms TEXT[]  DEFAULT '{}',
+    local_radius_meters     INT     DEFAULT 500,
+    configured_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    configuration_version   INT     DEFAULT 1
+  )`);
+  await sql(`CREATE TABLE IF NOT EXISTS otx_opportunities (
+    id                    TEXT        PRIMARY KEY,
+    business_id           TEXT        NOT NULL,
+    type                  TEXT        NOT NULL,
+    source_signal_ids     JSONB       NOT NULL DEFAULT '[]',
+    source_event_ids      JSONB       NOT NULL DEFAULT '[]',
+    source_forecast_ids   JSONB       NOT NULL DEFAULT '[]',
+    opportunity_score     NUMERIC(4,3) NOT NULL DEFAULT 0.5,
+    urgency               TEXT        NOT NULL DEFAULT 'medium',
+    confidence            NUMERIC(4,3) NOT NULL DEFAULT 0.5,
+    expected_window_start TIMESTAMPTZ,
+    expected_window_end   TIMESTAMPTZ,
+    explanation           TEXT        NOT NULL DEFAULT '',
+    dedup_key             TEXT        NOT NULL,
+    status                TEXT        NOT NULL DEFAULT 'active',
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(business_id, dedup_key)
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_otx_opps_biz_status ON otx_opportunities(business_id, status, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS otx_threats (
+    id           TEXT        PRIMARY KEY,
+    business_id  TEXT        NOT NULL,
+    type         TEXT        NOT NULL,
+    risk_score   NUMERIC(4,3) NOT NULL DEFAULT 0.5,
+    urgency      TEXT        NOT NULL DEFAULT 'medium',
+    confidence   NUMERIC(4,3) NOT NULL DEFAULT 0.5,
+    explanation  TEXT        NOT NULL DEFAULT '',
+    signal_ids   JSONB       NOT NULL DEFAULT '[]',
+    dedup_key    TEXT        NOT NULL,
+    status       TEXT        NOT NULL DEFAULT 'active',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(business_id, dedup_key)
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_otx_threats_biz_status ON otx_threats(business_id, status, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS otx_weight_update_log (
+    id           TEXT        PRIMARY KEY,
+    business_id  TEXT        NOT NULL,
+    agent_name   TEXT        NOT NULL,
+    action_type  TEXT        NOT NULL,
+    old_weight   NUMERIC(5,4) NOT NULL,
+    new_weight   NUMERIC(5,4) NOT NULL,
+    trigger_type TEXT        NOT NULL,
+    trigger_id   TEXT,
+    delta        NUMERIC(6,4) NOT NULL,
+    reason       TEXT        NOT NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(id)
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_otx_wlog_biz_agent ON otx_weight_update_log(business_id, agent_name, created_at DESC)`);
+
+  // ── Backfill missing columns ──────────────────────────────────────────────
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS action_type TEXT`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS urgency TEXT`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS rationale TEXT`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS final_score NUMERIC(5,3)`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS execution_mode TEXT DEFAULT 'suggest'`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS fused_insight_id TEXT`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS approval_required BOOLEAN DEFAULT false`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS policy_version INT DEFAULT 1`);
+  await sql(`ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS outcome_type TEXT DEFAULT 'execution'`);
+  await sql(`ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS outcome_score NUMERIC(4,3)`);
+  await sql(`ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS conversion_flag BOOLEAN DEFAULT false`);
+  await sql(`ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS execution_task_id TEXT`);
+  await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS opportunities_found INT DEFAULT 0`);
+  await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS threats_found INT DEFAULT 0`);
+  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS insight_id TEXT`);
+  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS opportunity_ids JSONB DEFAULT '[]'`);
+  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS signal_ids JSONB DEFAULT '[]'`);
+  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS summary TEXT`);
+  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS why_now TEXT`);
+  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS recommended_steps JSONB DEFAULT '[]'`);
+  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS recommended_timing TEXT`);
+  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS user_visible_payload JSONB DEFAULT '{}'`);
+  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS recommendation_id TEXT`);
+  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS approval_required BOOLEAN DEFAULT false`);
+  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMPTZ`);
+  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS executed_at TIMESTAMPTZ`);
+  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS result_payload JSONB DEFAULT '{}'`);
+
   console.log('Startup SQL complete');
 
   startScheduler();
