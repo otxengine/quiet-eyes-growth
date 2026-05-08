@@ -7,8 +7,9 @@
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 
-// In-memory flag: once we hit a 433, stop all further Tavily calls this process lifetime
-let rateLimitHit = false;
+// Rate-limit cooldown: on 433/429, pause for 60 minutes then retry automatically
+let rateLimitUntil = 0; // epoch ms — 0 means not limited
+const RATE_LIMIT_COOLDOWN_MS = 60 * 60 * 1000; // 60 minutes
 
 // 4-hour result cache — key: "depth:query:maxResults"
 const _cache = new Map<string, { results: any[]; expiresAt: number }>();
@@ -26,12 +27,16 @@ function _setCache(key: string, results: any[]): void {
 }
 
 export function isTavilyRateLimited(): boolean {
-  return rateLimitHit;
+  return Date.now() < rateLimitUntil;
 }
 
 async function _fetch(query: string, maxResults: number, depth: 'basic' | 'advanced'): Promise<any[]> {
   if (!TAVILY_API_KEY) return [];
-  if (rateLimitHit) return [];
+  if (Date.now() < rateLimitUntil) {
+    const minsLeft = Math.ceil((rateLimitUntil - Date.now()) / 60000);
+    console.warn(`[Tavily] Rate-limited — retry in ${minsLeft}m`);
+    return [];
+  }
 
   try {
     const res = await fetch('https://api.tavily.com/search', {
@@ -47,8 +52,8 @@ async function _fetch(query: string, maxResults: number, depth: 'basic' | 'advan
     });
 
     if (res.status === 433 || res.status === 429) {
-      rateLimitHit = true;
-      console.error('[Tavily] Rate limit hit (433) — all further Tavily calls disabled until restart. Upgrade at https://tavily.com/dashboard');
+      rateLimitUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
+      console.error(`[Tavily] Rate limit hit (${res.status}) — pausing Tavily for 60 minutes (until ${new Date(rateLimitUntil).toISOString()})`);
       return [];
     }
 

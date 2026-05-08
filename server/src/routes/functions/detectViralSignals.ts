@@ -15,8 +15,28 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { tavilyAdvancedSearch, isTavilyRateLimited } from '../../lib/tavily';
+import { runApifyActor, hasApifyKey } from '../../lib/apify';
 
-import { tavilyAdvancedSearch } from '../../lib/tavily';
+// Derives TikTok hashtags from Hebrew business category (mirrors tiktokSectorTrendAgent logic)
+function deriveHashtags(category: string): string[] {
+  const map: Record<string, string[]> = {
+    'מסעדה': ['מסעדה', 'אוכל', 'food_israel', 'restaurant_israel'],
+    'סושי':  ['סושי', 'sushi_israel', 'sushi', 'אוכל_יפני'],
+    'בר סושי': ['סושי', 'sushi_israel', 'sushi', 'food_israel'],
+    'קפה':   ['קפה', 'cafe_israel', 'לאטה', 'coffee'],
+    'כושר':  ['כושר', 'fitness_israel', 'אימון', 'gym_israel'],
+    'יופי':  ['יופי', 'beauty_israel', 'skincare', 'איפור'],
+    'מספרה': ['מספרה', 'haircut_israel', 'שיער', 'beauty_israel'],
+    'ספא':   ['ספא', 'spa_israel', 'עיסוי', 'wellness'],
+    'מאפייה':['מאפייה', 'לחם', 'bakery_israel', 'אפייה'],
+  };
+  const lower = category.toLowerCase();
+  for (const [key, tags] of Object.entries(map)) {
+    if (lower.includes(key) || key.includes(lower)) return tags;
+  }
+  return [category.replace(/\s+/g, '_'), 'food_israel', 'israel'];
+}
 
 function buildViralQueries(category: string, city: string): string[] {
   return [
@@ -49,28 +69,77 @@ export async function detectViralSignals(req: Request, res: Response) {
 
     const { name, category, city, relevant_services = '', tone_preference = 'friendly' } = profile;
 
-    // ── Scan social platforms ────────────────────────────────────────────────
-    const queries = buildViralQueries(category, city);
-    const rawResults = await Promise.all(queries.map(q => tavilyAdvancedSearch(q, 5)));
-    const allResults = rawResults.flat();
+    // ── Source 1: Apify TikTok hashtag scraper (real data) ──────────────────
+    // Derive TikTok hashtags from the business category
+    const sectorHashtags = deriveHashtags(category);
+    let apifyItems: any[] = [];
 
-    // De-duplicate
-    const seen = new Set<string>();
-    const unique = allResults.filter(r => {
-      if (!r.url || seen.has(r.url)) return false;
-      seen.add(r.url);
-      return true;
-    });
-
-    if (unique.length === 0) {
-      return res.json({ signals_created: 0, results_scanned: 0, note: 'No results — check TAVILY_API_KEY' });
+    if (hasApifyKey()) {
+      try {
+        apifyItems = await runApifyActor(
+          'clockworks~tiktok-hashtag-scraper',
+          {
+            hashtags:             sectorHashtags.slice(0, 4),
+            resultsPerPage:       20,
+            maxItems:             20,
+            shouldDownloadVideos: false,
+            shouldDownloadCovers: false,
+          },
+          90_000,
+          20,
+        );
+        console.log(`[detectViralSignals] Apify TikTok: ${apifyItems.length} videos from hashtags: ${sectorHashtags.slice(0, 4).join(', ')}`);
+      } catch (e: any) {
+        console.warn('[detectViralSignals] Apify failed:', e.message);
+      }
     }
 
-    const context = unique.slice(0, 20)
-      .map(r => `[${r.url}]\n${(r.content || r.title || '').slice(0, 300)}`)
-      .join('\n---\n');
+    // ── Source 2: Tavily web search fallback (only if Apify returned nothing) ─
+    let tavilyContext = '';
+    if (apifyItems.length === 0 && !isTavilyRateLimited()) {
+      const queries = buildViralQueries(category, city);
+      const rawResults = await Promise.all(queries.slice(0, 5).map(q => tavilyAdvancedSearch(q, 4)));
+      const allResults = rawResults.flat();
+      const seen = new Set<string>();
+      const unique = allResults.filter(r => {
+        if (!r.url || seen.has(r.url)) return false;
+        seen.add(r.url);
+        return true;
+      });
+      tavilyContext = unique.slice(0, 15)
+        .map(r => `[${r.url}]\n${(r.content || r.title || '').slice(0, 250)}`)
+        .join('\n---\n');
+      console.log(`[detectViralSignals] Tavily fallback: ${unique.length} results`);
+    }
+
+    // Skip entirely if no real data — don't let LLM hallucinate trends
+    if (apifyItems.length === 0 && !tavilyContext) {
+      await writeAutomationLog('detectViralSignals', businessProfileId, startTime, 0);
+      return res.json({ signals_created: 0, results_scanned: 0, note: 'No data sources available (Apify not set, Tavily rate-limited)' });
+    }
+
+    // ── Build context for LLM ────────────────────────────────────────────────
+    let context = '';
+    if (apifyItems.length > 0) {
+      // Real TikTok data: include video metrics for grounding
+      context = '=== TikTok Data (Apify — real engagement metrics) ===\n' +
+        apifyItems.slice(0, 20).map(v => {
+          const plays    = v.playCount || v.plays || 0;
+          const likes    = v.diggCount || v.likes || 0;
+          const comments = v.commentCount || v.comments || 0;
+          const desc     = (v.text || v.desc || v.description || '').slice(0, 150);
+          const hashtags = (v.hashtags || []).map((h: any) => `#${h.name || h}`).join(' ');
+          return `plays:${plays} likes:${likes} comments:${comments} | "${desc}" ${hashtags}`;
+        }).join('\n');
+    } else {
+      context = '=== Web Search Results (Tavily — articles about trends) ===\n' + tavilyContext;
+    }
 
     // ── AI viral analysis ────────────────────────────────────────────────────
+    const dataSourceLabel = apifyItems.length > 0
+      ? `REAL TikTok data from Apify (${apifyItems.length} videos with actual play/like counts)`
+      : 'web search results (Tavily — less reliable)';
+
     const result = await invokeLLM({
       prompt: `You are a social media virality expert. Analyze what is going viral right now and how the business can leverage it.
 Return ONLY valid JSON. ALL string values must be in Hebrew.
@@ -78,14 +147,14 @@ Return ONLY valid JSON. ALL string values must be in Hebrew.
 Business: "${name}" — ${category} in ${city}
 Services: ${relevant_services || 'not specified'}
 Tone: ${tone_preference}
+Data source: ${dataSourceLabel}
 
-Search results:
 ${context.slice(0, 3500)}
 
-Find 2-4 viral signals relevant to the business. For each one — write ready-to-publish content.
-
-Instructions:
-• Include only what is supported by the data
+CRITICAL RULES:
+• ONLY report signals backed by specific numbers or URLs from the data above
+• If the data shows a video with high plays/likes — cite those exact numbers
+• Do NOT invent or extrapolate signals not present in the data
 • The platform must be clear (TikTok / Instagram / YouTube)
 • The format must be specific (Reel / Story / Short / Post)
 • ready_to_post_text — complete text in Hebrew, ready to copy and publish

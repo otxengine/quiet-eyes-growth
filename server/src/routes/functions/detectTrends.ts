@@ -62,6 +62,13 @@ export async function detectTrends(req: Request, res: Response) {
       `${category} העדפות לקוחות שינויים`,
     ];
 
+    const { isTavilyRateLimited } = await import('../../lib/tavily');
+    if (isTavilyRateLimited() && !SERP_API_KEY) {
+      console.log('[detectTrends] skipping — Tavily rate-limited and no SerpAPI key');
+      await writeAutomationLog('detectTrends', businessProfileId, startTime, 0);
+      return res.json({ trends_created: 0, skipped: true, reason: 'no_data_sources' });
+    }
+
     const searchResults = await Promise.all(searchQueries.map(q => tavilyAdvancedSearch(q, 5)));
     const allWebResults = searchResults.flat();
 
