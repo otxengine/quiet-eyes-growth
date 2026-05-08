@@ -39,24 +39,44 @@ export async function findLocalEvents(req: Request, res: Response) {
     const nextMonth  = new Date(now.getTime() + 30 * 86400000).toLocaleDateString('he-IL', { month: 'long' });
     const yearStr    = now.getFullYear();
 
+    // Derive a region label for small cities that aren't indexed heavily
+    // e.g. "זכרון יעקב" → also search "כרמל", "שרון"; "אילת" → "נגב" etc.
+    const REGION_MAP: Record<string, string> = {
+      'זכרון יעקב': 'כרמל שרון קיסריה',
+      'בנימינה': 'כרמל שרון קיסריה',
+      'עתלית': 'כרמל חיפה',
+      'מגדל העמק': 'עמק יזרעאל',
+      'עפולה': 'עמק יזרעאל',
+      'כפר סבא': 'שרון',
+      'רעננה': 'שרון',
+      'הרצליה': 'גוש דן',
+      'נס ציונה': 'גוש דן',
+      'אשדוד': 'שפלה',
+      'אשקלון': 'שפלה',
+      'באר שבע': 'נגב',
+      'אילת': 'נגב',
+    };
+    const regionTerms = REGION_MAP[city] || '';
+
     if (isTavilyRateLimited()) {
       return res.json({ signals_created: 0, message: 'Tavily rate limited' });
     }
 
-    // ── Targeted queries: Israeli event listing sites + general area search ────
+    // ── Targeted queries: Israeli event listing sites + regional search ────────
     const queries = [
-      // Timeout Israel — best Hebrew concert/festival listings
+      // Direct city search on main event sites
       `site:timeout.co.il הופעות פסטיבלים ${city} ${month} ${nextMonth}`,
-      // goout.net — Israeli event aggregator
       `site:goout.net הופעה פסטיבל ${city} ${month} ${yearStr}`,
-      // General Hebrew search with artist/festival terms
-      `הופעה זמר להקה פסטיבל ${city} ${month} ${nextMonth} ${yearStr} כרטיסים`,
-      // Nearby events within the region (captures surrounding cities)
-      `אירועים הופעות פסטיבלים ${city} ואזור ${month} ${nextMonth}`,
-      // Free entry / street events
-      `אירוע חינם פתוח לקהל ירייד ${city} ${month} ${yearStr}`,
-      // English for international events / English-language listings
-      `concert festival event ${city} Israel ${month} ${yearStr} tickets`,
+      // General Hebrew search — city name
+      `הופעה זמר להקה פסטיבל אירוע "${city}" ${month} ${nextMonth} ${yearStr}`,
+      // Regional search — captures nearby venues and surrounding cities
+      regionTerms
+        ? `הופעות פסטיבלים אירועים ${regionTerms} ${month} ${nextMonth} ${yearStr}`
+        : `אירועים הופעות פסטיבלים ${city} ואזור ${month} ${nextMonth}`,
+      // Specific venue types for the area (amphitheaters, wineries, cultural centers)
+      `אמפיתיאטרון מרכז תרבות יקב ${city} ${regionTerms} הופעה אירוע ${month} ${yearStr}`,
+      // Free / open events
+      `אירוע חינם ירייד שוק ${city} ${regionTerms} ${month} ${yearStr}`,
     ];
 
     const allResults: any[] = [];
@@ -91,17 +111,18 @@ export async function findLocalEvents(req: Request, res: Response) {
         model: 'sonnet',
         maxTokens: 900,
         skipCache: true,
-        prompt: `אתה מומחה אירועים בישראל. זהה אירועים ספציפיים אמיתיים בטקסט הבא שיכולים לייצר תנועה לעסק "${name}" (${category} ב${city}).
+        prompt: `אתה מומחה אירועים בישראל. זהה אירועים ספציפיים אמיתיים בטקסט הבא שיכולים לייצר תנועה לעסק "${name}" (${category} ב${city} ואזור).
 
 טקסט:
 ${context.slice(0, 4500)}
 
 חוקים:
-- שם האירוע חייב להיות ספציפי: "הופעת אייגל" לא "הופעה", "פסטיבל הג'אז של ירושלים" לא "פסטיבל"
+- שם האירוע חייב להיות ספציפי: "הופעת אייגל" לא "הופעה", "פסטיבל הג'אז" לא "פסטיבל"
 - כלול שם האמן/להקה/פסטיבל אם מוזכר
-- תאריך ISO חובה — אם אין תאריך ספציפי, דלג
-- רק אירועים בשבועיים הקרובים עד חודשיים קדימה
-- הזדמנות עסקית: ספציפית לסקטור "${category}" — מה הלקוחות שיגיעו לאירוע יצטרכו מ"${name}"?
+- תאריך: אם יש תאריך מדויק — השתמש בו. אם יש רק "מאי", "החודש", "הקרוב" — הכנס את ה-1 של אותו חודש כ-date_iso. רק אם אין שום מידע על תאריך — דלג על האירוע
+- קבל אירועים גם מעיירות קרובות (רדיוס 30 ק"מ) — לא רק מהעיר עצמה
+- רק אירועים בחודשיים הקרובים
+- הזדמנות עסקית: ספציפית לסקטור "${category}" — מה הלקוחות שיגיעו יצטרכו מ"${name}"?
 
 החזר JSON בלבד:
 {"events":[{
@@ -115,12 +136,17 @@ ${context.slice(0, 4500)}
   "business_opportunity": "הזדמנות ספציפית ל${category} — עד 10 מילים",
   "source_url": "URL המקור"
 }]}
-אם אין אירועים עם תאריך ספציפי — החזר {"events":[]}`,
+אם אין שום אירוע שניתן לזהות — החזר {"events":[]}`,
         response_json_schema: { type: 'object' },
       });
-      events = (analysis?.events || []).filter(
-        (e: any) => e.name && e.date_iso
-      );
+      const currentMonthIso = now.toISOString().slice(0, 8) + '01';
+      events = (analysis?.events || [])
+        .filter((e: any) => e.name)
+        .map((e: any) => ({
+          ...e,
+          // If LLM returned no date_iso, use first of current month as fallback
+          date_iso: e.date_iso || currentMonthIso,
+        }));
     } catch (_) {}
 
     if (events.length === 0) {

@@ -81,10 +81,14 @@ export async function cleanupInsights(req: Request, res: Response) {
     for (const alerts of Object.values(byType)) {
       if (alerts.length <= 1) continue;
 
-      // Group by title prefix (first 35 chars, lowercased, whitespace-normalized)
+      // Group by normalized title — strip day-counter suffix ("— בעוד X ימים") and icon prefix
+      // so "שבועות — בעוד 13 ימים" and "שבועות — בעוד 14 ימים" collapse to the same group
       const groups: Record<string, typeof alerts> = {};
       for (const a of alerts) {
-        const key = (a.title || '').toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 35);
+        const key = (a.title || '')
+          .replace(/\s*—?\s*בעוד\s*\d+\s*ימים.*/i, '') // strip "— בעוד X ימים" suffix
+          .replace(/^[\s⚽📅🛍🌿🎵🎙️🎪🛒⚽🤝🖼️📍🎤]+/, '') // strip leading icons/whitespace
+          .toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 35);
         if (!groups[key]) groups[key] = [];
         groups[key].push(a);
       }
