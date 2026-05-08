@@ -151,11 +151,23 @@ async function _callOpenAI(prompt: string, response_json_schema: any): Promise<a
 }
 
 function _parseJson(text: string): any {
-  const clean = text.replace(/```json?|```/g, '').trim();
+  const clean = text.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
   try { return JSON.parse(clean); } catch {}
-  const obj = clean.match(/\{[\s\S]*\}/);
-  if (obj) { try { return JSON.parse(obj[0]); } catch {} }
-  const arr = clean.match(/\[[\s\S]*\]/);
-  if (arr) { try { return JSON.parse(arr[0]); } catch {} }
+  // Try extracting object or array
+  const objMatch = clean.match(/\{[\s\S]*\}/);
+  if (objMatch) { try { return JSON.parse(objMatch[0]); } catch {} }
+  const arrMatch = clean.match(/\[[\s\S]*\]/);
+  if (arrMatch) { try { return JSON.parse(arrMatch[0]); } catch {} }
+  // Last resort: try to close truncated JSON by appending closing brackets
+  if (clean.startsWith('{')) {
+    const openBraces = (clean.match(/\{/g) || []).length;
+    const closeBraces = (clean.match(/\}/g) || []).length;
+    const missing = openBraces - closeBraces;
+    if (missing > 0) {
+      const patched = clean.trimEnd().replace(/,\s*$/, '') + '}'.repeat(missing);
+      try { return JSON.parse(patched); } catch {}
+    }
+  }
+  console.warn('[_parseJson] Failed to parse LLM output, first 200 chars:', clean.substring(0, 200));
   return null;
 }

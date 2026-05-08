@@ -51,36 +51,16 @@ export async function generateMonthlyStrategy(req: Request, res: Response) {
 
     const result = await invokeLLM({
       model: 'sonnet',
-      maxTokens: 1800,
+      maxTokens: 3000,
       skipCache: true,
-      prompt: `אתה יועץ עסקי אסטרטגי לעסקים ישראלים. צור תכנית אסטרטגית חודשית ל${todayDate}.
-${ctxPrompt}
-${sectorCtx}
+      prompt: `אתה יועץ עסקי אסטרטגי. צור אסטרטגיה חודשית קצרה וממוקדת ל${todayDate}.
+
 ${contextBlock}
 
-צור אסטרטגיה חודשית ממוקדת. החזר JSON:
-{
-  "summary": "סיכום מנהלים — 2-3 משפטים על מצב העסק והיעד החודשי",
-  "focus_theme": "נושא המיקוד של החודש (ביטוי קצר)",
-  "top_goal": "היעד המספרי הראשי לחודש הקרוב",
-  "initiatives": [
-    {
-      "title": "שם היוזמה",
-      "description": "תיאור ב-1-2 משפטים",
-      "expected_impact": "השפעה צפויה (כמותית אם אפשר)",
-      "effort": "low|medium|high",
-      "priority": "high|medium|low",
-      "category": "acquisition|retention|reputation|marketing|operations"
-    }
-  ],
-  "kpis": [
-    { "metric": "שם המדד", "target": "יעד מספרי", "current": "מצב נוכחי" }
-  ],
-  "risks": [
-    { "risk": "תיאור הסיכון", "likelihood": "high|medium|low", "impact": "high|medium|low", "mitigation": "אמצעי מניעה" }
-  ],
-  "quick_wins": ["פעולה מהירה 1", "פעולה מהירה 2", "פעולה מהירה 3"]
-}`,
+החזר JSON בלבד (ללא markdown, ללא טקסט נוסף):
+{"summary":"סיכום 2 משפטים","focus_theme":"נושא קצר","top_goal":"יעד מספרי","initiatives":[{"title":"שם","description":"תיאור קצר","expected_impact":"השפעה","effort":"low","priority":"high","category":"acquisition"}],"kpis":[{"metric":"מדד","target":"יעד","current":"נוכחי"}],"risks":[{"risk":"סיכון","likelihood":"medium","impact":"medium","mitigation":"מניעה"}],"quick_wins":["פעולה 1","פעולה 2","פעולה 3"]}
+
+כלול 3-4 initiatives, 3 kpis, 2-3 risks, 3-5 quick_wins. הכל בעברית.`,
       response_json_schema: { type: 'object' },
     });
 
