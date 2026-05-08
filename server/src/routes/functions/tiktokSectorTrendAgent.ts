@@ -307,7 +307,7 @@ function formatVideoBlock(videos: VideoMetrics[]): string {
   return videos
     .slice(0, 15)
     .map((v, i) =>
-      `${i + 1}. [resonance=${v.pattern_score}/100] "${v.description.slice(0, 100)}"\n` +
+      `${i + 1}. [resonance=${v.pattern_score}/100] "${sanitizeText(v.description, 100)}"\n` +
       `   📊 ${v.plays.toLocaleString()} צפיות | eng ${(v.engagement_rate * 100).toFixed(1)}% | ${v.plays_per_day.toLocaleString()} views/day\n` +
       `   🎵 ${v.music || '—'} | #tags: ${v.hashtags.slice(0, 4).join(' ')} | 🔗 ${v.url}`
     )
@@ -496,7 +496,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       prompt,
       response_json_schema: { type: 'object' },
       model: 'sonnet',
-      maxTokens: 800,
+      maxTokens: 1200,
       skipCache: true, // always fresh analysis
     });
 

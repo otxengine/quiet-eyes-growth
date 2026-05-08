@@ -181,28 +181,55 @@ function _parseJson(text: string): any {
   if (objMatch) { try { return JSON.parse(objMatch[0]); } catch {} }
   const arrMatch = clean.match(/\[[\s\S]*\]/);
   if (arrMatch) { try { return JSON.parse(arrMatch[0]); } catch {} }
-  // Last resort: try to close truncated JSON by appending missing brackets/braces
-  if (clean.startsWith('{')) {
-    const openBraces = (clean.match(/\{/g) || []).length;
-    const closeBraces = (clean.match(/\}/g) || []).length;
-    const missing = openBraces - closeBraces;
-    if (missing > 0) {
-      const patched = clean.trimEnd().replace(/,\s*$/, '') + '}'.repeat(missing);
-      try { return JSON.parse(patched); } catch {}
-    }
-  }
-  if (clean.startsWith('[')) {
-    const openBrackets = (clean.match(/\[/g) || []).length;
-    const closeBrackets = (clean.match(/\]/g) || []).length;
-    const missingBraces = (clean.match(/\{/g) || []).length - (clean.match(/\}/g) || []).length;
-    const missingBrackets = openBrackets - closeBrackets;
-    if (missingBrackets > 0 || missingBraces > 0) {
-      const patched = clean.trimEnd().replace(/,\s*$/, '') +
-        '}'.repeat(Math.max(0, missingBraces)) +
-        ']'.repeat(Math.max(0, missingBrackets));
-      try { return JSON.parse(patched); } catch {}
-    }
-  }
+  // Last resort: find the last COMPLETE item, truncate there, close remaining structure.
+  // This handles mid-string truncation (stop_reason: max_tokens) that bracket-counting can't fix.
+  const recovered = _recoverTruncated(clean);
+  if (recovered !== null) return recovered;
   console.warn('[_parseJson] Failed to parse LLM output, first 200 chars:', clean.substring(0, 200));
   return null;
+}
+
+/**
+ * Find the last position where a complete nested item was closed (depth drops to 1),
+ * then truncate and close any remaining open structures.
+ * Works on both { "key": [...] } and [...] root shapes.
+ */
+function _recoverTruncated(text: string): any {
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  let lastItemCloseIdx = -1;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (escape)                        { escape = false; continue; }
+    if (ch === '\\' && inString)       { escape = true;  continue; }
+    if (ch === '"')                    { inString = !inString; continue; }
+    if (inString)                      continue;
+    if (ch === '{' || ch === '[')      depth++;
+    else if (ch === '}' || ch === ']') {
+      depth--;
+      // depth 1 → we just closed an item inside the root container
+      if (depth === 1) lastItemCloseIdx = i;
+    }
+  }
+
+  if (lastItemCloseIdx === -1) return null;
+
+  const truncated = text.substring(0, lastItemCloseIdx + 1).trimEnd().replace(/,\s*$/, '');
+
+  // Re-trace to build the closing sequence
+  let inStr2 = false, esc2 = false;
+  const stack: string[] = [];
+  for (const ch of truncated) {
+    if (esc2)                          { esc2 = false;  continue; }
+    if (ch === '\\' && inStr2)         { esc2 = true;   continue; }
+    if (ch === '"')                    { inStr2 = !inStr2; continue; }
+    if (inStr2)                        continue;
+    if (ch === '{')                    stack.push('}');
+    else if (ch === '[')               stack.push(']');
+    else if (ch === '}' || ch === ']') stack.pop();
+  }
+
+  try { return JSON.parse(truncated + stack.reverse().join('')); } catch { return null; }
 }

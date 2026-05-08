@@ -121,6 +121,25 @@ export async function detectViralSignals(req: Request, res: Response) {
     }
 
     // ── Build context for LLM ────────────────────────────────────────────────
+    // Strip lone surrogates from TikTok text (prevents Anthropic 400 "no low surrogate")
+    const sanitize = (s: string, maxLen = 150): string => {
+      if (!s) return '';
+      let out = '';
+      for (let i = 0; i < s.length; i++) {
+        const c = s.charCodeAt(i);
+        if (c >= 0xD800 && c <= 0xDBFF) {
+          const next = s.charCodeAt(i + 1);
+          if (next >= 0xDC00 && next <= 0xDFFF) { out += s[i] + s[i + 1]; i++; }
+          // else lone high surrogate → drop
+        } else if (c >= 0xDC00 && c <= 0xDFFF) {
+          // lone low surrogate → drop
+        } else {
+          out += s[i];
+        }
+      }
+      return out.slice(0, maxLen).trim();
+    };
+
     let context = '';
     if (apifyItems.length > 0) {
       // Real TikTok data: include video metrics for grounding
@@ -129,8 +148,8 @@ export async function detectViralSignals(req: Request, res: Response) {
           const plays    = v.playCount || v.plays || 0;
           const likes    = v.diggCount || v.likes || 0;
           const comments = v.commentCount || v.comments || 0;
-          const desc     = (v.text || v.desc || v.description || '').slice(0, 150);
-          const hashtags = (v.hashtags || []).map((h: any) => `#${h.name || h}`).join(' ');
+          const desc     = sanitize(v.text || v.desc || v.description || '', 150);
+          const hashtags = (v.hashtags || []).map((h: any) => `#${sanitize(h.name || h, 40)}`).join(' ');
           return `plays:${plays} likes:${likes} comments:${comments} | "${desc}" ${hashtags}`;
         }).join('\n');
     } else {
@@ -143,6 +162,8 @@ export async function detectViralSignals(req: Request, res: Response) {
       : 'web search results (Tavily — less reliable)';
 
     const result = await invokeLLM({
+      model: 'sonnet',
+      maxTokens: 1200,
       prompt: `You are a social media virality expert. Analyze what is going viral right now and how the business can leverage it.
 Return ONLY valid JSON. ALL string values must be in Hebrew.
 
