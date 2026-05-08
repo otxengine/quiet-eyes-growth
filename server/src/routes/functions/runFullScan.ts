@@ -11,6 +11,7 @@ import { findSocialLeads } from './findSocialLeads';
 import { detectTrends } from './detectTrends';
 import { detectEarlyTrends } from './detectEarlyTrends';
 import { detectViralSignals } from './detectViralSignals';
+import { tiktokSectorTrendAgent } from './tiktokSectorTrendAgent';
 import { calculateHealthScore } from './calculateHealthScore';
 import { generateMorningBriefing } from './generateMorningBriefing';
 import { runPredictions } from './runPredictions';
@@ -79,6 +80,20 @@ export async function runFullScan(req: Request, res: Response) {
     // automationLog query failure → continue scan (don't block on cooldown check)
   }
 
+  // tiktokSectorTrendAgent uses Apify (real TikTok data) — skip if ran within 12h
+  let tiktokSectorHandler: Function = tiktokSectorTrendAgent;
+  try {
+    const last12h = new Date(Date.now() - 12 * 60 * 60 * 1000);
+    const recentTT = await prisma.automationLog.findFirst({
+      where: { automation_name: 'tiktokSectorTrendAgent', linked_business: businessProfileId, created_date: { gt: last12h } },
+      orderBy: { created_date: 'desc' },
+    });
+    if (recentTT) {
+      tiktokSectorHandler = (_req: Request, res: Response) =>
+        res.json({ skipped: true, reason: 'tiktokSectorTrendAgent ran within 12h' });
+    }
+  } catch (_) {}
+
   // detectEarlyTrends is expensive (12 Tavily + 5 SerpAPI) — skip if ran within 48h
   let earlyTrendsHandler: Function = detectEarlyTrends;
   try {
@@ -110,6 +125,7 @@ export async function runFullScan(req: Request, res: Response) {
     ['runLeadGeneration',           runLeadGeneration],
     ['findSocialLeads',             findSocialLeads],
     // ── Trend Intelligence ───────────────────────────────────────
+    ['tiktokSectorTrendAgent',      tiktokSectorHandler],
     ['detectTrends',                detectTrends],
     ['detectEarlyTrends',           earlyTrendsHandler],
     ['detectViralSignals',          detectViralSignals],
