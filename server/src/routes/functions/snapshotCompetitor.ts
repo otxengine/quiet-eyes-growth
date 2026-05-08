@@ -31,23 +31,23 @@ export async function snapshotCompetitor(req: Request, res: Response) {
     const res2 = await invokeLLM({
       model: 'sonnet',
       maxTokens: 500,
-      prompt: `חלץ מידע עסקי מובנה על המתחרה "${competitor.name}" (${category} ב${city}) מהמידע שנמצא ברשת.
+      prompt: `Extract structured business information about the competitor "${competitor.name}" (${category} in ${city}) from the data found online.
 
-מידע שנמצא:
-${webData.slice(0, 2500) || 'לא נמצא מידע ספציפי'}
-${competitor.notes ? `מידע ידוע מקודם: ${competitor.notes}` : ''}
-דירוג נוכחי: ${competitor.rating || 'לא ידוע'}
+Data found:
+${webData.slice(0, 2500) || 'no specific data found'}
+${competitor.notes ? `Previously known information: ${competitor.notes}` : ''}
+Current rating: ${competitor.rating || 'unknown'}
 
-חלץ רק מידע שמופיע במפורש. אל תמציא נתונים.
+Extract only information that appears explicitly. Do not invent data.
 
-JSON בלבד:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
-  "prices": [{"item": "שם שירות/מוצר ספציפי", "price": "מחיר ספציפי"}],
-  "promotions": ["מבצע פעיל ספציפי"],
+  "prices": [{"item": "specific service/product name", "price": "specific price"}],
+  "promotions": ["specific active promotion"],
   "rating": null,
   "review_count": null,
-  "description": "תיאור קצר של מה שהעסק מציע",
-  "last_activity": "תיאור פעילות אחרונה שנמצאה"
+  "description": "short description of what the business offers",
+  "last_activity": "description of the latest activity found"
 }`,
       response_json_schema: { type: 'object' },
     });

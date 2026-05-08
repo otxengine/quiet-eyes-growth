@@ -62,22 +62,22 @@ export async function revenueForecaster(req: Request, res: Response) {
     const forecastMonth = MONTHS_HE[new Date().getMonth()];
 
     const result = await invokeLLM({
-      prompt: `אתה אנליסט פיננסי לעסק "${profile.name}" (${profile.category}).
+      prompt: `You are a financial analyst for the business "${profile.name}" (${profile.category}).
 
-נתוני צינור עסקאות:
-- לידים חמים (hot): ${hotLeads.length}
-- לידים חמים-בינוניים (warm): ${warmLeads.length}
-- סה"כ לידים פעילים: ${allLeads.length}
-- ערך צינור משוקלל: ₪${pipelineValue.toFixed(0)}
+Pipeline data:
+- Hot leads: ${hotLeads.length}
+- Warm leads: ${warmLeads.length}
+- Total active leads: ${allLeads.length}
+- Weighted pipeline value: ₪${pipelineValue.toFixed(0)}
 
-נתונים היסטוריים (90 יום):
-- ממוצע ערך עסקה: ₪${avgDealValue.toFixed(0)}
-- ממוצע עסקאות סגורות לחודש: ${monthlyCloseRate.toFixed(1)}
-- חודש שיא עונתי: ${isPeakMonth ? 'כן' : 'לא'} (מכפיל: ${seasonalMultiplier})
+Historical data (90 days):
+- Average deal value: ₪${avgDealValue.toFixed(0)}
+- Average closed deals per month: ${monthlyCloseRate.toFixed(1)}
+- Peak seasonal month: ${isPeakMonth ? 'yes' : 'no'} (multiplier: ${seasonalMultiplier})
 
-צור תחזית הכנסות ל${forecastMonth}:
+Generate a revenue forecast for ${forecastMonth}.
 
-החזר JSON:
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 {
   "forecast_month": "${forecastMonth}",
   "conservative_forecast": 0,

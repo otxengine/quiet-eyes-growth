@@ -36,21 +36,22 @@ export async function runMarketIntelligence(req: Request, res: Response) {
       const coldResult = await invokeLLM({
         model: 'sonnet',
         maxTokens: 1200,
-        prompt: `אתה אנליסט מודיעין שוק בכיר לעסקים קטנים בישראל.
-עסק: "${profile.name}" | תחום: ${profile.category} | עיר: ${profile.city}
-${profile.description ? `תיאור: ${profile.description}` : ''}
-${profile.relevant_services ? `שירותים: ${profile.relevant_services}` : ''}
+        prompt: `You are a senior market intelligence analyst for small businesses in Israel.
+Return ONLY valid JSON. ALL string values must be in Hebrew.
+Business: "${profile.name}" | Sector: ${profile.category} | City: ${profile.city}
+${profile.description ? `Description: ${profile.description}` : ''}
+${profile.relevant_services ? `Services: ${profile.relevant_services}` : ''}
 ${competitorContext}
 
 ${sectorCtx}
 
-צור 4-5 תובנות שוק ראשוניות ספציפיות וישימות לסקטור זה ולעיר זו בישראל.
-כל תובנה חייבת:
-• לנבוע מהבנת הסקטור הספציפי (לא גנרית)
-• לכלול פעולה ממוקדת ש-${profile.name} יכול לבצע כבר מחר
-• prefilled_text ריאלי שהמשתמש יכול להעתיק ישירות
+Generate 4-5 initial market insights that are specific and actionable for this sector and city in Israel.
+Each insight must:
+• stem from understanding of the specific sector (not generic)
+• include a focused action that ${profile.name} can take as early as tomorrow
+• include a realistic prefilled_text the user can copy directly
 
-JSON בלבד:
+Return ONLY valid JSON:
 {"insights":[{
   "summary": "תובנה ספציפית לסקטור + עיר — עם מספר או שם",
   "impact_level": "high|medium|low",
@@ -116,29 +117,30 @@ JSON בלבד:
     const result = await invokeLLM({
       model: 'sonnet',
       maxTokens: 1500,
-      prompt: `אתה אנליסט מודיעין שוק בכיר לעסקים קטנים בישראל. ניתח את האותות הבאים וצור תובנות ספציפיות וישימות.
+      prompt: `You are a senior market intelligence analyst for small businesses in Israel. Analyze the following signals and generate specific, actionable insights.
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 
-עסק: "${profile.name}" | תחום: ${profile.category} | עיר: ${profile.city}
-${profile.description ? `תיאור: ${profile.description}` : ''}
-${profile.relevant_services ? `שירותים: ${profile.relevant_services}` : ''}
+Business: "${profile.name}" | Sector: ${profile.category} | City: ${profile.city}
+${profile.description ? `Description: ${profile.description}` : ''}
+${profile.relevant_services ? `Services: ${profile.relevant_services}` : ''}
 ${competitorContext}
 
 ${sectorCtx}
 
-אותות גולמיים (${signals.length} אותות):
+Raw signals (${signals.length} signals):
 ${contextBlock}
 
-כללים קריטיים לתובנות:
-1. כל summary חייב לכלול שם ספציפי, מספר, או מיקום (לא "עלייה בביקוש" — אלא "עלייה של 30% בחיפושי מסעדות בתל אביב")
-2. כל recommended_action חייבת להתחיל בפועל ציווי ספציפי ("פרסם", "הגב", "התקשר", "שלח")
-3. action_label חייב להיות קצר, ספציפי, עם פועל (מקסימום 5 מילים)
-4. action_type: אחד מ: social_post / respond / promote / call / task
-5. action_platform: הפלטפורמה הכי מתאימה לפעולה זו — בחר: instagram (תוכן ויזואלי, קהל 18-40, מסעדות/יופי/אופנה) | facebook (אירועים, קהל מקומי, 30+) | tiktok (תוכן ויראלי, קהל 16-30) | google (ביקורות, SEO מקומי) | whatsapp (תקשורת ישירה, בלאסטים) | wolt / ten_bis (פרומו משלוחים) | general (כאשר כל הפלטפורמות רלוונטיות)
-6. platform_reason: משפט אחד בעברית — מדוע פלטפורמה זו מתאימה לעסק זה ולתובנה זו
-7. prefilled_text: טקסט מוכן לפעולה (פוסט/תגובה/הצעה) בעברית — 30-80 מילים
-8. time_minutes: זמן ביצוע ריאלי (5-60 דקות)
+Critical rules for insights:
+1. Every summary must include a specific name, number, or location (not "rise in demand" — but "30% rise in restaurant searches in Tel Aviv")
+2. Every recommended_action must start with a specific imperative verb ("פרסם", "הגב", "התקשר", "שלח")
+3. action_label must be short, specific, with a verb (maximum 5 words)
+4. action_type: one of: social_post / respond / promote / call / task
+5. action_platform: the most suitable platform for this action — choose: instagram (visual content, audience 18-40, restaurants/beauty/fashion) | facebook (events, local audience, 30+) | tiktok (viral content, audience 16-30) | google (reviews, local SEO) | whatsapp (direct communication, blasts) | wolt / ten_bis (delivery promos) | general (when all platforms are relevant)
+6. platform_reason: one sentence in Hebrew — why this platform suits this business and this insight
+7. prefilled_text: ready-to-use action text (post/reply/offer) in Hebrew — 30-80 words
+8. time_minutes: realistic execution time (5-60 minutes)
 
-החזר JSON בדיוק:
+Return ONLY valid JSON:
 {"insights":[{
   "summary": "כותרת ספציפית עם מספר/שם/מיקום",
   "impact_level": "high|medium|low",

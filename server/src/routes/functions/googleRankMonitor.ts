@@ -72,16 +72,17 @@ export async function googleRankMonitor(req: Request, res: Response) {
         ).join('\n');
 
         seoAnalysis = await invokeLLM({
-          prompt: `נתח את תוצאות החיפוש הבאות עבור "${category} ${city}" בגוגל.
-העסק שלנו: "${name}" (${businessReviewCount} ביקורות).
+          prompt: `Analyze the following search results for "${category} ${city}" on Google.
+Our business: "${name}" (${businessReviewCount} reviews).
 
-תוצאות חיפוש:
+Search results:
 ${resultsText}
 
-מתחרים ידועים: ${competitors.slice(0, 5).map(c => `${c.name} (${c.review_count || '?'} ביקורות, ${c.rating || '?'}⭐)`).join(', ')}
+Known competitors: ${competitors.slice(0, 5).map(c => `${c.name} (${c.review_count || '?'} reviews, ${c.rating || '?'}⭐)`).join(', ')}
 
-החזר JSON: {
-  "seo_score": (0-100, ציון SEO מקומי — מבוסס על נוכחות בתוצאות),
+Return ONLY valid JSON. ALL string values must be in Hebrew.
+{
+  "seo_score": (0-100, local SEO score based on presence in results),
   "top_competitor": "שם המתחרה המוביל",
   "key_gap": "מה חסר לנו להגיע לראש",
   "quick_win": "פעולה אחת שתשפר את הדירוג הכי מהר"

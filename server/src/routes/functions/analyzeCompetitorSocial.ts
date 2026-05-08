@@ -58,29 +58,29 @@ export async function analyzeCompetitorSocial(req: Request, res: Response) {
         const analysis = await invokeLLM({
           model: 'sonnet',
           maxTokens: 500,
-          prompt: `אתה אנליסט מודיעין תחרותי בכיר. נתח את הנוכחות הדיגיטלית של "${comp.name}" ומצא את נקודת הפגיעות שהעסק שלי יכול לנצל.
+          prompt: `You are a senior competitive intelligence analyst. Analyze the digital presence of "${comp.name}" and identify the vulnerability that my business can exploit.
 
-העסק שלי: "${profile?.name}" | תחום: ${profile?.category} | עיר: ${profile?.city}
-מתחרה: "${comp.name}"
+My business: "${profile?.name}" | Sector: ${profile?.category} | City: ${profile?.city}
+Competitor: "${comp.name}"
 
-ממצאים מהרשת:
+Web findings:
 ${textBlob.slice(0, 2500)}
 
-ניתוח נדרש:
-- מה הערוץ הדומיננטי שלהם? מה הם עושים טוב?
-- מהי החולשה הכי בולטת שניתן לראות מהתוכן?
-- מה הלקוחות מתלוננים עליהם? (מתוך הביקורות)
-- מה ההזדמנות הספציפית ביותר לנצל?
+Required analysis:
+- What is their dominant channel? What do they do well?
+- What is the most glaring weakness visible from the content?
+- What are customers complaining about? (from reviews)
+- What is the most specific opportunity to exploit?
 
-JSON בלבד:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
-  "content_strategy": "מה הם עושים ברשתות — משפט ספציפי עם דוגמאות",
+  "content_strategy": "what they do on social — one specific sentence with examples",
   "strongest_channel": "instagram|facebook|google|tiktok|unknown",
   "engagement_level": "low|medium|high",
-  "content_themes": ["נושא 1 ספציפי", "נושא 2 ספציפי"],
-  "main_weakness": "החולשה הבולטת ביותר שלהם — עם ראייה מהנתונים",
-  "our_opportunity": "הזדמנות ספציפית ממוקדת — מה אנחנו יכולים לעשות שהם לא עושים",
-  "recommended_action": "פועל ציווי + ערוץ + תוכן — עד 10 מילים",
+  "content_themes": ["specific topic 1", "specific topic 2"],
+  "main_weakness": "their most glaring weakness — with evidence from data",
+  "our_opportunity": "specific focused opportunity — what we can do that they don't",
+  "recommended_action": "imperative verb + channel + content — up to 10 words",
   "sentiment_from_reviews": "positive|negative|mixed|unknown"
 }`,
           response_json_schema: { type: 'object' },

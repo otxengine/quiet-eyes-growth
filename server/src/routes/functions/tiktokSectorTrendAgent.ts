@@ -440,57 +440,57 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
     const videoBlock = formatVideoBlock(videoMetrics);
     const hasRealData = videoBlock.length > 0;
 
-    const prompt = `אתה אנליסט TikTok מומחה לעסקים קטנים ישראלים בסקטור "${category}".
-המשימה: מצא 2-4 **תבניות תוכן עולות** שמתאימות בדיוק לעסק הספציפי הזה.
+    const prompt = `You are an expert TikTok analyst for small Israeli businesses in the "${category}" sector.
+Task: find 2-4 **rising content patterns** that fit this specific business exactly.
 
-=== פרופיל העסק ===
-שם: "${name}" | קטגוריה: ${category} | עיר: ${city}
+=== Business Profile ===
+Name: "${name}" | Category: ${category} | City: ${city}
 ${profileCtx}
-טון מועדף: ${toneInstruction}
+Preferred tone: ${toneInstruction}
 
 ${ownVideosCtx}
 
-${hasRealData ? `=== נתוני ENGAGEMENT אמיתיים מ-TikTok (סרטוני הסקטור) ===\n${videoBlock}` : ''}
+${hasRealData ? `=== Real ENGAGEMENT data from TikTok (sector videos) ===\n${videoBlock}` : ''}
 ${soundBlock}
 
-${tavilyContext ? `=== תוכן TikTok מהסקטור (מחקר אינטרנט) ===\n${tavilyContext.slice(0, 2500)}` : ''}
+${tavilyContext ? `=== TikTok sector content (web research) ===\n${tavilyContext.slice(0, 2500)}` : ''}
 
-=== תבניות תוכן TikTok לבחינה ===
+=== TikTok content patterns to consider ===
 ${CONTENT_PATTERNS.map((p, i) => `${i + 1}. ${p}`).join('\n')}
 
-כללי:
-• כל script חייב להתאים ספציפית ל"${name}" — לא תבנית גנרית
-• שלב את השירותים הספציפיים: ${relevant_services || category}
-• script מוכן לצילום — מה בדיוק לאמור/להראות, לא עקרוני
-• opportunity_window_hours — כמה שעות נשארו לרוץ על הגל לפני שהוא mainstream
+Rules:
+• Every script must be tailored specifically to "${name}" — not a generic template
+• Incorporate the specific services: ${relevant_services || category}
+• Script must be ready to film — what exactly to say/show, not abstract
+• opportunity_window_hours — how many hours remain to ride the wave before it goes mainstream
 
-JSON בלבד:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {"trends": [{
-  "pattern_name": "שם תבנית התוכן — עד 5 מילים בעברית",
-  "why_it_works_in_sector": "הסבר ספציפי לסקטור ולעסק הזה — לא כללי",
-  "service_spotlight": "איזה שירות/מוצר ספציפי של העסק להציג בסרטון הזה",
+  "pattern_name": "content pattern name — up to 5 words",
+  "why_it_works_in_sector": "specific explanation for this sector and business — not generic",
+  "service_spotlight": "which specific service/product of the business to feature in this video",
   "evidence": {
     "source": "apify_video|tavily_url|observed_pattern",
-    "detail": "ציטוט/URL/מספרים ספציפיים שמוכיחים את הטרנד",
+    "detail": "specific quote/URL/numbers proving the trend",
     "avg_plays_per_day": 0,
     "engagement_rate_pct": 0.0
   },
   "content_script": {
-    "hook_3sec": "המשפט הראשון בדיוק — מה אומרים/מראים ב-3 שניות הראשונות",
-    "body_20sec": "מה בדיוק להראות/לאמור בגוף הסרטון — שלבים קצרים",
-    "cta": "מה לאמור ב-5 שניות האחרונות",
-    "visual_direction": "מה בדיוק לצלם — תיאור סצנה קצר",
-    "music_suggestion": "סוג מוזיקה / אם יש sound ספציפי — ציין"
+    "hook_3sec": "exact first sentence — what to say/show in the first 3 seconds",
+    "body_20sec": "exactly what to show/say in the body — short steps",
+    "cta": "what to say in the last 5 seconds",
+    "visual_direction": "exactly what to film — short scene description",
+    "music_suggestion": "music type / if a specific sound — name it"
   },
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"],
-  "recommended_sound": "שם sound/סוג מוזיקה ספציפי שמומלץ לתבנית הזו",
-  "best_posting_time": "שעה אופטימלית ויום בשבוע",
+  "recommended_sound": "specific sound name/music type recommended for this pattern",
+  "best_posting_time": "optimal time and day of week",
   "opportunity_window_hours": 48,
   "velocity": "exploding|fast_rising|steady_rising",
   "estimated_reach_multiplier": 2.5,
   "confidence": 65
 }],
-"sector_sounds": [{"title": "שם ה-sound", "why_use_it": "למה להשתמש בו בסקטור הזה"}]}`;
+"sector_sounds": [{"title": "sound name", "why_use_it": "why to use it in this sector"}]}`;
 
     const result = await invokeLLM({
       prompt,

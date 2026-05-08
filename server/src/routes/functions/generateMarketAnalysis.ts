@@ -84,12 +84,13 @@ export async function generateMarketAnalysis(req: Request, res: Response) {
     const result = await invokeLLM({
       model: 'sonnet',
       maxTokens: 600,
-      prompt: `אתה אנליסט שוק בכיר לעסקים קטנים ישראלים. ניתוח זה יוצג לבעל העסק — כתוב תובנות ספציפיות ומדויקות, לא גנריות.
+      prompt: `You are a senior market analyst for small Israeli businesses. This analysis will be presented to the business owner — write specific, precise insights, not generic ones.
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 
-עסק: "${profile.name}" | תחום: ${profile.category} | עיר: ${profile.city}
-שירותים: ${profile.relevant_services || 'לא צוינו'}
-שוק יעד: ${profile.target_market || 'לא צוין'}
-${profile.description ? `תיאור: ${profile.description}` : ''}
+Business: "${profile.name}" | Sector: ${profile.category} | City: ${profile.city}
+Services: ${profile.relevant_services || 'not specified'}
+Target market: ${profile.target_market || 'not specified'}
+${profile.description ? `Description: ${profile.description}` : ''}
 
 === נתונים כמותיים ===
 • סיגנלים שוק: ${signals.length} (${opportunities} הזדמנויות, ${threats} איומים)
@@ -101,7 +102,7 @@ ${topServicesList.length > 0 ? `• שירותים מבוקשים: ${topServices
 הזדמנויות מזוהות:
 ${trendingOpps.length > 0 ? trendingOpps.map(o => `• ${o}`).join('\n') : '• אין מספיק נתונים עדיין'}
 
-JSON בלבד:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "market_size_estimate": "גדול|בינוני|קטן",
   "market_trend": "growing|stable|declining",

@@ -115,24 +115,24 @@ export async function analyzeTikTokContent(req: Request, res: Response) {
       : '';
 
     const result = await invokeLLM({
-      prompt: `אתה מומחה TikTok לעסקים קטנים ישראלים. נתח עבור "${name}" (${category}, ${city}).
+      prompt: `You are a TikTok expert for small Israeli businesses. Analyze for "${name}" (${category}, ${city}).
 
 ${ownVideosCtx}
 
 ${trendCtx}
 
-חלץ תובנות אסטרטגיות:
-1. ביצועי התוכן הנוכחי (אם יש)
-2. טרנד עולה ב-TikTok שרלוונטי לסקטור
-3. פורמט תוכן מומלץ ספציפי
-4. שעת פרסום אופטימלית
+Extract strategic insights:
+1. Current content performance (if available)
+2. A rising TikTok trend relevant to the sector
+3. A specific recommended content format
+4. Optimal posting time
 
-JSON בלבד:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
-  "performance_insight": "תובנה על הביצועים הנוכחיים — משפט אחד",
-  "sector_trend": "טרנד ספציפי שעולה בסקטור עכשיו",
-  "trending_formats": ["פורמט1", "פורמט2"],
-  "recommended_action": "פעולה מיידית ספציפית שהעסק יכול לעשות",
+  "performance_insight": "insight about current performance — one sentence",
+  "sector_trend": "specific trend rising in the sector right now",
+  "trending_formats": ["format1", "format2"],
+  "recommended_action": "specific immediate action the business can take",
   "best_posting_hour": 19,
   "top_hashtags": ["#hashtag1", "#hashtag2", "#hashtag3"],
   "confidence": 0.72

@@ -54,23 +54,23 @@ CURRENT DATA:
 - Total pending reviews: ${pendingReviews.length}
 - Hot leads: ${hotLeads.length}
 - New leads today: ${newLeadsToday.length}
-- Competitor changes: ${changedCompetitors.map(c => `${c.name}: שינוי מחירים`).join('; ') || 'אין שינויים'}
+- Competitor changes: ${changedCompetitors.map(c => `${c.name}: price change`).join('; ') || 'none'}
 - High-impact signals: ${highImpactSignals.slice(0, 3).map(s => s.summary).join('; ') || 'None'}
 - Unread signals: ${signals.length}
 - Average review rating: ${avgRating || 'N/A'}
 - Weekly score: ${weeklyScore || 'N/A'}/10
-- הכנסות החודש: ₪${monthRevenue > 0 ? monthRevenue.toLocaleString() : 0}
+- Monthly revenue: ₪${monthRevenue > 0 ? monthRevenue.toLocaleString() : 0}
 
-Write a morning briefing in Hebrew — exactly 3-4 lines max.
+Write a morning briefing — exactly 3-4 lines max.
 Each line starts with an emoji: 🔴 = urgent, 🟢 = opportunity, 🟡 = watch, 📊 = info
-Rules: Be SPECIFIC with real numbers. If nothing urgent: "הכל שקט — המערכת ממשיכה לעקוב."
+Rules: Be SPECIFIC with real numbers. If nothing urgent, the text should say there is nothing urgent and the system is still monitoring.
 Each line max 60 chars. Link mapping: reviews→/reviews, leads→/leads, competitors→/competitors, signals→/signals
 
-Also generate today_actions: up to 3 concrete Hebrew actions for TODAY based on the data.
-Each: { "action": "פעולה ספציפית", "type": "review|lead|signal|competitor", "priority": 1|2|3 }
+Also generate today_actions: up to 3 concrete actions for TODAY based on the data.
+Each: { "action": "specific action", "type": "review|lead|signal|competitor", "priority": 1|2|3 }
 priority 1=urgent (red), 2=important (orange), 3=helpful (green). Only include if real items exist.
 
-Return ONLY valid JSON:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {"lines":[{"emoji":"🔴","text":"...","link":"/reviews","type":"urgent"}],"weekly_score":${weeklyScore || 6.5},"score_trend":"stable","source_count":${totalSources},"today_actions":[{"action":"...","type":"review","priority":1}]}`;
 
     // Return cached briefing if already generated today (skip LLM re-call)

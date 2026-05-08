@@ -33,7 +33,7 @@ export async function diffCompetitorSnapshot(req: Request, res: Response) {
             const snap = await invokeLLM({
               model: 'sonnet',
               maxTokens: 400,
-              prompt: `חלץ מידע עסקי מובנה על "${competitor.name}" (${category} ב${city}) מהטקסט הבא:\n${webData.slice(0, 2000) || 'אין מידע'}\nJSON: {"prices":[],"promotions":[],"rating":null,"review_count":null,"description":"","last_activity":""}`,
+              prompt: `Extract structured business information about "${competitor.name}" (${category} in ${city}) from the following text:\n${webData.slice(0, 2000) || 'no data'}\nReturn ONLY valid JSON. ALL string values must be in Hebrew: {"prices":[],"promotions":[],"rating":null,"review_count":null,"description":"","last_activity":""}`,
               response_json_schema: { type: 'object' },
             });
             await prisma.$executeRawUnsafe(
@@ -60,7 +60,7 @@ export async function diffCompetitorSnapshot(req: Request, res: Response) {
           const updatedSnap = await invokeLLM({
             model: 'sonnet',
             maxTokens: 400,
-            prompt: `חלץ מידע עסקי מובנה על "${competitor.name}" מהמידע החדש:\n${freshData.slice(0, 2000)}\nJSON: {"prices":[],"promotions":[],"rating":null,"review_count":null,"description":"","last_activity":""}`,
+            prompt: `Extract structured business information about "${competitor.name}" from the new data:\n${freshData.slice(0, 2000)}\nReturn ONLY valid JSON. ALL string values must be in Hebrew: {"prices":[],"promotions":[],"rating":null,"review_count":null,"description":"","last_activity":""}`,
             response_json_schema: { type: 'object' },
           });
           if (updatedSnap) {
@@ -75,15 +75,15 @@ export async function diffCompetitorSnapshot(req: Request, res: Response) {
         const diffResult = await invokeLLM({
           model: 'sonnet',
           maxTokens: 500,
-          prompt: `אתה אנליסט מודיעין תחרותי. השווה בין שני מצבים של "${competitor.name}" וזהה שינויים ממשיים בלבד.
+          prompt: `You are a competitive intelligence analyst. Compare two states of "${competitor.name}" and identify only real changes.
 
-מצב ישן: ${JSON.stringify(oldJson).slice(0, 1000)}
-מצב חדש: ${JSON.stringify(newJson).slice(0, 1000)}
+Old state: ${JSON.stringify(oldJson).slice(0, 1000)}
+New state: ${JSON.stringify(newJson).slice(0, 1000)}
 
-כלל: דווח רק על שינויים קונקרטיים ומוכחים (מחיר שהשתנה ממספר למספר, מבצע ספציפי, שינוי דירוג).
-אם אין שינוי ממשי — החזר {"changes":[]}.
-JSON בלבד:
-{"changes":[{"change_type":"price_change|new_promo|rating_change|new_offering","old_value":"ערך ישן","new_value":"ערך חדש","description":"תיאור ספציפי בעברית — עם מספרים"}]}`,
+Rule: report only concrete, proven changes (a price that changed from one number to another, a specific promotion, a rating change).
+If there is no real change — return {"changes":[]}.
+Return ONLY valid JSON. ALL string values must be in Hebrew:
+{"changes":[{"change_type":"price_change|new_promo|rating_change|new_offering","old_value":"old value","new_value":"new value","description":"specific description in Hebrew — with numbers"}]}`,
           response_json_schema: { type: 'object' },
         });
 

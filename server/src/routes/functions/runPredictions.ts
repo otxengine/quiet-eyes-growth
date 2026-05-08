@@ -35,26 +35,26 @@ export async function runPredictions(req: Request, res: Response) {
     const recentSignals = signals.slice(0, 5).map(s => s.summary).join('; ');
 
     const result = await invokeLLM({
-      prompt: `אתה מנתח עסקי המתמחה בחיזוי מגמות לעסקים ישראלים.
+      prompt: `You are a business analyst specializing in trend forecasting for Israeli businesses.
 
-עסק: ${profile.name} (${profile.category}, ${profile.city})
-${profile.description ? `תיאור: ${profile.description}` : ''}
-נתונים:
-- ${leads.length} לידים, מתוכם ${hotLeadsCount} חמים
-- ${reviews.length} ביקורות, ממוצע ${avgRating || 'לא ידוע'}, ${negativeReviewsCount} שליליות
-- ${competitors.length} מתחרים מזוהים
-- תובנות שוק אחרונות: ${recentSignals || 'אין עדיין'}
+Business: ${profile.name} (${profile.category}, ${profile.city})
+${profile.description ? `Description: ${profile.description}` : ''}
+Data:
+- ${leads.length} leads, of which ${hotLeadsCount} are hot
+- ${reviews.length} reviews, average ${avgRating || 'unknown'}, ${negativeReviewsCount} negative
+- ${competitors.length} identified competitors
+- Recent market insights: ${recentSignals || 'none yet'}
 
-צור 2-3 חיזויים עסקיים בעלי ערך. לכל חיזוי:
-- title: כותרת בעברית (עד 70 תווים)
-- summary: תיאור החיזוי (עד 200 תווים)
+Generate 2-3 valuable business predictions. For each prediction include:
+- title: headline (up to 70 chars)
+- summary: description of the prediction (up to 200 chars)
 - prediction_type: revenue_trend / lead_flow / reputation_risk / competitive_threat / market_opportunity
-- confidence: אחוז ביטחון (50-90)
-- timeframe: טווח זמן (לדוגמה: "30 ימים", "3 חודשים")
+- confidence: confidence percentage (50-90)
+- timeframe: time range (e.g. "30 ימים", "3 חודשים")
 - impact_level: high / medium / low
-- recommended_actions: פעולות מומלצות (עד 150 תווים)
+- recommended_actions: recommended actions (up to 150 chars)
 
-החזר JSON: {"predictions": [...]}`,
+Return ONLY valid JSON. ALL string values must be in Hebrew. {"predictions": [...]}`,
       response_json_schema: { type: 'object' },
     });
 

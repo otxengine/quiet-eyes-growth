@@ -20,21 +20,21 @@ async function analyzeAndSave(
 ): Promise<{ signalsCreated: number; analysis: any }> {
   const analysis: any = await invokeLLM({
     model: 'haiku',
-    prompt: `נתח סנטימנט של תגובות מהרשת החברתית של "${profile.name}".
+    prompt: `Analyze the sentiment of comments from the social media page of "${profile.name}".
 
-תגובות (${allComments.length}):
+Comments (${allComments.length}):
 ${allComments.slice(0, 30).map((c, i) => `${i + 1}. ${c}`).join('\n')}
 
-החזר JSON בלבד:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "overall_sentiment": "positive|mixed|negative",
   "positive_count": 0,
   "negative_count": 0,
   "neutral_count": 0,
-  "top_complaints": ["תלונה 1", "תלונה 2"],
-  "top_praise": ["שבח 1", "שבח 2"],
-  "urgent_issues": ["בעיה דחופה אם יש"],
-  "recommended_response": "המלצה לתגובה",
+  "top_complaints": ["complaint 1", "complaint 2"],
+  "top_praise": ["praise 1", "praise 2"],
+  "urgent_issues": ["urgent issue if any"],
+  "recommended_response": "response recommendation",
   "has_crisis": false
 }`,
     response_json_schema: { type: 'object' },

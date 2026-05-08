@@ -75,27 +75,28 @@ export async function marketMemoryEngine(req: Request, res: Response) {
       .join('\n');
 
     const result = await invokeLLM({
-      prompt: `אתה מנוע ניתוח שוק לעסק "${profile.name}" (${profile.category}, ${profile.city}).
-ניתחת נתונים היסטוריים של 12 חודשים:
+      prompt: `You are a market analysis engine for the business "${profile.name}" (${profile.category}, ${profile.city}).
+You have analyzed 12 months of historical data:
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 
 ${statsBlock}
 
-החודש הנוכחי: ${MONTHS_HE[currentMonth]}
+Current month: ${MONTHS_HE[currentMonth]}
 
-זהה:
-1. חודשי שיא בביקוש (לידים/עסקאות גבוהים מהממוצע)
-2. חודשים שקטים שדורשים שיווק פרואקטיבי
-3. תבניות עונתיות חוזרות
-4. רגעי שוק קריטיים צפויים ב-60 הימים הקרובים
-5. תבנית התנהגות לקוחות (מתי הם מחפשים, מתי הם קונים)
+Identify:
+1. Peak demand months (leads/deals above average)
+2. Quiet months that require proactive marketing
+3. Recurring seasonal patterns
+4. Critical market moments expected in the next 60 days
+5. Customer behavior patterns (when they search, when they buy)
 
-החזר JSON:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
-  "peak_months": [{ "month": "שם חודש", "reason": "למה שיא", "demand_index": 1.0-3.0 }],
-  "slow_months": [{ "month": "שם חודש", "action": "מה לעשות בתקופה שקטה" }],
-  "seasonal_patterns": ["תבנית 1", "תבנית 2"],
-  "upcoming_opportunities": [{ "timeframe": "2-4 שבועות", "description": "הזדמנות ספציפית", "recommended_action": "פעולה" }],
-  "behavioral_insights": ["תובנה על התנהגות לקוחות 1", "תובנה 2"]
+  "peak_months": [{ "month": "month name in Hebrew", "reason": "why peak in Hebrew", "demand_index": 1.0-3.0 }],
+  "slow_months": [{ "month": "month name in Hebrew", "action": "what to do in the quiet period in Hebrew" }],
+  "seasonal_patterns": ["pattern 1 in Hebrew", "pattern 2 in Hebrew"],
+  "upcoming_opportunities": [{ "timeframe": "2-4 שבועות", "description": "specific opportunity in Hebrew", "recommended_action": "action in Hebrew" }],
+  "behavioral_insights": ["customer behavior insight 1 in Hebrew", "insight 2 in Hebrew"]
 }`,
       response_json_schema: { type: 'object' },
     });

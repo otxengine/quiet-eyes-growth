@@ -148,9 +148,10 @@ export async function contentCalendarAgent(req: Request, res: Response) {
       model: 'sonnet',
       maxTokens: 3000,
       skipCache: true,
-      prompt: `אתה מנהל תוכן דיגיטלי בכיר לעסקים ישראלים. המשימה: לוח תוכן שבועי שהמשתמש יוכל לסמוך עליו ולפרסם ישירות — ללא עריכה.
+      prompt: `You are a senior digital content manager for Israeli businesses. Your task: produce a weekly content calendar the user can publish directly — without any editing.
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 
-העסק: "${name}" (${category}, ${city})
+Business: "${name}" (${category}, ${city})
 ${descriptionLine}${sectorStrategy}
 
 ${audienceCtx ? `=== מחקר קהל יעד ===\n${audienceCtx}\n===` : ''}
@@ -161,20 +162,20 @@ ${socialProof ? `\n${socialProof}` : ''}
 ${sectorContext ? `\n${sectorContext}` : ''}
 ${contentStyle ? `\nסגנון תוכן מועדף: ${contentStyle}` : ''}
 
-ערוצים: ${preferredChannels}
-טון: ${toneInstruction}
+Channels: ${preferredChannels}
+Tone: ${toneInstruction}
 
-חוקי פוסט שחייבים לעבוד:
-1. כל פוסט חייב להתחיל ב-Hook של שורה אחת מנצחת (שאלה חדה / עובדה מפתיעה / אמירה אמיצה)
-2. גוף הפוסט: 80-130 מילים, ערך אמיתי, שפה חיה ואנושית — לא שיווקית
-3. CTA ברור בסוף כל פוסט (שאל שאלה / הזמן / שלח הודעה / בקר)
-4. האשטאגים: 3 רחבים (#קטגוריה) + 2 נישה ספציפיים לפוסט + 1 לוקאלי לעיר
-5. פיזור עמודי תוכן: 2 חינוכיים, 1 מאחורי קלעים, 1 עדות/לקוח, 1 מוצר/שירות, 1 ויראלי/שאלה, 1 מוטיבציה/ערך
-6. כל פוסט — פורמט מדויק: תמונה / ריל / קרוסל (3-5 שקפים) / סטורי
-7. זמן פרסום מבוסס קהל יעד — לא גנרי
-8. אם יש ביקורת חיובית ברשימה — שלב ציטוט אמיתי בפוסט העדות
+Post rules that must be followed:
+1. Every post must open with a single winning Hook line (sharp question / surprising fact / bold statement)
+2. Post body: 80-130 words, real value, lively and human language — not marketing-speak
+3. Clear CTA at the end of every post (ask a question / invite / send a message / visit)
+4. Hashtags: 3 broad (#category) + 2 niche specific to the post + 1 local to the city
+5. Content pillar distribution: 2 educational, 1 behind-the-scenes, 1 testimonial/customer, 1 product/service, 1 viral/question, 1 motivation/value
+6. Every post — exact format: תמונה / ריל / קרוסל (3-5 slides) / סטורי
+7. Publishing time based on target audience — not generic
+8. If a positive review appears in the list — embed a real quote in the testimonial post
 
-החזר JSON בלבד:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "posts": [
     {
@@ -195,7 +196,7 @@ ${contentStyle ? `\nסגנון תוכן מועדף: ${contentStyle}` : ''}
   ]
 }
 
-אם format=קרוסל, מלא carousel_slides: ["טקסט שקף 1 (כותרת)", "תוכן שקף 2", "תוכן שקף 3", "CTA שקף אחרון"]
+If format=קרוסל, fill carousel_slides: ["טקסט שקף 1 (כותרת)", "תוכן שקף 2", "תוכן שקף 3", "CTA שקף אחרון"]
 `,
       response_json_schema: { type: 'object' },
     });

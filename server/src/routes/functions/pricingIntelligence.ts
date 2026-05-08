@@ -54,30 +54,31 @@ export async function pricingIntelligence(req: Request, res: Response) {
     const priceReviews = reviews.filter(r => r.text?.includes('מחיר') || r.text?.includes('יקר') || r.text?.includes('זול') || r.text?.includes('שווה')).length;
 
     const result = await invokeLLM({
-      prompt: `אתה יועץ תמחור לעסק "${profile.name}" (${profile.category}, ${profile.city}).
+      prompt: `You are a pricing advisor for the business "${profile.name}" (${profile.category}, ${profile.city}).
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 ${sectorCtx}
 
-מחירי מתחרים:
+Competitor pricing:
 ${competitorPricing || 'אין מידע מחירים על מתחרים'}
 
-טווחי תקציב של לידים/לקוחות: ${leadBudgets || 'לא ידוע'}
-ביקורות המזכירות מחיר: ${priceReviews} מתוך ${reviews.length}
-טווח מחירים נוכחי: ${profile.min_budget || 'לא צוין'}
+Lead/customer budget ranges: ${leadBudgets || 'לא ידוע'}
+Reviews mentioning price: ${priceReviews} out of ${reviews.length}
+Current price range: ${profile.min_budget || 'לא צוין'}
 
-נתח והמלץ על אסטרטגיית תמחור:
+Analyze and recommend a pricing strategy.
 
-החזר JSON:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
-  "market_position": "premium|mid|budget — עמדת התמחור הנוכחית של העסק",
-  "recommended_position": "premium|mid|budget — עמדה מומלצת",
+  "market_position": "premium|mid|budget — current pricing position of the business (in Hebrew)",
+  "recommended_position": "premium|mid|budget — recommended position (in Hebrew)",
   "opportunities": [{
-    "title": "שם ההזדמנות (קצר)",
-    "description": "תיאור הזדמנות התמחור",
-    "action": "פעולה ספציפית (שנה מחיר X ל-Y, הוסף חבילה...",
-    "expected_revenue_impact": "השפעה על הכנסות (כמותי)",
+    "title": "opportunity name (short, in Hebrew)",
+    "description": "pricing opportunity description (in Hebrew)",
+    "action": "specific action (change price X to Y, add package... in Hebrew)",
+    "expected_revenue_impact": "quantitative revenue impact (in Hebrew)",
     "urgency": "high|medium|low"
   }],
-  "pricing_insight": "תובנה מרכזית אחת על תמחור בסקטור זה"
+  "pricing_insight": "one central insight about pricing in this sector (in Hebrew)"
 }`,
       response_json_schema: { type: 'object' },
     });

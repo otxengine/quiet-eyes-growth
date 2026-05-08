@@ -78,19 +78,19 @@ export async function detectCompetitorChanges(req: Request, res: Response) {
         const analysis = await invokeLLM({
           model: 'sonnet',
           maxTokens: 500,
-          prompt: `אתה אנליסט מודיעין תחרותי. נתח מידע שנאסף על המתחרה "${comp.name}" וזהה שינויים עסקיים ממשיים.
+          prompt: `You are a competitive intelligence analyst. Analyze the information gathered about the competitor "${comp.name}" and identify real business changes.
 
 ${textBlob.slice(0, 3000)}
 
-דווח רק על שינויים קונקרטיים שמופיעים במידע. JSON בלבד:
+Report only on concrete changes that appear in the data. Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "changes_found": true,
-  "price_change":    { "found": false, "summary": "תיאור ספציפי עם מספרים אם נמצא" },
-  "new_promotion":   { "found": false, "summary": "פרטי המבצע המדויקים" },
-  "new_menu_item":   { "found": false, "summary": "שם המנה/שירות החדש" },
-  "new_post":        { "found": false, "summary": "נושא הפוסט + engagement" },
-  "review_delta":    { "found": false, "summary": "ציטוט מביקורת + דירוג" },
-  "overall_summary": "תובנה תחרותית אחת — ספציפית ומדויקת, עד 15 מילים"
+  "price_change":    { "found": false, "summary": "specific description with numbers if found" },
+  "new_promotion":   { "found": false, "summary": "exact promotion details" },
+  "new_menu_item":   { "found": false, "summary": "name of new dish/service" },
+  "new_post":        { "found": false, "summary": "post topic + engagement" },
+  "review_delta":    { "found": false, "summary": "review quote + rating" },
+  "overall_summary": "one competitive insight — specific and precise, up to 15 words"
 }`,
           response_json_schema: { type: 'object' },
         }) as any;

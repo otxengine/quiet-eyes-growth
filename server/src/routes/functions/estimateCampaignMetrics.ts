@@ -103,17 +103,18 @@ export async function estimateCampaignMetrics(req: Request, res: Response) {
       targeting = await invokeLLM({
         model: 'sonnet',
         maxTokens: 900,
-        prompt: `אתה מומחה ${platformLabel} Ads לשוק הישראלי. בנה טרגטינג מדויק ומבוסס נתונים.
+        prompt: `You are a ${platformLabel} Ads expert for the Israeli market. Build precise, data-driven targeting.
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 
-עסק: "${name}" | תחום: ${category} | עיר: ${city}
-מטרת קמפיין: ${objectiveLabel} | תקציב יומי: ₪${budget}
-שירותים: ${profile.relevant_services || category}
-שוק יעד: ${profile.target_market || 'לא צוין'}
+Business: "${name}" | Sector: ${category} | City: ${city}
+Campaign objective: ${objectiveLabel} | Daily budget: ₪${budget}
+Services: ${profile.relevant_services || category}
+Target market: ${profile.target_market || 'not specified'}
 
-ביקורות אמיתיות (${reviews.length}):
-${reviewSample || 'אין'}
+Real reviews (${reviews.length}):
+${reviewSample || 'none'}
 
-${platform !== 'google' ? `החזר JSON בלבד:
+${platform !== 'google' ? `Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "fb_interests": ["עניין ספציפי ב-FB Ads Manager 1","עניין 2","עניין 3","עניין 4"],
   "fb_behaviors": ["התנהגות FB ספציפית 1","התנהגות 2"],
@@ -126,7 +127,7 @@ ${platform !== 'google' ? `החזר JSON בלבד:
   "lookalike_seed": "תיאור ספציפי של קהל seed — מי הם הלקוחות הכי טובים",
   "retargeting_suggestion": "מה לרטרגט ועם איזה מסר",
   "custom_audience_tip": "טיפ Custom Audience ספציפי לסקטור זה"
-}` : `החזר JSON בלבד:
+}` : `Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "keywords_exact": ["ביטוי מדויק בעברית 1","ביטוי 2","ביטוי 3"],
   "keywords_broad": ["ביטוי רחב 1","ביטוי רחב 2"],

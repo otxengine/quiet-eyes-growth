@@ -61,18 +61,18 @@ export async function generateSmartPost(req: Request, res: Response) {
     // ── Phase 1: Claude builds audience profile ──────────────────────────────
     console.log('[generateSmartPost] Phase 1: Claude building audience...');
     const audience = await callAIJson<any>('build_audience', `
-עסק: "${profile.name}" — ${profile.category} ב${profile.city}
-שירותים: ${profile.relevant_services || 'לא צוינו'}
-${profile.description ? `תיאור: ${profile.description}` : ''}
-תובנה ספציפית: "${insight_text}"
-פעולה מוצעת: "${action_label}"
-פלטפורמה: ${platform}
+Business: "${profile.name}" — ${profile.category} in ${profile.city}
+Services: ${profile.relevant_services || 'not specified'}
+${profile.description ? `Description: ${profile.description}` : ''}
+Specific insight: "${insight_text}"
+Suggested action: "${action_label}"
+Platform: ${platform}
 
-לידים: ${leadSummary}
-ביקורות: ${reviewSummary}
-מתחרים: ${competitors.map(c => c.name).join(', ') || 'אין'}
+Leads: ${leadSummary}
+Reviews: ${reviewSummary}
+Competitors: ${competitors.map(c => c.name).join(', ') || 'none'}
 
-בנה פרופיל קהל יעד מדויק לתובנה זו. JSON בלבד:
+Build a precise target-audience profile for this insight. Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "age_range": "XX-XX",
   "gender": "נשים|גברים|מעורב",
@@ -85,7 +85,7 @@ ${profile.description ? `תיאור: ${profile.description}` : ''}
   "estimated_size": "קטן|בינוני|גדול",
   "confidence": "high|medium|low"
 }`, {
-      systemPrompt: 'אתה מומחה פילוח קהלים. בנה פרופיל מבוסס נתונים, לא הנחות כלליות.',
+      systemPrompt: 'You are an audience segmentation expert. Build a data-based profile, not general assumptions. ALL string values in the JSON must be in Hebrew.',
     });
 
     // ── Phase 2: GPT-4o writes the post ─────────────────────────────────────
@@ -97,24 +97,24 @@ ${profile.description ? `תיאור: ${profile.description}` : ''}
     }[platform as string] || 'קצר ומשפיע, מקסימום 120 מילים';
 
     const post = await callAIJson<any>('generate_post', `
-כתוב פוסט שיווקי ל${platform} בעברית.
+Write a marketing post for ${platform} in Hebrew.
 
-עסק: "${profile.name}" — ${profile.category} ב${profile.city}
-${profile.description ? `תיאור: ${profile.description}` : ''}
-תובנה: "${insight_text}"
-קהל: ${audience.age_range}, ${audience.gender}
-כאב: ${audience.pain_point}
-טריגר: ${audience.purchase_trigger}
-סגנון: ${platformStyle}
+Business: "${profile.name}" — ${profile.category} in ${profile.city}
+${profile.description ? `Description: ${profile.description}` : ''}
+Insight: "${insight_text}"
+Audience: ${audience.age_range}, ${audience.gender}
+Pain point: ${audience.pain_point}
+Trigger: ${audience.purchase_trigger}
+Style: ${platformStyle}
 
-חוקים:
-• פתח עם hook שמושך תוך 2 שניות
-• גע בכאב של הקהל
-• הצע פתרון — העסק
-• סיים עם CTA ברור
-• כתוב עברית טבעית, לא תרגום מאנגלית
+Rules:
+• Open with a hook that grabs attention within 2 seconds
+• Touch the audience's pain point
+• Offer a solution — the business
+• End with a clear CTA
+• Write natural Hebrew, not a translation from English
 
-JSON בלבד:
+Return ONLY valid JSON. ALL string values must be in Hebrew, EXCEPT image_description which must be in English:
 {
   "text": "הפוסט המלא",
   "hook": "המשפט הפותח בלבד",
@@ -123,11 +123,11 @@ JSON בלבד:
   "audience_note": "למה הפוסט מדבר לקהל הזה — משפט קצר",
   "image_description": "6-8 English words describing the ideal marketing photo for this post (no Hebrew, no punctuation, e.g.: fitness gym workout equipment modern bright)"
 }`, {
-      systemPrompt: `אתה קופירייטר שיווקי מנוסה בשוק הישראלי.
-כתוב עברית טבעית — לא תרגום.
-הימנע מ"מומלץ לשקול", "ניתן לשקול", "שפת תאגידים".
-כתוב כמו שאדם אמיתי מדבר.
-image_description חייב להיות באנגלית בלבד.`,
+      systemPrompt: `You are an experienced marketing copywriter for the Israeli market.
+Write natural Hebrew — not a translation.
+Avoid corporate speak such as "מומלץ לשקול" or "ניתן לשקול".
+Write the way a real person speaks.
+ALL string values in the JSON must be in Hebrew, except image_description which must be in English only.`,
     });
 
     // image_description is generated inline by GPT-4o in Phase 2 — no separate translation needed

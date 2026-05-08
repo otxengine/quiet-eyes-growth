@@ -361,28 +361,29 @@ export async function cleanupAndLearn(req: Request, res: Response) {
     // AI synthesizes learning patterns
     if (retainedSignals.length > 0) {
       const learningResult = await invokeLLM({
-        prompt: `אתה מנוע ML עבור פלטפורמת מודיעין עסקי. נתח את הנתונים ולמד מהם.
+        prompt: `You are an ML engine for a business intelligence platform. Analyze the data and learn from it.
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 
-נתוני ביצועים:
-- אותות שנשמרו: ${retainedSignals.length} (לאחר ניקוי)
-- קטגוריות: ${qualitySummary || 'אין נתונים'}
-- סוכנים: ${agentSummary || 'אין נתונים'}
-- אחוז קבלת המלצות: ${outcomeAcceptanceRate}%
+Performance data:
+- Retained signals: ${retainedSignals.length} (after cleanup)
+- Categories: ${qualitySummary || 'אין נתונים'}
+- Agents: ${agentSummary || 'אין נתונים'}
+- Recommendation acceptance rate: ${outcomeAcceptanceRate}%
 
-זהה:
-1. אילו קטגוריות אותות מייצרות ערך אמיתי (גבוה = actioned/total גבוה)
-2. אילו סוכנים עובדים טוב (score חיובי)
-3. מה לשפר בפעולה הבאה
+Identify:
+1. Which signal categories produce real value (high = high actioned/total ratio)
+2. Which agents perform well (positive score)
+3. What to improve in the next run
 
-JSON בלבד:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "high_value_categories": ["cat1", "cat2"],
   "low_value_categories": ["cat3"],
   "top_agents": ["agent1"],
   "weak_agents": ["agent2"],
   "recommended_confidence_threshold": 50-80,
-  "key_learning": "משפט אחד — המסקנה הכי חשובה",
-  "next_action": "מה לעשות אחרת בסריקה הבאה"
+  "key_learning": "one sentence — the most important conclusion in Hebrew",
+  "next_action": "what to do differently in the next scan, in Hebrew"
 }`,
         response_json_schema: { type: 'object' },
       });

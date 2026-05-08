@@ -144,14 +144,14 @@ Return JSON only: {"results":[{"is_lead":true,"service_needed":"","urgency":"low
         .join('\n');
       try {
         const batchMsg = await invokeLLM({
-          prompt: `אתה מומחה מכירות לעסקים קטנים ישראלים. כתוב הודעת WhatsApp ראשונה שתגרום לליד להגיב — אנושית, ספציפית, לא מכירתית.
-עסק: "${name}" | תחום: ${category} | עיר: ${city} | סגנון: ${toneInstruction}
+          prompt: `You are a sales expert for Israeli small businesses. Write an opening WhatsApp message for each lead that will prompt a reply — human, specific, non-salesy.
+Business: "${name}" | Category: ${category} | City: ${city} | Style: ${toneInstruction}
 
-עבור כל ליד — פתח בשם אם ידוע, הזכר את השירות שהם חיפשו ספציפית, הצע ערך קצר, סיים בשאלה קלה.
+For each lead — open with the person's name if known, reference the specific service they searched for, offer brief value, end with an easy question.
 
 ${msgItemsStr}
 
-JSON בלבד: {"messages":["הודעה0","הודעה1",...]}, אותו אורך ואותו סדר.`,
+Return ONLY valid JSON. ALL string values must be in Hebrew. Format: {"messages":["message0","message1",...]}, same length and order.`,
           response_json_schema: { type: 'object' },
           model: 'sonnet',
           maxTokens: 1800,

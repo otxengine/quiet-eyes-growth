@@ -155,15 +155,15 @@ export async function tiktokPostTracker(req: Request, res: Response) {
       const feedback = await invokeLLM({
         model: 'sonnet',
         maxTokens: 300,
-        prompt: `אתה אנליסט TikTok לעסקים ישראלים. תן המלצה טקטית ספציפית לשיפור ביצועי הסרטון.
+        prompt: `You are a TikTok analyst for Israeli businesses. Provide a specific tactical recommendation to improve the video's performance.
 
-עסק: "${profile.name}" | תחום: ${profile.category}
-תוכן: "${(post.content || '').slice(0, 200)}"
-ביצועים: ${plays.toLocaleString()} צפיות | ${(engRate * 100).toFixed(1)}% engagement | ${Math.round(playsPerDay).toLocaleString()} views/day לאחר ${Math.round(ageHours)} שעות
-בנצ'מרק: ${sectorAvgPlaysPerDay.toLocaleString()} views/day | סטטוס: ${perfLabel}
+Business: "${profile.name}" | Sector: ${profile.category}
+Content: "${(post.content || '').slice(0, 200)}"
+Performance: ${plays.toLocaleString()} views | ${(engRate * 100).toFixed(1)}% engagement | ${Math.round(playsPerDay).toLocaleString()} views/day after ${Math.round(ageHours)} hours
+Benchmark: ${sectorAvgPlaysPerDay.toLocaleString()} views/day | Status: ${perfLabel}
 
-המלצה ספציפית + פעולה אחת (לא "שפר תוכן" — אלא "הגב ל-5 תגובות ראשונות תוך 30 דקות" או "שתף בסטורי עם Poll").
-JSON בלבד: { "recommendation": "המלצה ספציפית", "boost_action": "comment_reply|reshare_story|boost_ad|none" }`,
+Give a specific recommendation + one action (not "improve content" — but e.g. "reply to the first 5 comments within 30 minutes" or "share in Story with a Poll").
+Return ONLY valid JSON. ALL string values must be in Hebrew: { "recommendation": "specific recommendation", "boost_action": "comment_reply|reshare_story|boost_ad|none" }`,
         response_json_schema: { type: 'object' },
       });
 

@@ -82,25 +82,26 @@ export async function runMLLearningCycle(req: Request, res: Response) {
     const learningProfile = await invokeLLM({
       model: 'sonnet',
       maxTokens: 500,
-      prompt: `אתה מערכת למידה עסקית חכמה. נתח דפוסי משוב ובנה פרופיל העדפות מדויק שישפר את כל הסוכנים.
+      prompt: `You are a smart business learning system. Analyze feedback patterns and build a precise preference profile that will improve all agents.
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 
-עסק: "${profile.name}" | תחום: ${profile.category} | עיר: ${profile.city}
-סה"כ משוב: ${feedbackEvents.length} (${positive.length} חיובי, ${negative.length} שלילי)
+Business: "${profile.name}" | Sector: ${profile.category} | City: ${profile.city}
+Total feedback: ${feedbackEvents.length} (${positive.length} positive, ${negative.length} negative)
 
-תוכן שהמשתמש אהב (${likedTexts.length}):
+Content the user liked (${likedTexts.length}):
 ${likedTexts.join('\n') || 'אין עדיין'}
 
-תוכן שלא עבד (${dislikedTexts.length}):
+Content that did not work (${dislikedTexts.length}):
 ${dislikedTexts.join('\n') || 'אין עדיין'}
 
-מטרה: לזהות דפוסים קונקרטיים — לא "המשתמש מעדיף קצר", אלא "המשתמש מעדיף פוסטים עם emoji + שאלות פתיחה".
+Goal: identify concrete patterns — not "user prefers short", but "user prefers posts with emoji + opening questions".
 
-JSON בלבד:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "preferred_tone": "formal|casual|data_heavy|simple",
-  "accepted_patterns": "דפוסים ספציפיים שעובדים — מילים, מבנה, ערוצים",
-  "rejected_patterns": "דפוסים ספציפיים שלא עובדים — מה להימנע",
-  "feedback_summary": "סיכום 1-2 משפטים עם תובנה ספציפית",
+  "accepted_patterns": "specific patterns that work — words, structure, channels (in Hebrew)",
+  "rejected_patterns": "specific patterns that do not work — what to avoid (in Hebrew)",
+  "feedback_summary": "1-2 sentence summary with a specific insight (in Hebrew)",
   "learning_confidence": 0.0
 }`,
       response_json_schema: { type: 'object' },

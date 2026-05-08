@@ -90,13 +90,14 @@ export async function runCompetitorIdentification(req: Request, res: Response) {
     const contextResult = await invokeLLM({
       model: 'haiku',
       maxTokens: 250,
-      prompt: `עסק ישראלי: "${name}", קטגוריה: ${category}, עיר: ${city}
+      prompt: `Israeli business: "${name}", category: ${category}, city: ${city}
 
-1. מה הסוג המדויק של העסק? (למשל: "בר סושי יפני", "פיצרייה", "ספר לגברים")
-2. מה מילות החיפוש הכי טובות למצוא מתחרים ישירים באותו תחום? (3 ביטויים בעברית)
-3. אילו ערים נמצאות ברדיוס של ${radiusKm} ק"מ מ-${city} בישראל? (עד 5 ערים)
+1. What is the exact type of business? (e.g. "Japanese sushi bar", "pizzeria", "men's barber")
+2. What are the best search terms to find direct competitors in the same field? (3 Hebrew phrases)
+3. Which cities are within a radius of ${radiusKm} km from ${city} in Israel? (up to 5 cities)
 
-החזר JSON: {
+Return ONLY valid JSON. ALL string values must be in Hebrew:
+{
   "business_type": "...",
   "search_terms": ["...", "...", "..."],
   "nearby_cities": ["...", "..."]
@@ -166,26 +167,26 @@ export async function runCompetitorIdentification(req: Request, res: Response) {
     const areasDesc = allAreas.join(', ');
 
     const llmPrompt = contextBlock
-      ? `אתה מנתח תחרותי. זהה מתחרים ישירים לעסק "${name}" (${businessType}).
+      ? `You are a competitive analyst. Identify direct competitors for the business "${name}" (${businessType}).
 
-כללים:
-1. מתחרה ישיר = אותו סוג עסק בדיוק. לסושי בר — רק מסעדות סושי/יפניות, לא פיצריות.
-2. גיאוגרפיה: כלול רק עסקים שנמצאים עד ${radiusKm} ק"מ מ-${city} (ערים מאושרות: ${areasDesc}). אל תכלול ערים רחוקות יותר.
-3. אל תכלול את "${name}" עצמו.
-4. אם הנתונים חלקיים, השלם מהידע שלך — אך שמור על הגבלת הרדיוס.
+Rules:
+1. A direct competitor = the exact same type of business. For a sushi bar — only sushi/Japanese restaurants, not pizzerias.
+2. Geography: include only businesses located within ${radiusKm} km of ${city} (approved cities: ${areasDesc}). Do not include more distant cities.
+3. Do not include "${name}" itself.
+4. If data is partial, complete from your knowledge — but respect the radius limit.
 
 ${contextBlock}
 
-עבור כל מתחרה:
-- name, rating, review_count, address (חובה לכלול עיר), strengths, weaknesses, price_range, source_urls
+For each competitor:
+- name, rating, review_count, address (must include city), strengths, weaknesses, price_range, source_urls
 
-החזר JSON: {"competitors": [...]}`
-      : `אתה מנתח תחרותי. רשום עד 6 מתחרים ישירים ל-"${name}" (${businessType}).
-גיאוגרפיה: רק ערים עד ${radiusKm} ק"מ מ-${city} (${areasDesc}).
-מתחרה ישיר = אותו סוג עסק בדיוק. השתמש בשמות אמיתיים.
+Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [...]}`
+      : `You are a competitive analyst. List up to 6 direct competitors for "${name}" (${businessType}).
+Geography: only cities within ${radiusKm} km of ${city} (${areasDesc}).
+A direct competitor = the exact same type of business. Use real names.
 
-עבור כל מתחרה: name, rating, review_count, address (כולל עיר), strengths, weaknesses, price_range, source_urls.
-החזר JSON: {"competitors": [...]}`;
+For each competitor: name, rating, review_count, address (including city), strengths, weaknesses, price_range, source_urls.
+Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [...]}`;
 
     const result = await invokeLLM({
       model: 'sonnet',

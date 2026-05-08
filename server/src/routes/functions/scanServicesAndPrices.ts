@@ -61,7 +61,7 @@ export async function scanServicesAndPrices(req: Request, res: Response) {
       maxTokens: 350,
       prompt: `Extract all services and prices from this website text for "${profile.name}" (${profile.category}, Israel).
 Extract only what is explicitly listed. Do not invent services or prices.
-Return ONLY JSON: {"services":[{"name":"service name in Hebrew","price":"price with ₪ symbol or empty string if unknown","category":"main category of this service"}]}
+Return ONLY valid JSON. ALL string values must be in Hebrew: {"services":[{"name":"service name in Hebrew","price":"price with ₪ symbol or empty string if unknown","category":"main category of this service in Hebrew"}]}
 Max 15 items. Website text:
 ${rawText}`,
       response_json_schema: { type: 'object' },

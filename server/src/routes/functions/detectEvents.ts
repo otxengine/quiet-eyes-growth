@@ -435,11 +435,12 @@ export async function detectEvents(req: Request, res: Response) {
         const analysis: any = await invokeLLM({
           model: 'haiku',
           maxTokens: 400,
-          prompt: `זהה אירועים ממשיים בטקסט שיכולים להשפיע על עסק "${name}" (${category}, ${city}) בחודש הקרוב.
+          prompt: `Identify real events in the text below that could affect the business "${name}" (${category}, ${city}) in the coming month.
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 
 ${context.slice(0, 3500)}
 
-החזר JSON:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "events": [{
     "name": "שם האירוע בעברית",
@@ -450,7 +451,7 @@ ${context.slice(0, 3500)}
     "opportunity": "ההזדמנות הספציפית לעסק זה (${category}) — פעולה מספריות אחת ספציפית עד 10 מילים"
   }]
 }
-כלול רק אירועים עם תאריך ממשי. ללא תאריך — דלג. אם אין — החזר {"events":[]}`,
+Include only events with a real date. No date — skip. If none — return {"events":[]}`,
           response_json_schema: { type: 'object' },
         });
         extraEvents = (analysis?.events || []).filter(
@@ -502,20 +503,20 @@ ${context.slice(0, 3500)}
           invokeLLM({
             model: 'sonnet',
             maxTokens: 200,
-            prompt: `כתוב פוסט שיווקי בעברית (2-3 שורות) לעסק "${name}" (${category} ב${city}) לרגל "${event.name}" בעוד ${daysAway} ימים.
+            prompt: `Write a marketing post in Hebrew (2-3 lines) for the business "${name}" (${category} in ${city}) for the occasion of "${event.name}" in ${daysAway} days.
 
-הזדמנות ספציפית לסקטור: ${sectorCtx.opportunity}
-${event.type === 'sports' ? 'אירוע ספורט — כוון לצופים, האווירה, הזמנות מוקדמות.' : ''}
-${event.type === 'seasonal' ? 'אירוע עונתי — כוון לצורך העונתי הספציפי של הלקוח.' : ''}
-מבנה: Hook (שורה 1) + ערך/מבצע (שורה 2) + CTA ספציפי (שורה 3).
-סגנון: ${toneInstruction}. כתוב רק את טקסט הפוסט.`,
+Sector-specific opportunity: ${sectorCtx.opportunity}
+${event.type === 'sports' ? 'Sports event — target spectators, the atmosphere, early bookings.' : ''}
+${event.type === 'seasonal' ? 'Seasonal event — target the customer\'s specific seasonal need.' : ''}
+Structure: Hook (line 1) + value/offer (line 2) + specific CTA (line 3).
+Tone: ${toneInstruction}. Write only the post text. ALL text must be in Hebrew.`,
           }),
           invokeLLM({
             model: 'sonnet',
             maxTokens: 80,
-            prompt: `עסק: "${name}" (${category}). אירוע: "${event.name}" בעוד ${daysAway} ימים.
-הזדמנות: ${sectorCtx.opportunity}
-פעולה אחת ספציפית שצריך לעשות עכשיו כדי למקסם הכנסות — עד 8 מילים.`,
+            prompt: `Business: "${name}" (${category}). Event: "${event.name}" in ${daysAway} days.
+Opportunity: ${sectorCtx.opportunity}
+Write one specific action to take right now to maximise revenue — up to 8 words. Answer in Hebrew.`,
           }),
         ]);
         prefilledText = typeof ctaRes === 'string' ? ctaRes.trim() : '';
@@ -589,11 +590,11 @@ ${event.type === 'seasonal' ? 'אירוע עונתי — כוון לצורך ה�
         const ctaRes = await invokeLLM({
           model: 'sonnet',
           maxTokens: 180,
-          prompt: `כתוב פוסט שיווקי בעברית (2-3 שורות) לעסק "${name}" (${category} ב${city}) לרגל "${event.name}".
-הזדמנות: ${event.opportunity || 'אירוע מקומי'}.
-${event.type === 'sports' ? 'אירוע ספורט — כוון לצופים ולאווירה.' : ''}
-${event.type === 'concert' ? 'הופעה — כוון לקהל שמגיע לאזור.' : ''}
-מבנה: Hook + ערך ספציפי + CTA. סגנון: ${toneInstruction}. כתוב רק את הטקסט.`,
+          prompt: `Write a marketing post in Hebrew (2-3 lines) for the business "${name}" (${category} in ${city}) for the occasion of "${event.name}".
+Opportunity: ${event.opportunity || 'local event'}.
+${event.type === 'sports' ? 'Sports event — target spectators and the atmosphere.' : ''}
+${event.type === 'concert' ? 'Concert — target the audience arriving in the area.' : ''}
+Structure: Hook + specific value + CTA. Tone: ${toneInstruction}. Write only the post text. ALL text must be in Hebrew.`,
         });
         prefilledText = typeof ctaRes === 'string' ? ctaRes.trim() : '';
       } catch (_) {}

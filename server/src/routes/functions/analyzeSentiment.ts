@@ -36,18 +36,18 @@ export async function analyzeSentiment(req: Request, res: Response) {
     const neutralCount  = reviews.length - positiveCount - negativeCount;
     const avgRating     = reviews.reduce((s, r) => s + (r.rating || 0), 0) / reviews.length;
 
-    const prompt = `נתח ${reviews.length} ביקורות על עסק ישראלי.
+    const prompt = `Analyze ${reviews.length} reviews for an Israeli business.
 
-ביקורות (עד 20):
+Reviews (up to 20):
 ${reviews.slice(0, 20).map((r, i) =>
   `${i + 1}. [${r.sentiment || 'neutral'}/${r.rating || '?'}⭐] "${(r.text || '').slice(0, 120)}"`
 ).join('\n')}
 
-סטטיסטיקות:
-- חיובי: ${positiveCount}, שלילי: ${negativeCount}, ניטרלי: ${neutralCount}
-- דירוג ממוצע: ${avgRating.toFixed(1)}
+Statistics:
+- Positive: ${positiveCount}, Negative: ${negativeCount}, Neutral: ${neutralCount}
+- Average rating: ${avgRating.toFixed(1)}
 
-JSON בלבד:
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 {
   "overall": "positive|negative|neutral|mixed",
   "score": 0-100,

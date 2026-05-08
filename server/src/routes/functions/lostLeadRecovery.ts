@@ -60,23 +60,24 @@ export async function lostLeadRecovery(req: Request, res: Response) {
       const daysSilent = Math.floor((Date.now() - new Date(lead.last_contact_at || lead.created_date).getTime()) / 86400000);
 
       const result = await invokeLLM({
-        prompt: `אתה מנהל קשרי לקוחות לעסק "${profile.name}" (${profile.category}).
+        prompt: `You are a customer relations manager for the business "${profile.name}" (${profile.category}).
 
-ליד שהתקרר: ${lead.name}
-שירות מבוקש: ${lead.service_needed || 'לא צוין'}
-מקור: ${lead.source || 'לא ידוע'}
-ציון: ${lead.score || 'N/A'}/100
-ימים ללא קשר: ${daysSilent}
-הערות: ${lead.notes?.substring(0, 100) || 'אין'}
-ניסיון ראשון: ${lead.suggested_first_message?.substring(0, 80) || 'לא נשלח'}
+Cold lead: ${lead.name}
+Service requested: ${lead.service_needed || 'לא צוין'}
+Source: ${lead.source || 'לא ידוע'}
+Score: ${lead.score || 'N/A'}/100
+Days without contact: ${daysSilent}
+Notes: ${lead.notes?.substring(0, 100) || 'אין'}
+First attempt: ${lead.suggested_first_message?.substring(0, 80) || 'לא נשלח'}
 
-כתוב הודעת WhatsApp קצרה לחידוש קשר (40-60 מילים בעברית):
-- אל תזכיר שעברו ימים
-- הצע ערך חדש (הנחה/שירות/תוכן)
-- סיים עם שאלה פתוחה
-- טון: ${profile.tone_preference || 'ידידותי'}
+Write a short WhatsApp re-engagement message (40-60 words):
+- Do not mention that time has passed
+- Offer new value (discount/service/content)
+- End with an open question
+- Tone: ${profile.tone_preference || 'ידידותי'}
 
-החזר JSON: { "message": "הטקסט המלא", "subject": "נושא קצר (5 מילים)" }`,
+Return ONLY valid JSON. ALL string values must be in Hebrew.
+Format: { "message": "...", "subject": "..." }`,
         response_json_schema: { type: 'object' },
       });
 

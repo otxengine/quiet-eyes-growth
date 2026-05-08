@@ -169,15 +169,15 @@ export async function collectSocialSignals(req: Request, res: Response) {
           .join('\n');
 
         const influencerAnalysis = await invokeLLM({
-          prompt: `אתה מומחה שיווק דיגיטלי ישראלי. זהה אושיות רשת (influencers) רלוונטיות לסקטור.
-סקטור: ${category}, אזור: ${cityStr}
+          prompt: `You are an Israeli digital marketing expert. Identify influencers relevant to the sector.
+Sector: ${category}, Region: ${cityStr}
 
-נתונים מהאינטרנט:
+Data from the web:
 ${influencerCtx}
 
-זהה עד 3 אושיות רשת שפעילות בסקטור זה בישראל.
-JSON בלבד:
-{"influencers":[{"name":"שם","platform":"instagram|tiktok|youtube","followers_estimate":"50K","relevance":"למה רלוונטי לסקטור","collaboration_idea":"רעיון קונקרטי לשיתוף פעולה"}]}`,
+Identify up to 3 influencers active in this sector in Israel.
+Return ONLY valid JSON. ALL string values must be in Hebrew:
+{"influencers":[{"name":"name","platform":"instagram|tiktok|youtube","followers_estimate":"50K","relevance":"why relevant to the sector","collaboration_idea":"concrete collaboration idea"}]}`,
           response_json_schema: { type: 'object' },
         });
 

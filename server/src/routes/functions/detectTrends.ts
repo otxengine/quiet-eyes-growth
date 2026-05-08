@@ -105,17 +105,18 @@ export async function detectTrends(req: Request, res: Response) {
 
     // -- LLM analysis ---------------------------------------------------------
     const result = await invokeLLM({
-      prompt: `אתה אנליסט מגמות שוק לעסקים קטנים בישראל. נתח רק נתונים אמיתיים.
+      prompt: `You are a market trends analyst for small businesses in Israel. Analyze only real data.
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 
-עסק: ${name}, ${category}, ${city}
+Business: ${name}, ${category}, ${city}
 
-נתונים:
+Data:
 ${combinedContext.substring(0, 3500)}
 
-זהה 2-4 מגמות טרום-מיינסטרים עם ראיות מהנתונים בלבד.
-חוק: כלול רק מגמות עם ראיות ספציפיות. דלג על מגמות ללא אסמכתא.
+Identify 2-4 pre-mainstream trends with evidence from the data only.
+Rule: include only trends with specific evidence. Skip trends without a source citation.
 
-החזר JSON:
+Return ONLY valid JSON:
 {"trends":[{
   "trend_name":"שם קצר בעברית",
   "description":"משפט אחד בעברית — עד 12 מילה",

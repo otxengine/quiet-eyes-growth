@@ -107,10 +107,11 @@ export async function generateWeeklyReport(req: Request, res: Response) {
     const result = await invokeLLM({
       model: 'sonnet',
       maxTokens: 800,
-      prompt: `אתה יועץ עסקי בכיר לעסקים קטנים ישראלים. כתוב דוח שבועי מנהלי — ישיר, ממוקד, עם תובנה אחת חדה שתניע לפעולה.
+      prompt: `You are a senior business advisor for small Israeli businesses. Write an executive weekly report — direct, focused, with one sharp insight that drives action.
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 
-עסק: "${profile.name}" | תחום: ${profile.category} | עיר: ${profile.city}
-${profile.description ? `תיאור: ${profile.description}` : ''}
+Business: "${profile.name}" | Sector: ${profile.category} | City: ${profile.city}
+${profile.description ? `Description: ${profile.description}` : ''}
 
 === נתוני השבוע ===
 • תובנות שוק: ${weekSignals.length} חדשות (${opportunities} הזדמנויות, ${threats} איומים)
@@ -123,15 +124,15 @@ ${topService ? `• שירות מבוקש השבוע: ${topService}` : ''}
 תובנות בעלות השפעה גבוהה השבוע:
 ${topSignals.length > 0 ? topSignals.join('\n') : '• אין תובנות בעלות השפעה גבוהה השבוע'}
 
-JSON בלבד:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
-  "summary": "2-3 משפטים על השבוע — ציין מספרים, שמות שירותים, ומגמה ברורה. לא גנרי.",
-  "highlight": "הדבר הכי חשוב שקרה השבוע — משפט אחד ספציפי עם מספר או שם",
-  "next_week_action": "פעולה אחת ספציפית + ערוץ + לוח זמנים (לא יותר מ-12 מילים)",
+  "summary": "2-3 sentences about the week — cite numbers, service names, and a clear trend. Not generic.",
+  "highlight": "the single most important thing that happened this week — one specific sentence with a number or name",
+  "next_week_action": "one specific action + channel + timeline (no more than 12 words)",
   "score": 0,
-  "score_reason": "נימוק קצר לציון — מה קבע אותו (חיובי / שלילי)"
+  "score_reason": "brief rationale for the score — what determined it (positive / negative)"
 }
-חוק score: 1-10. 10=שבוע מצוין. 7+=מעל הממוצע. 5=ממוצע. 3-=שבוע קשה. הציון מבוסס על: כמות לידים, המרה, ביקורות, הזדמנויות שזוהו.`,
+Score rule: 1-10. 10=excellent week. 7+=above average. 5=average. 3-=tough week. Score is based on: lead volume, conversion, reviews, opportunities identified.`,
       response_json_schema: { type: 'object' },
     });
 

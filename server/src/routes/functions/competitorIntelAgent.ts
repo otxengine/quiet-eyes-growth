@@ -101,31 +101,31 @@ export async function competitorIntelAgent(req: Request, res: Response) {
         const insight: any = await invokeLLM({
           model: 'sonnet',
           maxTokens: 700,
-          prompt: `אתה אנליסט מודיעין תחרותי בכיר לעסקים קטנים ישראלים. המשימה: לזהות חלון הזדמנויות ספציפי שנובע מחולשת המתחרה ולהפוך אותו לפעולה מיידית.
+          prompt: `You are a senior competitive intelligence analyst for small Israeli businesses. Your task: identify a specific opportunity window arising from a competitor's weakness and turn it into an immediate action.
 
-העסק שלי: "${name}" | תחום: ${category} | עיר: ${city}
-מתחרה: "${compName}"
-דירוג: ${compRating != null ? compRating + '/5' : 'לא ידוע'} (${compReviewCount != null ? compReviewCount + ' ביקורות' : '? ביקורות'})
-חולשות ידועות: ${compWeaknesses || 'לא ידועות'}
-חוזקות: ${compStrengths || 'לא ידועות'}
-הערות: ${compNotes || 'אין'}
-${freshReviewsText ? `\nממצאים חדשים מהרשת (ביקורות/אזכורים):\n${freshReviewsText.slice(0, 800)}` : ''}
-${eventsContext ? `\nאירועים קרובים שצפויים לגרום לעומס: ${eventsContext}` : ''}
+My business: "${name}" | Industry: ${category} | City: ${city}
+Competitor: "${compName}"
+Rating: ${compRating != null ? compRating + '/5' : 'unknown'} (${compReviewCount != null ? compReviewCount + ' reviews' : '? reviews'})
+Known weaknesses: ${compWeaknesses || 'unknown'}
+Strengths: ${compStrengths || 'unknown'}
+Notes: ${compNotes || 'none'}
+${freshReviewsText ? `\nFresh findings from the web (reviews/mentions):\n${freshReviewsText.slice(0, 800)}` : ''}
+${eventsContext ? `\nUpcoming events expected to cause high demand: ${eventsContext}` : ''}
 
-ניתוח נדרש:
-1. מהי החולשה הספציפית של ${compName} שהכי בולטת מהנתונים?
-2. אם יש אירוע קרוב — כיצד החולשה הזו תפגע בו?
-3. מה הפעולה הממוקדת ביותר שיכולה לגנוב לקוחות מ-${compName} עכשיו?
-4. כתוב prefilled_text שמשתמש בחולשה של המתחרה כ-Hook (מבלי לציין שמו ישירות)
+Required analysis:
+1. What is the most prominent specific weakness of ${compName} evident from the data?
+2. If there is an upcoming event — how will this weakness hurt them during it?
+3. What is the most focused action that can win customers from ${compName} right now?
+4. Write prefilled_text that uses the competitor's weakness as a hook (without naming them directly)
 
-JSON בלבד:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
-  "insight_title": "כותרת ספציפית עד 8 מילים — עם שם חולשה / מספר / פעולה",
-  "insight_body": "2-3 משפטים: חולשה ספציפית של ${compName} + הקשר לאירוע אם רלוונטי + למה זה הזדמנות עכשיו",
-  "action": "פועל ציווי + ערוץ + תוכן ספציפי — עד 12 מילים",
-  "prefilled_text": "טקסט מוכן לפרסום (2-3 שורות עברית) — מדגיש את היתרון שלנו מול החולשה, ללא אזכור המתחרה בשמו",
+  "insight_title": "specific title up to 8 words — with weakness name / number / action",
+  "insight_body": "2-3 sentences: specific weakness of ${compName} + event context if relevant + why this is an opportunity now",
+  "action": "imperative verb + channel + specific content — up to 12 words",
+  "prefilled_text": "ready-to-publish text (2-3 Hebrew lines) — highlights our advantage vs the weakness, without naming the competitor",
   "impact": "high|medium",
-  "relevant_event": "שם האירוע הרלוונטי, או null"
+  "relevant_event": "name of the relevant event, or null"
 }`,
           response_json_schema: { type: 'object' },
         });

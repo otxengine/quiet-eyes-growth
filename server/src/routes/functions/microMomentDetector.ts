@@ -54,31 +54,32 @@ export async function microMomentDetector(req: Request, res: Response) {
       : '';
 
     const result = await invokeLLM({
-      prompt: `אתה מנוע זיהוי "מיקרו-רגעים" לעסק "${profile.name}" (${profile.category}, ${profile.city}).
+      prompt: `You are a "micro-moment" detection engine for the business "${profile.name}" (${profile.category}, ${profile.city}).
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 
-תאריך היום: ${now.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' })} (${dayOfWeek})
-חודש נוכחי: ${currentMonth} | חודש הבא: ${nextMonth}
+Today's date: ${now.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' })} (${dayOfWeek})
+Current month: ${currentMonth} | Next month: ${nextMonth}
 ${peakInfo}
 ${sectorCtx}
 
-מיקרו-רגעים הם רגעים ספציפיים שבהם אנשים הכי נוטים לחפש ולקנות שירות זה:
-- אחרי אירועי מזג אוויר (חום גל → מזגנים, גשם → אינסטלטורים)
-- לפני חגים ישראליים (ראש השנה, פסח, ל"ג בעומר)
-- תחילת/סוף עונות (בית ספר, קיץ, חורף)
-- אירועי חיים (חתונות, לידות, מעבר דירה)
-- ימי שבוע ושעות ספציפיות לסקטור זה
+Micro-moments are specific moments when people are most likely to search for and buy this service:
+- After weather events (heat wave → air conditioning, rain → plumbers)
+- Before Israeli holidays (Rosh Hashana, Passover, Lag BaOmer)
+- Start/end of seasons (school year, summer, winter)
+- Life events (weddings, births, moving homes)
+- Specific weekdays and hours for this sector
 
-זהה 3-4 מיקרו-רגעים שיגיעו ב-30-60 הימים הקרובים:
+Identify 3-4 micro-moments arriving in the next 30-60 days.
 
-החזר JSON:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "moments": [{
-    "title": "שם המיקרו-רגע (קצר)",
-    "description": "מה קורה ולמה זו הזדמנות לעסק זה",
+    "title": "micro-moment name (short, in Hebrew)",
+    "description": "what happens and why this is an opportunity for this business (in Hebrew)",
     "days_until": 1-60,
     "demand_multiplier": 1.2-5.0,
-    "recommended_action": "פעולה שיווקית ספציפית לנצל את הרגע",
-    "content_idea": "רעיון לפוסט/מסר שיווקי לאותו רגע",
+    "recommended_action": "specific marketing action to capitalize on the moment (in Hebrew)",
+    "content_idea": "idea for a post/marketing message for that moment (in Hebrew)",
     "urgency": "high|medium|low"
   }]
 }`,

@@ -103,21 +103,21 @@ export async function smartLeadNurture(req: Request, res: Response) {
           const messageResult = await invokeLLM({
             model: 'sonnet',
             maxTokens: 250,
-            prompt: `אתה מומחה לתקשורת מכירות לעסקים קטנים ישראלים. כתוב הודעת WhatsApp מעקב שתגרום ל${customerName} לענות — אנושית, לא לוחצת, מעוררת עניין.
+            prompt: `You are a sales communication expert for Israeli small businesses. Write a follow-up WhatsApp message that will prompt ${customerName} to respond — human, non-pushy, interest-sparking.
 
-עסק: "${name}" | תחום: ${category} | עיר: ${city}
-ליד: ${customerName} | עניין ב: ${serviceNeeded}
-ניסיון מעקב מספר: ${followupCount} | ימים מאז פנייה ראשונה: ${followupCount === 1 ? '2-3' : '5-7'}
-גישה נדרשת: ${angle}
-סגנון: ${toneInstruction}
+Business: "${name}" | Category: ${category} | City: ${city}
+Lead: ${customerName} | Interested in: ${serviceNeeded}
+Follow-up attempt number: ${followupCount} | Days since first contact: ${followupCount === 1 ? '2-3' : '5-7'}
+Required approach: ${angle}
+Style: ${toneInstruction}
 ${sectorCtx}
 
-הנחיות:
-- שורה 1: פנייה אישית בשם + הקשר ספציפי (מה שרצו)
-- שורה 2: ערך קצר — סיבה אחת ממוקדת לחזור עכשיו (מבצע / זמינות / עדכון רלוונטי)
-- שורה 3: שאלה אחת קצרה שקל לענות עליה (כן/לא)
-- ללא לחץ, ללא "רק רציתי לבדוק", ללא סמיילי מיותרים
-כתוב רק את טקסט ההודעה.`,
+Instructions:
+- Line 1: personal address by name + specific context (what they wanted)
+- Line 2: brief value — one focused reason to respond now (offer / availability / relevant update)
+- Line 3: one short easy-to-answer question (yes/no)
+- No pressure, no "just wanted to check in", no unnecessary emojis
+Write only the message text. ALL string values must be in Hebrew.`,
           });
 
           const followupMsg = typeof messageResult === 'string' ? messageResult.trim() : '';

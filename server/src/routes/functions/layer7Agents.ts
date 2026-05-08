@@ -93,10 +93,11 @@ export async function runViralCatalyst(req: Request, res: Response) {
     const sector = mapSector(profile.category);
 
     const result = await invokeLLM({
-      prompt: `אתה מומחה שיווק ויראלי ישראלי. צור 3 תבניות תוכן ויראלי לעסק "${profile.name}" (${profile.category}, ${profile.city}).
-לכל תבנית: format, platform, virality_score, peak_hour, script_template (עד 80 מילה בעברית).
-JSON array של 3 אובייקטים:
-[{"pattern_type":"format","pattern_value":"...","platform":"instagram","virality_score":0.75,"peak_hour":19,"script_template":"...","summary":"תיאור קצר 1-2 משפטים"}]`,
+      prompt: `You are an Israeli viral marketing expert. Create 3 viral content templates for the business "${profile.name}" (${profile.category}, ${profile.city}).
+Return ONLY valid JSON. ALL string values must be in Hebrew.
+For each template include: format, platform, virality_score, peak_hour, script_template (up to 80 words in Hebrew).
+Return a JSON array of 3 objects. ALL string values must be in Hebrew:
+[{"pattern_type":"format","pattern_value":"...","platform":"instagram","virality_score":0.75,"peak_hour":19,"script_template":"...","summary":"short description 1-2 sentences in Hebrew"}]`,
       response_json_schema: { type: 'array' },
     });
 
@@ -166,13 +167,14 @@ export async function runInfluenceIntegrity(req: Request, res: Response) {
       .join('\n');
 
     const result = await invokeLLM({
-      prompt: `אתה מומחה אבטחת מידע ואותנטיות ביקורות. נתח ביקורות לעסק "${profile.name}".
-ביקורות:
+      prompt: `You are an information security and review authenticity expert. Analyze reviews for the business "${profile.name}".
+Return ONLY valid JSON. ALL string values must be in Hebrew.
+Reviews:
 ${reviewSummary || 'אין ביקורות זמינות'}
 
-JSON:
-{"organic_pct":75.0,"bot_pct":10.0,"coordinated_pct":15.0,"verdict":"organic","recommendation":"...","risk_summary":"..."}
-verdict: organic/suspicious/manipulated`,
+Return ONLY valid JSON. ALL string values must be in Hebrew:
+{"organic_pct":75.0,"bot_pct":10.0,"coordinated_pct":15.0,"verdict":"organic","recommendation":"...in Hebrew...","risk_summary":"...in Hebrew..."}
+verdict must be one of: organic/suspicious/manipulated`,
       response_json_schema: { type: 'object' },
     });
 
@@ -247,12 +249,13 @@ export async function runDeepContextVision(req: Request, res: Response) {
     const compSummary = competitors.map(c => c.name).join(', ') || 'אין מתחרים ידועים';
 
     const result = await invokeLLM({
-      prompt: `אתה מומחה ניתוח עסקי. צור תובנה אסטרטגית לעסק "${profile.name}" (${profile.category}, ${profile.city}).
-מתחרים: ${compSummary}
+      prompt: `You are a business analysis expert. Create a strategic insight for the business "${profile.name}" (${profile.category}, ${profile.city}).
+Return ONLY valid JSON. ALL string values must be in Hebrew.
+Competitors: ${compSummary}
 
-JSON:
-{"business_insight":"...","unmet_demand_detected":true,"demand_description":"...","sentiment_visual":"positive","recommended_action":"..."}
-sentiment_visual: positive/neutral/negative/urgent`,
+Return ONLY valid JSON. ALL string values must be in Hebrew:
+{"business_insight":"...in Hebrew...","unmet_demand_detected":true,"demand_description":"...in Hebrew...","sentiment_visual":"positive","recommended_action":"...in Hebrew..."}
+sentiment_visual must be one of: positive/neutral/negative/urgent`,
       response_json_schema: { type: 'object' },
     });
 
@@ -428,13 +431,14 @@ export async function runNegotiationPricing(req: Request, res: Response) {
     const compContext = competitors.map(c => c.name).join(', ') || 'אין מתחרים ידועים';
 
     const result = await invokeLLM({
-      prompt: `אתה מאמן תמחור ישראלי. נתח שוק לעסק "${profile.name}" (${profile.category}).
-לידים: ${leadContext}. מתחרים: ${compContext}.
+      prompt: `You are an Israeli pricing coach. Analyze the market for the business "${profile.name}" (${profile.category}).
+Return ONLY valid JSON. ALL string values must be in Hebrew.
+Leads: ${leadContext}. Competitors: ${compContext}.
 
-JSON:
-{"market_supply":"balanced","competitor_avg_price":450,"recommended_price_modifier":5,"recommended_tactic":"standard","tactic_reason":"...","confidence_pct":72,"insight":"תובנת תמחור מרכזית בעברית"}
-market_supply: scarce/balanced/flooded
-recommended_tactic: premium/standard/discount/bundle`,
+Return ONLY valid JSON. ALL string values must be in Hebrew:
+{"market_supply":"balanced","competitor_avg_price":450,"recommended_price_modifier":5,"recommended_tactic":"standard","tactic_reason":"...in Hebrew...","confidence_pct":72,"insight":"central pricing insight in Hebrew"}
+market_supply must be one of: scarce/balanced/flooded
+recommended_tactic must be one of: premium/standard/discount/bundle`,
       response_json_schema: { type: 'object' },
     });
 
@@ -523,11 +527,12 @@ export async function runCampaignAutopilot(req: Request, res: Response) {
     const triggerContext = recentSignals[0]?.summary || `${hotLeads.length} לידים חמים הצטברו`;
 
     const result = await invokeLLM({
-      prompt: `אתה מנהל קמפיינים ישראלי. צור טיוטת קמפיין לרשתות חברתיות עבור "${profile.name}" (${profile.category}).
-הקשר: ${triggerContext}
+      prompt: `You are an Israeli campaign manager. Create a draft social media campaign for "${profile.name}" (${profile.category}).
+Return ONLY valid JSON. ALL string values must be in Hebrew.
+Context: ${triggerContext}
 
-JSON (בעברית):
-{"headline":"כותרת עד 10 מילה","body_text":"טקסט עד 50 מילה","cta_text":"CTA עד 5 מילה","platform":"instagram","estimated_reach":500,"duration_hours":24,"campaign_insight":"מדוע הקמפיין הזה נכון עכשיו"}`,
+Return ONLY valid JSON. ALL string values must be in Hebrew:
+{"headline":"headline up to 10 words in Hebrew","body_text":"text up to 50 words in Hebrew","cta_text":"CTA up to 5 words in Hebrew","platform":"instagram","estimated_reach":500,"duration_hours":24,"campaign_insight":"why this campaign is right now, in Hebrew"}`,
       response_json_schema: { type: 'object' },
     });
 
@@ -614,12 +619,13 @@ export async function runExpansionScout(req: Request, res: Response) {
     const signalSummary = allSignals.slice(0, 5).map(s => s.summary || '').filter(Boolean).join('; ');
 
     const result = await invokeLLM({
-      prompt: `אתה יועץ אסטרטגי לעסקים ישראלים. זהה הזדמנות הרחבת שירות ל"${profile.name}" (${profile.category}, ${profile.city}).
-שירות הנפוץ: ${topService ? `${topService[0]} (${topService[1]} פניות)` : 'לא מזוהה'}
-אותות שוק: ${signalSummary || 'אין'}
+      prompt: `You are a strategic advisor for Israeli businesses. Identify a service expansion opportunity for "${profile.name}" (${profile.category}, ${profile.city}).
+Return ONLY valid JSON. ALL string values must be in Hebrew.
+Most common service: ${topService ? `${topService[0]} (${topService[1]} inquiries)` : 'לא מזוהה'}
+Market signals: ${signalSummary || 'אין'}
 
-JSON:
-{"opportunity_title":"כותרת הזדמנות","unmet_demand_description":"...","demand_signal_count":5,"estimated_monthly_revenue":8000,"estimated_investment":3000,"roi_months":3,"why_now":"מדוע ההזדמנות רלוונטית עכשיו"}`,
+Return ONLY valid JSON. ALL string values must be in Hebrew:
+{"opportunity_title":"opportunity title in Hebrew","unmet_demand_description":"...in Hebrew...","demand_signal_count":5,"estimated_monthly_revenue":8000,"estimated_investment":3000,"roi_months":3,"why_now":"why the opportunity is relevant now, in Hebrew"}`,
       response_json_schema: { type: 'object' },
     });
 
@@ -708,11 +714,12 @@ export async function runReputationWarRoom(req: Request, res: Response) {
     const reviewSample = negReviews.slice(0, 3).map(r => `"${(r.text || '').slice(0, 60)}"`).join(', ');
 
     const result = await invokeLLM({
-      prompt: `אתה מנהל מוניטין דיגיטלי. נתח מצב "${profile.name}" (${profile.category}).
-${negReviews.length > 0 ? `${negReviews.length} ביקורות שליליות ב-7 ימים: ${reviewSample}` : 'אין ביקורות שליליות — בדיקה שגרתית'}
+      prompt: `You are a digital reputation manager. Analyze the situation for "${profile.name}" (${profile.category}).
+Return ONLY valid JSON. ALL string values must be in Hebrew.
+${negReviews.length > 0 ? `${negReviews.length} negative reviews in the last 7 days: ${reviewSample}` : 'No negative reviews — routine check'}
 
-JSON:
-{"description":"...","recommended_response":"2-3 משפטים פרקטיים בעברית","urgency_note":"..."}`,
+Return ONLY valid JSON. ALL string values must be in Hebrew:
+{"description":"...in Hebrew...","recommended_response":"2-3 practical sentences in Hebrew","urgency_note":"...in Hebrew..."}`,
       response_json_schema: { type: 'object' },
     });
 

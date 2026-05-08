@@ -57,18 +57,18 @@ export async function detectCompetitorPricing(req: Request, res: Response) {
         priceData = await invokeLLM({
           model: 'haiku',
           maxTokens: 200,
-          prompt: `נתח טקסט מאתר של עסק ישראלי: "${comp.name}".
+          prompt: `Analyze text from the website of an Israeli business: "${comp.name}".
 ${pageText.slice(0, 3500)}
 
-חלץ מחירים שמופיעים במפורש בטקסט. אל תמציא מחירים. החזר JSON בלבד:
+Extract only prices that appear explicitly in the text. Do not invent prices. Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "price_min": number_or_null,
   "price_max": number_or_null,
   "price_unit": "לשעה|לביקור|לחודש|למנה|לסשן|לטיפול|אחר|null",
   "price_tier": "budget|mid|premium|unknown",
-  "evidence": "ציטוט מדויק מהאתר שממנו חולץ המחיר (עד 80 תווים)"
+  "evidence": "exact quote from the site from which the price was extracted (up to 80 characters)"
 }
-אם אין מחירים מפורשים: החזר price_min=null`,
+If there are no explicit prices: return price_min=null`,
           response_json_schema: { type: 'object' },
         });
       } catch (_) { continue; }

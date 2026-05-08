@@ -14,13 +14,13 @@ export async function generateLeadFirstContact(req: Request, res: Response) {
     const profiles = await prisma.businessProfile.findMany({ where: { id: bpId } });
     const bp = profiles[0];
 
-    const prompt = `כתוב הודעת WhatsApp ראשונה קצרה ואישית ל-${lead.name}.
-עסק: ${bp?.name || 'העסק שלנו'}
-שירות שמבקש: ${lead.service_needed || 'לא צוין'}
-עיר: ${lead.city || bp?.city || ''}
-סגנון: ${bp?.tone_preference || 'ידידותי'}, לא יותר מ-3 שורות.
-אל תבטיח הנחות. אל תמציא פרטים. היה אנושי ומקצועי.
-החזר את ההודעה בלבד, ללא הסברים.`;
+    const prompt = `Write a short, personal opening WhatsApp message to ${lead.name}.
+Business: ${bp?.name || 'העסק שלנו'}
+Service requested: ${lead.service_needed || 'לא צוין'}
+City: ${lead.city || bp?.city || ''}
+Style: ${bp?.tone_preference || 'ידידותי'}, no more than 3 lines.
+Do not promise discounts. Do not invent details. Be human and professional.
+Return the message text only, no explanations. ALL string values must be in Hebrew.`;
 
     const message = await invokeLLM({ prompt });
 

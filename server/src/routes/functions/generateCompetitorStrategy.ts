@@ -70,40 +70,40 @@ export async function generateCompetitorStrategy(req: Request, res: Response) {
       : bootstrapContext || '\n\nאין נתונים ספציפיים — ניתוח מבוסס פרופיל כללי.';
 
     // Use callAIJson with competitor_analysis task (Claude Sonnet — strategic depth)
-    const result: any = await callAIJson('competitor_analysis', `אתה יועץ אסטרטגיה עסקית לעסקים קטנים בישראל.
+    const result: any = await callAIJson('competitor_analysis', `You are a business strategy advisor for small businesses in Israel.
 
-העסק שלנו: "${bp.name}" | תחום: ${bp.category} | עיר: ${bp.city}
-מתחרה: "${competitor.name}" | דירוג: ${competitor.rating || '?'}/5 | ביקורות: ${competitor.review_count || '?'}
-חוזקות המתחרה: ${competitor.strengths || 'לא ידוע'}
-חולשות המתחרה: ${competitor.weaknesses || 'לא ידוע'}
-שירותים: ${competitor.services || 'לא ידוע'}
-מגמה: ${competitor.trend_direction || '?'}${signalContext}
+Our business: "${bp.name}" | Category: ${bp.category} | City: ${bp.city}
+Competitor: "${competitor.name}" | Rating: ${competitor.rating || '?'}/5 | Reviews: ${competitor.review_count || '?'}
+Competitor strengths: ${competitor.strengths || 'unknown'}
+Competitor weaknesses: ${competitor.weaknesses || 'unknown'}
+Services: ${competitor.services || 'unknown'}
+Trend: ${competitor.trend_direction || '?'}${signalContext}
 
-JSON בלבד — ללא הסברים:
+Return ONLY valid JSON. ALL string values must be in Hebrew. No explanations outside the JSON:
 {
-  "strategy": "האסטרטגיה הכוללת — עד 20 מילים",
+  "strategy": "overall strategy — up to 20 words",
   "moves": [
     {
-      "title": "כותרת — עד 5 מילים",
-      "reason": "למה עכשיו — משפט אחד",
-      "action": "פועל ספציפי — עד 6 מילים",
-      "timeframe": "היום|השבוע|החודש",
+      "title": "title — up to 5 words",
+      "reason": "why now — one sentence",
+      "action": "specific action verb — up to 6 words",
+      "timeframe": "today|this_week|this_month",
       "effort": "low|medium|high",
       "platform": "instagram|facebook|in_store|menu|wolt|whatsapp"
     }
   ],
   "tactics": [
-    "טקטיקה ספציפית 1 — פועל + מה + זמן מוערך",
-    "טקטיקה ספציפית 2 — פועל + מה + זמן מוערך",
-    "טקטיקה ספציפית 3 — פועל + מה + זמן מוערך"
+    "specific tactic 1 — verb + what + estimated time",
+    "specific tactic 2 — verb + what + estimated time",
+    "specific tactic 3 — verb + what + estimated time"
   ],
-  "timeline": "קצר טווח (שבוע) / בינוני (חודש) / ארוך (רבעון)",
-  "key_advantage": "היתרון שלנו מול מתחרה זה — עד 10 מילים",
-  "risk": "הסיכון הגדול ביותר — עד 8 מילים",
-  "avoid": ["דבר לא לעשות — עד 5 מילים"],
-  "monitor": ["מה לעקוב — עד 5 מילים"]
+  "timeline": "short-term (week) / medium (month) / long (quarter)",
+  "key_advantage": "our advantage over this competitor — up to 10 words",
+  "risk": "biggest risk — up to 8 words",
+  "avoid": ["thing not to do — up to 5 words"],
+  "monitor": ["what to track — up to 5 words"]
 }
-חוק: בדיוק 3 moves ובדיוק 3 tactics.`);
+Rule: exactly 3 moves and exactly 3 tactics.`);
 
     return res.json(result || {
       strategy: '',

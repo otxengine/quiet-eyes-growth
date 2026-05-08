@@ -90,30 +90,31 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
       model: 'sonnet',
       maxTokens: 2000,
       skipCache: true,
-      prompt: `אתה מערכת ניטור פרואקטיבית בכירה לעסקים ישראלים קטנים. היום: ${todayDate}.
-המשימה שלך: לזהות את ההזדמנויות והסיכונים הקונקרטיים ביותר מתוך הנתונים, ולהמליץ על פעולות שהמשתמש יכול לבצע תוך דקות.
+      prompt: `You are a senior proactive monitoring system for small Israeli businesses. Today: ${todayDate}.
+Your task: identify the most concrete opportunities and risks from the data, and recommend actions the user can take within minutes.
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 
 ${ctxPrompt}
 === נתוני העסק ===
 ${contextBlock}
 
-${isNewBusiness ? `⚠️ עסק חדש: אין נתונים היסטוריים עדיין.
-צור 2-3 המלצות ראשוניות CRITICAL לסקטור זה — מה שכל עסק חדש חייב לעשות בשבוע הראשון.
+${isNewBusiness ? `⚠️ New business: no historical data yet.
+Generate 2-3 initial CRITICAL recommendations for this sector — what every new business must do in the first week.
 ` : ''}
 
-חוקי איכות בלתי ניתנים לפשרה:
-1. TITLE: חייב לכלול שם ספציפי / מספר / פעולה — "ביקורת שלילית מ-X", "3 לידים חמים ממתינים", "מגמה ב-TikTok להנצל"
-2. DESCRIPTION: עובדה קונקרטית מהנתונים — לא הכללה גנרית
-3. SUGGESTED_ACTION: פועל ציווי + ערוץ + תוכן ("פרסם Reel ב-TikTok על X", "שלח WhatsApp אישי ל-Y", "הגב לביקורת של Z")
-4. PREFILLED_TEXT: טקסט מוכן שהמשתמש יכול להעתיק ולשלוח ישירות — 40-80 מילים, בשם העסק, טון אנושי + מקצועי.
-   עבור פוסטים: כולל Hook + גוף + CTA + האשטאגים רלוונטיים.
-   עבור תגובות: כולל שם הלקוח, התייחסות לתוכן, פתרון.
-   עבור WhatsApp: ידידותי, קצר, עם CTA ברור.
-5. ACTION_TYPE: post_publish=פרסום ברשת חברתית (מייצר פוסט מלא) | respond=תגובה לביקורת/לקוח | call=שיחת טלפון | task=משימה פנימית | promote=קידום ממומן
-6. PLATFORM: בחר לפי: instagram=תוכן ויזואלי 18-40 | tiktok=ויראלי 16-30 | facebook=מקומי 30+ | google=ביקורות/SEO | whatsapp=תקשורת ישירה | general=חוצה פלטפורמות
-7. URGENCY_HOURS: זמן ריאלי — ביקורת שלילית=2h, ליד חם=4h, הזדמנות שוק=24h, תוכן=48h
+Non-negotiable quality rules:
+1. TITLE: must include a specific name / number / action — e.g. "negative review from X", "3 hot leads waiting", "TikTok trend to leverage"
+2. DESCRIPTION: a concrete fact from the data — no generic generalizations
+3. SUGGESTED_ACTION: imperative verb + channel + content (e.g. "Post a Reel on TikTok about X", "Send personal WhatsApp to Y", "Reply to Z's review")
+4. PREFILLED_TEXT: ready-to-use text the user can copy and send directly — 40-80 words, in the business's name, human + professional tone.
+   For posts: includes Hook + body + CTA + relevant hashtags.
+   For replies: includes customer name, reference to content, resolution.
+   For WhatsApp: friendly, short, with clear CTA.
+5. ACTION_TYPE: post_publish=social media post (generates full post) | respond=reply to review/customer | call=phone call | task=internal task | promote=paid promotion
+6. PLATFORM: choose by: instagram=visual content 18-40 | tiktok=viral 16-30 | facebook=local 30+ | google=reviews/SEO | whatsapp=direct communication | general=cross-platform
+7. URGENCY_HOURS: realistic time — negative review=2h, hot lead=4h, market opportunity=24h, content=48h
 
-צור 3-5 התראות מגוונות ולא כפולות. JSON בלבד:
+Generate 3-5 diverse, non-duplicate alerts. Return ONLY valid JSON:
 {"alerts":[{
   "title": "כותרת ספציפית עם פרטים",
   "description": "הסבר ממוקד מה קרה ולמה זה חשוב עכשיו (עד 120 תווים)",

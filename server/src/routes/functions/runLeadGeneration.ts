@@ -146,21 +146,23 @@ export async function runLeadGeneration(req: Request, res: Response) {
     for (const signal of intentSignals.slice(0, 10)) {
       try {
         const extraction = await invokeLLM({
-          prompt: `הטקסט הזה נאסף מהאינטרנט:
+          prompt: `The following text was collected from the internet:
 URL: ${signal.url}
-תוכן: "${(signal.content || '').substring(0, 400)}"
+Content: "${(signal.content || '').substring(0, 400)}"
 
-האם זה מראה שמישהו מחפש שירות של "${category}" באזור "${city}" בישראל?
-${leadCriteriaContext ? `קריטריוני ליד לעסק זה: ${leadCriteriaContext}.` : ''}
-אם כן, חלץ מהטקסט בלבד (לא להמציא):
-- name: שם האדם אם מוזכר, אחרת "לקוח פוטנציאלי"
-- service_needed: השירות שמחפש (עד 5 מילים)
-- city: עיר אם מוזכרת
+Does this indicate that someone is looking for a "${category}" service in the "${city}" area in Israel?
+${leadCriteriaContext ? `Lead criteria for this business: ${leadCriteriaContext}.` : ''}
+If yes, extract ONLY from the text (do not invent):
+- name: the person's name if mentioned, otherwise "לקוח פוטנציאלי"
+- service_needed: the service being sought (up to 5 words)
+- city: city if mentioned
 - urgency: היום/השבוע/החודש/מתעניין
-- budget_range: תקציב אם מוזכר
+- budget_range: budget if mentioned
 - has_intent: true/false
 
-אם אין כוונת קנייה ברורה — החזר { "has_intent": false }`,
+If there is no clear purchase intent — return { "has_intent": false }
+
+Return ONLY valid JSON. ALL string values must be in Hebrew.`,
           response_json_schema: { type: 'object' },
         });
 

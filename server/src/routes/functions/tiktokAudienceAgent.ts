@@ -185,48 +185,48 @@ export async function tiktokAudienceAgent(req: Request, res: Response) {
     const result = await invokeLLM({
       model: 'sonnet',
       maxTokens: 900,
-      prompt: `אתה מומחה TikTok ו-growth marketing לעסקים קטנים ישראלים. המשימה: לבנות פרופיל קהל יעד מדויק ש-${name} יוכל להשתמש בו לכל פיסת תוכן.
+      prompt: `You are a TikTok and growth marketing expert for small Israeli businesses. Task: build a precise target audience profile that ${name} can use for every piece of content.
 
-עסק: "${name}" | תחום: ${category} | עיר: ${city}
+Business: "${name}" | Sector: ${category} | City: ${city}
 
-=== נתוני TikTok אמיתיים מ-${videosAnalyzed} סרטוני סקטור ===
-• engagement ממוצע בסקטור: ${(avgEng * 100).toFixed(1)}%
-• שעות שיא פעילות (שעון ישראל): ${topHours.join(', ') || 'לא זוהו'}
-• hashtags עם highest engagement: ${topHashtags.slice(0, 6).join(' | ') || 'לא זוהו'}
-• sounds פופולריים: ${topSounds.slice(0, 3).join(' | ') || 'לא זוהו'}
+=== Real TikTok data from ${videosAnalyzed} sector videos ===
+• Average sector engagement: ${(avgEng * 100).toFixed(1)}%
+• Peak activity hours (Israel time): ${topHours.join(', ') || 'not identified'}
+• Hashtags with highest engagement: ${topHashtags.slice(0, 6).join(' | ') || 'not identified'}
+• Popular sounds: ${topSounds.slice(0, 3).join(' | ') || 'not identified'}
 
-=== מחקר קהל מהאינטרנט ===
-${tavilyCtx || 'לא נמצא מידע ספציפי'}
+=== Audience research from the web ===
+${tavilyCtx || 'No specific information found'}
 
-הנחיות:
-- hooks_that_work: 3 משפטי פתיחה שפועלים על הקהל הספציפי הזה (לא גנריים — ספציפיים לסקטור ולכאב)
-- growth_strategy_30d: 4 שלבים קונקרטיים עם שמות סוגי תוכן ספציפיים
-- pain_points: כאבים ספציפיים שמניעים אנשים לחפש את ${category} ב-TikTok
+Instructions:
+- hooks_that_work: 3 opening lines that work on this specific audience (not generic — specific to the sector and pain)
+- growth_strategy_30d: 4 concrete steps with specific content type names
+- pain_points: specific pains that drive people to seek ${category} on TikTok
 
-JSON בלבד:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "primary_audience": {
     "age_range": "X-Y",
-    "gender_skew": "נשי X% / גברי Y%",
-    "interests": ["עד 4 תחומי עניין ספציפיים לסקטור"],
-    "pain_points": ["כאב 1 — ספציפי וקונקרטי", "כאב 2", "כאב 3"],
-    "why_they_follow": "סיבה פסיכולוגית עמוקה — למה הקהל הזה צורך תוכן ${category} ב-TikTok"
+    "gender_skew": "female X% / male Y%",
+    "interests": ["up to 4 sector-specific interests"],
+    "pain_points": ["pain 1 — specific and concrete", "pain 2", "pain 3"],
+    "why_they_follow": "deep psychological reason — why this audience consumes ${category} content on TikTok"
   },
   "secondary_audience": {
     "age_range": "X-Y",
-    "description": "מי הם ומה הם מחפשים"
+    "description": "who they are and what they look for"
   },
   "best_posting_windows": [
-    { "days": "ראשון-חמישי", "time": "19:00-21:00", "reason": "סיבה ספציפית לסקטור זה" },
-    { "days": "שישי-שבת", "time": "11:00-13:00", "reason": "סיבה ספציפית" }
+    { "days": "Sunday-Thursday", "time": "19:00-21:00", "reason": "sector-specific reason" },
+    { "days": "Friday-Saturday", "time": "11:00-13:00", "reason": "specific reason" }
   ],
   "hooks_that_work": [
-    "Hook 1 — ספציפי לכאב של הקהל",
-    "Hook 2 — שאלה מחדדת",
-    "Hook 3 — עובדה מפתיעה"
+    "Hook 1 — specific to audience pain",
+    "Hook 2 — sharpening question",
+    "Hook 3 — surprising fact"
   ],
-  "content_to_avoid": "מה הקהל הזה מדלג עליו — ספציפי",
-  "growth_strategy_30d": "שבוע 1: [מה לעשות] → שבוע 2: [מה לעשות] → שבוע 3-4: [scaling] — כל שלב עם סוג תוכן ספציפי"
+  "content_to_avoid": "what this audience skips — specific",
+  "growth_strategy_30d": "Week 1: [what to do] → Week 2: [what to do] → Week 3-4: [scaling] — each step with specific content type"
 }`,
       response_json_schema: { type: 'object' },
     });

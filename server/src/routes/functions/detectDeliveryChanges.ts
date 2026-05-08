@@ -290,24 +290,25 @@ export async function detectDeliveryChanges(req: Request, res: Response) {
 
     try {
       const analysis: any = await invokeLLM({
-        prompt: `אתה אנליסט עסקי בכיר. נתח את הנוכחות הדיגיטלית של העסק ומתחריו בפלטפורמות הרלוונטיות לסקטור שלהם.
+        prompt: `You are a senior business analyst. Analyse the digital presence of the business and its competitors across their sector-relevant platforms.
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 
-סקטור עסקי: ${category}
-פלטפורמות נסרקות: ${platformNames}
+Business sector: ${category}
+Platforms scanned: ${platformNames}
 
-=== העסק שלי ===
+=== My Business ===
 ${ownSummary}
 
-=== מתחרים ===
-${competitorSummaries.join('\n\n') || 'אין מתחרים לנתח'}
+=== Competitors ===
+${competitorSummaries.join('\n\n') || 'No competitors to analyse'}
 
-משימה — זהה:
-1. האם העסק נעדר מפלטפורמה שמתחרה נוכח בה?
-2. מה הפער הגדול ביותר בדירוגים/זמנים/תנאים?
-3. אילו תלונות חוזרות מופיעות בביקורות של מתחרים שהעסק יכול לפרסם כיתרון?
-4. מה ההמלצה הספציפית ביותר שמתאימה לסקטור ${category}?
+Task — identify:
+1. Is the business absent from a platform where a competitor is present?
+2. What is the largest gap in ratings / times / terms?
+3. What recurring complaints appear in competitor reviews that this business can advertise as an advantage?
+4. What is the most specific recommendation suited to the ${category} sector?
 
-החזר JSON בדיוק:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "platforms_found_own": ["רשימת הפלטפורמות שהעסק נמצא בהן"],
   "missing_platform": "שם הפלטפורמה החשובה ביותר שהעסק לא נמצא בה, או null",

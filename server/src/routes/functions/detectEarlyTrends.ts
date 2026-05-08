@@ -171,23 +171,24 @@ export async function detectEarlyTrends(req: Request, res: Response) {
 
     // ── 5. AI analysis — pre-peak trend scoring ─────────────────────────────
     const result = await invokeLLM({
-      prompt: `אתה אנליסט מגמות מתמחה בגילוי טרנדים לפני שהם מגיעים לפיק שלהם.
-המשימה: מצא 2-5 טרנדים שנמצאים עדיין ב-"stage ראשוני" — לא עוד mainstream — אך מראים סימני צמיחה מהירה.
+      prompt: `You are a trends analyst specializing in discovering trends before they reach their peak.
+Task: find 2-5 trends that are still in an "early stage" — not yet mainstream — but showing signs of rapid growth.
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 
-עסק: "${name}" — ${category} ב${city}
-שירותים: ${relevant_services || 'לא צוינו'}
+Business: "${name}" — ${category} in ${city}
+Services: ${relevant_services || 'not specified'}
 
-נתונים:
+Data:
 ${fullContext.slice(0, 3500)}
 
-הוראות חשובות:
-• כלול רק טרנדים שיש להם ראיות ספציפיות בנתונים לעיל
-• דחה טרנדים שכבר mainstream (כולם מדברים עליהם = מאוחר מדי)
-• העדף: velocity גבוה + volume נמוך = זהב
-• חשוב: כמה ימים עד שהטרנד יגיע לפיק? (טווח: 7-60 ימים)
-• opportunity_text — מה העסק צריך לעשות עכשיו, ספציפי ממש
+Important instructions:
+• Include only trends that have specific evidence in the data above
+• Reject trends that are already mainstream (everyone is talking about them = too late)
+• Prefer: high velocity + low volume = gold
+• Important: how many days until the trend reaches its peak? (range: 7-60 days)
+• opportunity_text — what the business needs to do right now, very specific
 
-JSON בלבד:
+Return ONLY valid JSON:
 {"trends":[{
   "name": "שם הטרנד בעברית — עד 5 מילים",
   "description": "מה זה ולמה זה הולך להיות גדול — עד 15 מילה",

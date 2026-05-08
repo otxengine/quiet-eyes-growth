@@ -59,14 +59,15 @@ export async function findLocalEvents(req: Request, res: Response) {
       const analysis: any = await invokeLLM({
         model: 'haiku',
         maxTokens: 400,
-        prompt: `זהה אירועים מקומיים ממשיים בטקסט הבא: הופעות, כנסים, פסטיבלים, ירידים, שווקים, תערוכות, אירועי ספורט — כל אירוע שיכול לייצר תנועה של אנשים לאזור ${city}.
+        prompt: `Identify real local events in the following text: concerts, conferences, festivals, fairs, markets, exhibitions, sports events — any event that could generate foot traffic to the ${city} area.
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 
-טקסט:
+Text:
 ${context.slice(0, 4000)}
 
-עבור עסק: "${name}" (${category} ב${city}).
+For business: "${name}" (${category} in ${city}).
 
-החזר JSON בלבד:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "events": [
     {
@@ -81,7 +82,7 @@ ${context.slice(0, 4000)}
   ]
 }
 
-כלול רק אירועים עם תאריך ספציפי בחודשיים הקרובים. אם אין — החזר {"events":[]}.`,
+Include only events with a specific date in the next two months. If none — return {"events":[]}.`,
         response_json_schema: { type: 'object' },
       });
       events = (analysis?.events || []).filter(

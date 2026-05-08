@@ -62,32 +62,32 @@ export async function competitorMoveTracker(req: Request, res: Response) {
     });
 
     const result = await invokeLLM({
-      prompt: `אתה מנתח תחרות לעסק "${profile.name}" (${profile.category}, ${profile.city}).
+      prompt: `You are a competitive analyst for the business "${profile.name}" (${profile.category}, ${profile.city}).
 
-מתחרים עם נתוניהם הנוכחיים:
+Competitors with their current data:
 ${competitorContext.map(c => `
-מתחרה: ${c.name} | דירוג: ${c.rating || 'N/A'}⭐ | ביקורות: ${c.review_count || 0}
-שירותים: ${c.services || 'לא ידוע'}
-חוזקות: ${c.strengths || 'N/A'} | חולשות: ${c.weaknesses || 'N/A'}
-טווח מחירים: ${c.price_range || 'N/A'}
-שינויים שזוהו: ${c.changes.join(', ') || 'ללא שינויים ברורים'}
-מבצעים: ${c.current_promotions || 'אין'}
+Competitor: ${c.name} | Rating: ${c.rating || 'N/A'}⭐ | Reviews: ${c.review_count || 0}
+Services: ${c.services || 'unknown'}
+Strengths: ${c.strengths || 'N/A'} | Weaknesses: ${c.weaknesses || 'N/A'}
+Price range: ${c.price_range || 'N/A'}
+Detected changes: ${c.changes.join(', ') || 'no clear changes'}
+Promotions: ${c.current_promotions || 'none'}
 `).join('\n---\n')}
 
-זהה:
-1. מהלכים אסטרטגיים של מתחרים שדורשים תגובה
-2. הזדמנויות שנוצרות מחולשות של מתחרים
-3. איומים מהלכים של מתחרים
+Identify:
+1. Strategic competitor moves that require a response
+2. Opportunities created by competitor weaknesses
+3. Threats from competitor moves
 
-החזר JSON:
+Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "moves": [{
-    "competitor_name": "שם המתחרה",
+    "competitor_name": "competitor name",
     "move_type": "price_change|new_service|promotion|rating_drop|expansion|weakness",
-    "description": "תיאור המהלך — מה שינה המתחרה",
+    "description": "description of the move — what the competitor changed",
     "threat_level": "high|medium|low",
-    "recommended_response": "מה לעשות בתגובה — פעולה ספציפית",
-    "opportunity": "האם זו הזדמנות עבורנו?"
+    "recommended_response": "what to do in response — a specific action",
+    "opportunity": "is this an opportunity for us?"
   }]
 }`,
       response_json_schema: { type: 'object' },

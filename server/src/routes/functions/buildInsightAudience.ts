@@ -64,39 +64,40 @@ export async function buildInsightAudience(req: Request, res: Response) {
 
     let result: any = null;
     try {
-      result = await callAIJson('build_audience', `אתה מומחה מיקוד קהלים לעסקים ישראלים.
+      result = await callAIJson('build_audience', `You are an audience targeting expert for Israeli businesses.
 
-עסק: "${profile.name}" — ${profile.category} ב${profile.city}
-שירותים: ${profile.relevant_services || 'לא צוינו'}
-${profile.description ? `תיאור: ${profile.description}` : ''}
-תובנה ספציפית: "${insight_text}"
-פעולה מוצעת: "${action_label || 'לא צוינה'}"
-סוג: ${insight_type || 'כללי'}
+Business: "${profile.name}" — ${profile.category} in ${profile.city}
+Services: ${profile.relevant_services || 'לא צוינו'}
+${profile.description ? `Description: ${profile.description}` : ''}
+Specific insight: "${insight_text}"
+Proposed action: "${action_label || 'לא צוינה'}"
+Type: ${insight_type || 'כללי'}
 
-סיגנלים רלוונטיים לתובנה:
+Signals relevant to this insight:
 ${relevantSignals.length > 0 ? relevantSignals.join('\n') : 'אין סיגנלים ספציפיים'}
 
-לידים טובים ביותר:
+Top leads:
 ${topLeads.length > 0 ? topLeads.join('\n') : 'אין לידים'}
 
-ביקורות אחרונות:
+Recent reviews:
 ${reviewSample.length > 0 ? reviewSample.join('\n') : 'אין ביקורות'}
 
-בנה קהל יעד ספציפי לתובנה הזו בלבד — לא קהל כללי. JSON בלבד:
+Build a target audience specific to this insight only — not a general audience.
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 {
-  "headline": "שם הקהל — עד 6 מילים",
+  "headline": "...",
   "age_range": "XX-XX",
   "gender": "נשים|גברים|מעורב",
-  "interests": ["עניין 1", "עניין 2", "עניין 3"],
-  "pain_point": "הכאב הספציפי שהתובנה הזו פותרת",
-  "why_this_insight_matters": "למה התובנה הזו רלוונטית לקהל זה — משפט אחד",
+  "interests": ["...", "...", "..."],
+  "pain_point": "...",
+  "why_this_insight_matters": "...",
   "best_channel": "instagram|facebook|whatsapp|google",
   "best_time": "HH:00-HH:00",
-  "keywords": ["מילת מפתח 1", "מילת מפתח 2", "מילת מפתח 3"],
+  "keywords": ["...", "...", "..."],
   "estimated_size": "קטן|בינוני|גדול",
   "confidence": "high|medium|low"
 }`, {
-        systemPrompt: 'אתה מומחה פילוח קהלים. בנה פרופיל מבוסס נתונים, לא הנחות כלליות.',
+        systemPrompt: 'You are an audience segmentation expert. Build a data-based profile, not general assumptions. ALL string values must be in Hebrew.',
       });
     } catch (aiErr: any) {
       console.warn('[buildInsightAudience] AI parse failed, using estimated fallback:', aiErr.message);

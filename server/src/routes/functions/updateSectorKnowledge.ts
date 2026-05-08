@@ -36,24 +36,25 @@ export async function updateSectorKnowledge(req: Request, res: Response) {
       .join('; ');
 
     const result = await invokeLLM({
-      prompt: `אתה חוקר שוק לעסקים ישראלים. סנתז ידע על הסקטור.
+      prompt: `You are a market researcher for Israeli businesses. Synthesize knowledge about the sector.
 
-קטגוריה: ${category}, אזור: ${city}
-נתונים:
-- ${competitors.length} מתחרים: ${competitors.map(c => `${c.name}(${c.rating || '?'}⭐)`).join(', ')}
-- ${reviews.length} ביקורות, ממוצע ${avgRating || 'לא ידוע'}
-- תלונות נפוצות: ${commonComplaints || 'לא זוהו'}
-- ${signals.length} אותות שוק שנאספו
+Category: ${category}, Region: ${city}
+Data:
+- ${competitors.length} competitors: ${competitors.map(c => `${c.name}(${c.rating || '?'}⭐)`).join(', ')}
+- ${reviews.length} reviews, average ${avgRating || 'לא ידוע'}
+- Common complaints: ${commonComplaints || 'לא זוהו'}
+- ${signals.length} market signals collected
 
-חלץ ידע על הסקטור:
-- avg_rating: דירוג ממוצע בסקטור (מספר)
-- common_complaints: תלונות נפוצות (עד 5, מופרד בפסיקים)
-- trending_services: שירותים/מוצרים מבוקשים (עד 5)
-- price_range: טווח מחירים טיפוסי בסקטור
-- competitor_count: מספר מתחרים פעילים
-- key_insights: תובנות מרכזיות על הסקטור (עד 3 משפטים)
+Extract sector knowledge with these fields:
+- avg_rating: average sector rating (number)
+- common_complaints: common complaints (up to 5, comma-separated)
+- trending_services: in-demand services/products (up to 5)
+- price_range: typical price range in the sector
+- competitor_count: number of active competitors
+- key_insights: key insights about the sector (up to 3 sentences)
 
-החזר JSON: {"knowledge": {...}}`,
+Return ONLY valid JSON. ALL string values must be in Hebrew.
+Format: {"knowledge": {...}}`,
       response_json_schema: { type: 'object' },
     });
 

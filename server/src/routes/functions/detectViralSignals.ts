@@ -72,24 +72,25 @@ export async function detectViralSignals(req: Request, res: Response) {
 
     // ── AI viral analysis ────────────────────────────────────────────────────
     const result = await invokeLLM({
-      prompt: `אתה מומחה וירליות ברשתות חברתיות. נתח מה הולך ויראלי עכשיו ואיך העסק יכול לנצל את זה.
+      prompt: `You are a social media virality expert. Analyze what is going viral right now and how the business can leverage it.
+Return ONLY valid JSON. ALL string values must be in Hebrew.
 
-עסק: "${name}" — ${category} ב${city}
-שירותים: ${relevant_services || 'לא צוינו'}
-טון: ${tone_preference}
+Business: "${name}" — ${category} in ${city}
+Services: ${relevant_services || 'not specified'}
+Tone: ${tone_preference}
 
-תוצאות חיפוש:
+Search results:
 ${context.slice(0, 3500)}
 
-מצא 2-4 סיגנלים ויראלים שרלוונטיים לעסק. לכל אחד — כתוב תוכן מוכן לפרסום.
+Find 2-4 viral signals relevant to the business. For each one — write ready-to-publish content.
 
-הוראות:
-• כלול רק מה שנתמך על ידי הנתונים
-• הפלטפורם חייב להיות ברור (TikTok / Instagram / YouTube)
-• הפורמט חייב להיות ספציפי (Reel / Story / Short / Post)
-• ready_to_post_text — טקסט גמור בעברית, מוכן להעתקה ופרסום
+Instructions:
+• Include only what is supported by the data
+• The platform must be clear (TikTok / Instagram / YouTube)
+• The format must be specific (Reel / Story / Short / Post)
+• ready_to_post_text — complete text in Hebrew, ready to copy and publish
 
-JSON בלבד:
+Return ONLY valid JSON:
 {"signals":[{
   "title": "שם הסיגנל הויראלי — עד 6 מילים",
   "description": "מה הולך ויראלי ולמה — עד 12 מילה",

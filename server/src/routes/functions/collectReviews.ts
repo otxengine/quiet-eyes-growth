@@ -43,9 +43,9 @@ async function batchExtractTopics(
 
   try {
     const result = await invokeLLM({
-      prompt: `חלץ נושאים מהביקורות הבאות. לכל ביקורת: עד 4 נושאים (שירות/מחיר/איכות/ניקיון/אווירה/זמינות/משלוח) וסנטימנט לכל נושא (positive/negative/neutral).
+      prompt: `Extract topics from the following reviews. For each review: up to 4 topics (service/price/quality/cleanliness/atmosphere/availability/delivery) and a sentiment per topic (positive/negative/neutral).
 ${itemsStr}
-JSON בלבד: {"results":[{"topics":["נושא1"],"sentiments":{"נושא1":"positive"}},...]}, מערך באותו אורך ובאותו סדר.`,
+Return ONLY valid JSON. ALL string values must be in Hebrew. {"results":[{"topics":["נושא1"],"sentiments":{"נושא1":"positive"}},...]}, array of the same length and order.`,
       response_json_schema: { type: 'object' },
       model: 'haiku',
       maxTokens: 900,
@@ -225,7 +225,7 @@ export async function collectReviews(req: Request, res: Response) {
         let tavilyParsed: any[] = [];
         try {
           const batchResult = await invokeLLM({
-            prompt: `עבור כל קטע טקסט, האם יש ביקורת על "${name}"? חלץ: text (עד 300 תווים), rating (1-5 או 0), reviewer_name, platform, is_review (true/false).\n${itemsStr}\nJSON בלבד: {"results":[{...},...]}, מערך באותו אורך ובאותו סדר.`,
+            prompt: `For each text snippet, determine whether it contains a review of "${name}". Extract: text (up to 300 chars), rating (1-5 or 0), reviewer_name, platform, is_review (true/false).\n${itemsStr}\nReturn ONLY valid JSON. ALL string values must be in Hebrew. {"results":[{...},...]}, array of the same length and order.`,
             response_json_schema: { type: 'object' },
             model: 'haiku',
             maxTokens: 1000,
@@ -293,7 +293,7 @@ export async function collectReviews(req: Request, res: Response) {
       let parsed: any[] = [];
       try {
         const result = await invokeLLM({
-          prompt: `עבור כל קטע טקסט, האם יש ביקורת על "${name}"? חלץ: text (עד 300 תווים), rating (1-5 או 0), reviewer_name, is_review (true/false).\n${itemsStr}\nJSON בלבד: {"results":[{...},...]}, מערך באותו אורך ובאותו סדר.`,
+          prompt: `For each text snippet, determine whether it contains a review of "${name}". Extract: text (up to 300 chars), rating (1-5 or 0), reviewer_name, is_review (true/false).\n${itemsStr}\nReturn ONLY valid JSON. ALL string values must be in Hebrew. {"results":[{...},...]}, array of the same length and order.`,
           response_json_schema: { type: 'object' },
           model: 'haiku',
           maxTokens: 900,
@@ -370,7 +370,7 @@ export async function collectReviews(req: Request, res: Response) {
       let signalsParsed: any[] = [];
       try {
         const batchResult = await invokeLLM({
-          prompt: `עבור כל קטע, האם זו ביקורת על "${name}"? חלץ: text, rating (1-5 או 0), reviewer_name, platform, is_review.\n${signalsStr}\nJSON בלבד: {"results":[...]}, אותו אורך ואותו סדר.`,
+          prompt: `For each snippet, determine whether it is a review of "${name}". Extract: text, rating (1-5 or 0), reviewer_name, platform, is_review.\n${signalsStr}\nReturn ONLY valid JSON. ALL string values must be in Hebrew. {"results":[...]}, same length and same order.`,
           response_json_schema: { type: 'object' },
           model: 'haiku',
           maxTokens: 1000,

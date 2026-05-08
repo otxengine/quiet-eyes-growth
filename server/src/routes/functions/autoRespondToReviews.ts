@@ -26,10 +26,10 @@ export async function autoRespondToReviews(req: Request, res: Response) {
     const bizCtx = await loadBusinessContext(businessProfileId);
     const tone = bizCtx?.preferredTone || profile.tone_preference || 'professional';
     const toneInstruction = tone === 'casual'
-      ? 'טון קליל וחברותי, תשובה קצרה ואנושית'
+      ? 'casual and friendly tone, short and human reply'
       : tone === 'warm'
-      ? 'טון חם ואישי, מבלי להיות מכירתי'
-      : 'טון מקצועי ואמין, ספציפי לביקורת';
+      ? 'warm and personal tone, without being salesy'
+      : 'professional and trustworthy tone, specific to the review';
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 3600000).toISOString();
 
@@ -81,25 +81,25 @@ export async function autoRespondToReviews(req: Request, res: Response) {
         const responseText = await invokeLLM({
           model: 'sonnet',
           maxTokens: 350,
-          prompt: `אתה מומחה לניהול מוניטין לעסקים קטנים ישראלים. כתוב תגובה לביקורת שתהיה ברמה כזו שתהפוך לקוח נסגר ללקוח חוזר, ותשכנע קוראים חדשים לבחור בעסק.
+          prompt: `You are a reputation management expert for small Israeli businesses. Write a review response in Hebrew at a level that turns a lost customer into a returning one and convinces new readers to choose the business.
 
-עסק: "${name}" | תחום: ${category}
-שם המבקר: ${review.reviewer_name || 'לקוח'}
-דירוג: ${review.rating || '?'}/5
-תוכן הביקורת: "${review.text.substring(0, 500)}"
+Business: "${name}" | Category: ${category}
+Reviewer name: ${review.reviewer_name || 'לקוח'}
+Rating: ${review.rating || '?'}/5
+Review content: "${review.text.substring(0, 500)}"
 
-סגנון: ${toneInstruction}
+Style: ${toneInstruction}
 ${sectorCtx}
-דוגמת תגובה לסקטור זה: "${sectorExample}"
+Example response for this sector: "${sectorExample}"
 
-חוקים קריטיים:
-- פתח בפנייה אישית לשם המבקר אם ידוע
-- הכר בדיוק בנקודה שציינו — לא תגובה גנרית
-- הצע פתרון ספציפי / הזמן לשיחה ישירה
-- 2-4 משפטים בלבד — ממוקד ואנושי
-- אל תכתוב תירוצים, אל תהיה הגנתי
-- אל תחזור על המילה "סליחה" יותר מפעם אחת
-כתוב רק את טקסט התגובה הסופי.`,
+Critical rules:
+- Open with a personal address to the reviewer's name if known
+- Acknowledge the exact point raised — no generic response
+- Offer a specific solution or invite a direct conversation
+- 2-4 sentences only — focused and human
+- Do not make excuses, do not be defensive
+- Do not repeat the word "sorry" more than once
+Write ONLY the final response text. ALL string values must be in Hebrew.`,
         });
 
         const suggestedResponse = typeof responseText === 'string'

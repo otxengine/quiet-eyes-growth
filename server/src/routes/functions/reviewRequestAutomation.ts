@@ -27,10 +27,10 @@ export async function reviewRequestAutomation(req: Request, res: Response) {
     const bizCtx = await loadBusinessContext(businessProfileId);
     const tone = bizCtx?.preferredTone || profile.tone_preference || 'professional';
     const toneInstruction = tone === 'casual'
-      ? 'טון קליל וחברותי, תחושה אישית'
+      ? 'casual and friendly tone, personal feel'
       : tone === 'warm'
-      ? 'טון חם ואנושי, מבלי להיות מכירתי'
-      : 'טון מקצועי ואמין';
+      ? 'warm and human tone, without being salesy'
+      : 'professional and trustworthy tone';
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 3600000).toISOString();
 
@@ -74,15 +74,15 @@ export async function reviewRequestAutomation(req: Request, res: Response) {
 
         // Generate personalized review request message
         const messageResult = await invokeLLM({
-          prompt: `כתוב הודעת WhatsApp קצרה בעברית (2-3 שורות) לבקשת ביקורת Google עבור העסק "${name}" (${category} ב${city}).
+          prompt: `Write a short WhatsApp message (2-3 lines) requesting a Google review for the business "${name}" (${category} in ${city}).
 
-שם הלקוח: ${customerName}
-שירות שקיבל: ${serviceUsed}
-${reviewLink ? `קישור לביקורת: ${reviewLink}` : ''}
+Customer name: ${customerName}
+Service received: ${serviceUsed}
+${reviewLink ? `Review link: ${reviewLink}` : ''}
 ${sectorCtx}
 
-הנחיות: ${toneInstruction}. פנה בשם אם ידוע. תודה אישית על הבחירה בעסק. בקש ביקורת ב-Google בעדינות. ${reviewLink ? 'צרף את הקישור.' : ''}
-כתוב רק את טקסט ההודעה בלבד.`,
+Instructions: ${toneInstruction}. Address the customer by name if known. Thank them personally for choosing the business. Gently ask for a Google review. ${reviewLink ? 'Include the link.' : ''}
+Write ONLY the message text. ALL string values must be in Hebrew.`,
         });
 
         const message = typeof messageResult === 'string' ? messageResult.trim() : '';

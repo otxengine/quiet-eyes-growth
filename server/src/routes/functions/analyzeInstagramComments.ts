@@ -23,14 +23,14 @@ async function analyzeAndSave(
     try {
       const analysis = await invokeLLM({
         model: 'haiku',
-        prompt: `נתח את הסנטימנט של התגובות הבאות מ-Instagram. לכל תגובה החזר: positive/negative/neutral.
+        prompt: `Analyze the sentiment of the following Instagram comments. For each comment return: positive/negative/neutral.
 
-שם העסק: "${profile.name}"
-תגובות:
+Business name: "${profile.name}"
+Comments:
 ${batch.map((t, idx) => `${idx + 1}. "${t.substring(0, 150)}"`).join('\n')}
 
-החזר JSON בלבד:
-{ "sentiments": ["positive","negative","neutral",...], "urgent_negative": ["טקסט תגובה אם דחוף לטפל"] }`,
+Return ONLY valid JSON. ALL string values must be in Hebrew:
+{ "sentiments": ["positive","negative","neutral",...], "urgent_negative": ["comment text if urgent to handle"] }`,
         response_json_schema: { type: 'object' },
         maxTokens: 800,
       });
