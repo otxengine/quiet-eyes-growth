@@ -575,7 +575,7 @@ export default function InsightDetail() {
             <h1 className="text-[17px] font-bold text-foreground leading-snug mb-2">{title}</h1>
             <div className="flex flex-wrap gap-3 text-[10px] text-foreground-muted">
               {createdAt && <span>{new Date(createdAt).toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' })}</span>}
-              {sourceAgent && <span>· סוכן: {sourceAgent}</span>}
+              {actionMeta?.action_label && <span>· {actionMeta.action_label}</span>}
             </div>
           </div>
         </div>
