@@ -198,8 +198,9 @@ export default function Strategy() {
       await base44.functions.invoke('generateMonthlyStrategy', { businessProfileId: bpId });
       await queryClient.invalidateQueries({ queryKey: ['monthlyStrategy', bpId] });
       toast.success('האסטרטגיה החודשית נוצרה');
-    } catch {
-      toast.error('שגיאה ביצירת האסטרטגיה');
+    } catch (err) {
+      console.error('generateMonthlyStrategy error:', err);
+      toast.error(`שגיאה ביצירת האסטרטגיה: ${err?.message || 'נסה שוב'}`);
     }
     setGenerating(false);
   };

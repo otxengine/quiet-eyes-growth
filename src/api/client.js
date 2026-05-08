@@ -152,7 +152,7 @@ const functions = {
     const result = await apiFetch(`/functions/${name}`, {
       method: 'POST',
       body: JSON.stringify(data),
-    });
+    }, 90000); // 90s — LLM + DB calls can take 40-60s
     // Wrap in { data } to match Base44 SDK response shape
     return { data: result };
   },
