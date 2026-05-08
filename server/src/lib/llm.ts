@@ -209,8 +209,9 @@ function _recoverTruncated(text: string): any {
     if (ch === '{' || ch === '[')      depth++;
     else if (ch === '}' || ch === ']') {
       depth--;
-      // depth 1 → we just closed an item inside the root container
-      if (depth === 1) lastItemCloseIdx = i;
+      // depth 1 or 2 → we just closed an item inside the root container
+      // (depth 1 for root arrays like [{...}], depth 2 for {"key":[{...}]} shapes)
+      if (depth >= 1 && depth <= 2) lastItemCloseIdx = i;
     }
   }
 

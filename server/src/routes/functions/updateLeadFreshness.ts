@@ -62,11 +62,13 @@ export async function updateLeadFreshness(req: Request, res: Response) {
       const scoreChanged = Math.abs((lead.freshness_score ?? 100) - newScore) >= 2;
       const statusChanged = newStatus !== lead.status;
       if (!scoreChanged && !statusChanged) continue;
-      await prisma.lead.update({
-        where: { id: lead.id },
-        data: { freshness_score: newScore, ...(statusChanged ? { status: newStatus } : {}) },
-      });
-      freshnessUpdated++;
+      try {
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: { freshness_score: newScore, ...(statusChanged ? { status: newStatus } : {}) },
+        });
+        freshnessUpdated++;
+      } catch { /* lead deleted between findMany and update — skip */ }
     }
     stats.leads_freshness_updated = freshnessUpdated;
 
