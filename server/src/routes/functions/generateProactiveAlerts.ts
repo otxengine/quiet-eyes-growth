@@ -3,6 +3,7 @@ import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
 import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
+import { insightAutoResolve } from './insightAutoResolve';
 
 export async function generateProactiveAlerts(req: Request, res: Response) {
   const { businessProfileId } = req.body;
@@ -10,6 +11,9 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
 
   const startTime = new Date().toISOString();
   try {
+    // Auto-resolve stale / condition-cleared alerts before generating new ones
+    await insightAutoResolve(businessProfileId);
+
     const profiles = await prisma.businessProfile.findMany({ where: { id: businessProfileId } });
     const profile = profiles[0];
     if (!profile) return res.status(404).json({ error: 'No business profile' });
@@ -29,12 +33,28 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
 
     const existingTitles = new Set(pendingAlerts.map(a => a.title));
 
-    // Fuzzy dedup keys: normalize first 50 chars per alert_type within last 72h
-    const seventyTwoHoursAgo = new Date(Date.now() - 72 * 3600000).toISOString();
-    const recentAlerts = pendingAlerts.filter(a => (a.created_at || '') >= seventyTwoHoursAgo);
+    // Fuzzy dedup: 7-day window — prevents re-surfacing the same insight within a week
+    const sevenDaysAgoStr = new Date(Date.now() - 7 * 24 * 3600000).toISOString();
+    const recentAlerts = pendingAlerts.filter(a => (a.created_at || '') >= sevenDaysAgoStr);
     const recentFuzzyKeys = new Set(
       recentAlerts.map(a => `${a.alert_type}:${(a.title || '').toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 50)}`)
     );
+
+    // Also block alert_types that were acted on in the past 3 days (user already acted)
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 3600000).toISOString();
+    const recentlyActedTypes = new Set(
+      pendingAlerts
+        .filter(a => a.is_acted_on && (a.created_at || '') >= threeDaysAgo)
+        .map(a => a.alert_type)
+    );
+
+    // Load recently completed alerts for prompt context (last 7 days)
+    const recentlyCompleted = await prisma.proactiveAlert.findMany({
+      where: { linked_business: businessProfileId, is_acted_on: true, created_at: { gte: sevenDaysAgoStr } },
+      select: { title: true, alert_type: true },
+      orderBy: { created_at: 'desc' },
+      take: 8,
+    });
 
     const negativeReviews = recentReviews.filter(r => r.sentiment === 'negative' || (r.rating || 5) <= 2);
     const avgRating = recentReviews.length > 0
@@ -86,6 +106,11 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
     const bizCtx = await loadBusinessContext(businessProfileId);
     const ctxPrompt = formatContextForPrompt(bizCtx, 'generateProactiveAlerts');
 
+    // Build recently-done context so agent doesn't re-suggest what was already handled
+    const recentlyDoneBlock = recentlyCompleted.length > 0
+      ? `\nAlready handled in the past 7 days (DO NOT re-suggest these):\n${recentlyCompleted.map(a => `  • [${a.alert_type}] ${a.title}`).join('\n')}`
+      : '';
+
     const result = await invokeLLM({
       model: 'sonnet',
       maxTokens: 2000,
@@ -97,6 +122,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew.
 ${ctxPrompt}
 === נתוני העסק ===
 ${contextBlock}
+${recentlyDoneBlock}
 
 ${isNewBusiness ? `⚠️ New business: no historical data yet.
 Generate 2-3 initial CRITICAL recommendations for this sector — what every new business must do in the first week.
@@ -167,9 +193,11 @@ Generate 3-5 diverse, non-duplicate alerts. Return ONLY valid JSON:
 
     for (const alert of alerts) {
       if (!alert.title || existingTitles.has(alert.title)) continue;
-      // Fuzzy dedup: same alert_type + similar title within 72h
+      // Fuzzy dedup: same alert_type + similar title within 7 days
       const fuzzyKey = `${alert.alert_type}:${(alert.title as string).toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 50)}`;
       if (recentFuzzyKeys.has(fuzzyKey)) continue;
+      // Skip types that were already acted on in the past 3 days
+      if (recentlyActedTypes.has(alert.alert_type)) continue;
 
       // Store action metadata in source_agent as JSON (unified with MarketSignal format)
       const actionMeta = JSON.stringify({

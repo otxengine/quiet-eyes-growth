@@ -464,6 +464,7 @@ export default function InsightDetail() {
     : (entity?.category || 'general');
   const priority    = entity?.priority || 'medium';
   const sourceAgent = entity?.source_agent || null;
+  const actionMeta  = (() => { try { return sourceAgent ? JSON.parse(sourceAgent) : null; } catch { return null; } })();
   const createdAt   = entity?.created_date || entity?.created_at;
   const status      = kind === 'action' ? (entity?.status || 'proposed') : null;
   const isActedOn   = kind === 'alert' ? !!entity?.is_acted_on : entity?.status === 'completed';
@@ -497,6 +498,14 @@ export default function InsightDetail() {
       queryClient.invalidateQueries({ queryKey: ['businessSnapshot', bpId] });
       // Log outcome so agents won't suggest this again + invalidate snapshot
       await logCompletedAction(bpId, 'insight_completed', title, id);
+      // Update memory so future insights avoid already-done suggestions
+      base44.functions.invoke('updateInsightMemory', {
+        businessProfileId: bpId,
+        alertType: typeKey,
+        actionPlatform: actionMeta?.action_platform || '',
+        title,
+        action: 'completed',
+      }).catch(() => {});
       toast.success('סומן כהושלם ✓');
     },
   });

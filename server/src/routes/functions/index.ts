@@ -82,6 +82,7 @@ import { sentimentVelocityMonitor } from './sentimentVelocityMonitor';
 import { tiktokSectorTrendAgent } from './tiktokSectorTrendAgent';
 import { tiktokAudienceAgent } from './tiktokAudienceAgent';
 import { tiktokPostTracker } from './tiktokPostTracker';
+import { updateInsightMemory } from './updateInsightMemory';
 
 const router = Router();
 
@@ -170,6 +171,7 @@ const FUNCTION_MAP: Record<string, any> = {
   tiktokSectorTrendAgent,
   tiktokAudienceAgent,
   tiktokPostTracker,
+  updateInsightMemory,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,

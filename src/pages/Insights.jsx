@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { toast } from 'sonner';
 import {
   Lightbulb, Zap, Target, TrendingUp, AlertTriangle, Trophy,
-  ChevronLeft, Filter, CheckCircle2, Clock
+  ChevronLeft, Filter, CheckCircle2, Clock, X
 } from 'lucide-react';
 
 const ALERT_TYPE_META = {
@@ -34,7 +35,7 @@ const PRIORITY_BADGE = {
 
 const PRIORITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
 
-function InsightCard({ item, onOpen }) {
+function InsightCard({ item, onOpen, onDismiss }) {
   const typeMeta = ALERT_TYPE_META[item.type] || ALERT_TYPE_META.action_needed;
   const Icon = typeMeta.icon;
   const priorityMeta = PRIORITY_BADGE[item.priority] || PRIORITY_BADGE.medium;
@@ -69,15 +70,26 @@ function InsightCard({ item, onOpen }) {
           <div className="flex items-center justify-between mt-3">
             <span className="text-[10px] text-foreground-muted">
               {item.createdAt ? new Date(item.createdAt).toLocaleDateString('he-IL') : ''}
-              {item.sourceAgent && ` · ${item.sourceAgent}`}
             </span>
-            <button
-              onClick={() => onOpen(item.navId)}
-              className={`flex items-center gap-1 text-[11px] font-semibold ${typeMeta.color} hover:opacity-70 transition-all`}
-            >
-              פתח תובנה מלאה
-              <ChevronLeft className="w-3 h-3" />
-            </button>
+            <div className="flex items-center gap-3">
+              {item.kind === 'alert' && item.rawStatus !== 'completed' && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDismiss(item); }}
+                  className="flex items-center gap-1 text-[10px] text-foreground-muted hover:text-red-500 transition-colors"
+                  title="לא רלוונטי"
+                >
+                  <X className="w-3 h-3" />
+                  לא רלוונטי
+                </button>
+              )}
+              <button
+                onClick={() => onOpen(item.navId)}
+                className={`flex items-center gap-1 text-[11px] font-semibold ${typeMeta.color} hover:opacity-70 transition-all`}
+              >
+                פתח תובנה מלאה
+                <ChevronLeft className="w-3 h-3" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -88,10 +100,12 @@ function InsightCard({ item, onOpen }) {
 export default function Insights() {
   const { businessProfile } = useOutletContext();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const bpId = businessProfile?.id;
 
   const [filterType, setFilterType]   = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [dismissedIds, setDismissedIds] = useState(new Set());
 
   const { data: alerts = [], isLoading: loadingAlerts } = useQuery({
     queryKey: ['proactiveAlerts', bpId, 'all'],
@@ -170,6 +184,24 @@ export default function Insights() {
 
   const activeCount = unified.filter(i => i.rawStatus !== 'completed').length;
 
+  const handleDismiss = async (item) => {
+    setDismissedIds(prev => new Set([...prev, item.id]));
+    try {
+      await base44.entities.ProactiveAlert.update(item.id, { is_dismissed: true });
+      base44.functions.invoke('updateInsightMemory', {
+        businessProfileId: bpId,
+        alertType: item.type,
+        title: item.title,
+        action: 'dismissed',
+      }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ['proactiveAlerts'] });
+      queryClient.invalidateQueries({ queryKey: ['activeInsights'] });
+    } catch {
+      setDismissedIds(prev => { const n = new Set(prev); n.delete(item.id); return n; });
+      toast.error('שגיאה בהסרת התובנה');
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto space-y-5" dir="rtl">
       {/* Header */}
@@ -221,11 +253,12 @@ export default function Insights() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map(item => (
+          {filtered.filter(item => !dismissedIds.has(item.id)).map(item => (
             <InsightCard
               key={item.navId}
               item={item}
               onOpen={navId => navigate(`/insights/${navId}`)}
+              onDismiss={handleDismiss}
             />
           ))}
         </div>
