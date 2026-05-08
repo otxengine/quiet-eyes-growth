@@ -33,14 +33,24 @@ function getDevUserId() {
   return localStorage.getItem('dev_user_id') || 'dev-user';
 }
 
-async function apiFetch(path, options = {}) {
+async function apiFetch(path, options = {}, timeoutMs = 30000) {
   const token = await getToken();
   const headers = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : { 'x-dev-user': getDevUserId() }),
     ...(options.headers || {}),
   };
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { ...options, headers, signal: controller.signal });
+  } catch (err) {
+    if (err.name === 'AbortError') throw Object.assign(new Error('הבקשה לקחה יותר מדי זמן — נסה שוב'), { status: 408 });
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
   const contentType = res.headers.get('content-type') || '';
   const isJson = contentType.includes('application/json');
 
@@ -152,11 +162,11 @@ const functions = {
 
 const integrations = {
   Core: {
-    async InvokeLLM({ prompt, response_json_schema, model }) {
+    async InvokeLLM({ prompt, response_json_schema, model, maxTokens }) {
       return apiFetch('/functions/invokeLLM', {
         method: 'POST',
-        body: JSON.stringify({ prompt, response_json_schema, model }),
-      });
+        body: JSON.stringify({ prompt, response_json_schema, model, maxTokens }),
+      }, 60000); // LLM calls can take up to 60s
     },
   },
 };

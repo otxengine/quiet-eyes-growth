@@ -4,20 +4,19 @@ import { base44 } from '@/api/base44Client';
 import {
   LayoutGrid, Eye, Users, Star, CheckCircle, Heart, Settings,
   ChevronRight, ChevronLeft, ChevronDown, LogOut, FileBarChart,
-  ClipboardList, Database, Bot, Plug, Crown, Sparkles, Calendar, Megaphone, ShieldAlert, Lightbulb, TrendingUp, Target, SearchCheck
+  ClipboardList, Database, Bot, Plug, Crown, Sparkles, Calendar, Megaphone, ShieldAlert, Lightbulb, Target, SearchCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // 2-level structure: standalone items always visible, groups collapsible
 const NAV_STRUCTURE = [
-  { type: 'item',  path: '/',      label: 'מרכז פיקוד',   icon: LayoutGrid, badgeKey: 'unreadSignals' },
+  { type: 'item',  path: '/',      label: 'מרכז פיקוד',   icon: LayoutGrid },
   {
     type: 'group', key: 'intel', label: 'מודיעין', icon: Eye,
     items: [
-      { path: '/signals',      label: 'מודיעין שוק', icon: TrendingUp, badgeKey: 'unreadSignals' },
+      { path: '/insights',     label: 'תובנות',    icon: Lightbulb, badgeKey: 'activeInsights' },
       { path: '/competitors',  label: 'מתחרים',    icon: Users },
       { path: '/events',       label: 'אירועים',   icon: Calendar },
-      { path: '/insights',     label: 'תובנות',    icon: Lightbulb, badgeKey: 'activeInsights' },
       { path: '/strategy',     label: 'אסטרטגיה',  icon: Target },
       { path: '/demand-gap',   label: 'פערי ביקוש', icon: SearchCheck },
     ],

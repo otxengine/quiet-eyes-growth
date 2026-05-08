@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { SignIn, SignUp } from '@clerk/clerk-react';
 const ROUTER_FUTURE = { v7_startTransition: true, v7_relativeSplatPath: true };
 import PageNotFound from './lib/PageNotFound';
@@ -147,7 +147,7 @@ const AuthenticatedApp = () => {
       <Route element={<AppLayout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/signals" element={<Intelligence />} />
+        <Route path="/signals" element={<Navigate to="/insights" replace />} />
         <Route path="/competitors" element={<Competitors />} />
         <Route path="/events" element={<Events />} />
         <Route path="/reviews" element={<Reputation />} />
@@ -166,7 +166,7 @@ const AuthenticatedApp = () => {
         <Route path="/learning" element={<LearningCenter />} />
         <Route path="/marketing" element={<Marketing />} />
         <Route path="/marketing/create" element={<CampaignCreate />} />
-        <Route path="/signals/:signalId" element={<SignalDetail />} />
+        <Route path="/signals/:signalId" element={<Navigate to="/insights" replace />} />
         <Route path="/tasks/:taskId" element={<TaskDetail />} />
         <Route path="/insights" element={<Insights />} />
         <Route path="/insights/:id" element={<InsightDetail />} />
