@@ -53,14 +53,25 @@ export async function generateMonthlyStrategy(req: Request, res: Response) {
       model: 'sonnet',
       maxTokens: 3000,
       skipCache: true,
-      prompt: `אתה יועץ עסקי אסטרטגי. צור אסטרטגיה חודשית קצרה וממוקדת ל${todayDate}.
+      prompt: `You are a strategic business advisor for Israeli small businesses. Create a focused monthly strategy plan for ${todayDate}.
 
+Business context:
 ${contextBlock}
 
-החזר JSON בלבד (ללא markdown, ללא טקסט נוסף):
-{"summary":"סיכום 2 משפטים","focus_theme":"נושא קצר","top_goal":"יעד מספרי","initiatives":[{"title":"שם","description":"תיאור קצר","expected_impact":"השפעה","effort":"low","priority":"high","category":"acquisition"}],"kpis":[{"metric":"מדד","target":"יעד","current":"נוכחי"}],"risks":[{"risk":"סיכון","likelihood":"medium","impact":"medium","mitigation":"מניעה"}],"quick_wins":["פעולה 1","פעולה 2","פעולה 3"]}
+Return ONLY a JSON object (no markdown, no extra text). ALL string values must be in Hebrew. Use this exact structure:
+{
+  "summary": "2-sentence executive summary in Hebrew",
+  "focus_theme": "short Hebrew theme phrase",
+  "top_goal": "primary numeric goal for this month in Hebrew",
+  "initiatives": [
+    {"title": "Hebrew title", "description": "1-2 sentence Hebrew description", "expected_impact": "quantified Hebrew impact", "effort": "low|medium|high", "priority": "high|medium|low", "category": "acquisition|retention|reputation|marketing|operations"}
+  ],
+  "kpis": [{"metric": "Hebrew metric name", "target": "numeric target", "current": "current value"}],
+  "risks": [{"risk": "Hebrew risk description", "likelihood": "high|medium|low", "impact": "high|medium|low", "mitigation": "Hebrew mitigation"}],
+  "quick_wins": ["Hebrew action 1", "Hebrew action 2", "Hebrew action 3"]
+}
 
-כלול 3-4 initiatives, 3 kpis, 2-3 risks, 3-5 quick_wins. הכל בעברית.`,
+Include 3-4 initiatives, 3 kpis, 2-3 risks, 4-5 quick_wins.`,
       response_json_schema: { type: 'object' },
     });
 

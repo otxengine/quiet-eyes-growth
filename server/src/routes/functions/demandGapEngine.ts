@@ -38,36 +38,32 @@ export async function demandGapEngine(req: Request, res: Response) {
 
     const result = await invokeLLM({
       model: 'sonnet',
-      maxTokens: 1400,
+      maxTokens: 1600,
       skipCache: true,
-      prompt: `אתה מנוע זיהוי פערי ביקוש לעסקים ישראלים.
-עסק: "${profile.name}" (${profile.category} ב${profile.city})
-${profile.description ? `תיאור: ${profile.description}` : ''}
-שירותים מוצעים: ${profile.relevant_services || 'לא צוין'}
+      prompt: `You are a demand-gap analysis engine for Israeli small businesses.
 
-מתחרים באזור:
-${competitorServices || 'לא זוהו מתחרים'}
+Business: "${profile.name}" (${profile.category}, ${profile.city})
+${profile.description ? `Description: ${profile.description}` : ''}
+Current services: ${profile.relevant_services || 'not specified'}
 
-אותות שוק אחרונים:
-${recentSignals || 'אין אותות'}
+Local competitors:
+${competitorServices || 'none identified'}
 
-${sectorCtx}
+Recent market signals:
+${recentSignals || 'none'}
 
-זהה 3-5 פערי ביקוש קונקרטיים — ביקושים ממשיים שאין להם מענה מקומי מספיק:
-- ביקושים שאתה יכול לכסות אבל עוד לא מציע
-- ביקושים שהמתחרים לא מכסים
-- ניישים שוק לא מנוצלים בסקטור הזה באזור זה
-
-החזר JSON:
+Identify 3-5 concrete demand gaps — real unmet local demand. Return ONLY a JSON object. ALL string values must be in Hebrew except "time_to_capture":
 {
-  "gaps": [{
-    "demand": "תיאור הביקוש הלא מכוסה (משפט ספציפי)",
-    "evidence": "מה מצביע על ביקוש זה",
-    "estimated_monthly_demand": "הערכת כמות חיפושים/שאלות בחודש (מספר)",
-    "opportunity_score": 1-100,
-    "action": "איך לנצל את ההזדמנות הזו — פעולה קונקרטית",
-    "time_to_capture": "immediate OR weeks OR months (English only)"
-  }]
+  "gaps": [
+    {
+      "demand": "Hebrew description of unmet demand",
+      "evidence": "Hebrew evidence pointing to this demand",
+      "estimated_monthly_demand": "estimated monthly searches/requests (number as string)",
+      "opportunity_score": 75,
+      "action": "Hebrew concrete action to capture this opportunity",
+      "time_to_capture": "immediate|weeks|months"
+    }
+  ]
 }`,
       response_json_schema: { type: 'object' },
     });
