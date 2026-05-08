@@ -87,31 +87,43 @@ async function _callAnthropic(
   maxTokens: number,
   response_json_schema: any,
 ): Promise<any> {
-  const systemPrompt = response_json_schema
-    ? 'You are a helpful assistant. Return ONLY valid JSON. No markdown fences, no explanation, no extra text — just the JSON object.'
-    : 'You are a helpful assistant.';
 
-  // Claude 4.x does not support assistant-turn prefill.
-  // We rely on the system prompt + user prompt to get JSON back directly.
+  // When JSON is required, use tool_use to guarantee structured output
+  if (response_json_schema) {
+    const messages: Anthropic.MessageParam[] = [{ role: 'user', content: prompt }];
+    const response = await anthropic.messages.create({
+      model: modelId,
+      max_tokens: maxTokens,
+      system: 'You are a helpful assistant. ALL string values in your output must be in Hebrew unless the field explicitly requires English.',
+      tools: [{
+        name: 'output_result',
+        description: 'Output the structured result as JSON',
+        input_schema: { type: 'object' as const, properties: {}, additionalProperties: true },
+      }],
+      tool_choice: { type: 'any' as const },
+      messages,
+    });
+
+    const toolUse = response.content.find((b: any) => b.type === 'tool_use');
+    if (toolUse && (toolUse as any).type === 'tool_use') {
+      return (toolUse as any).input;
+    }
+    // Fallback: try text block
+    const textBlock = response.content.find((b: any) => b.type === 'text');
+    const text = textBlock ? (textBlock as any).text : '';
+    console.warn('[LLM] tool_use block missing, stop_reason:', response.stop_reason, '| fallback text (300 chars):', text.substring(0, 300));
+    return _parseJson(text);
+  }
+
+  // Plain text response
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: prompt }];
-
   const response = await anthropic.messages.create({
     model: modelId,
     max_tokens: maxTokens,
-    system: systemPrompt,
+    system: 'You are a helpful assistant.',
     messages,
   });
-
-  const text = (response.content[0] as any).text || '';
-
-  if (response_json_schema) {
-    const parsed = _parseJson(text);
-    if (parsed === null) {
-      console.error('[LLM] _parseJson returned null. stop_reason:', response.stop_reason, '| raw output (500 chars):\n', text.substring(0, 500));
-    }
-    return parsed;
-  }
-  return text;
+  return (response.content[0] as any).text || '';
 }
 
 async function _callOpenAI(prompt: string, response_json_schema: any): Promise<any> {
