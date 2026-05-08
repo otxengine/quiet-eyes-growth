@@ -24,7 +24,7 @@ router.post('/', async (req: Request, res: Response) => {
     // hyper_local_events
     `CREATE TABLE IF NOT EXISTS hyper_local_events (
       id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-      business_id          UUID        NOT NULL REFERENCES businesses(id),
+      business_id          UUID        NOT NULL REFERENCES business_profiles(id),
       event_name           TEXT        NOT NULL,
       event_type           TEXT        NOT NULL CHECK (event_type IN ('concert','sports','roadwork','market','festival','other')),
       venue_name           TEXT,
@@ -44,7 +44,7 @@ router.post('/', async (req: Request, res: Response) => {
     // demand_forecasts
     `CREATE TABLE IF NOT EXISTS demand_forecasts (
       id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-      business_id           UUID        NOT NULL REFERENCES businesses(id),
+      business_id           UUID        NOT NULL REFERENCES business_profiles(id),
       forecast_date         DATE        NOT NULL,
       hour_of_day           INT         CHECK (hour_of_day BETWEEN 0 AND 23),
       demand_index          NUMERIC(5,2),
@@ -62,7 +62,7 @@ router.post('/', async (req: Request, res: Response) => {
     // resource_arbitrage_actions
     `CREATE TABLE IF NOT EXISTS resource_arbitrage_actions (
       id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-      business_id          UUID        NOT NULL REFERENCES businesses(id),
+      business_id          UUID        NOT NULL REFERENCES business_profiles(id),
       trigger_type         TEXT        NOT NULL CHECK (trigger_type IN ('low_demand','weather','competitor_gap','inventory')),
       trigger_description  TEXT        NOT NULL,
       recommended_action   TEXT        NOT NULL,
@@ -97,7 +97,7 @@ router.post('/', async (req: Request, res: Response) => {
     // synthetic_personas (without pgvector column — use TEXT for embedding to avoid extension dependency)
     `CREATE TABLE IF NOT EXISTS synthetic_personas (
       id                        UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-      business_id               UUID        NOT NULL REFERENCES businesses(id),
+      business_id               UUID        NOT NULL REFERENCES business_profiles(id),
       persona_name              TEXT        NOT NULL,
       demographic_profile       JSONB       NOT NULL DEFAULT '{}',
       behavioral_traits         JSONB       NOT NULL DEFAULT '{}',
@@ -109,11 +109,11 @@ router.post('/', async (req: Request, res: Response) => {
       source_url                TEXT        NOT NULL DEFAULT 'internal://persona-simulator'
     )`,
 
-    // meta_configurations
+    // meta_configurations (no FK — uses TEXT business_id for compatibility)
     `CREATE TABLE IF NOT EXISTS meta_configurations (
-      id                      UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-      business_id             UUID    NOT NULL REFERENCES businesses(id) UNIQUE,
-      sector                  TEXT    NOT NULL,
+      id                      TEXT    PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+      business_id             TEXT    NOT NULL UNIQUE,
+      sector                  TEXT    NOT NULL DEFAULT '',
       auto_detected_kpis      JSONB   NOT NULL DEFAULT '{}',
       signal_keywords         TEXT[]  NOT NULL DEFAULT '{}',
       trend_thresholds        JSONB   NOT NULL DEFAULT '{}',
@@ -126,7 +126,7 @@ router.post('/', async (req: Request, res: Response) => {
     // business_events (used by EventImpactEngine)
     `CREATE TABLE IF NOT EXISTS business_events (
       id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-      business_id   UUID        NOT NULL REFERENCES businesses(id),
+      business_id   UUID        NOT NULL REFERENCES business_profiles(id),
       event_type    TEXT        NOT NULL,
       event_data    JSONB       NOT NULL DEFAULT '{}',
       occurred_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -408,6 +408,124 @@ router.post('/', async (req: Request, res: Response) => {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_approval_biz ON v3_approval_requests(business_id, status)`,
     `CREATE INDEX IF NOT EXISTS idx_approval_decision ON v3_approval_requests(decision_id)`,
+
+    // ── otx_opportunities (v3) ────────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS otx_opportunities (
+      id                    TEXT        PRIMARY KEY,
+      business_id           TEXT        NOT NULL,
+      type                  TEXT        NOT NULL,
+      source_signal_ids     JSONB       NOT NULL DEFAULT '[]',
+      source_event_ids      JSONB       NOT NULL DEFAULT '[]',
+      source_forecast_ids   JSONB       NOT NULL DEFAULT '[]',
+      opportunity_score     NUMERIC(4,3) NOT NULL DEFAULT 0.5,
+      urgency               TEXT        NOT NULL DEFAULT 'medium',
+      confidence            NUMERIC(4,3) NOT NULL DEFAULT 0.5,
+      expected_window_start TIMESTAMPTZ,
+      expected_window_end   TIMESTAMPTZ,
+      explanation           TEXT        NOT NULL DEFAULT '',
+      dedup_key             TEXT        NOT NULL,
+      status                TEXT        NOT NULL DEFAULT 'active',
+      created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(business_id, dedup_key)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_otx_opps_biz_status ON otx_opportunities(business_id, status, created_at DESC)`,
+
+    // ── otx_threats (v3) ─────────────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS otx_threats (
+      id           TEXT        PRIMARY KEY,
+      business_id  TEXT        NOT NULL,
+      type         TEXT        NOT NULL,
+      risk_score   NUMERIC(4,3) NOT NULL DEFAULT 0.5,
+      urgency      TEXT        NOT NULL DEFAULT 'medium',
+      confidence   NUMERIC(4,3) NOT NULL DEFAULT 0.5,
+      explanation  TEXT        NOT NULL DEFAULT '',
+      signal_ids   JSONB       NOT NULL DEFAULT '[]',
+      dedup_key    TEXT        NOT NULL,
+      status       TEXT        NOT NULL DEFAULT 'active',
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(business_id, dedup_key)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_otx_threats_biz_status ON otx_threats(business_id, status, created_at DESC)`,
+
+    // ── otx_weight_update_log (v3) ────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS otx_weight_update_log (
+      id           TEXT        PRIMARY KEY,
+      business_id  TEXT        NOT NULL,
+      agent_name   TEXT        NOT NULL,
+      action_type  TEXT        NOT NULL,
+      old_weight   NUMERIC(5,4) NOT NULL,
+      new_weight   NUMERIC(5,4) NOT NULL,
+      trigger_type TEXT        NOT NULL,
+      trigger_id   TEXT,
+      delta        NUMERIC(6,4) NOT NULL,
+      reason       TEXT        NOT NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(id)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_otx_wlog_biz_agent ON otx_weight_update_log(business_id, agent_name, created_at DESC)`,
+
+    // ── ALTER TABLE — add missing columns to existing tables ─────────────────
+    `ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS insight_id TEXT`,
+    `ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS opportunity_ids JSONB DEFAULT '[]'`,
+    `ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS signal_ids JSONB DEFAULT '[]'`,
+    `ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS trace_id TEXT`,
+    `ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS summary TEXT`,
+    `ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS why_now TEXT`,
+    `ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS recommended_steps JSONB DEFAULT '[]'`,
+    `ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS recommended_timing TEXT`,
+    `ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS user_visible_payload JSONB DEFAULT '{}'`,
+
+    `ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS fused_insight_id TEXT`,
+    `ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS approval_required BOOLEAN DEFAULT false`,
+    `ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS policy_version INT DEFAULT 1`,
+
+    `ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS recommendation_id TEXT`,
+    `ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS approval_required BOOLEAN DEFAULT false`,
+    `ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMPTZ`,
+    `ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS executed_at TIMESTAMPTZ`,
+    `ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS result_payload JSONB DEFAULT '{}'`,
+
+    `ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS execution_task_id TEXT`,
+    `ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS outcome_type TEXT DEFAULT 'execution'`,
+    `ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS outcome_score NUMERIC(4,3)`,
+    `ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS conversion_flag BOOLEAN DEFAULT false`,
+
+    `ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS opportunities_found INT DEFAULT 0`,
+    `ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS threats_found INT DEFAULT 0`,
+
+    // ── market_insights (v4) ─────────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS market_insights (
+      id              TEXT        PRIMARY KEY,
+      business_id     TEXT        NOT NULL,
+      insight_type    TEXT        NOT NULL,
+      title           TEXT        NOT NULL,
+      description     TEXT        NOT NULL,
+      urgency         TEXT        NOT NULL DEFAULT 'medium',
+      confidence      NUMERIC(4,3) NOT NULL DEFAULT 0.5,
+      data_payload    JSONB       NOT NULL DEFAULT '{}',
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_market_insights_biz ON market_insights(business_id, created_at DESC)`,
+
+    `CREATE TABLE IF NOT EXISTS otx_trust_snapshots (
+      id              TEXT        PRIMARY KEY,
+      business_id     TEXT        NOT NULL,
+      trust_score     NUMERIC(5,2) NOT NULL,
+      gap_type        TEXT,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_trust_snapshots_biz ON otx_trust_snapshots(business_id, created_at DESC)`,
+
+    `CREATE TABLE IF NOT EXISTS otx_churn_risk_logs (
+      id              TEXT        PRIMARY KEY,
+      business_id     TEXT        NOT NULL,
+      risk_level      TEXT        NOT NULL,
+      risk_score      NUMERIC(4,3) NOT NULL,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_churn_risk_biz ON otx_churn_risk_logs(business_id, created_at DESC)`,
   ];
 
   for (const sql of statements) {
