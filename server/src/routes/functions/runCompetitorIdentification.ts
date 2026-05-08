@@ -218,6 +218,13 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
     let created = 0;
     let updated = 0;
 
+    // LLM may return rating as "4.5★" or "4.5" — Prisma expects Float
+    const parseRating = (r: any): number | null => {
+      if (r == null) return null;
+      const n = parseFloat(String(r).replace(/[^0-9.]/g, ''));
+      return isNaN(n) ? null : n;
+    };
+
     for (const c of competitors) {
       if (!c.name || c.name.toLowerCase() === name.toLowerCase()) continue;
       const nameKey = c.name.toLowerCase();
@@ -232,7 +239,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
           await prisma.competitor.update({
             where: { id: existing.id },
             data: {
-              rating: c.rating || existing.rating,
+              rating: parseRating(c.rating) ?? existing.rating,
               review_count: c.review_count || existing.review_count,
               strengths: strengths || existing.strengths,
               weaknesses: weaknesses || existing.weaknesses,
@@ -249,7 +256,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
           data: {
             name: c.name,
             category: businessType,
-            rating: c.rating || null,
+            rating: parseRating(c.rating),
             review_count: c.review_count || null,
             address: c.address || city,
             strengths: strengths,

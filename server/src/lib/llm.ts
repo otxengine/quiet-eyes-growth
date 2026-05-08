@@ -92,29 +92,45 @@ async function _callAnthropic(
     ? 'You are a JSON-only assistant. Respond with a single valid JSON object only. No preamble, no explanation, no markdown fences. ALL string values must be in Hebrew unless the field explicitly requires English.'
     : 'You are a helpful assistant.';
 
-  // Assistant prefill: inject opening brace so Claude MUST continue with valid JSON
-  const messages: Anthropic.MessageParam[] = response_json_schema
-    ? [{ role: 'user', content: prompt }, { role: 'assistant', content: '{' }]
-    : [{ role: 'user', content: prompt }];
+  const makeAnthropicCall = async (withPrefill: boolean) => {
+    // Assistant prefill: inject opening brace so Claude continues with valid JSON.
+    // Some models/configurations don't support prefill — handled below.
+    const messages: Anthropic.MessageParam[] = (response_json_schema && withPrefill)
+      ? [{ role: 'user', content: prompt }, { role: 'assistant', content: '{' }]
+      : [{ role: 'user', content: prompt }];
 
-  const response = await anthropic.messages.create({
-    model: modelId,
-    max_tokens: maxTokens,
-    system: systemPrompt,
-    messages,
-  });
+    const response = await anthropic.messages.create({
+      model: modelId,
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages,
+    });
 
-  const rawText = ((response.content || [])[0] as any)?.text || '';
+    const rawText = ((response.content || [])[0] as any)?.text || '';
 
-  if (response_json_schema) {
-    // Prepend the prefilled '{' that we injected
-    const text = '{' + rawText;
-    console.log('[LLM] Anthropic raw (300 chars):', text.substring(0, 300), '| stop_reason:', response.stop_reason);
-    const parsed = _parseJson(text);
-    if (!parsed) console.error('[LLM] _parseJson failed on above text');
-    return parsed;
+    if (response_json_schema) {
+      // When prefill was used, prepend the '{' we injected; otherwise parse as-is
+      const text = withPrefill ? '{' + rawText : rawText;
+      console.log('[LLM] Anthropic raw (300 chars):', text.substring(0, 300), '| stop_reason:', response.stop_reason);
+      const parsed = _parseJson(text);
+      if (!parsed) console.error('[LLM] _parseJson failed on above text');
+      return parsed;
+    }
+    return rawText;
+  };
+
+  try {
+    return await makeAnthropicCall(true);
+  } catch (err: any) {
+    // Some models don't support assistant-turn prefill → retry without it
+    const isPrefillError = err.status === 400 &&
+      (err.message || '').toLowerCase().includes('prefill');
+    if (isPrefillError && response_json_schema) {
+      console.warn('[LLM] Model does not support prefill, retrying without it');
+      return await makeAnthropicCall(false);
+    }
+    throw err;
   }
-  return rawText;
 }
 
 async function _callOpenAI(prompt: string, response_json_schema: any, maxTokens = 1600): Promise<any> {
@@ -165,13 +181,25 @@ function _parseJson(text: string): any {
   if (objMatch) { try { return JSON.parse(objMatch[0]); } catch {} }
   const arrMatch = clean.match(/\[[\s\S]*\]/);
   if (arrMatch) { try { return JSON.parse(arrMatch[0]); } catch {} }
-  // Last resort: try to close truncated JSON by appending closing brackets
+  // Last resort: try to close truncated JSON by appending missing brackets/braces
   if (clean.startsWith('{')) {
     const openBraces = (clean.match(/\{/g) || []).length;
     const closeBraces = (clean.match(/\}/g) || []).length;
     const missing = openBraces - closeBraces;
     if (missing > 0) {
       const patched = clean.trimEnd().replace(/,\s*$/, '') + '}'.repeat(missing);
+      try { return JSON.parse(patched); } catch {}
+    }
+  }
+  if (clean.startsWith('[')) {
+    const openBrackets = (clean.match(/\[/g) || []).length;
+    const closeBrackets = (clean.match(/\]/g) || []).length;
+    const missingBraces = (clean.match(/\{/g) || []).length - (clean.match(/\}/g) || []).length;
+    const missingBrackets = openBrackets - closeBrackets;
+    if (missingBrackets > 0 || missingBraces > 0) {
+      const patched = clean.trimEnd().replace(/,\s*$/, '') +
+        '}'.repeat(Math.max(0, missingBraces)) +
+        ']'.repeat(Math.max(0, missingBrackets));
       try { return JSON.parse(patched); } catch {}
     }
   }
