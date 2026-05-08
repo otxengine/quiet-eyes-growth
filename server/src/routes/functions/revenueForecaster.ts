@@ -62,6 +62,9 @@ export async function revenueForecaster(req: Request, res: Response) {
     const forecastMonth = MONTHS_HE[new Date().getMonth()];
 
     const result = await invokeLLM({
+      model: 'sonnet',
+      maxTokens: 1200,
+      skipCache: true,
       prompt: `You are a financial analyst for the business "${profile.name}" (${profile.category}).
 
 Pipeline data:
