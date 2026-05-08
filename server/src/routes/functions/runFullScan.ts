@@ -25,6 +25,7 @@ import { cleanupAndLearn } from './cleanupAndLearn';
 import { analyzeInstagramComments } from './analyzeInstagramComments';
 import { analyzeSocialComments } from './analyzeSocialComments';
 import { analyzeTikTokContent } from './analyzeTikTokContent';
+import { updateSectorKnowledge } from './updateSectorKnowledge';
 
 async function callHandler(fn: Function, businessProfileId: string): Promise<any> {
   return new Promise((resolve) => {
@@ -140,6 +141,8 @@ export async function runFullScan(req: Request, res: Response) {
     ['calculateHealthScore',        calculateHealthScore],
     // ── Cleanup (last — runs after learning) ────────────────────
     ['cleanupAndLearn',             cleanupAndLearn],
+    // ── Sector learning — aggregates cross-business patterns ─────
+    ['updateSectorKnowledge',       updateSectorKnowledge],
     // ── Briefing (always last) ───────────────────────────────────
     ['generateMorningBriefing',     generateMorningBriefing],
   ];

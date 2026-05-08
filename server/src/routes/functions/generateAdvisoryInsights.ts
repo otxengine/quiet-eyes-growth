@@ -3,6 +3,7 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { getSectorInsightBlock } from '../../lib/sectorInsightConfig';
+import { getSectorContext } from '../../lib/sectorContext';
 
 /**
  * generateAdvisoryInsights — the strategic business advisor engine.
@@ -163,7 +164,7 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
       `${c.current_promotions ? ` | מבצע עכשיו: ${c.current_promotions}` : ''}`
     );
 
-    // Sector knowledge
+    // Sector knowledge — static fields + accumulated cross-business learning
     const sectorLines: string[] = [];
     if (sectorKnowledge) {
       if (sectorKnowledge.trending_services) sectorLines.push(`  שירותים מבוקשים בסקטור: ${sectorKnowledge.trending_services}`);
@@ -171,6 +172,9 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
       if (sectorKnowledge.price_range) sectorLines.push(`  טווח מחירים בסקטור: ${sectorKnowledge.price_range}`);
       if (sectorKnowledge.avg_rating) sectorLines.push(`  ממוצע דירוג סקטור: ${sectorKnowledge.avg_rating}★`);
     }
+    // Inject accumulated learning from ALL businesses in sector
+    const crossBusinessCtx = await getSectorContext(profile.category);
+    if (crossBusinessCtx) sectorLines.push(crossBusinessCtx);
 
     // Health score context
     const healthLines: string[] = [];
