@@ -230,7 +230,7 @@ ${signalAction ? `מטרת הקמפיין: ${signalAction}` : ''}
     setLoadingAudience(true);
     setAudienceError('');
     try {
-      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 50000));
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 20000));
       const res = await Promise.race([
         base44.functions.invoke('getAudienceSegments', {
           businessProfileId: bpId,

@@ -64,31 +64,20 @@ export async function getAudienceSegments(req: Request, res: Response) {
     let result: any = null;
     try {
       result = await invokeLLM({
-        model: 'sonnet',
-        maxTokens: 1500,
-        prompt: `אתה מומחה לפרסום ממומן בשוק הישראלי עם ניסיון ב-Meta Ads וגוגל. בנה 3 סגמנטים ממוקדים ומבוססי נתונים.
+        model: 'haiku',
+        maxTokens: 900,
+        prompt: `פרסום ממומן ישראל — בנה 2 סגמנטי קהל יעד שונים.
 
-עסק: "${profile.name}" | תחום: ${profile.category} | עיר: ${profile.city}
-שירותים: ${profile.relevant_services || profile.category}
-שוק יעד: ${profile.target_market || 'כללי'}
-${profile.description ? `תיאור: ${profile.description}` : ''}
-${insightContext}
+עסק: "${profile.name}" | ${profile.category} | ${profile.city}
+שירותים: ${profile.relevant_services || profile.category}${insightContext}
+נתונים: ${reviews.length} ביקורות | ${leads.length} לידים | המרה ${conversionRate}%
+${reviewSamples ? `ביקורות: ${reviews.slice(0,5).map(r=>`"${(r.text||'').slice(0,60)}"`).join(' | ')}` : ''}
+${leadSamples ? `לידים: ${leads.slice(0,5).map(l=>(l.service_needed||l.name||'').slice(0,40)).join(', ')}` : ''}
 
-נתונים אמיתיים:
-• ${reviews.length} ביקורות | ${leads.length} לידים | המרה: ${conversionRate}%
-${reviewSamples ? `ביקורות:\n${reviewSamples}` : ''}
-${leadSamples ? `לידים לדוגמה:\n${leadSamples}` : ''}
-${signalSamples ? `אותות שוק: ${signalSamples}` : ''}
-
-הוראות:
-- כל סגמנט חייב להיות שונה מהאחרים (גיל שונה / כוונת קנייה שונה / ערוץ שונה)
-- pain_point ו-purchase_trigger: ספציפיים לסקטור ולנתונים (לא גנריים)
-- Facebook interests: שמות ספציפיים של עמודים/תחומי עניין ב-Facebook Ads Manager
-- ad_creative_tip: מה לצלם/לכתוב ספציפי לסגמנט זה
-
-JSON עם בדיוק 3 סגמנטים:
-{"segments":[{"segment_name":"שם ייחודי","description":"תיאור ספציפי עם פסיכוגרפיה","age_min":25,"age_max":45,"genders":"נשים וגברים","income_level":"mid","conversion_probability":0.3,"estimated_size":"medium","estimated_audience_range":"10,000-40,000","facebook_targeting":{"interests":["עניין ספציפי 1","עניין 2","עניין 3"],"behaviors":["התנהגות 1"],"custom_audience":"תיאור Custom Audience","lookalike_source":"מקור Lookalike","exclusions":["מה לא לטרגט"]},"google_targeting":{"keywords":["ביטוי מדויק 1","ביטוי 2"],"negative_keywords":["שלילה 1"],"in_market_audiences":["in-market 1"],"custom_intent":"תיאור custom intent"},"best_channels":["Facebook","Instagram"],"best_posting_time":"ימים + שעות ספציפיים","ad_creative_tip":"מה לצלם ומה לכתוב — ספציפי","pain_point":"כאב ספציפי של הסגמנט","purchase_trigger":"מה מניע אותם לקנות עכשיו"}]}`,
+החזר JSON בלבד:
+{"segments":[{"segment_name":"שם","description":"תיאור קצר","age_min":25,"age_max":45,"genders":"נשים וגברים","income_level":"mid","conversion_probability":0.3,"estimated_size":"medium","estimated_audience_range":"10,000-40,000","facebook_targeting":{"interests":["עניין 1","עניין 2","עניין 3"],"behaviors":["התנהגות"],"custom_audience":"Custom Audience","lookalike_source":"מקור","exclusions":[]},"google_targeting":{"keywords":["ביטוי 1","ביטוי 2"],"negative_keywords":[],"in_market_audiences":["קטגוריה"],"custom_intent":"כוונה"},"best_channels":["Facebook","Instagram"],"best_posting_time":"ראשון-חמישי 18:00-21:00","ad_creative_tip":"טיפ קריאייטיב","pain_point":"כאב","purchase_trigger":"טריגר"}]}`,
         response_json_schema: { type: 'object' },
+        skipCache: true,
       });
     } catch (llmErr: any) {
       console.warn('[getAudienceSegments] LLM failed, using fallback:', llmErr.message);
