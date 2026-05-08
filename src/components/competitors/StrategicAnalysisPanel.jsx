@@ -60,7 +60,9 @@ JSON בלבד:
       });
       setSwot(res?.strengths ? res : parseLLMJson(res));
       setLoaded(true);
-    } catch (_) {
+    } catch (err) {
+      console.error('SwotTab error:', err);
+      toast.error(`שגיאת SWOT: ${err?.message || 'נסה שוב'}`);
       setLoaded(true);
     }
     setLoading(false);
@@ -196,7 +198,8 @@ function StrategyTab({ competitor, businessProfile, competitors, signals }) {
       setItems(parsed);
       setLoaded(true);
     } catch (err) {
-      toast.error('שגיאה ביצירת אסטרטגיה — נסה שוב');
+      console.error('StrategyTab error:', err);
+      toast.error(`שגיאת אסטרטגיה: ${err?.message || 'נסה שוב'}`);
       setLoaded(true);
       setItems([]);
     }
@@ -271,8 +274,9 @@ ${competitor.strengths ? `חוזקות: ${competitor.strengths}` : ''}
 }`,
       });
       setPriceData(parseLLMJson(res));
-    } catch (_) {
-      toast.error('שגיאה בזיהוי מחירים');
+    } catch (err) {
+      console.error('detectPrices error:', err);
+      toast.error(`שגיאת מחירים: ${err?.message || 'נסה שוב'}`);
     }
     setPriceLoading(false);
   };
@@ -288,8 +292,9 @@ ${competitor.strengths ? `חוזקות: ${competitor.strengths}` : ''}
         setBattlecard(res?.data?.battlecard || res?.battlecard);
         toast.success('השוואת מתחרה עודכן ✓');
       }
-    } catch (_) {
-      toast.error('שגיאה ביצירת השוואת מתחרה');
+    } catch (err) {
+      console.error('BattleTab generate error:', err);
+      toast.error(`שגיאת השוואת מתחרה: ${err?.message || 'נסה שוב'}`);
     }
     setLoading(false);
   };
