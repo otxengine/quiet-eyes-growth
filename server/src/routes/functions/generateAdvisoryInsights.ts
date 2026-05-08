@@ -1,0 +1,359 @@
+import { Request, Response } from 'express';
+import { prisma } from '../../db';
+import { invokeLLM } from '../../lib/llm';
+import { writeAutomationLog } from '../../lib/automationLog';
+import { getSectorInsightBlock } from '../../lib/sectorInsightConfig';
+
+/**
+ * generateAdvisoryInsights — the strategic business advisor engine.
+ *
+ * Unlike generateProactiveAlerts (which is reactive — hot leads, bad reviews),
+ * this engine synthesizes ALL collected OSINT into proactive strategic insights:
+ *
+ *   • TikTok/social trends the business can exploit
+ *   • New services/products competitors offer that you don't
+ *   • Upcoming events to leverage (local, seasonal, Israeli calendar)
+ *   • Viral content opportunities from detectViralSignals / early trends
+ *   • Sector shifts detected from sector knowledge
+ *   • Cross-source patterns (trend + competitor + demand_gap all pointing same direction)
+ *   • Pricing / promotion opportunities based on competitor intelligence
+ *   • Future opportunities from AI predictions
+ *
+ * Runs alongside generateProactiveAlerts. Both feed the /insights page.
+ * Deduplication: 7-day window per alert_type slug.
+ */
+export async function generateAdvisoryInsights(req: Request, res: Response) {
+  const { businessProfileId } = req.body;
+  if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+  const startTime = new Date().toISOString();
+  try {
+    const profile = await prisma.businessProfile.findFirst({ where: { id: businessProfileId } });
+    if (!profile) return res.status(404).json({ error: 'No business profile' });
+
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000);
+
+    // ── Pull all intelligence in parallel ──────────────────────────────────────
+    const [
+      tiktokTrends,
+      viralSignals,
+      earlyTrends,
+      eventSignals,
+      competitorMoves,
+      demandGaps,
+      opportunitySignals,
+      threatSignals,
+      socialSignals,
+      sectorKnowledge,
+      predictions,
+      healthScore,
+      competitors,
+      recentReviews,
+      existingAdvisory,
+    ] = await Promise.all([
+      // Social & trend intelligence
+      prisma.marketSignal.findMany({
+        where: { linked_business: businessProfileId, category: 'tiktok_sector_trend' },
+        orderBy: { detected_at: 'desc' },
+        take: 10,
+      }),
+      prisma.marketSignal.findMany({
+        where: { linked_business: businessProfileId, category: 'viral_signal' },
+        orderBy: { detected_at: 'desc' },
+        take: 8,
+      }),
+      prisma.marketSignal.findMany({
+        where: { linked_business: businessProfileId, category: 'early_trend' },
+        orderBy: { detected_at: 'desc' },
+        take: 8,
+      }),
+      // Events
+      prisma.marketSignal.findMany({
+        where: { linked_business: businessProfileId, category: { in: ['event', 'local_event'] } },
+        orderBy: { detected_at: 'desc' },
+        take: 8,
+      }),
+      // Competitor intelligence
+      prisma.marketSignal.findMany({
+        where: { linked_business: businessProfileId, category: 'competitor_move', detected_at: { gte: thirtyDaysAgo } },
+        orderBy: { detected_at: 'desc' },
+        take: 10,
+      }),
+      // Market signals
+      prisma.marketSignal.findMany({
+        where: { linked_business: businessProfileId, category: 'demand_gap' },
+        orderBy: { detected_at: 'desc' },
+        take: 8,
+      }),
+      prisma.marketSignal.findMany({
+        where: { linked_business: businessProfileId, category: { in: ['opportunity', 'expansion'] } },
+        orderBy: { detected_at: 'desc' },
+        take: 8,
+      }),
+      prisma.marketSignal.findMany({
+        where: { linked_business: businessProfileId, category: 'threat' },
+        orderBy: { detected_at: 'desc' },
+        take: 5,
+      }),
+      prisma.marketSignal.findMany({
+        where: { linked_business: businessProfileId, category: { in: ['social', 'mention'] } },
+        orderBy: { detected_at: 'desc' },
+        take: 8,
+      }),
+      // Strategic context
+      prisma.sectorKnowledge.findFirst({
+        where: { sector: profile.category },
+        orderBy: { created_date: 'desc' },
+      }),
+      prisma.prediction.findMany({
+        where: { linked_business: businessProfileId, status: 'active' },
+        orderBy: { created_date: 'desc' },
+        take: 5,
+      }),
+      prisma.healthScore.findFirst({
+        where: { linked_business: businessProfileId },
+        orderBy: { created_date: 'desc' },
+      }),
+      // Competitor profiles
+      prisma.competitor.findMany({
+        where: { linked_business: businessProfileId },
+        take: 8,
+      }),
+      // Recent customer voice
+      prisma.review.findMany({
+        where: { linked_business: businessProfileId },
+        orderBy: { created_date: 'desc' },
+        take: 15,
+      }),
+      // Existing advisory insights — for dedup
+      prisma.proactiveAlert.findMany({
+        where: {
+          linked_business: businessProfileId,
+          is_dismissed: false,
+          alert_type: { in: [
+            'trend_opportunity', 'new_service', 'promotion_strategy',
+            'sector_shift', 'event_opportunity', 'competitive_gap',
+            'social_viral', 'future_prediction',
+          ]},
+          created_at: { gte: sevenDaysAgo.toISOString() },
+        },
+        select: { alert_type: true, title: true },
+      }),
+    ]);
+
+    // ── Build dedup set ────────────────────────────────────────────────────────
+    const recentAdvisoryKeys = new Set(
+      existingAdvisory.map(a => `${a.alert_type}:${(a.title || '').toLowerCase().slice(0, 50)}`)
+    );
+
+    // ── Build intelligence briefing ────────────────────────────────────────────
+
+    const section = (title: string, items: string[]) =>
+      items.length > 0 ? `\n### ${title}\n${items.join('\n')}` : '';
+
+    const fmt = (signals: any[]) =>
+      signals.map(s => `  • ${s.summary}${s.recommended_action ? ` → ${s.recommended_action}` : ''}`);
+
+    // Competitor profile summary
+    const competitorProfiles = competitors.slice(0, 5).map(c =>
+      `  • ${c.name} (${c.rating || '?'}★, ${c.review_count || 0} ביקורות) — שירותים: ${c.services || c.category || 'לא ידוע'}` +
+      `${c.strengths ? ` | חוזקות: ${c.strengths}` : ''}` +
+      `${c.weaknesses ? ` | חולשות: ${c.weaknesses}` : ''}` +
+      `${c.current_promotions ? ` | מבצע עכשיו: ${c.current_promotions}` : ''}`
+    );
+
+    // Sector knowledge
+    const sectorLines: string[] = [];
+    if (sectorKnowledge) {
+      if (sectorKnowledge.trending_services) sectorLines.push(`  שירותים מבוקשים בסקטור: ${sectorKnowledge.trending_services}`);
+      if (sectorKnowledge.common_complaints) sectorLines.push(`  תלונות נפוצות בסקטור: ${sectorKnowledge.common_complaints}`);
+      if (sectorKnowledge.price_range) sectorLines.push(`  טווח מחירים בסקטור: ${sectorKnowledge.price_range}`);
+      if (sectorKnowledge.avg_rating) sectorLines.push(`  ממוצע דירוג סקטור: ${sectorKnowledge.avg_rating}★`);
+    }
+
+    // Health score context
+    const healthLines: string[] = [];
+    if (healthScore) {
+      healthLines.push(`  ציון כולל: ${Math.round(healthScore.overall_score)}/100`);
+      if (healthScore.reputation_score) healthLines.push(`  מוניטין: ${Math.round(healthScore.reputation_score)}/100`);
+      if (healthScore.seo_score) healthLines.push(`  SEO מקומי: ${Math.round(healthScore.seo_score)}/100`);
+      if (healthScore.reviews_needed_for_top3) healthLines.push(`  ביקורות נוספות לטופ-3 Google: ${Math.round(healthScore.reviews_needed_for_top3)}`);
+    }
+
+    // Review themes
+    const negativeThemes = recentReviews
+      .filter(r => (r.rating || 5) <= 3 || r.sentiment === 'negative')
+      .slice(0, 3)
+      .map(r => `  ⚠ "${(r.text || '').slice(0, 80)}" (${r.rating || '?'}★)`);
+
+    const positiveThemes = recentReviews
+      .filter(r => (r.rating || 0) >= 4 || r.sentiment === 'positive')
+      .slice(0, 3)
+      .map(r => `  ✓ "${(r.text || '').slice(0, 60)}"`);
+
+    // Active predictions
+    const predictionLines = predictions.slice(0, 3).map(p =>
+      `  • [${p.prediction_type}] ${p.title}: ${p.summary?.slice(0, 100) || ''}`
+    );
+
+    const todayDate = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const dayOfWeek = new Date().getDay(); // 0=Sun, 5=Fri
+    const isWeekend = dayOfWeek === 5 || dayOfWeek === 6;
+
+    const intelligenceBriefing = [
+      `## עסק: ${profile.name} | ${profile.category} | ${profile.city}`,
+      profile.description ? `תיאור: ${profile.description}` : '',
+      profile.relevant_services ? `שירותים: ${profile.relevant_services}` : '',
+      `תאריך: ${todayDate}${isWeekend ? ' (סוף שבוע)' : ''}`,
+
+      section('ציון בריאות עסקית', healthLines),
+      section('מודיעין סקטור', sectorLines),
+      section('פרופיל מתחרים', competitorProfiles),
+      section('מהלכי מתחרים (30 יום)', fmt(competitorMoves)),
+      section('מגמות TikTok בסקטור', fmt(tiktokTrends)),
+      section('אותות ויראליים', fmt(viralSignals)),
+      section('טרנדים מוקדמים שזוהו', fmt(earlyTrends)),
+      section('אירועים קרובים', fmt(eventSignals)),
+      section('פערי ביקוש בשוק', fmt(demandGaps)),
+      section('הזדמנויות שוק', fmt(opportunitySignals)),
+      section('איומים שזוהו', fmt(threatSignals)),
+      section('אותות רשתות חברתיות', fmt(socialSignals)),
+      section('תחזיות AI', predictionLines),
+      negativeThemes.length > 0 ? section('קולות לקוחות שליליים', negativeThemes) : '',
+      positiveThemes.length > 0 ? section('חוזקות שמוזכרות', positiveThemes) : '',
+    ].filter(Boolean).join('\n');
+
+    const sectorBlock = getSectorInsightBlock(profile.category);
+
+    const totalSignals = tiktokTrends.length + viralSignals.length + earlyTrends.length +
+      eventSignals.length + competitorMoves.length + demandGaps.length +
+      opportunitySignals.length + socialSignals.length;
+
+    if (totalSignals === 0 && !sectorKnowledge) {
+      console.log('[generateAdvisoryInsights] insufficient intelligence data, skipping');
+      await writeAutomationLog('generateAdvisoryInsights', businessProfileId, startTime, 0);
+      return res.json({ insights_created: 0, reason: 'no intelligence data yet' });
+    }
+
+    // Throttle: check how many active alerts exist across ALL types
+    const activeCount = await prisma.proactiveAlert.count({
+      where: { linked_business: businessProfileId, is_dismissed: false, is_acted_on: false },
+    });
+    const HARD_CAP = 10; // skip if too many already active
+    const SOFT_CAP = 6;  // generate max 1-2 if moderately full
+    if (activeCount >= HARD_CAP) {
+      console.log(`[generateAdvisoryInsights] skipping — ${activeCount} active alerts already (>=${HARD_CAP})`);
+      return res.json({ insights_created: 0, skipped: true, reason: 'too_many_active' });
+    }
+    const maxNewInsights = activeCount >= SOFT_CAP ? 2 : 3;
+
+    // ── LLM synthesis ─────────────────────────────────────────────────────────
+    const result = await invokeLLM({
+      model: 'sonnet',
+      maxTokens: 3000,
+      skipCache: true,
+      prompt: `You are a senior business intelligence advisor and strategy consultant for Israeli small businesses.
+You have just received a comprehensive intelligence briefing compiled from social media monitoring, competitor tracking, market signals, sector trends, events, and AI predictions.
+
+Your job: synthesize this intelligence into ${maxNewInsights} HIGH-VALUE, NON-OBVIOUS strategic insights.
+
+RULES for high-quality insights:
+1. Each insight MUST reference at least one specific data point from the briefing (signal, trend name, competitor name, etc.)
+2. Cross-reference multiple sources when possible — e.g., "TikTok trend X + competitor gap Y + demand signal Z all point to opportunity W"
+3. NEVER give generic advice like "post more on social media" — always say WHAT, WHERE, WHY NOW
+4. Include a concrete "cost of not acting" or quantified opportunity
+5. Cover DIVERSE categories — do not generate 4 similar insights. Cover: trends, competitors, services, events, promotions
+6. Be time-aware: if an event is soon, or a trend is peaking — say so explicitly
+
+${sectorBlock}
+
+=== INTELLIGENCE BRIEFING ===
+${intelligenceBriefing}
+
+=== INSIGHT TYPES AVAILABLE ===
+- trend_opportunity: TikTok/social trend to exploit right now
+- new_service: new service or product to add based on market signals
+- promotion_strategy: specific promotion/pricing action to drive revenue
+- sector_shift: important sector-wide change the business must adapt to
+- event_opportunity: upcoming event to leverage commercially
+- competitive_gap: something competitors offer or do that you don't — and should
+- social_viral: viral content angle specific to this business/sector
+- future_prediction: AI-predicted opportunity or risk in the next 30-60 days
+
+Return ONLY valid JSON. ALL string values MUST be in Hebrew:
+{"insights": [{
+  "title": "כותרת ספציפית — חייב לכלול מספר/שם/פרט קונקרטי",
+  "description": "תיאור של 1-2 משפטים: מה זוהה, מאיזה מקורות, ולמה זה חשוב עכשיו",
+  "alert_type": "trend_opportunity|new_service|promotion_strategy|sector_shift|event_opportunity|competitive_gap|social_viral|future_prediction",
+  "priority": "critical|high|medium",
+  "reasoning": "מה המקורות שמצביעים על זה — ציין אות/טרנד/מתחרה ספציפי",
+  "opportunity_size": "הערכת ההזדמנות — ₪X פוטנציאל / X לקוחות / X% גידול",
+  "cost_of_inaction": "מה יקרה אם לא יפעלו — נזק קונקרטי",
+  "suggested_action": "פעולה ספציפית: מה לעשות, באיזה ערוץ, עם איזה מסר",
+  "action_label": "פועל + עצם קצר (עד 4 מילים)",
+  "prefilled_text": "טקסט מוכן לשימוש ישיר — פוסט/הודעה/מבצע (50-80 מילים) אם רלוונטי",
+  "urgency_hours": 48,
+  "data_sources": ["tiktok_trend", "competitor_move", "demand_gap"]
+}]}`,
+      response_json_schema: { type: 'object' },
+    });
+
+    if (!result?.insights || !Array.isArray(result.insights)) {
+      console.warn('[generateAdvisoryInsights] no valid insights returned');
+      await writeAutomationLog('generateAdvisoryInsights', businessProfileId, startTime, 0, 'failed', 'no insights array');
+      return res.json({ insights_created: 0 });
+    }
+
+    console.log(`[generateAdvisoryInsights] LLM returned ${result.insights.length} insights`);
+
+    // ── Save non-duplicate insights ────────────────────────────────────────────
+    let created = 0;
+    for (const insight of result.insights) {
+      if (created >= maxNewInsights) break;
+      if (!insight.title || !insight.alert_type) continue;
+
+      const dedupKey = `${insight.alert_type}:${(insight.title as string).toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 50)}`;
+      if (recentAdvisoryKeys.has(dedupKey)) continue;
+
+      const actionMeta = JSON.stringify({
+        action_label:    insight.action_label || insight.suggested_action?.split(' ').slice(0, 3).join(' ') || 'ראה תובנה',
+        action_type:     'task',
+        prefilled_text:  insight.prefilled_text || '',
+        urgency_hours:   insight.urgency_hours || 48,
+        impact_reason:   insight.cost_of_inaction || '',
+        opportunity_size: insight.opportunity_size || '',
+        reasoning:       insight.reasoning || '',
+        data_sources:    (insight.data_sources || []).join(', '),
+        advisor_type:    'strategic',
+      });
+
+      await prisma.proactiveAlert.create({
+        data: {
+          linked_business:  businessProfileId,
+          title:            insight.title,
+          description:      `${insight.description || ''}${insight.opportunity_size ? ` | פוטנציאל: ${insight.opportunity_size}` : ''}`,
+          alert_type:       insight.alert_type,
+          priority:         insight.priority || 'high',
+          suggested_action: insight.suggested_action || '',
+          source_agent:     actionMeta,
+          is_dismissed:     false,
+          is_acted_on:      false,
+          created_at:       new Date().toISOString(),
+        },
+      });
+
+      recentAdvisoryKeys.add(dedupKey);
+      created++;
+    }
+
+    await writeAutomationLog('generateAdvisoryInsights', businessProfileId, startTime, created);
+    console.log(`[generateAdvisoryInsights] created ${created} advisory insights for ${profile.name}`);
+    return res.json({ insights_created: created, total_signals_analyzed: totalSignals });
+
+  } catch (err: any) {
+    console.error('[generateAdvisoryInsights] error:', err.message);
+    await writeAutomationLog('generateAdvisoryInsights', businessProfileId, startTime, 0, 'failed', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+}

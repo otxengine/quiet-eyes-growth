@@ -16,6 +16,18 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
     // Auto-resolve stale / condition-cleared alerts before generating new ones
     await insightAutoResolve(businessProfileId);
 
+    // Throttle: check how many active alerts exist — don't overwhelm the user
+    const activeCount = await prisma.proactiveAlert.count({
+      where: { linked_business: businessProfileId, is_dismissed: false, is_acted_on: false },
+    });
+    const HARD_CAP = 10; // skip generation entirely if already crowded
+    const SOFT_CAP = 6;  // generate max 2 new ones if moderately full
+    if (activeCount >= HARD_CAP) {
+      console.log(`[generateProactiveAlerts] skipping — ${activeCount} active alerts already (>=${HARD_CAP})`);
+      return res.json({ alerts_created: 0, items_created: 0, skipped: true, reason: 'too_many_active' });
+    }
+    const maxNewAlerts = activeCount >= SOFT_CAP ? 2 : 4;
+
     const profiles = await prisma.businessProfile.findMany({ where: { id: businessProfileId } });
     const profile = profiles[0];
     if (!profile) return res.status(404).json({ error: 'No business profile' });
@@ -187,7 +199,7 @@ Non-negotiable quality rules:
 6. PLATFORM: choose by: instagram=visual content 18-40 | tiktok=viral 16-30 | facebook=local 30+ | google=reviews/SEO | whatsapp=direct communication | general=cross-platform
 7. URGENCY_HOURS: realistic time — negative review=2h, hot lead=4h, market opportunity=24h, content=48h
 
-Generate 3-5 diverse, non-duplicate alerts. Return ONLY valid JSON:
+Generate ${maxNewAlerts} diverse, non-duplicate alerts. Return ONLY valid JSON:
 {"alerts":[{
   "title": "כותרת ספציפית עם פרטים",
   "description": "הסבר ממוקד מה קרה ולמה זה חשוב עכשיו (עד 120 תווים)",
@@ -239,6 +251,7 @@ Generate 3-5 diverse, non-duplicate alerts. Return ONLY valid JSON:
     let created = 0;
 
     for (const alert of alerts) {
+      if (created >= maxNewAlerts) break;
       if (!alert.title || existingTitles.has(alert.title)) continue;
       // Fuzzy dedup: same alert_type + similar title within 7 days
       const fuzzyKey = `${alert.alert_type}:${(alert.title as string).toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 50)}`;

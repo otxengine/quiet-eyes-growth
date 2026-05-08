@@ -15,6 +15,8 @@ import { calculateHealthScore } from './calculateHealthScore';
 import { generateMorningBriefing } from './generateMorningBriefing';
 import { runPredictions } from './runPredictions';
 import { generateProactiveAlerts } from './generateProactiveAlerts';
+import { generateAdvisoryInsights } from './generateAdvisoryInsights';
+import { cleanupInsights } from './cleanupInsights';
 import { updateLeadFreshness as applyDataFreshness } from './updateLeadFreshness';
 import { runMLLearning } from './learnFromClosedDeals';
 import { runMLLearningCycle } from './runMLLearningCycle';
@@ -93,6 +95,8 @@ export async function runFullScan(req: Request, res: Response) {
 
   // Full pipeline — ordered from data collection → analysis → learning → cleanup
   const pipeline: Array<[string, Function]> = [
+    // ── Cleanup first — make room before any generator adds new insights ──────
+    ['cleanupInsights',             cleanupInsights],
     // ── Data Collection ──────────────────────────────────────────
     ['collectWebSignals',           collectWebSignals],
     ['collectSocialSignals',        collectSocialSignals],
@@ -113,6 +117,7 @@ export async function runFullScan(req: Request, res: Response) {
     ['runPredictions',              runPredictions],
     ['applyDataFreshness',          applyDataFreshness],
     ['generateProactiveAlerts',     generateProactiveAlerts],
+    ['generateAdvisoryInsights',    generateAdvisoryInsights],
     // ── Learning + Optimization ──────────────────────────────────
     ['runMLLearning',               runMLLearning],
     ['runMLLearningCycle',          runMLLearningCycle],

@@ -9,15 +9,26 @@ import {
 } from 'lucide-react';
 
 const ALERT_TYPE_META = {
-  action_needed:      { label: 'פעולה נדרשת', color: 'text-red-600',    bg: 'bg-red-50',     border: 'border-red-100',    icon: Zap },
-  negative_review:    { label: 'ביקורת שלילית', color: 'text-red-600',  bg: 'bg-red-50',     border: 'border-red-100',    icon: AlertTriangle },
-  opportunity:        { label: 'הזדמנות',       color: 'text-green-600', bg: 'bg-green-50',   border: 'border-green-100',  icon: Target },
-  market_opportunity: { label: 'הזדמנות שוק',  color: 'text-green-600', bg: 'bg-green-50',   border: 'border-green-100',  icon: TrendingUp },
-  risk:               { label: 'סיכון',         color: 'text-amber-600', bg: 'bg-amber-50',   border: 'border-amber-100',  icon: AlertTriangle },
-  retention_risk:     { label: 'סיכון שימור',  color: 'text-amber-600', bg: 'bg-amber-50',   border: 'border-amber-100',  icon: AlertTriangle },
-  competitor_move:    { label: 'מהלך מתחרה',   color: 'text-indigo-600',bg: 'bg-indigo-50',  border: 'border-indigo-100', icon: Trophy },
-  milestone:          { label: 'אבן דרך',       color: 'text-purple-600',bg: 'bg-purple-50',  border: 'border-purple-100', icon: Trophy },
-  hot_lead:           { label: 'ליד חם',        color: 'text-amber-600', bg: 'bg-amber-50',   border: 'border-amber-100',  icon: Zap },
+  action_needed:        { label: 'פעולה נדרשת',   color: 'text-red-600',     bg: 'bg-red-50',      border: 'border-red-100',     icon: Zap },
+  negative_review:      { label: 'ביקורת שלילית', color: 'text-red-600',     bg: 'bg-red-50',      border: 'border-red-100',     icon: AlertTriangle },
+  opportunity:          { label: 'הזדמנות',        color: 'text-green-600',   bg: 'bg-green-50',    border: 'border-green-100',   icon: Target },
+  market_opportunity:   { label: 'הזדמנות שוק',   color: 'text-green-600',   bg: 'bg-green-50',    border: 'border-green-100',   icon: TrendingUp },
+  risk:                 { label: 'סיכון',          color: 'text-amber-600',   bg: 'bg-amber-50',    border: 'border-amber-100',   icon: AlertTriangle },
+  retention_risk:       { label: 'סיכון שימור',   color: 'text-amber-600',   bg: 'bg-amber-50',    border: 'border-amber-100',   icon: AlertTriangle },
+  competitor_move:      { label: 'מהלך מתחרה',    color: 'text-indigo-600',  bg: 'bg-indigo-50',   border: 'border-indigo-100',  icon: Trophy },
+  milestone:            { label: 'אבן דרך',        color: 'text-purple-600',  bg: 'bg-purple-50',   border: 'border-purple-100',  icon: Trophy },
+  hot_lead:             { label: 'ליד חם',         color: 'text-amber-600',   bg: 'bg-amber-50',    border: 'border-amber-100',   icon: Zap },
+  // Advisory engine alert types
+  trend_opportunity:    { label: 'טרנד עולה',      color: 'text-teal-600',    bg: 'bg-teal-50',     border: 'border-teal-100',    icon: TrendingUp },
+  new_service:          { label: 'שירות חדש',      color: 'text-blue-600',    bg: 'bg-blue-50',     border: 'border-blue-100',    icon: Target },
+  promotion_strategy:   { label: 'אסטרטגיית מבצע', color: 'text-orange-600',  bg: 'bg-orange-50',   border: 'border-orange-100',  icon: Zap },
+  sector_shift:         { label: 'שינוי בתחום',    color: 'text-purple-600',  bg: 'bg-purple-50',   border: 'border-purple-100',  icon: AlertTriangle },
+  event_opportunity:    { label: 'הזדמנות אירוע',  color: 'text-green-600',   bg: 'bg-green-50',    border: 'border-green-100',   icon: Target },
+  competitive_gap:      { label: 'פער מתחרים',     color: 'text-indigo-600',  bg: 'bg-indigo-50',   border: 'border-indigo-100',  icon: Trophy },
+  social_viral:         { label: 'ויראלי חברתי',   color: 'text-pink-600',    bg: 'bg-pink-50',     border: 'border-pink-100',    icon: TrendingUp },
+  future_prediction:    { label: 'תחזית עתידית',   color: 'text-violet-600',  bg: 'bg-violet-50',   border: 'border-violet-100',  icon: TrendingUp },
+  demand_gap:           { label: 'פער ביקוש',      color: 'text-cyan-600',    bg: 'bg-cyan-50',     border: 'border-cyan-100',    icon: Target },
+  content_opportunity:  { label: 'תוכן לפרסום',   color: 'text-rose-600',    bg: 'bg-rose-50',     border: 'border-rose-100',    icon: Zap },
 };
 
 const ACTION_STATUS_META = {
@@ -156,11 +167,16 @@ export default function Insights() {
   });
 
   const TYPE_OPTIONS = [
-    { value: 'all',             label: 'כל הסוגים' },
-    { value: 'action_needed',   label: 'פעולה נדרשת' },
-    { value: 'opportunity',     label: 'הזדמנות' },
-    { value: 'risk',            label: 'סיכון' },
-    { value: 'milestone',       label: 'אבן דרך' },
+    { value: 'all',              label: 'כל הסוגים' },
+    { value: 'action_needed',    label: 'פעולה נדרשת' },
+    { value: 'opportunity',      label: 'הזדמנות' },
+    { value: 'risk',             label: 'סיכון' },
+    { value: 'milestone',        label: 'אבן דרך' },
+    { value: 'trend_opportunity', label: 'טרנד עולה' },
+    { value: 'new_service',      label: 'שירות חדש' },
+    { value: 'social_viral',     label: 'ויראלי חברתי' },
+    { value: 'future_prediction', label: 'תחזית עתידית' },
+    { value: 'competitive_gap',  label: 'פער מתחרים' },
   ];
 
   const STATUS_OPTIONS = [
@@ -172,9 +188,9 @@ export default function Insights() {
 
   const filtered = unified.filter(item => {
     if (filterType !== 'all') {
-      // group-match: opportunity covers market_opportunity, risk covers retention_risk etc.
+      // group-match: opportunity covers market_opportunity/event_opportunity/demand_gap etc.
       const t = item.type;
-      if (filterType === 'opportunity' && !t.includes('opportunity')) return false;
+      if (filterType === 'opportunity' && !t.includes('opportunity') && t !== 'demand_gap' && t !== 'new_service') return false;
       if (filterType === 'risk'        && !t.includes('risk'))        return false;
       if (filterType !== 'opportunity' && filterType !== 'risk' && t !== filterType) return false;
     }
