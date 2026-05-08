@@ -192,16 +192,39 @@ const CALENDAR_EVENTS: CalendarEvent[] = [
   },
 
   {
-    name: 'מונדיאל 2026', nameEn: 'FIFA World Cup 2026', date: '2026-06-11',
-    type: 'sports', leadDays: 21,
+    name: 'מונדיאל 2026 — שלב הבקרות', nameEn: 'FIFA World Cup 2026 Group Stage', date: '2026-06-11',
+    type: 'sports', leadDays: 14,
     sectors: [
-      { keywords: ['מסעדה', 'אוכל', 'food', 'restaurant', 'בר', 'bar', 'פאב', 'pub', 'קייטרינג'], boost: 'high', opportunity: 'עונת המונדיאל = חודש של צפייה משותפת — מבצעי "ארוחת משחק" יומיים' },
+      { keywords: ['מסעדה', 'אוכל', 'food', 'restaurant', 'בר', 'bar', 'פאב', 'pub', 'קייטרינג'], boost: 'high', opportunity: 'פתיחת מונדיאל 2026 — מבצעי "ארוחת משחק" לכל יום, מסך גדול, הזמנות מוקדמות' },
       { keywords: ['משלוח', 'delivery', 'wolt', 'שליחות'], boost: 'high', opportunity: 'שיא הזמנות משלוח בשעות משחקים — חזק את צי המשלוח' },
-      { keywords: ['ספורט', 'sports', 'כדורגל', 'football', 'קמעונאות', 'retail'], boost: 'high', opportunity: 'ציוד, חולצות, מוצרי מאהדים ישראלים — נבחרת ישראל במונדיאל!' },
+      { keywords: ['ספורט', 'sports', 'כדורגל', 'football', 'קמעונאות', 'retail'], boost: 'high', opportunity: 'ציוד, חולצות, מוצרי מאהדים — ישראל במונדיאל לראשונה!' },
       { keywords: ['אלקטרוניקה', 'electronics', 'מסכים', 'tv'], boost: 'high', opportunity: 'מסכים 4K לצפייה במונדיאל — שיא ביקוש שנתי' },
-      { keywords: ['מלון', 'hotel', 'תיירות', 'tourism', 'travel'], boost: 'high', opportunity: 'חבילות למשחקים בארה"ב — ישראל במונדיאל!' },
+      { keywords: ['מלון', 'hotel', 'תיירות', 'tourism', 'travel'], boost: 'high', opportunity: 'חבילות טיסה למשחקים בארה"ב — ישראל במונדיאל!' },
     ],
-    defaultOpportunity: 'מונדיאל 2026 — ישראל משתתפת! אווירה לאומית שמשפיעה על כל עסק',
+    defaultOpportunity: 'מונדיאל 2026 — ישראל משתתפת! שלב הבקרות מתחיל, אווירה לאומית',
+  },
+
+  {
+    name: 'מונדיאל 2026 — שלב נוקאאוט', nameEn: 'FIFA World Cup 2026 Knockout Stage', date: '2026-07-04',
+    type: 'sports', leadDays: 7,
+    sectors: [
+      { keywords: ['מסעדה', 'אוכל', 'food', 'restaurant', 'בר', 'bar', 'פאב', 'pub'], boost: 'high', opportunity: 'שלב הנוקאאוט — כל משחק הוא "הכל או כלום", צפייה משותפת בשיא, הזמנות גדולות' },
+      { keywords: ['משלוח', 'delivery', 'wolt', 'שליחות'], boost: 'high', opportunity: 'שיא הזמנות משלוח בשעות נוקאאוט — כל טעות עולה לקוחות' },
+      { keywords: ['ספורט', 'sports', 'כדורגל', 'football', 'קמעונאות', 'retail'], boost: 'high', opportunity: 'מוצרי מאהדים לנוקאאוט — ביקוש פי 2 מהבקרות' },
+    ],
+    defaultOpportunity: 'מונדיאל 2026 שלב נוקאאוט — עצימות שיא, כל עסק נהנה מהאווירה',
+  },
+
+  {
+    name: 'גמר מונדיאל 2026', nameEn: 'FIFA World Cup 2026 Final', date: '2026-07-19',
+    type: 'sports', leadDays: 10,
+    sectors: [
+      { keywords: ['מסעדה', 'אוכל', 'food', 'restaurant', 'בר', 'bar', 'פאב', 'pub', 'קייטרינג'], boost: 'high', opportunity: 'גמר מונדיאל — הערב הכי נצפה בשנה, אירוע צפייה בשיא, הזמנות שבוע מראש' },
+      { keywords: ['משלוח', 'delivery', 'wolt', 'שליחות'], boost: 'high', opportunity: 'גל הזמנות בשעת הגמר — ספק לפני כולם' },
+      { keywords: ['אלקטרוניקה', 'electronics', 'מסכים', 'tv'], boost: 'high', opportunity: 'מסכים וסאונד לגמר — שיא ביקוש שנתי אחרון' },
+      { keywords: ['בידור', 'entertainment', 'אירועים', 'events'], boost: 'high', opportunity: 'אירוע צפייה לגמר — מסיבת גמר, VIP, כרטיסים' },
+    ],
+    defaultOpportunity: 'גמר מונדיאל 2026 — האירוע הנצפה ביותר בעולם, שיא שיווקי',
   },
 
   {
@@ -328,6 +351,15 @@ function buildEventTavilyQueries(category: string, city: string): string[] {
     queries.push(`ליגת האלופות Champions League Europa League ספורט בינלאומי ${month} גמר תאריך`);
     queries.push(`ליגת העל ישראל ${city} משחק ${month}`);
   }
+
+  // World Cup specific match schedule (when tournament is imminent — within 60 days)
+  const worldCupStart = new Date('2026-06-11').getTime();
+  const worldCupEnd   = new Date('2026-07-20').getTime();
+  const nowMs = Date.now();
+  if (nowMs >= worldCupStart - 60 * 86400000 && nowMs <= worldCupEnd) {
+    queries.push(`FIFA World Cup 2026 upcoming matches schedule specific teams date`);
+    queries.push(`מונדיאל 2026 לוח משחקים קבוצות תאריכים`);
+  }
   if (['יופי', 'beauty', 'מספרה', 'salon', 'spa'].some(k => lower.includes(k))) {
     queries.push(`תצוגת אופנה כנס יופי מופע ${city} ${month} ${nextMonth}`);
   }
@@ -371,9 +403,7 @@ export async function detectEvents(req: Request, res: Response) {
     const now = new Date();
     const windowEnd = new Date(now.getTime() + 45 * 24 * 3600000);
 
-    // ── Phase 0: Dismiss stale event alerts whose date has passed ─────────────
-    // Finds market_opportunity alerts where the description contains a date like "DD.MM.YYYY"
-    // and that date is in the past.
+    // ── Phase 0: Clean up stale and duplicate event alerts ────────────────────
     try {
       const openEventAlerts = await prisma.proactiveAlert.findMany({
         where: {
@@ -381,10 +411,11 @@ export async function detectEvents(req: Request, res: Response) {
           is_dismissed: false,
           alert_type: 'market_opportunity',
         },
-        select: { id: true, description: true },
+        select: { id: true, title: true, description: true, created_at: true },
       });
 
       const staleIds: string[] = [];
+      // 0a. Dismiss alerts whose event date has passed
       for (const alert of openEventAlerts) {
         const desc = alert.description || '';
         const m = desc.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
@@ -394,12 +425,28 @@ export async function detectEvents(req: Request, res: Response) {
         }
       }
 
+      // 0b. Deduplicate old-format titles that include "— בעוד X ימים"
+      // Group by event name (strip icon + "— בעוד ... ימים") and dismiss all but the newest
+      const byEventName = new Map<string, { id: string; created_at: string | null }[]>();
+      for (const alert of openEventAlerts) {
+        if (!alert.title?.includes('בעוד') || staleIds.includes(alert.id)) continue;
+        const baseName = alert.title.replace(/^[⚽📅🛍🌿] /, '').split(' — בעוד')[0].trim();
+        if (!byEventName.has(baseName)) byEventName.set(baseName, []);
+        byEventName.get(baseName)!.push({ id: alert.id, created_at: alert.created_at });
+      }
+      for (const [, group] of byEventName) {
+        if (group.length < 2) continue;
+        // Keep newest, dismiss the rest
+        group.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+        staleIds.push(...group.slice(1).map(g => g.id));
+      }
+
       if (staleIds.length > 0) {
         await prisma.proactiveAlert.updateMany({
           where: { id: { in: staleIds } },
           data: { is_dismissed: true },
         });
-        console.log(`[detectEvents] dismissed ${staleIds.length} past-event alerts`);
+        console.log(`[detectEvents] dismissed ${staleIds.length} stale/duplicate event alerts`);
       }
     } catch (_) {}
 
@@ -435,23 +482,27 @@ export async function detectEvents(req: Request, res: Response) {
         const analysis: any = await invokeLLM({
           model: 'haiku',
           maxTokens: 400,
-          prompt: `Identify real events in the text below that could affect the business "${name}" (${category}, ${city}) in the coming month.
+          prompt: `Identify real upcoming events in the text below that could affect the business "${name}" (${category}, ${city}).
 Return ONLY valid JSON. ALL string values must be in Hebrew.
 
 ${context.slice(0, 3500)}
 
+IMPORTANT: For sports events, extract SPECIFIC matchups if available (e.g., "ספרד נגד גרמניה — מונדיאל 2026" NOT just "מונדיאל").
+For World Cup matches: include the specific teams and date.
+
 Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "events": [{
-    "name": "שם האירוע בעברית",
-    "date_estimate": "YYYY-MM-DD או 'סוף מאי 2026'",
+    "name": "שם ספציפי — למשחק ספורט: 'קבוצה א נגד קבוצה ב'",
+    "date_estimate": "YYYY-MM-DD",
     "type": "sports|concert|festival|fair|conference|cultural|commercial",
     "relevance": "high|medium|low",
     "audience_size": "large|medium|small",
-    "opportunity": "ההזדמנות הספציפית לעסק זה (${category}) — פעולה מספריות אחת ספציפית עד 10 מילים"
+    "opportunity": "ההזדמנות הספציפית לעסק זה (${category}) — עד 10 מילים"
   }]
 }
-Include only events with a real date. No date — skip. If none — return {"events":[]}`,
+Rules: Only events with a real date. No date — skip. If none — return {"events":[]}.
+Prefer specific (Spain vs Germany) over generic (World Cup).`,
           response_json_schema: { type: 'object' },
         });
         extraEvents = (analysis?.events || []).filter(
@@ -490,7 +541,8 @@ Include only events with a real date. No date — skip. If none — return {"eve
 
       const daysAway = Math.ceil((new Date(event.date).getTime() - now.getTime()) / 86400000);
       const icon = event.type === 'sports' ? '⚽' : event.type === 'commercial' ? '🛍' : event.type === 'seasonal' ? '🌿' : '📅';
-      const alertTitle = `${icon} ${event.name} — בעוד ${daysAway} ימים`;
+      // Title uses stable event name (no day counter) so dedup works across multiple runs
+      const alertTitle = `${icon} ${event.name}`;
 
       if (existingTitles.has(alertTitle) || existingSignalNames.has(event.name)) continue;
 
@@ -533,6 +585,8 @@ Write one specific action to take right now to maximise revenue — up to 8 word
         action_type: 'social_post',
         prefilled_text: prefilledText,
         urgency_hours: urgencyHours,
+        event_date: event.date,
+        days_away: daysAway,
         impact_reason: `${event.name} — ${sectorCtx.opportunity}`,
       });
 
@@ -540,7 +594,7 @@ Write one specific action to take right now to maximise revenue — up to 8 word
         data: {
           alert_type: 'market_opportunity',
           title: alertTitle,
-          description: `${event.name} בתאריך ${new Date(event.date).toLocaleDateString('he-IL')} (בעוד ${daysAway} ימים).\n${sectorCtx.opportunity}`,
+          description: `${event.name} — ${new Date(event.date).toLocaleDateString('he-IL')} (בעוד ${daysAway} ימים).\n${sectorCtx.opportunity}`,
           suggested_action: suggestedAction,
           priority,
           source_agent: actionMeta,
@@ -553,7 +607,7 @@ Write one specific action to take right now to maximise revenue — up to 8 word
 
       await prisma.marketSignal.create({
         data: {
-          summary: `${event.name} — ${daysAway} ימים`,
+          summary: event.name,
           category: 'event',
           impact_level: sectorCtx.boost === 'high' ? 'high' : 'medium',
           recommended_action: suggestedAction,
@@ -565,6 +619,8 @@ Write one specific action to take right now to maximise revenue — up to 8 word
             prefilled_text: prefilledText,
             time_minutes: 10,
             urgency_hours: urgencyHours,
+            event_date: event.date,
+            days_away: daysAway,
           }),
           is_read: false,
           detected_at: new Date().toISOString(),

@@ -197,15 +197,8 @@ const STATIC_EVENTS = [
     category: 'sports',
     tags: ['כדורגל', 'יורו', 'ספורט'],
   },
-  {
-    id: 'static_world_cup_2026',
-    _type: 'static',
-    title: "גמר מונדיאל 2026 — קנדה/ארה\"ב/מקסיקו",
-    description: "מונדיאל 2026 — גמר טורניר כדורגל העולמי. אירוע מדיה עולמי ענקי — הזדמנות שיווקית פיק לכל עסק.",
-    event_date: '2026-07-19',
-    category: 'sports',
-    tags: ['מונדיאל', 'כדורגל', 'world cup'],
-  },
+  // מונדיאל 2026 — events come from detectEvents agent (group stage / knockouts / final)
+  // Removed static duplicate to avoid showing 2 world cup entries
   {
     id: 'static_premier_league_start',
     _type: 'static',
@@ -354,7 +347,9 @@ function EventCard({ item, businessProfile, type, onCardClick }) {
 
   const countdown = type === 'static'
     ? getCountdown(item.event_date, true)
-    : getCountdown(meta.urgency_hours);
+    : meta.event_date
+      ? getCountdown(meta.event_date, true)      // real date stored in meta → always accurate
+      : getCountdown(meta.urgency_hours);         // fallback for old records
 
   const category = type === 'static' ? item.category : classifyEvent(title, description, tags);
 
@@ -490,20 +485,27 @@ export default function Events() {
     return true;
   });
 
-  // Build a set of words from DB items to detect duplicates against static events
+  // Build combined text from DB items for keyword dedup
   const dbTextLower = dbItems
-    .map(i => i._type === 'alert' ? (i.title || '') : ((i.agent_name || '') + ' ' + (i.summary || '')))
+    .map(i => i._type === 'alert'
+      ? ((i.title || '') + ' ' + (i.description || ''))
+      : ((i.agent_name || '') + ' ' + (i.summary || '')))
     .join(' ')
     .toLowerCase();
 
+  // Words that are too generic to use for dedup
+  const DEDUP_STOP = new Set(['2026', '2027', 'ימים', 'בעוד', 'אירוע', 'עסקי', 'הזדמנות', 'גמר', 'שלב', 'ליגה', 'קיץ', 'חורף', 'אביב', 'סתיו']);
+
   const staticFiltered = STATIC_EVENTS.filter(e => {
-    const isPast = new Date(e.event_date).getTime() < Date.now() - 86400000;
-    // Prefer static event over DB duplicate: if any keyword from this event's title
-    // appears in DB results, keep static (which has correct date) and skip the check.
-    // Only deduplicate if the FULL title matches a DB item title exactly.
-    const dbTitlesExact = new Set(dbItems.map(i => (i._type === 'alert' ? i.title : i.agent_name || '').toLowerCase()));
-    const isDup = dbTitlesExact.has(e.title.toLowerCase());
-    return !isPast && !isDup;
+    // Only show events within the next 90 days
+    const eventTs = new Date(e.event_date).getTime();
+    const isPast   = eventTs < Date.now() - 86400000;
+    const isTooFar = eventTs > Date.now() + 90 * 86400000;
+    if (isPast || isTooFar) return false;
+    // Dedup: if any specific keyword from this event's tags appears in DB events, hide static
+    const specificTags = (e.tags || []).filter(t => t.length > 3 && !DEDUP_STOP.has(t));
+    const isDup = specificTags.some(tag => dbTextLower.includes(tag.toLowerCase()));
+    return !isDup;
   });
 
   const allItems = [...dbItems, ...staticFiltered]
