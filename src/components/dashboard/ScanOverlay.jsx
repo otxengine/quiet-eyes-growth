@@ -2,17 +2,37 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Check, Loader2, X } from 'lucide-react';
 
-// Default full-scan steps used by Dashboard
+// Full scan pipeline — mirrors runFullScan order exactly
 const defaultScanSteps = [
-  { key: 'collect',       label: 'אוסף נתונים מ-12 מקורות...',     fn: 'collectWebSignals',           resultKey: 'new_signals_saved' },
-  { key: 'social',        label: 'סורק רשתות חברתיות...',           fn: 'collectSocialSignals',        resultKey: 'signals_saved' },
-  { key: 'reviews',       label: 'סורק ביקורות...',                  fn: 'scanAllReviews',              resultKey: 'new_reviews' },
-  { key: 'analyze',       label: 'מנתח תובנות שוק...',              fn: 'runMarketIntelligence',       resultKey: 'insights_generated' },
-  { key: 'compete',       label: 'מזהה מתחרים ושינויים...',         fn: 'runCompetitorIdentification', resultKey: 'competitors_found' },
-  { key: 'leads',         label: 'סורק לידים ואותות ביקוש...',     fn: 'runLeadGeneration',           resultKey: 'leads_generated' },
-  { key: 'early_trends',  label: 'מגלה טרנדים מוקדמים...',         fn: 'detectEarlyTrends',           resultKey: 'trends_created' },
-  { key: 'viral',         label: 'סורק סיגנלים ויראלים...',         fn: 'detectViralSignals',          resultKey: 'signals_created' },
-  { key: 'cleanup',       label: 'מנקה ולומד...',                   fn: 'cleanupAndLearn',             resultKey: 'signals_archived' },
+  // ── Cleanup ───────────────────────────────────────────────────────────────
+  { key: 'cleanup_insights',  label: 'מנקה תובנות ישנות וכפולות...',       fn: 'cleanupInsights',             resultKey: 'total_cleaned' },
+  // ── Data Collection ───────────────────────────────────────────────────────
+  { key: 'collect',           label: 'אוסף אותות מהרשת...',                fn: 'collectWebSignals',           resultKey: 'new_signals_saved' },
+  { key: 'social',            label: 'סורק פייסבוק ואינסטגרם...',          fn: 'collectSocialSignals',        resultKey: 'new_signals' },
+  { key: 'ig_comments',       label: 'מנתח תגובות אינסטגרם...',            fn: 'analyzeInstagramComments',    resultKey: 'comments_analyzed' },
+  { key: 'social_comments',   label: 'מנתח תגובות ברשתות חברתיות...',      fn: 'analyzeSocialComments',       resultKey: 'comments_analyzed' },
+  { key: 'tiktok_content',    label: 'מנתח תוכן TikTok של העסק...',        fn: 'analyzeTikTokContent',        resultKey: 'videos_analyzed' },
+  { key: 'reviews',           label: 'סורק ביקורות גוגל ומשלוחים...',      fn: 'scanAllReviews',              resultKey: 'new_reviews' },
+  // ── Analysis ─────────────────────────────────────────────────────────────
+  { key: 'market',            label: 'מנתח מודיעין שוק...',                fn: 'runMarketIntelligence',       resultKey: 'insights_generated' },
+  { key: 'compete',           label: 'מזהה מתחרים ושינויים...',            fn: 'runCompetitorIdentification', resultKey: 'competitors_found' },
+  { key: 'leads',             label: 'סורק לידים מהאינטרנט...',            fn: 'runLeadGeneration',           resultKey: 'leads_generated' },
+  { key: 'social_leads',      label: 'מחפש לידים ברשתות חברתיות...',       fn: 'findSocialLeads',             resultKey: 'leads_created' },
+  // ── Trend Intelligence ────────────────────────────────────────────────────
+  { key: 'tiktok_trends',     label: 'סורק טרנדים בTikTok (Apify)...',     fn: 'tiktokSectorTrendAgent',      resultKey: 'trends_created' },
+  { key: 'trends',            label: 'מזהה מגמות שוק + Google Trends...',  fn: 'detectTrends',                resultKey: 'trends_created' },
+  { key: 'early_trends',      label: 'מגלה טרנדים מוקדמים...',             fn: 'detectEarlyTrends',           resultKey: 'trends_created' },
+  { key: 'viral',             label: 'סורק סיגנלים ויראלים...',            fn: 'detectViralSignals',          resultKey: 'signals_created' },
+  // ── Predictive + Alerts ───────────────────────────────────────────────────
+  { key: 'predictions',       label: 'מחשב תחזיות AI...',                  fn: 'runPredictions',              resultKey: 'predictions_created' },
+  { key: 'alerts',            label: 'מייצר התראות פרואקטיביות...',        fn: 'generateProactiveAlerts',     resultKey: 'alerts_created' },
+  { key: 'advisory',          label: 'מנתח תובנות אסטרטגיות מכל OSINT...', fn: 'generateAdvisoryInsights',    resultKey: 'insights_created' },
+  // ── Learning + Optimization ───────────────────────────────────────────────
+  { key: 'ml',                label: 'לומד מעסקאות סגורות...',             fn: 'runMLLearning',               resultKey: 'patterns_learned' },
+  { key: 'ml_cycle',          label: 'מריץ מחזור אופטימיזציה...',          fn: 'runMLLearningCycle',          resultKey: 'events_processed' },
+  { key: 'health',            label: 'מחשב ציון בריאות עסקית...',          fn: 'calculateHealthScore',        resultKey: 'score' },
+  { key: 'cleanup',           label: 'מנקה נתונים ולומד...',               fn: 'cleanupAndLearn',             resultKey: 'signals_archived' },
+  { key: 'briefing',          label: 'מכין בריפינג בוקר...',               fn: 'generateMorningBriefing',     resultKey: 'sections' },
 ];
 
 export default function ScanOverlay({ businessProfile, onComplete, onClose, steps, title }) {
@@ -70,14 +90,18 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
   }, [businessProfile?.id]);
 
   const totalSignals = (results.collect || 0) + (results.social || 0);
+  const totalLeads   = (results.leads || 0) + (results.social_leads || 0);
+  const totalTrends  = (results.tiktok_trends || 0) + (results.trends || 0) + (results.early_trends || 0);
+  const totalInsights = (results.alerts || 0) + (results.advisory || 0);
   const summary = [
-    results.reviews      ? `${results.reviews} ביקורות`           : null,
-    results.analyze      ? `${results.analyze} תובנות`             : null,
-    results.compete      ? `${results.compete} מתחרים`             : null,
-    totalSignals > 0     ? `${totalSignals} אותות`                 : null,
-    results.leads        ? `${results.leads} לידים`                : null,
-    results.early_trends ? `${results.early_trends} טרנדים מוקדמים` : null,
-    results.viral        ? `${results.viral} סיגנלים ויראלים`      : null,
+    results.reviews      ? `${results.reviews} ביקורות`            : null,
+    totalSignals > 0     ? `${totalSignals} אותות`                  : null,
+    results.compete      ? `${results.compete} מתחרים`              : null,
+    totalLeads > 0       ? `${totalLeads} לידים`                    : null,
+    totalTrends > 0      ? `${totalTrends} טרנדים`                  : null,
+    results.viral        ? `${results.viral} סיגנלים ויראלים`       : null,
+    totalInsights > 0    ? `${totalInsights} תובנות`                : null,
+    results.predictions  ? `${results.predictions} תחזיות`          : null,
   ].filter(Boolean).join(' · ');
 
   return (
