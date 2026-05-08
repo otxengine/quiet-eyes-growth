@@ -398,6 +398,13 @@ function EventCard({ item, businessProfile, type, onCardClick }) {
             )}
           </div>
           <p className="text-[12px] text-foreground-secondary leading-relaxed mb-2 line-clamp-3">{description}</p>
+          {/* Artist / headliner + venue for local events */}
+          {(meta.artist_or_headliner || meta.venue) && (
+            <div className="flex items-center gap-2 text-[11px] text-foreground-muted mb-1.5">
+              {meta.artist_or_headliner && <span className="font-medium text-foreground-secondary">🎤 {meta.artist_or_headliner}</span>}
+              {meta.venue && <span className="opacity-70">📍 {meta.venue}</span>}
+            </div>
+          )}
           {meta.action_label && (
             <div className="flex items-center gap-1.5 text-[11px] text-foreground-muted">
               <TrendingUp className="w-3.5 h-3.5 text-primary opacity-60" />
@@ -463,6 +470,7 @@ export default function Events() {
     if (m) return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1])).getTime();
     try {
       const meta = JSON.parse(item._type === 'alert' ? (item.source_agent || '{}') : (item.source_description || '{}'));
+      if (meta.event_date) return new Date(meta.event_date).getTime();
       if (meta.urgency_hours) return Date.now() + Number(meta.urgency_hours) * 3600000;
     } catch {}
     // No date info — push to end of list rather than sorting by creation time
