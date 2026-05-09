@@ -274,7 +274,7 @@ export default function Reputation() {
 
       <AiInsightBox
         title="ניתוח סנטימנט ונושאים חוזרים"
-        prompt={`אתה מנתח מוניטין דיגיטלי. העסק "${businessProfile?.name}" (${businessProfile?.category}) עם ${reviews.length} ביקורות, דירוג ממוצע ${avgRating.toFixed(1)}, ${pendingCount} ממתינות לתגובה.
+        prompt={`אתה מנתח מוניטין דיגיטלי. העסק "${businessProfile?.name}" (${businessProfile?.category}) עם ${reviews.length} ביקורות, דירוג ממוצע ${Number(avgRating).toFixed(1)}, ${pendingCount} ממתינות לתגובה.
 ביקורות אחרונות: ${reviews.slice(0, 15).map(r => `[${r.sentiment}/${r.rating}⭐] "${(r.text || '').slice(0, 80)}"`).join('; ')}.
 סכם את הנושאים החוזרים (חיובי/שלילי), זהה נקודות חוזק וחולשה, והמלץ 3 פעולות לשיפור המוניטין. בעברית, Markdown.`}
       />

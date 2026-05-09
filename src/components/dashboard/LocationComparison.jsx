@@ -39,7 +39,7 @@ export default function LocationComparison({ businessProfileId }) {
     const locReviews = reviews.filter(r => r.linked_location === loc.id);
     const locSignals = signals.filter(s => s.linked_location === loc.id);
     const weekLeads = locLeads.filter(l => (l.created_at || l.created_date) >= weekAgo);
-    const avgRating = locReviews.length > 0 ? locReviews.reduce((s, r) => s + (r.rating || 0), 0) / locReviews.length : 0;
+    const avgRating = locReviews.length > 0 ? locReviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / locReviews.length : 0;
     return { ...loc, leads: weekLeads.length, reviews: locReviews.length, signals: locSignals.length, avgRating };
   });
 

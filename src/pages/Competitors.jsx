@@ -488,7 +488,7 @@ export default function Competitors() {
             </div>
             <div className="card-base p-4 fade-in-up stagger-4">
               <p className="text-[11px] font-medium text-foreground-muted mb-1">הדירוג שלך</p>
-              <span className="text-[24px] font-bold text-foreground tracking-tight">{avgRating.toFixed(1)}</span>
+              <span className="text-[24px] font-bold text-foreground tracking-tight">{Number(avgRating).toFixed(1)}</span>
             </div>
           </div>
 

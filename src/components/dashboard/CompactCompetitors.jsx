@@ -46,7 +46,7 @@ export default function CompactCompetitors({ competitors = [], business }) {
             <span className="text-[11px] text-[#999999] flex-1 truncate">{comp.name}</span>
             <Sparkline trend={comp.trend_direction} />
             <span className={`text-[14px] font-semibold ${comp.rating >= 4.3 ? 'text-[#10b981]' : comp.rating >= 4 ? 'text-[#d97706]' : 'text-[#dc2626]'}`}>
-              {comp.rating?.toFixed(1)}
+              {comp.rating != null ? Number(comp.rating).toFixed(1) : '—'}
             </span>
           </div>
         ))}

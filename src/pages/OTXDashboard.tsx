@@ -86,8 +86,8 @@ function trendToFeedItem(t: SectorTrend): FeedItem {
     source_url: t.source_url,
     confidence_score: t.confidence_score,
     stale_memory_flag: false,
-    label: `עלייה בענף ${t.sector}${t.geo ? ` — ${t.geo}` : ""} | Z=${t.z_score.toFixed(2)}`,
-    sublabel: `ממוצע: ${t.rolling_mean.toFixed(1)} | סטיית תקן: ${t.rolling_std.toFixed(1)}`,
+    label: `עלייה בענף ${t.sector}${t.geo ? ` — ${t.geo}` : ""} | Z=${Number(t.z_score).toFixed(2)}`,
+    sublabel: `ממוצע: ${Number(t.rolling_mean).toFixed(1)} | סטיית תקן: ${Number(t.rolling_std).toFixed(1)}`,
   };
 }
 
@@ -333,12 +333,12 @@ function SectorTrendCard({ trend }: { trend: SectorTrend | null }) {
       </div>
       <div className="space-y-2">
         <div className="flex justify-between">
-          <span className="font-bold text-2xl text-orange-600">Z={trend.z_score.toFixed(2)}</span>
+          <span className="font-bold text-2xl text-orange-600">Z={Number(trend.z_score).toFixed(2)}</span>
           <span className="text-sm text-gray-500 self-end">{trend.sector}{trend.geo ? ` | ${trend.geo}` : ""}</span>
         </div>
         <div className="flex gap-4 text-xs text-gray-500">
-          <span>ממוצע: {trend.rolling_mean.toFixed(1)}</span>
-          <span>סטיית תקן: {trend.rolling_std.toFixed(1)}</span>
+          <span>ממוצע: {Number(trend.rolling_mean).toFixed(1)}</span>
+          <span>סטיית תקן: {Number(trend.rolling_std).toFixed(1)}</span>
           <span>ביטחון: {Math.round(trend.confidence_score * 100)}%</span>
         </div>
         <a

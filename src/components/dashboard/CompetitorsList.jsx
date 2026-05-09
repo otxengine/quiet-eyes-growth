@@ -78,7 +78,7 @@ export default function CompetitorsList({ competitors = [], business }) {
                 <Sparkline trend={comp.trend_direction} />
                 <TrendIcon direction={comp.trend_direction} />
                 <span className={`text-lg font-bold ${ratingColor(comp.rating)}`}>
-                  {comp.rating?.toFixed(1)}
+                  {comp.rating != null ? Number(comp.rating).toFixed(1) : '—'}
                 </span>
               </div>
             </div>

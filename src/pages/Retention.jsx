@@ -159,7 +159,7 @@ export default function Retention() {
       <AiInsightBox
         title="זיהוי לקוחות בסיכון והמלצות שימור"
         prompt={`אתה מומחה לשימור לקוחות. העסק "${businessProfile?.name}" (${businessProfile?.category}, ${businessProfile?.city}).
-נתונים: ${completedLeads.length} לקוחות שטופלו, ${lostLeads.length} אבודים, ${negativeReviews.length} ביקורות שליליות, ${monthLeads.length} לידים החודש. שביעות רצון ממוצעת: ${avgSatisfaction.toFixed(1)}/5.
+נתונים: ${completedLeads.length} לקוחות שטופלו, ${lostLeads.length} אבודים, ${negativeReviews.length} ביקורות שליליות, ${monthLeads.length} לידים החודש. שביעות רצון ממוצעת: ${Number(avgSatisfaction).toFixed(1)}/5.
 הצע: 1) אסטרטגיות זיהוי מוקדם של נטישה 2) 3 פעולות שימור מותאמות אישית 3) רעיונות למבצעי שימור והטבות ללקוחות חוזרים. בעברית, Markdown.`}
       />
 
