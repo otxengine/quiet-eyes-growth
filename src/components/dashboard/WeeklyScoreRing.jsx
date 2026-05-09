@@ -24,7 +24,7 @@ export default function WeeklyScoreRing({ score = null, size = 80 }) {
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         {hasData ? (
           <>
-            <span className="text-[20px] font-bold leading-none" style={{ color }}>{score.toFixed(1)}</span>
+            <span className="text-[20px] font-bold leading-none" style={{ color }}>{Number(score).toFixed(1)}</span>
             <span className="text-[8px] text-foreground-muted">/10</span>
           </>
         ) : (

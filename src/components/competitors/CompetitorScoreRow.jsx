@@ -10,7 +10,7 @@ export default function CompetitorScoreRow({ business, avgRating, reviewCount, c
         <span className="text-[11px] font-medium text-foreground truncate">{business?.name}</span>
         </div>
         <div className="flex items-center justify-between">
-        <span className="text-[22px] font-bold text-foreground tracking-tight">{avgRating.toFixed(1)}</span>
+        <span className="text-[22px] font-bold text-foreground tracking-tight">{Number(avgRating).toFixed(1)}</span>
         <span className="text-[10px] text-foreground-muted">{reviewCount} ביקורות</span>
         </div>
       </div>

@@ -123,7 +123,7 @@ export default function Reports() {
       const monthReviews = reviews.filter(r => new Date(r.created_date || r.review_date   || 0) >= new Date(monthStart));
       const monthSignals = signals.filter(s => new Date(s.detected_at  || s.created_date  || 0) >= new Date(monthStart));
       const hotMonthLeads = monthLeads.filter(l => l.status === 'hot').length;
-      const avgRating = monthReviews.length ? (monthReviews.reduce((s, r) => s + (r.rating || 0), 0) / monthReviews.length).toFixed(1) : null;
+      const avgRating = monthReviews.length ? (monthReviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / monthReviews.length).toFixed(1) : null;
       const topSignal = monthSignals.sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0];
 
       const res = await base44.functions.invoke('invokeLLM', {

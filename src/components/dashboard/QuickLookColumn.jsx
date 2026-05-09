@@ -21,7 +21,7 @@ export default function QuickLookColumn({ competitors, leads, reviews }) {
 
   // Satisfaction from reviews
   const rated = (reviews || []).filter(r => r.rating);
-  const avgRating = rated.length > 0 ? (rated.reduce((s, r) => s + r.rating, 0) / rated.length) : 0;
+  const avgRating = rated.length > 0 ? (rated.reduce((s, r) => s + (Number(r.rating) || 0), 0) / rated.length) : 0;
   const satisfactionPct = Math.round((avgRating / 5) * 100);
 
   return (

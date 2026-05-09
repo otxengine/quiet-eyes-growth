@@ -107,7 +107,7 @@ export default function Reputation() {
   const monthStartForReqs = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
   const requestsThisMonth = reviewRequests.filter(r => (r.sent_at || r.created_date) >= monthStartForReqs).length;
 
-  const avgRating = reviews.length > 0 ? (reviews.reduce((s, r) => s + (r.rating || 0), 0) / reviews.length) : 0;
+  const avgRating = reviews.length > 0 ? (reviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / reviews.length) : 0;
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const thisMonthReviews = reviews.filter(r => (r.created_at || r.created_date) >= monthStart);

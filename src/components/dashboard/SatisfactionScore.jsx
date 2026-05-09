@@ -12,7 +12,7 @@ export default function SatisfactionScore({ bpId }) {
 
   if (surveys.length === 0) return null;
 
-  const avg = surveys.reduce((sum, s) => sum + (s.rating || 0), 0) / surveys.length;
+  const avg = surveys.reduce((sum, s) => sum + (Number(s.rating) || 0), 0) / surveys.length;
 
   return (
     <div className="card-base px-5 py-4 fade-in-up">

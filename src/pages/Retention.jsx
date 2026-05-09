@@ -90,7 +90,7 @@ export default function Retention() {
   const monthLeads = leads.filter(l => (l.created_at || l.created_date) >= monthStart);
 
   const respondedSurveys = surveys.filter(s => s.response_received);
-  const avgSatisfaction = respondedSurveys.length > 0 ? respondedSurveys.reduce((sum, s) => sum + (s.rating || 0), 0) / respondedSurveys.length : 0;
+  const avgSatisfaction = respondedSurveys.length > 0 ? respondedSurveys.reduce((sum, s) => sum + (Number(s.rating) || 0), 0) / respondedSurveys.length : 0;
   const pendingSurveys = surveys.filter(s => !s.response_received);
 
   // Retention metrics
