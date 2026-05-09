@@ -121,16 +121,62 @@ Rules:
       }
     }
 
-    // Always include a curated baseline of Israeli business URLs
+    // ── Curated URL lists per category ──────────────────────────────────────
+    // Social platforms relevant to any Israeli business
+    const SOCIAL_PLATFORMS = [
+      'https://www.instagram.com',
+      'https://www.facebook.com',
+      'https://www.tiktok.com',
+    ];
+
     const CURATED_URLS: Record<string, string[]> = {
-      מסעדה: ['https://www.rest.co.il', 'https://www.onono.co.il', 'https://www.timeout.co.il'],
-      קפה: ['https://www.rest.co.il', 'https://www.timeout.co.il', 'https://www.zap.co.il'],
-      כושר: ['https://www.zap.co.il', 'https://www.sportlight.co.il', 'https://www.maccabi4u.co.il'],
-      יופי: ['https://www.zap.co.il', 'https://www.ynet.co.il/lifestyle', 'https://www.mako.co.il/lifestyle'],
-      ספא: ['https://www.zap.co.il', 'https://www.timeout.co.il', 'https://www.mako.co.il/lifestyle'],
+      מסעדה: [
+        'https://www.rest.co.il', 'https://www.onono.co.il', 'https://www.timeout.co.il',
+        'https://www.wolt.com/he/isr', 'https://www.10bis.co.il', 'https://www.easy.co.il',
+        ...SOCIAL_PLATFORMS,
+      ],
+      קפה: [
+        'https://www.rest.co.il', 'https://www.onono.co.il', 'https://www.timeout.co.il',
+        'https://www.wolt.com/he/isr', 'https://www.10bis.co.il', 'https://www.easy.co.il',
+        ...SOCIAL_PLATFORMS,
+      ],
+      מאפייה: [
+        'https://www.rest.co.il', 'https://www.wolt.com/he/isr', 'https://www.10bis.co.il',
+        'https://www.timeout.co.il', 'https://www.easy.co.il', ...SOCIAL_PLATFORMS,
+      ],
+      כושר: [
+        'https://www.zap.co.il', 'https://www.easy.co.il', 'https://www.sportlight.co.il',
+        ...SOCIAL_PLATFORMS,
+      ],
+      יופי: [
+        'https://www.zap.co.il', 'https://www.easy.co.il', 'https://www.ynet.co.il/lifestyle',
+        'https://www.mako.co.il/lifestyle', ...SOCIAL_PLATFORMS,
+      ],
+      ספא: [
+        'https://www.zap.co.il', 'https://www.easy.co.il', 'https://www.timeout.co.il',
+        'https://www.mako.co.il/lifestyle', ...SOCIAL_PLATFORMS,
+      ],
+      חנות: [
+        'https://www.zap.co.il', 'https://www.easy.co.il', 'https://www.price.co.il',
+        ...SOCIAL_PLATFORMS,
+      ],
+      שירותים: [
+        'https://www.zap.co.il', 'https://www.easy.co.il', 'https://www.komo.co.il',
+        ...SOCIAL_PLATFORMS,
+      ],
     };
-    const curatedBase = CURATED_URLS[profile.category] || ['https://www.zap.co.il', 'https://www.ynet.co.il', 'https://www.mako.co.il'];
-    const allUrls = [...new Set([...discoveredUrls.slice(0, 6), ...curatedBase])].slice(0, 8);
+
+    const curatedBase = CURATED_URLS[profile.category] || [
+      'https://www.zap.co.il', 'https://www.easy.co.il', 'https://www.komo.co.il',
+      ...SOCIAL_PLATFORMS,
+    ];
+
+    // Add business's own social/web URLs from profile
+    const ownUrls: string[] = [
+      profile.website_url, profile.facebook_url, profile.instagram_url, profile.tiktok_url,
+    ].filter((u): u is string => !!u && u.startsWith('http'));
+
+    const allUrls = [...new Set([...ownUrls, ...discoveredUrls.slice(0, 4), ...curatedBase])].slice(0, 12);
     const urls = allUrls;
 
     // Update business profile with keywords and URLs
