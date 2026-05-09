@@ -15,6 +15,7 @@ export default function DataSources() {
   const bpId = businessProfile?.id;
   const queryClient = useQueryClient();
   const [regenerating, setRegenerating] = useState(false);
+  const [regenError, setRegenError] = useState(null);
 
   const { data: competitors = [], isLoading: loadingComp } = useQuery({
     queryKey: ['dsCompetitors', bpId],
@@ -39,6 +40,7 @@ export default function DataSources() {
 
   const handleRegenerate = async () => {
     setRegenerating(true);
+    setRegenError(null);
     try {
       const res = await base44.functions.invoke('autoConfigOsint', { businessProfileId: bpId });
       const { keywords_count = 0, urls_count = 0, competitors_created = 0 } = res?.data || res || {};
@@ -48,7 +50,9 @@ export default function DataSources() {
       queryClient.invalidateQueries({ queryKey: ['dsCompetitors'] });
       toast.success(`עודכן: ${keywords_count} מילות מפתח, ${urls_count} מקורות, ${competitors_created} מתחרים חדשים`);
     } catch (err) {
-      toast.error('שגיאה: ' + err.message);
+      const msg = err?.data?.error || err?.message || 'שגיאה לא ידועה';
+      setRegenError(msg);
+      toast.error('שגיאה: ' + msg, { duration: 8000 });
     }
     setRegenerating(false);
   };
@@ -69,6 +73,12 @@ export default function DataSources() {
           {regenerating ? 'מנתח מחדש...' : 'צור מחדש עם AI'}
         </button>
       </div>
+
+      {regenError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-700 break-all">
+          <span className="font-semibold">שגיאה: </span>{regenError}
+        </div>
+      )}
 
       {keywords.length === 0 && urls.length === 0 && competitors.length === 0 && !regenerating ? (
         <div className="card-base py-16 text-center">

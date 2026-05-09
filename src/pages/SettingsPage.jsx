@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Save, Loader2, Zap, MapPin, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -251,6 +252,7 @@ import SettingsAutoRespond from '@/components/settings/SettingsAutoRespond.jsx';
 
 export default function SettingsPage() {
   const { businessProfile } = useOutletContext();
+  const queryClient = useQueryClient();
   const [form, setForm] = useState({
     name: '', category: '', city: '', full_address: '', description: '', target_market: '',
     tone_preference: 'friendly', min_budget: '', relevant_services: '', preferred_area: '',
@@ -337,15 +339,26 @@ export default function SettingsPage() {
   const saveField = async (partial) => {
     if (!businessProfile?.id) return;
     setForm(f => ({ ...f, ...partial }));
-    await base44.entities.BusinessProfile.update(businessProfile.id, partial);
+    try {
+      await base44.entities.BusinessProfile.update(businessProfile.id, partial);
+      queryClient.invalidateQueries({ queryKey: ['businessProfiles'] });
+    } catch (err) {
+      toast.error('שגיאה בשמירה: ' + (err.message || 'נסה שוב'));
+    }
   };
 
   const handleSaveAll = async () => {
     if (!businessProfile?.id) return;
     setSaving(true);
-    await base44.entities.BusinessProfile.update(businessProfile.id, form);
-    setSaving(false);
-    toast.success('ההגדרות נשמרו בהצלחה');
+    try {
+      await base44.entities.BusinessProfile.update(businessProfile.id, form);
+      queryClient.invalidateQueries({ queryKey: ['businessProfiles'] });
+      toast.success('ההגדרות נשמרו בהצלחה');
+    } catch (err) {
+      toast.error('שגיאה בשמירה: ' + (err.message || 'נסה שוב'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

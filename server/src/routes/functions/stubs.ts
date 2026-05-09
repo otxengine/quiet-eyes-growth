@@ -72,52 +72,43 @@ export async function autoConfigOsint(req: Request, res: Response) {
     const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
     if (!profile) return res.status(404).json({ error: 'Business profile not found' });
 
-    const prompt = `You are an Israeli business intelligence assistant. Given the following business details, generate a JSON object with OSINT monitoring configuration.
+    const prompt = `Return a JSON object for an Israeli business OSINT configuration. No extra keys, no nesting beyond what is specified.
 
-Business details:
-- Name: ${profile.name}
-- Category: ${profile.category}
-- City: ${profile.city}
-- Description: ${profile.description || 'Not provided'}
-- Target market: ${profile.target_market || 'Not provided'}
-- Services: ${profile.relevant_services || 'Not provided'}
+Business: ${profile.name} | Category: ${profile.category} | City: ${profile.city}
+Services: ${profile.relevant_services || profile.category}
 
-Generate a configuration with:
-- keywords: 8-12 Hebrew + English keywords relevant to the business niche and city. Include the category, city, and key services.
-- urls: 3-6 Israeli news/review/forum URLs relevant to this sector (e.g. ynet.co.il, mako.co.il, zap.co.il, rest.co.il)
-- competitors: 2-4 likely local competitors. Use realistic Israeli business names for the sector and city.`;
+Return exactly this structure:
+{"keywords":["kw1","kw2",...],"urls":["url1","url2",...],"competitors":[{"name":"...","category":"...","address":"..."}]}
+
+Rules:
+- keywords: exactly 8 Hebrew search terms for this business/city (short phrases, no explanations)
+- urls: exactly 4 Israeli URLs relevant to this sector (e.g. rest.co.il, zap.co.il, onono.co.il, timeout.co.il)
+- competitors: exactly 3 realistic local competitor business names in ${profile.city} or nearby`;
 
     const config = await invokeLLM({
+      model: 'sonnet',
+      maxTokens: 1200,
+      skipCache: true,
       prompt,
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          keywords: { type: 'array', items: { type: 'string' } },
-          urls: { type: 'array', items: { type: 'string' } },
-          competitors: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                name: { type: 'string' },
-                category: { type: 'string' },
-                address: { type: 'string' },
-                notes: { type: 'string' },
-              },
-            },
-          },
-        },
-      },
+      response_json_schema: { type: 'object' },
     }) as { keywords?: string[]; urls?: string[]; competitors?: Array<{ name: string; category?: string; address?: string; notes?: string }> } | null;
 
-    if (!config) return res.status(500).json({ error: 'LLM returned invalid JSON' });
+    // Handle case where LLM wrapped output in an extra key (e.g. osint_configuration)
+    const unwrapped = (config as any)?.osint_configuration || (config as any)?.configuration || config;
+
+    if (!unwrapped) return res.status(500).json({ error: 'LLM returned invalid JSON' });
+
+    const keywords: string[] = Array.isArray(unwrapped.keywords) ? unwrapped.keywords : [];
+    const urls: string[] = Array.isArray(unwrapped.urls) ? unwrapped.urls : [];
+    const competitors: Array<{ name: string; category?: string; address?: string; notes?: string }> =
+      Array.isArray(unwrapped.competitors) ? unwrapped.competitors : [];
 
     // Update business profile with keywords and URLs
     await prisma.businessProfile.update({
       where: { id: businessProfileId },
       data: {
-        custom_keywords: (config.keywords ?? []).join(', '),
-        custom_urls: (config.urls ?? []).join('\n'),
+        custom_keywords: keywords.join(', '),
+        custom_urls: urls.join('\n'),
       },
     });
 
@@ -128,7 +119,7 @@ Generate a configuration with:
     });
     const existingNames = new Set(existingComps.map((c: { name: string }) => c.name.toLowerCase()));
 
-    const newComps = (config.competitors ?? []).filter(
+    const newComps = competitors.filter(
       (c) => c.name && !existingNames.has(c.name.toLowerCase()),
     );
 
@@ -147,8 +138,8 @@ Generate a configuration with:
 
     return res.json({
       success: true,
-      keywords_count: (config.keywords ?? []).length,
-      urls_count: (config.urls ?? []).length,
+      keywords_count: keywords.length,
+      urls_count: urls.length,
       competitors_created: newComps.length,
     });
   } catch (err: any) {
