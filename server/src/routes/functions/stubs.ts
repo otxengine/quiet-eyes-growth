@@ -6,6 +6,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
+import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 
 export async function runCompetitorIdentification(req: Request, res: Response) {
   return res.json({ competitors_found: 0, new_competitors_created: 0, existing_competitors_updated: 0 });
@@ -72,36 +73,65 @@ export async function autoConfigOsint(req: Request, res: Response) {
     const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
     if (!profile) return res.status(404).json({ error: 'Business profile not found' });
 
-    const prompt = `Return a JSON object for an Israeli business OSINT configuration. No extra keys, no nesting beyond what is specified.
+    // ── Step 1: LLM → keywords + competitors (no URL guessing) ──────────────
+    const llmPrompt = `Return a JSON object. No extra keys, no nesting.
 
 Business: ${profile.name} | Category: ${profile.category} | City: ${profile.city}
 Services: ${profile.relevant_services || profile.category}
 
-Return exactly this structure:
-{"keywords":["kw1","kw2",...],"urls":["url1","url2",...],"competitors":[{"name":"...","category":"...","address":"..."}]}
+Return exactly:
+{"keywords":["kw1","kw2",...],"competitors":[{"name":"...","category":"...","address":"..."}]}
 
 Rules:
-- keywords: exactly 8 Hebrew search terms for this business/city (short phrases, no explanations)
-- urls: exactly 4 Israeli URLs relevant to this sector (e.g. rest.co.il, zap.co.il, onono.co.il, timeout.co.il)
-- competitors: exactly 3 realistic local competitor business names in ${profile.city} or nearby`;
+- keywords: exactly 10 Hebrew search terms customers use to find this type of business in ${profile.city} (short phrases only)
+- competitors: exactly 3 realistic competitor business names in ${profile.city} or nearby cities`;
 
-    const config = await invokeLLM({
+    const llmResult = await invokeLLM({
       model: 'sonnet',
-      maxTokens: 1200,
+      maxTokens: 600,
       skipCache: true,
-      prompt,
+      prompt: llmPrompt,
       response_json_schema: { type: 'object' },
-    }) as { keywords?: string[]; urls?: string[]; competitors?: Array<{ name: string; category?: string; address?: string; notes?: string }> } | null;
+    }) as { keywords?: string[]; competitors?: Array<{ name: string; category?: string; address?: string }> } | null;
 
-    // Handle case where LLM wrapped output in an extra key (e.g. osint_configuration)
-    const unwrapped = (config as any)?.osint_configuration || (config as any)?.configuration || config;
-
+    const unwrapped = (llmResult as any)?.osint_configuration || (llmResult as any)?.configuration || llmResult;
     if (!unwrapped) return res.status(500).json({ error: 'LLM returned invalid JSON' });
 
     const keywords: string[] = Array.isArray(unwrapped.keywords) ? unwrapped.keywords : [];
-    const urls: string[] = Array.isArray(unwrapped.urls) ? unwrapped.urls : [];
     const competitors: Array<{ name: string; category?: string; address?: string; notes?: string }> =
       Array.isArray(unwrapped.competitors) ? unwrapped.competitors : [];
+
+    // ── Step 2: Tavily → discover real URLs for this business sector ─────────
+    const discoveredUrls: string[] = [];
+    if (!isTavilyRateLimited()) {
+      const tCategory = profile.category || '';
+      const tCity = profile.city || '';
+      const searchQueries = [
+        `${tCategory} ${tCity} ביקורות המלצות פורום`,
+        `${tCategory} ישראל אתר מידע השוואה`,
+      ];
+      for (const q of searchQueries) {
+        if (isTavilyRateLimited()) break;
+        const results = await tavilySearch(q, 4);
+        for (const r of results) {
+          if (r.url && !discoveredUrls.includes(r.url)) {
+            discoveredUrls.push(r.url);
+          }
+        }
+      }
+    }
+
+    // Always include a curated baseline of Israeli business URLs
+    const CURATED_URLS: Record<string, string[]> = {
+      מסעדה: ['https://www.rest.co.il', 'https://www.onono.co.il', 'https://www.timeout.co.il'],
+      קפה: ['https://www.rest.co.il', 'https://www.timeout.co.il', 'https://www.zap.co.il'],
+      כושר: ['https://www.zap.co.il', 'https://www.sportlight.co.il', 'https://www.maccabi4u.co.il'],
+      יופי: ['https://www.zap.co.il', 'https://www.ynet.co.il/lifestyle', 'https://www.mako.co.il/lifestyle'],
+      ספא: ['https://www.zap.co.il', 'https://www.timeout.co.il', 'https://www.mako.co.il/lifestyle'],
+    };
+    const curatedBase = CURATED_URLS[profile.category] || ['https://www.zap.co.il', 'https://www.ynet.co.il', 'https://www.mako.co.il'];
+    const allUrls = [...new Set([...discoveredUrls.slice(0, 6), ...curatedBase])].slice(0, 8);
+    const urls = allUrls;
 
     // Update business profile with keywords and URLs
     await prisma.businessProfile.update({

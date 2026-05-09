@@ -224,7 +224,17 @@ router.delete('/:entity/:id', async (req: Request, res: Response) => {
       const userId = getUserId(req);
       if (userId) where.created_by = userId;
     }
-    await model.delete({ where });
+    try {
+      await model.delete({ where });
+    } catch (prismaErr: any) {
+      // P2025 = record not found — happens when record was created by a server agent
+      // without the user's created_by. Retry by ID only.
+      if (prismaErr.code === 'P2025') {
+        await model.delete({ where: { id: req.params.id } });
+      } else {
+        throw prismaErr;
+      }
+    }
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
