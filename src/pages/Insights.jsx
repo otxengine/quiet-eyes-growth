@@ -130,7 +130,31 @@ export default function Insights() {
     enabled: !!bpId,
   });
 
-  const loading = loadingAlerts || loadingActions;
+  const { data: signals = [], isLoading: loadingSignals } = useQuery({
+    queryKey: ['marketSignals', bpId, 'insights'],
+    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, is_dismissed: false }, '-detected_at', 50),
+    enabled: !!bpId,
+  });
+
+  const loading = loadingAlerts || loadingActions || loadingSignals;
+
+  // Map MarketSignal impact_level → priority
+  const signalPriority = (s) => {
+    if (s.impact_level === 'high' || s.impact_level === 'critical') return 'high';
+    if (s.impact_level === 'low') return 'low';
+    return 'medium';
+  };
+
+  // Map MarketSignal category → alert type key
+  const signalType = (s) => {
+    const cat = s.category || '';
+    if (cat === 'competitor') return 'competitor_move';
+    if (cat === 'event' || cat === 'local_event') return 'event_opportunity';
+    if (cat === 'demand_gap') return 'demand_gap';
+    if (cat === 'trend') return 'trend_opportunity';
+    if (cat === 'social') return 'social_viral';
+    return 'market_opportunity';
+  };
 
   // Normalize to unified list
   const unified = [
@@ -159,6 +183,19 @@ export default function Insights() {
       statusLabel: a.status,
       createdAt:   a.created_date || a.created_at,
       sourceAgent: a.source_agent,
+    })),
+    ...signals.map(s => ({
+      id:          s.id,
+      navId:       `signal-${s.id}`,
+      kind:        'signal',
+      title:       s.summary,
+      description: s.recommended_action,
+      type:        signalType(s),
+      priority:    signalPriority(s),
+      rawStatus:   s.is_read ? 'completed' : 'proposed',
+      statusLabel: s.is_read ? 'נקרא' : null,
+      createdAt:   s.detected_at || s.created_date,
+      sourceAgent: null,
     })),
   ].sort((a, b) => {
     const po = (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3);
@@ -203,14 +240,19 @@ export default function Insights() {
   const handleDismiss = async (item) => {
     setDismissedIds(prev => new Set([...prev, item.id]));
     try {
-      await base44.entities.ProactiveAlert.update(item.id, { is_dismissed: true });
-      base44.functions.invoke('updateInsightMemory', {
-        businessProfileId: bpId,
-        alertType: item.type,
-        title: item.title,
-        action: 'dismissed',
-      }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: ['proactiveAlerts'] });
+      if (item.kind === 'signal') {
+        await base44.entities.MarketSignal.update(item.id, { is_dismissed: true });
+        queryClient.invalidateQueries({ queryKey: ['marketSignals'] });
+      } else {
+        await base44.entities.ProactiveAlert.update(item.id, { is_dismissed: true });
+        base44.functions.invoke('updateInsightMemory', {
+          businessProfileId: bpId,
+          alertType: item.type,
+          title: item.title,
+          action: 'dismissed',
+        }).catch(() => {});
+        queryClient.invalidateQueries({ queryKey: ['proactiveAlerts'] });
+      }
       queryClient.invalidateQueries({ queryKey: ['activeInsights'] });
     } catch {
       setDismissedIds(prev => { const n = new Set(prev); n.delete(item.id); return n; });

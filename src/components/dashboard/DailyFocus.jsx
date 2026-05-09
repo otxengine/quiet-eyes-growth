@@ -284,7 +284,7 @@ export default function DailyFocus({ reviews, leads, signals, competitors, pendi
       title: s.summary,
       sub:   s.recommended_action,
       date:  s.detected_at || s.created_date,
-      link:  '/signals',
+      link:  `/insights/signal-${s.id}`,
       meta:  {},
     }));
 

@@ -424,9 +424,9 @@ export default function InsightDetail() {
   const queryClient = useQueryClient();
   const bpId = businessProfile?.id;
 
-  // Parse: "alert-{uuid}" | "action-{uuid}"
-  const kind     = id?.startsWith('action-') ? 'action' : 'alert';
-  const entityId = id?.replace(/^(alert|action)-/, '');
+  // Parse: "alert-{uuid}" | "action-{uuid}" | "signal-{uuid}"
+  const kind     = id?.startsWith('action-') ? 'action' : id?.startsWith('signal-') ? 'signal' : 'alert';
+  const entityId = id?.replace(/^(alert|action|signal)-/, '');
 
   // Load business snapshot (cached 15 min) — context for all agents
   const { data: snapshot, isLoading: snapshotLoading } = useQuery({
@@ -448,26 +448,48 @@ export default function InsightDetail() {
     enabled: kind === 'action' && !!entityId,
   });
 
-  const loading = loadingAlert || loadingAction;
-  const entity  = kind === 'alert' ? alert : action;
+  const { data: signal, isLoading: loadingSignal, error: signalError } = useQuery({
+    queryKey: ['marketSignal', entityId],
+    queryFn: () => base44.entities.MarketSignal.get(entityId),
+    enabled: kind === 'signal' && !!entityId,
+  });
 
-  // Normalize fields across Alert / Action schemas
-  const title       = entity?.title || '';
-  const description = entity?.description || '';
+  const loading = loadingAlert || loadingAction || loadingSignal;
+  const entity  = kind === 'alert' ? alert : kind === 'action' ? action : signal;
+
+  // Normalize fields across Alert / Action / MarketSignal schemas
+  const title       = kind === 'signal' ? (entity?.summary || '') : (entity?.title || '');
+  const description = kind === 'signal' ? (entity?.recommended_action || '') : (entity?.description || '');
   const reasoning   = kind === 'action' ? (entity?.reasoning || '') : '';
   const impact      = kind === 'action' ? (entity?.impact_estimate || '') : '';
   const stepsText   = kind === 'action'
     ? (entity?.execution_plan || entity?.suggested_action || '')
-    : (entity?.suggested_action || '');
+    : kind === 'alert' ? (entity?.suggested_action || '')
+    : '';
+
+  const signalCatToType = (cat) => {
+    if (cat === 'competitor') return 'competitor_move';
+    if (cat === 'event' || cat === 'local_event') return 'event_opportunity';
+    if (cat === 'demand_gap') return 'demand_gap';
+    if (cat === 'trend') return 'trend_opportunity';
+    if (cat === 'social') return 'social_viral';
+    return 'market_opportunity';
+  };
+
   const typeKey     = kind === 'alert'
     ? (entity?.alert_type || 'action_needed')
-    : (entity?.category || 'general');
-  const priority    = entity?.priority || 'medium';
+    : kind === 'action' ? (entity?.category || 'general')
+    : signalCatToType(entity?.category);
+  const priority    = kind === 'signal'
+    ? (entity?.impact_level === 'high' || entity?.impact_level === 'critical' ? 'high' : entity?.impact_level === 'low' ? 'low' : 'medium')
+    : (entity?.priority || 'medium');
   const sourceAgent = entity?.source_agent || null;
   const actionMeta  = (() => { try { return sourceAgent ? JSON.parse(sourceAgent) : null; } catch { return null; } })();
-  const createdAt   = entity?.created_date || entity?.created_at;
+  const createdAt   = entity?.detected_at || entity?.created_date || entity?.created_at;
   const status      = kind === 'action' ? (entity?.status || 'proposed') : null;
-  const isActedOn   = kind === 'alert' ? !!entity?.is_acted_on : entity?.status === 'completed';
+  const isActedOn   = kind === 'alert' ? !!entity?.is_acted_on
+    : kind === 'action' ? entity?.status === 'completed'
+    : !!entity?.is_read;
 
   const typeMeta    = TYPE_META[typeKey] || TYPE_META.general;
   const priorityMeta = PRIORITY_BADGE[priority] || PRIORITY_BADGE.medium;
@@ -486,14 +508,17 @@ export default function InsightDetail() {
     select: data => data.filter(a => a.id !== entityId).slice(0, 3),
   });
 
-  // Mark completed
+  // Mark completed / read
   const completeMutation = useMutation({
     mutationFn: () => kind === 'alert'
       ? base44.entities.ProactiveAlert.update(entityId, { is_acted_on: true })
+      : kind === 'signal'
+      ? base44.entities.MarketSignal.update(entityId, { is_read: true })
       : base44.entities.Action.update(entityId, { status: 'completed' }),
     onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: [kind === 'alert' ? 'proactiveAlert' : 'action', entityId] });
+      queryClient.invalidateQueries({ queryKey: [kind === 'alert' ? 'proactiveAlert' : kind === 'signal' ? 'marketSignal' : 'action', entityId] });
       queryClient.invalidateQueries({ queryKey: ['proactiveAlerts'] });
+      queryClient.invalidateQueries({ queryKey: ['marketSignals'] });
       queryClient.invalidateQueries({ queryKey: ['activeInsights'] });
       queryClient.invalidateQueries({ queryKey: ['businessSnapshot', bpId] });
       // Log outcome so agents won't suggest this again + invalidate snapshot
@@ -525,7 +550,7 @@ export default function InsightDetail() {
       <div className="text-center py-20 space-y-3" dir="rtl">
         <Lightbulb className="w-10 h-10 text-foreground-muted opacity-30 mx-auto" />
         <p className="text-[13px] text-foreground-muted">
-          {alertError || actionError ? 'שגיאה בטעינת התובנה' : 'התובנה לא נמצאה'}
+          {alertError || actionError || signalError ? 'שגיאה בטעינת התובנה' : 'התובנה לא נמצאה'}
         </p>
         <button onClick={() => navigate('/insights')} className="text-[12px] text-primary hover:underline">
           ← חזור לרשימת התובנות
