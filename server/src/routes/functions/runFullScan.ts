@@ -149,7 +149,11 @@ export async function runFullScan(req: Request, res: Response) {
     ['generateMorningBriefing',     generateMorningBriefing],
   ];
 
-  for (const [name, fn] of pipeline) {
+  // Run the first 3 critical agents synchronously (fast, needed for UI refresh)
+  const immediate: Array<[string, Function]> = pipeline.slice(0, 3);
+  const deferred: Array<[string, Function]> = pipeline.slice(3);
+
+  for (const [name, fn] of immediate) {
     try {
       results[name] = await callHandler(fn, businessProfileId);
     } catch (e: any) {
@@ -157,6 +161,19 @@ export async function runFullScan(req: Request, res: Response) {
     }
   }
 
-  await writeAutomationLog('runFullScan', businessProfileId, startTime, pipeline.length);
-  return res.json({ success: true, profile_name: profile?.name, results });
+  // Respond to the client immediately — do NOT make the HTTP call wait for all 20 agents
+  res.json({ success: true, profile_name: profile?.name, results });
+
+  // Run remaining agents in background (fire-and-forget)
+  (async () => {
+    for (const [name, fn] of deferred) {
+      try {
+        results[name] = await callHandler(fn, businessProfileId);
+      } catch (e: any) {
+        results[name] = { error: e.message };
+      }
+    }
+    await writeAutomationLog('runFullScan', businessProfileId, startTime, pipeline.length);
+    console.log(`[runFullScan] background pipeline complete for ${profile?.name}`);
+  })().catch(e => console.error('[runFullScan] background error:', e.message));
 }

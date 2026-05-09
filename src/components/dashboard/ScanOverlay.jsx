@@ -88,7 +88,7 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
         setCurrentStep(idx);
       }, LABEL_INTERVAL);
 
-      base44.functions.invoke('runFullScan', params)
+      base44.functions.invoke('runFullScan', params, 360000) // 6 min — scan runs many agents
         .then(res => {
           clearInterval(timer);
           if (cancelledRef.current) return;

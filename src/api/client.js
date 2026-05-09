@@ -148,11 +148,11 @@ const auth = {
 // ── functions ─────────────────────────────────────────────────────────────────
 
 const functions = {
-  async invoke(name, data = {}) {
+  async invoke(name, data = {}, timeoutMs = 90000) {
     const result = await apiFetch(`/functions/${name}`, {
       method: 'POST',
       body: JSON.stringify(data),
-    }, 90000); // 90s — LLM + DB calls can take 40-60s
+    }, timeoutMs);
     // Wrap in { data } to match Base44 SDK response shape
     return { data: result };
   },
