@@ -62,6 +62,12 @@ export async function detectTrends(req: Request, res: Response) {
       `${category} העדפות לקוחות שינויים`,
     ];
 
+    // ── custom_keywords: add each keyword as a trend search ──────────────────
+    const { parseKeywords: _parseKw } = await import('../../lib/dataSources');
+    for (const kw of _parseKw(profile).slice(0, 8)) {
+      searchQueries.push(`${kw} טרנד מגמה 2025`);
+    }
+
     const { isTavilyRateLimited } = await import('../../lib/tavily');
     if (isTavilyRateLimited() && !SERP_API_KEY) {
       console.log('[detectTrends] skipping — Tavily rate-limited and no SerpAPI key');

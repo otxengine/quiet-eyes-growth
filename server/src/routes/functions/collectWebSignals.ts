@@ -3,6 +3,7 @@ import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { tavilySearch } from '../../lib/tavily';          // shared cache (12h TTL)
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { buildKeywordQueries, buildUrlQueries } from '../../lib/dataSources';
 
 // Minimum interval between full web-signal collections per business
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
@@ -49,30 +50,11 @@ export async function collectWebSignals(req: Request, res: Response) {
       `${catStr} ${cityStr} Israel`,
     ];
 
-    // ── custom_keywords: use up to 5 keywords as additional queries ──────────
-    if (custom_keywords) {
-      const kws = custom_keywords.split(',').map((k: string) => k.trim()).filter(Boolean).slice(0, 5);
-      for (const kw of kws) queries.push(`${kw} ${cityStr}`);
-    }
+    // ── custom_keywords: ALL configured keywords → one query each ───────────
+    for (const q of buildKeywordQueries(profile, cityStr)) queries.push(q);
 
-    // ── custom_urls: target each configured source domain with Tavily ────────
-    if (custom_urls) {
-      const urlList = custom_urls.split('\n').map((u: string) => u.trim()).filter(Boolean);
-      for (const rawUrl of urlList.slice(0, 8)) {
-        try {
-          const hostname = new URL(rawUrl).hostname.replace(/^www\./, '');
-          const isSocial = /instagram|facebook|tiktok/.test(hostname);
-          if (isSocial) {
-            // For social platforms: search for the business by name on that platform
-            const platform = hostname.split('.')[0];
-            queries.push(`"${name}" ${platform}`);
-          } else {
-            // For review/directory sites: search the site for the business name
-            queries.push(`site:${hostname} "${name}"`);
-          }
-        } catch { /* skip invalid URLs */ }
-      }
-    }
+    // ── custom_urls: every configured source domain targeted with Tavily ─────
+    for (const q of buildUrlQueries(profile, name)) queries.push(q);
 
     let newSignals = 0;
     for (const query of queries) {

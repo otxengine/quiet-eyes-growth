@@ -6,6 +6,7 @@ import { invokeLLM } from '../../lib/llm';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { parseKeywords, buildUrlQueries } from '../../lib/dataSources';
 
 // Dummy res that swallows output — used when firing sub-agents inline
 const GRAPH_BASE = 'https://graph.facebook.com/v19.0';
@@ -203,6 +204,35 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
               is_read: false,
             },
           });
+        }
+      }
+    }
+
+    // ── custom_keywords → social mentions on each configured platform ────────
+    if (!isTavilyRateLimited()) {
+      const keywords = parseKeywords(profile);
+      const urlQueries = buildUrlQueries(profile, name); // e.g. '"name" instagram'
+      for (const q of [...urlQueries, ...keywords.slice(0, 8).map(kw => `"${kw}" site:facebook.com OR site:instagram.com OR site:tiktok.com`)]) {
+        if (isTavilyRateLimited()) break;
+        const results = await tavilySearch(q, 4);
+        for (const r of results) {
+          if (!r.url || existingUrls.has(r.url)) continue;
+          const isSocial = ['facebook.com', 'instagram.com', 'tiktok.com'].some(d => r.url.includes(d));
+          if (!isSocial) continue;
+          await prisma.rawSignal.create({
+            data: {
+              source: `tavily_kw_social: ${q.slice(0, 80)}`,
+              content: (r.content || r.title || '').substring(0, 500),
+              url: r.url,
+              signal_type: 'social_mention',
+              platform: r.url.includes('facebook') ? 'facebook' : r.url.includes('instagram') ? 'instagram' : 'tiktok',
+              source_origin: 'tavily',
+              detected_at: new Date().toISOString(),
+              linked_business: businessProfileId,
+            },
+          });
+          existingUrls.add(r.url);
+          newSignals++;
         }
       }
     }
