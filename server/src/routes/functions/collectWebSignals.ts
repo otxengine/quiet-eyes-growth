@@ -21,7 +21,7 @@ export async function collectWebSignals(req: Request, res: Response) {
     const profile = await prisma.businessProfile.findFirst({ where: { id: businessProfileId } });
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
-    const { name, category, city, custom_keywords } = profile;
+    const { name, category, city, custom_keywords, custom_urls } = profile;
 
     const existingSignals = await prisma.rawSignal.findMany({
       where: { linked_business: businessProfileId },
@@ -42,16 +42,36 @@ export async function collectWebSignals(req: Request, res: Response) {
     const cityStr = cityEn[city] || city;
     const catStr = categoryEn[category] || category;
 
-    // 3 core queries (was 6+) — basic depth (3x cheaper than advanced)
+    // Core queries
     const queries = [
       `"${name}" reviews ${cityStr} Israel`,
       `${catStr} ${cityStr} best recommendations 2025`,
       `${catStr} ${cityStr} Israel`,
     ];
 
+    // ── custom_keywords: use up to 5 keywords as additional queries ──────────
     if (custom_keywords) {
-      const kws = custom_keywords.split(',').map((k: string) => k.trim()).filter(Boolean).slice(0, 1);
+      const kws = custom_keywords.split(',').map((k: string) => k.trim()).filter(Boolean).slice(0, 5);
       for (const kw of kws) queries.push(`${kw} ${cityStr}`);
+    }
+
+    // ── custom_urls: target each configured source domain with Tavily ────────
+    if (custom_urls) {
+      const urlList = custom_urls.split('\n').map((u: string) => u.trim()).filter(Boolean);
+      for (const rawUrl of urlList.slice(0, 8)) {
+        try {
+          const hostname = new URL(rawUrl).hostname.replace(/^www\./, '');
+          const isSocial = /instagram|facebook|tiktok/.test(hostname);
+          if (isSocial) {
+            // For social platforms: search for the business by name on that platform
+            const platform = hostname.split('.')[0];
+            queries.push(`"${name}" ${platform}`);
+          } else {
+            // For review/directory sites: search the site for the business name
+            queries.push(`site:${hostname} "${name}"`);
+          }
+        } catch { /* skip invalid URLs */ }
+      }
     }
 
     let newSignals = 0;
