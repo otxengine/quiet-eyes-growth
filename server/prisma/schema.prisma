@@ -105,6 +105,8 @@ model BusinessProfile {
   search_radius_km           Int?     @default(15)
   additional_cities          String?
   branches                   String?  // JSON array of branch objects
+  lead_intent_signals        String?  // Free-text: phrases indicating purchase intent
+  lead_quality_notes         String?  // Free-text: what makes a lead high-quality for this business
 
   @@map("business_profiles")
 }

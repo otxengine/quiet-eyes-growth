@@ -107,15 +107,13 @@ export async function runLeadGeneration(req: Request, res: Response) {
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
     const { name, category, city, relevant_services } = profile;
-    const leadCriteria = (profile as any).lead_criteria
-      ? JSON.parse((profile as any).lead_criteria)
-      : {};
+    // Read lead criteria directly from individual profile fields (set via Settings page)
     const leadCriteriaContext = [
-      leadCriteria.min_budget ? `תקציב מינימלי: ${leadCriteria.min_budget}` : '',
-      leadCriteria.relevant_services ? `שירותים: ${leadCriteria.relevant_services}` : '',
-      leadCriteria.preferred_area ? `אזור: ${leadCriteria.preferred_area}` : '',
-      leadCriteria.lead_intent_signals ? `סימני כוונה: ${leadCriteria.lead_intent_signals}` : '',
-      leadCriteria.lead_quality_notes ? `הערות איכות: ${leadCriteria.lead_quality_notes}` : '',
+      profile.min_budget ? `תקציב מינימלי: ${profile.min_budget}` : '',
+      profile.relevant_services ? `שירותים: ${profile.relevant_services}` : '',
+      profile.preferred_area ? `אזור: ${profile.preferred_area}` : '',
+      (profile as any).lead_intent_signals ? `סימני כוונה: ${(profile as any).lead_intent_signals}` : '',
+      (profile as any).lead_quality_notes ? `הערות איכות: ${(profile as any).lead_quality_notes}` : '',
     ].filter(Boolean).join('. ');
 
     // Load winner DNA to bias scoring toward past closed deals

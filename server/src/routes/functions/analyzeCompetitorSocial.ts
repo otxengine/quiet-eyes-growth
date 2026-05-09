@@ -39,6 +39,11 @@ export async function analyzeCompetitorSocial(req: Request, res: Response) {
     const competitors = await prisma.competitor.findMany({ where });
     const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
 
+    if (profile?.monitor_competitors_social === false) {
+      await writeAutomationLog('analyzeCompetitorSocial', businessProfileId, new Date().toISOString(), 0);
+      return res.json({ analyzed: 0, skipped: true, reason: 'competitor_monitoring_disabled' });
+    }
+
     const insights: any[] = [];
 
     for (const comp of competitors.slice(0, 5)) { // max 5 to control API usage

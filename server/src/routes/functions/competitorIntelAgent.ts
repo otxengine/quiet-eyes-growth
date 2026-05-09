@@ -26,6 +26,11 @@ export async function competitorIntelAgent(req: Request, res: Response) {
     const profile = await prisma.businessProfile.findFirst({ where: { id: businessProfileId } });
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
+    if (profile.monitor_competitors_social === false) {
+      await writeAutomationLog('competitorIntelAgent', businessProfileId, startTime, 0);
+      return res.json({ insights_created: 0, skipped: true, reason: 'competitor_monitoring_disabled' });
+    }
+
     const { name, category, city } = profile;
 
     const bizCtx = await loadBusinessContext(businessProfileId);

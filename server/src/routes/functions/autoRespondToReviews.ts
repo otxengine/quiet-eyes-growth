@@ -20,6 +20,12 @@ export async function autoRespondToReviews(req: Request, res: Response) {
     const profile = profiles[0];
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
+    // Respect the auto_respond_enabled toggle in Settings
+    if (profile.auto_respond_enabled === false) {
+      await writeAutomationLog('autoRespondToReviews', businessProfileId, startTime, 0);
+      return res.json({ responses_created: 0, skipped: true, reason: 'auto_respond_disabled' });
+    }
+
     const { name, category } = profile;
 
     // Load business tone preference
