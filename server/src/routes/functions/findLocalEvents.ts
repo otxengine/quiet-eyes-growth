@@ -63,20 +63,19 @@ export async function findLocalEvents(req: Request, res: Response) {
     }
 
     // ── Targeted queries: Israeli event listing sites + regional search ────────
+    const areaTerms = [city, regionTerms].filter(Boolean).join(' ');
     const queries = [
-      // Direct city search on main event sites
+      // ── Ticket / event aggregator sites ──────────────────────────────────────
+      `site:kupat.co.il ${city} ${month} ${nextMonth}`,
+      `site:leaan.co.il הופעה פסטיבל אירוע ${areaTerms} ${month} ${yearStr}`,
       `site:timeout.co.il הופעות פסטיבלים ${city} ${month} ${nextMonth}`,
-      `site:goout.net הופעה פסטיבל ${city} ${month} ${yearStr}`,
-      // General Hebrew search — city name
-      `הופעה זמר להקה פסטיבל אירוע "${city}" ${month} ${nextMonth} ${yearStr}`,
-      // Regional search — captures nearby venues and surrounding cities
-      regionTerms
-        ? `הופעות פסטיבלים אירועים ${regionTerms} ${month} ${nextMonth} ${yearStr}`
-        : `אירועים הופעות פסטיבלים ${city} ואזור ${month} ${nextMonth}`,
-      // Specific venue types for the area (amphitheaters, wineries, cultural centers)
-      `אמפיתיאטרון מרכז תרבות יקב ${city} ${regionTerms} הופעה אירוע ${month} ${yearStr}`,
-      // Free / open events
-      `אירוע חינם ירייד שוק ${city} ${regionTerms} ${month} ${yearStr}`,
+      `site:goout.net הופעה פסטיבל ${areaTerms} ${month} ${yearStr}`,
+      // ── General Hebrew search — city + region ─────────────────────────────
+      `הופעה זמר להקה פסטיבל אירוע ${areaTerms} ${month} ${nextMonth} ${yearStr} כרטיסים`,
+      // ── Venue types for the area (amphitheaters, wineries, cultural centers) ─
+      `אמפיתיאטרון מרכז תרבות יקב ${areaTerms} הופעה אירוע ${month} ${yearStr}`,
+      // ── Free / open events ────────────────────────────────────────────────
+      `אירוע חינם ירייד שוק ${areaTerms} ${month} ${yearStr}`,
     ];
 
     const allResults: any[] = [];
