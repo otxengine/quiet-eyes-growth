@@ -408,6 +408,9 @@ export async function detectEvents(req: Request, res: Response) {
     const tone = bizCtx?.preferredTone || profile.tone_preference || 'professional';
     const toneInstruction = tone === 'casual' ? 'קליל וחברותי' : tone === 'warm' ? 'חם ואנושי' : 'מקצועי ואמין';
 
+    // Keywords the user marked as irrelevant — skip events matching these
+    const rejectedPatterns: string[] = (bizCtx as any)?.rejectedPatterns || [];
+
     const now = new Date();
     const windowEnd = new Date(now.getTime() + 45 * 24 * 3600000);
 
@@ -569,6 +572,10 @@ If no events with specific details found — return {"events":[]}.`,
 
       if (existingTitles.has(alertTitle) || existingSignalNames.has(event.name)) continue;
 
+      // Skip if the user previously dismissed a similar event
+      const eventText = `${event.name} ${sectorCtx.opportunity}`.toLowerCase();
+      if (rejectedPatterns.some(p => p && eventText.includes(p.toLowerCase()))) continue;
+
       // LLM generates business-specific CTA using sector opportunity as context
       let prefilledText = '';
       let suggestedAction = `נצל את ${event.name} לקידום ${category}`;
@@ -663,6 +670,10 @@ Write one specific action to take right now to maximise revenue — up to 8 word
       const icon = event.type === 'sports' ? '⚽' : event.type === 'concert' ? '🎵' : '🎯';
       const alertTitle = `${icon} ${event.name} — הזדמנות עסקית`;
       if (existingTitles.has(alertTitle)) continue;
+
+      // Skip if user previously dismissed a similar event
+      const extraEventText = `${event.name} ${event.opportunity || ''}`.toLowerCase();
+      if (rejectedPatterns.some(p => p && extraEventText.includes(p.toLowerCase()))) continue;
 
       let prefilledText = '';
       try {

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { ArrowLeft, Loader2, CheckCheck, ExternalLink, ListPlus, Sparkles, RefreshCw, Megaphone } from 'lucide-react';
+import DismissMenu from '@/components/ui/DismissMenu';
 import { useNavigate } from 'react-router-dom';
 import { classifyInsight, isOrganicContent, isPaidCampaign, isNavigateAway } from '@/lib/popup_classifier';
 import { toast } from 'sonner';
@@ -390,13 +391,17 @@ ACTION_TIME: [זמן ביצוע ריאלי]
             </div>
           </div>
           <div className="flex flex-col items-end gap-1 flex-shrink-0">
-            <button
-              onClick={(e) => { e.stopPropagation(); dismissMutation.mutate(); }}
-              className="btn-subtle text-[11px] text-foreground-muted hover:text-red-500 opacity-50 hover:opacity-100 transition-all"
-              title="הסר תובנה"
-            >
-              ✕
-            </button>
+            <div onClick={e => e.stopPropagation()}>
+              <DismissMenu
+                entityType="signal"
+                entityId={signal.id}
+                title={signal.summary}
+                businessProfileId={businessProfile?.id}
+                onDismissed={() => dismissMutation.mutate()}
+                buttonLabel=""
+                buttonClassName="btn-subtle text-[11px] text-foreground-muted hover:text-red-500 opacity-50 hover:opacity-100 transition-all flex items-center gap-0.5"
+              />
+            </div>
             {!signal.is_read && <span className="w-2 h-2 rounded-full bg-primary" />}
           </div>
         </div>

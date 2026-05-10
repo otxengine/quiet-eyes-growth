@@ -148,8 +148,12 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     console.log(`runCompetitorIdentification: ${googleResults.length} Google, ${tavilyResults.length} Tavily results`);
 
     // ── Step 3: LLM identifies DIRECT competitors only ───────────────────────
-    const existingCompetitors = await prisma.competitor.findMany({ where: { linked_business: businessProfileId } });
-    const existingNames = new Set(existingCompetitors.map(c => c.name.toLowerCase()));
+    const existingCompetitors = await (prisma as any).competitor.findMany({ where: { linked_business: businessProfileId } });
+    const existingNames = new Set(existingCompetitors.map((c: any) => c.name.toLowerCase()));
+    // Names the user explicitly marked as not-relevant — never re-add these
+    const notRelevantNames = new Set(
+      existingCompetitors.filter((c: any) => c.not_relevant).map((c: any) => c.name.toLowerCase())
+    );
 
     const googleBlock = googleResults.length > 0
       ? `Google Places:\n${googleResults.map((p: any) =>
@@ -166,6 +170,10 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     const contextBlock = [googleBlock, tavilyBlock].filter(Boolean).join('\n\n');
     const areasDesc = allAreas.join(', ');
 
+    const notRelevantBlock = notRelevantNames.size > 0
+      ? `\nDo NOT include these businesses (user explicitly marked as irrelevant): ${[...notRelevantNames].join(', ')}.`
+      : '';
+
     const llmPrompt = contextBlock
       ? `You are a competitive analyst. Identify direct competitors for the business "${name}" (${businessType}).
 
@@ -173,7 +181,7 @@ Rules:
 1. A direct competitor = the exact same type of business. For a sushi bar — only sushi/Japanese restaurants, not pizzerias.
 2. Geography: include only businesses located within ${radiusKm} km of ${city} (approved cities: ${areasDesc}). Do not include more distant cities.
 3. Do not include "${name}" itself.
-4. If data is partial, complete from your knowledge — but respect the radius limit.
+4. If data is partial, complete from your knowledge — but respect the radius limit.${notRelevantBlock}
 
 ${contextBlock}
 
@@ -183,7 +191,7 @@ For each competitor:
 Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [...]}`
       : `You are a competitive analyst. List up to 6 direct competitors for "${name}" (${businessType}).
 Geography: only cities within ${radiusKm} km of ${city} (${areasDesc}).
-A direct competitor = the exact same type of business. Use real names.
+A direct competitor = the exact same type of business. Use real names.${notRelevantBlock}
 
 For each competitor: name, rating, review_count, address (including city), strengths, weaknesses, price_range, source_urls.
 Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [...]}`;
@@ -197,6 +205,11 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
 
     console.log(`runCompetitorIdentification LLM: ${JSON.stringify(result).substring(0, 600)}`);
     let competitors: any[] = result?.competitors || [];
+
+    // Never re-add businesses the user explicitly marked as not-relevant
+    if (notRelevantNames.size > 0) {
+      competitors = competitors.filter(c => !notRelevantNames.has((c.name || '').toLowerCase()));
+    }
 
     // Hard distance filter on incoming results
     if (cityCoords && competitors.length > 0) {

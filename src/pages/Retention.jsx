@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Heart, Star, ClipboardList, AlertTriangle, Loader2, TrendingDown, Clock, MessageSquare, Copy, CheckCheck } from 'lucide-react';
+import DismissMenu from '@/components/ui/DismissMenu';
 import { toast } from 'sonner';
 
 function daysAgo(dateStr) {
@@ -24,6 +25,7 @@ export default function Retention() {
   const [winBackLoading, setWinBackLoading] = useState(false);
   const [winBackMessage, setWinBackMessage] = useState('');
   const [winBackCopied, setWinBackCopied] = useState(false);
+  const [dismissedIds, setDismissedIds] = useState(new Set());
 
   const { data: leads = [] } = useQuery({
     queryKey: ['retentionLeads', bpId],
@@ -221,54 +223,72 @@ export default function Retention() {
             </h3>
           </div>
           <div className="space-y-2">
-            {lostLeads.slice(0, 5).map(lead => (
+            {lostLeads.slice(0, 5).filter(l => !dismissedIds.has(`lead-${l.id}`)).map(lead => (
               <div key={lead.id} className="flex items-center justify-between p-3 rounded-xl border border-danger/20 bg-red-50/30">
                 <div>
                   <p className="text-[12px] font-medium text-foreground">{lead.name || 'ליד אנונימי'}</p>
                   <p className="text-[10px] text-foreground-muted">{lead.service_needed || 'שירות לא צוין'} · אבד</p>
                 </div>
-                <button
-                  onClick={() => setRetentionPopup({
-                    id: `retention_lead_${lead.id}`,
-                    summary: `לקוח בסיכון: ${lead.name || 'ליד'} — ליד שאבד`,
-                    recommended_action: 'שלח הצעה אישית להחזרה',
-                    source_description: JSON.stringify({
-                      action_label: 'שלח הצעה',
-                      action_type: 'social_post',
-                      prefilled_text: `שלום ${lead.name || ''},\n\nראינו שלא המשכנו ביחד — נשמח להציע לך הצעה מיוחדת!\n\nצרו קשר ונסגור בתנאים טובים 🙏\n\n${businessProfile?.name}`,
-                      time_minutes: 5,
-                    }),
-                    impact_level: 'high',
-                  })}
-                  className="text-[11px] px-3 py-1.5 rounded-lg bg-danger text-white hover:opacity-90 transition-all"
-                >
-                  שלח הצעה ←
-                </button>
+                <div className="flex items-center gap-2">
+                  <DismissMenu
+                    entityType="retention"
+                    title={`ליד אבוד: ${lead.name || 'ליד'}`}
+                    businessProfileId={bpId}
+                    onDismissed={() => setDismissedIds(prev => new Set([...prev, `lead-${lead.id}`]))}
+                    buttonLabel="לא רלוונטי"
+                  />
+                  <button
+                    onClick={() => setRetentionPopup({
+                      id: `retention_lead_${lead.id}`,
+                      summary: `לקוח בסיכון: ${lead.name || 'ליד'} — ליד שאבד`,
+                      recommended_action: 'שלח הצעה אישית להחזרה',
+                      source_description: JSON.stringify({
+                        action_label: 'שלח הצעה',
+                        action_type: 'social_post',
+                        prefilled_text: `שלום ${lead.name || ''},\n\nראינו שלא המשכנו ביחד — נשמח להציע לך הצעה מיוחדת!\n\nצרו קשר ונסגור בתנאים טובים 🙏\n\n${businessProfile?.name}`,
+                        time_minutes: 5,
+                      }),
+                      impact_level: 'high',
+                    })}
+                    className="text-[11px] px-3 py-1.5 rounded-lg bg-danger text-white hover:opacity-90 transition-all"
+                  >
+                    שלח הצעה ←
+                  </button>
+                </div>
               </div>
             ))}
-            {negativeReviews.slice(0, 3).map(review => (
+            {negativeReviews.slice(0, 3).filter(r => !dismissedIds.has(`review-${r.id}`)).map(review => (
               <div key={review.id} className="flex items-center justify-between p-3 rounded-xl border border-amber-200 bg-amber-50/30">
                 <div>
                   <p className="text-[12px] font-medium text-foreground">{review.reviewer_name || 'לקוח'}</p>
                   <p className="text-[10px] text-foreground-muted truncate max-w-[180px]">{(review.text || '').slice(0, 60) || 'ביקורת שלילית'}</p>
                 </div>
-                <button
-                  onClick={() => setRetentionPopup({
-                    id: `retention_review_${review.id}`,
-                    summary: `לקוח עם ביקורת שלילית: ${review.reviewer_name || 'לקוח'}`,
-                    recommended_action: 'פנה ללקוח באופן אישי',
-                    source_description: JSON.stringify({
-                      action_label: 'פנה ללקוח',
-                      action_type: 'respond',
-                      prefilled_text: `שלום ${review.reviewer_name || ''},\n\nתודה על המשוב. מצטערים על החוויה — נשמח לפצות ולשפר!\n\nאנא צרו קשר ישירות ונסדר הכל 🙏\n\n${businessProfile?.name}`,
-                      time_minutes: 5,
-                    }),
-                    impact_level: 'high',
-                  })}
-                  className="text-[11px] px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:opacity-90 transition-all"
-                >
-                  פנה ←
-                </button>
+                <div className="flex items-center gap-2">
+                  <DismissMenu
+                    entityType="retention"
+                    title={`ביקורת שלילית: ${review.reviewer_name || 'לקוח'}`}
+                    businessProfileId={bpId}
+                    onDismissed={() => setDismissedIds(prev => new Set([...prev, `review-${review.id}`]))}
+                    buttonLabel="לא רלוונטי"
+                  />
+                  <button
+                    onClick={() => setRetentionPopup({
+                      id: `retention_review_${review.id}`,
+                      summary: `לקוח עם ביקורת שלילית: ${review.reviewer_name || 'לקוח'}`,
+                      recommended_action: 'פנה ללקוח באופן אישי',
+                      source_description: JSON.stringify({
+                        action_label: 'פנה ללקוח',
+                        action_type: 'respond',
+                        prefilled_text: `שלום ${review.reviewer_name || ''},\n\nתודה על המשוב. מצטערים על החוויה — נשמח לפצות ולשפר!\n\nאנא צרו קשר ישירות ונסדר הכל 🙏\n\n${businessProfile?.name}`,
+                        time_minutes: 5,
+                      }),
+                      impact_level: 'high',
+                    })}
+                    className="text-[11px] px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:opacity-90 transition-all"
+                  >
+                    פנה ←
+                  </button>
+                </div>
               </div>
             ))}
           </div>

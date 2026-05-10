@@ -5,8 +5,9 @@ import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 import {
   Lightbulb, Zap, Target, TrendingUp, AlertTriangle, Trophy,
-  ChevronLeft, Filter, CheckCircle2, Clock, X
+  ChevronLeft, Filter, CheckCircle2, Clock
 } from 'lucide-react';
+import DismissMenu from '@/components/ui/DismissMenu';
 
 const ALERT_TYPE_META = {
   action_needed:        { label: 'פעולה נדרשת',   color: 'text-red-600',     bg: 'bg-red-50',      border: 'border-red-100',     icon: Zap },
@@ -46,7 +47,7 @@ const PRIORITY_BADGE = {
 
 const PRIORITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
 
-function InsightCard({ item, onOpen, onDismiss }) {
+function InsightCard({ item, onOpen, onDismiss, businessProfileId }) {
   const typeMeta = ALERT_TYPE_META[item.type] || ALERT_TYPE_META.action_needed;
   const Icon = typeMeta.icon;
   const priorityMeta = PRIORITY_BADGE[item.priority] || PRIORITY_BADGE.medium;
@@ -83,15 +84,14 @@ function InsightCard({ item, onOpen, onDismiss }) {
               {item.createdAt ? new Date(item.createdAt).toLocaleDateString('he-IL') : ''}
             </span>
             <div className="flex items-center gap-3">
-              {item.kind === 'alert' && item.rawStatus !== 'completed' && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onDismiss(item); }}
-                  className="flex items-center gap-1 text-[10px] text-foreground-muted hover:text-red-500 transition-colors"
-                  title="לא רלוונטי"
-                >
-                  <X className="w-3 h-3" />
-                  לא רלוונטי
-                </button>
+              {item.rawStatus !== 'completed' && (
+                <DismissMenu
+                  entityType={item.kind === 'signal' ? 'signal' : 'alert'}
+                  entityId={item.id}
+                  title={item.title}
+                  businessProfileId={businessProfileId}
+                  onDismissed={() => onDismiss(item)}
+                />
               )}
               <button
                 onClick={() => onOpen(item.navId)}
@@ -237,27 +237,16 @@ export default function Insights() {
 
   const activeCount = unified.filter(i => i.rawStatus !== 'completed').length;
 
-  const handleDismiss = async (item) => {
+  const handleDismiss = (item) => {
+    // DismissMenu already called updateInsightMemory + entity update.
+    // Just remove from local state and invalidate queries.
     setDismissedIds(prev => new Set([...prev, item.id]));
-    try {
-      if (item.kind === 'signal') {
-        await base44.entities.MarketSignal.update(item.id, { is_dismissed: true });
-        queryClient.invalidateQueries({ queryKey: ['marketSignals'] });
-      } else {
-        await base44.entities.ProactiveAlert.update(item.id, { is_dismissed: true });
-        base44.functions.invoke('updateInsightMemory', {
-          businessProfileId: bpId,
-          alertType: item.type,
-          title: item.title,
-          action: 'dismissed',
-        }).catch(() => {});
-        queryClient.invalidateQueries({ queryKey: ['proactiveAlerts'] });
-      }
-      queryClient.invalidateQueries({ queryKey: ['activeInsights'] });
-    } catch {
-      setDismissedIds(prev => { const n = new Set(prev); n.delete(item.id); return n; });
-      toast.error('שגיאה בהסרת התובנה');
+    if (item.kind === 'signal') {
+      queryClient.invalidateQueries({ queryKey: ['marketSignals'] });
+    } else {
+      queryClient.invalidateQueries({ queryKey: ['proactiveAlerts'] });
     }
+    queryClient.invalidateQueries({ queryKey: ['activeInsights'] });
   };
 
   return (
@@ -317,6 +306,7 @@ export default function Insights() {
               item={item}
               onOpen={navId => navigate(`/insights/${navId}`)}
               onDismiss={handleDismiss}
+              businessProfileId={bpId}
             />
           ))}
         </div>

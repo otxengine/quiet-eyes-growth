@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Users, Loader2, MapPin, ExternalLink, Activity, MessageSquare, X, FileText } from 'lucide-react';
+import DismissMenu from '@/components/ui/DismissMenu';
 import { toast } from 'sonner';
 import { usePlan } from '@/lib/usePlan';
 import { getLimits } from '@/lib/planConfig';
@@ -440,13 +441,15 @@ export default function Competitors() {
                       <span className="text-[10px] text-foreground-muted opacity-50">
                         {Math.round((change.confidence_score ?? 0) * 100)}%
                       </span>
-                      <button
-                        onClick={() => dismissAlert(change.id)}
-                        className="text-foreground-muted opacity-40 hover:opacity-80 hover:text-danger transition-all"
-                        title="הסתר התראה"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
+                      <DismissMenu
+                        entityType="signal"
+                        entityId={change._fromBase44 ? change.id : undefined}
+                        title={change.change_summary || change.competitor_name}
+                        businessProfileId={bpId}
+                        onDismissed={() => dismissAlert(change.id)}
+                        buttonLabel=""
+                        buttonClassName="text-foreground-muted opacity-40 hover:opacity-80 hover:text-danger transition-all flex items-center gap-0.5"
+                      />
                     </div>
                     <button
                       onClick={() => openCounterResponse(change)}
@@ -533,9 +536,25 @@ export default function Competitors() {
                     businessProfileId={bpId}
                     otxBizId={otxBizId}
                   />
-                  <div className={`w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-medium border border-t-0 border-border transition-colors ${selectedComp?.id === comp.id ? 'bg-primary/5 text-primary' : 'bg-secondary text-foreground-muted hover:bg-secondary/70'}`}>
-                    <FileText className="w-3.5 h-3.5" />
-                    {selectedComp?.id === comp.id ? 'הסתר ניתוח אסטרטגי' : 'SWOT · אסטרטגיה · קרב'}
+                  <div className={`w-full flex items-center justify-between gap-1.5 px-4 py-2 text-[11px] font-medium border border-t-0 border-border transition-colors ${selectedComp?.id === comp.id ? 'bg-primary/5 text-primary' : 'bg-secondary text-foreground-muted hover:bg-secondary/70'}`}>
+                    <div className="flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5" />
+                      {selectedComp?.id === comp.id ? 'הסתר ניתוח אסטרטגי' : 'SWOT · אסטרטגיה · קרב'}
+                    </div>
+                    <div onClick={e => e.stopPropagation()}>
+                      <DismissMenu
+                        entityType="competitor"
+                        entityId={comp.id}
+                        title={comp.name}
+                        businessProfileId={bpId}
+                        onDismissed={() => {
+                          queryClient.invalidateQueries({ queryKey: ['competitorsPage'] });
+                          if (selectedComp?.id === comp.id) setSelectedComp(null);
+                        }}
+                        buttonLabel="לא רלוונטי"
+                        buttonClassName="flex items-center gap-1 text-[10px] text-foreground-muted hover:text-red-500 transition-colors"
+                      />
+                    </div>
                   </div>
                 </div>
               ))

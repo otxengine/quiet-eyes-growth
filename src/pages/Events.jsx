@@ -6,6 +6,7 @@ import { Calendar, Loader2, Zap, Clock, TrendingUp } from 'lucide-react';
 import ActionPopup from '@/components/ui/ActionPopup';
 import AiInsightsBar from '@/components/ai/AiInsightsBar';
 import EventDetailModal from '@/components/events/EventDetailModal';
+import DismissMenu from '@/components/ui/DismissMenu';
 import { toast } from 'sonner';
 
 const EVENT_TABS = [
@@ -326,7 +327,7 @@ function getCountdown(input, isDate = false) {
   return { text: `${Math.ceil(days / 7)} שבועות`, urgent: false };
 }
 
-function EventCard({ item, businessProfile, type, onCardClick }) {
+function EventCard({ item, businessProfile, type, onCardClick, onDismissed }) {
   const [popup, setPopup] = useState(false);
 
   let title, description, tags;
@@ -381,6 +382,19 @@ function EventCard({ item, businessProfile, type, onCardClick }) {
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             <span className="text-base">{categoryIcons[category] || '📅'}</span>
             <span className="text-[13px] font-semibold text-foreground leading-snug">{title}</span>
+            {/* Dismiss — only for DB-backed events, not static calendar entries */}
+            {type !== 'static' && onDismissed && businessProfile?.id && (
+              <div onClick={e => e.stopPropagation()}>
+                <DismissMenu
+                  entityType={type === 'alert' ? 'alert' : 'signal'}
+                  entityId={item.id}
+                  title={title}
+                  businessProfileId={businessProfile.id}
+                  onDismissed={() => onDismissed(item)}
+                  buttonLabel="לא רלוונטי"
+                />
+              </div>
+            )}
             {countdown && (
               <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
                 countdown.urgent
@@ -440,6 +454,13 @@ export default function Events() {
   const [activeTab, setActiveTab] = useState('all');
   const [scanning, setScanning] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [dismissedIds, setDismissedIds] = useState(new Set());
+
+  const handleEventDismissed = (item) => {
+    setDismissedIds(prev => new Set([...prev, item.id]));
+    if (item._type === 'alert') queryClient.invalidateQueries({ queryKey: ['eventAlerts', bpId] });
+    else queryClient.invalidateQueries({ queryKey: ['eventSignals', bpId] });
+  };
 
   const { data: eventAlerts = [], isLoading: loadingAlerts } = useQuery({
     queryKey: ['eventAlerts', bpId],
@@ -639,13 +660,14 @@ export default function Events() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map(item => (
+          {filtered.filter(item => !dismissedIds.has(item.id)).map(item => (
             <EventCard
               key={`${item._type}-${item.id}`}
               item={item}
               type={item._type}
               businessProfile={businessProfile}
               onCardClick={(ev, t) => setSelectedEvent({ item: ev, type: t })}
+              onDismissed={item._type !== 'static' ? handleEventDismissed : undefined}
             />
           ))}
         </div>

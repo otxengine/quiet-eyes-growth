@@ -6,6 +6,7 @@ import { Bell, X, AlertTriangle, Target, TrendingUp, Trophy, Zap, ClipboardList,
 import { toast } from 'sonner';
 import ActionPopup from '@/components/ui/ActionPopup';
 import FeedbackWidget from '@/components/FeedbackWidget';
+import DismissMenu from '@/components/ui/DismissMenu';
 
 const _apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3007/api';
 const SERVER_BASE = _apiUrl.replace(/\/api\/?$/, '');
@@ -335,9 +336,15 @@ export default function ProactiveAlertsPanel({ bpId }) {
                   )}
                 </div>
                 {!selectMode && (
-                  <button onClick={() => dismissMutation.mutate(alert.id)} className="p-1 rounded-md text-foreground-muted/40 hover:text-foreground-muted hover:bg-white/50 transition-all">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                  <DismissMenu
+                    entityType="alert"
+                    entityId={alert.id}
+                    title={alert.title}
+                    businessProfileId={bpId}
+                    onDismissed={() => dismissMutation.mutate(alert.id)}
+                    buttonLabel=""
+                    buttonClassName="p-1 rounded-md text-foreground-muted/40 hover:text-foreground-muted hover:bg-white/50 transition-all flex items-center"
+                  />
                 )}
               </div>
             </div>
