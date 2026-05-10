@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ChevronDown } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
@@ -36,17 +37,37 @@ export default function DismissMenu({
   const [open, setOpen]       = useState(false);
   const [reason, setReason]   = useState('');
   const [loading, setLoading] = useState(false);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const btnRef  = useRef(null);
   const menuRef = useRef(null);
+
+  const calcPosition = useCallback(() => {
+    if (!btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    const dropH = 230; // approx dropdown height
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top = spaceBelow >= dropH ? rect.bottom + 4 : rect.top - dropH - 4;
+    const left = Math.min(rect.left, window.innerWidth - 264);
+    setMenuPos({ top, left });
+  }, []);
 
   // Close on outside click
   useEffect(() => {
     if (!open) return;
+    calcPosition();
     const handler = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setOpen(false);
+      if (
+        menuRef.current && !menuRef.current.contains(e.target) &&
+        btnRef.current  && !btnRef.current.contains(e.target)
+      ) setOpen(false);
     };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+    window.addEventListener('scroll', () => setOpen(false), { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      window.removeEventListener('scroll', () => setOpen(false));
+    };
+  }, [open, calcPosition]);
 
   const chips = REASON_CHIPS[entityType] || REASON_CHIPS.alert;
 
@@ -73,9 +94,65 @@ export default function DismissMenu({
 
   const defaultBtnCls = 'flex items-center gap-1 text-[10px] text-foreground-muted hover:text-red-500 transition-colors';
 
+  const dropdown = open ? createPortal(
+    <div
+      ref={menuRef}
+      style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, zIndex: 9999 }}
+      className="w-64 bg-white border border-border rounded-xl shadow-xl p-3 space-y-2"
+      onClick={e => e.stopPropagation()}
+      dir="rtl"
+    >
+      <p className="text-[11px] font-semibold text-foreground">מדוע זה לא רלוונטי?</p>
+
+      {/* Quick chips */}
+      <div className="flex flex-wrap gap-1.5">
+        {chips.map(chip => (
+          <button
+            key={chip}
+            onClick={() => setReason(prev => prev === chip ? '' : chip)}
+            className={`text-[10px] px-2 py-1 rounded-full border transition-all ${
+              reason === chip
+                ? 'bg-foreground text-background border-foreground'
+                : 'border-border text-foreground-muted hover:border-foreground-muted'
+            }`}
+          >
+            {chip}
+          </button>
+        ))}
+      </div>
+
+      {/* Free text */}
+      <input
+        type="text"
+        value={reason}
+        onChange={e => setReason(e.target.value)}
+        placeholder="או כתוב סיבה אחרת..."
+        className="w-full text-[11px] border border-border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-foreground/30 placeholder:text-foreground-muted"
+      />
+
+      <div className="flex gap-2">
+        <button
+          onClick={handleConfirm}
+          disabled={loading}
+          className="flex-1 text-[11px] font-semibold py-1.5 rounded-lg bg-foreground text-background hover:opacity-90 transition-all disabled:opacity-50"
+        >
+          {loading ? 'מסיר...' : 'הסר ולמד'}
+        </button>
+        <button
+          onClick={() => setOpen(false)}
+          className="text-[11px] px-3 py-1.5 rounded-lg border border-border text-foreground-muted hover:text-foreground transition-colors"
+        >
+          ביטול
+        </button>
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
   return (
-    <div className="relative inline-block" ref={menuRef}>
+    <div className="relative inline-block">
       <button
+        ref={btnRef}
         onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
         className={buttonClassName || defaultBtnCls}
         title="הסר — ציין סיבה"
@@ -84,57 +161,7 @@ export default function DismissMenu({
         {buttonLabel !== '' && (buttonLabel ?? 'לא רלוונטי')}
         <ChevronDown className={`w-2.5 h-2.5 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
-
-      {open && (
-        <div
-          className="absolute left-0 top-full mt-1 z-50 w-64 bg-white border border-border rounded-xl shadow-lg p-3 space-y-2"
-          onClick={e => e.stopPropagation()}
-        >
-          <p className="text-[11px] font-semibold text-foreground">מדוע זה לא רלוונטי?</p>
-
-          {/* Quick chips */}
-          <div className="flex flex-wrap gap-1.5">
-            {chips.map(chip => (
-              <button
-                key={chip}
-                onClick={() => setReason(prev => prev === chip ? '' : chip)}
-                className={`text-[10px] px-2 py-1 rounded-full border transition-all ${
-                  reason === chip
-                    ? 'bg-foreground text-background border-foreground'
-                    : 'border-border text-foreground-muted hover:border-foreground-muted'
-                }`}
-              >
-                {chip}
-              </button>
-            ))}
-          </div>
-
-          {/* Free text */}
-          <input
-            type="text"
-            value={reason}
-            onChange={e => setReason(e.target.value)}
-            placeholder="או כתוב סיבה אחרת..."
-            className="w-full text-[11px] border border-border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-foreground/30 placeholder:text-foreground-muted"
-          />
-
-          <div className="flex gap-2">
-            <button
-              onClick={handleConfirm}
-              disabled={loading}
-              className="flex-1 text-[11px] font-semibold py-1.5 rounded-lg bg-foreground text-background hover:opacity-90 transition-all disabled:opacity-50"
-            >
-              {loading ? 'מסיר...' : 'הסר ולמד'}
-            </button>
-            <button
-              onClick={() => setOpen(false)}
-              className="text-[11px] px-3 py-1.5 rounded-lg border border-border text-foreground-muted hover:text-foreground transition-colors"
-            >
-              ביטול
-            </button>
-          </div>
-        </div>
-      )}
+      {dropdown}
     </div>
   );
 }
