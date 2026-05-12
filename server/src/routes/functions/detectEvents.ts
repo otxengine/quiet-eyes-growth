@@ -359,7 +359,9 @@ function buildEventTavilyQueries(category: string, city: string): string[] {
   const nextMonth = new Date(Date.now() + 30 * 24 * 3600000).toLocaleDateString('he-IL', { month: 'long' });
 
   const queries: string[] = [
-    // Universal: always search for local events
+    // Universal: ticket sites + local event search
+    `site:kupat.co.il הופעה פסטיבל אירוע ${city} ${month} ${nextMonth}`,
+    `site:leaan.co.il הופעה פסטיבל אירוע ${city} ${month} ${nextMonth}`,
     `אירועים ${city} ${month} ${nextMonth}`,
   ];
 
@@ -397,8 +399,8 @@ function buildEventTavilyQueries(category: string, city: string): string[] {
   // Always include a general cultural/festival search
   queries.push(`פסטיבל תערוכה הופעה ${city} ${nextMonth}`);
 
-  // Deduplicate and limit to 4 queries max (Tavily credit conservation)
-  return [...new Set(queries)].slice(0, 4);
+  // Deduplicate and limit to 6 queries max (Tavily credit conservation)
+  return [...new Set(queries)].slice(0, 6);
 }
 
 // ── Core agent ────────────────────────────────────────────────────────────────

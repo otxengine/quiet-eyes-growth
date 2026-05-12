@@ -67,6 +67,7 @@ export async function findLocalEvents(req: Request, res: Response) {
 
     // ── Batch 1: Local events — concerts, festivals, shows ────────────────────
     const localEventQueries = [
+      `site:kupat.co.il הופעה פסטיבל אירוע ${areaTerms} ${month} ${nextMonth} ${yearStr}`,
       `site:leaan.co.il הופעה פסטיבל אירוע ${areaTerms} ${month} ${nextMonth} ${yearStr}`,
       `site:timeout.co.il הופעות פסטיבלים אירועים ${city} ${month} ${nextMonth}`,
       `site:goout.net הופעה פסטיבל ${areaTerms} ${month} ${yearStr}`,
