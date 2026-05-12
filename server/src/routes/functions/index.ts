@@ -85,6 +85,8 @@ import { tiktokPostTracker } from './tiktokPostTracker';
 import { updateInsightMemory } from './updateInsightMemory';
 import { generateAdvisoryInsights } from './generateAdvisoryInsights';
 import { cleanupInsights } from './cleanupInsights';
+import { processEventBus } from './processEventBus';
+import { getBusinessConstraints, updateBusinessConstraints } from './manageConstraints';
 
 const router = Router();
 
@@ -176,6 +178,10 @@ const FUNCTION_MAP: Record<string, any> = {
   updateInsightMemory,
   generateAdvisoryInsights,
   cleanupInsights,
+  // OTX Patent architecture
+  processEventBus,
+  getBusinessConstraints,
+  updateBusinessConstraints,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,

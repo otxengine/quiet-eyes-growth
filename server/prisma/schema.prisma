@@ -5,6 +5,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model BusinessProfile {
@@ -715,8 +716,111 @@ model AutoAction {
   executed_at      String?
   revenue_impact   Float?   @default(0) // estimated ₪ impact
   auto_execute_at  String?  // semi_auto: ISO timestamp for auto-execution if not acted on
+  // OTX-003: Execution Decision fields
+  confidence_score    Float?  // 0–100: how confident the system is in this action
+  predicted_impact    String? // 'high'|'medium'|'low'
+  execution_decision  String? // 'auto_execute'|'present_for_approval'|'discard'
+  decision_reason     String? // human-readable explanation of the decision
+  constraint_notes    String? // OTX-004: JSON array of constraint modifications applied
+  outcome_score       Float?  // post-execution: observed impact score (updated by outcome monitor)
 
   @@map("auto_actions")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// OTX-001 — Event-Driven Multi-Agent Orchestration
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * SystemEvent — the centralized event data bus.
+ * Every agent publishes events here; the routing engine reads and dispatches.
+ */
+model SystemEvent {
+  id              String   @id @default(cuid())
+  created_at      DateTime @default(now())
+  business_id     String
+  event_type      String   // 'competitor_change'|'new_review'|'market_signal'|'local_event'|'sports_match'|'hot_lead'|'retention_risk'
+  source          String   // originating agent name
+  payload         String?  // JSON — event-specific structured data
+  context_attrs   String?  // JSON — city, category, sector, geo_lat, geo_lng, time_of_day
+  routing_status  String   @default("pending") // 'pending'|'routing'|'dispatched'|'processed'|'failed'
+  dispatched_to   String?  // JSON array of agent names activated
+  processed_at    String?
+  composite_id    String?  // FK → CompositeSignal.id if fused
+
+  @@index([business_id, routing_status])
+  @@map("system_events")
+}
+
+/**
+ * RoutingRule — runtime rule table evaluated by the routing engine.
+ * Conditions are JSON logical expressions evaluated against SystemEvent fields.
+ */
+model RoutingRule {
+  id            String   @id @default(cuid())
+  created_at    DateTime @default(now())
+  event_type    String   // event_type pattern (exact match or '*' wildcard)
+  conditions    String?  // JSON: [{field, op, value}] — AND-combined
+  target_agents String   // JSON array of agent function names to activate
+  priority      Int      @default(0) // higher = evaluated first
+  is_active     Boolean  @default(true)
+  description   String?  // human-readable rule description
+
+  @@map("routing_rules")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// OTX-002 — Context-Aware Signal Processing Pipeline
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * CompositeSignal — result of fusing multiple related signals.
+ * Signals are fused by temporal (24h), geographic, and semantic correlation.
+ */
+model CompositeSignal {
+  id                String   @id @default(cuid())
+  created_at        DateTime @default(now())
+  business_id       String
+  signal_ids        String   // JSON array of source MarketSignal IDs fused
+  fusion_type       String   // 'temporal'|'geographic'|'semantic'|'multi'
+  composite_score   Float?   // weighted relevance score 0–100
+  context           String?  // JSON — merged contextual attributes
+  candidate_actions String?  // JSON array of scored CandidateAction objects
+  selected_action   String?  // JSON — winning action after scoring
+  status            String   @default("pending") // 'pending'|'scored'|'executed'|'dismissed'
+  scored_at         String?
+  weight_snapshot   String?  // JSON — scoring weights used at time of scoring
+
+  @@index([business_id, status])
+  @@map("composite_signals")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// OTX-004 — Constraint-Based Validation
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * BusinessConstraints — per-business constraint rules for action validation.
+ * Validated against every candidate action before execution or presentation.
+ */
+model BusinessConstraints {
+  id                    String   @id @default(cuid())
+  created_at            DateTime @default(now())
+  business_id           String   @unique
+  brand_tone            String?  // 'formal'|'casual'|'warm'|'bold'
+  prohibited_keywords   String?  // JSON array — never appear in generated content
+  max_discount_pct      Float?   // max allowed discount % in promotions
+  allow_competitor_mention Boolean? @default(false)
+  posting_hours_start   Int?     @default(8)   // earliest allowed auto-post hour (local)
+  posting_hours_end     Int?     @default(22)  // latest allowed auto-post hour
+  approved_channels     String?  // JSON array: ['instagram','facebook','whatsapp']
+  budget_cap_daily_ils  Float?   // max daily spend on auto-campaigns
+  content_policy        String?  // JSON array of custom constraint rules [{rule, description}]
+  min_confidence_auto   Float?   @default(85)  // OTX-003: min confidence for auto-execute
+  min_confidence_suggest Float?  @default(60)  // OTX-003: min confidence to suggest
+  updated_at            String?
+
+  @@map("business_constraints")
 }
 
 model MediaAsset {

@@ -4,6 +4,7 @@ import { invokeLLM } from '../../lib/llm';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { publishEvent } from '../../lib/eventBus';
 
 const MIN_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours — events change frequently
 
@@ -249,6 +250,16 @@ ${sportsContext.slice(0, 2000)}
           detected_at: new Date().toISOString(),
           linked_business: businessProfileId,
         },
+      }).catch(() => {});
+
+      // Publish to OTX-001 event bus for downstream orchestration
+      const busEventType = ev.type === 'sports' ? 'sports_match' : 'local_event';
+      publishEvent({
+        businessId:  businessProfileId,
+        eventType:   busEventType,
+        source:      'findLocalEvents',
+        payload:     { name: ev.name, type: ev.type, date_iso: ev.date_iso, traffic_impact: ev.traffic_impact },
+        contextAttrs: { city, category, impact: ev.traffic_impact === 'high' ? 'high' : 'medium' },
       }).catch(() => {});
 
       existingNames.add(ev.name.toLowerCase());
