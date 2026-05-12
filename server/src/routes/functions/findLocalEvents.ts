@@ -5,7 +5,7 @@ import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 
-const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
+const MIN_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours — events change frequently
 
 const TYPE_ICON: Record<string, string> = {
   concert: '🎵', conference: '🎙️', festival: '🎪', market: '🛒',
@@ -62,80 +62,111 @@ export async function findLocalEvents(req: Request, res: Response) {
       return res.json({ signals_created: 0, message: 'Tavily rate limited' });
     }
 
-    // ── Targeted queries: Israeli event listing sites + regional search ────────
+    // ── Targeted queries: Israeli event listing sites + sports ────────────────
     const areaTerms = [city, regionTerms].filter(Boolean).join(' ');
-    const queries = [
-      // ── Ticket / event aggregator sites ──────────────────────────────────────
-      `site:kupat.co.il ${city} ${month} ${nextMonth}`,
-      `site:leaan.co.il הופעה פסטיבל אירוע ${areaTerms} ${month} ${yearStr}`,
-      `site:timeout.co.il הופעות פסטיבלים ${city} ${month} ${nextMonth}`,
+
+    // ── Batch 1: Local events — concerts, festivals, shows ────────────────────
+    const localEventQueries = [
+      `site:leaan.co.il הופעה פסטיבל אירוע ${areaTerms} ${month} ${nextMonth} ${yearStr}`,
+      `site:timeout.co.il הופעות פסטיבלים אירועים ${city} ${month} ${nextMonth}`,
       `site:goout.net הופעה פסטיבל ${areaTerms} ${month} ${yearStr}`,
-      // ── General Hebrew search — city + region ─────────────────────────────
       `הופעה זמר להקה פסטיבל אירוע ${areaTerms} ${month} ${nextMonth} ${yearStr} כרטיסים`,
-      // ── Venue types for the area (amphitheaters, wineries, cultural centers) ─
-      `אמפיתיאטרון מרכז תרבות יקב ${areaTerms} הופעה אירוע ${month} ${yearStr}`,
-      // ── Free / open events ────────────────────────────────────────────────
-      `אירוע חינם ירייד שוק ${areaTerms} ${month} ${yearStr}`,
+      `אמפיתיאטרון מרכז תרבות יקב פארק ${areaTerms} הופעה אירוע ${month} ${yearStr}`,
+      `ירייד שוק אוכל פסטיבל ${areaTerms} ${month} ${nextMonth} ${yearStr}`,
+    ];
+
+    // ── Batch 2: Sports matches — always run, high traffic potential ──────────
+    // These generate massive foot traffic for restaurants/bars/retail
+    const sportsQueries = [
+      // International football — specific upcoming matches (next 30 days)
+      `international football matches upcoming ${month} ${nextMonth} 2026 specific teams date schedule high profile`,
+      `UEFA Nations League Europa League Champions League upcoming matches ${month} 2026 teams date`,
+      `France Brazil Argentina England Germany Spain upcoming match 2026 ${month} date opponent`,
+      // Israeli football
+      `ישראל נבחרת כדורגל משחק קרוב ${month} ${nextMonth} 2026 יריב תאריך`,
+      `ליגת העל ישראל כדורגל לוח משחקים ${month} ${nextMonth} 2026`,
+      // Basketball + other sports
+      `NBA Finals 2026 teams date schedule`,
+      `ישראל כדורסל ליגה לאומית אירופה ${month} 2026 משחק`,
     ];
 
     const allResults: any[] = [];
-    for (const q of queries) {
+    // Run local event queries
+    for (const q of localEventQueries) {
       if (isTavilyRateLimited()) break;
       const results = await tavilySearch(q, 4);
       allResults.push(...results);
     }
+    // Run sports queries separately
+    const sportsResults: any[] = [];
+    for (const q of sportsQueries) {
+      if (isTavilyRateLimited()) break;
+      const results = await tavilySearch(q, 5);
+      sportsResults.push(...results);
+    }
 
-    // Deduplicate by URL
+    // Deduplicate combined results by URL
     const seen = new Set<string>();
-    const unique = allResults.filter(r => {
+    const dedup = (arr: any[]) => arr.filter(r => {
       if (!r.url || seen.has(r.url)) return false;
       seen.add(r.url);
       return true;
     });
+    const uniqueLocal  = dedup(allResults);
+    const uniqueSports = dedup(sportsResults);
 
-    if (unique.length === 0) {
+    if (uniqueLocal.length === 0 && uniqueSports.length === 0) {
       setLastRun(businessProfileId, 'findLocalEvents');
       await writeAutomationLog('findLocalEvents', businessProfileId, startTime, 0);
       return res.json({ signals_created: 0 });
     }
 
-    const context = unique.slice(0, 15)
-      .map(r => `[${r.url}]\n${r.title || ''}: ${(r.content || '').slice(0, 250)}`)
+    const localContext = uniqueLocal.slice(0, 12)
+      .map(r => `[${r.url}]\n${r.title || ''}: ${(r.content || '').slice(0, 220)}`)
       .join('\n\n');
 
-    // ── LLM: extract specific events with artist/band names and real dates ─────
+    const sportsContext = uniqueSports.slice(0, 10)
+      .map(r => `[${r.url}]\n${r.title || ''}: ${(r.content || '').slice(0, 220)}`)
+      .join('\n\n');
+
+    // ── LLM: extract specific events with team names, artist names and real dates ─
     let events: any[] = [];
     try {
       const analysis: any = await invokeLLM({
         model: 'sonnet',
-        maxTokens: 900,
+        maxTokens: 1100,
         skipCache: true,
-        prompt: `אתה מומחה אירועים בישראל. זהה אירועים ספציפיים אמיתיים בטקסט הבא שיכולים לייצר תנועה לעסק "${name}" (${category} ב${city} ואזור).
+        prompt: `אתה מומחה אירועים ושיווק עסקי בישראל. זהה אירועים ספציפיים שיכולים לייצר תנועה לעסק "${name}" (${category} ב${city}).
 
-טקסט:
-${context.slice(0, 4500)}
+== אירועים מקומיים (הופעות, פסטיבלים, שווקים) ==
+${localContext.slice(0, 2800)}
 
-חוקים:
-- שם האירוע חייב להיות ספציפי: "הופעת אייגל" לא "הופעה", "פסטיבל הג'אז" לא "פסטיבל"
-- כלול שם האמן/להקה/פסטיבל אם מוזכר
-- תאריך: אם יש תאריך מדויק — השתמש בו. אם יש רק "מאי", "החודש", "הקרוב" — הכנס את ה-1 של אותו חודש כ-date_iso. רק אם אין שום מידע על תאריך — דלג על האירוע
-- קבל אירועים גם מעיירות קרובות (רדיוס 30 ק"מ) — לא רק מהעיר עצמה
-- רק אירועים בחודשיים הקרובים
-- הזדמנות עסקית: ספציפית לסקטור "${category}" — מה הלקוחות שיגיעו יצטרכו מ"${name}"?
+== משחקי ספורט בינלאומיים ומקומיים ==
+${sportsContext.slice(0, 2000)}
+
+חוקים קריטיים:
+- שם האירוע חייב להיות ספציפי עם פרטים: "צרפת נגד סנגל" (לא "משחק כדורגל"), "הופעת אייגל" (לא "הופעה"), "פסטיבל הג'אז של חיפה" (לא "פסטיבל")
+- למשחקי כדורגל/כדורסל: ציין תמיד שתי הקבוצות/נבחרות בשם מלא — "קבוצה א נגד קבוצה ב"
+- תאריך: אם יש תאריך מדויק — השתמש בו. אם יש רק חודש — הכנס את ה-1 של אותו חודש. אין מידע על תאריך — דלג על האירוע
+- רק אירועים בחודשיים הקרובים (עד ${nextMonth} ${yearStr})
+- קבל גם אירועים מעיירות קרובות (רדיוס 30 ק"מ)
+- traffic_impact: גמר/ליגת העל/נבחרת לאומית/אמן ידוע = "high". ספורט מקומי/הופעה בינונית = "medium". שאר = "low"
+- business_opportunity: ספציפי לסקטור "${category}" — מה הלקוחות של האירוע הזה יצטרכו מ"${name}"?
 
 החזר JSON בלבד:
 {"events":[{
-  "name": "שם ספציפי של האירוע / האמן / הפסטיבל",
+  "name": "שם ספציפי: קבוצה א נגד קבוצה ב / שם האמן / שם הפסטיבל",
   "date_iso": "YYYY-MM-DD",
   "date_text": "תאריך קריא בעברית",
   "venue": "מיקום האירוע",
   "type": "concert|festival|market|sports|exhibition|community|conference|other",
-  "artist_or_headliner": "שם האמן / ראש הלהקה / שם הפסטיבל",
+  "artist_or_headliner": "שם האמן / שתי הקבוצות / שם הפסטיבל",
   "expected_crowd": "large|medium|small",
+  "traffic_impact": "high|medium|low",
   "business_opportunity": "הזדמנות ספציפית ל${category} — עד 10 מילים",
   "source_url": "URL המקור"
 }]}
-אם אין שום אירוע שניתן לזהות — החזר {"events":[]}`,
+אם אין שום אירוע — החזר {"events":[]}`,
         response_json_schema: { type: 'object' },
       });
       const currentMonthIso = now.toISOString().slice(0, 8) + '01';
@@ -194,7 +225,7 @@ ${context.slice(0, 4500)}
         data: {
           summary: ev.name,
           category: 'local_event',
-          impact_level: ev.expected_crowd === 'large' ? 'high' : 'medium',
+          impact_level: ev.traffic_impact === 'high' || ev.expected_crowd === 'large' ? 'high' : 'medium',
           recommended_action: ev.business_opportunity || `נצל את ${ev.name}`,
           confidence: ev.source_url ? 80 : 65,
           source_signals: 'tavily_local_search',
@@ -205,6 +236,7 @@ ${context.slice(0, 4500)}
             date_text:            ev.date_text || null,
             event_date:           ev.date_iso || null,
             days_away:            daysAway,
+            traffic_impact:       ev.traffic_impact || null,
             source_url:           ev.source_url || null,
             action_type:          'social_post',
             action_label:         `${icon} ${ev.name}`,

@@ -308,39 +308,48 @@ const CALENDAR_EVENTS: CalendarEvent[] = [
 function buildSportsSpecificQueries(now: Date): string[] {
   const queries: string[] = [];
   const nowMs = now.getTime();
+  const month = now.toLocaleDateString('he-IL', { month: 'long' });
+  const nextMonth = new Date(nowMs + 30 * 86400000).toLocaleDateString('he-IL', { month: 'long' });
+  const year = now.getFullYear();
 
-  // Champions League Final — within 30 days of May 30
+  // ── Always-on: general upcoming international matches ────────────────────────
+  queries.push(`international football matches upcoming ${month} ${year} specific teams date schedule`);
+  queries.push(`UEFA Nations League Europa League Champions League upcoming match ${month} ${year} teams date`);
+  queries.push(`France Brazil Argentina England Germany Spain Italy Portugal upcoming match ${year} date opponent`);
+  queries.push(`ישראל נבחרת כדורגל משחק קרוב ${month} ${nextMonth} ${year} יריב תאריך`);
+  queries.push(`ליגת העל ישראל כדורגל לוח משחקים ${month} ${nextMonth} ${year}`);
+  queries.push(`NBA Finals ${year} teams date schedule`);
+
+  // ── Date-specific: Champions League Final ────────────────────────────────────
   const clFinal = new Date('2026-05-30').getTime();
   if (nowMs >= clFinal - 30 * 86400000 && nowMs <= clFinal + 86400000) {
     queries.push('Champions League Final 2026 which two teams qualified who is playing date');
     queries.push('גמר ליגת האלופות 2026 קבוצות מי שיחק תאריך');
   }
 
-  // Israeli Premier League Final — within 20 days of May 25
+  // ── Date-specific: Israeli Premier League Final ───────────────────────────────
   const ipelFinal = new Date('2026-05-25').getTime();
   if (nowMs >= ipelFinal - 20 * 86400000 && nowMs <= ipelFinal + 86400000) {
     queries.push('ליגת העל ישראל גמר 2026 קבוצות מי שיחק תאריך');
     queries.push('Israeli Premier League final 2026 teams who is playing');
   }
 
-  // World Cup 2026 — within 60 days of opening match + during tournament
+  // ── Date-specific: World Cup 2026 ────────────────────────────────────────────
   const wcStart = new Date('2026-06-11').getTime();
   const wcEnd   = new Date('2026-07-20').getTime();
   if (nowMs >= wcStart - 60 * 86400000 && nowMs <= wcEnd) {
-    // Israel's specific matches (highest traffic in Israel)
     queries.push('Israel World Cup 2026 matches schedule which teams group stage date');
     queries.push('ישראל מונדיאל 2026 משחקים לוח קבוצות יריב תאריך');
-    // High-profile upcoming matches (quarterfinals, semis, final)
     queries.push('FIFA World Cup 2026 upcoming matches this week high profile teams date');
     queries.push('מונדיאל 2026 המשחקים הקרובים השבוע קבוצות תאריכים');
-    // During tournament: focus on next 2 specific matches
     if (nowMs >= wcStart) {
       queries.push('World Cup 2026 today tomorrow match teams playing score');
       queries.push('מונדיאל 2026 משחק היום מחר קבוצות');
     }
   }
 
-  return queries;
+  // Deduplicate
+  return [...new Set(queries)];
 }
 
 // ── Build sector-aware Tavily queries for dynamic event detection ───────────────
