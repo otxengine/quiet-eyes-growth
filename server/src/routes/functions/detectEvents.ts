@@ -425,6 +425,10 @@ export async function detectEvents(req: Request, res: Response) {
         select: { id: true, title: true, description: true, created_at: true },
       });
 
+      // Normalize title for dedup: strip leading emoji + "— בעוד X ימים" suffix
+      const normalizeTitle = (t: string) =>
+        t.replace(/^[^\u0590-\u05FFa-zA-Z0-9]+ /, '').split(' — ')[0].split(' בעוד ')[0].trim().toLowerCase();
+
       const staleIds: string[] = [];
       // 0a. Dismiss alerts whose event date has passed
       for (const alert of openEventAlerts) {
@@ -436,19 +440,20 @@ export async function detectEvents(req: Request, res: Response) {
         }
       }
 
-      // 0b. Deduplicate old-format titles that include "— בעוד X ימים"
-      // Group by event name (strip icon + "— בעוד ... ימים") and dismiss all but the newest
+      // 0b. Deduplicate by normalized event name — keep only the newest per event
       const byEventName = new Map<string, { id: string; created_at: string | null }[]>();
       for (const alert of openEventAlerts) {
-        if (!alert.title?.includes('בעוד') || staleIds.includes(alert.id)) continue;
-        const baseName = alert.title.replace(/^[⚽📅🛍🌿] /, '').split(' — בעוד')[0].trim();
+        if (staleIds.includes(alert.id)) continue;
+        const baseName = normalizeTitle(alert.title || '');
+        if (!baseName) continue;
         if (!byEventName.has(baseName)) byEventName.set(baseName, []);
         byEventName.get(baseName)!.push({ id: alert.id, created_at: alert.created_at });
       }
       for (const [, group] of byEventName) {
-        if (group.length === 0) continue;
-        // Dismiss ALL old-format entries — Phase 5 will re-create with stable title
-        staleIds.push(...group.map(g => g.id));
+        if (group.length <= 1) continue;
+        // Sort by created_at descending — keep the newest, dismiss the rest
+        group.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+        staleIds.push(...group.slice(1).map(g => g.id));
       }
 
       if (staleIds.length > 0) {

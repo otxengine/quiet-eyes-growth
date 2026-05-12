@@ -2,12 +2,13 @@ import React, { useState, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Calendar, Loader2, Zap, Clock, TrendingUp } from 'lucide-react';
-import ActionPopup from '@/components/ui/ActionPopup';
+import { Calendar, Loader2, Zap, Clock, TrendingUp, X, Copy, CheckCheck, ListPlus, Megaphone } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import AiInsightsBar from '@/components/ai/AiInsightsBar';
 import EventDetailModal from '@/components/events/EventDetailModal';
 import DismissMenu from '@/components/ui/DismissMenu';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 const EVENT_TABS = [
   { key: 'all',        label: 'הכל' },
@@ -327,6 +328,134 @@ function getCountdown(input, isDate = false) {
   return { text: `${Math.ceil(days / 7)} שבועות`, urgent: false };
 }
 
+/** Simple action sheet for events — replaces ActionPopup which isn't designed for events */
+function EventActSheet({ item, type, businessProfile, onClose }) {
+  const navigate = useNavigate();
+  const [copied, setCopied] = useState(false);
+  const [creatingTask, setCreatingTask] = useState(false);
+
+  let title, description;
+  if (type === 'static') {
+    title = item.title;
+    description = item.description;
+  } else {
+    title = type === 'alert' ? item.title : (item.agent_name || item.summary);
+    description = type === 'alert' ? item.description : item.summary;
+  }
+
+  let prefilled = '';
+  try {
+    const meta = JSON.parse(type === 'alert' ? (item.source_agent || '{}') : (item.source_description || '{}'));
+    prefilled = meta.prefilled_text || '';
+  } catch {}
+
+  if (!prefilled) {
+    prefilled = `🎉 ${(title || '').split(' — ')[0]}\n\n${(description || '').slice(0, 120)}\n\n${businessProfile?.name || ''}`;
+  }
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(prefilled).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const handleCreateTask = async () => {
+    setCreatingTask(true);
+    try {
+      await base44.entities.Task.create({
+        title: `הכן תוכן לרגל: ${(title || '').split(' — ')[0].slice(0, 60)}`,
+        description: description || '',
+        status: 'pending',
+        priority: 'medium',
+        source_type: 'alert',
+        linked_business: businessProfile?.id || '',
+      });
+      toast.success('משימה נוצרה ✓');
+      onClose();
+    } catch {
+      toast.error('שגיאה ביצירת המשימה');
+    }
+    setCreatingTask(false);
+  };
+
+  const cleanTitle = (title || '').split(' — ')[0].replace(/^[^\u0590-\u05FFa-zA-Z0-9]*/, '').trim();
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl p-5 space-y-4"
+        onClick={e => e.stopPropagation()}
+        dir="rtl"
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-[15px] font-bold text-foreground leading-snug">{cleanTitle}</h3>
+            <p className="text-[11px] text-foreground-muted mt-0.5 line-clamp-2">{description}</p>
+          </div>
+          <button onClick={onClose} className="text-foreground-muted hover:text-foreground p-1 -mt-1 -mr-1">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Post text */}
+        <div className="bg-secondary rounded-xl p-3 space-y-2">
+          <p className="text-[10px] font-semibold text-foreground-muted">תוכן מוכן לפרסום</p>
+          <p className="text-[12px] text-foreground leading-relaxed whitespace-pre-line">{prefilled}</p>
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:opacity-70 transition-all"
+          >
+            {copied ? <CheckCheck className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? 'הועתק!' : 'העתק טקסט'}
+          </button>
+        </div>
+
+        {/* Action buttons */}
+        <div className="space-y-2">
+          <button
+            onClick={() => {
+              const params = new URLSearchParams({
+                type: 'seasonal',
+                event: cleanTitle,
+                summary: description?.slice(0, 120) || '',
+              });
+              navigate(`/marketing/create?${params.toString()}`);
+              onClose();
+            }}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-foreground text-background text-[12px] font-semibold hover:opacity-90 transition-all"
+          >
+            <Megaphone className="w-4 h-4" />
+            צור קמפיין לרגל האירוע
+          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => {
+                const params = new URLSearchParams({ create: 'organic', summary: prefilled });
+                navigate(`/marketing?${params.toString()}`);
+                onClose();
+              }}
+              className="flex items-center justify-center gap-1.5 py-2 rounded-xl border border-border text-[11px] font-medium text-foreground hover:bg-secondary transition-all"
+            >
+              📣 פרסם ברשתות
+            </button>
+            <button
+              onClick={handleCreateTask}
+              disabled={creatingTask}
+              className="flex items-center justify-center gap-1.5 py-2 rounded-xl border border-border text-[11px] font-medium text-foreground hover:bg-secondary transition-all disabled:opacity-50"
+            >
+              {creatingTask ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ListPlus className="w-3.5 h-3.5" />}
+              הוסף כמשימה
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function EventCard({ item, businessProfile, type, onCardClick, onDismissed }) {
   const [popup, setPopup] = useState(false);
 
@@ -361,15 +490,6 @@ function EventCard({ item, businessProfile, type, onCardClick, onDismissed }) {
     seasonal:   '🌿',
     commercial: '🛍️',
     other:      '📅',
-  };
-
-  const fakeSignal = {
-    id: item.id,
-    summary: description,
-    agent_name: title,
-    category: 'event',
-    source_description: type === 'alert' ? item.source_agent : item.source_description,
-    impact_level: meta.impact || 'medium',
   };
 
   return (
@@ -437,8 +557,9 @@ function EventCard({ item, businessProfile, type, onCardClick, onDismissed }) {
       </div>
 
       {popup && (
-        <ActionPopup
-          signal={fakeSignal}
+        <EventActSheet
+          item={item}
+          type={type}
           businessProfile={businessProfile}
           onClose={() => setPopup(false)}
         />
@@ -498,23 +619,51 @@ export default function Events() {
     return Date.now() + 365 * 86400000;
   }
 
+  // Normalize event title for dedup — strip leading icon, strip "— בעוד X ימים" suffix
+  function normalizeEventTitle(item) {
+    const raw = item._type === 'alert'
+      ? (item.title || '')
+      : (item.agent_name || item.summary || '');
+    return raw
+      .replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}⚽📅🛍🌿🎵🎯🏆🕌✡️🎤📍🎉🎊🎶📣💡]\s*/u, '')
+      .split(' — ')[0]
+      .split(' בעוד ')[0]
+      .trim()
+      .toLowerCase();
+  }
+
   // Merge: DB items + static events, dedup by title, keep only future events from static
-  const dbItems = [
+  const rawDbItems = [
     ...eventAlerts.map(a => ({ ...a, _type: 'alert' })),
     ...eventSignals.map(s => ({ ...s, _type: 'signal' })),
     ...localEventSignals.map(s => ({ ...s, _type: 'signal', _isLocal: true })),
   ].filter(item => {
-    // Filter out DB items that are clearly stale (creation date >24h ago and no parseable date)
+    // Filter out dismissed items (signal has is_dismissed)
+    if (item.is_dismissed) return false;
+    // Filter out DB items that are clearly stale (creation date >7d ago and no parseable future date)
     const created = new Date(item.created_date || item.detected_at || 0).getTime();
-    if (created < Date.now() - 86400000) {
+    if (created < Date.now() - 7 * 86400000) {
       const text = item._type === 'alert' ? (item.description || '') : (item.summary || '');
-      const hasDate = /(\d{1,2})[./](\d{1,2})[./](\d{4})/.test(text);
-      if (!hasDate) return false;
+      const m = text.match(/(\d{1,2})[./](\d{1,2})[./](\d{4})/);
+      if (!m) return false;
+      const eventDate = new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1])).getTime();
+      if (eventDate < Date.now()) return false; // event already passed
     }
     return true;
   });
 
-  // Build combined text from DB items for keyword dedup
+  // Deduplicate: per normalized event name keep only the most recent DB record
+  const seenEventKeys = new Map();
+  rawDbItems.forEach(item => {
+    const key = normalizeEventTitle(item);
+    if (!key) return;
+    const ts = new Date(item.created_date || item.detected_at || 0).getTime();
+    const prev = seenEventKeys.get(key);
+    if (!prev || ts > prev.ts) seenEventKeys.set(key, { item, ts });
+  });
+  const dbItems = Array.from(seenEventKeys.values()).map(v => v.item);
+
+  // Build combined text from deduped DB items for keyword matching against static events
   const dbTextLower = dbItems
     .map(i => i._type === 'alert'
       ? ((i.title || '') + ' ' + (i.description || ''))
@@ -526,11 +675,14 @@ export default function Events() {
   const DEDUP_STOP = new Set(['2026', '2027', 'ימים', 'בעוד', 'אירוע', 'עסקי', 'הזדמנות', 'גמר', 'שלב', 'ליגה', 'קיץ', 'חורף', 'אביב', 'סתיו']);
 
   const staticFiltered = STATIC_EVENTS.filter(e => {
-    // Only show events within the next 90 days
+    // Only show events within the next 60 days
     const eventTs = new Date(e.event_date).getTime();
     const isPast   = eventTs < Date.now() - 86400000;
-    const isTooFar = eventTs > Date.now() + 90 * 86400000;
+    const isTooFar = eventTs > Date.now() + 60 * 86400000;
     if (isPast || isTooFar) return false;
+    // Dedup against DB: if normalized DB key matches this event's name, hide static
+    const staticKey = e.title.replace(/^[^\u0590-\u05FFa-zA-Z0-9]*/, '').split(' — ')[0].trim().toLowerCase();
+    if (seenEventKeys.has(staticKey)) return false;
     // Dedup: if any specific keyword from this event's tags appears in DB events, hide static
     const specificTags = (e.tags || []).filter(t => t.length > 3 && !DEDUP_STOP.has(t));
     const isDup = specificTags.some(tag => dbTextLower.includes(tag.toLowerCase()));
