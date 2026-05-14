@@ -87,6 +87,7 @@ import { generateAdvisoryInsights } from './generateAdvisoryInsights';
 import { cleanupInsights } from './cleanupInsights';
 import { processEventBus } from './processEventBus';
 import { getBusinessConstraints, updateBusinessConstraints } from './manageConstraints';
+import { getEventBusStats, approveAction, rejectAction } from './getEventBusStats';
 
 const router = Router();
 
@@ -182,6 +183,9 @@ const FUNCTION_MAP: Record<string, any> = {
   processEventBus,
   getBusinessConstraints,
   updateBusinessConstraints,
+  getEventBusStats,
+  approveAction,
+  rejectAction,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,

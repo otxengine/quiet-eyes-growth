@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Loader2 } from 'lucide-react';
+import { EventBusPanel } from './EventBusDashboard';
 import { toast } from 'sonner';
 
 import AgentCard from '@/components/agents/AgentCard';
@@ -179,6 +180,7 @@ export default function Agents() {
   const { businessProfile } = useOutletContext();
   const bpId = businessProfile?.id;
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState('agents');
   const [runningAgent, setRunningAgent] = useState(null);
   const [agentResults, setAgentResults] = useState({}); // { [nameEn]: { ok, message } }
 
@@ -334,18 +336,33 @@ export default function Agents() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-[16px] font-bold text-foreground tracking-tight">סוכנים</h1>
-        <p className="text-[12px] text-foreground-muted mt-0.5">19 סוכנים חכמים עובדים בשבילך 24/7</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-[16px] font-bold text-foreground tracking-tight">סוכנים</h1>
+          <p className="text-[12px] text-foreground-muted mt-0.5">19 סוכנים חכמים עובדים בשבילך 24/7</p>
+        </div>
+        <div className="flex gap-1 bg-secondary rounded-lg p-1">
+          {[{ key: 'agents', label: 'סוכנים' }, { key: 'event-bus', label: 'Event Bus' }].map(t => (
+            <button key={t.key} onClick={() => setActiveTab(t.key)}
+              className={`px-4 py-1.5 rounded-md text-[11px] font-medium transition-all ${
+                activeTab === t.key ? 'bg-white text-foreground shadow-sm' : 'text-foreground-muted hover:text-foreground'
+              }`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {agentsStale && (
+      {activeTab === 'event-bus' && <EventBusPanel bpId={bpId} />}
+
+      {activeTab === 'agents' && agentsStale && (
         <div className="flex items-center gap-2 px-4 py-3 bg-danger/5 border border-danger/20 rounded-lg">
           <span className="text-[13px]">⚠️</span>
           <p className="text-[12px] font-medium text-danger">הסוכנים לא רצו מזה 8 שעות — בדוק הגדרות</p>
         </div>
       )}
 
+      {activeTab === 'agents' && (<>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-4">
           <ChannelStatusCard businessProfile={businessProfile} />
@@ -519,6 +536,7 @@ ${agentsWithStatus.map(a => `- ${a.name} (${a.nameEn}): ${a.automation?.total_ru
           </div>
         </div>
       )}
+      </>)}
     </div>
   );
 }

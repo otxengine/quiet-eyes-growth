@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
+import { publishEvent } from '../../lib/eventBus';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
@@ -324,6 +325,16 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
 
     await writeAutomationLog('runCompetitorIdentification', businessProfileId, startTime, created + updated);
     console.log(`runCompetitorIdentification done: ${created} created, ${updated} updated, areas: ${areasDesc}`);
+    // Publish to event bus (OTX-001)
+    if (created > 0 || updated > 0) {
+      publishEvent({
+        businessId: businessProfileId,
+        eventType:  'competitor_change',
+        source:     'runCompetitorIdentification',
+        payload:    { new_competitors: created, updated_competitors: updated },
+        contextAttrs: { impact: created > 0 ? 'high' : 'medium' },
+      }).catch(() => {});
+    }
     return res.json({
       competitors_found: competitors.length,
       new_competitors_created: created,

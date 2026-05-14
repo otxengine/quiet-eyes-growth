@@ -8,6 +8,7 @@ import TaskCard from '@/components/tasks/TaskCard';
 import TaskStatsBar from '@/components/tasks/TaskStatsBar';
 import AddTaskModal from '@/components/tasks/AddTaskModal';
 import AiInsightBox from '@/components/ai/AiInsightBox';
+import { ApprovalsPanel } from './Approvals';
 
 const filterTabs = [
   { key: 'all', label: 'הכל' },
@@ -15,6 +16,7 @@ const filterTabs = [
   { key: 'in_progress', label: 'בביצוע' },
   { key: 'done', label: 'הושלמו' },
   { key: 'overdue', label: 'באיחור' },
+  { key: 'approvals', label: 'אישורי סוכן' },
 ];
 
 export default function Tasks() {
@@ -118,7 +120,9 @@ export default function Tasks() {
         ))}
       </div>
 
-      {sorted.length === 0 ? (
+      {activeTab === 'approvals' ? (
+        <ApprovalsPanel bpId={bpId} />
+      ) : sorted.length === 0 ? (
         <div className="card-base py-20 text-center">
           <ClipboardList className="w-12 h-12 text-foreground-muted opacity-20 mx-auto mb-3" />
           <p className="text-[13px] text-foreground-muted mb-4">

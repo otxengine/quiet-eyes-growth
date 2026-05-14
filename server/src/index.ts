@@ -281,6 +281,10 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS branches TEXT`);
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS lead_intent_signals TEXT`);
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS lead_quality_notes TEXT`);
+  await sql(`ALTER TABLE market_signals ADD COLUMN IF NOT EXISTS dismiss_reason TEXT`);
+  await sql(`ALTER TABLE proactive_alerts ADD COLUMN IF NOT EXISTS dismiss_reason TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS not_relevant BOOLEAN DEFAULT false`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS not_relevant_reason TEXT`);
   await sql(`CREATE TABLE IF NOT EXISTS media_assets (
     id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     created_date    TIMESTAMPTZ NOT NULL DEFAULT NOW(),

@@ -4,6 +4,7 @@ import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
+import { publishEvent } from '../../lib/eventBus';
 
 // ── Sector opportunity entry ───────────────────────────────────────────────────
 // Each event can have multiple sector entries. The first matching entry wins.
@@ -753,6 +754,17 @@ Structure: Hook + specific value + CTA. Tone: ${toneInstruction}. Write only the
       existingTitles.add(alertTitle);
       existingSignalNames.add(event.name);
       created++;
+    }
+
+    // Publish summary event to bus (OTX-001)
+    if (created > 0) {
+      publishEvent({
+        businessId: businessProfileId,
+        eventType:  'local_event',
+        source:     'detectEvents',
+        payload:    { alerts_created: created, calendar_events: upcomingEvents.length, tavily_events: extraEvents.length },
+        contextAttrs: { city, category, impact: created > 2 ? 'high' : 'medium' },
+      }).catch(() => {});
     }
 
     await writeAutomationLog('detectEvents', businessProfileId, startTime, created);
