@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import {
   Loader2, RefreshCw, ChevronDown, ChevronUp, Send, ArrowRight,
   Eye, MousePointerClick, Users, TrendingUp, Zap, CheckCircle,
-  Upload, Sparkles, X,
+  Upload, Sparkles, X, Info, ExternalLink, AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -24,6 +24,12 @@ const OBJECTIVES = [
 ];
 
 const DURATIONS = [7, 14, 30];
+
+const ADS_MANAGER_URLS = {
+  meta:      'https://business.facebook.com/adsmanager/manage/campaigns',
+  instagram: 'https://business.facebook.com/adsmanager/manage/campaigns',
+  google:    'https://ads.google.com/aw/campaigns',
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -147,6 +153,9 @@ export default function CampaignCreate() {
   const [audienceError, setAudienceError] = useState('');
   const [forecastData,  setForecastData]  = useState(null);
   const [error,         setError]         = useState('');
+  const [showConfirm,   setShowConfirm]   = useState(false);
+  const [savedAsDraft,  setSavedAsDraft]  = useState(false);
+  const [successScreen, setSuccessScreen] = useState(null); // { asDraft, platform }
 
   const platConfig = PLATFORMS.find(p => p.id === platform) || PLATFORMS[0];
 
@@ -288,6 +297,7 @@ ${signalAction ? `מטרת הקמפיין: ${signalAction}` : ''}
   const handlePublish = async (asDraft = false) => {
     if (!bpId) { toast.error('חסר מזהה עסק'); return; }
     if (!postContent.trim()) { toast.error('יש להזין תוכן לפוסט'); return; }
+    setShowConfirm(false);
     setSaving(true);
     try {
       const m = forecastData?.metrics;
@@ -308,11 +318,15 @@ ${signalAction ? `מטרת הקמפיין: ${signalAction}` : ''}
         est_reach_high:   m?.total_reach?.high ?? null,
         est_leads_low:    m?.total_leads?.low  ?? null,
         est_leads_high:   m?.total_leads?.high ?? null,
-        status:           asDraft ? 'draft' : 'published',
+        status:           asDraft ? 'draft' : 'pending_launch',
         published_at:     asDraft ? null : new Date().toISOString(),
       });
-      toast.success(asDraft ? 'נשמר כטיוטה' : 'הקמפיין פורסם! 🎉');
-      navigate('/marketing');
+      if (asDraft) {
+        toast.success('נשמר כטיוטה');
+        navigate('/marketing');
+      } else {
+        setSuccessScreen({ platform });
+      }
     } catch (e) {
       toast.error('שגיאה בשמירת הקמפיין');
     }
@@ -325,6 +339,61 @@ ${signalAction ? `מטרת הקמפיין: ${signalAction}` : ''}
     return (
       <div className="p-6 text-center text-foreground-muted" dir="rtl">
         לא נמצא פרופיל עסקי
+      </div>
+    );
+  }
+
+  // ── Success screen after saving ──────────────────────────────────────────────
+  if (successScreen) {
+    const sc = PLATFORMS.find(p => p.id === successScreen.platform) || PLATFORMS[0];
+    const adsUrl = ADS_MANAGER_URLS[successScreen.platform] || ADS_MANAGER_URLS.meta;
+    const totalBudget = Number(budget) * Number(days);
+    return (
+      <div className="p-6 max-w-xl mx-auto space-y-5 text-right" dir="rtl">
+        <div className="flex flex-col items-center text-center py-6 gap-3">
+          <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center text-2xl">✅</div>
+          <h1 className="text-[18px] font-bold text-foreground">הקמפיין נשמר בהצלחה!</h1>
+          <p className="text-[13px] text-foreground-muted max-w-sm">
+            כל פרטי הקמפיין נשמרו במערכת. כדי שהמודעה תופעל, עליך להעלות אותה ל-{sc.label} Ads Manager ולאשר את התשלום שם.
+          </p>
+        </div>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+          <p className="text-[13px] font-bold text-amber-800 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" /> שלבים להפעלת הקמפיין
+          </p>
+          <ol className="space-y-2 text-[12px] text-amber-800 list-decimal list-inside">
+            <li>כנס ל-{sc.label} Ads Manager (הכפתור למטה)</li>
+            <li>צור קמפיין חדש ובחר את המטרה: <strong>{OBJECTIVES.find(o => o.id === objective)?.label}</strong></li>
+            <li>הדבק את טקסט הפוסט שיצרנו — הוא כבר מוכן</li>
+            <li>הגדר תקציב יומי: <strong>₪{budget}/יום</strong> למשך <strong>{days} ימים</strong></li>
+            <li>אשר תשלום כולל של <strong>₪{totalBudget}</strong> ישירות ל-{sc.label}</li>
+          </ol>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-[11px] text-blue-700 flex items-start gap-2">
+          <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+          תשלום ₪{totalBudget} ישולם ישירות ל-{sc.label} — OTX לא גובה תשלום על תקציב הפרסום
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <a
+            href={adsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[13px] font-bold text-white transition-all hover:opacity-90"
+            style={{ background: sc.color }}
+          >
+            <ExternalLink className="w-4 h-4" />
+            פתח {sc.label} Ads Manager
+          </a>
+          <button
+            onClick={() => navigate('/marketing')}
+            className="px-5 py-2.5 rounded-xl border border-border text-[13px] text-foreground-muted hover:text-foreground transition-colors"
+          >
+            חזור למרכז שיווק
+          </button>
+        </div>
       </div>
     );
   }
@@ -609,10 +678,16 @@ ${signalAction ? `מטרת הקמפיין: ${signalAction}` : ''}
             </div>
           </div>
         </div>
-        <div className="px-4 pb-3">
+        <div className="px-4 pb-3 space-y-2">
           <p className="text-[11px] text-foreground-muted">
             תקציב כולל: <span className="font-bold text-foreground">₪{Number(budget) * Number(days)}</span>
           </p>
+          <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+            <Info className="w-3.5 h-3.5 text-blue-500 mt-0.5 flex-shrink-0" />
+            <p className="text-[11px] text-blue-700 leading-snug">
+              תקציב זה ישולם ישירות ל-{platConfig.label} — OTX אינה גובה תשלום על הפרסום
+            </p>
+          </div>
         </div>
       </SectionCard>
 
@@ -801,19 +876,83 @@ ${signalAction ? `מטרת הקמפיין: ${signalAction}` : ''}
           שמור טיוטה
         </button>
         <button
-          onClick={() => handlePublish(false)}
+          onClick={() => {
+            if (!postContent.trim()) { toast.error('יש להזין תוכן לפוסט'); return; }
+            setShowConfirm(true);
+          }}
           disabled={saving}
           className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-bold text-background hover:opacity-90 transition-all"
           style={{ background: platConfig.color }}
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          פרסם ב-{platConfig.label}
+          המשך לפרסום ב-{platConfig.label}
         </button>
         <div className="text-right">
           <p className="text-[12px] font-bold text-foreground">₪{Number(budget) * Number(days)}</p>
-          <p className="text-[10px] text-foreground-muted">סה״כ</p>
+          <p className="text-[10px] text-foreground-muted">לפלטפורמה</p>
         </div>
       </div>
+
+      {/* ── Confirm modal ── */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" dir="rtl">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowConfirm(false)} />
+          <div className="relative bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4 z-10">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[15px] font-bold text-foreground">אישור לפני פרסום</h2>
+              <button onClick={() => setShowConfirm(false)} className="text-foreground-muted hover:text-foreground">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Budget summary */}
+            <div className="bg-secondary rounded-xl p-4 space-y-2 text-right">
+              <div className="flex justify-between text-[12px]">
+                <span className="text-foreground font-semibold">₪{budget}/יום</span>
+                <span className="text-foreground-muted">תקציב יומי</span>
+              </div>
+              <div className="flex justify-between text-[12px]">
+                <span className="text-foreground font-semibold">{days} ימים</span>
+                <span className="text-foreground-muted">משך הקמפיין</span>
+              </div>
+              <div className="border-t border-border pt-2 flex justify-between">
+                <span className="text-[15px] font-bold text-foreground">₪{Number(budget) * Number(days)}</span>
+                <span className="text-[12px] text-foreground-muted">סה״כ תקציב</span>
+              </div>
+            </div>
+
+            {/* Disclaimer */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+              <div className="text-right">
+                <p className="text-[12px] font-semibold text-amber-800 mb-0.5">חשוב לדעת</p>
+                <p className="text-[11px] text-amber-700 leading-snug">
+                  סכום ₪{Number(budget) * Number(days)} ישולם ישירות ל-{platConfig.label} כשתפעיל את הקמפיין ב-Ads Manager — לא ל-OTX.
+                  OTX שומרת את פרטי הקמפיין ועוזרת לך ליצור אותו, אך אינה מחייבת אותך בתשלום על הפרסום.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                onClick={() => handlePublish(false)}
+                disabled={saving}
+                className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-bold text-white hover:opacity-90 transition-all disabled:opacity-60"
+                style={{ background: platConfig.color }}
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                הבנתי — שמור קמפיין
+              </button>
+              <button
+                onClick={() => setShowConfirm(false)}
+                className="px-5 py-2 rounded-xl border border-border text-[12px] text-foreground-muted hover:text-foreground transition-colors"
+              >
+                ביטול
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
