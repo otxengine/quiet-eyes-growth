@@ -6,7 +6,23 @@ import { publishEvent } from '../../lib/eventBus';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
+const SERPAPI_KEY    = process.env.SERPAPI_KEY || process.env.SERPAPI_API_KEY || '';
 const CURRENT_YEAR = new Date().getFullYear();
+
+/** SerpAPI Google Maps local search — finds competitors with ratings + review counts */
+async function serpMapsSearch(query: string, city: string): Promise<any[]> {
+  if (!SERPAPI_KEY) return [];
+  try {
+    const params = new URLSearchParams({
+      engine: 'google_maps', q: query, location: `${city}, Israel`,
+      hl: 'iw', gl: 'il', type: 'search', api_key: SERPAPI_KEY,
+    });
+    const res = await fetch(`https://serpapi.com/search.json?${params}`, { signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) return [];
+    const data: any = await res.json();
+    return data.local_results || [];
+  } catch { return []; }
+}
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -137,16 +153,23 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     }
     tavilyQueries.push(`site:rest.co.il ${searchTerms[0] || businessType} ${city}`);
 
-    const [googleResultSets, tavilyResultSets, extraResults] = await Promise.all([
+    // SerpAPI Maps for primary city — richer structured data than Places alone
+    const serpPromises = SERPAPI_KEY
+      ? searchTerms.slice(0, 2).map(term => serpMapsSearch(`${term} ${city}`, city))
+      : [];
+
+    const [googleResultSets, tavilyResultSets, extraResults, serpResultSets] = await Promise.all([
       Promise.all(googleSearchPromises),
       Promise.all(tavilyQueries.map(q => tavilySearch(q, 5))),
       Promise.all(extraCitySearchPromises),
+      Promise.all(serpPromises),
     ]);
 
     const googleResults = googleResultSets.flat();
     const tavilyResults = [...tavilyResultSets.flat(), ...extraResults];
+    const serpResults   = serpResultSets.flat();
 
-    console.log(`runCompetitorIdentification: ${googleResults.length} Google, ${tavilyResults.length} Tavily results`);
+    console.log(`runCompetitorIdentification: ${googleResults.length} Google, ${tavilyResults.length} Tavily, ${serpResults.length} SerpAPI results`);
 
     // ── Step 3: LLM identifies DIRECT competitors only ───────────────────────
     const existingCompetitors = await (prisma as any).competitor.findMany({ where: { linked_business: businessProfileId } });
@@ -162,13 +185,19 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
         ).join('\n')}`
       : '';
 
+    const serpBlock = serpResults.length > 0
+      ? `Google Maps (SerpAPI):\n${serpResults.map((p: any) =>
+          `- ${p.title}: ${p.rating || '?'}★ (${p.reviews || 0} ביקורות) — ${p.address || city}${p.phone ? ' | ' + p.phone : ''}`
+        ).join('\n')}`
+      : '';
+
     const tavilyBlock = tavilyResults.length > 0
       ? `תוצאות חיפוש:\n${tavilyResults.map((r: any) =>
           `- ${r.title}: ${(r.content || '').substring(0, 150)}`
         ).join('\n')}`
       : '';
 
-    const contextBlock = [googleBlock, tavilyBlock].filter(Boolean).join('\n\n');
+    const contextBlock = [googleBlock, serpBlock, tavilyBlock].filter(Boolean).join('\n\n');
     const areasDesc = allAreas.join(', ');
 
     const notRelevantBlock = notRelevantNames.size > 0

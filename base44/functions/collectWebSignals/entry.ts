@@ -1,6 +1,30 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
+const SERPAPI_KEY    = Deno.env.get("SERPAPI_KEY") || Deno.env.get("SERPAPI_API_KEY") || "";
+
+// ── SerpAPI helper — Google Maps local business search ────────────────────────
+async function serpMapsSearch(query: string, location: string): Promise<any[]> {
+  if (!SERPAPI_KEY) return [];
+  try {
+    const params = new URLSearchParams({
+      engine:   'google_maps',
+      q:        query,
+      location: location,
+      hl:       'iw',
+      gl:       'il',
+      type:     'search',
+      api_key:  SERPAPI_KEY,
+    });
+    const res = await fetch(`https://serpapi.com/search.json?${params}`);
+    if (!res.ok) { console.warn(`[SerpAPI] HTTP ${res.status}`); return []; }
+    const data = await res.json();
+    return data.local_results || [];
+  } catch (err) {
+    console.warn(`[SerpAPI] error: ${err.message}`);
+    return [];
+  }
+}
 
 // ── Tavily helper ──────────────────────────────────────────────────────────────
 async function tavilySearch(query, options: any = {}) {
@@ -496,6 +520,41 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ── Phase 5: SerpAPI Google Maps — local business & competitor landscape ─────
+  // Gets structured local business data (ratings, reviews count, address, hours)
+  // for the same sector in the same city — competitor intelligence & market density.
+  if (SERPAPI_KEY && !rateLimited) {
+    console.log(`[collectWebSignals] Phase 5: SerpAPI Google Maps for ${category} in ${city}`);
+    const mapQueries = [
+      `${category} ${city}`,
+      `${category} ב${city}`,
+    ];
+    for (const q of mapQueries) {
+      const places = await serpMapsSearch(q, `${city}, Israel`);
+      for (const place of places.slice(0, 8)) {
+        const content = [
+          place.title,
+          place.address,
+          place.rating ? `דירוג: ${place.rating}/5` : '',
+          place.reviews ? `${place.reviews} ביקורות` : '',
+          place.type || '',
+          place.phone || '',
+          place.hours ? `שעות: ${JSON.stringify(place.hours)}` : '',
+          place.description || '',
+        ].filter(Boolean).join(' | ');
+
+        if (!content || content.length < 15) continue;
+        const url = place.website || `https://maps.google.com/?q=${encodeURIComponent(place.title + ' ' + city)}`;
+        totalResultsFound++;
+        await saveResult(
+          { url, content, title: place.title, published_date: null },
+          'serp_maps',
+          'competitor_listing',
+        );
+      }
+    }
+  }
+
   console.log(`[collectWebSignals] Done: ${newSignalsSaved} saved, ${duplicatesSkipped} skipped, ${totalResultsFound} found`);
 
   try {
@@ -510,11 +569,12 @@ Deno.serve(async (req) => {
   } catch (_) {}
 
   return Response.json({
-    phases_run: rateLimited ? 'partial' : 4,
+    phases_run: rateLimited ? 'partial' : 5,
     total_results_found: totalResultsFound,
     new_signals_saved: newSignalsSaved,
     duplicates_skipped: duplicatesSkipped,
     rate_limited: rateLimited,
     sector_sites_used: sectorSites,
+    serpapi_used: !!SERPAPI_KEY,
   });
 });

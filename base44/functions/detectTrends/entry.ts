@@ -8,6 +8,36 @@ import {
 const AGENT_NAME = 'הזיכרון';
 
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY') || '';
+const SERPAPI_KEY    = Deno.env.get('SERPAPI_KEY') || Deno.env.get('SERPAPI_API_KEY') || '';
+
+/** Fetch Google Trends data via SerpAPI for a query in Israel */
+async function fetchGoogleTrends(query: string): Promise<string> {
+  if (!SERPAPI_KEY) return '';
+  try {
+    const params = new URLSearchParams({
+      engine: 'google_trends',
+      q: query,
+      geo: 'IL',
+      data_type: 'TIMESERIES',
+      api_key: SERPAPI_KEY,
+    });
+    const res = await fetch(`https://serpapi.com/search.json?${params}`);
+    if (!res.ok) return '';
+    const data = await res.json();
+    const timeline = (data.interest_over_time?.timeline_data || [])
+      .slice(-8)
+      .map((pt: any) => `${pt.date}: ${pt.values?.[0]?.value ?? 0}`)
+      .join(', ');
+    const rising = (data.related_queries?.rising || [])
+      .slice(0, 6)
+      .map((q: any) => q.query)
+      .join(', ');
+    if (!timeline && !rising) return '';
+    return `Google Trends (${query} בישראל) — עניין לאורך זמן: ${timeline}. שאילתות עולות: ${rising}.`;
+  } catch {
+    return '';
+  }
+}
 
 async function searchTrendData(query: string): Promise<string> {
   if (!TAVILY_API_KEY) return '';
@@ -135,22 +165,32 @@ Previous avg quality: ${myScore.avg_quality}/100
     }
   }
 
-  const trendDataSources = await Promise.all([
-    // Google Trends-specific (searches for actual Google Trends pages and data)
-    searchTrendData(`${category} google trends israel 2025 2026 rising search volume`),
-    searchTrendDataTargeted(`${category} ישראל מגמה עולה 2025 2026 נתוני שוק`, isrBusinessPress),
-    // Sector-specific site queries
-    searchTrendDataTargeted(`${category} ${city} ביקוש 2025 2026 שינוי`, trendSites),
-    searchTrendDataTargeted(`${category} ישראל שוק צמיחה נתונים 2025 2026`, isrBusinessPress),
-    // Social trend intelligence
-    searchTrendData(`${category} Israel trending viral social media 2025 2026`),
-    searchTrendData(`${category} ישראל מגמות עולות 2026 נתונים`),
-    // Emerging demand signals
-    searchTrendData(`what do customers want from ${category} Israel 2025 2026 preferences`),
-    searchTrendDataTargeted(`${category} ${city} חדש נפתח פתוח 2025 2026`, [...trendSites, 'tapuz.co.il']),
+  // Run SerpAPI Google Trends in parallel with Tavily searches
+  const [trendDataSources, googleTrendsData, googleTrendsEn] = await Promise.all([
+    Promise.all([
+      // Google Trends-specific (searches for actual Google Trends pages and data)
+      searchTrendData(`${category} google trends israel 2025 2026 rising search volume`),
+      searchTrendDataTargeted(`${category} ישראל מגמה עולה 2025 2026 נתוני שוק`, isrBusinessPress),
+      // Sector-specific site queries
+      searchTrendDataTargeted(`${category} ${city} ביקוש 2025 2026 שינוי`, trendSites),
+      searchTrendDataTargeted(`${category} ישראל שוק צמיחה נתונים 2025 2026`, isrBusinessPress),
+      // Social trend intelligence
+      searchTrendData(`${category} Israel trending viral social media 2025 2026`),
+      searchTrendData(`${category} ישראל מגמות עולות 2026 נתונים`),
+      // Emerging demand signals
+      searchTrendData(`what do customers want from ${category} Israel 2025 2026 preferences`),
+      searchTrendDataTargeted(`${category} ${city} חדש נפתח פתוח 2025 2026`, [...trendSites, 'tapuz.co.il']),
+    ]),
+    // SerpAPI Google Trends — actual search volume data from Google
+    fetchGoogleTrends(category),
+    fetchGoogleTrends(`${category} israel`),
   ]);
 
-  const combinedTrendData = trendDataSources.filter(Boolean).join('\n\n---\n\n').substring(0, 6000);
+  const combinedTrendData = [
+    googleTrendsData,
+    googleTrendsEn,
+    ...trendDataSources,
+  ].filter(Boolean).join('\n\n---\n\n').substring(0, 7000);
 
   const rawSignals = await base44.asServiceRole.entities.RawSignal.filter(
     { linked_business: profile.id }, '-detected_at', 50

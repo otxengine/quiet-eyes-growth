@@ -5,6 +5,8 @@ import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { publishEvent } from '../../lib/eventBus';
+import { searchEventbriteEvents, hasEventbriteKey } from '../../lib/eventbrite';
+import { serpGoogleEvents, hasSerpApiKey } from '../../lib/serpapi';
 
 const MIN_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours — events change frequently
 
@@ -65,6 +67,66 @@ export async function findLocalEvents(req: Request, res: Response) {
 
     // ── Targeted queries: Israeli event listing sites + sports ────────────────
     const areaTerms = [city, regionTerms].filter(Boolean).join(' ');
+
+    // ── Phase 0: Eventbrite API — structured event data (direct API, not search) ─
+    const eventbriteRaw: any[] = [];
+    if (hasEventbriteKey()) {
+      try {
+        const [ebGeneral, ebCategory] = await Promise.all([
+          searchEventbriteEvents(city, `${category} ${city}`, 60, 15),
+          searchEventbriteEvents(city, city, 45, 10),
+        ]);
+        for (const ev of [...ebGeneral, ...ebCategory]) {
+          if (!ev.name || !ev.start_utc) continue;
+          eventbriteRaw.push({
+            name:               ev.name,
+            date_iso:           ev.start_utc.slice(0, 10),
+            date_text:          new Date(ev.start_utc).toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' }),
+            venue:              ev.venue_name || city,
+            type:               'other',
+            artist_or_headliner: ev.category || null,
+            expected_crowd:     (ev.capacity && ev.capacity > 500) ? 'large' : 'medium',
+            traffic_impact:     (ev.capacity && ev.capacity > 500) ? 'high' : 'medium',
+            business_opportunity: `לקוחות האירוע "${ev.name}" עשויים לבקר ב${name} לפני/אחרי האירוע`,
+            source_url:         ev.url || null,
+            _source:            'eventbrite_api',
+          });
+        }
+        console.log(`[findLocalEvents] Eventbrite API: ${eventbriteRaw.length} events in ${city}`);
+      } catch (e: any) {
+        console.warn('[findLocalEvents] Eventbrite error:', e.message);
+      }
+    }
+
+    // ── Phase 0.5: SerpAPI Google Events ─────────────────────────────────────
+    const serpEventRaw: any[] = [];
+    if (hasSerpApiKey()) {
+      try {
+        const [serpCity, serpHeb] = await Promise.all([
+          serpGoogleEvents(`events in ${city} Israel ${month} ${yearStr}`, `${city}, Israel`),
+          serpGoogleEvents(`אירועים הופעות ${city} ${month} ${yearStr}`, `${city}, Israel`),
+        ]);
+        for (const ev of [...serpCity, ...serpHeb]) {
+          if (!ev.title || !ev.date?.start_date) continue;
+          serpEventRaw.push({
+            name:               ev.title,
+            date_iso:           ev.date.start_date || new Date().toISOString().slice(0, 10),
+            date_text:          ev.date.when || ev.date.start_date || '',
+            venue:              ev.venue?.name || ev.address?.[0] || city,
+            type:               'other',
+            artist_or_headliner: ev.title,
+            expected_crowd:     'medium',
+            traffic_impact:     'medium',
+            business_opportunity: `לקוחות "${ev.title}" ב${city} — הזדמנות ל${name}`,
+            source_url:         ev.link || ev.ticket_info?.[0]?.link || null,
+            _source:            'serpapi_events',
+          });
+        }
+        console.log(`[findLocalEvents] SerpAPI Events: ${serpEventRaw.length} events for ${city}`);
+      } catch (e: any) {
+        console.warn('[findLocalEvents] SerpAPI Events error:', e.message);
+      }
+    }
 
     // ── Batch 1: Local events — concerts, festivals, shows ────────────────────
     const localEventQueries = [
@@ -136,7 +198,8 @@ export async function findLocalEvents(req: Request, res: Response) {
     const uniqueSports = dedup(sportsResults);
     const uniqueTv     = dedup(tvResults);
 
-    if (uniqueLocal.length === 0 && uniqueSports.length === 0 && uniqueTv.length === 0) {
+    if (uniqueLocal.length === 0 && uniqueSports.length === 0 && uniqueTv.length === 0 &&
+        eventbriteRaw.length === 0 && serpEventRaw.length === 0) {
       setLastRun(businessProfileId, 'findLocalEvents');
       await writeAutomationLog('findLocalEvents', businessProfileId, startTime, 0);
       return res.json({ signals_created: 0 });
@@ -154,6 +217,11 @@ export async function findLocalEvents(req: Request, res: Response) {
       .map(r => `[${r.url}]\n${r.title || ''}: ${(r.content || '').slice(0, 220)}`)
       .join('\n\n');
 
+    // Eventbrite + SerpAPI already structured — pass as context for the LLM
+    const structuredEventContext = [...eventbriteRaw, ...serpEventRaw].slice(0, 15)
+      .map(e => `[${e._source}] ${e.name} | ${e.date_iso} | ${e.venue} | ${e.source_url || ''}`)
+      .join('\n');
+
     // ── LLM: extract specific events with team names, artist names and real dates ─
     let events: any[] = [];
     try {
@@ -163,14 +231,17 @@ export async function findLocalEvents(req: Request, res: Response) {
         skipCache: true,
         prompt: `אתה מומחה אירועים ושיווק עסקי בישראל. זהה אירועים ספציפיים שיכולים לייצר תנועה לעסק "${name}" (${category} ב${city}).
 
+== אירועים מובנים (Eventbrite API + Google Events) — מקור ראשוני אמין ==
+${structuredEventContext || 'אין נתונים מובנים'}
+
 == אירועים מקומיים (הופעות, פסטיבלים, שווקים) ==
-${localContext.slice(0, 2400)}
+${localContext.slice(0, 2000)}
 
 == משחקי ספורט בינלאומיים ומקומיים ==
-${sportsContext.slice(0, 1800)}
+${sportsContext.slice(0, 1600)}
 
 == שידורי טלוויזיה עם רייטינג גבוה (פינאלות, ריאליטי, סדרות) ==
-${tvContext.slice(0, 1200)}
+${tvContext.slice(0, 1000)}
 
 חוקים קריטיים:
 - שם האירוע חייב להיות ספציפי עם פרטים: "צרפת נגד סנגל" (לא "משחק כדורגל"), "הופעת אייגל" (לא "הופעה"), "פסטיבל הג'אז של חיפה" (לא "פסטיבל"), "פינאלה של X-Factor ישראל" (לא "תוכנית ריאליטי")
