@@ -17,11 +17,15 @@ import { writeAutomationLog } from '../../lib/automationLog';
  * always start with a clean slate and have room to add new insights.
  */
 
-const MAX_ACTIVE = 12;
+// Cap BEFORE generators run — leaves room for up to 4 new alerts from generateProactiveAlerts.
+// generateProactiveAlerts has HARD_CAP=10 (skips if ≥10), so setting this to 8 ensures
+// the generator always has room to add alerts after cleanup.
+// cleanupAndLearn (runs at END of pipeline) then caps the final total at 10.
+const MAX_ACTIVE = 8;
 
 const STALE_DAYS: Record<string, number> = {
-  low:      5,
-  medium:   10,
+  low:      3,   // low-priority insights expire faster
+  medium:   7,
   high:     14,
   critical: 21,
 };

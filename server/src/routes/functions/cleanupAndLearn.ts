@@ -61,6 +61,41 @@ export async function cleanupAndLearn(req: Request, res: Response) {
     const sevenDaysAgo    = new Date(now.getTime() -  7 * 24 * 60 * 60 * 1000).toISOString();
     const ninetyDaysAgo   = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
 
+    // ── Phase 0: RawSignal cleanup — these accumulate fastest ────────────────
+    // RawSignals are created by collectWebSignals/collectSocialSignals every scan.
+    // Each scan can add 50-200 records. Delete aggressively: keep only last 14 days.
+    const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    try {
+      const rawOldDelete = await (prisma as any).rawSignal.deleteMany({
+        where: {
+          linked_business: businessProfileId,
+          detected_at: { lt: fourteenDaysAgo },
+        },
+      });
+      stats.signals_archived += rawOldDelete.count;
+
+      // Also cap total RawSignals per business to 500 (keep newest)
+      const rawCount = await (prisma as any).rawSignal.count({
+        where: { linked_business: businessProfileId },
+      });
+      if (rawCount > 500) {
+        const oldest = await (prisma as any).rawSignal.findMany({
+          where: { linked_business: businessProfileId },
+          orderBy: { detected_at: 'asc' },
+          take: rawCount - 500,
+          select: { id: true },
+        });
+        if (oldest.length > 0) {
+          const capDelete = await (prisma as any).rawSignal.deleteMany({
+            where: { id: { in: oldest.map((r: any) => r.id) } },
+          });
+          stats.signals_archived += capDelete.count;
+        }
+      }
+    } catch (_) {
+      // rawSignal table may use different name — safe to ignore
+    }
+
     // ── Phase 1A: Delete read signals older than 30 days ─────────────────────
     const readOldDelete = await prisma.marketSignal.deleteMany({
       where: {
@@ -277,7 +312,8 @@ export async function cleanupAndLearn(req: Request, res: Response) {
       stats.alerts_dismissed += semanticDupIds.length;
     }
 
-    // 4. Cap undismissed alerts to max 7 — dismiss lowest-priority oldest ones
+    // 4. Cap undismissed alerts to max 10 — dismiss lowest-priority oldest ones.
+    //    (cleanupInsights at scan-start caps to 8; generators add up to 4; we cap final at 10)
     const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
     const activeAlerts = await prisma.proactiveAlert.findMany({
       where: { linked_business: businessProfileId, is_dismissed: false },
@@ -285,7 +321,7 @@ export async function cleanupAndLearn(req: Request, res: Response) {
       orderBy: { created_at: 'desc' },
     });
 
-    if (activeAlerts.length > 7) {
+    if (activeAlerts.length > 10) {
       // Sort: critical first, then high, medium, low — within same priority newest first
       const sorted = [...activeAlerts].sort((a, b) => {
         const pa = priorityRank[a.priority || 'low'] ?? 3;
@@ -293,7 +329,7 @@ export async function cleanupAndLearn(req: Request, res: Response) {
         if (pa !== pb) return pa - pb;
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
-      const toDismiss = sorted.slice(7).map(a => a.id);
+      const toDismiss = sorted.slice(10).map(a => a.id);
       if (toDismiss.length > 0) {
         await prisma.proactiveAlert.updateMany({
           where: { id: { in: toDismiss } },

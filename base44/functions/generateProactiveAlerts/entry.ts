@@ -39,11 +39,32 @@ Deno.serve(async (req) => {
     base44.asServiceRole.entities.HealthScore.filter({ linked_business: bpId }),
   ]);
 
-  // Dismiss old alerts (>3 days old)
+  // ── Cleanup existing alerts before generating new ones ────────────────────
+  const ALERT_HARD_CAP = 10; // never show more than this many active alerts
   const existingAlerts = await base44.asServiceRole.entities.ProactiveAlert.filter({ linked_business: bpId });
   const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString();
+
+  // 1. Dismiss stale alerts (>3 days old, non-critical)
   for (const alert of existingAlerts) {
-    if (!alert.is_dismissed && (alert.created_at || alert.created_date) < threeDaysAgo) {
+    if (!alert.is_dismissed && !alert.is_acted_on &&
+        (alert.priority === 'low' || alert.priority === 'medium') &&
+        (alert.created_at || alert.created_date || '') < threeDaysAgo) {
+      await base44.asServiceRole.entities.ProactiveAlert.update(alert.id, { is_dismissed: true });
+    }
+  }
+
+  // 2. Hard cap: if still too many active, dismiss lowest-priority oldest ones
+  const stillActive = existingAlerts.filter(a => !a.is_dismissed && !a.is_acted_on);
+  if (stillActive.length >= ALERT_HARD_CAP) {
+    const PRIORITY_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+    const sorted = [...stillActive].sort((a, b) => {
+      const pa = PRIORITY_RANK[a.priority || 'low'] ?? 3;
+      const pb = PRIORITY_RANK[b.priority || 'low'] ?? 3;
+      if (pa !== pb) return pb - pa; // lowest priority first
+      return (a.created_at || '') < (b.created_at || '') ? -1 : 1; // oldest first
+    });
+    const toDismiss = sorted.slice(0, sorted.length - ALERT_HARD_CAP + 4); // leave room for 4 new
+    for (const alert of toDismiss) {
       await base44.asServiceRole.entities.ProactiveAlert.update(alert.id, { is_dismissed: true });
     }
   }

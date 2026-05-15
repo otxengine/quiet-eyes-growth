@@ -27,6 +27,9 @@ import { analyzeInstagramComments } from './analyzeInstagramComments';
 import { analyzeSocialComments } from './analyzeSocialComments';
 import { analyzeTikTokContent } from './analyzeTikTokContent';
 import { updateSectorKnowledge } from './updateSectorKnowledge';
+import { marketMemoryEngine } from './marketMemoryEngine';
+import { microMomentDetector } from './microMomentDetector';
+import { sentimentVelocityMonitor } from './sentimentVelocityMonitor';
 
 async function callHandler(fn: Function, businessProfileId: string): Promise<any> {
   return new Promise((resolve) => {
@@ -132,6 +135,10 @@ export async function runFullScan(req: Request, res: Response) {
     ['detectTrends',                detectTrends],
     ['detectEarlyTrends',           earlyTrendsHandler],
     ['detectViralSignals',          detectViralSignals],
+    // ── Market Memory + Moment Detection ────────────────────────
+    ['marketMemoryEngine',          marketMemoryEngine],    // learns seasonal patterns → BusinessMemory
+    ['microMomentDetector',         microMomentDetector],   // finds upcoming purchase moments
+    ['sentimentVelocityMonitor',    sentimentVelocityMonitor], // detects rapid sentiment drops
     // ── Predictive + Alerts ──────────────────────────────────────
     ['runPredictions',              runPredictions],
     ['applyDataFreshness',          applyDataFreshness],

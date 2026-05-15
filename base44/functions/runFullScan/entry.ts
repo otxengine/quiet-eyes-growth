@@ -17,18 +17,24 @@ Deno.serve(async (req) => {
   console.log(`[runFullScan] Starting for "${profile.name}" (${profile.category}, ${profile.city})`);
 
   for (const [step, fn] of [
-    ['collectWebSignals', 'collectWebSignals'],
-    ['collectSocialSignals', 'collectSocialSignals'],
-    ['scanAllReviews', 'scanAllReviews'],
-    ['runMarketIntelligence', 'runMarketIntelligence'],
+    // ── Data Collection ──────────────────────────────────────────
+    ['collectWebSignals',           'collectWebSignals'],
+    ['collectSocialSignals',        'collectSocialSignals'],
+    ['scanAllReviews',              'scanAllReviews'],
+    // ── Analysis ────────────────────────────────────────────────
+    ['runMarketIntelligence',       'runMarketIntelligence'],
     ['runCompetitorIdentification', 'runCompetitorIdentification'],
-    ['runLeadGeneration', 'runLeadGeneration'],
-    ['findSocialLeads', 'findSocialLeads'],
-    ['detectTrends', 'detectTrends'],
-    ['runPredictions', 'runPredictions'],
-    ['calculateHealthScore', 'calculateHealthScore'],
-    ['generateProactiveAlerts', 'generateProactiveAlerts'],
-    ['generateMorningBriefing', 'generateMorningBriefing'],
+    ['runLeadGeneration',           'runLeadGeneration'],
+    ['findSocialLeads',             'findSocialLeads'],
+    // ── Trend Intelligence ───────────────────────────────────────
+    ['detectTrends',                'detectTrends'],
+    // ── Predictive + Health ──────────────────────────────────────
+    ['runPredictions',              'runPredictions'],
+    ['calculateHealthScore',        'calculateHealthScore'],
+    // ── Alerts (cap enforced inside generateProactiveAlerts) ─────
+    ['generateProactiveAlerts',     'generateProactiveAlerts'],
+    // ── Briefing (always last) ───────────────────────────────────
+    ['generateMorningBriefing',     'generateMorningBriefing'],
   ] as [string, string][]) {
     try {
       const r = await base44.functions.invoke(fn, params);

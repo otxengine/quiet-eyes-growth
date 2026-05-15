@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { callAI, callAIJson } from '../../lib/ai_router';
+import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
 
 /**
  * generateSmartPost — Multi-brain post generation pipeline.
@@ -25,7 +26,7 @@ export async function generateSmartPost(req: Request, res: Response) {
   }
 
   try {
-    const [profile, leads, reviews, competitors] = await Promise.all([
+    const [profile, leads, reviews, competitors, bizCtx] = await Promise.all([
       prisma.businessProfile.findUnique({ where: { id: businessProfileId } }),
       prisma.lead.findMany({
         where: { linked_business: businessProfileId },
@@ -44,9 +45,13 @@ export async function generateSmartPost(req: Request, res: Response) {
         take: 3,
         select: { name: true, strengths: true },
       }),
+      loadBusinessContext(businessProfileId),
     ]);
 
     if (!profile) return res.status(404).json({ error: 'Business profile not found' });
+
+    // ML context: inject learned tone/style preferences into post generation
+    const mlContext = formatContextForPrompt(bizCtx, 'generateSmartPost');
 
     const leadSummary = leads
       .slice(0, 5)
@@ -98,7 +103,7 @@ Build a precise target-audience profile for this insight. Return ONLY valid JSON
 
     const post = await callAIJson<any>('generate_post', `
 Write a marketing post for ${platform} in Hebrew.
-
+${mlContext}
 Business: "${profile.name}" — ${profile.category} in ${profile.city}
 ${profile.description ? `Description: ${profile.description}` : ''}
 Insight: "${insight_text}"
@@ -113,6 +118,7 @@ Rules:
 • Offer a solution — the business
 • End with a clear CTA
 • Write natural Hebrew, not a translation from English
+• Apply the learned tone and style preferences above (if provided)
 
 Return ONLY valid JSON. ALL string values must be in Hebrew, EXCEPT image_description which must be in English:
 {
