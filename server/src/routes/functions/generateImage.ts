@@ -157,17 +157,16 @@ async function translateForSearch(text: string): Promise<string> {
   if (!text) return text;
   // If no Hebrew, nothing to translate
   if (!/[\u0590-\u05FF]/.test(text)) return text;
-  // Try full API translation first — best quality for free-form Hebrew descriptions
-  // Step 1: GPT-4o-mini
-  const gpt = await gptTranslate(text);
-  if (gpt) return gpt;
-  // Step 2: Google Translate
-  const google = await googleTranslate(text);
-  if (google) return google;
-  // Step 3: Claude Haiku
+  // Step 1: Claude Haiku — primary (Anthropic is our main provider)
   const claude = await claudeTranslate(text);
   if (claude) return claude;
-  // Step 4: local dictionary + strip (last resort)
+  // Step 2: GPT-4o-mini — fallback
+  const gpt = await gptTranslate(text);
+  if (gpt) return gpt;
+  // Step 3: Google Translate — fallback when both AI providers unavailable
+  const google = await googleTranslate(text);
+  if (google) return google;
+  // Step 4: local dictionary + strip (last resort, no API needed)
   return translateCustomPrompt(text);
 }
 
