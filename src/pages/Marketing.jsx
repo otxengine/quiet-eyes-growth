@@ -25,10 +25,11 @@ const ORGANIC_PLATFORMS = [
 ];
 
 const STATUS_CONFIG = {
-  draft:     { label: 'טיוטה',  cls: 'bg-gray-100 text-gray-600' },
-  published: { label: 'פורסם',  cls: 'bg-blue-50 text-blue-700' },
-  active:    { label: 'פעיל',   cls: 'bg-green-50 text-green-700' },
-  completed: { label: 'הסתיים', cls: 'bg-purple-50 text-purple-700' },
+  draft:          { label: 'טיוטה',          cls: 'bg-gray-100 text-gray-600' },
+  pending_launch: { label: 'ממתין לפרסום',   cls: 'bg-amber-50 text-amber-700' },
+  published:      { label: 'פורסם',           cls: 'bg-blue-50 text-blue-700' },
+  active:         { label: 'פעיל',            cls: 'bg-green-50 text-green-700' },
+  completed:      { label: 'הסתיים',          cls: 'bg-purple-50 text-purple-700' },
 };
 
 const ORGANIC_STATUS = {
@@ -74,6 +75,16 @@ function CampaignCard({ campaign, onDelete }) {
       </div>
       <div className="flex items-center gap-2 px-4 py-2 border-t border-border bg-secondary/30">
         <button onClick={() => navigate(`/marketing/create?campaignId=${campaign.id}`)} className="text-[11px] text-foreground-muted hover:text-foreground transition-colors">✏️ ערוך</button>
+        {campaign.status === 'pending_launch' && (
+          <a
+            href={campaign.platform === 'google' ? 'https://ads.google.com/aw/campaigns' : 'https://business.facebook.com/adsmanager/'}
+            target="_blank" rel="noreferrer"
+            className="flex items-center gap-1 text-[11px] font-medium text-amber-700 hover:text-amber-800 transition-colors"
+          >
+            <ExternalLink className="w-3 h-3" />
+            פתח Ads Manager
+          </a>
+        )}
         <button onClick={() => onDelete(campaign.id)} className="text-[11px] text-foreground-muted hover:text-red-500 mr-auto transition-colors">
           <Trash2 className="w-3 h-3" />
         </button>
@@ -615,8 +626,8 @@ const TABS = [
   { id: 'calendar',  label: 'לוח שנה',   icon: '📅' },
 ];
 
-const PAID_TABS = ['all', 'draft', 'published', 'active', 'completed'];
-const PAID_TAB_LABELS = { all: 'הכל', draft: 'טיוטות', published: 'פורסמו', active: 'פעילים', completed: 'הסתיימו' };
+const PAID_TABS = ['all', 'pending_launch', 'draft', 'published', 'active', 'completed'];
+const PAID_TAB_LABELS = { all: 'הכל', pending_launch: 'ממתין לפרסום', draft: 'טיוטות', published: 'פורסמו', active: 'פעילים', completed: 'הסתיימו' };
 
 export default function Marketing() {
   const { businessProfile } = useOutletContext();

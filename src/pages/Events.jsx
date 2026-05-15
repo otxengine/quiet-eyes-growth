@@ -11,13 +11,14 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
 const EVENT_TABS = [
-  { key: 'all',        label: 'הכל' },
-  { key: 'holiday',    label: 'חגים יהודיים' },
-  { key: 'religion',   label: 'דתות אחרות' },
-  { key: 'sports',     label: 'ספורט' },
-  { key: 'seasonal',   label: 'עונתי' },
-  { key: 'commercial', label: 'מסחרי' },
-  { key: 'local',      label: 'אירועים מקומיים' },
+  { key: 'all',          label: 'הכל' },
+  { key: 'holiday',      label: 'חגים יהודיים' },
+  { key: 'religion',     label: 'דתות אחרות' },
+  { key: 'sports',       label: 'ספורט' },
+  { key: 'tv_broadcast', label: 'שידורי טלוויזיה' },
+  { key: 'seasonal',     label: 'עונתי' },
+  { key: 'commercial',   label: 'מסחרי' },
+  { key: 'local',        label: 'אירועים מקומיים' },
 ];
 
 const HOLIDAY_KEYWORDS  = ['פסח', 'ראש השנה', 'סוכות', 'חנוכה', 'פורים', 'שבועות', 'יום כיפור', 'עצמאות', 'ירושלים', 'לג בעומר', 'ט"ו באב', 'שמחת תורה', 'holiday', 'jewish', 'yom_kippur', 'rosh_hashana'];
@@ -26,8 +27,12 @@ const SPORTS_KEYWORDS   = ['ליגת האלופות', 'גמר', 'ספורט', '�
 const SEASONAL_KEYWORDS = ['קיץ', 'חורף', 'אביב', 'סתיו', 'חזרה ללימודים', 'חתונה', 'עונה', 'summer', 'winter', 'spring', 'renovation', 'שיפוץ'];
 const COMMERCIAL_KEYWORDS = ['בלאק פריידי', 'ולנטיין', 'ינואר', 'כושר', 'דיאטה', 'החלטות', 'black friday', 'valentine', 'commercial', 'אמהות', 'אבות', 'הלווין', 'halloween'];
 
-function classifyEvent(title = '', description = '', tags = []) {
+const TV_KEYWORDS = ['tv_broadcast', 'פינאלה', 'ריאליטי', 'x-factor', 'הכוכב הבא', 'האח הגדול', 'מאסטרשף', 'ערוץ 12', 'ערוץ 13', 'hot', 'שידור חי', 'רייטינג'];
+
+function classifyEvent(title = '', description = '', tags = [], eventType = '') {
+  if (eventType === 'tv_broadcast') return 'tv_broadcast';
   const text = `${title} ${description} ${tags.join(' ')}`.toLowerCase();
+  if (TV_KEYWORDS.some(k => text.includes(k.toLowerCase()))) return 'tv_broadcast';
   if (RELIGION_KEYWORDS.some(k => text.includes(k.toLowerCase()))) return 'religion';
   if (SPORTS_KEYWORDS.some(k => text.includes(k.toLowerCase()))) return 'sports';
   if (HOLIDAY_KEYWORDS.some(k => text.includes(k.toLowerCase()))) return 'holiday';
@@ -481,15 +486,16 @@ function EventCard({ item, businessProfile, type, onCardClick, onDismissed }) {
       ? getCountdown(meta.event_date, true)      // real date stored in meta → always accurate
       : getCountdown(meta.urgency_hours);         // fallback for old records
 
-  const category = type === 'static' ? item.category : classifyEvent(title, description, tags);
+  const category = type === 'static' ? item.category : classifyEvent(title, description, tags, meta.event_type || '');
 
   const categoryIcons = {
-    sports:     '⚽',
-    holiday:    '✡️',
-    religion:   '🕌',
-    seasonal:   '🌿',
-    commercial: '🛍️',
-    other:      '📅',
+    sports:      '⚽',
+    holiday:     '✡️',
+    religion:    '🕌',
+    seasonal:    '🌿',
+    commercial:  '🛍️',
+    tv_broadcast:'📺',
+    other:       '📅',
   };
 
   return (
@@ -698,7 +704,9 @@ export default function Events() {
       if (item._type === 'static') { map.set(item.id, item.category); return; }
       const title = item._type === 'alert' ? item.title : (item.agent_name || '');
       const desc  = item._type === 'alert' ? item.description : item.summary;
-      map.set(item.id, classifyEvent(title, desc, item.tags || []));
+      let evType = '';
+      try { evType = JSON.parse(item.source_description || '{}').event_type || ''; } catch {}
+      map.set(item.id, classifyEvent(title, desc, item.tags || [], evType));
     });
     return map;
   }, [allItems]);
@@ -713,12 +721,13 @@ export default function Events() {
     : allItems.filter(item => getCategory(item) === activeTab);
 
   const countByTab = {
-    holiday:    allItems.filter(i => getCategory(i) === 'holiday').length,
-    religion:   allItems.filter(i => getCategory(i) === 'religion').length,
-    sports:     allItems.filter(i => getCategory(i) === 'sports').length,
-    seasonal:   allItems.filter(i => getCategory(i) === 'seasonal').length,
-    commercial: allItems.filter(i => getCategory(i) === 'commercial').length,
-    local:      allItems.filter(i => getCategory(i) === 'local').length,
+    holiday:      allItems.filter(i => getCategory(i) === 'holiday').length,
+    religion:     allItems.filter(i => getCategory(i) === 'religion').length,
+    sports:       allItems.filter(i => getCategory(i) === 'sports').length,
+    tv_broadcast: allItems.filter(i => getCategory(i) === 'tv_broadcast').length,
+    seasonal:     allItems.filter(i => getCategory(i) === 'seasonal').length,
+    commercial:   allItems.filter(i => getCategory(i) === 'commercial').length,
+    local:        allItems.filter(i => getCategory(i) === 'local').length,
   };
 
   const handleScan = async () => {

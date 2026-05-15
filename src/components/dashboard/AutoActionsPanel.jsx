@@ -44,31 +44,28 @@ export default function AutoActionsPanel({ bpId }) {
   const [collapsed, setCollapsed] = useState(false);
   const [actioning, setActioning] = useState({});
 
-  const { data: roiData } = useQuery({
-    queryKey: ['roi', bpId],
-    queryFn: () => base44.raw.get(`/roi/${bpId}`),
-    enabled: !!bpId,
-    staleTime: 2 * 60 * 1000,
-  });
-
-  const { data: pendingData } = useQuery({
-    queryKey: ['autoActionsPending', bpId],
-    queryFn: () => base44.raw.get(`/auto-actions/${bpId}?status=pending_approval&take=10`),
+  const { data: busStats } = useQuery({
+    queryKey: ['eventBusStats', bpId],
+    queryFn: () => base44.functions.invoke('getEventBusStats', { businessProfileId: bpId }),
     enabled: !!bpId,
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000,
   });
 
-  const pending = pendingData?.actions || [];
-  const roi = roiData || {};
+  const pending = busStats?.pending_actions || [];
+  const recentActions = busStats?.recent_actions || [];
+  const roi = {
+    completed: recentActions.filter(a => a.status === 'completed').length,
+    total_revenue_impact: recentActions.reduce((sum, a) => sum + (a.revenue_impact || 0), 0),
+    recent_actions: recentActions,
+  };
 
   const handleApprove = async (actionId, description) => {
     setActioning(prev => ({ ...prev, [actionId]: 'approving' }));
     try {
-      await base44.raw.put(`/auto-actions/${actionId}/approve`, {});
+      await base44.functions.invoke('approveAction', { actionId, businessProfileId: bpId });
       toast.success(`בוצע: ${description}`);
-      queryClient.invalidateQueries({ queryKey: ['autoActionsPending', bpId] });
-      queryClient.invalidateQueries({ queryKey: ['roi', bpId] });
+      queryClient.invalidateQueries({ queryKey: ['eventBusStats', bpId] });
     } catch (err) {
       toast.error(`שגיאה: ${err.message}`);
     } finally {
@@ -79,9 +76,9 @@ export default function AutoActionsPanel({ bpId }) {
   const handleReject = async (actionId) => {
     setActioning(prev => ({ ...prev, [actionId]: 'rejecting' }));
     try {
-      await base44.raw.put(`/auto-actions/${actionId}/reject`, { reason: 'נדחה על ידי המשתמש' });
+      await base44.functions.invoke('rejectAction', { actionId, businessProfileId: bpId });
       toast.success('פעולה נדחתה');
-      queryClient.invalidateQueries({ queryKey: ['autoActionsPending', bpId] });
+      queryClient.invalidateQueries({ queryKey: ['eventBusStats', bpId] });
     } catch (err) {
       toast.error(`שגיאה: ${err.message}`);
     } finally {

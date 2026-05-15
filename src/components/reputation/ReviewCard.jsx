@@ -2,7 +2,6 @@ import React, { useState, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Star, Loader2, RefreshCw, ExternalLink, ShieldCheck, ShieldX } from 'lucide-react';
-import AiConfidenceBadge from '@/components/ai/AiConfidenceBadge';
 
 const PLATFORM_ICON = {
   'Google Maps':  '📍',
@@ -169,16 +168,20 @@ export default function ReviewCard({ review, businessProfile, compact = false })
 
   const saveResponse = async () => {
     if (!responseText.trim()) return;
-    await base44.entities.Review.update(review.id, {
-      suggested_response: responseText,
-      response_status: 'responded',
-    });
-    setSaved(true);
-    logOutcome('review_response', true, `תגובה לביקורת של ${review.reviewer_name}`);
-    queryClient.invalidateQueries({ queryKey: ['reviewsPage'] });
-    queryClient.invalidateQueries({ queryKey: ['pendingReviews'] });
-    queryClient.invalidateQueries({ queryKey: ['allReviews'] });
-    setTimeout(() => { setExpanded(false); setSaved(false); }, 2000);
+    try {
+      await base44.entities.Review.update(review.id, {
+        suggested_response: responseText,
+        response_status: 'responded',
+      });
+      setSaved(true);
+      logOutcome('review_response', true, `תגובה לביקורת של ${review.reviewer_name}`);
+      queryClient.invalidateQueries({ queryKey: ['reviewsPage'] });
+      queryClient.invalidateQueries({ queryKey: ['pendingReviews'] });
+      queryClient.invalidateQueries({ queryKey: ['allReviews'] });
+      setTimeout(() => { setExpanded(false); setSaved(false); }, 2000);
+    } catch {
+      setError('שגיאה בשמירת התגובה. נסה שוב.');
+    }
   };
 
   const handleEdit = () => {

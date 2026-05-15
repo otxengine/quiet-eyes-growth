@@ -148,9 +148,12 @@ export default function AppLayout() {
       }
       setShowGlobalScan(true);
     };
-    // setTimeout ensures Dashboard's cleanup (delete) runs first on navigation
-    const t = setTimeout(() => { window.__quieteyes_scan = handler; }, 0);
-    return () => clearTimeout(t);
+    // setTimeout ensures page-specific handlers (from Intelligence/Leads/etc.) run first.
+    // Only register generic handler if no page has set its own.
+    const t = setTimeout(() => {
+      if (!window.__quieteyes_scan) window.__quieteyes_scan = handler;
+    }, 0);
+    return () => { clearTimeout(t); if (window.__quieteyes_scan === handler) delete window.__quieteyes_scan; };
   }, [isOnDashboard, scanQuota.isExhausted, scanQuota.plan, scanQuota.quota, location.pathname]);
 
   // Fetch badge counts

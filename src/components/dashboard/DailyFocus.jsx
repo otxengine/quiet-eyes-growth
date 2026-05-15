@@ -97,19 +97,19 @@ function ActionRow({ item, onDone }) {
   const handleApproveAction = async () => {
     setBusy(true);
     try {
-      await base44.raw.put(`/auto-actions/${item.id}/approve`, {});
-      qc.invalidateQueries({ queryKey: ['autoActionsPending'] });
+      await base44.functions.invoke('approveAction', { actionId: item.id, businessProfileId: item.meta?.bpId });
+      qc.invalidateQueries({ queryKey: ['eventBusStats'] });
       toast.success('פעולה בוצעה ✓');
       setDone(true);
       onDone?.();
-    } catch (e) { toast.error(e.message); }
+    } catch (e) { toast.error(e.message || 'שגיאה בביצוע הפעולה'); }
     setBusy(false);
   };
 
   const handleRejectAction = async () => {
     try {
-      await base44.raw.put(`/auto-actions/${item.id}/reject`, { reason: 'נדחה' });
-      qc.invalidateQueries({ queryKey: ['autoActionsPending'] });
+      await base44.functions.invoke('rejectAction', { actionId: item.id, businessProfileId: item.meta?.bpId });
+      qc.invalidateQueries({ queryKey: ['eventBusStats'] });
       setDone(true);
     } catch {}
   };
@@ -196,7 +196,7 @@ function ActionRow({ item, onDone }) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function DailyFocus({ reviews, leads, signals, competitors, pendingActions }) {
+export default function DailyFocus({ reviews, leads, signals, competitors, pendingActions, bpId }) {
   const [showAll, setShowAll] = useState(false);
   const [doneIds, setDoneIds] = useState(new Set());
 
@@ -253,7 +253,7 @@ export default function DailyFocus({ reviews, leads, signals, competitors, pendi
     sub:   a.action_type ? `סוג: ${a.action_type}` : null,
     date:  a.created_date,
     link:  null,
-    meta:  {},
+    meta:  { bpId },
   }));
 
   // P1 — Competitor price changes this week

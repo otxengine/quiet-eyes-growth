@@ -332,7 +332,7 @@ export default function Competitors() {
       </div>
 
       {/* ── Main content ── */}
-      {true && <>
+      <>
 
       {/* OTX Competitor Changes section — data from agent */}
       <div className="card-base fade-in-up">
@@ -573,7 +573,7 @@ export default function Competitors() {
         </>
       )}
 
-      </> /* end main section */}
+      </>
 
       <CompetitorTimeline bpId={businessProfile?.id} />
 

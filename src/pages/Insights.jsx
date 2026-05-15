@@ -197,7 +197,8 @@ export default function Insights() {
       createdAt:   s.detected_at || s.created_date,
       sourceAgent: null,
     })),
-  ].sort((a, b) => {
+  ].filter(item => !dismissedIds.has(item.id))
+  .sort((a, b) => {
     const po = (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3);
     if (po !== 0) return po;
     return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
@@ -300,7 +301,7 @@ export default function Insights() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.filter(item => !dismissedIds.has(item.id)).map(item => (
+          {filtered.map(item => (
             <InsightCard
               key={item.navId}
               item={item}

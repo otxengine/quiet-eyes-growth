@@ -10,7 +10,7 @@ const MIN_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours — events change frequen
 
 const TYPE_ICON: Record<string, string> = {
   concert: '🎵', conference: '🎙️', festival: '🎪', market: '🛒',
-  sports: '⚽', community: '🤝', exhibition: '🖼️', other: '📍',
+  sports: '⚽', community: '🤝', exhibition: '🖼️', tv_broadcast: '📺', other: '📍',
 };
 
 /**
@@ -92,6 +92,17 @@ export async function findLocalEvents(req: Request, res: Response) {
       `ישראל כדורסל ליגה לאומית אירופה ${month} 2026 משחק`,
     ];
 
+    // ── Batch 3: High-rated TV broadcasts — drive social buzz and consumer demand ─
+    // Finales, live events, high-viewership episodes affect social conversation
+    // and purchasing behavior (fashion worn, food mentioned, brands featured)
+    const tvQueries = [
+      `ישראל טלוויזיה פינאלה גמר עונה פרק אחרון ${month} ${yearStr} רייטינג גבוה תאריך`,
+      `ישראל ריאליטי X-factor הכוכב הבא המאסטרשף האח הגדול ${month} ${yearStr} שידור חי`,
+      `ישראל סדרה עונה חדשה השקה ${month} ${nextMonth} ${yearStr} ערוץ 12 ערוץ 13 HOT`,
+      `israel tv ratings top show finale ${month} ${yearStr} broadcast date`,
+      `ישראל שידור ספורט ישיר רייטינג גבוה ${month} ${yearStr} צפייה`,
+    ];
+
     const allResults: any[] = [];
     // Run local event queries
     for (const q of localEventQueries) {
@@ -106,6 +117,13 @@ export async function findLocalEvents(req: Request, res: Response) {
       const results = await tavilySearch(q, 5);
       sportsResults.push(...results);
     }
+    // Run TV high-viewership queries
+    const tvResults: any[] = [];
+    for (const q of tvQueries) {
+      if (isTavilyRateLimited()) break;
+      const results = await tavilySearch(q, 4);
+      tvResults.push(...results);
+    }
 
     // Deduplicate combined results by URL
     const seen = new Set<string>();
@@ -116,8 +134,9 @@ export async function findLocalEvents(req: Request, res: Response) {
     });
     const uniqueLocal  = dedup(allResults);
     const uniqueSports = dedup(sportsResults);
+    const uniqueTv     = dedup(tvResults);
 
-    if (uniqueLocal.length === 0 && uniqueSports.length === 0) {
+    if (uniqueLocal.length === 0 && uniqueSports.length === 0 && uniqueTv.length === 0) {
       setLastRun(businessProfileId, 'findLocalEvents');
       await writeAutomationLog('findLocalEvents', businessProfileId, startTime, 0);
       return res.json({ signals_created: 0 });
@@ -131,6 +150,10 @@ export async function findLocalEvents(req: Request, res: Response) {
       .map(r => `[${r.url}]\n${r.title || ''}: ${(r.content || '').slice(0, 220)}`)
       .join('\n\n');
 
+    const tvContext = uniqueTv.slice(0, 8)
+      .map(r => `[${r.url}]\n${r.title || ''}: ${(r.content || '').slice(0, 220)}`)
+      .join('\n\n');
+
     // ── LLM: extract specific events with team names, artist names and real dates ─
     let events: any[] = [];
     try {
@@ -141,18 +164,23 @@ export async function findLocalEvents(req: Request, res: Response) {
         prompt: `אתה מומחה אירועים ושיווק עסקי בישראל. זהה אירועים ספציפיים שיכולים לייצר תנועה לעסק "${name}" (${category} ב${city}).
 
 == אירועים מקומיים (הופעות, פסטיבלים, שווקים) ==
-${localContext.slice(0, 2800)}
+${localContext.slice(0, 2400)}
 
 == משחקי ספורט בינלאומיים ומקומיים ==
-${sportsContext.slice(0, 2000)}
+${sportsContext.slice(0, 1800)}
+
+== שידורי טלוויזיה עם רייטינג גבוה (פינאלות, ריאליטי, סדרות) ==
+${tvContext.slice(0, 1200)}
 
 חוקים קריטיים:
-- שם האירוע חייב להיות ספציפי עם פרטים: "צרפת נגד סנגל" (לא "משחק כדורגל"), "הופעת אייגל" (לא "הופעה"), "פסטיבל הג'אז של חיפה" (לא "פסטיבל")
+- שם האירוע חייב להיות ספציפי עם פרטים: "צרפת נגד סנגל" (לא "משחק כדורגל"), "הופעת אייגל" (לא "הופעה"), "פסטיבל הג'אז של חיפה" (לא "פסטיבל"), "פינאלה של X-Factor ישראל" (לא "תוכנית ריאליטי")
 - למשחקי כדורגל/כדורסל: ציין תמיד שתי הקבוצות/נבחרות בשם מלא — "קבוצה א נגד קבוצה ב"
+- לשידורי טלוויזיה: ציין את שם התוכנית ומה מיוחד בשידור הזה (פינאלה, עונה חדשה, פרק מיוחד)
 - תאריך: אם יש תאריך מדויק — השתמש בו. אם יש רק חודש — הכנס את ה-1 של אותו חודש. אין מידע על תאריך — דלג על האירוע
 - רק אירועים בחודשיים הקרובים (עד ${nextMonth} ${yearStr})
 - קבל גם אירועים מעיירות קרובות (רדיוס 30 ק"מ)
-- traffic_impact: גמר/ליגת העל/נבחרת לאומית/אמן ידוע = "high". ספורט מקומי/הופעה בינונית = "medium". שאר = "low"
+- traffic_impact: גמר/פינאלה/ליגת העל/נבחרת לאומית/אמן ידוע/ריאליטי גדול = "high". ספורט מקומי/הופעה בינונית/סדרה רגילה = "medium". שאר = "low"
+- type: השתמש ב-"tv_broadcast" עבור שידורי טלוויזיה
 - business_opportunity: ספציפי לסקטור "${category}" — מה הלקוחות של האירוע הזה יצטרכו מ"${name}"?
 
 החזר JSON בלבד:
@@ -161,7 +189,7 @@ ${sportsContext.slice(0, 2000)}
   "date_iso": "YYYY-MM-DD",
   "date_text": "תאריך קריא בעברית",
   "venue": "מיקום האירוע",
-  "type": "concert|festival|market|sports|exhibition|community|conference|other",
+  "type": "concert|festival|market|sports|exhibition|community|conference|tv_broadcast|other",
   "artist_or_headliner": "שם האמן / שתי הקבוצות / שם הפסטיבל",
   "expected_crowd": "large|medium|small",
   "traffic_impact": "high|medium|low",

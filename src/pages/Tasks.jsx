@@ -98,15 +98,18 @@ export default function Tasks() {
         </div>
       </div>
 
-      <TaskStatsBar tasks={tasks} />
-
-      <AiInsightBox
-        title="ניתוח משימות וסדר עדיפויות — AI"
-        prompt={`אתה מנהל משימות מומחה. העסק "${businessProfile?.name}" (${businessProfile?.category}).
+      {activeTab !== 'approvals' && (
+        <>
+          <TaskStatsBar tasks={tasks} />
+          <AiInsightBox
+            title="ניתוח משימות וסדר עדיפויות — AI"
+            prompt={`אתה מנהל משימות מומחה. העסק "${businessProfile?.name}" (${businessProfile?.category}).
 משימות פתוחות: ${tasks.filter(t => t.status !== 'done' && t.status !== 'cancelled').length}, באיחור: ${tasks.filter(t => t.due_date && new Date(t.due_date) < now && t.status !== 'done' && t.status !== 'cancelled').length}.
 משימות אחרונות: ${tasks.slice(0, 8).map(t => `"${t.title}" (${t.status}, ${t.priority}, ${t.assignee || 'לא מוקצה'}, יעד: ${t.due_date || '?'})`).join('; ')}.
 הצע: 1) סדר עדיפויות מומלץ 2) משימות שדורשות תשומת לב מיידית 3) שיפורים לתהליך העבודה. בעברית, Markdown.`}
-      />
+          />
+        </>
+      )}
 
       <div className="flex gap-0.5 border-b border-border">
         {filterTabs.map(tab => (

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { ArrowLeft, ArrowRight, Globe, Instagram } from 'lucide-react';
+import { toast } from 'sonner';
 import Autocomplete from '@/components/ui/Autocomplete';
 
 const categorySuggestions = [
@@ -67,7 +68,7 @@ export default function OnboardingForm() {
       navigate('/onboarding/scanning', { state: { businessProfile: profile } });
     } catch (err) {
       console.error('Failed to create business profile:', err);
-      alert('שגיאה בשמירת הפרטים: ' + (err.message || 'נסה שוב'));
+      toast.error('שגיאה בשמירת הפרטים. נסה שוב.');
       setIsSubmitting(false);
     }
   };

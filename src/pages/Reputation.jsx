@@ -63,7 +63,7 @@ export default function Reputation() {
         businessProfileId: bpId,
         sources: selectedSources,
       });
-      const { new_reviews = 0 } = res.data || {};
+      const { new_reviews = 0 } = res?.data || {};
       if (new_reviews > 0) {
         toast.success(`נמצאו ${new_reviews} ביקורות חדשות מ-${selectedSources.length} מקורות ✓`);
       } else {

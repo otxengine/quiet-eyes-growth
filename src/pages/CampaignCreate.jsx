@@ -154,7 +154,6 @@ export default function CampaignCreate() {
   const [forecastData,  setForecastData]  = useState(null);
   const [error,         setError]         = useState('');
   const [showConfirm,   setShowConfirm]   = useState(false);
-  const [savedAsDraft,  setSavedAsDraft]  = useState(false);
   const [successScreen, setSuccessScreen] = useState(null); // { asDraft, platform }
 
   const platConfig = PLATFORMS.find(p => p.id === platform) || PLATFORMS[0];

@@ -121,6 +121,7 @@ export default function Dashboard() {
             signals={allSignals}
             competitors={competitors}
             pendingActions={[]}
+            bpId={bpId}
           />
           {/* Auto-actions below focus list on left */}
           <AutoActionsPanel bpId={bpId} />

@@ -112,20 +112,21 @@ export default function Leads() {
 
   const handleEnrich = async () => {
     setEnriching(true);
-    const res = await base44.functions.invoke('enrichLeads', { businessProfileId: bpId });
-    const enriched = res?.data?.enriched ?? res?.enriched ?? 0;
-    queryClient.invalidateQueries({ queryKey: ['leadsPage'] });
-    if (enriched > 0) {
-      toast.success(`${enriched} לידים הועשרו ✓`);
-    } else {
-      toast.info('אין לידים שדורשים העשרה כרגע');
-    }
+    try {
+      const res = await base44.functions.invoke('enrichLeads', { businessProfileId: bpId });
+      const enriched = res?.data?.enriched ?? res?.enriched ?? 0;
+      queryClient.invalidateQueries({ queryKey: ['leadsPage'] });
+      if (enriched > 0) {
+        toast.success(`${enriched} לידים הועשרו ✓`);
+      } else {
+        toast.info('אין לידים שדורשים העשרה כרגע');
+      }
+    } catch { toast.error('שגיאה בהעשרת לידים'); }
     setEnriching(false);
   };
 
   const handleHuntSocialLeads = async () => {
     if (!bpId) { toast.error('לא נמצא פרופיל עסקי'); return; }
-    const beforeCount = leads.length;
     setSearchState('running');
     setSearchLog(['מחפש בפייסבוק וקבוצות...']);
     setNewLeadsCount(0);
