@@ -75,13 +75,79 @@ Previous avg quality: ${myScore.avg_quality}/100
 
   console.log(`[detectTrends] Gathering real trend data for ${category} in ${city}`);
 
+  // ── Sector-specific verified Israeli sources for trend data ──────────────────
+  // Maps category → authoritative sites that publish real sector trend data
+  const TREND_SOURCE_MAP: Record<string, string[]> = {
+    'מסעדה':         ['rest.co.il', '2eat.co.il', 'wolt.com', 'calcalist.co.il'],
+    'בית קפה':       ['2eat.co.il', 'timeout.co.il', 'calcalist.co.il'],
+    'מספרה':         ['fresha.com', 'treatwell.co.il', 'calcalist.co.il'],
+    'מכון יופי':     ['fresha.com', 'treatwell.co.il', 'calcalist.co.il'],
+    'מכון כושר':     ['sporteam.co.il', 'calcalist.co.il', 'walla.co.il'],
+    'חנות בגדים':    ['zap.co.il', 'calcalist.co.il', 'walla.co.il'],
+    'חנות אלקטרוניקה':['zap.co.il', 'ksp.co.il', 'geektime.co.il', 'calcalist.co.il'],
+    'סוכנות נדלן':   ['yad2.co.il', 'madlan.co.il', 'calcalist.co.il', 'themarker.co.il'],
+    'קבלן שיפוצים':  ['zap.co.il', 'koter.co.il', 'calcalist.co.il'],
+    '_default':      ['calcalist.co.il', 'themarker.co.il', 'globes.co.il', 'ynet.co.il', 'walla.co.il'],
+  };
+
+  function getTrendSites(cat: string): string[] {
+    if (TREND_SOURCE_MAP[cat]) return TREND_SOURCE_MAP[cat];
+    for (const [key, sites] of Object.entries(TREND_SOURCE_MAP)) {
+      if (key === '_default') continue;
+      if (cat.includes(key) || key.includes(cat.split(' ')[0])) return sites;
+    }
+    return TREND_SOURCE_MAP['_default'];
+  }
+
+  const trendSites = getTrendSites(category);
+  const isrBusinessPress = ['calcalist.co.il', 'themarker.co.il', 'globes.co.il', 'geektime.co.il'];
+
+  // Helper to search with include_domains for targeted sector sites
+  async function searchTrendDataTargeted(query: string, domains?: string[]): Promise<string> {
+    if (!TAVILY_API_KEY) return '';
+    try {
+      const body: any = {
+        api_key: TAVILY_API_KEY,
+        query,
+        search_depth: 'advanced',
+        max_results: 5,
+        include_answer: true,
+      };
+      if (domains?.length) body.include_domains = domains;
+      const res = await fetch('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.status === 429 || res.status === 433) return '';
+      if (!res.ok) return '';
+      const data = await res.json();
+      const results = (data.results || []).filter((r: any) => {
+        // Freshness gate: skip results with only old dates and no recent ones
+        const text = `${r.url} ${r.content || ''}`.toLowerCase();
+        const hasRecent = /202[4-6]/.test(text);
+        const hasOldOnly = /201[0-9]|2020|2021|2022/.test(text) && !hasRecent;
+        return !hasOldOnly;
+      });
+      return [data.answer || '', ...results.map((r: any) => r.content || '')].join('\n').substring(0, 1500);
+    } catch {
+      return '';
+    }
+  }
+
   const trendDataSources = await Promise.all([
-    searchTrendData(`"${category}" google trends rising Israel 2025 2026 growth`),
-    searchTrendData(`${category} Israel rising demand statistics data 2026`),
-    searchTrendData(`${category} Israel trending viral social media 2026`),
+    // Google Trends-specific (searches for actual Google Trends pages and data)
+    searchTrendData(`${category} google trends israel 2025 2026 rising search volume`),
+    searchTrendDataTargeted(`${category} ישראל מגמה עולה 2025 2026 נתוני שוק`, isrBusinessPress),
+    // Sector-specific site queries
+    searchTrendDataTargeted(`${category} ${city} ביקוש 2025 2026 שינוי`, trendSites),
+    searchTrendDataTargeted(`${category} ישראל שוק צמיחה נתונים 2025 2026`, isrBusinessPress),
+    // Social trend intelligence
+    searchTrendData(`${category} Israel trending viral social media 2025 2026`),
     searchTrendData(`${category} ישראל מגמות עולות 2026 נתונים`),
-    searchTrendData(`${category} ${city} חדש פתח נפתח 2026`),
-    searchTrendData(`what do customers want from ${category} 2025 2026 Israel preferences`),
+    // Emerging demand signals
+    searchTrendData(`what do customers want from ${category} Israel 2025 2026 preferences`),
+    searchTrendDataTargeted(`${category} ${city} חדש נפתח פתוח 2025 2026`, [...trendSites, 'tapuz.co.il']),
   ]);
 
   const combinedTrendData = trendDataSources.filter(Boolean).join('\n\n---\n\n').substring(0, 6000);

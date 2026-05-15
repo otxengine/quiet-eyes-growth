@@ -352,9 +352,9 @@ Deno.serve(async (req) => {
     }
   }
 
-  // === PHASE 3: Search for reviews and mentions about the business ===
+  // === PHASE 3: External mentions + reviews about the business ===
   if (TAVILY_API_KEY) {
-    console.log('[collectSocialSignals] Phase 3: Scanning for external mentions and reviews');
+    console.log('[collectSocialSignals] Phase 3: External mentions and reviews');
 
     const competitorsList = await base44.asServiceRole.entities.Competitor.filter({ linked_business: profile.id });
     const competitorNames = competitorsList.map((c: any) => c.name).filter(Boolean);
@@ -385,19 +385,13 @@ Deno.serve(async (req) => {
         });
         if (!res.ok) continue;
         const data = await res.json();
-        const results = data.results || [];
 
-        for (const result of results) {
+        for (const result of (data.results || [])) {
           if (!result.url || result.url.length < 10) continue;
-
           const existing = await base44.asServiceRole.entities.RawSignal.filter({ url: result.url });
           if (existing.length > 0) { duplicatesSkipped++; continue; }
-
           const content = (result.content || result.title || '').substring(0, 500);
           if (!content || content.length < 15) continue;
-
-          const isAboutBusiness = content.includes(name) ||
-            (result.url.includes('facebook.com') && content.length > 30);
 
           const urlLower = result.url.toLowerCase();
           let platform = 'website';
@@ -407,13 +401,12 @@ Deno.serve(async (req) => {
           else if (urlLower.includes('google.com/maps') || urlLower.includes('google.co.il')) platform = 'google_maps';
           else if (urlLower.includes('tapuz') || urlLower.includes('forum') || urlLower.includes('reddit')) platform = 'forum';
 
-          const signalType = isAboutBusiness ? 'social_review' : 'social_mention';
-
+          const isAboutBusiness = content.includes(name) || (result.url.includes('facebook.com') && content.length > 30);
           await base44.asServiceRole.entities.RawSignal.create({
             source: `social_scan: ${query.substring(0, 60)}`,
             content,
             url: result.url,
-            signal_type: signalType,
+            signal_type: isAboutBusiness ? 'social_review' : 'social_mention',
             platform,
             sentiment: 'unknown',
             source_origin: 'tavily',
@@ -423,10 +416,90 @@ Deno.serve(async (req) => {
           newSignals++;
         }
       } catch (err: any) {
-        console.error(`Phase 3 mention scan error "${query}":`, err.message);
+        console.error(`Phase 3 error "${query}":`, err.message);
       }
     }
-    console.log(`[collectSocialSignals] Phase 3 complete: ${newSignals} total signals`);
+    console.log(`[collectSocialSignals] Phase 3 complete: ${newSignals} total`);
+  }
+
+  // === PHASE 4 (NEW): Israeli forums + sector-specific Facebook groups =========
+  // Searches tapuz.co.il (Israel's largest forum) and targeted Facebook groups
+  // for authentic local customer conversations about the business and sector.
+  if (TAVILY_API_KEY) {
+    console.log('[collectSocialSignals] Phase 4: Israeli forums + sector FB groups');
+
+    // Sector-specific Facebook group keywords — how Israelis search for recommendations
+    const fbGroupTerms = [
+      `"${category}" "${city}" קבוצה פייסבוק ממליץ 2025`,
+      `"ממליץ על" ${category} ${city} site:facebook.com`,
+      `"איפה יש" ${category} ${city} site:facebook.com OR site:tapuz.co.il`,
+      `${category} ${city} "שווה" "לא שווה" site:tapuz.co.il`,
+      `${category} ישראל ביקורת 2025 site:tapuz.co.il`,
+      `"מחפש ${category}" ${city} site:tapuz.co.il OR site:facebook.com`,
+    ];
+
+    // Sector hashtag intelligence on Instagram and TikTok
+    const hashtagTerms = [
+      `#${category.replace(/\s+/g, '')} ${city} site:instagram.com 2025`,
+      `${category} ${city} viral ויראלי site:tiktok.com 2025`,
+    ];
+
+    const allPhase4Queries = [...fbGroupTerms, ...hashtagTerms];
+
+    for (const query of allPhase4Queries) {
+      try {
+        const res = await fetch('https://api.tavily.com/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_key: TAVILY_API_KEY,
+            query,
+            search_depth: 'basic',
+            max_results: 4,
+            include_answer: false,
+          }),
+        });
+        if (res.status === 429 || res.status === 433) break;
+        if (!res.ok) continue;
+        const data = await res.json();
+
+        for (const result of (data.results || [])) {
+          if (!result.url || result.url.length < 10) continue;
+          const existing = await base44.asServiceRole.entities.RawSignal.filter({ url: result.url });
+          if (existing.length > 0) { duplicatesSkipped++; continue; }
+          const content = (result.content || result.title || '').substring(0, 500);
+          if (!content || content.length < 15) continue;
+
+          // Skip clearly stale content
+          const hasRecentDate = /202[4-6]/.test(content) || /202[4-6]/.test(result.url);
+          const hasOldDateOnly = /201[0-9]|2020|2021|2022/.test(content) && !hasRecentDate;
+          if (hasOldDateOnly) { duplicatesSkipped++; continue; }
+
+          const urlLower = result.url.toLowerCase();
+          let platform = 'forum';
+          if (urlLower.includes('facebook.com')) platform = 'facebook';
+          else if (urlLower.includes('instagram.com')) platform = 'instagram';
+          else if (urlLower.includes('tiktok.com')) platform = 'tiktok';
+          else if (urlLower.includes('tapuz.co.il')) platform = 'forum';
+
+          await base44.asServiceRole.entities.RawSignal.create({
+            source: `forum_group: ${query.substring(0, 60)}`,
+            content,
+            url: result.url,
+            signal_type: 'social_mention',
+            platform,
+            sentiment: 'unknown',
+            source_origin: 'tavily',
+            detected_at: new Date().toISOString(),
+            linked_business: profile.id,
+          });
+          newSignals++;
+        }
+      } catch (err: any) {
+        console.error(`Phase 4 error "${query}":`, err.message);
+      }
+    }
+    console.log(`[collectSocialSignals] Phase 4 complete: ${newSignals} total`);
   }
 
   console.log(`[collectSocialSignals] Complete: ${newSignals} new, ${duplicatesSkipped} dupes`);
