@@ -51,6 +51,19 @@ const PRIORITY_BADGE = {
 
 function parseSteps(text) {
   if (!text) return [];
+  // Try JSON: might be {step_1: {title, timeframe}, ...} or [{...}] or ["string", ...]
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) {
+      return parsed.map(s => typeof s === 'string' ? s : (s?.title || s?.step || s?.description || JSON.stringify(s))).filter(Boolean);
+    }
+    if (parsed && typeof parsed === 'object') {
+      // {step_1: {title, timeframe, actions}, step_2: ...}
+      return Object.values(parsed)
+        .map(s => typeof s === 'string' ? s : (s?.title || s?.step || s?.description || ''))
+        .filter(Boolean);
+    }
+  } catch {}
   const lines = text.split(/\n/).map(l => l.trim()).filter(Boolean);
   const steps = lines.map(l => l.replace(/^[\d]+[.)]\s*/, '').replace(/^[-•*]\s*/, '').trim()).filter(Boolean);
   return steps.length > 1 ? steps : (text.trim() ? [text.trim()] : []);

@@ -18,9 +18,9 @@ const MODEL_MAP: Record<string, string> = {
 
 // Hard output caps per model — keeps token burn predictable
 const MAX_TOKENS_DEFAULT: Record<string, number> = {
-  haiku:  350,
-  sonnet: 900,  // raised: most sonnet calls need 600-900 for quality output
-  opus:   1200,
+  haiku:  600,   // raised: 350 was too low for structured JSON
+  sonnet: 1400,  // raised: complex agent outputs need more room
+  opus:   2000,
 };
 
 /**
@@ -92,45 +92,27 @@ async function _callAnthropic(
     ? 'You are a JSON-only assistant. Respond with a single valid JSON object only. No preamble, no explanation, no markdown fences. ALL string values must be in Hebrew unless the field explicitly requires English.'
     : 'You are a helpful assistant.';
 
-  const makeAnthropicCall = async (withPrefill: boolean) => {
-    // Assistant prefill: inject opening brace so Claude continues with valid JSON.
-    // Some models/configurations don't support prefill — handled below.
-    const messages: Anthropic.MessageParam[] = (response_json_schema && withPrefill)
-      ? [{ role: 'user', content: prompt }, { role: 'assistant', content: '{' }]
-      : [{ role: 'user', content: prompt }];
+  const messages: Anthropic.MessageParam[] = [{ role: 'user', content: prompt }];
 
-    const response = await anthropic.messages.create({
-      model: modelId,
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages,
-    });
+  const response = await anthropic.messages.create({
+    model: modelId,
+    max_tokens: maxTokens,
+    system: systemPrompt,
+    messages,
+  });
 
-    const rawText = ((response.content || [])[0] as any)?.text || '';
+  const rawText = ((response.content || [])[0] as any)?.text || '';
 
-    if (response_json_schema) {
-      // When prefill was used, prepend the '{' we injected; otherwise parse as-is
-      const text = withPrefill ? '{' + rawText : rawText;
-      console.log('[LLM] Anthropic raw (300 chars):', text.substring(0, 300), '| stop_reason:', response.stop_reason);
-      const parsed = _parseJson(text);
-      if (!parsed) console.error('[LLM] _parseJson failed on above text');
-      return parsed;
-    }
-    return rawText;
-  };
-
-  try {
-    return await makeAnthropicCall(true);
-  } catch (err: any) {
-    // Some models don't support assistant-turn prefill → retry without it
-    const isPrefillError = err.status === 400 &&
-      (err.message || '').toLowerCase().includes('prefill');
-    if (isPrefillError && response_json_schema) {
-      console.warn('[LLM] Model does not support prefill, retrying without it');
-      return await makeAnthropicCall(false);
-    }
-    throw err;
+  if (response.stop_reason === 'max_tokens') {
+    console.warn('[LLM] stop_reason=max_tokens — response truncated. model:', modelId, 'maxTokens:', maxTokens);
   }
+
+  if (response_json_schema) {
+    const parsed = _parseJson(rawText);
+    if (!parsed) console.error('[LLM] _parseJson failed, raw (300):', rawText.substring(0, 300));
+    return parsed;
+  }
+  return rawText;
 }
 
 async function _callOpenAI(prompt: string, response_json_schema: any, maxTokens = 1600): Promise<any> {
