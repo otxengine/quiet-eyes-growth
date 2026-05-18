@@ -439,21 +439,7 @@ export async function generateImage(req: Request, res: Response) {
 
   console.log('[generateImage] prompt:', finalPrompt.slice(0, 120), '| platform:', platform, '| force:', force_regenerate);
 
-  // ── Tier 0: Google Imagen 3 (Gemini API — simple key, no service account) ──
-  if (GEMINI_API_KEY) {
-    try {
-      console.log('[generateImage] trying Gemini Imagen 3...');
-      const url = await generateWithGeminiImagen(finalPrompt, platform);
-      if (url) {
-        console.log('[generateImage] Gemini Imagen 3 success, platform:', platform);
-        return res.json({ url, provider: 'imagen3', is_stock: false, platform });
-      }
-    } catch (err: any) {
-      console.warn('[generateImage] Gemini Imagen failed:', err.message);
-    }
-  }
-
-  // ── Tier 1: Flux.1 schnell (fal.ai) ──────────────────────────────────────
+  // ── Tier 0: Flux.1 schnell via fal.ai (primary — fast, reliable) ──────────
   if (FAL_API_KEY) {
     try {
       console.log('[generateImage] trying Flux.1 schnell...');
@@ -464,6 +450,20 @@ export async function generateImage(req: Request, res: Response) {
       }
     } catch (err: any) {
       console.warn('[generateImage] Flux failed:', err.message);
+    }
+  }
+
+  // ── Tier 1: Google Imagen 3 (requires paid Google Cloud + Imagen API) ─────
+  if (GEMINI_API_KEY) {
+    try {
+      console.log('[generateImage] trying Gemini Imagen 3...');
+      const url = await generateWithGeminiImagen(finalPrompt, platform);
+      if (url) {
+        console.log('[generateImage] Gemini Imagen 3 success, platform:', platform);
+        return res.json({ url, provider: 'imagen3', is_stock: false, platform });
+      }
+    } catch (err: any) {
+      console.warn('[generateImage] Gemini Imagen failed:', err.message);
     }
   }
 
