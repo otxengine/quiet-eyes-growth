@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Star, Loader2, RefreshCw, ExternalLink, ShieldCheck, ShieldX } from 'lucide-react';
+import { Star, Loader2, RefreshCw, ExternalLink, ShieldCheck, ShieldX, Copy, CheckCheck } from 'lucide-react';
 
 const PLATFORM_ICON = {
   'Google Maps':  '📍',
@@ -115,11 +115,12 @@ The response should:
 }
 
 export default function ReviewCard({ review, businessProfile, compact = false }) {
-  const [expanded, setExpanded] = useState(false);
-  const [responseText, setResponseText] = useState('');
+  const [expanded, setExpanded] = useState(review.response_status === 'suggested');
+  const [responseText, setResponseText] = useState(review.response_status === 'suggested' ? (review.suggested_response || '') : '');
   const [generating, setGenerating] = useState(false);
   const [generatingType, setGeneratingType] = useState('');
   const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
   const [dismissed, setDismissed] = useState(false);
   const textareaRef = useRef(null);
@@ -127,10 +128,14 @@ export default function ReviewCard({ review, businessProfile, compact = false })
 
   const borderCls = sentimentBorder[review.sentiment] || 'border-l-[#d97706]';
   const badge = sentimentBadge[review.sentiment] || sentimentBadge.neutral;
+  const isSuggested = review.response_status === 'suggested' && !dismissed;
   const isPending = review.response_status === 'pending' && !dismissed;
   const isResponded = review.response_status === 'responded';
   const isAutoResponded = review.response_status === 'auto_responded';
+  const isPublished = review.response_status === 'published';
   const [showAutoResponse, setShowAutoResponse] = useState(false);
+
+  const topics = review.topics ? review.topics.split(',').map(t => t.trim()).filter(Boolean) : [];
 
   const generateResponse = async (type) => {
     setGenerating(true);
@@ -173,15 +178,25 @@ export default function ReviewCard({ review, businessProfile, compact = false })
         suggested_response: responseText,
         response_status: 'responded',
       });
+      // Copy to clipboard so user can paste directly into Google/Facebook
+      await navigator.clipboard.writeText(responseText).catch(() => {});
       setSaved(true);
+      setCopied(true);
       logOutcome('review_response', true, `תגובה לביקורת של ${review.reviewer_name}`);
       queryClient.invalidateQueries({ queryKey: ['reviewsPage'] });
       queryClient.invalidateQueries({ queryKey: ['pendingReviews'] });
       queryClient.invalidateQueries({ queryKey: ['allReviews'] });
-      setTimeout(() => { setExpanded(false); setSaved(false); }, 2000);
+      setTimeout(() => { setExpanded(false); setSaved(false); setCopied(false); }, 3500);
     } catch {
       setError('שגיאה בשמירת התגובה. נסה שוב.');
     }
+  };
+
+  const copyToClipboard = async () => {
+    if (!responseText.trim()) return;
+    await navigator.clipboard.writeText(responseText).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const handleEdit = () => {
@@ -231,8 +246,17 @@ export default function ReviewCard({ review, businessProfile, compact = false })
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`text-[9px] font-medium px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.text}</span>
 
-          {isResponded && <span className="text-[10px] font-medium text-[#10b981]">✓ הגבת</span>}
-          {isAutoResponded && <span className="text-[10px] font-medium text-[#10b981]">✓ הגבנו אוטומטית</span>}
+          {isResponded && <span className="text-[10px] font-medium text-[#10b981]">✓ נשמר — העתק ופרסם ב-Google</span>}
+          {isPublished && <span className="text-[10px] font-medium text-[#10b981]">✓ פורסם</span>}
+          {isAutoResponded && <span className="text-[10px] font-medium text-[#6366f1]">⚡ AI הכין תגובה</span>}
+          {isSuggested && <span className="text-[10px] font-medium text-[#d97706]">⏳ ממתין לאישורך</span>}
+
+          {isSuggested && (
+            <button onClick={() => { setResponseText(review.suggested_response || ''); setExpanded(true); }}
+              className="px-3 py-1.5 text-[11px] font-medium bg-[#111111] text-white rounded-md hover:bg-[#333333] transition-colors">
+              אשר תגובה →
+            </button>
+          )}
 
           {isPending && (review.sentiment === 'negative' || review.sentiment === 'neutral') && (
             <>
@@ -251,11 +275,11 @@ export default function ReviewCard({ review, businessProfile, compact = false })
             <>
               <button onClick={() => setShowAutoResponse(!showAutoResponse)}
                 className="px-3 py-1.5 text-[11px] font-medium text-[#aaaaaa] bg-white border border-[#eeeeee] rounded-md hover:border-[#cccccc] hover:text-[#666666] transition-colors">
-                {showAutoResponse ? 'הסתר תגובה' : 'צפה בתגובה'}
+                {showAutoResponse ? 'הסתר' : 'צפה בתגובה'}
               </button>
               <button onClick={() => { setResponseText(review.suggested_response || ''); setExpanded(true); }}
                 className="px-3 py-1.5 text-[11px] font-medium text-[#aaaaaa] bg-white border border-[#eeeeee] rounded-md hover:border-[#cccccc] hover:text-[#666666] transition-colors">
-                ערוך
+                ערוך ואשר
               </button>
             </>
           )}
@@ -273,6 +297,17 @@ export default function ReviewCard({ review, businessProfile, compact = false })
             </>
           )}
         </div>
+
+        {/* Topic tags from AI extraction */}
+        {topics.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {topics.map((t, i) => (
+              <span key={i} className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#f5f5f5] text-[#888888] border border-[#eeeeee]">
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
 
         {error && (
           <div className="mt-2 flex items-center gap-2">
@@ -293,26 +328,45 @@ export default function ReviewCard({ review, businessProfile, compact = false })
 
       {expanded && (
         <div className="px-4 pb-4 border-t border-[#f5f5f5] pt-3">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             <label className="text-[11px] text-[#999999]">תגובה מוצעת:</label>
             <span className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-[#fffbeb] border border-[#fef3c7] text-[#d97706]">
-              ⚡ נוצר ע"י AI — מומלץ לעיין לפני שליחה
+              ⚡ נוצר ע"י AI — עיין ואשר לפני פרסום
             </span>
           </div>
           <textarea ref={textareaRef} value={responseText} onChange={(e) => setResponseText(e.target.value)}
             rows={3} style={{ minHeight: '80px' }}
             className="w-full bg-[#fafafa] border border-[#eeeeee] rounded-lg p-3 text-[12px] text-[#333333] resize-none focus:outline-none focus:border-[#dddddd]" />
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="flex flex-wrap gap-2 mt-2 items-center">
             {saved ? (
-              <span className="px-3 py-1.5 text-[12px] font-medium text-[#10b981]">✓ התגובה נשמרה</span>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1.5 text-[12px] font-medium text-[#10b981]">✓ נשמר</span>
+                <span className="text-[11px] text-[#6366f1] flex items-center gap-1">
+                  <Copy className="w-3 h-3" /> הועתק ללוח — פרסם עכשיו ב-Google/Facebook
+                </span>
+              </div>
             ) : (
               <>
-                <button onClick={saveResponse} className="px-4 py-2 text-[12px] font-medium bg-[#111111] text-white rounded-md hover:bg-[#333333] transition-colors">אשר ושלח ✓</button>
+                <button onClick={saveResponse} className="px-4 py-2 text-[12px] font-medium bg-[#111111] text-white rounded-md hover:bg-[#333333] transition-colors">
+                  שמור והעתק ✓
+                </button>
+                <button onClick={copyToClipboard} className="px-3 py-1.5 text-[12px] font-medium text-[#6366f1] bg-indigo-50 border border-indigo-100 rounded-md hover:bg-indigo-100 transition-colors flex items-center gap-1">
+                  {copied ? <><CheckCheck className="w-3 h-3" /> הועתק</> : <><Copy className="w-3 h-3" /> העתק</>}
+                </button>
+                {review.source_url && (
+                  <a href={review.source_url} target="_blank" rel="noopener noreferrer"
+                    className="px-3 py-1.5 text-[12px] font-medium text-[#aaaaaa] bg-white border border-[#eeeeee] rounded-md hover:border-[#cccccc] hover:text-[#666666] transition-colors flex items-center gap-1">
+                    <ExternalLink className="w-3 h-3" /> פתח ב-Google
+                  </a>
+                )}
                 <button onClick={handleEdit} className="px-3 py-1.5 text-[12px] font-medium text-[#aaaaaa] bg-white border border-[#eeeeee] rounded-md hover:border-[#cccccc] hover:text-[#666666] transition-colors">ערוך</button>
                 <button onClick={handleCancel} className="px-3 py-1.5 text-[12px] font-medium text-[#aaaaaa] bg-white border border-[#eeeeee] rounded-md hover:border-[#cccccc] hover:text-[#666666] transition-colors">בטל</button>
               </>
             )}
           </div>
+          <p className="text-[10px] text-[#bbbbbb] mt-2">
+            * המערכת שומרת את התגובה — לשליחה בפועל יש להדביק אותה בדף הביזנס שלך ב-Google / Facebook
+          </p>
         </div>
       )}
     </div>

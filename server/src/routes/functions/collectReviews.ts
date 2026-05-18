@@ -428,6 +428,64 @@ export async function collectReviews(req: Request, res: Response) {
     setLastRun(businessProfileId, 'collectReviews');
     await writeAutomationLog('collectReviews', businessProfileId, startTime, newReviews);
     console.log(`collectReviews done: ${newReviews} new reviews (${googleAdded} from Google, ${sourcesScanCount} from other sources)`);
+
+    // ── Snapshot current avg rating → rating_history for trend graph ─────────
+    try {
+      const allRatings = await prisma.review.findMany({
+        where: { linked_business: businessProfileId },
+        select: { rating: true },
+      });
+      if (allRatings.length > 0) {
+        const avgRating = allRatings.reduce((s, r) => s + (r.rating || 0), 0) / allRatings.length;
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO rating_history (business_id, avg_rating, review_count, new_reviews, source) VALUES ($1, $2, $3, $4, $5)`,
+          businessProfileId, avgRating.toFixed(2), allRatings.length, newReviews, 'collectReviews'
+        );
+      }
+    } catch (_) {}
+
+    // ── Real-time alert: create ProactiveAlert for new negative reviews ───────
+    if (newReviews > 0) {
+      try {
+        const recentNegatives = await prisma.review.findMany({
+          where: {
+            linked_business: businessProfileId,
+            sentiment: 'negative',
+            created_date: { gte: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() },
+          },
+          orderBy: { created_date: 'desc' },
+          take: 5,
+        });
+
+        for (const rev of recentNegatives) {
+          const alertTitle = `ביקורת שלילית חדשה: ${rev.reviewer_name || 'לקוח'} (${rev.rating || '?'}⭐)`;
+          const exists = await prisma.proactiveAlert.findFirst({
+            where: { linked_business: businessProfileId, title: alertTitle, is_dismissed: false },
+          });
+          if (exists) continue;
+          await prisma.proactiveAlert.create({
+            data: {
+              alert_type: 'negative_review',
+              title: alertTitle,
+              description: (rev.text || '').substring(0, 150),
+              suggested_action: `צור תגובה מקצועית ל${rev.reviewer_name || 'לקוח'}`,
+              priority: (rev.rating || 5) <= 2 ? 'high' : 'medium',
+              source_agent: JSON.stringify({
+                action_label: 'הגב עכשיו',
+                action_type: 'respond',
+                review_id: rev.id,
+                urgency_hours: 6,
+                impact_reason: 'תגובה תוך 6 שעות מגדילה שימור לקוחות ב-40%',
+              }),
+              is_dismissed: false,
+              is_acted_on: false,
+              created_at: new Date().toISOString(),
+              linked_business: businessProfileId,
+            },
+          }).catch(() => {});
+        }
+      } catch (_) {}
+    }
     // Publish to event bus (OTX-001)
     if (newReviews > 0) {
       publishEvent({

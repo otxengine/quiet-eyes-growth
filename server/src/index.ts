@@ -426,6 +426,21 @@ app.listen(PORT, async () => {
   )`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_otx_wlog_biz_agent ON otx_weight_update_log(business_id, agent_name, created_at DESC)`);
 
+  // ── Reputation: daily rating snapshots for trend graph ───────────────────
+  await sql(`CREATE TABLE IF NOT EXISTS rating_history (
+    id           SERIAL PRIMARY KEY,
+    business_id  TEXT NOT NULL,
+    snapped_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    avg_rating   NUMERIC(3,2) NOT NULL,
+    review_count INT NOT NULL DEFAULT 0,
+    new_reviews  INT NOT NULL DEFAULT 0,
+    source       TEXT NOT NULL DEFAULT 'collectReviews'
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_rating_history_biz ON rating_history(business_id, snapped_at DESC)`);
+  // ── Reputation: missing columns ───────────────────────────────────────────
+  await sql(`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS auto_response_sent BOOLEAN DEFAULT false`);
+  await sql(`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS auto_response_sent_at TIMESTAMPTZ`);
+
   // ── Backfill missing columns ──────────────────────────────────────────────
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS action_type TEXT`);
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS urgency TEXT`);

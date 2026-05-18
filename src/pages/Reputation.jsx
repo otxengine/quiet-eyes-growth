@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Star, Plus, Search, Loader2, MessageCircle, BarChart2, Bot, Send, MoreHorizontal } from 'lucide-react';
+import { Star, Plus, Search, Loader2, MessageCircle, BarChart2, Bot, Send, MoreHorizontal, AlertTriangle, X } from 'lucide-react';
 import { toast } from 'sonner';
 import ReviewCard from '@/components/reputation/ReviewCard';
 import AddReviewModal from '@/components/reputation/AddReviewModal';
@@ -10,6 +10,7 @@ import RequestReviewModal from '@/components/reputation/RequestReviewModal';
 import AiInsightBox from '@/components/ai/AiInsightBox';
 import AiInsightsBar from '@/components/ai/AiInsightsBar';
 import ScheduledReviewRequests from '@/components/reputation/ScheduledReviewRequests';
+import RatingTrendChart from '@/components/reputation/RatingTrendChart';
 
 export default function Reputation() {
   const { businessProfile } = useOutletContext();
@@ -24,7 +25,10 @@ export default function Reputation() {
   const [sendingRequests, setSendingRequests] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
-  const [selectedSources, setSelectedSources] = useState(['google', 'facebook', 'instagram', 'tripadvisor']);
+  const [selectedSources, setSelectedSources] = useState(['google', 'facebook', 'instagram', 'tripadvisor', 'waze', 'wolt', '10bis', 'easy', 'forums']);
+  const [dismissedAlerts, setDismissedAlerts] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('dismissed_rep_alerts') || '[]'); } catch { return []; }
+  });
 
   const handleSendRequests = async () => {
     if (!bpId) return;
@@ -70,6 +74,7 @@ export default function Reputation() {
         toast.info('לא נמצאו ביקורות חדשות');
       }
       queryClient.invalidateQueries({ queryKey: ['reviewsPage'] });
+      queryClient.invalidateQueries({ queryKey: ['negativeAlerts', bpId] });
     } catch (err) {
       toast.error('שגיאה באיסוף ביקורות');
     }
@@ -104,6 +109,36 @@ export default function Reputation() {
     queryFn: () => base44.entities.ReviewRequest.filter({ linked_business: bpId }, '-created_date', 100),
     enabled: !!bpId
   });
+
+  // Real-time: load reputation-related alerts — poll every 2 minutes
+  const { data: negativeAlerts = [] } = useQuery({
+    queryKey: ['negativeAlerts', bpId],
+    queryFn: async () => {
+      const [neg, risk] = await Promise.all([
+        base44.entities.ProactiveAlert.filter(
+          { linked_business: bpId, alert_type: 'negative_review', is_dismissed: false },
+          '-created_at', 8
+        ),
+        base44.entities.ProactiveAlert.filter(
+          { linked_business: bpId, alert_type: 'reputation_risk', is_dismissed: false },
+          '-created_at', 4
+        ),
+      ]);
+      return [...neg, ...risk].sort((a, b) =>
+        new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+      );
+    },
+    enabled: !!bpId,
+    refetchInterval: 2 * 60 * 1000,
+  });
+
+  const visibleAlerts = negativeAlerts.filter(a => !dismissedAlerts.includes(a.id));
+
+  function dismissAlert(id) {
+    const next = [...dismissedAlerts, id];
+    setDismissedAlerts(next);
+    localStorage.setItem('dismissed_rep_alerts', JSON.stringify(next));
+  }
   const monthStartForReqs = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
   const requestsThisMonth = reviewRequests.filter(r => (r.sent_at || r.created_date) >= monthStartForReqs).length;
 
@@ -126,14 +161,26 @@ export default function Reputation() {
   });
 
   const verifiedCount = reviews.filter(r => r.source_url).length;
+  const respondedCount = reviews.filter(r => ['responded', 'auto_responded', 'suggested', 'published'].includes(r.response_status)).length;
+  const responseRate = reviews.length > 0 ? Math.round((respondedCount / reviews.length) * 100) : 0;
 
   const statCards = [
-    { label: 'ציון ממוצע', value: avgRating > 0 ? avgRating.toFixed(1) : '—' },
+    { label: 'ציון ממוצע', value: avgRating > 0 ? avgRating.toFixed(1) : '—', color: avgRating >= 4.3 ? 'text-emerald-600' : avgRating >= 4 ? 'text-amber-600' : avgRating > 0 ? 'text-red-600' : '' },
     { label: 'ביקורות החודש', value: thisMonthReviews.length },
-    { label: 'ממתינות לתגובה', value: pendingCount },
-    { label: 'מאומתות', value: `${verifiedCount}/${reviews.length}` },
+    { label: 'ממתינות לתגובה', value: pendingCount, color: pendingCount > 3 ? 'text-red-600' : pendingCount > 0 ? 'text-amber-600' : 'text-emerald-600' },
+    { label: 'שיעור תגובה', value: reviews.length > 0 ? `${responseRate}%` : '—', color: responseRate >= 80 ? 'text-emerald-600' : responseRate >= 50 ? 'text-amber-600' : reviews.length > 0 ? 'text-red-600' : '' },
     { label: 'בקשות ביקורת החודש', value: requestsThisMonth },
   ];
+
+  const [filterSentiment, setFilterSentiment] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+
+  const filteredReviews = sortedReviews.filter(r => {
+    if (filterSentiment !== 'all' && r.sentiment !== filterSentiment) return false;
+    if (filterStatus === 'pending' && r.response_status !== 'pending') return false;
+    if (filterStatus === 'responded' && !['responded', 'auto_responded', 'suggested', 'published'].includes(r.response_status)) return false;
+    return true;
+  });
 
   return (
     <div className="space-y-5">
@@ -215,10 +262,36 @@ export default function Reputation() {
         {statCards.map((card, i) => (
           <div key={card.label} className={`card-base p-5 fade-in-up stagger-${i + 1}`}>
             <p className="text-[11px] font-medium text-foreground-muted mb-1">{card.label}</p>
-            <span className="text-[28px] font-bold text-foreground leading-none tracking-tight">{card.value}</span>
+            <span className={`text-[28px] font-bold leading-none tracking-tight ${card.color || 'text-foreground'}`}>{card.value}</span>
           </div>
         ))}
       </div>
+
+      {/* Real-time negative review alerts */}
+      {visibleAlerts.length > 0 && (
+        <div className="space-y-2">
+          {visibleAlerts.map(alert => (
+            <div key={alert.id} className="flex items-start gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200">
+              <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-semibold text-red-800">{alert.title}</p>
+                {alert.description && (
+                  <p className="text-[11px] text-red-700 mt-0.5 line-clamp-2">{alert.description}</p>
+                )}
+              </div>
+              <button
+                onClick={() => dismissAlert(alert.id)}
+                className="text-red-400 hover:text-red-600 flex-shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Rating trend chart */}
+      {reviews.length >= 3 && <RatingTrendChart reviews={reviews} />}
 
       {/* FIX 7: Sentiment analysis result */}
       {sentimentResult && (
@@ -316,13 +389,53 @@ export default function Reputation() {
       </div>
 
       <div>
-        <h2 className="text-[14px] font-semibold text-foreground mb-3">ביקורות ({reviews.length})</h2>
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <h2 className="text-[14px] font-semibold text-foreground">
+            ביקורות ({filteredReviews.length}{filteredReviews.length !== reviews.length ? `/${reviews.length}` : ''})
+          </h2>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {[
+              { key: 'all', label: 'הכל' },
+              { key: 'negative', label: 'שליליות', cls: 'text-red-600' },
+              { key: 'neutral', label: 'ניטרלי', cls: 'text-amber-600' },
+              { key: 'positive', label: 'חיוביות', cls: 'text-emerald-600' },
+            ].map(f => (
+              <button key={f.key} onClick={() => setFilterSentiment(f.key)}
+                className={`px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all ${
+                  filterSentiment === f.key
+                    ? 'bg-foreground text-background border-foreground'
+                    : `bg-white border-border ${f.cls || 'text-foreground-muted'} hover:border-foreground-muted`
+                }`}>
+                {f.label}
+              </button>
+            ))}
+            <div className="w-px h-4 bg-border mx-1" />
+            {[
+              { key: 'all', label: 'כולן' },
+              { key: 'pending', label: 'ממתינות' },
+              { key: 'responded', label: 'נענו' },
+            ].map(f => (
+              <button key={f.key} onClick={() => setFilterStatus(f.key)}
+                className={`px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all ${
+                  filterStatus === f.key
+                    ? 'bg-foreground text-background border-foreground'
+                    : 'bg-white border-border text-foreground-muted hover:border-foreground-muted'
+                }`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
         {reviews.length === 0 ? (
           <div className="card-base py-20 text-center">
             <Star className="w-12 h-12 text-foreground-muted opacity-20 mx-auto mb-3" />
             <p className="text-[13px] text-foreground-muted mb-1">לא נמצאו ביקורות עדיין — הסוכן יאסוף ביקורות בריצה הבאה</p>
             <p className="text-[11px] text-foreground-muted opacity-50 mb-4">ניתן גם לאסוף ידנית או להוסיף ביקורת</p>
             <button onClick={() => setShowAddModal(true)} className="btn-subtle px-5 py-2.5 rounded-lg text-[12px] font-medium bg-foreground text-background hover:opacity-90 transition-all">+ הוסף ביקורת ראשונה</button>
+          </div>
+        ) : filteredReviews.length === 0 ? (
+          <div className="card-base py-10 text-center">
+            <p className="text-[12px] text-foreground-muted">אין ביקורות התואמות את הסינון</p>
           </div>
         ) : (() => {
           // Group reviews by date
@@ -334,7 +447,7 @@ export default function Reputation() {
           const monthAgo = new Date(today); monthAgo.setDate(monthAgo.getDate() - 30);
 
           const groups = { 'היום': [], 'אתמול': [], 'השבוע': [], 'החודש': [], 'ישן יותר': [] };
-          sortedReviews.forEach(r => {
+          filteredReviews.forEach(r => {
             const d = new Date(r.created_at || r.created_date || '2000-01-01');
             if (isNaN(d.getTime())) { groups['ישן יותר'].push(r); return; }
             const ds = d.toISOString().split('T')[0];

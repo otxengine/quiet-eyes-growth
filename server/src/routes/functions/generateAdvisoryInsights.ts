@@ -137,7 +137,7 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
             'trend_opportunity', 'new_service', 'promotion_strategy',
             'sector_shift', 'event_opportunity', 'competitive_gap',
             'social_viral', 'future_prediction', 'campaign_opportunity',
-            'competitor_intel', 'competitor_move',
+            'competitor_intel', 'competitor_move', 'reputation_risk',
           ]},
           created_at: { gte: sevenDaysAgo.toISOString() },
         },
@@ -198,7 +198,7 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
       if (healthScore.reviews_needed_for_top3) healthLines.push(`  ביקורות נוספות לטופ-3 Google: ${Math.round(healthScore.reviews_needed_for_top3)}`);
     }
 
-    // Review themes
+    // Review themes & rating trend
     const negativeThemes = recentReviews
       .filter(r => (r.rating || 5) <= 3 || r.sentiment === 'negative')
       .slice(0, 3)
@@ -208,6 +208,33 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
       .filter(r => (r.rating || 0) >= 4 || r.sentiment === 'positive')
       .slice(0, 3)
       .map(r => `  ✓ "${(r.text || '').slice(0, 60)}"`);
+
+    // Rating trend from history snapshots
+    const ratingSnapshots: any[] = await prisma.$queryRawUnsafe(
+      `SELECT avg_rating, review_count, snapped_at FROM rating_history WHERE business_id=$1 ORDER BY snapped_at DESC LIMIT 10`,
+      businessProfileId
+    ).catch(() => []);
+
+    const reputationLines: string[] = [];
+    if (ratingSnapshots.length >= 2) {
+      const latest = parseFloat(ratingSnapshots[0].avg_rating);
+      const oldest = parseFloat(ratingSnapshots[ratingSnapshots.length - 1].avg_rating);
+      const delta = +(latest - oldest).toFixed(2);
+      reputationLines.push(`  דירוג עכשווי: ${latest.toFixed(2)}★ (שינוי ${delta >= 0 ? '+' : ''}${delta} ב-${ratingSnapshots.length} מדידות)`);
+      if (delta < -0.2) reputationLines.push(`  ⚠ מגמת ירידה בדירוג — דורש התייחסות דחופה`);
+      if (delta > 0.2) reputationLines.push(`  ✓ מגמת עלייה בדירוג — ממש חיובי, כדאי לנצל`);
+    }
+    const pendingResponses = recentReviews.filter(r => r.response_status === 'pending').length;
+    if (pendingResponses > 0) reputationLines.push(`  ${pendingResponses} ביקורות ממתינות לתגובה`);
+    const negCount = recentReviews.filter(r => r.sentiment === 'negative').length;
+    if (negCount > 0) {
+      const recurrThemes = recentReviews
+        .filter(r => r.topics)
+        .flatMap(r => (r.topics as string).split(','))
+        .reduce((acc: Record<string, number>, t) => { acc[t] = (acc[t] || 0) + 1; return acc; }, {});
+      const topComplaint = Object.entries(recurrThemes).sort((a,b) => b[1]-a[1])[0];
+      if (topComplaint) reputationLines.push(`  נושא תלונה מרכזי: "${topComplaint[0]}" (${topComplaint[1]} ביקורות)`);
+    }
 
     // Active predictions
     const predictionLines = predictions.slice(0, 3).map(p =>
@@ -225,6 +252,7 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
       `תאריך: ${todayDate}${isWeekend ? ' (סוף שבוע)' : ''}`,
 
       section('ציון בריאות עסקית', healthLines),
+      section('מגמת מוניטין ודירוג', reputationLines),
       section('מודיעין סקטור', sectorLines),
       section('פרופיל מתחרים', competitorProfiles),
       section('מהלכי מתחרים (30 יום)', fmt(competitorMoves)),
@@ -297,12 +325,13 @@ ${intelligenceBriefing}
 - competitive_gap: something competitors offer or do that you don't — and should
 - social_viral: viral content angle specific to this business/sector
 - future_prediction: AI-predicted opportunity or risk in the next 30-60 days
+- reputation_risk: reputation deterioration pattern that requires immediate action (use only if rating dropped or recurring complaint theme found)
 
 Return ONLY valid JSON. ALL string values MUST be in Hebrew:
 {"insights": [{
   "title": "כותרת ספציפית — חייב לכלול מספר/שם/פרט קונקרטי",
   "description": "תיאור של 1-2 משפטים: מה זוהה, מאיזה מקורות, ולמה זה חשוב עכשיו",
-  "alert_type": "trend_opportunity|new_service|promotion_strategy|sector_shift|event_opportunity|competitive_gap|social_viral|future_prediction",
+  "alert_type": "trend_opportunity|new_service|promotion_strategy|sector_shift|event_opportunity|competitive_gap|social_viral|future_prediction|reputation_risk",
   "priority": "critical|high|medium",
   "reasoning": "מה המקורות שמצביעים על זה — ציין אות/טרנד/מתחרה ספציפי",
   "opportunity_size": "הערכת ההזדמנות — ₪X פוטנציאל / X לקוחות / X% גידול",
