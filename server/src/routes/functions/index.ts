@@ -88,6 +88,16 @@ import { cleanupInsights } from './cleanupInsights';
 import { processEventBus } from './processEventBus';
 import { getBusinessConstraints, updateBusinessConstraints } from './manageConstraints';
 import { getEventBusStats, approveAction, rejectAction } from './getEventBusStats';
+import {
+  runViralCatalyst,
+  runInfluenceIntegrity,
+  runDeepContextVision,
+  runRetentionSentinel,
+  runNegotiationPricing,
+  runCampaignAutopilot,
+  runExpansionScout,
+  runReputationWarRoom,
+} from './layer7Agents';
 
 const router = Router();
 
@@ -186,6 +196,15 @@ const FUNCTION_MAP: Record<string, any> = {
   getEventBusStats,
   approveAction,
   rejectAction,
+  // Layer 7 advanced agents
+  runViralCatalyst,
+  runInfluenceIntegrity,
+  runDeepContextVision,
+  runRetentionSentinel,
+  runNegotiationPricing,
+  runCampaignAutopilot,
+  runExpansionScout,
+  runReputationWarRoom,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,
