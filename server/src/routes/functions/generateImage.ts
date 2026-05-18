@@ -11,7 +11,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 // Flux.1 via fal.ai
 const FAL_API_KEY = process.env.FAL_API_KEY || '';
 
-// ── Tier 0: Google Imagen 3 via Gemini API ────────────────────────────────────
+// ── Tier 1 (fallback): Google Imagen 3 via Gemini API ───────────────────────
 
 // Platform → aspect ratio mappings
 const PLATFORM_ASPECT: Record<string, string> = {
@@ -69,7 +69,7 @@ async function generateWithGeminiImagen(englishPrompt: string, platform = 'insta
   return `data:image/png;base64,${b64}`;
 }
 
-// ── Tier 1: Flux.1 schnell via fal.ai ────────────────────────────────────────
+// ── Tier 0 (primary): Flux.1 schnell via fal.ai ──────────────────────────────
 
 async function generateWithFlux(englishPrompt: string, platform = 'instagram_post'): Promise<string | null> {
   if (!FAL_API_KEY) return null;
@@ -387,8 +387,8 @@ function categoryToSector(category = ''): string {
 /**
  * generateImage — AI image generation.
  *
- * Tier 0: Google Imagen 3 via Gemini API (GEMINI_API_KEY)
- * Tier 1: Flux.1 schnell via fal.ai (FAL_API_KEY)
+ * Tier 0: Flux.1 schnell via fal.ai (FAL_API_KEY) — primary
+ * Tier 1: Google Imagen 3 via Gemini API (GEMINI_API_KEY) — fallback
  *
  * Prompt strategy:
  *   custom_prompt → translated to English directly
