@@ -3,9 +3,7 @@ import { prisma } from '../../db';
 import Anthropic from '@anthropic-ai/sdk';
 import { invokeLLM } from '../../lib/llm';
 
-const OPENAI_API_KEY      = process.env.OPENAI_API_KEY      || ''; // kept for translation only
-const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY || '';
-const PEXELS_API_KEY      = process.env.PEXELS_API_KEY      || '';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || ''; // used for translation fallback only
 
 // Google Imagen 3 — simple API key (no Vertex / service account needed)
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
@@ -160,24 +158,6 @@ async function translateForSearch(text: string): Promise<string> {
   return translateCustomPrompt(text);
 }
 
-// ── Sector → curated Unsplash photo IDs (stable, no API key needed) ─────────
-const SECTOR_PHOTO_IDS: Record<string, string[]> = {
-  restaurant: ['1517248135467-4c7edcad34c4', '1414235077428-338989a2e8c0', '1555396273-367ea4eb4db5'],
-  cafe:       ['1501339847302-ac426a4a7cbb', '1495474472287-4d71bcdd2085', '1442512595331-3f6a1e6e4cd7'],
-  fitness:    ['1534438327276-14e5300c3a48', '1571019614242-c5c5dee9f50b', '1506629082955-511b1aa562c8'],
-  gym:        ['1534438327276-14e5300c3a48', '1581009137042-c6e32dc793f4', '1517836357463-d25dfeac3438'],
-  beauty:     ['1560066984-138dadb4c035', '1522335789203-aabd1fc54bc9', '1487412947147-5cebf100ffc2'],
-  salon:      ['1560066984-138dadb4c035', '1522335789203-aabd1fc54bc9', '1604654894610-df63bc536371'],
-  health:     ['1576091160399-112ba8d25d1d', '1505751172876-fa1923c5c528', '1526256262350-7da7584cf5eb'],
-  tech:       ['1518770660439-4636190af475', '1581091226825-a6a2a5aee158', '1563986768494-4dee2763ff3f'],
-  retail:     ['1441986300917-64674bd600d8', '1607082349566-187531fc9759', '1472851294608-ac1d6e0ce4d6'],
-  food:       ['1498837167922-ddd27525d352', '1504674900247-0877df9cc836', '1490645935967-10de6ba17061'],
-  bakery:     ['1509440159596-0249088772ff', '1555507036-ab1f4038808a', '1476224203421-9ac39bcb3327'],
-  law:        ['1589829545856-d10d557cf95f', '1436450412740-5e3b1b77f1cb', '1453728013993-6d66e9c9123a'],
-  education:  ['1503676260728-1c00da094a0b', '1456513080510-7bf3a84b82f8', '1523050854058-8df90110c9f1'],
-  realestate: ['1560518883-ce09059eeffa', '1512917774080-9991f1c4c750', '1558618666-fcd25c85cd64'],
-  local:      ['1556742049-0cfed4f6a45d', '1441986300917-64674bd600d8', '1542744094-24638eff58bb'],
-};
 
 // ── Insight-to-visual keyword mapping ────────────────────────────────────────
 const INSIGHT_TO_VISUAL: Array<{ keywords: string[]; visual: string }> = [
@@ -383,24 +363,7 @@ function buildDynamicImagePrompt(insightText: string, postText: string, sector: 
   ].filter(Boolean).join(' ');
 }
 
-// ── Simple deterministic hash ─────────────────────────────────────────────────
-function simpleHash(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash) + str.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
 
-function getDynamicFallback(insightText: string, sector: string): string {
-  const seed = simpleHash(`${insightText}${sector}${Date.now()}`);
-  return `https://picsum.photos/seed/${seed}/1024/576`;
-}
-
-function unsplashCdnUrl(photoId: string): string {
-  return `https://images.unsplash.com/photo-${photoId}?w=1024&h=576&fit=crop&auto=format`;
-}
 
 function categoryToSector(category = ''): string {
   const c = category.toLowerCase();
@@ -422,10 +385,8 @@ function categoryToSector(category = ''): string {
 /**
  * generateImage — server-side image generation with dynamic prompts + 3-tier fallback.
  *
- * Tier 1: DALL-E 3 via OpenAI (if OPENAI_API_KEY configured)
- * Tier 2: Pexels (if PEXELS_API_KEY configured) — random from 15 results on force_regenerate
- *       : Unsplash search (if UNSPLASH_ACCESS_KEY configured)
- * Tier 3: picsum.photos with insight-seeded URL (always works)
+ * Tier 0: Google Imagen 3 via Gemini API (GEMINI_API_KEY)
+ * Tier 1: Flux.1 schnell via fal.ai (FAL_API_KEY)
  *
  * Body: { businessProfileId, insight_text?, post_text?, custom_prompt?, force_regenerate? }
  * Returns: { url, provider, is_stock, alt_photos? }
@@ -511,108 +472,5 @@ export async function generateImage(req: Request, res: Response) {
     }
   }
 
-  // ── Tier 2a: Pexels ───────────────────────────────────────────────────────
-  if (PEXELS_API_KEY) {
-    try {
-      const query = encodeURIComponent(visualKeywords.slice(0, 80));
-      const pexelsRes = await fetch(
-        `https://api.pexels.com/v1/search?query=${query}&per_page=15&orientation=landscape`,
-        { headers: { 'Authorization': PEXELS_API_KEY } },
-      );
-
-      if (pexelsRes.ok) {
-        const data: any = await pexelsRes.json();
-        const photos: any[] = data.photos || [];
-        if (photos.length > 0) {
-          // Pick random photo on force_regenerate, first photo otherwise
-          const idx = force_regenerate ? Math.floor(Math.random() * photos.length) : 0;
-          const chosen = photos[idx];
-          const altPhotos = photos
-            .filter((_, i) => i !== idx)
-            .slice(0, 5)
-            .map(p => p.src?.medium || p.src?.original);
-
-          return res.json({
-            url: chosen.src?.large2x || chosen.src?.large || chosen.src?.original,
-            provider: 'pexels',
-            is_stock: true,
-            ai_attempted: true,
-            credit: chosen.photographer,
-            alt_photos: altPhotos,
-          });
-        }
-      }
-    } catch (err: any) {
-      console.warn('[generateImage] Pexels exception:', err.message);
-    }
-  }
-
-  // ── Tier 2b: Unsplash search API ─────────────────────────────────────────
-  if (UNSPLASH_ACCESS_KEY) {
-    try {
-      const query = encodeURIComponent(
-        visualKeywords.split(' ').slice(0, 4).join(' '),
-      );
-      const unsplashRes = await fetch(
-        `https://api.unsplash.com/search/photos?query=${query}&per_page=15&orientation=landscape`,
-        { headers: { 'Authorization': `Client-ID ${UNSPLASH_ACCESS_KEY}` } },
-      );
-
-      if (unsplashRes.ok) {
-        const data: any = await unsplashRes.json();
-        const results: any[] = data.results || [];
-        if (results.length > 0) {
-          const idx = force_regenerate ? Math.floor(Math.random() * results.length) : 0;
-          const chosen = results[idx];
-          const altPhotos = results
-            .filter((_, i) => i !== idx)
-            .slice(0, 5)
-            .map(p => p.urls?.thumb);
-
-          return res.json({
-            url: chosen.urls?.regular,
-            provider: 'unsplash',
-            is_stock: true,
-            ai_attempted: true,
-            credit: chosen.user?.name,
-            alt_photos: altPhotos,
-          });
-        }
-      }
-    } catch (err: any) {
-      console.warn('[generateImage] Unsplash exception:', err.message);
-    }
-  }
-
-  // ── Tier 2c: loremflickr — keyword-aware, no API key required ──────────────
-  // Uses the actual visual keywords (translated custom prompt or insight keywords)
-  // so the image is always topically relevant.
-  // Format: https://loremflickr.com/1024/576/keyword1,keyword2?random=N
-  {
-    // Take first 3 meaningful words from visualKeywords as search tags
-    const tags = visualKeywords
-      .replace(/[^a-zA-Z ,]/g, '')   // keep only ASCII + spaces + commas
-      .split(/[\s,]+/)
-      .filter(w => w.length > 3)
-      .slice(0, 3)
-      .join(',');
-
-    const searchTags = tags || sector;
-
-    // random param ensures a different image on force_regenerate
-    const randomParam = force_regenerate ? `?random=${Date.now()}` : `?random=${simpleHash(visualKeywords)}`;
-
-    // Build 5 alt photo URLs with different random seeds for quick swap
-    const altPhotos = Array.from({ length: 5 }, (_, i) =>
-      `https://loremflickr.com/400/300/${searchTags}?random=${simpleHash(visualKeywords) + i + 1}`
-    );
-
-    return res.json({
-      url: `https://loremflickr.com/1024/576/${searchTags}${randomParam}`,
-      provider: 'stock',
-      is_stock: true,
-      ai_attempted: true,
-      alt_photos: altPhotos,
-    });
-  }
+  return res.status(503).json({ error: 'Image generation unavailable — configure GEMINI_API_KEY or FAL_API_KEY' });
 }
