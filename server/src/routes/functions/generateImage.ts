@@ -1,94 +1,84 @@
 import { Request, Response } from 'express';
-import crypto from 'crypto';
 import { prisma } from '../../db';
 import Anthropic from '@anthropic-ai/sdk';
 import { invokeLLM } from '../../lib/llm';
 
-const OPENAI_API_KEY      = process.env.OPENAI_API_KEY      || '';
+const OPENAI_API_KEY      = process.env.OPENAI_API_KEY      || ''; // kept for translation only
 const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY || '';
 const PEXELS_API_KEY      = process.env.PEXELS_API_KEY      || '';
 
-// Google Imagen (Vertex AI)
-const GCP_PROJECT_ID  = process.env.GOOGLE_CLOUD_PROJECT_ID         || '';
-const GCP_LOCATION    = process.env.GOOGLE_CLOUD_LOCATION            || 'us-central1';
-const GCP_CREDS_JSON  = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON || '';
+// Google Imagen 3 — simple API key (no Vertex / service account needed)
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 
-// ── Google Service Account JWT + Imagen ──────────────────────────────────────
+// Flux.1 via fal.ai
+const FAL_API_KEY = process.env.FAL_API_KEY || '';
 
-function base64url(str: string): string {
-  return Buffer.from(str).toString('base64')
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-}
+// ── Tier 0: Google Imagen 3 via Gemini API ────────────────────────────────────
 
-async function getGoogleAccessToken(credsJson: string): Promise<string> {
-  const creds = JSON.parse(credsJson);
-  const now   = Math.floor(Date.now() / 1000);
+async function generateWithGeminiImagen(englishPrompt: string): Promise<string | null> {
+  if (!GEMINI_API_KEY) return null;
 
-  const header  = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const payload = base64url(JSON.stringify({
-    iss:   creds.client_email,
-    scope: 'https://www.googleapis.com/auth/cloud-platform',
-    aud:   'https://oauth2.googleapis.com/token',
-    iat:   now,
-    exp:   now + 3600,
-  }));
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${GEMINI_API_KEY}`,
+    {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        instances: [{
+          prompt: `${englishPrompt}, professional marketing photography, vibrant colors, modern commercial style, well-lit, no text overlay, no logos, suitable for social media post`,
+        }],
+        parameters: {
+          sampleCount:       1,
+          aspectRatio:       '1:1',
+          safetyFilterLevel: 'block_few',
+          personGeneration:  'allow_adult',
+        },
+      }),
+    },
+  );
 
-  const signingInput = `${header}.${payload}`;
-  const sign = crypto.createSign('RSA-SHA256');
-  sign.update(signingInput);
-  const signature = sign.sign(creds.private_key, 'base64')
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-
-  const jwt = `${signingInput}.${signature}`;
-
-  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body:    new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion:  jwt,
-    }),
-  });
-
-  const tokenData: any = await tokenRes.json();
-  if (!tokenData.access_token) throw new Error(`Token exchange failed: ${JSON.stringify(tokenData)}`);
-  return tokenData.access_token;
-}
-
-async function generateWithImagen(englishPrompt: string): Promise<string | null> {
-  if (!GCP_PROJECT_ID || !GCP_CREDS_JSON) return null;
-
-  const token = await getGoogleAccessToken(GCP_CREDS_JSON);
-
-  const endpoint = `https://${GCP_LOCATION}-aiplatform.googleapis.com/v1/projects/${GCP_PROJECT_ID}/locations/${GCP_LOCATION}/publishers/google/models/imagen-3.0-generate-001:predict`;
-
-  const imagenRes = await fetch(endpoint, {
-    method:  'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      instances: [{
-        prompt: `${englishPrompt}, professional marketing photography, vibrant colors, modern commercial style, well-lit, no text overlay, no logos, suitable for Instagram post`,
-      }],
-      parameters: {
-        sampleCount:       1,
-        aspectRatio:       '1:1',
-        safetyFilterLevel: 'block_few',
-        personGeneration:  'allow_adult',
-      },
-    }),
-  });
-
-  if (!imagenRes.ok) {
-    const errText = await imagenRes.text();
-    throw new Error(`Imagen ${imagenRes.status}: ${errText.slice(0, 200)}`);
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Gemini Imagen ${res.status}: ${err.slice(0, 200)}`);
   }
 
-  const data: any = await imagenRes.json();
+  const data: any = await res.json();
   const b64 = data.predictions?.[0]?.bytesBase64Encoded;
-  if (!b64) throw new Error('Imagen returned no image');
+  if (!b64) throw new Error('Gemini Imagen returned no image data');
 
-  // Return as data URL — no external storage required
   return `data:image/png;base64,${b64}`;
+}
+
+// ── Tier 1: Flux.1 schnell via fal.ai ────────────────────────────────────────
+
+async function generateWithFlux(englishPrompt: string): Promise<string | null> {
+  if (!FAL_API_KEY) return null;
+
+  const res = await fetch('https://fal.run/fal-ai/flux/schnell', {
+    method:  'POST',
+    headers: {
+      'Authorization': `Key ${FAL_API_KEY}`,
+      'Content-Type':  'application/json',
+    },
+    body: JSON.stringify({
+      prompt: `${englishPrompt}, professional marketing photography, vibrant colors, modern commercial style, well-lit, no text overlay, no logos, suitable for social media`,
+      image_size:           'square_hd',
+      num_images:           1,
+      output_format:        'jpeg',
+      num_inference_steps:  4,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Flux ${res.status}: ${err.slice(0, 200)}`);
+  }
+
+  const data: any = await res.json();
+  const url = data.images?.[0]?.url;
+  if (!url) throw new Error('Flux returned no image URL');
+
+  return url;
 }
 
 // ── Claude-powered Hebrew → English translation (fallback) ───────────────────
@@ -484,70 +474,40 @@ export async function generateImage(req: Request, res: Response) {
     visualKeywords = extractVisualKeywordsSync(insightText, post_text, sector);
   }
 
-  console.log('[generateImage] custom_prompt:', custom_prompt || '(none)');
-  console.log('[generateImage] translatedCustom:', translatedCustom || '(none)');
-  console.log('[generateImage] visualKeywords:', visualKeywords.slice(0, 80));
-  console.log('[generateImage] force_regenerate:', force_regenerate);
+  console.log('[generateImage] keywords:', visualKeywords.slice(0, 80), '| force:', force_regenerate);
 
-  let dalleAttempted = false;
+  const aiPrompt = hasCustom
+    ? translatedCustom
+    : buildDynamicImagePrompt(insightText, post_text, sector, city).replace(/[^\x00-\x7F]/g, '');
 
-  // ── Tier 0: Google Imagen 3 (Vertex AI) ──────────────────────────────────
-  if (GCP_PROJECT_ID && GCP_CREDS_JSON) {
+  const variationSuffix = force_regenerate ? ` variation ${Math.floor(Math.random() * 9000) + 1000}` : '';
+  const finalPrompt = aiPrompt + variationSuffix;
+
+  // ── Tier 0: Google Imagen 3 (Gemini API — simple key, no service account) ──
+  if (GEMINI_API_KEY) {
     try {
-      const imagenPrompt = hasCustom
-        ? translatedCustom
-        : buildDynamicImagePrompt(insightText, post_text, sector, city).replace(/[^\x00-\x7F]/g, '');
-
-      console.log('[generateImage] Imagen prompt:', imagenPrompt.slice(0, 120));
-      const url = await generateWithImagen(imagenPrompt);
+      console.log('[generateImage] trying Gemini Imagen 3...');
+      const url = await generateWithGeminiImagen(finalPrompt);
       if (url) {
-        console.log('[generateImage] Imagen success');
-        return res.json({ url, provider: 'imagen3', is_stock: false, dalle_attempted: false });
+        console.log('[generateImage] Gemini Imagen 3 success');
+        return res.json({ url, provider: 'imagen3', is_stock: false });
       }
     } catch (err: any) {
-      console.warn('[generateImage] Imagen failed:', err.message);
+      console.warn('[generateImage] Gemini Imagen failed:', err.message);
     }
   }
 
-  // ── Tier 1: DALL-E 3 ──────────────────────────────────────────────────────
-  if (OPENAI_API_KEY) {
-    dalleAttempted = true;
+  // ── Tier 1: Flux.1 schnell (fal.ai) ──────────────────────────────────────
+  if (FAL_API_KEY) {
     try {
-      const variationSeed = force_regenerate ? ` [style variation ${Math.floor(Math.random() * 1000)}]` : '';
-      const prompt = hasCustom
-        ? `${translatedCustom}, professional marketing photography, vibrant colors, modern commercial style, well-lit, no text overlay, no logos, suitable for Instagram post${variationSeed}`
-        : buildDynamicImagePrompt(insightText, post_text, sector, city) + variationSeed;
-
-      console.log('[generateImage] DALL-E prompt:', prompt.slice(0, 120));
-
-      const dalleRes = await fetch('https://api.openai.com/v1/images/generations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'dall-e-3',
-          prompt,
-          n: 1,
-          size: '1024x1024',
-          quality: 'standard',
-          response_format: 'url',
-        }),
-      });
-
-      if (dalleRes.ok) {
-        const data: any = await dalleRes.json();
-        const url = data.data?.[0]?.url;
-        if (url) {
-          return res.json({ url, provider: 'dalle3', is_stock: false, dalle_attempted: true });
-        }
-      } else {
-        const errBody: any = await dalleRes.json().catch(() => ({}));
-        console.warn('[generateImage] DALL-E error:', dalleRes.status, errBody.error?.message);
+      console.log('[generateImage] trying Flux.1 schnell...');
+      const url = await generateWithFlux(finalPrompt);
+      if (url) {
+        console.log('[generateImage] Flux.1 success');
+        return res.json({ url, provider: 'flux1', is_stock: false });
       }
     } catch (err: any) {
-      console.warn('[generateImage] DALL-E exception:', err.message);
+      console.warn('[generateImage] Flux failed:', err.message);
     }
   }
 
@@ -576,7 +536,7 @@ export async function generateImage(req: Request, res: Response) {
             url: chosen.src?.large2x || chosen.src?.large || chosen.src?.original,
             provider: 'pexels',
             is_stock: true,
-            dalle_attempted: dalleAttempted,
+            ai_attempted: true,
             credit: chosen.photographer,
             alt_photos: altPhotos,
           });
@@ -613,7 +573,7 @@ export async function generateImage(req: Request, res: Response) {
             url: chosen.urls?.regular,
             provider: 'unsplash',
             is_stock: true,
-            dalle_attempted: dalleAttempted,
+            ai_attempted: true,
             credit: chosen.user?.name,
             alt_photos: altPhotos,
           });
@@ -651,7 +611,7 @@ export async function generateImage(req: Request, res: Response) {
       url: `https://loremflickr.com/1024/576/${searchTags}${randomParam}`,
       provider: 'stock',
       is_stock: true,
-      dalle_attempted: dalleAttempted,
+      ai_attempted: true,
       alt_photos: altPhotos,
     });
   }
