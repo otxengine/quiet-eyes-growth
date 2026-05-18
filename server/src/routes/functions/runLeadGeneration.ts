@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
+import { publishEvent } from '../../lib/eventBus';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 
@@ -230,6 +231,27 @@ Return ONLY valid JSON. ALL string values must be in Hebrew.`,
     }
 
     await writeAutomationLog('runLeadGeneration', businessProfileId, startTime, newLeads);
+
+    // OTX-001: publish hot_lead events for each new hot lead found
+    if (newLeads > 0) {
+      const profile = await prisma.businessProfile.findFirst({ where: { id: businessProfileId }, select: { category: true, city: true } });
+      const hotLeads = await prisma.lead.findMany({
+        where: { linked_business: businessProfileId, status: 'hot' },
+        orderBy: { created_date: 'desc' },
+        take: newLeads,
+        select: { id: true, name: true, score: true, service_needed: true },
+      });
+      for (const lead of hotLeads) {
+        publishEvent({
+          businessId: businessProfileId,
+          eventType: 'hot_lead',
+          source: 'runLeadGeneration',
+          payload: { leadId: lead.id, name: lead.name, score: lead.score, service: lead.service_needed },
+          contextAttrs: { category: profile?.category, city: profile?.city, impact: 'high' },
+        }).catch(() => {});
+      }
+    }
+
     console.log(`runLeadGeneration done: ${newLeads} leads from ${intentSignals.length} signals`);
     return res.json({ new_leads: newLeads, signals_checked: intentSignals.length });
   } catch (err: any) {

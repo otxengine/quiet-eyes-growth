@@ -5,6 +5,8 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
 import { executeOrQueue } from '../../services/execution/executeOrQueue';
 import { getSectorContext, getSectorReviewResponse } from '../../lib/sectorPrompts';
+import { validateAction } from '../../lib/constraintValidator';
+import { publishEvent } from '../../lib/eventBus';
 
 /**
  * autoRespondToReviews — proactively generates suggested responses for
@@ -114,13 +116,30 @@ Write ONLY the final response text. ALL string values must be in Hebrew.`,
 
         if (!suggestedResponse) continue;
 
+        // OTX-004: validate generated reply against business constraints
+        const validation = await validateAction(businessProfileId, {
+          type: 'review_reply',
+          content: suggestedResponse,
+          platform: 'google',
+        });
+        const validatedReply = validation.action.content || suggestedResponse;
+
         // Always pre-fill suggested_response so user can preview in UI
         await prisma.review.update({
           where: { id: review.id },
-          data: { suggested_response: suggestedResponse, response_status: 'suggested' },
+          data: { suggested_response: validatedReply, response_status: 'suggested' },
         });
 
         const reviewerLabel = review.reviewer_name || 'לקוח';
+
+        // OTX-001: publish event so routing engine can trigger other agents
+        publishEvent({
+          businessId: businessProfileId,
+          eventType: 'new_review',
+          source: 'autoRespondToReviews',
+          payload: { reviewId: review.id, rating: review.rating, sentiment: review.sentiment },
+          contextAttrs: { category: profile.category, city: profile.city, impact: review.rating <= 2 ? 'high' : 'medium' },
+        }).catch(() => {});
 
         // Queue or auto-execute the review reply based on autonomy_level
         const { executed, autoActionId } = await executeOrQueue({
@@ -130,11 +149,15 @@ Write ONLY the final response text. ALL string values must be in Hebrew.`,
           description: `תגובה לביקורת של ${reviewerLabel} (${review.rating || '?'}⭐)`,
           payload: {
             reviewId: review.id,
-            replyText: suggestedResponse,
+            replyText: validatedReply,
             googleReviewId: (review as any).google_review_id || null,
           },
           revenueImpact: 200,
           autoExecuteAfterHours: 4,
+          // OTX-003: confidence based on review negativity
+          confidenceScore: review.rating <= 2 ? 90 : 75,
+          predictedImpact: review.rating <= 2 ? 'high' : 'medium',
+          constraintNotes: validation.constraintNotes,
         });
 
         // ProactiveAlert for dashboard visibility (skip if already auto-executed)

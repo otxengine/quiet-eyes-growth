@@ -5,6 +5,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
 import { executeOrQueue } from '../../services/execution/executeOrQueue';
 import { getSectorContext } from '../../lib/sectorPrompts';
+import { validateAction } from '../../lib/constraintValidator';
 
 /**
  * reviewRequestAutomation — finds closed/won leads that haven't received a
@@ -108,15 +109,27 @@ Write ONLY the message text. ALL string values must be in Hebrew.`,
           },
         });
 
+        // OTX-004: validate message against business constraints
+        const validation = await validateAction(businessProfileId, {
+          type: 'review_request',
+          content: message,
+          platform: 'whatsapp',
+          scheduledHour: new Date().getHours(),
+        });
+        const validatedMessage = validation.action.content || message;
+
         // Queue or auto-send the WhatsApp review request based on autonomy_level
         const { executed, autoActionId } = await executeOrQueue({
           businessProfileId,
           agentName: 'reviewRequestAutomation',
           actionType: 'review_request',
           description: `בקשת ביקורת Google ל${customerName}`,
-          payload: { phone, message, customerName, leadId: lead.id },
+          payload: { phone, message: validatedMessage, customerName, leadId: lead.id },
           revenueImpact: 150,
           autoExecuteAfterHours: 2,
+          confidenceScore: 80,
+          predictedImpact: 'medium',
+          constraintNotes: validation.constraintNotes,
         });
 
         // ProactiveAlert for dashboard visibility (skip if already auto-sent)

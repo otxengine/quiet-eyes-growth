@@ -4,6 +4,7 @@ import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { getSectorContext, getSectorContentStrategy } from '../../lib/sectorPrompts';
 import { getSectorContext as getAccumulatedSectorCtx } from '../../lib/sectorContext';
+import { publishEvent } from '../../lib/eventBus';
 
 export async function runMarketIntelligence(req: Request, res: Response) {
   const { businessProfileId } = req.body;
@@ -202,6 +203,18 @@ Return ONLY valid JSON:
     }
 
     await writeAutomationLog('runMarketIntelligence', businessProfileId, startTime, created);
+
+    // OTX-001: publish market_signal event for each high-impact insight generated
+    if (created > 0) {
+      publishEvent({
+        businessId: businessProfileId,
+        eventType: 'market_signal',
+        source: 'runMarketIntelligence',
+        payload: { insights_generated: created, signals_analyzed: signals.length },
+        contextAttrs: { category: profile.category, city: profile.city, impact: created >= 3 ? 'high' : 'medium' },
+      }).catch(() => {});
+    }
+
     console.log(`runMarketIntelligence done: ${created} insights from ${signals.length} signals`);
     return res.json({ signals_processed: signals.length, insights_generated: created, duplicates_skipped: dupes });
   } catch (err: any) {

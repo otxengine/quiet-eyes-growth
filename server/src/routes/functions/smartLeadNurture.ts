@@ -5,6 +5,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
 import { executeOrQueue } from '../../services/execution/executeOrQueue';
 import { getSectorContext } from '../../lib/sectorPrompts';
+import { validateAction } from '../../lib/constraintValidator';
 
 /**
  * smartLeadNurture — follows up on contacted leads that haven't responded:
@@ -124,6 +125,15 @@ Write only the message text. ALL string values must be in Hebrew.`,
           if (!followupMsg) continue;
           nurtured++;
 
+          // OTX-004: validate message against business constraints
+          const validation = await validateAction(businessProfileId, {
+            type: 'whatsapp_send',
+            content: followupMsg,
+            platform: 'whatsapp',
+            scheduledHour: new Date().getHours(),
+          });
+          const validatedMsg = validation.action.content || followupMsg;
+
           const phone = lead.contact_phone || '';
           const waUrl = phone
             ? `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(followupMsg)}`
@@ -145,9 +155,12 @@ Write only the message text. ALL string values must be in Hebrew.`,
             agentName: 'smartLeadNurture',
             actionType: 'whatsapp_send',
             description: `מעקב ליד: ${customerName} — ניסיון ${followupCount}`,
-            payload: { phone, message: followupMsg, customerName, leadId: lead.id },
+            payload: { phone, message: validatedMsg, customerName, leadId: lead.id },
             revenueImpact: 500,
             isLead: true,
+            confidenceScore: followupCount === 1 ? 85 : 70,
+            predictedImpact: followupCount === 1 ? 'high' : 'medium',
+            constraintNotes: validation.constraintNotes,
           });
 
           // ProactiveAlert with ActionPopup metadata

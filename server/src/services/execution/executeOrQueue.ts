@@ -34,6 +34,10 @@ export interface QueuedAction {
   revenueImpact?: number;          // estimated ₪ impact (for ROI calc)
   autoExecuteAfterHours?: number;  // semi_auto: hours before auto-exec (default 24)
   isLead?: boolean;                // if true → always manual, never auto
+  // OTX-003: execution decision metadata
+  confidenceScore?: number;        // 0–100: agent's confidence in this action
+  predictedImpact?: 'high' | 'medium' | 'low';
+  constraintNotes?: string;        // OTX-004: JSON from constraintValidator
 }
 
 export interface ExecuteResult {
@@ -137,14 +141,18 @@ async function createAutoAction(
 ): Promise<string> {
   const record = await prisma.autoAction.create({
     data: {
-      linked_business: action.businessProfileId,
-      agent_name: action.agentName,
-      action_type: action.actionType,
-      description: action.description,
-      payload: JSON.stringify(action.payload),
-      revenue_impact: action.revenueImpact ?? 0,
+      linked_business:    action.businessProfileId,
+      agent_name:         action.agentName,
+      action_type:        action.actionType,
+      description:        action.description,
+      payload:            JSON.stringify(action.payload),
+      revenue_impact:     action.revenueImpact ?? 0,
       status,
-      auto_execute_at: autoExecuteAt,
+      auto_execute_at:    autoExecuteAt,
+      // OTX-003/004 fields (populated when agents provide them)
+      confidence_score:   action.confidenceScore ?? null,
+      predicted_impact:   action.predictedImpact ?? null,
+      constraint_notes:   action.constraintNotes ?? null,
     },
   });
   return record.id;
