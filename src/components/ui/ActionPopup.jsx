@@ -66,6 +66,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
   const [smartImagePrompt, setSmartImagePrompt] = useState('');
 
   // Image step
+  const [imagePlatform,    setImagePlatform]    = useState('instagram_post');
   const [imageUrl,         setImageUrl]         = useState(null);
   const [imageProvider,    setImageProvider]    = useState(null); // 'imagen3'|'flux1'
   const [imageIsStock,     setImageIsStock]     = useState(false);
@@ -202,6 +203,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
         insight_text:      signal.summary,
         post_text:         data?.post?.text || '',
         force_regenerate:  false,
+        platform:          imagePlatform,
       });
       const imgData = imgRes?.data || imgRes;
       if (imgData?.url) {
@@ -323,6 +325,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
         post_text:         text,
         custom_prompt:     customPrompt.trim() || undefined,
         force_regenerate:  imageUrl !== null,
+        platform:          imagePlatform,
       });
       const data = res?.data || res;
       if (!data?.url) throw new Error('לא התקבלה תמונה מהשרת');
@@ -586,10 +589,53 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
     </>
   );
 
+  const PLATFORM_OPTIONS = [
+    { key: 'instagram_post',     label: 'Instagram',  sub: '1:1',   icon: '📷' },
+    { key: 'instagram_portrait', label: 'פורטרט',     sub: '4:5',   icon: '🖼' },
+    { key: 'instagram_story',    label: 'סטורי',      sub: '9:16',  icon: '📱' },
+    { key: 'facebook',           label: 'Facebook',   sub: '4:3',   icon: '🌐' },
+    { key: 'tiktok',             label: 'TikTok',     sub: '9:16',  icon: '🎵' },
+  ];
+
+  // aspect-ratio CSS value per platform (for the preview container)
+  const PLATFORM_ASPECT_CSS = {
+    instagram_post:     '1 / 1',
+    instagram_portrait: '4 / 5',
+    instagram_story:    '9 / 16',
+    facebook:           '4 / 3',
+    tiktok:             '9 / 16',
+    facebook_landscape: '16 / 9',
+  };
+
   // ── STEP 1: Image ──
   const stepImage = (
     <>
       <div className="mb-3">
+        {/* Platform picker */}
+        <p className="text-[11px] font-semibold text-gray-500 mb-1.5">פלטפורמה ופורמט</p>
+        <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1">
+          {PLATFORM_OPTIONS.map(opt => (
+            <button
+              key={opt.key}
+              onClick={() => {
+                if (opt.key !== imagePlatform) {
+                  setImagePlatform(opt.key);
+                  setImageUrl(null); // clear old image — wrong aspect ratio
+                }
+              }}
+              className={`flex-shrink-0 flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border text-[10px] transition-all ${
+                imagePlatform === opt.key
+                  ? 'bg-indigo-50 border-indigo-400 text-indigo-700 font-semibold'
+                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <span>{opt.icon}</span>
+              <span>{opt.label}</span>
+              <span className="text-[9px] opacity-70">{opt.sub}</span>
+            </button>
+          ))}
+        </div>
+
         <p className="text-[12px] font-semibold text-gray-700 mb-2">תמונה שיווקית — נוצרה על ידי AI</p>
 
         {/* Loading state */}
@@ -613,16 +659,20 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
         {/* Image */}
         {!imageLoading && imageUrl && (
           <div className="relative mb-3">
-            <img
-              src={imageUrl}
-              alt="marketing image"
-              className="w-full rounded-xl border border-gray-100"
-              style={{ maxHeight: 260, objectFit: 'cover' }}
-              onError={() => {
-                setImageUrl(null);
-                setImageError('התמונה לא נטענה — נסה שוב');
-              }}
-            />
+            <div
+              className="w-full rounded-xl border border-gray-100 overflow-hidden bg-gray-50"
+              style={{ aspectRatio: PLATFORM_ASPECT_CSS[imagePlatform] || '1 / 1', maxHeight: 320 }}
+            >
+              <img
+                src={imageUrl}
+                alt="marketing image"
+                className="w-full h-full object-cover"
+                onError={() => {
+                  setImageUrl(null);
+                  setImageError('התמונה לא נטענה — נסה שוב');
+                }}
+              />
+            </div>
             {/* AI provider badge */}
             {imageProvider && (
               <span className="absolute bottom-2 right-2 text-[9px] font-medium px-1.5 py-0.5 rounded bg-black/60 text-white">

@@ -13,8 +13,30 @@ const FAL_API_KEY = process.env.FAL_API_KEY || '';
 
 // ── Tier 0: Google Imagen 3 via Gemini API ────────────────────────────────────
 
-async function generateWithGeminiImagen(englishPrompt: string): Promise<string | null> {
+// Platform → aspect ratio mappings
+const PLATFORM_ASPECT: Record<string, string> = {
+  instagram_post:     '1:1',
+  instagram_portrait: '3:4',   // 4:5 not supported by Imagen; 3:4 is closest
+  instagram_story:    '9:16',
+  tiktok:             '9:16',
+  facebook:           '4:3',
+  facebook_landscape: '16:9',
+};
+
+// Platform → Flux image_size or custom dims
+const PLATFORM_FLUX_SIZE: Record<string, string | { width: number; height: number }> = {
+  instagram_post:     'square_hd',            // 1024×1024
+  instagram_portrait: { width: 864, height: 1080 }, // ~4:5
+  instagram_story:    'portrait_16_9',        // 576×1024
+  tiktok:             'portrait_16_9',
+  facebook:           'landscape_4_3',        // 1024×768
+  facebook_landscape: 'landscape_16_9',       // 1024×576
+};
+
+async function generateWithGeminiImagen(englishPrompt: string, platform = 'instagram_post'): Promise<string | null> {
   if (!GEMINI_API_KEY) return null;
+
+  const aspectRatio = PLATFORM_ASPECT[platform] || '1:1';
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${GEMINI_API_KEY}`,
@@ -27,7 +49,7 @@ async function generateWithGeminiImagen(englishPrompt: string): Promise<string |
         }],
         parameters: {
           sampleCount:       1,
-          aspectRatio:       '1:1',
+          aspectRatio,
           safetyFilterLevel: 'block_few',
           personGeneration:  'allow_adult',
         },
@@ -49,8 +71,13 @@ async function generateWithGeminiImagen(englishPrompt: string): Promise<string |
 
 // ── Tier 1: Flux.1 schnell via fal.ai ────────────────────────────────────────
 
-async function generateWithFlux(englishPrompt: string): Promise<string | null> {
+async function generateWithFlux(englishPrompt: string, platform = 'instagram_post'): Promise<string | null> {
   if (!FAL_API_KEY) return null;
+
+  const sizeVal = PLATFORM_FLUX_SIZE[platform] || 'square_hd';
+  const sizeParam = typeof sizeVal === 'string'
+    ? { image_size: sizeVal }
+    : { image_size: { width: (sizeVal as any).width, height: (sizeVal as any).height } };
 
   const res = await fetch('https://fal.run/fal-ai/flux/schnell', {
     method:  'POST',
@@ -60,7 +87,7 @@ async function generateWithFlux(englishPrompt: string): Promise<string | null> {
     },
     body: JSON.stringify({
       prompt: `${englishPrompt}, professional marketing photography, vibrant colors, modern commercial style, well-lit, no text overlay, no logos, suitable for social media`,
-      image_size:           'square_hd',
+      ...sizeParam,
       num_images:           1,
       output_format:        'jpeg',
       num_inference_steps:  4,
@@ -368,8 +395,9 @@ function categoryToSector(category = ''): string {
  *   post_text / insight_text → Claude Haiku writes a detailed photographic scene prompt
  *   neither → sector fallback scene description
  *
- * Body: { businessProfileId, insight_text?, post_text?, custom_prompt?, force_regenerate? }
- * Returns: { url, provider, is_stock, prompt_used? }
+ * Body: { businessProfileId, insight_text?, post_text?, custom_prompt?, force_regenerate?, platform? }
+ * platform: 'instagram_post' (default) | 'instagram_portrait' | 'instagram_story' | 'tiktok' | 'facebook' | 'facebook_landscape'
+ * Returns: { url, provider, is_stock, platform, prompt_used? }
  */
 export async function generateImage(req: Request, res: Response) {
   const {
@@ -378,6 +406,7 @@ export async function generateImage(req: Request, res: Response) {
     post_text        = '',
     custom_prompt    = '',
     force_regenerate = false,
+    platform         = 'instagram_post',
     summary          = '', // legacy
   } = req.body;
 
@@ -408,16 +437,16 @@ export async function generateImage(req: Request, res: Response) {
   const variationSuffix = force_regenerate ? `, unique composition ${Math.floor(Math.random() * 9000) + 1000}` : '';
   const finalPrompt = basePrompt + variationSuffix;
 
-  console.log('[generateImage] prompt:', finalPrompt.slice(0, 120), '| force:', force_regenerate);
+  console.log('[generateImage] prompt:', finalPrompt.slice(0, 120), '| platform:', platform, '| force:', force_regenerate);
 
   // ── Tier 0: Google Imagen 3 (Gemini API — simple key, no service account) ──
   if (GEMINI_API_KEY) {
     try {
       console.log('[generateImage] trying Gemini Imagen 3...');
-      const url = await generateWithGeminiImagen(finalPrompt);
+      const url = await generateWithGeminiImagen(finalPrompt, platform);
       if (url) {
-        console.log('[generateImage] Gemini Imagen 3 success');
-        return res.json({ url, provider: 'imagen3', is_stock: false });
+        console.log('[generateImage] Gemini Imagen 3 success, platform:', platform);
+        return res.json({ url, provider: 'imagen3', is_stock: false, platform });
       }
     } catch (err: any) {
       console.warn('[generateImage] Gemini Imagen failed:', err.message);
@@ -428,10 +457,10 @@ export async function generateImage(req: Request, res: Response) {
   if (FAL_API_KEY) {
     try {
       console.log('[generateImage] trying Flux.1 schnell...');
-      const url = await generateWithFlux(finalPrompt);
+      const url = await generateWithFlux(finalPrompt, platform);
       if (url) {
-        console.log('[generateImage] Flux.1 success');
-        return res.json({ url, provider: 'flux1', is_stock: false });
+        console.log('[generateImage] Flux.1 success, platform:', platform);
+        return res.json({ url, provider: 'flux1', is_stock: false, platform });
       }
     } catch (err: any) {
       console.warn('[generateImage] Flux failed:', err.message);
