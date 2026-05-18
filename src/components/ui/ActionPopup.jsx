@@ -67,7 +67,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
 
   // Image step
   const [imageUrl,         setImageUrl]         = useState(null);
-  const [imageProvider,    setImageProvider]    = useState(null); // 'dalle3'|'pexels'|'unsplash'|'stock'
+  const [imageProvider,    setImageProvider]    = useState(null); // 'imagen3'|'flux1'
   const [imageIsStock,     setImageIsStock]     = useState(false);
   const [imageLoading,     setImageLoading]     = useState(false);
   const [imageError,       setImageError]       = useState(null); // null | string — blocking error
@@ -171,7 +171,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
     }
   }, [signal.id]);
 
-  // ── Multi-brain: Claude audience + GPT post + DALL-E image ──
+  // ── Multi-brain: Claude audience + GPT post + Gemini Imagen 3 / Flux.1 image ──
   async function runSmartGeneration() {
     if (!businessProfile?.id) return;
     setSmartPhase('analyzing');
@@ -207,7 +207,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
       if (imgData?.url) {
         setImageUrl(imgData.url);
         setImageProvider(imgData.provider || 'stock');
-        setImageIsStock(!['dalle3', 'imagen3'].includes(imgData.provider));
+        setImageIsStock(false); // only AI-generated images — never stock
         setAltPhotos(Array.isArray(imgData.alt_photos) ? imgData.alt_photos.filter(Boolean) : []);
       }
 
@@ -311,7 +311,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  // ── Generate image — server-side endpoint (DALL-E → Pexels → Unsplash → stock) ──
+  // ── Generate image — server-side endpoint (Gemini Imagen 3 → Flux.1) ──
   async function handleGenerateImage() {
     setImageLoading(true);
     setImageError(null);
@@ -328,14 +328,9 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
       if (!data?.url) throw new Error('לא התקבלה תמונה מהשרת');
       setImageUrl(data.url);
       setImageProvider(data.provider || 'stock');
-      // is_stock=true + dalle_attempted=false means OpenAI key not configured
-      setImageIsStock(!['dalle3', 'imagen3'].includes(data.provider));
+      setImageIsStock(false); // only AI-generated images — never stock
       setAltPhotos(Array.isArray(data.alt_photos) ? data.alt_photos.filter(Boolean) : []);
       setStep(1);
-      // Soft notice when user wrote custom prompt but DALL-E key not configured
-      if (customPrompt.trim() && data.provider !== 'dalle3' && data.dalle_attempted === false) {
-        setImageNotice('תמונת AI אינה זמינה — הוצגה תמונה דומה לתיאור שלך');
-      }
     } catch (err) {
       setImageError(err?.message || 'שגיאה ביצירת תמונה — נסה שוב');
     } finally {
@@ -454,7 +449,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
   const SMART_PHASE_LABELS = {
     analyzing: 'Claude מנתח קהל יעד...',
     writing:   'GPT-4o כותב פוסט...',
-    imaging:   'DALL-E יוצר תמונה...',
+    imaging:   'Imagen 3 יוצר תמונה...',
   };
 
   // ── STEP 0: Content ──
@@ -628,10 +623,10 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
                 setImageError('התמונה לא נטענה — נסה שוב');
               }}
             />
-            {/* Stock badge */}
-            {imageIsStock && (
+            {/* AI provider badge */}
+            {imageProvider && (
               <span className="absolute bottom-2 right-2 text-[9px] font-medium px-1.5 py-0.5 rounded bg-black/60 text-white">
-                {imageProvider === 'imagen3' ? 'Google AI' : imageProvider === 'dalle3' ? 'DALL-E' : 'תמונת stock'}
+                {imageProvider === 'imagen3' ? '✦ Google Imagen 3' : imageProvider === 'flux1' ? '✦ Flux AI' : '✦ AI'}
               </span>
             )}
             {/* Regenerate overlay */}
@@ -644,7 +639,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           </div>
         )}
 
-        {/* Soft notice — DALL-E not available */}
+        {/* Soft notice — image generation unavailable */}
         {imageNotice && (
           <div className="flex items-center gap-2 px-3 py-2 mb-2 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-700">
             <span>⚠️ {imageNotice}</span>
