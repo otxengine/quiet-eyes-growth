@@ -181,7 +181,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
         await prisma.marketSignal.create({
           data: {
             summary: `תובנה על ${compName}: ${insight.insight_title}`,
-            category: 'competitor',
+            category: 'competitor_move',   // was 'competitor' — fixed to flow into generateAdvisoryInsights
             impact_level: insight.impact === 'high' ? 'high' : 'medium',
             recommended_action: insight.action,
             confidence: freshReviewsText ? 78 : 65,

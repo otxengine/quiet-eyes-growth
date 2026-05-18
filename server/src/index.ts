@@ -285,6 +285,19 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE proactive_alerts ADD COLUMN IF NOT EXISTS dismiss_reason TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS not_relevant BOOLEAN DEFAULT false`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS not_relevant_reason TEXT`);
+  // ── Competitor enrichment columns (social + pricing intelligence) ─────────
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS instagram_handle TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS facebook_url TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS google_business_url TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS tiktok_handle TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS social_post_frequency TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS last_post_date TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS social_followers_est TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS engagement_level TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS strongest_channel TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS price_snapshot TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS content_themes TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS sentiment_from_reviews TEXT`);
   await sql(`CREATE TABLE IF NOT EXISTS media_assets (
     id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     created_date    TIMESTAMPTZ NOT NULL DEFAULT NOW(),

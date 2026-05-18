@@ -62,7 +62,7 @@ export async function analyzeCompetitorSocial(req: Request, res: Response) {
 
         const analysis = await invokeLLM({
           model: 'sonnet',
-          maxTokens: 500,
+          maxTokens: 600,
           prompt: `You are a senior competitive intelligence analyst. Analyze the digital presence of "${comp.name}" and identify the vulnerability that my business can exploit.
 
 My business: "${profile?.name}" | Sector: ${profile?.category} | City: ${profile?.city}
@@ -76,6 +76,7 @@ Required analysis:
 - What is the most glaring weakness visible from the content?
 - What are customers complaining about? (from reviews)
 - What is the most specific opportunity to exploit?
+- How often do they post? When was their last post?
 
 Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
@@ -86,19 +87,48 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
   "main_weakness": "their most glaring weakness — with evidence from data",
   "our_opportunity": "specific focused opportunity — what we can do that they don't",
   "recommended_action": "imperative verb + channel + content — up to 10 words",
-  "sentiment_from_reviews": "positive|negative|mixed|unknown"
+  "sentiment_from_reviews": "positive|negative|mixed|unknown",
+  "post_frequency": "e.g. 3 פוסטים בשבוע or daily or unknown",
+  "last_post_date": "ISO date string or null if unknown",
+  "followers_estimate": "rough estimate e.g. 2,000-5,000 or unknown"
 }`,
           response_json_schema: { type: 'object' },
         }) as any;
 
         if (!analysis) continue;
 
-        // Update competitor notes with social insights
-        const insightNote = `[ניתוח רשתות ${new Date().toLocaleDateString('he-IL')}] ${analysis.our_opportunity || ''}`;
+        // ── Write structured social data to new competitor fields ─────────────
+        const socialUpdate: Record<string, any> = {
+          last_scanned: new Date().toISOString(),
+        };
+        if (analysis.strongest_channel)       socialUpdate.strongest_channel       = analysis.strongest_channel;
+        if (analysis.engagement_level)        socialUpdate.engagement_level        = analysis.engagement_level;
+        if (analysis.sentiment_from_reviews)  socialUpdate.sentiment_from_reviews  = analysis.sentiment_from_reviews;
+        if (analysis.main_weakness)           socialUpdate.weaknesses              = analysis.main_weakness;
+        if (analysis.content_themes?.length)  socialUpdate.content_themes          = analysis.content_themes.join(', ');
+        if (analysis.post_frequency)          socialUpdate.social_post_frequency   = analysis.post_frequency;
+        if (analysis.last_post_date)          socialUpdate.last_post_date          = analysis.last_post_date;
+        if (analysis.followers_estimate)      socialUpdate.social_followers_est    = analysis.followers_estimate;
+        if (analysis.our_opportunity)         socialUpdate.notes                   = `[ניתוח ${new Date().toLocaleDateString('he-IL')}] ${analysis.our_opportunity}`;
+
+        // Extract social URLs from search results
+        const igUrl = allResults.find(r => r.url?.includes('instagram.com'))?.url;
+        const fbUrl = allResults.find(r => r.url?.includes('facebook.com'))?.url;
+        if (igUrl) socialUpdate.instagram_handle = igUrl;
+        if (fbUrl) socialUpdate.facebook_url     = fbUrl;
+
         await prisma.competitor.update({
           where: { id: comp.id },
-          data: { notes: insightNote },
+          data: socialUpdate,
         }).catch(() => {});
+
+        // ── Publish to agent_data_bus so other agents can react ──────────────
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO agent_data_bus (event_type, source_agent, payload) VALUES ($1, $2, $3::jsonb)`,
+          'competitor_social_analyzed',
+          'analyzeCompetitorSocial',
+          JSON.stringify({ competitorId: comp.id, competitorName: comp.name, analysis })
+        ).catch(() => {});
 
         insights.push({ competitor_name: comp.name, ...analysis });
       } catch (_) { /* skip */ }

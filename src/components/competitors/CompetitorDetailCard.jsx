@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, MapPin, Briefcase, Banknote, ExternalLink } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, MapPin, Briefcase, Banknote, ExternalLink, Instagram, Globe, Clock } from 'lucide-react';
 import CompetitorSwotCard from '@/components/competitors/CompetitorSwotCard';
 import CompetitorStrategyCard from '@/components/competitors/CompetitorStrategyCard';
 import CompetitorNewsCard from '@/components/competitors/CompetitorNewsCard';
@@ -87,13 +87,75 @@ export default function CompetitorDetailCard({ competitor, businessName, signals
             </div>
           )}
         </div>
+
+        {/* Social intelligence row */}
+        {(comp.strongest_channel || comp.engagement_level || comp.social_post_frequency || comp.current_promotions) && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {comp.strongest_channel && comp.strongest_channel !== 'unknown' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-medium bg-pink-50 border border-pink-100 text-pink-600">
+                {comp.strongest_channel === 'instagram' ? '📸' : comp.strongest_channel === 'facebook' ? '👤' : comp.strongest_channel === 'tiktok' ? '🎵' : '🌐'} {comp.strongest_channel}
+              </span>
+            )}
+            {comp.engagement_level && (
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-medium border ${
+                comp.engagement_level === 'high' ? 'bg-green-50 border-green-100 text-green-700' :
+                comp.engagement_level === 'medium' ? 'bg-yellow-50 border-yellow-100 text-yellow-700' :
+                'bg-gray-50 border-gray-100 text-gray-500'}`}>
+                engagement {comp.engagement_level === 'high' ? 'גבוה' : comp.engagement_level === 'medium' ? 'בינוני' : 'נמוך'}
+              </span>
+            )}
+            {comp.social_post_frequency && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-medium bg-blue-50 border border-blue-100 text-blue-600">
+                🗓 {comp.social_post_frequency}
+              </span>
+            )}
+            {comp.current_promotions && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-orange-50 border border-orange-200 text-orange-700">
+                🔥 מבצע פעיל
+              </span>
+            )}
+            {comp.sentiment_from_reviews && comp.sentiment_from_reviews !== 'unknown' && (
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-medium border ${
+                comp.sentiment_from_reviews === 'positive' ? 'bg-green-50 border-green-100 text-green-600' :
+                comp.sentiment_from_reviews === 'negative' ? 'bg-red-50 border-red-100 text-red-600' :
+                'bg-gray-50 border-gray-100 text-gray-500'}`}>
+                {comp.sentiment_from_reviews === 'positive' ? '😊' : comp.sentiment_from_reviews === 'negative' ? '😠' : '😐'} {comp.sentiment_from_reviews === 'positive' ? 'ביקורות חיוביות' : comp.sentiment_from_reviews === 'negative' ? 'ביקורות שליליות' : 'ביקורות מעורבות'}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Expanded section */}
       {expanded && (
         <div className="px-5 pb-5 border-t border-border pt-4 space-y-4 fade-in-up">
+          {/* Last scanned + social links bar */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {comp.last_scanned && (
+              <span className="flex items-center gap-1 text-[10px] text-foreground-muted">
+                <Clock className="w-3 h-3" />
+                נסרק {timeAgo(comp.last_scanned)}
+              </span>
+            )}
+            {comp.instagram_handle && (
+              <a href={comp.instagram_handle} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1 text-[10px] text-pink-500 hover:underline">
+                <Instagram className="w-3 h-3" /> Instagram
+              </a>
+            )}
+            {comp.facebook_url && (
+              <a href={comp.facebook_url} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1 text-[10px] text-blue-500 hover:underline">
+                <Globe className="w-3 h-3" /> Facebook
+              </a>
+            )}
+            {comp.social_followers_est && comp.social_followers_est !== 'unknown' && (
+              <span className="text-[10px] text-foreground-muted">~{comp.social_followers_est} עוקבים</span>
+            )}
+          </div>
+
           {/* Enriched data from agents */}
-          {(comp.menu_highlights || comp.price_points || comp.current_promotions || comp.recent_reviews_summary) && (
+          {(comp.menu_highlights || comp.price_points || comp.current_promotions || comp.recent_reviews_summary || comp.content_themes || comp.price_snapshot) && (
             <div className="bg-secondary/50 rounded-lg p-4 space-y-3 border border-border">
               <span className="text-[10px] font-semibold text-foreground-muted">מידע שנאסף אוטומטית</span>
               {comp.menu_highlights && (
@@ -126,6 +188,30 @@ export default function CompetitorDetailCard({ competitor, businessName, signals
                   <p className="text-[11px] text-foreground-secondary italic">{comp.recent_reviews_summary}</p>
                 </div>
               )}
+              {comp.content_themes && (
+                <div>
+                  <span className="text-[10px] font-medium text-foreground-muted block mb-0.5">🎯 נושאי תוכן</span>
+                  <p className="text-[11px] text-foreground-secondary">{comp.content_themes}</p>
+                </div>
+              )}
+              {comp.price_snapshot && (() => {
+                try {
+                  const prices = JSON.parse(comp.price_snapshot);
+                  if (!Array.isArray(prices) || prices.length === 0) return null;
+                  return (
+                    <div>
+                      <span className="text-[10px] font-medium text-foreground-muted block mb-1">💰 מחירים שנמצאו</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {prices.slice(0, 5).map((p, i) => (
+                          <span key={i} className="px-2 py-0.5 rounded-md text-[10px] bg-white border border-border text-foreground-secondary">
+                            {p.item}: <span className="font-semibold">{p.price}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                } catch { return null; }
+              })()}
             </div>
           )}
 

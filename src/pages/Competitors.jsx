@@ -37,10 +37,18 @@ function cityToGeo(city) {
 }
 
 const CHANGE_TYPE_LABELS = {
-  price:   'שינוי מחיר',
-  website: 'שינוי אתר',
-  social:  'פוסט חדש',
-  reviews: 'שינוי ביקורות',
+  price:        'שינוי מחיר',
+  price_change: 'שינוי מחיר',
+  website:      'שינוי אתר',
+  website_change: 'שינוי אתר',
+  social:       'פוסט חדש',
+  new_post:     'פוסט חדש',
+  reviews:      'שינוי ביקורות',
+  review_delta: 'שינוי ביקורות',
+  intel:        'תובנה אסטרטגית',
+  move:         'מהלך מתחרה',
+  new_promo:    'מבצע חדש',
+  new_offering: 'שירות חדש',
 };
 
 const PLATFORM_BADGES = {
@@ -76,21 +84,32 @@ function formatHebrewDate(isoStr) {
   }).format(new Date(isoStr));
 }
 
-// Competitor changes — loads from MarketSignal competitor_move category
+// Competitor changes — merges MarketSignals (competitor_move) + ProactiveAlerts (competitor_intel/competitor_move)
 async function fetchCompetitorChanges(businessProfile) {
   if (!businessProfile?.id) return { changes: [], bizId: null };
   try {
     const { base44 } = await import('@/api/base44Client');
-    const signals = await base44.entities.MarketSignal.filter(
-      { linked_business: businessProfile.id, category: 'competitor_move' },
-      '-detected_at',
-      50
-    );
-    const changes = signals.map(s => {
+
+    // Load both signal types in parallel
+    const [signals, alerts] = await Promise.all([
+      base44.entities.MarketSignal.filter(
+        { linked_business: businessProfile.id, category: 'competitor_move' },
+        '-detected_at', 40
+      ).catch(() => []),
+      base44.entities.ProactiveAlert.filter(
+        { linked_business: businessProfile.id,
+          alert_type: { in: ['competitor_move', 'competitor_intel'] },
+          is_dismissed: false },
+        '-created_at', 20
+      ).catch(() => []),
+    ]);
+
+    const fromSignals = signals.map(s => {
       let parsed = {};
       try { parsed = JSON.parse(s.source_description || '{}'); } catch {}
       return {
         id: s.id,
+        _kind: 'signal',
         competitor_name: parsed.competitor_name || s.agent_name || 'מתחרה',
         change_type: parsed.change_type || 'website',
         change_summary: s.summary,
@@ -102,9 +121,46 @@ async function fetchCompetitorChanges(businessProfile) {
         sentiment: parsed.sentiment || null,
         engagement_count: parsed.engagement_count || null,
         content_excerpt: parsed.content_excerpt || null,
+        action_label: parsed.action_label || null,
+        action_type: parsed.action_type || 'task',
+        prefilled_text: parsed.prefilled_text || null,
         _fromBase44: true,
       };
     });
+
+    const fromAlerts = alerts.map(a => {
+      let parsed = {};
+      try { parsed = JSON.parse(a.source_agent || '{}'); } catch {}
+      // Extract competitor name from title (format: "🔍 CompName: ...")
+      const nameMatch = a.title?.match(/^[🔍⚔️📊🔴]\s*([^:]+):/);
+      const compName = nameMatch ? nameMatch[1].trim() : 'מתחרה';
+      return {
+        id: a.id,
+        _kind: 'alert',
+        competitor_name: compName,
+        change_type: a.alert_type === 'competitor_intel' ? 'intel' : 'move',
+        change_summary: a.description || a.title,
+        detected_at_utc: a.created_at || a.created_date,
+        source_url: null,
+        confidence_score: a.priority === 'high' ? 0.85 : 0.65,
+        social_platform: null,
+        post_url: null,
+        sentiment: null,
+        engagement_count: null,
+        content_excerpt: null,
+        action_label: parsed.action_label || a.suggested_action || null,
+        action_type: parsed.action_type || 'social_post',
+        prefilled_text: parsed.prefilled_text || null,
+        priority: a.priority,
+        _fromBase44: true,
+      };
+    });
+
+    // Merge + sort by date
+    const changes = [...fromSignals, ...fromAlerts]
+      .sort((a, b) => new Date(b.detected_at_utc || 0) - new Date(a.detected_at_utc || 0))
+      .slice(0, 50);
+
     return { changes, bizId: null };
   } catch {
     return { changes: [], bizId: null };
@@ -149,16 +205,15 @@ export default function Competitors() {
   }, [selectedComp]);
 
   const openCounterResponse = (change) => {
-    const isSocial = change.change_type === 'social';
+    const isSocial = ['social', 'new_post', 'intel', 'move'].includes(change.change_type) || change.action_type === 'social_post';
     if (isSocial) {
-      // Open ComposerDrawer with a suggested counter-post
       const platform = change.social_platform ?? 'instagram';
-      const suggestion = change.content_excerpt
-        ? `בתגובה ל: "${change.content_excerpt.slice(0, 80)}..."\n\nהנה מה שאנחנו מציעים:`
-        : `תגובה לפעילות של ${change.competitor_name} ב${PLATFORM_BADGES[platform]?.label ?? platform}:`;
-      setActiveDrawer({ type: 'composer', props: { text: suggestion, platform, context: `פוסט תגובתי מול ${change.competitor_name}` } });
+      // Prefer prefilled_text from agent, then content_excerpt, then generic
+      const text = change.prefilled_text
+        || (change.content_excerpt ? `בתגובה ל: "${change.content_excerpt.slice(0, 80)}..."\n\n` : '')
+        || `תגובה לפעילות של ${change.competitor_name}:`;
+      setActiveDrawer({ type: 'composer', props: { text, platform, context: `פוסט תגובתי מול ${change.competitor_name}` } });
     } else {
-      // Open ReplyDrawer for review/website changes
       const reviewUrl = change.source_url?.includes('google') ? change.source_url : undefined;
       setActiveDrawer({ type: 'reply', props: { reviewUrl, reviewText: change.change_summary, context: `תגובה לשינוי של ${change.competitor_name}` } });
     }
@@ -202,14 +257,26 @@ export default function Competitors() {
     try {
       // Step 1: gather web signals
       await base44.functions.invoke('collectWebSignals', { businessProfileId: bpId });
-      toast.info('אותות נאספו — מנתח מתחרים...');
+      toast.info('אותות נאספו — מזהה מתחרים...');
 
       // Step 2: identify competitors from gathered signals
       const res = await base44.functions.invoke('runCompetitorIdentification', { businessProfileId: bpId });
       const { new_competitors_created = 0, existing_competitors_updated = 0 } = res?.data || {};
 
-      // Step 3: run market intelligence to populate competitor_move signals
-      await base44.functions.invoke('runMarketIntelligence', { businessProfileId: bpId });
+      // Step 3: competitor intelligence pipeline
+      toast.info('סורק שינויים, מחירים ורשתות חברתיות...');
+      await Promise.allSettled([
+        base44.functions.invoke('batchSnapshotCompetitors',  { businessProfileId: bpId }),
+        base44.functions.invoke('detectCompetitorChanges',   { businessProfileId: bpId }),
+        base44.functions.invoke('analyzeCompetitorSocial',   { businessProfileId: bpId }),
+      ]);
+
+      // Step 4: intel + advisory insights
+      await Promise.allSettled([
+        base44.functions.invoke('competitorIntelAgent',      { businessProfileId: bpId }),
+        base44.functions.invoke('competitorMoveTracker',     { businessProfileId: bpId }),
+        base44.functions.invoke('runMarketIntelligence',     { businessProfileId: bpId }),
+      ]);
 
       queryClient.invalidateQueries({ queryKey: ['competitorsPage'] });
       queryClient.invalidateQueries({ queryKey: ['competitorSignals'] });
@@ -383,7 +450,11 @@ export default function Competitors() {
                     {/* Name + type badge + platform badge */}
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="text-[12px] font-semibold text-foreground">{change.competitor_name}</span>
-                      <span className="px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-primary/10 text-primary">
+                      <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-medium ${
+                        change._kind === 'alert' && change.priority === 'high'
+                          ? 'bg-red-50 text-red-600'
+                          : 'bg-primary/10 text-primary'
+                      }`}>
                         {CHANGE_TYPE_LABELS[change.change_type] ?? change.change_type}
                       </span>
                       {change.social_platform && (

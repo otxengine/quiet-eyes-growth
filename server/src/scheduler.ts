@@ -26,6 +26,10 @@ import { fetchSocialInsights } from './routes/functions/fetchSocialInsights';
 import { schedulePostPublisher } from './routes/functions/schedulePostPublisher';
 import { analyzeInstagramComments } from './routes/functions/analyzeInstagramComments';
 import { diffCompetitorSnapshot } from './routes/functions/diffCompetitorSnapshot';
+import { batchSnapshotCompetitors } from './routes/functions/batchSnapshotCompetitors';
+import { detectCompetitorChanges } from './routes/functions/detectCompetitorChanges';
+import { analyzeCompetitorSocial } from './routes/functions/analyzeCompetitorSocial';
+import { competitorMoveTracker } from './routes/functions/competitorMoveTracker';
 import { tiktokSectorTrendAgent } from './routes/functions/tiktokSectorTrendAgent';
 import { tiktokAudienceAgent } from './routes/functions/tiktokAudienceAgent';
 import { tiktokPostTracker } from './routes/functions/tiktokPostTracker';
@@ -104,8 +108,13 @@ export function startScheduler() {
     runForAll('TwiceDailyPipeline', 'full', []);
     runAgentForAll('GoogleRankMonitor', googleRankMonitor);
     runAgentForAll('SmartLeadNurture', smartLeadNurture);
-    runAgentForAll('CompetitorIntel', competitorIntelAgent);
     runAgentForAll('DeliveryPlatformIntel', detectDeliveryChanges);
+    // ── Competitor intelligence pipeline (ordered: snapshot → changes → social → intel → moves) ──
+    runAgentForAll('BatchSnapshotCompetitors', batchSnapshotCompetitors); // takes fresh snapshots
+    runAgentForAll('DetectCompetitorChanges',  detectCompetitorChanges);  // prices/promos/posts → MarketSignals
+    runAgentForAll('AnalyzeCompetitorSocial',  analyzeCompetitorSocial);  // social enrichment → new fields
+    runAgentForAll('CompetitorIntel',          competitorIntelAgent);     // OSINT × events → ProactiveAlerts
+    runAgentForAll('CompetitorMoveTracker',    competitorMoveTracker);    // DB-level moves → ProactiveAlerts
     // ── Social agents ────────────────────────────────────────────────────────
     runAgentForAll('FetchSocialInsights', fetchSocialInsights);
     runAgentForAll('SchedulePostPublisher', schedulePostPublisher);
@@ -129,8 +138,8 @@ export function startScheduler() {
     runAgentForAll('ContentCalendarAgent', contentCalendarAgent);
   });
 
-  // ── Every Wednesday at 04:00 UTC: competitor snapshot diff ───────────────────
-  cron.schedule('0 4 * * 3', () => {
+  // ── Every day at 04:00 UTC: competitor snapshot diff (was weekly, now daily) ──
+  cron.schedule('0 4 * * *', () => {
     runAgentForAll('DiffCompetitorSnapshot', diffCompetitorSnapshot);
   });
 

@@ -128,7 +128,7 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
         orderBy: { created_date: 'desc' },
         take: 15,
       }),
-      // Existing advisory insights — for dedup
+      // Existing advisory insights — for dedup (includes competitor_intel + competitor_move)
       prisma.proactiveAlert.findMany({
         where: {
           linked_business: businessProfileId,
@@ -137,6 +137,7 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
             'trend_opportunity', 'new_service', 'promotion_strategy',
             'sector_shift', 'event_opportunity', 'competitive_gap',
             'social_viral', 'future_prediction', 'campaign_opportunity',
+            'competitor_intel', 'competitor_move',
           ]},
           created_at: { gte: sevenDaysAgo.toISOString() },
         },
@@ -162,11 +163,17 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
     const fmt = (signals: any[]) =>
       signals.map(s => `  • ${s.summary}${s.recommended_action ? ` → ${s.recommended_action}` : ''}`);
 
-    // Competitor profile summary
+    // Competitor profile summary — enriched with social + pricing intel
     const competitorProfiles = competitors.slice(0, 5).map(c =>
-      `  • ${c.name} (${c.rating || '?'}★, ${c.review_count || 0} ביקורות) — שירותים: ${c.services || c.category || 'לא ידוע'}` +
-      `${c.strengths ? ` | חוזקות: ${c.strengths}` : ''}` +
+      `  • ${c.name} (${c.rating || '?'}★, ${c.review_count || 0} ביקורות)` +
+      `${(c as any).strongest_channel ? ` | ערוץ חזק: ${(c as any).strongest_channel}` : ''}` +
+      `${(c as any).engagement_level  ? ` | engagement: ${(c as any).engagement_level}` : ''}` +
+      `${(c as any).social_post_frequency ? ` | ${(c as any).social_post_frequency}` : ''}` +
+      `${(c as any).current_promotions ? ` | מבצע פעיל: ${(c as any).current_promotions}` : ''}` +
+      `${(c as any).last_known_prices  ? ` | מחירים: ${(c as any).last_known_prices}` : ''}` +
+      `${c.strengths  ? ` | חוזקות: ${c.strengths}`  : ''}` +
       `${c.weaknesses ? ` | חולשות: ${c.weaknesses}` : ''}` +
+      `${(c as any).sentiment_from_reviews ? ` | סנטימנט: ${(c as any).sentiment_from_reviews}` : ''}` +
       `${c.current_promotions ? ` | מבצע עכשיו: ${c.current_promotions}` : ''}`
     );
 
