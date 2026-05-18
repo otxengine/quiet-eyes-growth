@@ -13,7 +13,7 @@ const baseAutoSelect = {
 } as const;
 
 export async function getEventBusStats(req: Request, res: Response) {
-  const { businessProfileId } = req.query as { businessProfileId: string };
+  const businessProfileId = (req.body?.businessProfileId || req.query?.businessProfileId) as string;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
   const since24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();

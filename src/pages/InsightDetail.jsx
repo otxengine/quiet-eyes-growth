@@ -302,14 +302,17 @@ ${insight.description ? `הקשר: ${(insight.description).slice(0, 150)}` : ''}
             {guidance.steps?.length > 0 && (
               <div className="space-y-2">
                 <p className="text-[11px] font-semibold text-foreground-muted">שלבי ביצוע</p>
-                {guidance.steps.map((step, i) => (
-                  <div key={i} className="flex items-start gap-3 p-3 rounded-xl border border-border bg-secondary/20">
-                    <span className="w-5 h-5 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
-                      {i + 1}
-                    </span>
-                    <p className="text-[12px] text-foreground leading-relaxed">{step}</p>
-                  </div>
-                ))}
+                {guidance.steps.map((step, i) => {
+                  const stepText = typeof step === 'string' ? step : (step?.title || step?.step || step?.description || '');
+                  return (
+                    <div key={i} className="flex items-start gap-3 p-3 rounded-xl border border-border bg-secondary/20">
+                      <span className="w-5 h-5 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                        {i + 1}
+                      </span>
+                      <p className="text-[12px] text-foreground leading-relaxed">{stepText}</p>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
