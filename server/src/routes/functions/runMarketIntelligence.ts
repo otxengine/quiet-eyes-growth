@@ -3,6 +3,7 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { getSectorContext, getSectorContentStrategy } from '../../lib/sectorPrompts';
+import { getSectorContext as getAccumulatedSectorCtx } from '../../lib/sectorContext';
 
 export async function runMarketIntelligence(req: Request, res: Response) {
   const { businessProfileId } = req.body;
@@ -16,9 +17,10 @@ export async function runMarketIntelligence(req: Request, res: Response) {
 
     const twoDaysAgo = new Date(Date.now() - 48 * 3600000);
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600000);
-    const [allRawSignals, competitors] = await Promise.all([
+    const [allRawSignals, competitors, accumulatedSectorCtx] = await Promise.all([
       prisma.rawSignal.findMany({ where: { linked_business: businessProfileId }, orderBy: { created_date: 'desc' }, take: 50 }),
       prisma.competitor.findMany({ where: { linked_business: businessProfileId } }),
+      getAccumulatedSectorCtx(profile.category),
     ]);
 
     // Three-tier fallback: 48h → 7 days → all → empty
@@ -44,7 +46,7 @@ ${profile.relevant_services ? `Services: ${profile.relevant_services}` : ''}
 ${competitorContext}
 
 ${sectorCtx}
-
+${accumulatedSectorCtx ? `\n${accumulatedSectorCtx}` : ''}
 Generate 4-5 initial market insights that are specific and actionable for this sector and city in Israel.
 Each insight must:
 • stem from understanding of the specific sector (not generic)
@@ -126,7 +128,7 @@ ${profile.relevant_services ? `Services: ${profile.relevant_services}` : ''}
 ${competitorContext}
 
 ${sectorCtx}
-
+${accumulatedSectorCtx ? `\n${accumulatedSectorCtx}` : ''}
 Raw signals (${signals.length} signals):
 ${contextBlock}
 

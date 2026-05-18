@@ -442,6 +442,88 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS executed_at TIMESTAMPTZ`);
   await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS result_payload JSONB DEFAULT '{}'`);
 
+  // ── OTX-003/004: AutoAction new columns ──────────────────────────────────
+  await sql(`ALTER TABLE auto_actions ADD COLUMN IF NOT EXISTS confidence_score   DOUBLE PRECISION`);
+  await sql(`ALTER TABLE auto_actions ADD COLUMN IF NOT EXISTS predicted_impact   TEXT`);
+  await sql(`ALTER TABLE auto_actions ADD COLUMN IF NOT EXISTS execution_decision TEXT`);
+  await sql(`ALTER TABLE auto_actions ADD COLUMN IF NOT EXISTS decision_reason    TEXT`);
+  await sql(`ALTER TABLE auto_actions ADD COLUMN IF NOT EXISTS constraint_notes   TEXT`);
+  await sql(`ALTER TABLE auto_actions ADD COLUMN IF NOT EXISTS outcome_score      DOUBLE PRECISION`);
+
+  // ── OTX-001: SystemEvent — centralized event data bus ────────────────────
+  await sql(`CREATE TABLE IF NOT EXISTS system_events (
+    id              TEXT        NOT NULL PRIMARY KEY,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    business_id     TEXT        NOT NULL,
+    event_type      TEXT        NOT NULL,
+    source          TEXT        NOT NULL,
+    payload         TEXT,
+    context_attrs   TEXT,
+    routing_status  TEXT        NOT NULL DEFAULT 'pending',
+    dispatched_to   TEXT,
+    processed_at    TEXT,
+    composite_id    TEXT
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_system_events_biz_status ON system_events (business_id, routing_status)`);
+
+  // ── OTX-001: RoutingRule — dynamic rule table ────────────────────────────
+  await sql(`CREATE TABLE IF NOT EXISTS routing_rules (
+    id            TEXT        NOT NULL PRIMARY KEY,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    event_type    TEXT        NOT NULL,
+    conditions    TEXT,
+    target_agents TEXT        NOT NULL,
+    priority      INT         NOT NULL DEFAULT 0,
+    is_active     BOOLEAN     NOT NULL DEFAULT TRUE,
+    description   TEXT
+  )`);
+
+  // ── OTX-001: Seed default routing rules ──────────────────────────────────
+  await sql(`INSERT INTO routing_rules (id, event_type, target_agents, priority, is_active, description) VALUES
+    ('rule-new-review',     'new_review',       '["autoRespondToReviews","generateProactiveAlerts"]', 10, TRUE, 'New review → response + alert'),
+    ('rule-hot-lead',       'hot_lead',         '["sendLeadNotification","generateProactiveAlerts"]',  10, TRUE, 'Hot lead → notify'),
+    ('rule-competitor',     'competitor_change', '["runCompetitorIdentification","generateProactiveAlerts"]', 8, TRUE, 'Competitor change → re-analyse'),
+    ('rule-market-signal',  'market_signal',    '["runMarketIntelligence","generateProactiveAlerts"]',  7, TRUE, 'Market signal → intelligence'),
+    ('rule-local-event',    'local_event',      '["findLocalEvents","generateProactiveAlerts"]',        6, TRUE, 'Local event → opportunities'),
+    ('rule-retention-risk', 'retention_risk',   '["generateProactiveAlerts","reviewRequestAutomation"]', 9, TRUE, 'Retention risk → alert + review request')
+    ON CONFLICT (id) DO NOTHING`);
+
+  // ── OTX-002: CompositeSignal — fused signal representation ───────────────
+  await sql(`CREATE TABLE IF NOT EXISTS composite_signals (
+    id                TEXT        NOT NULL PRIMARY KEY,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    business_id       TEXT        NOT NULL,
+    signal_ids        TEXT        NOT NULL,
+    fusion_type       TEXT        NOT NULL,
+    composite_score   DOUBLE PRECISION,
+    context           TEXT,
+    candidate_actions TEXT,
+    selected_action   TEXT,
+    status            TEXT        NOT NULL DEFAULT 'pending',
+    scored_at         TEXT,
+    weight_snapshot   TEXT
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_composite_signals_biz_status ON composite_signals (business_id, status)`);
+
+  // ── OTX-004: BusinessConstraints — per-business constraint rules ─────────
+  await sql(`CREATE TABLE IF NOT EXISTS business_constraints (
+    id                       TEXT        NOT NULL PRIMARY KEY,
+    created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    business_id              TEXT        NOT NULL UNIQUE,
+    brand_tone               TEXT,
+    prohibited_keywords      TEXT,
+    max_discount_pct         DOUBLE PRECISION,
+    allow_competitor_mention BOOLEAN     DEFAULT FALSE,
+    posting_hours_start      INT         DEFAULT 8,
+    posting_hours_end        INT         DEFAULT 22,
+    approved_channels        TEXT,
+    budget_cap_daily_ils     DOUBLE PRECISION,
+    content_policy           TEXT,
+    min_confidence_auto      DOUBLE PRECISION DEFAULT 85,
+    min_confidence_suggest   DOUBLE PRECISION DEFAULT 60,
+    updated_at               TEXT
+  )`);
+
   console.log('Startup SQL complete');
 
   startScheduler();

@@ -52,18 +52,23 @@ export async function publishEvent(opts: PublishOptions): Promise<string> {
     ...contextAttrs,
   };
 
-  const event = await prisma.systemEvent.create({
-    data: {
-      business_id:    businessId,
-      event_type:     eventType,
-      source,
-      payload:        JSON.stringify(payload),
-      context_attrs:  JSON.stringify(enriched),
-      routing_status: 'pending',
-    },
-  });
-
-  return event.id;
+  try {
+    const event = await prisma.systemEvent.create({
+      data: {
+        business_id:    businessId,
+        event_type:     eventType,
+        source,
+        payload:        JSON.stringify(payload),
+        context_attrs:  JSON.stringify(enriched),
+        routing_status: 'pending',
+      },
+    });
+    return event.id;
+  } catch (err: any) {
+    // Table doesn't exist yet — run prisma/migrate-otx.sql to create it.
+    if (err.message?.includes('does not exist')) return 'pending-migration';
+    throw err;
+  }
 }
 
 /**
@@ -71,14 +76,19 @@ export async function publishEvent(opts: PublishOptions): Promise<string> {
  * Used by the routing engine on each scan cycle.
  */
 export async function fetchPendingEvents(businessId?: string, limit = 50) {
-  return prisma.systemEvent.findMany({
-    where: {
-      routing_status: 'pending',
-      ...(businessId ? { business_id: businessId } : {}),
-    },
-    orderBy: { created_at: 'asc' },
-    take: limit,
-  });
+  try {
+    return await prisma.systemEvent.findMany({
+      where: {
+        routing_status: 'pending',
+        ...(businessId ? { business_id: businessId } : {}),
+      },
+      orderBy: { created_at: 'asc' },
+      take: limit,
+    });
+  } catch (err: any) {
+    if (err.message?.includes('does not exist')) return [];
+    throw err;
+  }
 }
 
 /**

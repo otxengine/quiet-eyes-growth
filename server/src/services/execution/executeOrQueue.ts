@@ -162,6 +162,13 @@ export async function processScheduledAutoActions(): Promise<void> {
       auto_execute_at: { lte: now },
     },
     take: 20,
+    // Explicit select avoids crash when OTX-003/004 columns don't exist yet in DB.
+    // Remove this select after running prisma/migrate-otx.sql.
+    select: {
+      id: true, linked_business: true, agent_name: true,
+      action_type: true, description: true, payload: true,
+      status: true, auto_execute_at: true,
+    },
   });
 
   for (const action of due) {

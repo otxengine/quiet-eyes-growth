@@ -15,6 +15,15 @@ import { createLogger } from '../infra/logger';
 const logger = createLogger('ROIRoute');
 const router = Router();
 
+// Select only base columns — OTX-003/004 columns (confidence_score etc.) are added
+// via prisma/migrate-otx.sql. Until that migration runs, omitting them prevents crashes.
+const baseSelect = {
+  id: true, created_date: true, linked_business: true,
+  agent_name: true, action_type: true, description: true,
+  payload: true, result: true, status: true,
+  executed_at: true, revenue_impact: true, auto_execute_at: true,
+} as const;
+
 // ─── GET /api/roi/:bpId ───────────────────────────────────────────────────────
 
 router.get('/roi/:bpId', async (req: Request, res: Response) => {
@@ -27,6 +36,7 @@ router.get('/roi/:bpId', async (req: Request, res: Response) => {
         where: { linked_business: bpId, created_date: { gte: new Date(thirtyDaysAgo) } },
         orderBy: { created_date: 'desc' },
         take: 200,
+        select: baseSelect,
       }),
       prisma.lead.findMany({
         where: {
@@ -94,6 +104,7 @@ router.get('/auto-actions/:bpId', async (req: Request, res: Response) => {
       where,
       orderBy: { created_date: 'desc' },
       take,
+      select: baseSelect,
     });
 
     return res.json({ actions, count: actions.length });
@@ -107,7 +118,7 @@ router.get('/auto-actions/:bpId', async (req: Request, res: Response) => {
 router.put('/auto-actions/:id/approve', async (req: Request, res: Response) => {
   const id = String(req.params.id);
   try {
-    const action = await prisma.autoAction.findUnique({ where: { id } });
+    const action = await prisma.autoAction.findUnique({ where: { id }, select: baseSelect });
     if (!action) return res.status(404).json({ error: 'AutoAction not found' });
     if (action.status !== 'pending_approval') {
       return res.status(409).json({ error: `Cannot approve action with status: ${action.status}` });

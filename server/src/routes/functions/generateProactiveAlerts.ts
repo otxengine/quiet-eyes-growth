@@ -6,6 +6,7 @@ import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessC
 import { insightAutoResolve } from './insightAutoResolve';
 import { getSectorInsightBlock } from '../../lib/sectorInsightConfig';
 import { getSectorContentStrategy } from '../../lib/sectorPrompts';
+import { getSectorContext as getAccumulatedSectorCtx } from '../../lib/sectorContext';
 
 export async function generateProactiveAlerts(req: Request, res: Response) {
   const { businessProfileId } = req.body;
@@ -152,6 +153,7 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
     // Sector-specific intelligence blocks
     const sectorInsightBlock = getSectorInsightBlock(profile.category);
     const sectorContentBlock = getSectorContentStrategy(profile.category);
+    const accumulatedSectorCtx = await getAccumulatedSectorCtx(profile.category);
 
     const todayDate = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -178,7 +180,7 @@ ${ctxPrompt}
 ${sectorInsightBlock}
 
 ${sectorContentBlock}
-
+${accumulatedSectorCtx ? `\n${accumulatedSectorCtx}` : ''}
 === נתוני העסק ===
 ${contextBlock}
 ${recentlyDoneBlock}

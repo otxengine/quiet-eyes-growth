@@ -5,6 +5,13 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 
+const baseAutoSelect = {
+  id: true, created_date: true, linked_business: true,
+  agent_name: true, action_type: true, description: true,
+  payload: true, result: true, status: true,
+  executed_at: true, revenue_impact: true, auto_execute_at: true,
+} as const;
+
 export async function getEventBusStats(req: Request, res: Response) {
   const { businessProfileId } = req.query as { businessProfileId: string };
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
@@ -26,33 +33,34 @@ export async function getEventBusStats(req: Request, res: Response) {
         by: ['routing_status'],
         where: { business_id: businessProfileId, created_at: { gte: new Date(since24h) } },
         _count: { id: true },
-      }),
+      }).catch(() => []),
 
       // 20 most recent events
       prisma.systemEvent.findMany({
         where: { business_id: businessProfileId },
         orderBy: { created_at: 'desc' },
         take: 20,
-      }),
+      }).catch(() => []),
 
       // All active routing rules
       prisma.routingRule.findMany({
         where: { is_active: true },
         orderBy: { priority: 'desc' },
-      }),
+      }).catch(() => []),
 
       // Recent composite signals (7 days)
       prisma.compositeSignal.findMany({
         where: { business_id: businessProfileId, created_at: { gte: new Date(since7d) } },
         orderBy: { created_at: 'desc' },
         take: 15,
-      }),
+      }).catch(() => []),
 
       // Pending approval actions
       prisma.autoAction.findMany({
         where: { linked_business: businessProfileId, status: 'pending_approval' },
         orderBy: { created_date: 'desc' },
         take: 20,
+        select: baseAutoSelect,
       }),
 
       // Recent completed/rejected actions (7 days)
@@ -64,6 +72,7 @@ export async function getEventBusStats(req: Request, res: Response) {
         },
         orderBy: { created_date: 'desc' },
         take: 20,
+        select: baseAutoSelect,
       }),
     ]);
 
@@ -99,6 +108,7 @@ export async function approveAction(req: Request, res: Response) {
   try {
     const action = await prisma.autoAction.findFirst({
       where: { id: actionId, linked_business: businessProfileId },
+      select: baseAutoSelect,
     });
     if (!action) return res.status(404).json({ error: 'Action not found' });
 
