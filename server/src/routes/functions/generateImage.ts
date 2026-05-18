@@ -159,32 +159,24 @@ async function translateForSearch(text: string): Promise<string> {
 }
 
 
-// ── Insight-to-visual keyword mapping ────────────────────────────────────────
-const INSIGHT_TO_VISUAL: Array<{ keywords: string[]; visual: string }> = [
-  { keywords: ['happy hour', 'שעת שמחה', 'קוקטייל', 'cocktail', 'בר', 'bar'], visual: 'cocktails bar colorful drinks happy hour' },
-  { keywords: ['תפריט', 'menu', 'מנה', 'dish', 'אוכל חדש', 'new dish'], visual: 'restaurant menu gourmet food presentation' },
-  { keywords: ['מבצע', 'sale', 'הנחה', 'discount', 'מחיר', 'price'], visual: 'sale promotion discount shopping deal' },
-  { keywords: ['קפה', 'coffee', 'בוקר', 'morning', 'לאטה', 'latte'], visual: 'coffee latte art morning cafe cozy' },
-  { keywords: ['ספורט', 'sport', 'כושר', 'fitness', 'אימון', 'workout'], visual: 'fitness workout gym exercise energy' },
-  { keywords: ['יום הולדת', 'birthday', 'חגיגה', 'celebration', 'אירוע'], visual: 'birthday celebration party festive' },
-  { keywords: ['קייטרינג', 'catering', 'אירוח', 'event food'], visual: 'catering event food table spread' },
-  { keywords: ['קיץ', 'summer', 'חוף', 'beach', 'שמש', 'sun'], visual: 'summer beach bright sunshine vibrant' },
-  { keywords: ['חורף', 'winter', 'חם', 'warm', 'עונה', 'season'], visual: 'cozy winter warm comfort indoor' },
-  { keywords: ['בריאות', 'health', 'טרי', 'fresh', 'ירקות', 'vegetables', 'סלט', 'salad'], visual: 'healthy food fresh vegetables salad wellness' },
-  { keywords: ['פיצה', 'pizza'], visual: 'pizza fresh baked melted cheese' },
-  { keywords: ['בשר', 'meat', 'גריל', 'grill', 'סטייק', 'steak'], visual: 'grilled meat steak barbecue sizzle' },
-  { keywords: ['עוגה', 'cake', 'מאפה', 'pastry', 'קינוח', 'dessert'], visual: 'cake pastry dessert bakery sweet' },
-  { keywords: ['יופי', 'beauty', 'מניקור', 'manicure', 'שיער', 'hair', 'ספא', 'spa'], visual: 'beauty spa treatment self care luxury' },
-  { keywords: ['חדר כושר', 'gym', 'שרירים', 'muscle', 'משקולות', 'weights'], visual: 'gym weights fitness equipment modern' },
-  { keywords: ['נדל"ן', 'real estate', 'דירה', 'apartment', 'בית', 'house'], visual: 'modern apartment interior real estate bright' },
-  { keywords: ['פתיחה', 'opening', 'חדש', 'new', 'חנות חדשה'], visual: 'grand opening new store ribbon cutting celebration' },
-  { keywords: ['משלוח', 'delivery', 'שליח', 'courier'], visual: 'food delivery courier box packaging' },
-  { keywords: ['לקוח', 'customer', 'שירות', 'service', 'חוויה', 'experience'], visual: 'customer service smiling staff welcoming' },
-  { keywords: ['מוזיקה', 'music', 'הופעה', 'performance', 'אומן', 'artist'], visual: 'live music performance stage concert' },
-];
+// ── Sector fallback scene descriptions (used when LLM prompt build fails) ────
+const SECTOR_FALLBACK: Record<string, string> = {
+  restaurant:  'Elegant restaurant table with beautifully plated gourmet dish, warm candlelight, shallow depth of field, editorial food photography',
+  cafe:        'Cozy cafe interior, latte art in ceramic cup on wooden table, morning sunlight through window, warm lifestyle photography',
+  fitness:     'Modern gym with professional equipment, athlete in motion, dramatic lighting, motivational sports photography',
+  beauty:      'Luxury beauty salon, skincare products arranged on marble surface, soft diffused light, premium lifestyle photography',
+  health:      'Clean bright medical clinic, professional healthcare environment, welcoming atmosphere, trust-inspiring photography',
+  bakery:      'Freshly baked artisan bread and pastries on rustic wooden board, golden hour light, food styling photography',
+  retail:      'Modern boutique interior, stylish product display with accent lighting, inviting commercial photography',
+  realestate:  'Bright modern apartment living room, minimalist furniture, large windows, architectural lifestyle photography',
+  tech:        'Sleek modern office with technology, collaborative workspace, professional corporate photography',
+  law:         'Professional law office, polished wooden desk, books, confident atmosphere, corporate photography',
+  education:   'Bright classroom or study space, books and learning materials, inspiring educational photography',
+  food:        'Fresh colorful ingredients arranged on clean surface, vibrant food photography, natural lighting',
+  local:       'Welcoming business storefront with warm interior, professional commercial photography',
+};
 
-// ── Hebrew → English translation dictionary ───────────────────────────────────
-// Used for DALL-E prompts and Pexels/Unsplash search queries.
+// ── Hebrew → English translation dictionary (last-resort, no API needed) ─────
 // Longer phrases first so they match before their sub-words.
 const HEB_TO_ENG: Array<[string, string]> = [
   // Business types
@@ -269,9 +261,7 @@ const HEB_TO_ENG: Array<[string, string]> = [
 ];
 
 /**
- * Translate Hebrew custom prompt to English for DALL-E / Pexels.
- * Replaces known Hebrew phrases with English equivalents.
- * Strips remaining Hebrew characters, leaving only English.
+ * Last-resort translation: replace known Hebrew phrases, strip remaining Hebrew.
  */
 function translateCustomPrompt(hebrewText: string): string {
   let result = hebrewText;
@@ -295,72 +285,57 @@ function translateCustomPrompt(hebrewText: string): string {
   return result;
 }
 
-/** Use LLM to extract 5 English visual keywords directly from the post text */
-async function extractKeywordsFromPost(postText: string, businessName: string, sector: string): Promise<string> {
-  if (postText.trim().length < 20) return '';
-  try {
-    const result = await invokeLLM({
-      model: 'haiku',
-      maxTokens: 80,
-      prompt: `Extract 5 English visual keywords for a stock photo search that matches this marketing post.
-Business: "${businessName}" (${sector})
-Post text: "${postText.slice(0, 300)}"
-Rules: English only, descriptive nouns/adjectives, suitable for photo search (e.g. "fresh sushi salmon roll restaurant").
-Return ONLY the keywords as a single line, space-separated. No JSON, no explanation.`,
-      response_json_schema: undefined,
-    });
-    // invokeLLM returns parsed JSON by default — if we get a string-like result, use it
-    const text = typeof result === 'string' ? result : JSON.stringify(result);
-    const cleaned = text.replace(/["{}\[\]]/g, '').replace(/\n/g, ' ').trim();
-    if (cleaned.length > 5) return cleaned.slice(0, 120);
-  } catch { /* fall through */ }
-  return '';
-}
+/**
+ * Build a rich AI image generation prompt using Claude Haiku.
+ * Translates Hebrew post text → detailed English photographic scene description.
+ * Falls back to sector scene if LLM unavailable.
+ */
+async function buildAIImagePrompt(
+  insightText: string,
+  postText:    string,
+  sector:      string,
+  businessName: string,
+  city:        string,
+): Promise<string> {
+  const sourceText = [
+    postText    ? `Marketing post (may be Hebrew): "${postText.slice(0, 500)}"` : '',
+    insightText ? `Campaign context: "${insightText.slice(0, 150)}"` : '',
+    `Business type: ${businessName} — ${sector} in ${city}`,
+  ].filter(Boolean).join('\n');
 
-function extractVisualKeywordsSync(insightText: string, postText: string, sector: string): string {
-  const combined = `${insightText} ${postText}`.toLowerCase();
-
-  for (const entry of INSIGHT_TO_VISUAL) {
-    if (entry.keywords.some(kw => combined.includes(kw.toLowerCase()))) {
-      return entry.visual;
-    }
+  if (sourceText.length < 20) {
+    return SECTOR_FALLBACK[sector] || SECTOR_FALLBACK.local;
   }
 
-  // Fall back to sector-based keywords
-  const sectorKeywords: Record<string, string> = {
-    restaurant: 'restaurant dining table food elegant',
-    cafe:       'coffee shop cafe cozy interior',
-    fitness:    'fitness gym workout equipment modern',
-    beauty:     'beauty salon spa treatment luxury',
-    health:     'medical clinic wellness clean bright',
-    tech:       'modern office technology startup',
-    retail:     'retail store shopping products display',
-    food:       'fresh food ingredients colorful',
-    bakery:     'fresh baked goods pastry artisan',
-    law:        'law office professional corporate',
-    education:  'education learning books classroom',
-    realestate: 'modern home interior real estate',
-    local:      'local business storefront welcoming',
-  };
-  return sectorKeywords[sector] || sectorKeywords.local;
-}
+  try {
+    const result = await invokeLLM({
+      model:    'haiku',
+      maxTokens: 150,
+      prompt: `You are an expert commercial photographer writing an AI image generation prompt.
+Based on the marketing context below, write ONE detailed photographic scene description in English.
 
-function buildDynamicImagePrompt(insightText: string, postText: string, sector: string, city: string): string {
-  const visualKeywords = extractVisualKeywordsSync(insightText, postText, sector);
+${sourceText}
 
-  // Strip non-ASCII to avoid DALL-E content policy issues
-  const cleanInsight = insightText
-    .replace(/[^\x00-\x7F]/g, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim()
-    .slice(0, 100);
+Rules:
+- Describe a specific visual scene: subject, setting, lighting, angle, mood, style
+- Match the business type and post topic precisely
+- English only, 25-50 words
+- NO text, NO logos, NO watermarks in the described scene
+- Photographic style: professional commercial or editorial photography
+- Do NOT mention the business name or city
+- Return ONLY the prompt, no explanation`,
+      response_json_schema: undefined,
+    });
 
-  return [
-    `Professional marketing photograph: ${visualKeywords}.`,
-    cleanInsight ? `Context: ${cleanInsight}.` : '',
-    'Style: vibrant colors, modern commercial photography, well-lit, sharp focus.',
-    'Requirements: no text overlays, no logos, no faces, suitable for social media.',
-  ].filter(Boolean).join(' ');
+    const text = (typeof result === 'string' ? result : JSON.stringify(result))
+      .replace(/^["']|["']$/g, '')
+      .replace(/\n/g, ' ')
+      .trim();
+
+    if (text.length > 20) return text.slice(0, 500);
+  } catch { /* fall through to sector fallback */ }
+
+  return SECTOR_FALLBACK[sector] || SECTOR_FALLBACK.local;
 }
 
 
@@ -383,66 +358,57 @@ function categoryToSector(category = ''): string {
 }
 
 /**
- * generateImage — server-side image generation with dynamic prompts + 3-tier fallback.
+ * generateImage — AI image generation.
  *
  * Tier 0: Google Imagen 3 via Gemini API (GEMINI_API_KEY)
  * Tier 1: Flux.1 schnell via fal.ai (FAL_API_KEY)
  *
- * Body: { businessProfileId, insight_text?, post_text?, custom_prompt?, force_regenerate? }
- * Returns: { url, provider, is_stock, alt_photos? }
+ * Prompt strategy:
+ *   custom_prompt → translated to English directly
+ *   post_text / insight_text → Claude Haiku writes a detailed photographic scene prompt
+ *   neither → sector fallback scene description
  *
- * When custom_prompt is provided it overrides the auto-generated prompt for DALL-E
- * and is used as the Pexels/Unsplash search query too.
+ * Body: { businessProfileId, insight_text?, post_text?, custom_prompt?, force_regenerate? }
+ * Returns: { url, provider, is_stock, prompt_used? }
  */
 export async function generateImage(req: Request, res: Response) {
   const {
     businessProfileId,
     insight_text     = '',
     post_text        = '',
-    custom_prompt    = '',   // free-text user description — highest priority
+    custom_prompt    = '',
     force_regenerate = false,
-    // legacy support
-    summary          = '',
+    summary          = '', // legacy
   } = req.body;
 
   const insightText = insight_text || summary;
 
-  let category = '';
-  let city     = '';
+  let category     = '';
+  let city         = '';
+  let businessName = '';
   if (businessProfileId) {
     try {
       const bp = await prisma.businessProfile.findFirst({ where: { id: businessProfileId } });
-      category = bp?.category || '';
-      city     = bp?.city     || '';
+      category     = bp?.category || '';
+      city         = bp?.city     || '';
+      businessName = bp?.name     || '';
     } catch (_) {}
   }
 
   const sector = categoryToSector(category);
 
-  const hasCustom = custom_prompt.trim().length > 0;
-  const hasPost   = post_text.trim().length >= 20;
-
-  // Priority: custom_prompt > post_text (LLM keywords) > hardcoded insight mapping
-  const translatedCustom = hasCustom ? await translateForSearch(custom_prompt.trim()) : '';
-  let visualKeywords: string;
-  if (hasCustom) {
-    visualKeywords = translatedCustom;
-  } else if (hasPost) {
-    // Extract keywords from the actual post content so the image matches what was written
-    const postKeywords = await extractKeywordsFromPost(post_text, category, sector);
-    visualKeywords = postKeywords || extractVisualKeywordsSync(insightText, post_text, sector);
+  // Build the prompt: custom → LLM scene description → sector fallback
+  let basePrompt: string;
+  if (custom_prompt.trim()) {
+    basePrompt = await translateForSearch(custom_prompt.trim());
   } else {
-    visualKeywords = extractVisualKeywordsSync(insightText, post_text, sector);
+    basePrompt = await buildAIImagePrompt(insightText, post_text, sector, businessName, city);
   }
 
-  console.log('[generateImage] keywords:', visualKeywords.slice(0, 80), '| force:', force_regenerate);
+  const variationSuffix = force_regenerate ? `, unique composition ${Math.floor(Math.random() * 9000) + 1000}` : '';
+  const finalPrompt = basePrompt + variationSuffix;
 
-  const aiPrompt = hasCustom
-    ? translatedCustom
-    : buildDynamicImagePrompt(insightText, post_text, sector, city).replace(/[^\x00-\x7F]/g, '');
-
-  const variationSuffix = force_regenerate ? ` variation ${Math.floor(Math.random() * 9000) + 1000}` : '';
-  const finalPrompt = aiPrompt + variationSuffix;
+  console.log('[generateImage] prompt:', finalPrompt.slice(0, 120), '| force:', force_regenerate);
 
   // ── Tier 0: Google Imagen 3 (Gemini API — simple key, no service account) ──
   if (GEMINI_API_KEY) {
