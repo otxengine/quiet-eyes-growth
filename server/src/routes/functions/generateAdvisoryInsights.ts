@@ -52,6 +52,7 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
       competitors,
       recentReviews,
       existingAdvisory,
+      tiktokAudienceSignal,
     ] = await Promise.all([
       // Social & trend intelligence
       prisma.marketSignal.findMany({
@@ -135,11 +136,16 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
           alert_type: { in: [
             'trend_opportunity', 'new_service', 'promotion_strategy',
             'sector_shift', 'event_opportunity', 'competitive_gap',
-            'social_viral', 'future_prediction',
+            'social_viral', 'future_prediction', 'campaign_opportunity',
           ]},
           created_at: { gte: sevenDaysAgo.toISOString() },
         },
         select: { alert_type: true, title: true },
+      }),
+      // TikTok audience profile — for campaign opportunity generation
+      prisma.marketSignal.findFirst({
+        where: { linked_business: businessProfileId, category: 'tiktok_audience' },
+        orderBy: { detected_at: 'desc' },
       }),
     ]);
 
@@ -349,6 +355,92 @@ Return ONLY valid JSON. ALL string values MUST be in Hebrew:
 
       recentAdvisoryKeys.add(dedupKey);
       created++;
+    }
+
+    // ── Campaign Opportunity: auto-connect trend + TikTok audience → campaign alert ──
+    const hasTrendSignals = tiktokTrends.length > 0 || viralSignals.length > 0;
+    const alreadyHasCampaignOpp = existingAdvisory.some(a => a.alert_type === 'campaign_opportunity');
+
+    if (hasTrendSignals && tiktokAudienceSignal && !alreadyHasCampaignOpp && activeCount + created < HARD_CAP) {
+      try {
+        let audienceData: any = null;
+        try { audienceData = JSON.parse(tiktokAudienceSignal.source_description || '{}'); } catch {}
+
+        const trendSignal = tiktokTrends[0] || viralSignals[0];
+        const platform   = audienceData?.dominant_platform || 'instagram';
+        const ageRange   = audienceData?.age_range || '25-40';
+        const genderSkew = audienceData?.gender_skew || '';
+        const bestTime   = audienceData?.optimal_posting_hours || '19:00-21:00';
+        const hooks      = (audienceData?.hooks_that_work || []).slice(0, 2).join(', ');
+
+        // Generate a ready-to-use post text for the campaign
+        const postResult = await invokeLLM({
+          model: 'haiku',
+          maxTokens: 200,
+          prompt: `כתוב פוסט שיווקי קצר בעברית לעסק "${profile.name}" (${profile.category}, ${profile.city}).
+בסיס הפוסט על הטרנד: "${trendSignal?.summary?.slice(0, 120) || ''}".
+קהל יעד: גיל ${ageRange}${genderSkew ? `, ${genderSkew}` : ''}.
+הוקים שעובדים: ${hooks || 'ערך, דחיפות'}.
+כתוב רק טקסט הפוסט: Hook + ערך + CTA. 40-60 מילים. בעברית.`,
+        });
+
+        const postText = typeof postResult === 'string' ? postResult.trim() : '';
+
+        const campaignParams = new URLSearchParams({
+          summary:      (trendSignal?.summary || '').slice(0, 100),
+          platform,
+          audience_age: ageRange,
+          best_time:    bestTime,
+        });
+        const campaignUrl = `/marketing/create?${campaignParams.toString()}`;
+
+        const alertTitle = `הזדמנות קמפיין: ${(trendSignal?.summary || 'טרנד עולה').slice(0, 60)}`;
+
+        const existingCampOpp = await prisma.proactiveAlert.findFirst({
+          where: {
+            linked_business: businessProfileId,
+            alert_type: 'campaign_opportunity',
+            is_dismissed: false,
+            created_at: { gte: sevenDaysAgo.toISOString() },
+          },
+          select: { id: true },
+        });
+
+        if (!existingCampOpp) {
+          const campaignMeta = JSON.stringify({
+            action_label:     'צור קמפיין ממוקד',
+            action_type:      'create_campaign_with_audience',
+            action_platform:  platform,
+            prefilled_text:   postText,
+            audience_age:     ageRange,
+            audience_gender:  genderSkew,
+            best_time:        bestTime,
+            audience_hooks:   hooks,
+            campaign_url:     campaignUrl,
+            urgency_hours:    48,
+            impact_reason:    'טרנד + קהל יעד מזוהה — חלון הזדמנות צר לפני שמתחרים יפעלו',
+          });
+
+          await prisma.proactiveAlert.create({
+            data: {
+              linked_business:  businessProfileId,
+              title:            alertTitle,
+              description:      `זוהה טרנד "${(trendSignal?.summary || '').slice(0, 80)}" ופרופיל קהל יעד מ-TikTok (גיל ${ageRange}). הזדמנות לקמפיין ממוקד עם טרגטינג מוכן.`,
+              alert_type:       'campaign_opportunity',
+              priority:         'high',
+              suggested_action: `צור קמפיין בפלטפורמת ${platform} ממוקד לגיל ${ageRange}, שעת פרסום מומלצת: ${bestTime}`,
+              source_agent:     campaignMeta,
+              is_dismissed:     false,
+              is_acted_on:      false,
+              created_at:       new Date().toISOString(),
+            },
+          });
+          created++;
+          console.log(`[generateAdvisoryInsights] created campaign_opportunity alert for ${profile.name}`);
+        }
+      } catch (campErr: any) {
+        console.warn('[generateAdvisoryInsights] campaign_opportunity failed:', campErr.message);
+      }
     }
 
     await writeAutomationLog('generateAdvisoryInsights', businessProfileId, startTime, created);

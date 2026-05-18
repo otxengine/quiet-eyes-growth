@@ -162,6 +162,20 @@ const ACTION_DEFS = {
     url: `/marketing?create=whatsapp&summary=${encodeURIComponent(insight?.title || '')}`,
     condition: (snap) => snap?.has_whatsapp,
   }),
+
+  create_campaign_with_audience: (insight) => ({
+    label: 'צור קמפיין ממוקד',
+    icon: 'Zap',
+    type: 'navigate',
+    url: insight?.campaign_url || `/marketing/create?summary=${encodeURIComponent(insight?.title || '')}`,
+  }),
+
+  view_tiktok_audience: () => ({
+    label: 'קהל יעד TikTok',
+    icon: 'Users',
+    type: 'navigate',
+    url: '/marketing?tab=audiences',
+  }),
 };
 
 // ── Routing map ───────────────────────────────────────────────────────────────
@@ -218,6 +232,57 @@ const INSIGHT_ACTION_MAP = {
     'view_leads',
     'create_task',
     'view_retention',
+  ],
+  // Advisory insight types (from generateAdvisoryInsights)
+  trend_opportunity: [
+    'create_campaign_with_audience',
+    'draft_post',
+    'view_tiktok_audience',
+    'create_task',
+  ],
+  campaign_opportunity: [
+    'create_campaign_with_audience',
+    'draft_post',
+    'view_tiktok_audience',
+    'create_task',
+  ],
+  new_service: [
+    'create_task',
+    'draft_post',
+    'create_campaign',
+  ],
+  promotion_strategy: [
+    'draft_post',
+    'create_campaign',
+    'whatsapp_blast',
+    'create_task',
+  ],
+  sector_shift: [
+    'create_task',
+    'view_signals',
+    'draft_post',
+  ],
+  event_opportunity: [
+    'draft_post',
+    'create_campaign',
+    'whatsapp_blast',
+    'create_task',
+  ],
+  competitive_gap: [
+    'view_competitors',
+    'create_task',
+    'draft_post',
+  ],
+  social_viral: [
+    'draft_post',
+    'create_campaign_with_audience',
+    'view_tiktok_audience',
+    'create_task',
+  ],
+  future_prediction: [
+    'create_task',
+    'view_analytics',
+    'draft_post',
   ],
   // Action entity categories
   competitive: [

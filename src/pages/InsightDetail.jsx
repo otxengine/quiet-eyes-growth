@@ -28,6 +28,16 @@ const TYPE_META = {
   competitive:        { label: 'תחרותי',         color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', icon: Target },
   defensive:          { label: 'הגנתי',          color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-100',  icon: AlertTriangle },
   general:            { label: 'כללי',           color: 'text-blue-600',   bg: 'bg-blue-50',   border: 'border-blue-100',   icon: Lightbulb },
+  // Advisory insight types
+  trend_opportunity:  { label: 'טרנד',           color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100', icon: TrendingUp },
+  campaign_opportunity:{ label: 'הזדמנות קמפיין', color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100', icon: Zap },
+  new_service:        { label: 'שירות חדש',       color: 'text-green-600',  bg: 'bg-green-50',  border: 'border-green-100',  icon: Sparkles },
+  promotion_strategy: { label: 'מבצע',            color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-100', icon: Zap },
+  sector_shift:       { label: 'שינוי סקטור',     color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', icon: TrendingUp },
+  event_opportunity:  { label: 'אירוע',            color: 'text-green-600',  bg: 'bg-green-50',  border: 'border-green-100',  icon: Target },
+  competitive_gap:    { label: 'פער תחרותי',       color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', icon: Trophy },
+  social_viral:       { label: 'ויראלי',           color: 'text-pink-600',   bg: 'bg-pink-50',   border: 'border-pink-100',   icon: Sparkles },
+  future_prediction:  { label: 'תחזית AI',         color: 'text-blue-600',   bg: 'bg-blue-50',   border: 'border-blue-100',   icon: Lightbulb },
 };
 
 const PRIORITY_BADGE = {
@@ -559,7 +569,7 @@ export default function InsightDetail() {
     );
   }
 
-  const insightForAgent = { title, description, typeLabel: typeMeta.label, priority, stepsText, typeKey };
+  const insightForAgent = { title, description, typeLabel: typeMeta.label, priority, stepsText, typeKey, ...actionMeta };
 
   // Quick actions from ActionRouter — filtered by snapshot
   const quickActions = getActionsForInsight(typeKey, snapshot, insightForAgent, 4);

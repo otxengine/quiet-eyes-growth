@@ -119,15 +119,23 @@ export default function CampaignCreate() {
   const [searchParams] = useSearchParams();
   const bpId = businessProfile?.id;
 
-  // URL context from signal
-  const signalId      = searchParams.get('signalId') || '';
-  const signalSummary = searchParams.get('summary') || '';
-  const signalAction  = searchParams.get('action')  || '';
-  const signalCat     = searchParams.get('category') || '';
+  // URL context from signal / campaign opportunity
+  const signalId       = searchParams.get('signalId') || '';
+  const signalSummary  = searchParams.get('summary') || '';
+  const signalAction   = searchParams.get('action')  || '';
+  const signalCat      = searchParams.get('category') || '';
+  const urlPlatform    = searchParams.get('platform') || '';
+  const urlAudienceAge = searchParams.get('audience_age') || '';
+  const urlBestTime    = searchParams.get('best_time') || '';
 
   // Form state
   const [postContent,  setPostContent]  = useState('');
-  const [platform,     setPlatform]     = useState('meta');
+  const [platform,     setPlatform]     = useState(
+    urlPlatform === 'tiktok' ? 'tiktok'
+    : urlPlatform === 'instagram' ? 'meta'
+    : urlPlatform === 'facebook' ? 'meta'
+    : 'meta'
+  );
   const [objective,    setObjective]    = useState('leads');
   const [budget,       setBudget]       = useState(50);
   const [days,         setDays]         = useState(7);
@@ -172,6 +180,8 @@ export default function CampaignCreate() {
 עסק: "${businessProfile.name}" | תחום: ${businessProfile.category} | עיר: ${businessProfile.city}
 ${signalSummary ? `הזדמנות/תובנה: "${signalSummary}"` : ''}
 ${signalAction ? `מטרת הקמפיין: ${signalAction}` : ''}
+${urlAudienceAge ? `קהל יעד: גיל ${urlAudienceAge}` : ''}
+${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
 פלטפורמה: ${platConfig.label}
 מטרה: ${OBJECTIVES.find(o => o.id === objective)?.label || objective}
 
@@ -691,8 +701,19 @@ ${signalAction ? `מטרת הקמפיין: ${signalAction}` : ''}
       </SectionCard>
 
       {/* ── 4. Audience ── */}
-      <SectionCard title="קהל יעד" subtitle="טרגטינג מוכן לפייסבוק / גוגל" defaultOpen={false}>
+      <SectionCard title="קהל יעד" subtitle="טרגטינג מוכן לפייסבוק / גוגל" defaultOpen={!!(urlAudienceAge || urlBestTime)}>
         <div className="p-4">
+          {(urlAudienceAge || urlBestTime) && !audienceData && (
+            <div className="flex items-start gap-2 bg-purple-50 border border-purple-100 rounded-lg px-3 py-2 mb-3">
+              <Sparkles className="w-3.5 h-3.5 text-purple-500 mt-0.5 flex-shrink-0" />
+              <div className="text-[11px] text-purple-700 leading-snug">
+                <p className="font-semibold mb-0.5">קהל יעד מזוהה מ-TikTok Intelligence</p>
+                {urlAudienceAge && <p>גיל: {urlAudienceAge}</p>}
+                {urlBestTime && <p>שעת פרסום מומלצת: {urlBestTime}</p>}
+                <p className="mt-1 text-purple-600">לחץ "צור קהל יעד" לטרגטינג מלא</p>
+              </div>
+            </div>
+          )}
           {!audienceData && (
             <div className="space-y-3">
               <button
