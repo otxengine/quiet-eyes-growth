@@ -10,7 +10,7 @@ function getAdminKey() {
   return sessionStorage.getItem('__admin_key') || '';
 }
 
-async function adminFetch(path, options = {}) {
+export async function adminFetch(path, options = {}) {
   const headers = {
     'Content-Type': 'application/json',
     'x-admin-key': getAdminKey(),
