@@ -8,11 +8,12 @@ import { publishEvent } from '../../lib/eventBus';
 import { searchEventbriteEvents, hasEventbriteKey } from '../../lib/eventbrite';
 import { serpGoogleEvents, hasSerpApiKey } from '../../lib/serpapi';
 
-const MIN_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours — events change frequently
+const MIN_INTERVAL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days — runs twice a week via scheduler
 
 const TYPE_ICON: Record<string, string> = {
   concert: '🎵', conference: '🎙️', festival: '🎪', market: '🛒',
-  sports: '⚽', community: '🤝', exhibition: '🖼️', tv_broadcast: '📺', other: '📍',
+  sports: '⚽', community: '🤝', exhibition: '🖼️', tv_broadcast: '📺',
+  weather_event: '🌡️', other: '📍',
 };
 
 /**
@@ -24,10 +25,11 @@ const TYPE_ICON: Record<string, string> = {
  * Runs automatically as part of runFullScan (every 12h).
  */
 export async function findLocalEvents(req: Request, res: Response) {
-  const { businessProfileId } = req.body;
+  const { businessProfileId, force } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
-  if (shouldSkipAgent(businessProfileId, 'findLocalEvents', MIN_INTERVAL_MS)) {
+  // Scheduler uses the 3-day guard; manual scan from the UI passes force:true to bypass it
+  if (!force && shouldSkipAgent(businessProfileId, 'findLocalEvents', MIN_INTERVAL_MS)) {
     return res.json({ signals_created: 0, skipped: true, reason: 'ran_recently' });
   }
 
@@ -165,6 +167,15 @@ export async function findLocalEvents(req: Request, res: Response) {
       `ישראל שידור ספורט ישיר רייטינג גבוה ${month} ${yearStr} צפייה`,
     ];
 
+    // ── Batch 4: Weather events — extreme heat, storms, rain affect consumer behavior ─
+    // Heatwaves spike HVAC demand, cold snaps boost restaurants/clothing, heavy rain affects footfall
+    const weatherQueries = [
+      `ישראל מזג אוויר ${month} ${yearStr} גל חום קיצוני טמפרטורות שיא תחזית`,
+      `israel weather forecast ${month} ${yearStr} extreme heat heatwave warning`,
+      `ישראל גשם שיטפון סערה ${month} ${yearStr} אזהרה תחזית`,
+      `israel weather warning storm rain flood ${month} ${yearStr}`,
+    ];
+
     const allResults: any[] = [];
     // Run local event queries
     for (const q of localEventQueries) {
@@ -186,6 +197,13 @@ export async function findLocalEvents(req: Request, res: Response) {
       const results = await tavilySearch(q, 4);
       tvResults.push(...results);
     }
+    // Run weather queries
+    const weatherResults: any[] = [];
+    for (const q of weatherQueries) {
+      if (isTavilyRateLimited()) break;
+      const results = await tavilySearch(q, 3);
+      weatherResults.push(...results);
+    }
 
     // Deduplicate combined results by URL
     const seen = new Set<string>();
@@ -194,12 +212,13 @@ export async function findLocalEvents(req: Request, res: Response) {
       seen.add(r.url);
       return true;
     });
-    const uniqueLocal  = dedup(allResults);
-    const uniqueSports = dedup(sportsResults);
-    const uniqueTv     = dedup(tvResults);
+    const uniqueLocal   = dedup(allResults);
+    const uniqueSports  = dedup(sportsResults);
+    const uniqueTv      = dedup(tvResults);
+    const uniqueWeather = dedup(weatherResults);
 
     if (uniqueLocal.length === 0 && uniqueSports.length === 0 && uniqueTv.length === 0 &&
-        eventbriteRaw.length === 0 && serpEventRaw.length === 0) {
+        uniqueWeather.length === 0 && eventbriteRaw.length === 0 && serpEventRaw.length === 0) {
       setLastRun(businessProfileId, 'findLocalEvents');
       await writeAutomationLog('findLocalEvents', businessProfileId, startTime, 0);
       return res.json({ signals_created: 0 });
@@ -215,6 +234,10 @@ export async function findLocalEvents(req: Request, res: Response) {
 
     const tvContext = uniqueTv.slice(0, 8)
       .map(r => `[${r.url}]\n${r.title || ''}: ${(r.content || '').slice(0, 220)}`)
+      .join('\n\n');
+
+    const weatherContext = uniqueWeather.slice(0, 6)
+      .map(r => `[${r.url}]\n${r.title || ''}: ${(r.content || '').slice(0, 200)}`)
       .join('\n\n');
 
     // Eventbrite + SerpAPI already structured — pass as context for the LLM
@@ -241,7 +264,10 @@ ${localContext.slice(0, 2000)}
 ${sportsContext.slice(0, 1600)}
 
 == שידורי טלוויזיה עם רייטינג גבוה (פינאלות, ריאליטי, סדרות) ==
-${tvContext.slice(0, 1000)}
+${tvContext.slice(0, 800)}
+
+== אירועי מזג אוויר קיצוניים (גל חום, סערה, גשם כבד) ==
+${weatherContext.slice(0, 600)}
 
 חוקים קריטיים:
 - שם האירוע חייב להיות ספציפי עם פרטים: "צרפת נגד סנגל" (לא "משחק כדורגל"), "הופעת אייגל" (לא "הופעה"), "פסטיבל הג'אז של חיפה" (לא "פסטיבל"), "פינאלה של X-Factor ישראל" (לא "תוכנית ריאליטי")
@@ -250,17 +276,18 @@ ${tvContext.slice(0, 1000)}
 - תאריך: אם יש תאריך מדויק — השתמש בו. אם יש רק חודש — הכנס את ה-1 של אותו חודש. אין מידע על תאריך — דלג על האירוע
 - רק אירועים בחודשיים הקרובים (עד ${nextMonth} ${yearStr})
 - קבל גם אירועים מעיירות קרובות (רדיוס 30 ק"מ)
-- traffic_impact: גמר/פינאלה/ליגת העל/נבחרת לאומית/אמן ידוע/ריאליטי גדול = "high". ספורט מקומי/הופעה בינונית/סדרה רגילה = "medium". שאר = "low"
-- type: השתמש ב-"tv_broadcast" עבור שידורי טלוויזיה
+- traffic_impact: גמר/פינאלה/ליגת העל/נבחרת לאומית/אמן ידוע/ריאליטי גדול/גל חום קיצוני = "high". ספורט מקומי/הופעה בינונית/סדרה רגילה/גשם כבד = "medium". שאר = "low"
+- type: השתמש ב-"tv_broadcast" עבור שידורי טלוויזיה, "weather_event" עבור גל חום/סערה/גשם קיצוני
+- לאירועי מזג אוויר (weather_event): שם = "גל חום קיצוני — [תאריך/תקופה]" או "סערה קיצונית — [תאריך]". date_iso = תאריך ההשפעה הצפויה. venue = "ישראל כללי" או שם האזור. לא לייצר weather_event אם אין אזהרה ממשית.
 - business_opportunity: ספציפי לסקטור "${category}" — מה הלקוחות של האירוע הזה יצטרכו מ"${name}"?
 
 החזר JSON בלבד:
 {"events":[{
-  "name": "שם ספציפי: קבוצה א נגד קבוצה ב / שם האמן / שם הפסטיבל",
+  "name": "שם ספציפי: קבוצה א נגד קבוצה ב / שם האמן / שם הפסטיבל / גל חום קיצוני",
   "date_iso": "YYYY-MM-DD",
   "date_text": "תאריך קריא בעברית",
   "venue": "מיקום האירוע",
-  "type": "concert|festival|market|sports|exhibition|community|conference|tv_broadcast|other",
+  "type": "concert|festival|market|sports|exhibition|community|conference|tv_broadcast|weather_event|other",
   "artist_or_headliner": "שם האמן / שתי הקבוצות / שם הפסטיבל",
   "expected_crowd": "large|medium|small",
   "traffic_impact": "high|medium|low",
@@ -325,7 +352,7 @@ ${tvContext.slice(0, 1000)}
       await prisma.marketSignal.create({
         data: {
           summary: ev.name,
-          category: 'local_event',
+          category: ev.type === 'weather_event' ? 'weather_event' : 'local_event',
           impact_level: ev.traffic_impact === 'high' || ev.expected_crowd === 'large' ? 'high' : 'medium',
           recommended_action: ev.business_opportunity || `נצל את ${ev.name}`,
           confidence: ev.source_url ? 80 : 65,

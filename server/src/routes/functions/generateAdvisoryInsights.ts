@@ -72,7 +72,7 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
       }),
       // Events
       prisma.marketSignal.findMany({
-        where: { linked_business: businessProfileId, category: { in: ['event', 'local_event'] } },
+        where: { linked_business: businessProfileId, category: { in: ['event', 'local_event', 'weather_event'] } },
         orderBy: { detected_at: 'desc' },
         take: 8,
       }),
@@ -210,10 +210,10 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
       .map(r => `  ✓ "${(r.text || '').slice(0, 60)}"`);
 
     // Rating trend from history snapshots
-    const ratingSnapshots: any[] = await prisma.$queryRawUnsafe(
+    const ratingSnapshots = await prisma.$queryRawUnsafe<any[]>(
       `SELECT avg_rating, review_count, snapped_at FROM rating_history WHERE business_id=$1 ORDER BY snapped_at DESC LIMIT 10`,
       businessProfileId
-    ).catch(() => []);
+    ).catch(() => [] as any[]);
 
     const reputationLines: string[] = [];
     if (ratingSnapshots.length >= 2) {
