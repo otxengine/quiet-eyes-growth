@@ -33,6 +33,7 @@ import { competitorMoveTracker } from './routes/functions/competitorMoveTracker'
 import { tiktokSectorTrendAgent } from './routes/functions/tiktokSectorTrendAgent';
 import { tiktokAudienceAgent } from './routes/functions/tiktokAudienceAgent';
 import { tiktokPostTracker } from './routes/functions/tiktokPostTracker';
+import { findLocalEvents } from './routes/functions/findLocalEvents';
 
 const logger = createLogger('Scheduler');
 
@@ -125,12 +126,20 @@ export function startScheduler() {
     runAgentForAll('TikTokPostTracker', tiktokPostTracker);           // 12h guard
   });
 
-  // ── Every 24 hours at 03:00 UTC: ML learning + reviews + events ──────────────
+  // ── Twice a week (Mon + Thu, 07:00 UTC = 10:00 Israel): events online sync ──
+  // findLocalEvents: Tavily + LLM — expensive; twice a week is sufficient for
+  // concerts/festivals/TV listings that typically update Mon & Thu.
+  // detectEvents: calendar-based; re-runs to catch new sports matchups revealed weekly.
+  cron.schedule('0 7 * * 1,4', () => {
+    runAgentForAll('FindLocalEvents', findLocalEvents);
+    runAgentForAll('DetectEvents', detectEvents);
+  });
+
+  // ── Every 24 hours at 03:00 UTC: ML learning + reviews ───────────────────────
   cron.schedule('0 3 * * *', () => {
     runForAll('DailyLearning', 'decision_only');
     runAgentForAll('AutoRespondToReviews', autoRespondToReviews);
     runAgentForAll('ReviewRequestAutomation', reviewRequestAutomation);
-    runAgentForAll('DetectEvents', detectEvents);
   });
 
   // ── Every Sunday at 20:00 UTC: weekly content calendar ──────────────────────

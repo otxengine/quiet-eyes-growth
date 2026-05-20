@@ -47,22 +47,7 @@ const CALENDAR_EVENTS: CalendarEvent[] = [
   // ═══════════════════════════════════════════════════════════════
 
   {
-    name: 'ראש השנה', nameEn: 'Rosh Hashana', date: '2025-09-22',
-    type: 'holiday', leadDays: 21,
-    sectors: [
-      { keywords: ['מסעדה', 'אוכל', 'קייטרינג', 'food', 'restaurant', 'catering', 'בית קפה', 'cafe'], boost: 'high', opportunity: 'ארוחות חגיגיות, תפריט מיוחד לראש השנה, הזמנות מראש' },
-      { keywords: ['מאפייה', 'bakery', 'קונדיטוריה', 'pastry'], boost: 'high', opportunity: 'חלות, עוגות דבש, עוגיות שנה טובה — הביקוש מכפיל את עצמו' },
-      { keywords: ['מספרה', 'ספא', 'קוסמטיקה', 'יופי', 'beauty', 'salon', 'spa', 'hair', 'nail'], boost: 'high', opportunity: 'תספורת, צביעה וטיפול לפני החג — לוחות זמנים מלאים שבועיים לפני' },
-      { keywords: ['מתנות', 'gift', 'קמעונאות', 'retail', 'חנות', 'shop', 'store', 'אופנה', 'fashion'], boost: 'high', opportunity: 'סלי מתנה, מוצרי חג, מבצעים לרגל השנה החדשה' },
-      { keywords: ['ניקיון', 'cleaning', 'שיפוץ', 'renovation', 'contractor', 'קבלן'], boost: 'medium', opportunity: 'ניקיון לפני החג, סידור הבית לקראת האורחים' },
-      { keywords: ['מלון', 'hotel', 'תיירות', 'tourism', 'travel', 'טיולים', 'נופש', 'resort'], boost: 'high', opportunity: 'חבילות חג ונסיעות לשנה החדשה — הזמנות נסגרות מוקדם' },
-      { keywords: ['כושר', 'fitness', 'gym', 'יוגה', 'yoga', 'פילאטיס'], boost: 'medium', opportunity: 'מנויי "שנה חדשה החלטות" — הזמן הטוב ביותר להצעת חבילות' },
-    ],
-    defaultOpportunity: 'מבצע מיוחד לכבוד ראש השנה — לקוחות מחפשים שירותים לפני החג',
-  },
-
-  {
-    name: 'יום כיפור', nameEn: 'Yom Kippur', date: '2025-10-01',
+    name: 'יום כיפור', nameEn: 'Yom Kippur', date: '2026-09-20',
     type: 'holiday', leadDays: 14,
     sectors: [
       { keywords: ['מסעדה', 'אוכל', 'food', 'restaurant', 'קייטרינג', 'catering'], boost: 'high', opportunity: 'ארוחה לפני הצום וסעודה המפסקת — שיא ההכנסות ביום אחד' },
@@ -73,7 +58,7 @@ const CALENDAR_EVENTS: CalendarEvent[] = [
   },
 
   {
-    name: 'סוכות', nameEn: 'Sukkot', date: '2025-10-06',
+    name: 'סוכות', nameEn: 'Sukkot', date: '2026-09-25',
     type: 'holiday', leadDays: 14,
     sectors: [
       { keywords: ['מסעדה', 'אוכל', 'food', 'restaurant', 'קייטרינג'], boost: 'high', opportunity: 'ארוחות בסוכה ואירועי חג — ביקוש גבוה לחוויה חגיגית' },
@@ -85,7 +70,18 @@ const CALENDAR_EVENTS: CalendarEvent[] = [
   },
 
   {
-    name: 'חנוכה', nameEn: 'Hanukkah', date: '2025-12-14',
+    name: 'שמחת תורה', nameEn: 'Simchat Torah', date: '2026-10-02',
+    type: 'holiday', leadDays: 7,
+    sectors: [
+      { keywords: ['מסעדה', 'אוכל', 'food', 'restaurant', 'קייטרינג'], boost: 'high', opportunity: 'סיום עונת החגים — ארוחת חג אחרונה, מבצעי סוף חגים' },
+      { keywords: ['קמעונאות', 'retail', 'חנות', 'shop', 'מתנות', 'gift'], boost: 'medium', opportunity: 'מכירות סוף חגים — לקוחות מחפשים מבצעים לפני החזרה לשגרה' },
+      { keywords: ['בידור', 'entertainment', 'אירועים', 'events', 'מוזיקה', 'music'], boost: 'high', opportunity: 'ריקודים וחגיגות שמחת תורה — אירועים בבתי כנסת ובפארקים' },
+    ],
+    defaultOpportunity: 'שמחת תורה — סיום עונת החגים, הזדמנות אחרונה למבצעי חגים',
+  },
+
+  {
+    name: 'חנוכה', nameEn: 'Hanukkah', date: '2026-12-04',
     type: 'holiday', leadDays: 14,
     sectors: [
       { keywords: ['מסעדה', 'אוכל', 'food', 'restaurant', 'מאפייה', 'bakery', 'קייטרינג'], boost: 'high', opportunity: 'סופגניות, לביבות, ארוחות חגיגיות — 8 ימים של ביקוש' },
