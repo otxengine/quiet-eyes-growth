@@ -18,6 +18,7 @@ import explainabilityRouter from './routes/explainability';
 import kpiRouter from './routes/kpi';
 import oauthRouter from './routes/oauth';
 import roiRouter from './routes/roi';
+import adminUsersRouter from './routes/adminUsers';
 
 // Wire up all event choreography handlers at startup
 registerAllHandlers();
@@ -88,6 +89,7 @@ app.use('/api/explain', explainabilityRouter);
 app.use('/api/kpi', kpiRouter);
 app.use('/api/oauth', oauthRouter);
 app.use('/api', roiRouter);
+app.use('/api/admin', adminUsersRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 

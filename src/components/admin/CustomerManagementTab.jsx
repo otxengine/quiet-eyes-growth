@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { adminClient } from '@/api/adminClient';
+import { adminClient, adminFetch } from '@/api/adminClient';
 import { PLAN_LABELS, PLAN_COLORS, PLAN_ORDER } from '@/lib/usePlan';
 import {
   Loader2, Search, Crown, ChevronDown, X, Plus, AlertCircle, CheckCircle2, Zap,
@@ -100,15 +100,23 @@ function AddBusinessModal({ onClose, onAdded }) {
 }
 
 // ── Cancel Confirm Modal ───────────────────────────────────────────────────────
-function CancelModal({ biz, onClose, onConfirm }) {
+function CancelModal({ biz, onClose, onConfirm, deleting }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className={`${CARD} p-6 w-full max-w-sm space-y-4`}>
-        <h3 className="text-[14px] font-bold text-white">בטל מנוי</h3>
-        <p className="text-[12px] text-slate-400">האם לבטל את המנוי של <strong className="text-white">{biz?.name}</strong>? פעולה זו תשנה את התכנית ל-Free Trial.</p>
-        <div className="flex gap-2">
-          <button onClick={onClose} className={`${BTN} flex-1 bg-[#2a3042] text-white`}>ביטול</button>
-          <button onClick={onConfirm} className={`${BTN} flex-1 bg-red-600 text-white hover:bg-red-700`}>אשר ביטול</button>
+        <div className="flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+          <h3 className="text-[14px] font-bold text-white">מחיקת משתמש</h3>
+        </div>
+        <p className="text-[12px] text-slate-400">
+          פעולה זו תמחק לצמיתות את <strong className="text-white">{biz?.name}</strong> ({biz?.created_by}).<br />
+          <span className="text-red-400 font-semibold">המשתמש לא יוכל להתחבר יותר. כל הנתונים יימחקו. לא ניתן לבטל.</span>
+        </p>
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose} disabled={deleting} className={`${BTN} flex-1 bg-[#2a3042] text-white disabled:opacity-50`}>ביטול</button>
+          <button onClick={onConfirm} disabled={deleting} className={`${BTN} flex-1 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-1.5`}>
+            {deleting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> מוחק...</> : 'מחק לצמיתות'}
+          </button>
         </div>
       </div>
     </div>
@@ -285,6 +293,7 @@ export default function CustomerManagementTab({ allBusinesses, allLogs, allSigna
   const [savingPlan, setSavingPlan] = useState(null);
   const [drillBiz, setDrillBiz]   = useState(null);
   const [cancelBiz, setCancelBiz] = useState(null);
+  const [deleting, setDeleting]   = useState(false);
   const [showAdd, setShowAdd]     = useState(false);
 
   const activeIds = useMemo(() =>
@@ -335,7 +344,23 @@ export default function CustomerManagementTab({ allBusinesses, allLogs, allSigna
 
   const confirmCancel = async () => {
     if (!cancelBiz) return;
-    await updatePlan(cancelBiz.id, 'free_trial');
+    setDeleting(true);
+    try {
+      const res = await adminFetch(`/admin/users/${cancelBiz.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast.success(`המשתמש ${cancelBiz.name} נמחק לצמיתות`);
+        // Remove from local cache immediately
+        qc.setQueryData(['admin_businesses'], (old = []) =>
+          old.filter(b => b.id !== cancelBiz.id)
+        );
+      } else {
+        toast.error('מחיקה חלקית — בדוק לוגים: ' + (res.errors?.[0] || ''));
+        qc.invalidateQueries({ queryKey: ['admin_businesses'] });
+      }
+    } catch (e) {
+      toast.error('שגיאה: ' + e.message);
+    }
+    setDeleting(false);
     setCancelBiz(null);
   };
 
@@ -447,14 +472,13 @@ export default function CustomerManagementTab({ allBusinesses, allLogs, allSigna
                     >
                       פרטים
                     </button>
-                    {plan !== 'free_trial' && (
-                      <button
-                        onClick={() => setCancelBiz(biz)}
-                        className="text-[10px] px-2 py-1 rounded-lg bg-red-900/50 text-red-400 hover:bg-red-900/80 border border-red-800 transition"
-                      >
-                        בטל
-                      </button>
-                    )}
+                    <button
+                      onClick={() => setCancelBiz(biz)}
+                      className="text-[10px] px-2 py-1 rounded-lg bg-red-900/50 text-red-400 hover:bg-red-900/80 border border-red-800 transition"
+                      title="מחק משתמש לצמיתות"
+                    >
+                      מחק
+                    </button>
                   </div>
                 </div>
               </div>
@@ -468,7 +492,7 @@ export default function CustomerManagementTab({ allBusinesses, allLogs, allSigna
 
       {/* Modals */}
       {showAdd     && <AddBusinessModal onClose={() => setShowAdd(false)} onAdded={() => qc.invalidateQueries({ queryKey: ['admin_businesses'] })} />}
-      {cancelBiz   && <CancelModal biz={cancelBiz} onClose={() => setCancelBiz(null)} onConfirm={confirmCancel} />}
+      {cancelBiz   && <CancelModal biz={cancelBiz} onClose={() => !deleting && setCancelBiz(null)} onConfirm={confirmCancel} deleting={deleting} />}
       {drillBiz    && (
         <DrillModal
           biz={drillBiz}
