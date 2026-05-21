@@ -10,7 +10,10 @@ const router = Router();
 const MIGRATION_SECRET = process.env.MIGRATION_SECRET || 'otx-migrate-2026';
 
 router.post('/', async (req: Request, res: Response) => {
-  if (req.headers['x-migration-secret'] !== MIGRATION_SECRET) {
+  const { isAdminKeyRequest } = require('../middleware/auth');
+  const validMigrationSecret = req.headers['x-migration-secret'] === MIGRATION_SECRET;
+  const validAdminKey = isAdminKeyRequest(req);
+  if (!validMigrationSecret && !validAdminKey) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 

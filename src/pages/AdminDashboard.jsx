@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminClient } from '@/api/adminClient';
-import { Loader2, ShieldAlert } from 'lucide-react';
+import { Loader2, ShieldAlert, AlertTriangle } from 'lucide-react';
 
 // Tab components
 import OverviewTab           from '@/components/admin/OverviewTab';
@@ -40,9 +40,10 @@ export default function AdminDashboard({ skipAdminCheck = false }) {
   const [tab, setTab] = useState('overview');
 
   // ── Shared data queries ────────────────────────────────────────
-  const { data: allBusinesses = [], isLoading: loadingBiz } = useQuery({
+  const { data: allBusinesses = [], isLoading: loadingBiz, error: bizError } = useQuery({
     queryKey: ['admin_businesses'],
     queryFn: () => adminClient.entities.BusinessProfile.filter({}, '-created_date', 300),
+    retry: 1,
   });
 
   const { data: allLogs = [], isLoading: loadingLogs } = useQuery({
@@ -63,6 +64,7 @@ export default function AdminDashboard({ skipAdminCheck = false }) {
 
   const loading    = loadingBiz || loadingLogs;
   const sharedProps = { allBusinesses, allLogs, allSignals, allLeads };
+  const needsMigration = !loadingBiz && bizError && allBusinesses.length === 0;
 
   // ── Render ─────────────────────────────────────────────────────
   return (
@@ -103,6 +105,26 @@ export default function AdminDashboard({ skipAdminCheck = false }) {
           </button>
         ))}
       </div>
+
+      {/* Migration warning banner */}
+      {needsMigration && (
+        <div className="mx-5 mt-4 p-4 bg-amber-950/60 border border-amber-700 rounded-xl flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-[13px] font-semibold text-amber-300 mb-1">נדרשות מיגרציות DB</p>
+            <p className="text-[11px] text-amber-500/80 mb-3">
+              הקולונות החדשות טרם נוצרו בבסיס הנתונים — כתוצאה מכך המשתמשים לא מוצגים.
+              עבור לטאב "פעולות" ולחץ "הרץ מיגרציות".
+            </p>
+            <button
+              onClick={() => setTab('actions')}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-semibold rounded-lg transition-colors"
+            >
+              עבור לפעולות ← הרץ מיגרציות
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Tab content */}
       <div className="p-5">
