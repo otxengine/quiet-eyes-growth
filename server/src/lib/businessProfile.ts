@@ -224,6 +224,17 @@ export function isSignalRelevant(
 }
 
 /**
+ * Filter an array of signals, keeping only those relevant to this business's sector.
+ * Drop-in wrapper around isSignalRelevant() — use everywhere signals are processed.
+ */
+export function filterSignals<T extends { content?: string | null; category?: string | null }>(
+  signals: T[],
+  profile: { sector_profile?: string | null },
+): T[] {
+  return signals.filter(s => isSignalRelevant(s, profile));
+}
+
+/**
  * Build a rich context block for any LLM prompt.
  * Drop-in replacement / complement to getBusinessSectorContext().
  * Includes: sub-sector, B2B/B2C type, target audience, pricing context, relevant topics,

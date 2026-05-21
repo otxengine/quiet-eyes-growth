@@ -112,6 +112,7 @@ model BusinessProfile {
   price_tier                 String?  // 'budget' | 'mid' | 'premium'
   customer_sources           String?  // JSON array: ['google', 'instagram', 'word_of_mouth', ...]
   sector_profile             String?  // JSON: AI-parsed sub-sector context for agents
+  agent_missions             String?  // JSON: LLM-generated per-agent mission plan (generated once at onboarding)
 
   @@map("business_profiles")
 }

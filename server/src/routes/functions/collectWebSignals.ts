@@ -5,6 +5,7 @@ import { tavilySearch } from '../../lib/tavily';          // shared cache (12h T
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { buildKeywordQueries, buildUrlQueries } from '../../lib/dataSources';
 import { buildSearchQueries, cityToEn } from '../../lib/businessProfile';
+import { getAgentMission } from '../../lib/missionPlanner';
 
 // Minimum interval between full web-signal collections per business
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
@@ -33,8 +34,11 @@ export async function collectWebSignals(req: Request, res: Response) {
 
     const cityStr = cityToEn(city);
 
-    // ── Sector-aware queries (uses AI sector_profile when available) ──────────
-    const queries = buildSearchQueries(profile, cityStr);
+    // ── Mission-driven queries (agent_missions > sector_profile > fallback) ───
+    const mission = getAgentMission<{ priority_queries_en?: string[]; exclude_topics?: string[] }>(profile, 'collectWebSignals');
+    const queries: string[] = mission?.priority_queries_en?.length
+      ? [...mission.priority_queries_en, ...buildSearchQueries(profile, cityStr).slice(0, 3)]
+      : buildSearchQueries(profile, cityStr);
 
     // ── custom_keywords: user-configured keywords → one query each ──────────
     for (const q of buildKeywordQueries(profile, cityStr)) queries.push(q);

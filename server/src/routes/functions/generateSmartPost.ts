@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { callAI, callAIJson } from '../../lib/ai_router';
 import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
+import { buildAgentPromptContext } from '../../lib/businessProfile';
+import { getAllMissions } from '../../lib/missionPlanner';
 
 /**
  * generateSmartPost — Multi-brain post generation pipeline.
@@ -53,6 +55,15 @@ export async function generateSmartPost(req: Request, res: Response) {
     // ML context: inject learned tone/style preferences into post generation
     const mlContext = formatContextForPrompt(bizCtx, 'generateSmartPost');
 
+    // Mission intelligence: sector-tuned hooks, hashtags, content strategy
+    const allMissions = getAllMissions(profile);
+    const contentMissions = allMissions?.content;
+    const sectorCtxBlock = buildAgentPromptContext(profile);
+    const hooksBlock = contentMissions?.post_hooks_he?.slice(0, 3).join('\n• ') || '';
+    const hashtagGuide = contentMissions?.hashtags
+      ? `Sector hashtags — primary: ${(contentMissions.hashtags.primary || []).join(' ')} | local: ${(contentMissions.hashtags.local || []).join(' ')} | trending: ${(contentMissions.hashtags.trending || []).join(' ')}`
+      : '';
+
     const leadSummary = leads
       .slice(0, 5)
       .map(l => `• [${l.source || '?'}] ${(l.service_needed || '').slice(0, 50)}`)
@@ -66,6 +77,8 @@ export async function generateSmartPost(req: Request, res: Response) {
     // ── Phase 1: Claude builds audience profile ──────────────────────────────
     console.log('[generateSmartPost] Phase 1: Claude building audience...');
     const audience = await callAIJson<any>('build_audience', `
+${sectorCtxBlock}
+
 Business: "${profile.name}" — ${profile.category} in ${profile.city}
 Services: ${profile.relevant_services || 'not specified'}
 ${profile.description ? `Description: ${profile.description}` : ''}
@@ -111,14 +124,17 @@ Audience: ${audience.age_range}, ${audience.gender}
 Pain point: ${audience.pain_point}
 Trigger: ${audience.purchase_trigger}
 Style: ${platformStyle}
+${hooksBlock ? `\nHook examples that work for this sector (DO NOT copy, use as tone guide):\n• ${hooksBlock}` : ''}
+${hashtagGuide ? `\n${hashtagGuide}` : ''}
 
 Rules:
-• Open with a hook that grabs attention within 2 seconds
-• Touch the audience's pain point
-• Offer a solution — the business
+• Open with a hook that grabs attention within 2 seconds — specific to this sector's audience pain point
+• Touch the audience's pain point precisely (not generic)
+• Offer a solution — specific to THIS business's unique value
 • End with a clear CTA
 • Write natural Hebrew, not a translation from English
 • Apply the learned tone and style preferences above (if provided)
+• Use sector-appropriate hashtags from the list above, not generic ones
 
 Return ONLY valid JSON. ALL string values must be in Hebrew, EXCEPT image_description which must be in English:
 {

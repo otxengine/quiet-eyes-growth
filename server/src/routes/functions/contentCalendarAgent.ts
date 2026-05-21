@@ -4,6 +4,7 @@ import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
 import { getSectorContentStrategy } from '../../lib/sectorPrompts';
+import { getAgentMission, getAllMissions } from '../../lib/missionPlanner';
 
 const DAYS_HE = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
@@ -34,6 +35,32 @@ export async function contentCalendarAgent(req: Request, res: Response) {
       : tone === 'warm'
       ? 'טון חם ומוסמך, ספר סיפורים קצרים'
       : 'טון מקצועי ואמין, נתונים + ערך';
+
+    // Mission intelligence: per-agent calendar plan + content templates
+    const calendarMission = getAgentMission<{
+      best_platforms?: string[];
+      posting_frequency_he?: string;
+      content_pillars_he?: string[];
+      seasonal_opportunities_he?: string[];
+    }>(profile, 'contentCalendarAgent');
+    const allMissions = getAllMissions(profile);
+    const contentMissions = allMissions?.content;
+
+    // Override preferred channels from mission if available
+    const missionPlatforms = calendarMission?.best_platforms?.join(',') || '';
+    const activePlatforms = missionPlatforms || preferredChannels;
+
+    // Build mission blocks for prompt injection
+    const contentPillarsBlock = calendarMission?.content_pillars_he?.length
+      ? `נושאי תוכן מרכזיים לסקטור זה:\n${calendarMission.content_pillars_he.map(p => `• ${p}`).join('\n')}`
+      : '';
+    const seasonalBlock = calendarMission?.seasonal_opportunities_he?.length
+      ? `הזדמנויות עונתיות קרובות:\n${calendarMission.seasonal_opportunities_he.map(s => `• ${s}`).join('\n')}`
+      : '';
+    const hookExamples = contentMissions?.post_hooks_he?.slice(0, 3).join('\n• ') || '';
+    const hashtagGuide = contentMissions?.hashtags
+      ? `hashtags מומלצים לסקטור:\nראשיים: ${(contentMissions.hashtags.primary || []).join(' ')} | מקומיים: ${(contentMissions.hashtags.local || []).join(' ')} | טרנדיים: ${(contentMissions.hashtags.trending || []).join(' ')}`
+      : '';
 
     // Load rich intelligence for high-quality content
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600000);
@@ -148,11 +175,17 @@ export async function contentCalendarAgent(req: Request, res: Response) {
       model: 'sonnet',
       maxTokens: 3000,
       skipCache: true,
+      profile,
       prompt: `You are a senior digital content manager for Israeli businesses. Your task: produce a weekly content calendar the user can publish directly — without any editing.
 Return ONLY valid JSON. ALL string values must be in Hebrew.
 
 Business: "${name}" (${category}, ${city})
 ${descriptionLine}${sectorStrategy}
+
+${contentPillarsBlock ? `\n${contentPillarsBlock}` : ''}
+${seasonalBlock ? `\n${seasonalBlock}` : ''}
+${hookExamples ? `\nדוגמאות לפתיחת פוסט שעובדות בסקטור זה (השתמש כהשראה, לא כהעתקה):\n• ${hookExamples}` : ''}
+${hashtagGuide ? `\n${hashtagGuide}` : ''}
 
 ${audienceCtx ? `=== מחקר קהל יעד ===\n${audienceCtx}\n===` : ''}
 ${signalContext ? `\n${signalContext}` : ''}
@@ -162,8 +195,9 @@ ${socialProof ? `\n${socialProof}` : ''}
 ${sectorContext ? `\n${sectorContext}` : ''}
 ${contentStyle ? `\nסגנון תוכן מועדף: ${contentStyle}` : ''}
 
-Channels: ${preferredChannels}
+Channels: ${activePlatforms}
 Tone: ${toneInstruction}
+${calendarMission?.posting_frequency_he ? `Posting frequency for this sector: ${calendarMission.posting_frequency_he}` : ''}
 
 Post rules that must be followed:
 1. Every post must open with a single winning Hook line (sharp question / surprising fact / bold statement)
@@ -242,13 +276,13 @@ If format=קרוסל, fill carousel_slides: ["טקסט שקף 1 (כותרת)", "
             priority: 'medium',
             due_date: dueDate,
             source_type: 'content_calendar',
-            notes: `סוג: ${post.post_type || 'כללי'} | ערוץ: ${preferredChannels.split(',')[0] || 'instagram'}`,
+            notes: `סוג: ${post.post_type || 'כללי'} | ערוץ: ${activePlatforms.split(',')[0] || 'instagram'}`,
           },
         });
 
         // Also create an OrganicPost draft with full content
         const postContent = [post.hook, post.body, post.cta ? `→ ${post.cta}` : '', post.hashtags].filter(Boolean).join('\n\n');
-        const platform = preferredChannels.split(',')[0]?.trim() || 'instagram';
+        const platform = activePlatforms.split(',')[0]?.trim() || 'instagram';
         await prisma.organicPost.create({
           data: {
             linked_business: businessProfileId,

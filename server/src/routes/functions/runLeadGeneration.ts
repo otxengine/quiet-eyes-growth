@@ -4,6 +4,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
 import { publishEvent } from '../../lib/eventBus';
 import { buildLeadQueries, buildAgentPromptContext, isSignalRelevant } from '../../lib/businessProfile';
+import { getAgentMission } from '../../lib/missionPlanner';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 
@@ -209,9 +210,16 @@ Return ONLY valid JSON. ALL string values must be in Hebrew.`,
       }
     }
 
-    // Phase 2: Tavily search if no raw signals yet — use sector-aware queries
+    // Phase 2: Tavily search if no raw signals yet — use mission-driven or sector-aware queries
     if (intentSignals.length === 0 && TAVILY_API_KEY) {
-      const queries = buildLeadQueries(profile);
+      const leadMission = getAgentMission<{ intent_phrases_he?: string[]; intent_phrases_en?: string[] }>(profile, 'runLeadGeneration');
+      const missionQueries = [
+        ...(leadMission?.intent_phrases_he || []).map(p => `${p} ${profile.city}`),
+        ...(leadMission?.intent_phrases_en || []).map(p => `${p} Israel`),
+      ];
+      const queries = missionQueries.length > 0
+        ? [...missionQueries, ...buildLeadQueries(profile).slice(0, 2)]
+        : buildLeadQueries(profile);
       for (const query of queries) {
         const results = await tavilySearch(query, 5);
         for (const result of results) {

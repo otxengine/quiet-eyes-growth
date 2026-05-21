@@ -4,6 +4,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
 import { publishEvent } from '../../lib/eventBus';
 import { buildCompetitorTerms, buildAgentPromptContext, getSectorProfile } from '../../lib/businessProfile';
+import { getAgentMission } from '../../lib/missionPlanner';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
@@ -106,7 +107,11 @@ export async function runCompetitorIdentification(req: Request, res: Response) {
 
     const sp = getSectorProfile(profile);
     const profileCtx = buildAgentPromptContext(profile);
-    const prebuiltTerms = buildCompetitorTerms(profile);
+    const competitorMission = getAgentMission<{ search_terms_he?: string[]; competitor_profile_he?: string }>(profile, 'runCompetitorIdentification');
+    // Mission-provided terms are most precise; fall back to sector-profile terms
+    const prebuiltTerms = competitorMission?.search_terms_he?.length
+      ? competitorMission.search_terms_he
+      : buildCompetitorTerms(profile);
 
     // ── Step 1: Understand the business type + get nearby cities ──────────────
     // If we have an AI sector profile, provide it so the LLM generates precise competitor terms

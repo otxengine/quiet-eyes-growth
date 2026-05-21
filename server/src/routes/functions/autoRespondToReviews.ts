@@ -4,7 +4,8 @@ import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
 import { executeOrQueue } from '../../services/execution/executeOrQueue';
-import { getSectorContext, getSectorReviewResponse } from '../../lib/sectorPrompts';
+import { getSectorReviewResponse } from '../../lib/sectorPrompts';
+import { getAllMissions } from '../../lib/missionPlanner';
 import { validateAction } from '../../lib/constraintValidator';
 import { publishEvent } from '../../lib/eventBus';
 
@@ -38,6 +39,13 @@ export async function autoRespondToReviews(req: Request, res: Response) {
       : tone === 'warm'
       ? 'warm and personal tone, without being salesy'
       : 'professional and trustworthy tone, specific to the review';
+
+    // Mission intelligence: sector-tuned review response templates
+    const allMissions = getAllMissions(profile);
+    const reviewTemplates = allMissions?.content?.review_response_templates_he;
+    const positiveTemplate = reviewTemplates?.positive || '';
+    const negativeTemplate = reviewTemplates?.negative || '';
+    const neutralTemplate  = reviewTemplates?.neutral  || '';
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 3600000).toISOString();
 
@@ -82,32 +90,39 @@ export async function autoRespondToReviews(req: Request, res: Response) {
     for (const review of toProcess) {
       try {
         const isNegative = (review.rating || 5) <= 3;
-        const sectorCtx = getSectorContext(category);
+        const isNeutral  = (review.rating || 5) === 3 || (review.rating || 5) === 4;
         const sectorExample = getSectorReviewResponse(category, isNegative ? 'negative' : 'positive');
+
+        // Pick the right mission template based on sentiment
+        const missionTemplate = isNegative
+          ? negativeTemplate
+          : isNeutral
+          ? neutralTemplate
+          : positiveTemplate;
 
         // Generate Hebrew response
         const responseText = await invokeLLM({
           model: 'sonnet',
-          maxTokens: 350,
-          prompt: `You are a reputation management expert for small Israeli businesses. Write a review response in Hebrew at a level that turns a lost customer into a returning one and convinces new readers to choose the business.
+          maxTokens: 300,
+          profile,
+          prompt: `You are a reputation management expert for Israeli small businesses.
+Write a review response that turns ${isNegative ? 'a disappointed customer into a returning one' : 'a satisfied customer into a loyal ambassador'} — and convinces every new reader to choose this business.
 
-Business: "${name}" | Category: ${category}
-Reviewer name: ${review.reviewer_name || 'לקוח'}
+Reviewer: ${review.reviewer_name || 'לקוח'}
 Rating: ${review.rating || '?'}/5
-Review content: "${review.text.substring(0, 500)}"
+Review text: "${review.text.substring(0, 500)}"
 
-Style: ${toneInstruction}
-${sectorCtx}
-Example response for this sector: "${sectorExample}"
+Tone: ${toneInstruction}
+${missionTemplate ? `Sector-tuned style guide (DO NOT copy, use as tone/structure inspiration):\n"${missionTemplate}"` : `Sector example: "${sectorExample}"`}
 
 Critical rules:
-- Open with a personal address to the reviewer's name if known
-- Acknowledge the exact point raised — no generic response
-- Offer a specific solution or invite a direct conversation
-- 2-4 sentences only — focused and human
-- Do not make excuses, do not be defensive
-- Do not repeat the word "sorry" more than once
-Write ONLY the final response text. ALL string values must be in Hebrew.`,
+1. Open by addressing the reviewer by name (if given) — not "שלום" or "לקוח יקר"
+2. Reference ONE specific thing they mentioned — shows you actually read it
+3. ${isNegative ? 'Take ownership without excuses. Offer a specific fix or personal conversation (not a hotline)' : 'Express genuine gratitude + reinforce one specific value they mentioned'}
+4. 2-4 sentences ONLY — tight, human, specific
+5. NEVER use: "מצטערים לשמוע", "נשמח לסייע", "ברשותנו", "כרגיל" — these are generic and kill trust
+6. End with an invitation or a forward-looking note, not a corporate sign-off
+Write ONLY the final response text in Hebrew.`,
         });
 
         const suggestedResponse = typeof responseText === 'string'

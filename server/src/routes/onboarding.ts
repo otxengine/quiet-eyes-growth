@@ -9,6 +9,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
 import { invokeLLM } from '../lib/llm';
+import { generateAgentMissions } from '../lib/missionPlanner';
 import { createLogger } from '../infra/logger';
 
 const logger = createLogger('Onboarding');
@@ -91,6 +92,23 @@ Respond ONLY with valid JSON (no markdown, no explanation) matching this exact s
   } catch (err: any) {
     logger.warn(`parse-profile failed for ${businessProfileId}: ${err.message}`);
     // Non-fatal — onboarding can continue without the AI profile
+    return res.json({ ok: false, error: err.message });
+  }
+});
+
+// ── POST /api/onboarding/generate-missions ────────────────────────────────────
+// Called after parse-profile. Sends full profile to Claude Sonnet + GPT-4o
+// and generates per-agent mission plans stored in BusinessProfile.agent_missions.
+router.post('/generate-missions', async (req: Request, res: Response) => {
+  const { businessProfileId } = req.body;
+  if (!businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
+
+  try {
+    const missions = await generateAgentMissions(businessProfileId);
+    if (!missions) return res.json({ ok: false, error: 'LLM generation failed' });
+    return res.json({ ok: true, missions });
+  } catch (err: any) {
+    logger.warn(`generate-missions failed for ${businessProfileId}: ${err.message}`);
     return res.json({ ok: false, error: err.message });
   }
 });

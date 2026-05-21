@@ -532,6 +532,7 @@ router.post('/', async (req: Request, res: Response) => {
     `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS price_tier TEXT`,
     `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS customer_sources TEXT`,
     `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS sector_profile TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS agent_missions TEXT`,
   ];
 
   for (const sql of statements) {

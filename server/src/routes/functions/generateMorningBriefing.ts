@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { getAllMissions } from '../../lib/missionPlanner';
 
 // Process-level daily cache — resets on server restart (Render redeploys daily anyway)
 const _dailyCache = new Map<string, { result: any; date: string }>();
@@ -47,7 +48,18 @@ export async function generateMorningBriefing(req: Request, res: Response) {
     const weeklyScore = weeklyReports[0]?.weekly_score || null;
     const totalSources = reviews.length + leads.length + competitors.length + signals.length;
 
-    const prompt = `You are a business intelligence advisor for "${bp.name}", a ${bp.category} business in ${bp.city}.
+    // Mission intelligence: quick wins + weekly focus from onboarding plan
+    const allMissions = getAllMissions(bp);
+    const quickWins: string[] = allMissions?.quick_wins_he || [];
+    const weeklyFocus: string = allMissions?.weekly_focus_he || '';
+
+    const missionContext = [
+      quickWins.length ? `פעולות מהירות שהAI המליץ לעסק זה:\n${quickWins.map(w => `• ${w}`).join('\n')}` : '',
+      weeklyFocus ? `מיקוד השבוע לסקטור זה: ${weeklyFocus}` : '',
+    ].filter(Boolean).join('\n');
+
+    const prompt = `You are a senior business intelligence advisor for "${bp.name}".
+Generate a sharp, actionable morning briefing tailored to this specific business and sector.
 
 CURRENT DATA:
 - Negative reviews pending: ${negativeReviews.length}
@@ -55,18 +67,23 @@ CURRENT DATA:
 - Hot leads: ${hotLeads.length}
 - New leads today: ${newLeadsToday.length}
 - Competitor changes: ${changedCompetitors.map(c => `${c.name}: price change`).join('; ') || 'none'}
-- High-impact signals: ${highImpactSignals.slice(0, 3).map(s => s.summary).join('; ') || 'None'}
+- High-impact market signals: ${highImpactSignals.slice(0, 3).map(s => s.summary).join('; ') || 'None'}
 - Unread signals: ${signals.length}
 - Average review rating: ${avgRating || 'N/A'}
 - Weekly score: ${weeklyScore || 'N/A'}/10
-- Monthly revenue: ₪${monthRevenue > 0 ? monthRevenue.toLocaleString() : 0}
+- Monthly revenue closed: ₪${monthRevenue > 0 ? monthRevenue.toLocaleString() : 0}
+${missionContext ? `\n${missionContext}` : ''}
 
-Write a morning briefing — exactly 3-4 lines max.
-Each line starts with an emoji: 🔴 = urgent, 🟢 = opportunity, 🟡 = watch, 📊 = info
-Rules: Be SPECIFIC with real numbers. If nothing urgent, the text should say there is nothing urgent and the system is still monitoring.
-Each line max 60 chars. Link mapping: reviews→/reviews, leads→/leads, competitors→/competitors, signals→/signals
+Briefing rules:
+1. Exactly 3-4 lines. Each starts with: 🔴=urgent, 🟢=opportunity, 🟡=watch, 📊=info
+2. Use SPECIFIC numbers and names — not "מספר לידים" but "3 לידים חמים"
+3. If nothing urgent — say "הכל תחת שליטה, המערכת עוקבת" and highlight one opportunity instead
+4. Every line max 60 chars. Link mapping: reviews→/reviews, leads→/leads, competitors→/competitors, signals→/signals
+5. Lines must be relevant to THIS specific sector — not generic business advice
 
-Also generate today_actions: up to 3 concrete actions for TODAY based on the data.
+Also generate today_actions: up to 3 concrete actions for TODAY.
+Each must be a specific, actionable task (not "בדוק לידים" but "השב ל-3 לידים חמים שממתינים 2+ ימים").
+Use the mission's quick_wins and weekly_focus to suggest sector-specific priorities.
 Each: { "action": "specific action", "type": "review|lead|signal|competitor", "priority": 1|2|3 }
 priority 1=urgent (red), 2=important (orange), 3=helpful (green). Only include if real items exist.
 
@@ -96,7 +113,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       });
     }
 
-    const result = await invokeLLM({ model: 'haiku', maxTokens: 600, prompt, response_json_schema: { type: 'object' } });
+    const result = await invokeLLM({ model: 'sonnet', maxTokens: 700, skipCache: true, profile: bp, prompt, response_json_schema: { type: 'object' } });
 
     if (result && monthRevenue > 0 && !result.month_revenue) {
       result.month_revenue = monthRevenue;

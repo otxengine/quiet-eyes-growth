@@ -7,6 +7,7 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3002';
 
 const scanSteps = [
   { fn: 'parseProfile',            text: 'מנתח את פרופיל העסק שלך...',      narrative: 'מבין את הסקטור שלך לעומק...' },
+  { fn: 'generateMissions',        text: 'מתכנן משימות לכל הסוכנים...',     narrative: 'Claude + GPT-4o בונים תוכנית עבודה מותאמת...' },
   { fn: 'autoConfigOsint',         text: 'מגדיר מקורות מידע מותאמים...',    narrative: 'בוחר את המקורות הרלוונטיים לתחום שלך...' },
   { fn: 'learnFromWebsite',        text: 'לומד את האתר שלך...',             narrative: 'קורא את הדפים ומבין את הקול שלך...', requiresWebsite: true },
   { fn: 'collectWebSignals',       text: 'סורק את השוק ברשת...',            narrative: 'מחפש מה לקוחות מדברים על הסקטור שלך...' },
@@ -71,7 +72,7 @@ export default function OnboardingScanning() {
 
         try {
           if (step.fn === 'parseProfile') {
-            // Call our new parse-profile endpoint to build AI sector profile
+            // Step 1: parse free-text description into structured sector profile
             const key = sessionStorage.getItem('__user_token') || '';
             await fetch(`${SERVER_URL}/api/onboarding/parse-profile`, {
               method: 'POST',
@@ -85,6 +86,14 @@ export default function OnboardingScanning() {
                 price_tier:        onboardingData.price_tier,
                 customer_sources:  onboardingData.customer_sources,
               }),
+            }).catch(() => {}); // non-fatal
+          } else if (step.fn === 'generateMissions') {
+            // Step 2: Claude Sonnet + GPT-4o generate per-agent mission plans
+            const key = sessionStorage.getItem('__user_token') || '';
+            await fetch(`${SERVER_URL}/api/onboarding/generate-missions`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+              body: JSON.stringify({ businessProfileId: bp.id }),
             }).catch(() => {}); // non-fatal
           } else if (step.fn === 'learnFromWebsite') {
             await base44.functions.invoke('learnFromWebsite', { businessProfileId: bp.id, websiteUrl: bp.website_url });

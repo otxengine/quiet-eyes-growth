@@ -5,6 +5,7 @@ import { invokeLLM } from '../../lib/llm';
 import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
 import { insightAutoResolve } from './insightAutoResolve';
 import { getBusinessSectorContext } from '../../lib/sectorInsightConfig';
+import { getAgentMission, getAllMissions } from '../../lib/missionPlanner';
 import { getSectorContentStrategy } from '../../lib/sectorPrompts';
 import { getSectorContext as getAccumulatedSectorCtx } from '../../lib/sectorContext';
 
@@ -155,6 +156,21 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
     const sectorContentBlock = getSectorContentStrategy(profile.category);
     const accumulatedSectorCtx = await getAccumulatedSectorCtx(profile.category);
 
+    // Mission intelligence — if available, inject agent-specific priorities
+    const alertMission = getAgentMission<{
+      priority_alert_types?: string[];
+      opportunity_triggers_he?: string[];
+      ignore_signal_types?: string[];
+    }>(profile, 'generateProactiveAlerts');
+    const allMissions = getAllMissions(profile);
+    const missionBlock = alertMission ? `
+=== תכנית משימות מותאמת (נוצרה ע"י AI בעת ההרשמה) ===
+סוגי התראות בעדיפות: ${(alertMission.priority_alert_types || []).join(', ')}
+טריגרים להזדמנויות: ${(alertMission.opportunity_triggers_he || []).join(' | ')}
+סיכום עסק: ${allMissions?.business_summary || ''}
+${allMissions?.osint_persona ? `OSINT persona: ${allMissions.osint_persona}` : ''}
+=== סוף תכנית משימות ===` : '';
+
     const todayDate = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' });
 
     const isNewBusiness = recentReviews.length === 0 && hotLeads.length === 0 && signals.length === 0;
@@ -178,6 +194,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew.
 
 ${ctxPrompt}
 ${sectorInsightBlock}
+${missionBlock}
 
 ${sectorContentBlock}
 ${accumulatedSectorCtx ? `\n${accumulatedSectorCtx}` : ''}

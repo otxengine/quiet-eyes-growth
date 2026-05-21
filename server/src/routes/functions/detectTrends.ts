@@ -2,7 +2,8 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
-
+import { getAgentMission } from '../../lib/missionPlanner';
+import { filterSignals, getSectorProfile } from '../../lib/businessProfile';
 import { tavilyAdvancedSearch } from '../../lib/tavily';
 
 const SERP_API_KEY = process.env.SERP_API_KEY || '';
@@ -52,19 +53,43 @@ export async function detectTrends(req: Request, res: Response) {
 
     const { name, category, city } = profile;
 
-    // -- Web search for trend signals -----------------------------------------
-    const searchQueries = [
-      `${category} ${city} מגמות 2025`,
-      `${category} ביקוש עולה ישראל`,
-      `${category} טרנד רשתות חברתיות`,
-      `${category} ${city} חדשות שוק`,
-      `${category} ${city} עסקים חדשים`,
-      `${category} העדפות לקוחות שינויים`,
-    ];
+    // Mission intelligence: sector-specific signals to watch / ignore
+    const marketMission = getAgentMission<{
+      watch_signals_he?: string[];
+      ignore_signals_he?: string[];
+      market_context_he?: string;
+    }>(profile, 'runMarketIntelligence');
+    const sp = getSectorProfile(profile);
+
+    // Build search queries: mission watch_signals first, then sector-specific, then fallback
+    const searchQueries: string[] = [];
+
+    if (marketMission?.watch_signals_he?.length) {
+      // Primary: exact signals the LLM decided to watch at onboarding
+      for (const signal of marketMission.watch_signals_he) {
+        searchQueries.push(`${signal} ישראל 2025`);
+        searchQueries.push(`${signal} ${city} מגמה`);
+      }
+    }
+
+    if (sp?.relevant_topics?.length) {
+      // Secondary: sector-specific topics from AI-parsed profile
+      for (const topic of sp.relevant_topics.slice(0, 4)) {
+        searchQueries.push(`${topic} trend Israel 2025`);
+        searchQueries.push(`${topic} ${city} שינויים`);
+      }
+    } else {
+      // Fallback: generic category queries (only if no sector profile)
+      searchQueries.push(`${category} ${city} מגמות 2025`);
+      searchQueries.push(`${category} ביקוש עולה ישראל`);
+      searchQueries.push(`${category} טרנד רשתות חברתיות`);
+      searchQueries.push(`${category} ${city} חדשות שוק`);
+      searchQueries.push(`${category} העדפות לקוחות שינויים`);
+    }
 
     // ── custom_keywords: add each keyword as a trend search ──────────────────
     const { parseKeywords: _parseKw } = await import('../../lib/dataSources');
-    for (const kw of _parseKw(profile).slice(0, 8)) {
+    for (const kw of _parseKw(profile).slice(0, 4)) {
       searchQueries.push(`${kw} טרנד מגמה 2025`);
     }
 
@@ -104,13 +129,24 @@ export async function detectTrends(req: Request, res: Response) {
     const rawSignals = await prisma.rawSignal.findMany({
       where: { linked_business: businessProfileId },
       orderBy: { created_date: 'desc' },
-      take: 50,
+      take: 80,
     });
+
+    // Filter out irrelevant signals before analysis
+    const relevantSignals = filterSignals(rawSignals, profile);
+
+    // Build ignore list from missions for prompt
+    const ignoreSignalsBlock = marketMission?.ignore_signals_he?.length
+      ? `\nSignals to IGNORE (not relevant to this business): ${marketMission.ignore_signals_he.join(', ')}`
+      : '';
+    const marketContextBlock = marketMission?.market_context_he
+      ? `\nMarket context: ${marketMission.market_context_he}`
+      : '';
 
     const webContext = uniqueResults.slice(0, 12)
       .map(r => `[${r.url}]\n${(r.content || r.title || '').substring(0, 300)}`)
       .join('\n---\n');
-    const signalContext = rawSignals.slice(0, 20)
+    const signalContext = relevantSignals.slice(0, 20)
       .map(s => `[${s.signal_type}] ${(s.content || '').substring(0, 200)}`)
       .join('\n---\n');
 
@@ -118,16 +154,23 @@ export async function detectTrends(req: Request, res: Response) {
 
     // -- LLM analysis ---------------------------------------------------------
     const result = await invokeLLM({
+      profile,
+      model: 'sonnet',
+      maxTokens: 1200,
       prompt: `You are a market trends analyst for small businesses in Israel. Analyze only real data.
 Return ONLY valid JSON. ALL string values must be in Hebrew.
-
-Business: ${name}, ${category}, ${city}
+${marketContextBlock}
+${ignoreSignalsBlock}
 
 Data:
-${combinedContext.substring(0, 3500)}
+${combinedContext.substring(0, 3200)}
 
-Identify 2-4 pre-mainstream trends with evidence from the data only.
-Rule: include only trends with specific evidence. Skip trends without a source citation.
+Identify 2-4 pre-mainstream trends that are DIRECTLY relevant to this specific business's sector.
+Critical rules:
+1. Include ONLY trends with specific evidence from the data — cite the source
+2. Skip any trend that matches the "ignore" list above
+3. Every trend must have a concrete opportunity for THIS business specifically, not generic advice
+4. If a trend is in the data but doesn't relate to this business's sector — skip it
 
 Return ONLY valid JSON:
 {"trends":[{
@@ -139,7 +182,7 @@ Return ONLY valid JSON:
   "urgency":"high|medium|low",
   "estimated_days_until_peak":30,
   "action_platform":"instagram|facebook|google_ads|content|whatsapp",
-  "opportunity_for_business":"פועל + יעד — עד 6 מילים",
+  "opportunity_for_business":"פועל + יעד ספציפי לעסק זה — עד 8 מילים",
   "confidence":60-90,
   "source_type":"web|signal|both"
 }]}`,

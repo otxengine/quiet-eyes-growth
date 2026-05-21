@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { getAgentMission, getAllMissions } from '../../lib/missionPlanner';
 
 /**
  * lostLeadRecovery — finds leads that went cold and generates personalized recovery messages.
@@ -44,6 +45,17 @@ export async function lostLeadRecovery(req: Request, res: Response) {
       return res.json({ cold_leads_found: 0, items_created: 0, message: 'No cold leads' });
     }
 
+    // Mission intelligence: reactivation templates + value props
+    const nurtureMission = getAgentMission<{
+      tone_he?: string;
+      value_propositions_he?: string[];
+      best_contact_time_he?: string;
+    }>(profile, 'smartLeadNurture');
+    const allMissions = getAllMissions(profile);
+    const reactivationTemplate = allMissions?.content?.retention_message_templates_he?.reactivation || '';
+    const valueProps = nurtureMission?.value_propositions_he || [];
+    const missionTone = nurtureMission?.tone_he || profile.tone_preference || 'ידידותי';
+
     // Check for existing recovery alerts to avoid duplicates
     const existingAlerts = await prisma.proactiveAlert.findMany({
       where: { linked_business: businessProfileId, alert_type: 'lost_lead_recovery', is_dismissed: false, is_acted_on: false },
@@ -59,22 +71,33 @@ export async function lostLeadRecovery(req: Request, res: Response) {
 
       const daysSilent = Math.floor((Date.now() - new Date(lead.last_contact_at || lead.created_date).getTime()) / 86400000);
 
+      // Pick a value proposition relevant to this lead's service
+      const relevantValueProp = valueProps.find(v =>
+        v.toLowerCase().includes((lead.service_needed || '').toLowerCase().slice(0, 10))
+      ) || valueProps[0] || '';
+
       const result = await invokeLLM({
-        prompt: `You are a customer relations manager for the business "${profile.name}" (${profile.category}).
+        profile,
+        model: 'sonnet',
+        maxTokens: 250,
+        skipCache: true,
+        prompt: `You are a customer relations expert for the business "${profile.name}".
+A previously interested lead has gone quiet for ${daysSilent} days. Your job: write a re-engagement WhatsApp message that re-ignites their interest WITHOUT mentioning the silence or time passed.
 
-Cold lead: ${lead.name}
-Service requested: ${lead.service_needed || 'לא צוין'}
+Lead: ${lead.name} | Service: ${lead.service_needed || 'לא צוין'} | Score: ${lead.score || 'N/A'}/100
 Source: ${lead.source || 'לא ידוע'}
-Score: ${lead.score || 'N/A'}/100
-Days without contact: ${daysSilent}
-Notes: ${lead.notes?.substring(0, 100) || 'אין'}
-First attempt: ${lead.suggested_first_message?.substring(0, 80) || 'לא נשלח'}
+Notes: ${lead.notes?.substring(0, 80) || 'אין'}
 
-Write a short WhatsApp re-engagement message (40-60 words):
-- Do not mention that time has passed
-- Offer new value (discount/service/content)
-- End with an open question
-- Tone: ${profile.tone_preference || 'ידידותי'}
+Tone: ${missionTone}
+${relevantValueProp ? `Value to offer: ${relevantValueProp}` : ''}
+${reactivationTemplate ? `Style baseline (DO NOT copy, inspire only): "${reactivationTemplate}"` : ''}
+
+Message rules:
+1. Open with their name + reference to the specific thing they were looking for
+2. Offer new, concrete value — a recent development, seasonal timing, or relevant opportunity (specific to this sector)
+3. One open question that's easy to answer and doesn't feel like a sales pitch
+4. 40-60 words total. No mention of time passing. No "האם אתם עדיין מעוניינים".
+5. Must feel like a real person, not an automated message.
 
 Return ONLY valid JSON. ALL string values must be in Hebrew.
 Format: { "message": "...", "subject": "..." }`,

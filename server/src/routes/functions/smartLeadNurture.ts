@@ -4,8 +4,8 @@ import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
 import { executeOrQueue } from '../../services/execution/executeOrQueue';
-import { getSectorContext } from '../../lib/sectorPrompts';
 import { validateAction } from '../../lib/constraintValidator';
+import { getAgentMission, getAllMissions } from '../../lib/missionPlanner';
 
 /**
  * smartLeadNurture — follows up on contacted leads that haven't responded:
@@ -25,12 +25,41 @@ export async function smartLeadNurture(req: Request, res: Response) {
     const { name, category, city } = profile;
 
     const bizCtx = await loadBusinessContext(businessProfileId);
-    const tone = bizCtx?.preferredTone || profile.tone_preference || 'professional';
-    const toneInstruction = tone === 'casual'
+
+    // Mission Intelligence: read per-agent plan generated at onboarding
+    const nurtureMission = getAgentMission<{
+      tone_he?: string;
+      followup_interval_days?: number;
+      value_propositions_he?: string[];
+      best_contact_time_he?: string;
+    }>(profile, 'smartLeadNurture');
+    const allMissions = getAllMissions(profile);
+    const contentTemplates = allMissions?.content;
+
+    // Tone: mission > bizCtx > profile > default
+    const missionTone = nurtureMission?.tone_he || '';
+    const bizTone = bizCtx?.preferredTone || profile.tone_preference || 'professional';
+    const toneInstruction = missionTone
+      ? missionTone
+      : bizTone === 'casual'
       ? 'טון קליל וחברותי, קצר מאוד'
-      : tone === 'warm'
+      : bizTone === 'warm'
       ? 'טון חם, מבין ולא לוחץ'
       : 'טון מקצועי ותכליתי';
+
+    // Value propositions specific to this sector (from missions)
+    const valuePropsBlock = nurtureMission?.value_propositions_he?.length
+      ? `הצעות ערך לשלב בהודעה (בחר אחת שמתאימה להקשר):\n${nurtureMission.value_propositions_he.map(v => `• ${v}`).join('\n')}`
+      : '';
+
+    // WhatsApp template from content missions as example baseline
+    const whatsappTemplate = contentTemplates?.first_contact_templates_he?.whatsapp || '';
+    const templateBlock = whatsappTemplate
+      ? `תבנית בסיסית לסגנון הודעה (התאם לסיטואציה, אל תעתיק מילה במילה):\n"${whatsappTemplate}"`
+      : '';
+
+    // Best contact time from mission
+    const bestContactTime = nurtureMission?.best_contact_time_he || '';
 
     const fortyEightHoursAgo = new Date(Date.now() - 48 * 3600000);
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600000);
@@ -100,25 +129,29 @@ export async function smartLeadNurture(req: Request, res: Response) {
           const followupCount = (lead.followup_count || 0) + 1;
           const angle = followupCount === 1 ? 'הוספת ערך — שאלה קצרה' : 'הזכרה קצרה וידידותית';
 
-          const sectorCtx = getSectorContext(category);
           const messageResult = await invokeLLM({
             model: 'sonnet',
-            maxTokens: 250,
-            prompt: `You are a sales communication expert for Israeli small businesses. Write a follow-up WhatsApp message that will prompt ${customerName} to respond — human, non-pushy, interest-sparking.
+            maxTokens: 300,
+            profile,
+            prompt: `You are a sales communication expert for Israeli small businesses.
+Write a follow-up WhatsApp message that will prompt ${customerName} to respond — human, non-pushy, interest-sparking.
+The message must feel like it comes from a real person who genuinely wants to help, not a template.
 
-Business: "${name}" | Category: ${category} | City: ${city}
 Lead: ${customerName} | Interested in: ${serviceNeeded}
-Follow-up attempt number: ${followupCount} | Days since first contact: ${followupCount === 1 ? '2-3' : '5-7'}
+Follow-up attempt: ${followupCount} | Days since first contact: ${followupCount === 1 ? '2-3' : '5-7'}
 Required approach: ${angle}
 Style: ${toneInstruction}
-${sectorCtx}
+${valuePropsBlock}
+${templateBlock}
+${bestContactTime ? `שעת פנייה מומלצת לסקטור זה: ${bestContactTime}` : ''}
 
-Instructions:
-- Line 1: personal address by name + specific context (what they wanted)
-- Line 2: brief value — one focused reason to respond now (offer / availability / relevant update)
-- Line 3: one short easy-to-answer question (yes/no)
-- No pressure, no "just wanted to check in", no unnecessary emojis
-Write only the message text. ALL string values must be in Hebrew.`,
+Message rules:
+- Line 1: personal address by name + the specific thing they needed (not generic)
+- Line 2: one concrete reason to respond now — specific to THIS business's sector and value props
+- Line 3: one short, easy yes/no question that opens dialogue
+- Maximum 3 lines total. No pressure. No "just wanted to check in". No unnecessary emojis.
+- The message must reference the specific service, not just "our services"
+Write ONLY the message text in Hebrew.`,
           });
 
           const followupMsg = typeof messageResult === 'string' ? messageResult.trim() : '';

@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { cacheGet, cacheSet, TTL, hashPrompt } from './agentCache';
+import { buildAgentPromptContext } from './businessProfile';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' });
 
@@ -8,6 +9,19 @@ export interface LLMOptions {
   model?: string;    // 'haiku' | 'sonnet' | 'opus' or full model ID
   maxTokens?: number; // override default
   skipCache?: boolean; // set true only for real-time / user-facing calls
+  /**
+   * When provided, automatically prepends the AI-parsed sector + mission context block
+   * before the prompt. Every agent that passes profile gets deep business-awareness for free.
+   */
+  profile?: {
+    name: string;
+    category: string;
+    city: string;
+    description?: string | null;
+    sector_profile?: string | null;
+    business_goal?: string | null;
+    price_tier?: string | null;
+  };
 }
 
 const MODEL_MAP: Record<string, string> = {
@@ -31,26 +45,31 @@ const MAX_TOKENS_DEFAULT: Record<string, number> = {
  * Caches responses for 4 hours to avoid duplicate AI calls across pipeline runs.
  */
 export async function invokeLLM(options: { prompt: string } & LLMOptions): Promise<any> {
-  const { prompt, response_json_schema, model, maxTokens: maxTokensOverride, skipCache } = options;
+  const { prompt, response_json_schema, model, maxTokens: maxTokensOverride, skipCache, profile } = options;
 
   const modelKey = model || 'haiku'; // default to Haiku (cheapest)
   const modelId = MODEL_MAP[modelKey] || model || 'claude-haiku-4-5-20251001';
   const maxTokens = maxTokensOverride ?? MAX_TOKENS_DEFAULT[modelKey] ?? 350;
 
+  // Auto-inject sector + mission context block when profile is provided
+  const finalPrompt = profile
+    ? `${buildAgentPromptContext(profile)}\n\n${prompt}`
+    : prompt;
+
   // ── LLM response cache (4h TTL) ───────────────────────────────────────────
   if (!skipCache) {
-    const cacheKey = `llm:${modelKey}:${hashPrompt(prompt)}`;
+    const cacheKey = `llm:${modelKey}:${hashPrompt(finalPrompt)}`;
     const cached = cacheGet(cacheKey);
     if (cached !== null) {
       return cached;
     }
 
-    const result = await _invokeLLMRaw(prompt, modelId, maxTokens, response_json_schema);
+    const result = await _invokeLLMRaw(finalPrompt, modelId, maxTokens, response_json_schema);
     cacheSet(cacheKey, result, TTL.LLM_RESPONSE);
     return result;
   }
 
-  return _invokeLLMRaw(prompt, modelId, maxTokens, response_json_schema);
+  return _invokeLLMRaw(finalPrompt, modelId, maxTokens, response_json_schema);
 }
 
 async function _invokeLLMRaw(
