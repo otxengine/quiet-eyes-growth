@@ -24,6 +24,7 @@ import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { refreshMissionsIfStale } from '../../lib/missionPlanner';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
@@ -43,13 +44,22 @@ export async function updateSectorKnowledge(req: Request, res: Response) {
 
     if (allProfiles.length === 0) return res.json({ updated: 0, message: 'No profiles' });
 
-    // Group by sector
+    // Group by sub_sector (from AI-parsed sector_profile) when available,
+    // fall back to category. This ensures UI/UX designer and graphic designer
+    // don't share the same SectorKnowledge bucket.
     const bySector = new Map<string, typeof allProfiles>();
     for (const p of allProfiles) {
       if (!p.category) continue;
-      const list = bySector.get(p.category) || [];
+      let sectorKey = p.category;
+      if (p.sector_profile) {
+        try {
+          const sp = JSON.parse(p.sector_profile);
+          if (sp.sub_sector) sectorKey = sp.sub_sector;
+        } catch {}
+      }
+      const list = bySector.get(sectorKey) || [];
       list.push(p);
-      bySector.set(p.category, list);
+      bySector.set(sectorKey, list);
     }
 
     let totalUpdated = 0;
@@ -272,6 +282,7 @@ Return ONLY valid JSON:
       });
 
       // ── Upsert sector record ──────────────────────────────────────────────
+      // Use sub_sector as the sector key for more precise matching
       const existing = await prisma.sectorKnowledge.findFirst({ where: { sector } });
 
       const upsertData = {
@@ -291,13 +302,22 @@ Return ONLY valid JSON:
           data: Object.fromEntries(Object.entries(upsertData).filter(([, v]) => v !== undefined)),
         });
       } else {
+        // Determine human-readable label for the sector
+        const firstProfile = sectorProfiles[0];
+        let sectorLabel = sector;
+        if (firstProfile?.sector_profile) {
+          try {
+            const sp = JSON.parse(firstProfile.sector_profile);
+            sectorLabel = sp.sector_label_he || sector;
+          } catch {}
+        }
         await prisma.sectorKnowledge.create({
           data: {
             sector,
-            region: sectorProfiles[0]?.city || 'ישראל',
+            region: firstProfile?.city || 'ישראל',
             avg_rating:             avgRating ? Math.round(avgRating * 10) / 10 : null,
             common_complaints:      llmResult ? toStr(llmResult.common_complaints) : '',
-            trending_services:      llmResult ? toStr(llmResult.trending_services) : '',
+            trending_services:      llmResult ? toStr(llmResult.trending_services) : sectorLabel,
             price_range:            llmResult?.price_range || '',
             competitor_count:       competitors.length,
             total_signals_analyzed: marketSignals.length,
@@ -313,6 +333,14 @@ Return ONLY valid JSON:
         `conversion=${conversionRate}%`
       );
       totalUpdated++;
+
+      // ── Propagate new sector wisdom: refresh stale missions for all businesses ──
+      // Each business whose missions are >7 days old (or never had sector wisdom)
+      // gets a silent background refresh so they benefit from cross-business learning.
+      // Fire-and-forget — don't block the sector update response.
+      for (const p of sectorProfiles) {
+        refreshMissionsIfStale(p.id).catch(() => {});
+      }
     }
 
     if (businessProfileId) setLastRun(businessProfileId, 'updateSectorKnowledge');

@@ -200,6 +200,28 @@ ${spBlock}
 }`;
 }
 
+// ── Build sector wisdom block from cross-business learning ───────────────────
+function buildSectorWisdomBlock(wisdom: any): string {
+  if (!wisdom) return '';
+  const parts: string[] = ['=== למידה צולבת מעסקים דומים בסקטור (SectorKnowledge) ==='];
+  if (wisdom.winning_patterns)    parts.push(`דפוסי הצלחה שחוזרים: ${wisdom.winning_patterns}`);
+  if (wisdom.risk_patterns)       parts.push(`דפוסי כישלון נפוצים: ${wisdom.risk_patterns}`);
+  if (wisdom.key_insights)        parts.push(`תובנות מפתח: ${wisdom.key_insights}`);
+  if (wisdom.top_lead_sources?.length)
+    parts.push(`מקורות הלידים שהובילו לסגירה: ${wisdom.top_lead_sources.join(', ')}`);
+  if (wisdom.top_closed_services?.length)
+    parts.push(`שירותים שנסגרו הכי הרבה: ${wisdom.top_closed_services.join(', ')}`);
+  if (wisdom.peak_demand)         parts.push(`שיא הביקוש: ${wisdom.peak_demand}`);
+  if (wisdom.best_content_types)  parts.push(`תוכן שעובד בסקטור: ${wisdom.best_content_types}`);
+  if (wisdom.top_alert_type)      parts.push(`סוג ההתראה שעסקים מגיבים לו הכי הרבה: ${wisdom.top_alert_type}`);
+  if (wisdom.lead_conversion_rate_pct !== undefined)
+    parts.push(`אחוז סגירה ממוצע בסקטור: ${wisdom.lead_conversion_rate_pct}%`);
+  if (wisdom.avg_competitor_rating)
+    parts.push(`דירוג מתחרים ממוצע: ${wisdom.avg_competitor_rating}⭐`);
+  parts.push('=== סוף למידה צולבת ===');
+  return parts.join('\n');
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 export async function generateAgentMissions(businessProfileId: string): Promise<any | null> {
   const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
@@ -207,18 +229,41 @@ export async function generateAgentMissions(businessProfileId: string): Promise<
 
   const sp = profile.sector_profile ? (() => { try { return JSON.parse(profile.sector_profile!); } catch { return null; } })() : null;
 
-  logger.info(`Generating agent missions for ${businessProfileId} (${profile.name})`);
+  // ── Load cross-business SectorKnowledge to enrich missions ──────────────
+  // New businesses immediately benefit from patterns learned across similar businesses.
+  const subSector = sp?.sub_sector || profile.category;
+  const sectorKnowledge = await prisma.sectorKnowledge.findFirst({
+    where: {
+      OR: [
+        { sector: subSector },
+        { sector: profile.category },
+      ],
+    },
+    orderBy: { last_updated: 'desc' },
+  });
+  const rawWisdom = sectorKnowledge?.winner_lead_dna
+    ? (() => { try { return JSON.parse(sectorKnowledge.winner_lead_dna!); } catch { return null; } })()
+    : null;
+  const sectorWisdomBlock = buildSectorWisdomBlock(rawWisdom);
+
+  logger.info(`Generating agent missions for ${businessProfileId} (${profile.name})${sectorKnowledge ? ` — sector wisdom from ${rawWisdom?.businesses_analyzed || '?'} businesses` : ''}`);
+
+  // Inject sector wisdom into both prompts
+  const strategicPrompt = sectorWisdomBlock
+    ? `${buildStrategicPrompt(profile, sp)}\n\n${sectorWisdomBlock}`
+    : buildStrategicPrompt(profile, sp);
+  const contentPrompt = buildContentPrompt(profile, sp);
 
   // ── Run Claude Sonnet + GPT-4o in parallel ───────────────────────────────
   const [strategicResult, contentResult] = await Promise.allSettled([
     invokeLLM({
-      prompt: buildStrategicPrompt(profile, sp),
+      prompt: strategicPrompt,
       model: 'sonnet',
       maxTokens: 2500,
       skipCache: true,
       response_json_schema: { type: 'object' },
     }),
-    callGPT4o(buildContentPrompt(profile, sp), 2000),
+    callGPT4o(contentPrompt, 2000),
   ]);
 
   const strategic = strategicResult.status === 'fulfilled' ? strategicResult.value : null;
@@ -231,9 +276,11 @@ export async function generateAgentMissions(businessProfileId: string): Promise<
 
   // ── Merge both layers ──────────────────────────────────────────────────────
   const missions = {
-    generated_at:    new Date().toISOString(),
-    business_id:     businessProfileId,
-    business_name:   profile.name,
+    generated_at:        new Date().toISOString(),
+    business_id:         businessProfileId,
+    business_name:       profile.name,
+    sector_wisdom_used:  !!(rawWisdom && rawWisdom.businesses_analyzed > 0),
+    sector_businesses_analyzed: rawWisdom?.businesses_analyzed ?? 0,
     // Strategic layer (Claude Sonnet)
     ...(strategic || {}),
     // Content layer (GPT-4o) — nested under 'content'
@@ -248,6 +295,52 @@ export async function generateAgentMissions(businessProfileId: string): Promise<
 
   logger.info(`Agent missions saved for ${businessProfileId}`);
   return missions;
+}
+
+/**
+ * Refresh missions if they are stale (>7 days old) or if new sector wisdom
+ * is available that wasn't used when missions were last generated.
+ * Called by updateSectorKnowledge after cross-business learning runs.
+ * Returns true if missions were refreshed.
+ */
+export async function refreshMissionsIfStale(businessProfileId: string): Promise<boolean> {
+  const profile = await prisma.businessProfile.findUnique({
+    where: { id: businessProfileId },
+    select: { id: true, name: true, category: true, agent_missions: true, sector_profile: true },
+  });
+  if (!profile) return false;
+
+  const STALE_DAYS = 7;
+  const staleThreshold = new Date(Date.now() - STALE_DAYS * 24 * 3600 * 1000).toISOString();
+
+  // Check staleness
+  let needsRefresh = false;
+  if (!profile.agent_missions) {
+    needsRefresh = true; // never generated
+  } else {
+    try {
+      const existing = JSON.parse(profile.agent_missions);
+      const generatedAt = existing.generated_at || '';
+      if (generatedAt < staleThreshold) needsRefresh = true; // too old
+
+      // Also refresh if missions were generated WITHOUT sector wisdom but now wisdom exists
+      const sp = profile.sector_profile ? (() => { try { return JSON.parse(profile.sector_profile!); } catch { return null; } })() : null;
+      const subSector = sp?.sub_sector || profile.category;
+      const sectorKnowledge = await prisma.sectorKnowledge.findFirst({
+        where: { OR: [{ sector: subSector }, { sector: profile.category }] },
+        orderBy: { last_updated: 'desc' },
+      });
+      if (sectorKnowledge && !existing.sector_wisdom_used) needsRefresh = true;
+      // Refresh if sector was updated after missions were generated
+      if (sectorKnowledge && sectorKnowledge.last_updated > generatedAt) needsRefresh = true;
+    } catch { needsRefresh = true; }
+  }
+
+  if (!needsRefresh) return false;
+
+  logger.info(`Refreshing stale missions for ${businessProfileId} (${profile.name})`);
+  const result = await generateAgentMissions(businessProfileId);
+  return !!result;
 }
 
 /**
