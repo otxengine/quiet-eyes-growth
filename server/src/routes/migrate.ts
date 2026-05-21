@@ -27,7 +27,7 @@ router.post('/', async (req: Request, res: Response) => {
     // hyper_local_events
     `CREATE TABLE IF NOT EXISTS hyper_local_events (
       id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-      business_id          UUID        NOT NULL REFERENCES business_profiles(id),
+      business_id          TEXT        NOT NULL REFERENCES business_profiles(id),
       event_name           TEXT        NOT NULL,
       event_type           TEXT        NOT NULL CHECK (event_type IN ('concert','sports','roadwork','market','festival','other')),
       venue_name           TEXT,
@@ -47,7 +47,7 @@ router.post('/', async (req: Request, res: Response) => {
     // demand_forecasts
     `CREATE TABLE IF NOT EXISTS demand_forecasts (
       id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-      business_id           UUID        NOT NULL REFERENCES business_profiles(id),
+      business_id           TEXT        NOT NULL REFERENCES business_profiles(id),
       forecast_date         DATE        NOT NULL,
       hour_of_day           INT         CHECK (hour_of_day BETWEEN 0 AND 23),
       demand_index          NUMERIC(5,2),
@@ -65,7 +65,7 @@ router.post('/', async (req: Request, res: Response) => {
     // resource_arbitrage_actions
     `CREATE TABLE IF NOT EXISTS resource_arbitrage_actions (
       id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-      business_id          UUID        NOT NULL REFERENCES business_profiles(id),
+      business_id          TEXT        NOT NULL REFERENCES business_profiles(id),
       trigger_type         TEXT        NOT NULL CHECK (trigger_type IN ('low_demand','weather','competitor_gap','inventory')),
       trigger_description  TEXT        NOT NULL,
       recommended_action   TEXT        NOT NULL,
@@ -100,7 +100,7 @@ router.post('/', async (req: Request, res: Response) => {
     // synthetic_personas (without pgvector column — use TEXT for embedding to avoid extension dependency)
     `CREATE TABLE IF NOT EXISTS synthetic_personas (
       id                        UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-      business_id               UUID        NOT NULL REFERENCES business_profiles(id),
+      business_id               TEXT        NOT NULL REFERENCES business_profiles(id),
       persona_name              TEXT        NOT NULL,
       demographic_profile       JSONB       NOT NULL DEFAULT '{}',
       behavioral_traits         JSONB       NOT NULL DEFAULT '{}',
@@ -129,7 +129,7 @@ router.post('/', async (req: Request, res: Response) => {
     // business_events (used by EventImpactEngine)
     `CREATE TABLE IF NOT EXISTS business_events (
       id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-      business_id   UUID        NOT NULL REFERENCES business_profiles(id),
+      business_id   TEXT        NOT NULL REFERENCES business_profiles(id),
       event_type    TEXT        NOT NULL,
       event_data    JSONB       NOT NULL DEFAULT '{}',
       occurred_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
