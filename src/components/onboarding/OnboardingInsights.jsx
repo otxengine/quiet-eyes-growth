@@ -1,67 +1,174 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { AlertTriangle, Target, TrendingUp, ArrowLeft, Lightbulb } from 'lucide-react';
+import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 
-const categoryConfig = {
-  threat: { icon: AlertTriangle, borderColor: 'border-l-[#dc2626]' },
-  opportunity: { icon: Target, borderColor: 'border-l-[#10b981]' },
-  trend: { icon: TrendingUp, borderColor: 'border-l-[#d97706]' },
+const GOAL_LABELS = {
+  new_customers:     { emoji: '🎯', text: 'להביא לקוחות חדשים' },
+  retain:            { emoji: '🔁', text: 'לשמר לקוחות קיימים' },
+  more_per_customer: { emoji: '📈', text: 'להרוויח יותר מכל לקוח' },
+  reviews:           { emoji: '⭐', text: 'לשפר דירוגים וביקורות' },
 };
+
+const ALERT_CTA = {
+  review:     { label: 'הגב לביקורת', path: '/reviews',     bg: '#dc2626' },
+  lead:       { label: 'פתח ליד',     path: '/leads',       bg: '#059669' },
+  competitor: { label: 'בדוק מתחרה', path: '/competitors', bg: '#d97706' },
+  trend:      { label: 'ראה מגמה',   path: '/intelligence', bg: '#6366f1' },
+};
+const DEFAULT_ALERT_CTA = { label: 'ראה פרטים', path: '/signals', bg: '#6366f1' };
+
+const SIGNAL_STYLE = {
+  threat:      { border: 'border-red-200',     bg: 'bg-red-50',     label: 'ראה מתחרים',   path: '/competitors' },
+  opportunity: { border: 'border-emerald-200', bg: 'bg-emerald-50', label: 'גלה הזדמנות',  path: '/leads' },
+  trend:       { border: 'border-amber-200',   bg: 'bg-amber-50',   label: 'גלה מגמה',     path: '/intelligence' },
+};
+const DEFAULT_SIGNAL_STYLE = { border: 'border-[#e5e7eb]', bg: 'bg-white', label: 'ראה פרטים', path: '/signals' };
 
 export default function OnboardingInsights() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { businessProfile, signals } = location.state || {};
+  const { businessProfile, signals = [], proactiveAlerts = [] } = location.state || {};
 
-  const handleContinue = async () => {
+  if (!businessProfile) { navigate('/onboarding'); return null; }
+
+  const completeOnboarding = async (targetPath = '/') => {
     if (businessProfile?.id) {
       await base44.entities.BusinessProfile.update(businessProfile.id, { onboarding_completed: true });
-      try { base44.functions.invoke('runFullScan', { businessProfileId: businessProfile.id }, 360000); } catch (e) {}
+      try { base44.functions.invoke('runFullScan', { businessProfileId: businessProfile.id }, 360000); } catch (_) {}
     }
-    // Persist across navigation and page refresh until AppLayout confirms the profile loaded
     sessionStorage.setItem('otx_just_onboarded', '1');
-    navigate('/', { state: { fromOnboarding: true } });
+    navigate(targetPath, { state: { fromOnboarding: true } });
   };
 
-  if (!businessProfile || !signals) { navigate('/onboarding'); return null; }
+  const goal = GOAL_LABELS[businessProfile.business_goal] || { emoji: '🚀', text: 'צמיחה עסקית' };
+
+  // Parse quick wins from agent_missions
+  let quickWins = [];
+  try {
+    const missions = JSON.parse(businessProfile.agent_missions || '{}');
+    quickWins = (missions.quick_wins_he || []).slice(0, 3);
+  } catch (_) {}
+
+  const topAlerts = (proactiveAlerts || []).filter(a => !a.is_dismissed).slice(0, 3);
+  const topSignals = (signals || []).slice(0, 3);
 
   return (
-    <div className="min-h-screen bg-white py-8 px-4">
-      <div className="max-w-2xl mx-auto">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-[#111111] mb-2">מה גילינו על השוק שלך</h1>
-          <p className="text-[#999999] text-sm">{businessProfile.name} · {businessProfile.category} · {businessProfile.city}</p>
+    <div className="min-h-screen bg-[#f5f5f5] py-8 px-4" dir="rtl">
+      <div className="max-w-lg mx-auto space-y-4">
+
+        {/* ── Header ─────────────────────────────────────────────── */}
+        <div className="text-center pb-2">
+          <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-full px-4 py-1.5 mb-4">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <span className="text-[13px] font-medium text-emerald-700">הסריקה הושלמה בהצלחה</span>
+          </div>
+          <h1 className="text-[22px] font-bold text-[#111111] mb-1">התוכנית שלך מוכנה</h1>
+          <p className="text-[13px] text-[#888888]">{businessProfile.name} · {businessProfile.city}</p>
         </div>
 
-        <div className="space-y-4 mb-8">
-          {signals.map((signal, index) => {
-            const config = categoryConfig[signal.category] || categoryConfig.trend;
-            const Icon = config.icon;
-            return (
-              <div key={signal.id || index}
-                className={`bg-white rounded-[10px] border border-[#f0f0f0] border-l-[2.5px] ${config.borderColor} p-5 card-enter`}
-                style={{ animationDelay: `${index * 0.15}s` }}>
-                <div className="flex gap-4">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-[14px] font-medium text-[#222222] mb-1.5">{signal.summary}</h3>
-                    {signal.recommended_action && (
-                      <p className="text-[12px] text-[#999999] leading-relaxed mb-2">{signal.recommended_action}</p>
-                    )}
-                    <div className="flex items-center justify-between mt-3">
-                      <span className="px-2.5 py-1 bg-[#fafafa] rounded text-[11px] text-[#999999]">ביטחון: {signal.confidence}%</span>
-                    </div>
-                  </div>
+        {/* ── Goal banner ─────────────────────────────────────────── */}
+        <div className="bg-[#111111] text-white rounded-2xl px-5 py-4 flex items-center gap-4">
+          <span className="text-3xl leading-none">{goal.emoji}</span>
+          <div>
+            <p className="text-[10px] text-white/40 uppercase tracking-wider mb-0.5">המטרה שהגדרת</p>
+            <p className="text-[16px] font-semibold">{goal.text}</p>
+          </div>
+        </div>
+
+        {/* ── Quick wins from agent missions ──────────────────────── */}
+        {quickWins.length > 0 && (
+          <div>
+            <p className="text-[11px] font-semibold text-[#aaaaaa] uppercase tracking-wider px-1 mb-2">
+              3 פעולות שיקדמו אותך הכי מהר
+            </p>
+            <div className="bg-white rounded-2xl border border-[#eeeeee] overflow-hidden">
+              {quickWins.map((win, i) => (
+                <div
+                  key={i}
+                  className={`flex items-start gap-3 px-4 py-3.5 ${i < quickWins.length - 1 ? 'border-b border-[#f4f4f4]' : ''}`}
+                >
+                  <span className="w-6 h-6 rounded-full bg-[#111111] text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                    {i + 1}
+                  </span>
+                  <p className="text-[13px] text-[#222222] leading-snug">{win}</p>
                 </div>
-              </div>
-            );
-          })}
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Proactive alerts with direct CTAs ───────────────────── */}
+        {topAlerts.length > 0 && (
+          <div>
+            <p className="text-[11px] font-semibold text-[#aaaaaa] uppercase tracking-wider px-1 mb-2">
+              פעולות שמחכות לך עכשיו
+            </p>
+            <div className="space-y-2">
+              {topAlerts.map((alert, i) => {
+                const cta = ALERT_CTA[alert.alert_type] || DEFAULT_ALERT_CTA;
+                return (
+                  <div key={alert.id || i} className="bg-white border border-[#eeeeee] rounded-2xl p-4">
+                    <p className="text-[14px] font-semibold text-[#111111] mb-1">{alert.title}</p>
+                    {alert.description && (
+                      <p className="text-[12px] text-[#888888] leading-relaxed mb-3">{alert.description}</p>
+                    )}
+                    <button
+                      onClick={() => completeOnboarding(cta.path)}
+                      className="text-[12px] font-semibold text-white px-4 py-2 rounded-lg transition-opacity hover:opacity-90 flex items-center gap-1.5"
+                      style={{ backgroundColor: cta.bg }}
+                    >
+                      {cta.label} <ArrowLeft className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Market signals ───────────────────────────────────────── */}
+        {topSignals.length > 0 && (
+          <div>
+            <p className="text-[11px] font-semibold text-[#aaaaaa] uppercase tracking-wider px-1 mb-2">
+              מה הסוכן גילה על השוק שלך
+            </p>
+            <div className="space-y-2">
+              {topSignals.map((signal, i) => {
+                const style = SIGNAL_STYLE[signal.category] || DEFAULT_SIGNAL_STYLE;
+                return (
+                  <div key={signal.id || i} className={`border ${style.border} ${style.bg} rounded-2xl p-4`}>
+                    <p className="text-[13px] font-semibold text-[#111111] mb-1">{signal.summary}</p>
+                    {signal.recommended_action && (
+                      <p className="text-[12px] text-[#555555] leading-relaxed mb-3">{signal.recommended_action}</p>
+                    )}
+                    <button
+                      onClick={() => completeOnboarding(style.path)}
+                      className="text-[12px] font-semibold text-[#111111] underline underline-offset-2 hover:no-underline transition-all"
+                    >
+                      {style.label} ←
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Main CTA ─────────────────────────────────────────────── */}
+        <div className="pt-2 pb-6">
+          <button
+            onClick={() => completeOnboarding('/')}
+            className="w-full h-14 text-[14px] font-semibold bg-[#111111] hover:bg-[#2a2a2a] text-white rounded-2xl transition-colors flex items-center justify-center gap-2"
+          >
+            כניסה למרכז הפיקוד
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <p className="text-[11px] text-[#bbbbbb] text-center mt-3">
+            הסוכנים ימשיכו לעבוד ברקע — תקבל עדכונים בזמן אמת
+          </p>
         </div>
 
-        <button onClick={handleContinue}
-          className="w-full h-12 text-[13px] font-semibold bg-[#111111] hover:bg-[#333333] text-white rounded-md transition-colors flex items-center justify-center gap-2">
-          המשך למרכז הפיקוד <ArrowLeft className="w-5 h-5" />
-        </button>
       </div>
     </div>
   );

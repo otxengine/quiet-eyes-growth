@@ -106,10 +106,18 @@ export default function OnboardingScanning() {
         setCompletedSteps(prev => [...prev, i]);
       }
 
-      // Get generated signals for insights page
+      // Get generated signals, alerts, and fresh profile for First Value Screen
+      let proactiveAlerts = [];
+      let freshProfile = bp;
       try {
-        const allSignals = await base44.entities.MarketSignal.filter({ linked_business: bp.id }, '-detected_at', 10);
-        signals = allSignals.slice(0, 5);
+        const [allSignals, alertsRes, profileRes] = await Promise.all([
+          base44.entities.MarketSignal.filter({ linked_business: bp.id }, '-detected_at', 10),
+          base44.entities.ProactiveAlert.filter({ linked_business: bp.id }, '-created_date', 4),
+          base44.entities.BusinessProfile.get(bp.id),
+        ]);
+        signals = (allSignals || []).slice(0, 5);
+        proactiveAlerts = alertsRes || [];
+        if (profileRes) freshProfile = profileRes;
       } catch (_) {}
 
       // Fallback if no signals generated
@@ -125,7 +133,7 @@ export default function OnboardingScanning() {
         }
       }
 
-      navigate('/onboarding/insights', { state: { businessProfile: bp, signals } });
+      navigate('/onboarding/insights', { state: { businessProfile: freshProfile, signals, proactiveAlerts } });
     };
 
     run();
