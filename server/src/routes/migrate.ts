@@ -526,6 +526,12 @@ router.post('/', async (req: Request, res: Response) => {
       created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
     )`,
     `CREATE INDEX IF NOT EXISTS idx_churn_risk_biz ON otx_churn_risk_logs(business_id, created_at DESC)`,
+
+    // Onboarding intelligence columns (added 2026-05)
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS business_goal TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS price_tier TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS customer_sources TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS sector_profile TEXT`,
   ];
 
   for (const sql of statements) {

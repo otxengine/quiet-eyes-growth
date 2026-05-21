@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
-import { getSectorInsightBlock } from '../../lib/sectorInsightConfig';
+import { getBusinessSectorContext } from '../../lib/sectorInsightConfig';
 import { getSectorContext } from '../../lib/sectorContext';
 
 /**
@@ -269,7 +269,7 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
       positiveThemes.length > 0 ? section('חוזקות שמוזכרות', positiveThemes) : '',
     ].filter(Boolean).join('\n');
 
-    const sectorBlock = getSectorInsightBlock(profile.category);
+    const sectorBlock = getBusinessSectorContext(profile);
 
     const totalSignals = tiktokTrends.length + viralSignals.length + earlyTrends.length +
       eventSignals.length + competitorMoves.length + demandGaps.length +

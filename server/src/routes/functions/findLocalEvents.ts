@@ -324,12 +324,24 @@ ${weatherContext.slice(0, 600)}
     });
     const existingNames = new Set(existing.map(s => s.summary.toLowerCase()));
 
+    // Parse sector_profile to determine which event types are irrelevant
+    let irrelevantEventTypes: string[] = [];
+    if (profile.sector_profile) {
+      try {
+        const sp = JSON.parse(profile.sector_profile);
+        irrelevantEventTypes = sp.irrelevant_signal_types || [];
+      } catch {}
+    }
+
     let created = 0;
     for (const ev of events.slice(0, 8)) {
       if (existingNames.has(ev.name.toLowerCase())) continue;
 
       // Skip past events
       if (ev.date_iso && new Date(ev.date_iso).getTime() < Date.now() - 86400000) continue;
+
+      // Skip event types that are irrelevant for this business's sector
+      if (irrelevantEventTypes.includes(ev.type) || irrelevantEventTypes.includes('local_event')) continue;
 
       const icon = TYPE_ICON[ev.type] || '📍';
       const daysAway = ev.date_iso

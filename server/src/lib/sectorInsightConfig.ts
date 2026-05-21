@@ -361,6 +361,85 @@ function normalizeSector(category: string): string {
 }
 
 /**
+ * getBusinessSectorContext — unified entry point for all agents.
+ * If the business has an AI-parsed sector_profile (from onboarding), use it.
+ * Otherwise fall back to getSectorInsightBlock(category).
+ *
+ * Pass the BusinessProfile object (or a subset with category + sector_profile).
+ */
+export function getBusinessSectorContext(profile: {
+  category: string;
+  sector_profile?: string | null;
+  description?: string | null;
+  business_goal?: string | null;
+  price_tier?: string | null;
+}): string {
+  if (profile.sector_profile) {
+    try {
+      const sp = JSON.parse(profile.sector_profile);
+      return buildAISectorBlock(sp, profile.category);
+    } catch {
+      // fall through to regex-based
+    }
+  }
+  return getSectorInsightBlock(profile.category);
+}
+
+/**
+ * Build a rich sector context block from the AI-parsed sector_profile JSON.
+ */
+function buildAISectorBlock(sp: Record<string, any>, rawCategory: string): string {
+  const key = sp.sector_key || normalizeSector(rawCategory);
+  const cfg = SECTOR_INSIGHT_MAP[key] || DEFAULT_CONFIG;
+  const currentMonth = new Date().getMonth();
+  const seasonalNow = cfg.seasonalTriggers[currentMonth];
+
+  const lines: string[] = [
+    `=== פרופיל עסקי מדויק: ${sp.sector_label_he || rawCategory} ===`,
+    `תת-סקטור: ${sp.sub_sector || 'לא מוגדר'}`,
+    `סוג עסק: ${sp.business_type || 'לא מוגדר'} | מודל: ${sp.service_model || 'לא מוגדר'}`,
+    `קהל יעד: ${sp.target_audience_he || ''}`,
+    `הקשר מחיר: ${sp.price_context_he || ''}`,
+  ];
+
+  if (sp.relevant_topics?.length) {
+    lines.push(`\nנושאים רלוונטיים לעסק זה (חפש תובנות על):`);
+    sp.relevant_topics.slice(0, 6).forEach((t: string) => lines.push(`  • ${t}`));
+  }
+
+  if (sp.irrelevant_topics?.length) {
+    lines.push(`\n[חשוב מאוד] נושאים לא רלוונטיים — אל תכלול תובנות על:`);
+    sp.irrelevant_topics.slice(0, 6).forEach((t: string) => lines.push(`  ✗ ${t}`));
+  }
+
+  if (sp.content_themes_he?.length) {
+    lines.push(`\nנושאי תוכן שמדבר לקהל שלהם:`);
+    sp.content_themes_he.forEach((t: string) => lines.push(`  → ${t}`));
+  }
+
+  if (sp.competitor_type_he) {
+    lines.push(`\nסוג מתחרים: ${sp.competitor_type_he}`);
+  }
+
+  if (sp.key_trust_signals_he?.length) {
+    lines.push(`\nמה בונה אמון בסקטור זה: ${sp.key_trust_signals_he.join(' | ')}`);
+  }
+
+  if (seasonalNow) {
+    lines.push(`\nטריגר עונתי עכשיו: ${seasonalNow}`);
+  }
+
+  if (cfg.quickWinTriggers.length) {
+    lines.push(`\nטריגרים לתובנה מיידית (מהכללת סקטור):`);
+    cfg.quickWinTriggers.slice(0, 3).forEach(t => lines.push(`  → ${t}`));
+  }
+
+  lines.push(`\nסוגי התראות בעדיפות: ${cfg.topAlertTypes.join(', ')}`);
+  lines.push(`=== סוף פרופיל ===`);
+  return lines.join('\n');
+}
+
+/**
  * Returns sector-specific context block to inject into generateProactiveAlerts prompt.
  * Includes: top alert types, seasonal triggers for current month, quick-win triggers,
  * and two concrete few-shot examples of high-quality insights.

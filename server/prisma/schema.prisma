@@ -107,6 +107,11 @@ model BusinessProfile {
   branches                   String?  // JSON array of branch objects
   lead_intent_signals        String?  // Free-text: phrases indicating purchase intent
   lead_quality_notes         String?  // Free-text: what makes a lead high-quality for this business
+  // Onboarding intelligence
+  business_goal              String?  // 'new_customers' | 'retain' | 'more_per_customer' | 'reviews'
+  price_tier                 String?  // 'budget' | 'mid' | 'premium'
+  customer_sources           String?  // JSON array: ['google', 'instagram', 'word_of_mouth', ...]
+  sector_profile             String?  // JSON: AI-parsed sub-sector context for agents
 
   @@map("business_profiles")
 }

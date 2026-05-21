@@ -4,7 +4,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
 import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
 import { insightAutoResolve } from './insightAutoResolve';
-import { getSectorInsightBlock } from '../../lib/sectorInsightConfig';
+import { getBusinessSectorContext } from '../../lib/sectorInsightConfig';
 import { getSectorContentStrategy } from '../../lib/sectorPrompts';
 import { getSectorContext as getAccumulatedSectorCtx } from '../../lib/sectorContext';
 
@@ -151,7 +151,7 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
     ].filter(Boolean).join('\n');
 
     // Sector-specific intelligence blocks
-    const sectorInsightBlock = getSectorInsightBlock(profile.category);
+    const sectorInsightBlock = getBusinessSectorContext(profile);
     const sectorContentBlock = getSectorContentStrategy(profile.category);
     const accumulatedSectorCtx = await getAccumulatedSectorCtx(profile.category);
 
