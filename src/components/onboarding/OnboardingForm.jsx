@@ -75,9 +75,12 @@ export default function OnboardingForm() {
     if (isSubmitting) return;
     setIsSubmitting(true);
 
+    // category will be overwritten by parse-profile with the AI-inferred sector label
+    // Use first ~60 chars of description as a temporary category until then
+    const tempCategory = formData.description.split('\n')[0].substring(0, 60).trim();
     const profileData = {
       name:                formData.name,
-      category:            formData.description, // use description as category for LLM
+      category:            tempCategory,
       city:                formData.city,
       description:         formData.description,
       business_goal:       formData.goal,

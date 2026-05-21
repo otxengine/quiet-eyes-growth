@@ -7,6 +7,7 @@ import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { parseKeywords, buildUrlQueries } from '../../lib/dataSources';
+import { getSectorProfile, cityToEn } from '../../lib/businessProfile';
 
 // Dummy res that swallows output — used when firing sub-agents inline
 const GRAPH_BASE = 'https://graph.facebook.com/v19.0';
@@ -104,11 +105,19 @@ export async function collectSocialSignals(req: Request, res: Response) {
     if (igAccount?.access_token && igAccount?.page_id) {
       const igUserId = igAccount.page_id;
       const token    = igAccount.access_token;
-      const sectorHashtags = [
-        category.replace(/\s+/g, ''),
-        `${category.replace(/\s+/g, '')}${city.replace(/\s+/g, '')}`,
-        name.replace(/\s+/g, ''),
-      ].filter(Boolean).slice(0, 3);
+      // Use AI sector profile for precise hashtags when available
+      const sp = getSectorProfile(profile);
+      const hashtagBase = sp
+        ? [
+            sp.sub_sector.replace(/_/g, ''),
+            sp.sector_label_he.replace(/\s+/g, ''),
+            ...sp.relevant_topics.slice(0, 2).map(t => t.replace(/\s+/g, '')),
+          ]
+        : [
+            category.replace(/\s+/g, ''),
+            `${category.replace(/\s+/g, '')}${city.replace(/\s+/g, '')}`,
+          ];
+      const sectorHashtags = [...hashtagBase, name.replace(/\s+/g, '')].filter(Boolean).slice(0, 4);
 
       for (const hashtag of sectorHashtags) {
         try {
@@ -153,16 +162,12 @@ export async function collectSocialSignals(req: Request, res: Response) {
 
     // ── Influencer scanner — Tavily + LLM ────────────────────────────────────
     if (!isTavilyRateLimited()) {
-      const cityEn: Record<string, string> = {
-        'תל אביב': 'Tel Aviv', 'ירושלים': 'Jerusalem', 'חיפה': 'Haifa',
-        'זכרון יעקב': 'Zichron Yaakov', 'נתניה': 'Netanya', 'ראשון לציון': 'Rishon LeZion',
-      };
-      const catEn: Record<string, string> = {
-        'מסעדה': 'restaurant food', 'כושר': 'fitness gym', 'יופי': 'beauty salon',
-        'קפה': 'cafe coffee', 'מאפייה': 'bakery pastry',
-      };
-      const cityStr = cityEn[city] || city;
-      const catStr  = catEn[category] || category;
+      const sp = getSectorProfile(profile);
+      const cityStr = cityToEn(city);
+      // Use sub-sector label for precise influencer search (e.g. "ui ux design" not just "design")
+      const catStr = sp
+        ? sp.sub_sector.replace(/_/g, ' ')
+        : category;
 
       const influencerResults = await tavilySearch(
         `influencers ${catStr} Israel instagram tiktok micro-influencer`,

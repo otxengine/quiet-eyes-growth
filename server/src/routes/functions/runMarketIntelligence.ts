@@ -2,8 +2,9 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
-import { getSectorContext, getSectorContentStrategy } from '../../lib/sectorPrompts';
+import { getSectorContentStrategy } from '../../lib/sectorPrompts';
 import { getSectorContext as getAccumulatedSectorCtx } from '../../lib/sectorContext';
+import { buildAgentPromptContext, isSignalRelevant } from '../../lib/businessProfile';
 import { publishEvent } from '../../lib/eventBus';
 
 export async function runMarketIntelligence(req: Request, res: Response) {
@@ -25,14 +26,20 @@ export async function runMarketIntelligence(req: Request, res: Response) {
     ]);
 
     // Three-tier fallback: 48h → 7 days → all → empty
-    let signals = allRawSignals.filter(s => new Date(s.detected_at || s.created_date) >= twoDaysAgo).slice(0, 18);
-    if (signals.length === 0) signals = allRawSignals.filter(s => new Date(s.detected_at || s.created_date) >= sevenDaysAgo).slice(0, 18);
-    if (signals.length === 0) signals = allRawSignals.slice(0, 18);
+    // Filter out signals on irrelevant topics based on AI sector profile
+    let signals = allRawSignals
+      .filter(s => isSignalRelevant(s, profile))
+      .filter(s => new Date(s.detected_at || s.created_date) >= twoDaysAgo).slice(0, 18);
+    if (signals.length === 0) signals = allRawSignals.filter(s => isSignalRelevant(s, profile) && new Date(s.detected_at || s.created_date) >= sevenDaysAgo).slice(0, 18);
+    if (signals.length === 0) signals = allRawSignals.filter(s => isSignalRelevant(s, profile)).slice(0, 18);
+    if (signals.length === 0) signals = allRawSignals.slice(0, 18); // absolute fallback
+
     const competitorContext = competitors.length > 0
       ? `\nמתחרים מזוהים:\n${competitors.slice(0, 5).map(c => `- ${c.name}: דירוג ${c.rating || '?'}, חוזקות: ${c.strengths || '?'}`).join('\n')}`
       : '';
 
     const sectorCtx = getSectorContentStrategy(profile.category);
+    const profileCtx = buildAgentPromptContext(profile);
 
     // ── Cold-start: no raw signals yet — generate sector-level insights from context alone ──
     if (signals.length === 0) {
@@ -41,8 +48,8 @@ export async function runMarketIntelligence(req: Request, res: Response) {
         maxTokens: 1200,
         prompt: `You are a senior market intelligence analyst for small businesses in Israel.
 Return ONLY valid JSON. ALL string values must be in Hebrew.
-Business: "${profile.name}" | Sector: ${profile.category} | City: ${profile.city}
-${profile.description ? `Description: ${profile.description}` : ''}
+
+${profileCtx}
 ${profile.relevant_services ? `Services: ${profile.relevant_services}` : ''}
 ${competitorContext}
 
@@ -123,8 +130,7 @@ Return ONLY valid JSON:
       prompt: `You are a senior market intelligence analyst for small businesses in Israel. Analyze the following signals and generate specific, actionable insights.
 Return ONLY valid JSON. ALL string values must be in Hebrew.
 
-Business: "${profile.name}" | Sector: ${profile.category} | City: ${profile.city}
-${profile.description ? `Description: ${profile.description}` : ''}
+${profileCtx}
 ${profile.relevant_services ? `Services: ${profile.relevant_services}` : ''}
 ${competitorContext}
 

@@ -3,6 +3,7 @@ import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
 import { publishEvent } from '../../lib/eventBus';
+import { buildLeadQueries, buildAgentPromptContext, isSignalRelevant } from '../../lib/businessProfile';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 
@@ -137,21 +138,28 @@ export async function runLeadGeneration(req: Request, res: Response) {
 
     const intentSignals = rawSignals.filter(s => {
       const content = (s.content || '').toLowerCase();
-      return intentKeywords.some(kw => content.includes(kw.toLowerCase()));
+      // Must match intent keywords AND be relevant to this business's sector
+      return intentKeywords.some(kw => content.includes(kw.toLowerCase()))
+        && isSignalRelevant(s, profile);
     }).filter(s => !existingUrls.has(s.url || ''));
 
     let newLeads = 0;
 
     for (const signal of intentSignals.slice(0, 10)) {
       try {
+        const profileCtx = buildAgentPromptContext(profile);
         const extraction = await invokeLLM({
-          prompt: `The following text was collected from the internet:
+          prompt: `${profileCtx}
+
+The following text was collected from the internet:
 URL: ${signal.url}
 Content: "${(signal.content || '').substring(0, 400)}"
 
-Does this indicate that someone is looking for a "${category}" service in the "${city}" area in Israel?
-${leadCriteriaContext ? `Lead criteria for this business: ${leadCriteriaContext}.` : ''}
-If yes, extract ONLY from the text (do not invent):
+Does this indicate that someone is looking for THIS SPECIFIC type of business/service?
+${leadCriteriaContext ? `Specific lead criteria: ${leadCriteriaContext}.` : ''}
+Only count as a lead if it matches the exact service this business offers — not generic or unrelated services.
+
+Extract ONLY from the text (do not invent):
 - name: the person's name if mentioned, otherwise "לקוח פוטנציאלי"
 - service_needed: the service being sought (up to 5 words)
 - city: city if mentioned
@@ -159,7 +167,7 @@ If yes, extract ONLY from the text (do not invent):
 - budget_range: budget if mentioned
 - has_intent: true/false
 
-If there is no clear purchase intent — return { "has_intent": false }
+If there is no clear purchase intent for THIS business type — return { "has_intent": false }
 
 Return ONLY valid JSON. ALL string values must be in Hebrew.`,
           response_json_schema: { type: 'object' },
@@ -201,13 +209,9 @@ Return ONLY valid JSON. ALL string values must be in Hebrew.`,
       }
     }
 
-    // Phase 2: Tavily search if no raw signals yet
+    // Phase 2: Tavily search if no raw signals yet — use sector-aware queries
     if (intentSignals.length === 0 && TAVILY_API_KEY) {
-      const queries = [
-        `מחפש ${category} ${city}`,
-        `צריך ${relevant_services || category} ${city}`,
-        `המלצה על ${category} ${city}`,
-      ];
+      const queries = buildLeadQueries(profile);
       for (const query of queries) {
         const results = await tavilySearch(query, 5);
         for (const result of results) {

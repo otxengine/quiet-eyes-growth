@@ -73,8 +73,11 @@ Respond ONLY with valid JSON (no markdown, no explanation) matching this exact s
     const sectorProfile = typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
     const sectorProfileStr = JSON.stringify(sectorProfile);
 
-    // Build update data
-    const updateData: Record<string, any> = { sector_profile: sectorProfileStr };
+    // Build update data — also update category to clean AI-inferred label
+    const updateData: Record<string, any> = {
+      sector_profile: sectorProfileStr,
+      category: sectorProfile.sector_label_he || sectorProfile.sub_sector || catText,
+    };
     if (goal)            updateData.business_goal    = goal;
     if (price_tier)      updateData.price_tier       = price_tier;
     if (customer_sources) updateData.customer_sources = typeof customer_sources === 'string'

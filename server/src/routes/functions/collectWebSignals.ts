@@ -4,6 +4,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { tavilySearch } from '../../lib/tavily';          // shared cache (12h TTL)
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { buildKeywordQueries, buildUrlQueries } from '../../lib/dataSources';
+import { buildSearchQueries, cityToEn } from '../../lib/businessProfile';
 
 // Minimum interval between full web-signal collections per business
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
@@ -22,7 +23,7 @@ export async function collectWebSignals(req: Request, res: Response) {
     const profile = await prisma.businessProfile.findFirst({ where: { id: businessProfileId } });
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
-    const { name, category, city, custom_keywords, custom_urls } = profile;
+    const { name, city } = profile;
 
     const existingSignals = await prisma.rawSignal.findMany({
       where: { linked_business: businessProfileId },
@@ -30,27 +31,12 @@ export async function collectWebSignals(req: Request, res: Response) {
     });
     const existingUrls = new Set(existingSignals.map(s => s.url).filter(Boolean));
 
-    // City/category → English (Tavily works better with English)
-    const cityEn: Record<string, string> = {
-      'תל אביב': 'Tel Aviv', 'ירושלים': 'Jerusalem', 'חיפה': 'Haifa',
-      'בני ברק': 'Bnei Brak', 'ראשון לציון': 'Rishon LeZion', 'נתניה': 'Netanya',
-      'זכרון יעקב': 'Zichron Yaakov', 'אשדוד': 'Ashdod', 'רמת גן': 'Ramat Gan',
-    };
-    const categoryEn: Record<string, string> = {
-      'מסעדה': 'restaurant', 'כושר': 'fitness gym', 'יופי': 'beauty salon',
-      'restaurant': 'restaurant', 'fitness': 'fitness gym', 'beauty': 'beauty salon', 'local': 'local business',
-    };
-    const cityStr = cityEn[city] || city;
-    const catStr = categoryEn[category] || category;
+    const cityStr = cityToEn(city);
 
-    // Core queries
-    const queries = [
-      `"${name}" reviews ${cityStr} Israel`,
-      `${catStr} ${cityStr} best recommendations 2025`,
-      `${catStr} ${cityStr} Israel`,
-    ];
+    // ── Sector-aware queries (uses AI sector_profile when available) ──────────
+    const queries = buildSearchQueries(profile, cityStr);
 
-    // ── custom_keywords: ALL configured keywords → one query each ───────────
+    // ── custom_keywords: user-configured keywords → one query each ──────────
     for (const q of buildKeywordQueries(profile, cityStr)) queries.push(q);
 
     // ── custom_urls: every configured source domain targeted with Tavily ─────

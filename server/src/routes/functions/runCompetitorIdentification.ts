@@ -3,6 +3,7 @@ import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
 import { publishEvent } from '../../lib/eventBus';
+import { buildCompetitorTerms, buildAgentPromptContext, getSectorProfile } from '../../lib/businessProfile';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
@@ -103,14 +104,19 @@ export async function runCompetitorIdentification(req: Request, res: Response) {
     const userExtraCities: string[] = ((profile as any).additional_cities || '')
       .split(',').map((c: string) => c.trim()).filter(Boolean);
 
+    const sp = getSectorProfile(profile);
+    const profileCtx = buildAgentPromptContext(profile);
+    const prebuiltTerms = buildCompetitorTerms(profile);
+
     // ── Step 1: Understand the business type + get nearby cities ──────────────
+    // If we have an AI sector profile, provide it so the LLM generates precise competitor terms
     const contextResult = await invokeLLM({
       model: 'haiku',
-      maxTokens: 250,
-      prompt: `Israeli business: "${name}", category: ${category}, city: ${city}
+      maxTokens: 300,
+      prompt: `${profileCtx}
 
-1. What is the exact type of business? (e.g. "Japanese sushi bar", "pizzeria", "men's barber")
-2. What are the best search terms to find direct competitors in the same field? (3 Hebrew phrases)
+1. What is the exact type of business? (e.g. "UI/UX design studio for SaaS", "Japanese sushi bar", "men's barber")
+2. What are the best 3-4 Hebrew search terms to find DIRECT competitors in the same specific field? Be precise — a pilates studio's competitors are other pilates studios, not generic gyms.
 3. Which cities are within a radius of ${radiusKm} km from ${city} in Israel? (up to 5 cities)
 
 Return ONLY valid JSON. ALL string values must be in Hebrew:
@@ -122,8 +128,12 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       response_json_schema: { type: 'object' },
     });
 
-    const businessType: string = contextResult?.business_type || category;
-    const searchTerms: string[] = contextResult?.search_terms || [name, category];
+    const businessType: string = contextResult?.business_type || sp?.sector_label_he || category;
+    // Merge: LLM-suggested terms + pre-built terms from sector_profile, deduplicated
+    const searchTerms: string[] = [
+      ...(contextResult?.search_terms || []),
+      ...prebuiltTerms,
+    ].filter((v, i, a) => v && a.indexOf(v) === i).slice(0, 6);
     const nearbyCities: string[] = contextResult?.nearby_cities || [];
 
     // Combine: city + LLM-suggested nearby cities + user's additional cities, deduplicated
