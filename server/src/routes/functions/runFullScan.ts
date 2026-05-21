@@ -30,6 +30,7 @@ import { updateSectorKnowledge } from './updateSectorKnowledge';
 import { marketMemoryEngine } from './marketMemoryEngine';
 import { microMomentDetector } from './microMomentDetector';
 import { sentimentVelocityMonitor } from './sentimentVelocityMonitor';
+import { bootstrapBusinessIntelligence } from '../../lib/bootstrapIntelligence';
 
 async function callHandler(fn: Function, businessProfileId: string): Promise<any> {
   return new Promise((resolve) => {
@@ -59,6 +60,13 @@ export async function runFullScan(req: Request, res: Response) {
 
   const profileRows = await prisma.businessProfile.findMany({ where: { id: businessProfileId }, take: 1 });
   const profile = profileRows[0];
+
+  // Auto-bootstrap missing intelligence for accounts that predate the new onboarding flow
+  if (profile && (!profile.sector_profile || !(profile as any).agent_missions)) {
+    bootstrapBusinessIntelligence(businessProfileId).catch(e =>
+      console.warn('[runFullScan] bootstrap warning:', e.message)
+    );
+  }
 
   // Cooldown: prevent burning API budget with multiple full scans within 12 hours
   const sixHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);

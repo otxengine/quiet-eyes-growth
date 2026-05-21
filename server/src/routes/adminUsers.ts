@@ -7,9 +7,34 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
 import { isAdminKeyRequest } from '../middleware/auth';
 import { createLogger } from '../infra/logger';
+import { bulkBootstrapAllBusinesses, bootstrapBusinessIntelligence } from '../lib/bootstrapIntelligence';
 
 const logger = createLogger('AdminUsers');
 const router = Router();
+
+// ── POST /api/admin/bulk-bootstrap ────────────────────────────────────────────
+// Retroactively populates sector_profile + agent_missions for all existing accounts
+router.post('/bulk-bootstrap', async (req: Request, res: Response) => {
+  if (!isAdminKeyRequest(req)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { businessId } = req.body;
+
+  // Single-business mode
+  if (businessId) {
+    try {
+      const did = await bootstrapBusinessIntelligence(businessId);
+      return res.json({ ok: true, upgraded: did ? 1 : 0, message: did ? 'Bootstrapped' : 'Already up to date' });
+    } catch (err: any) {
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  }
+
+  // Bulk mode — responds immediately, runs in background
+  res.json({ ok: true, message: 'Bulk bootstrap started in background — check server logs for progress' });
+  bulkBootstrapAllBusinesses().catch(e => logger.warn(`bulk-bootstrap error: ${e.message}`));
+});
 
 // ── DELETE /api/admin/users/:businessId ───────────────────────────────────────
 router.delete('/users/:businessId', async (req: Request, res: Response) => {

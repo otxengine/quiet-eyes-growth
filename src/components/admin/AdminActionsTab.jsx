@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { adminClient, adminFetch } from '@/api/adminClient';
-import { Loader2, Zap, Database } from 'lucide-react';
+import { Loader2, Zap, Database, BrainCircuit } from 'lucide-react';
 import { toast } from 'sonner';
 
 const CARD = 'bg-[#161b25] border border-[#2a3042] rounded-xl';
@@ -25,6 +25,8 @@ export default function AdminActionsTab({ allBusinesses, onLogsRefresh }) {
   const [agentResult, setAgentResult]     = useState(null);
   const [migrating, setMigrating]         = useState(false);
   const [migrateResult, setMigrateResult] = useState(null);
+  const [bootstrapping, setBootstrapping] = useState(false);
+  const [bootstrapResult, setBootstrapResult] = useState(null);
 
   const handleMigrate = async () => {
     setMigrating(true);
@@ -40,6 +42,20 @@ export default function AdminActionsTab({ allBusinesses, onLogsRefresh }) {
       setMigrateResult({ error: e.message });
     }
     setMigrating(false);
+  };
+
+  const handleBulkBootstrap = async () => {
+    setBootstrapping(true);
+    setBootstrapResult(null);
+    try {
+      const res = await adminFetch('/admin/bulk-bootstrap', { method: 'POST' });
+      setBootstrapResult(res);
+      toast.success('שדרוג חשבונות קיימים התחיל ברקע — בדוק לוגים בשרת');
+    } catch (e) {
+      toast.error('שגיאה: ' + e.message);
+      setBootstrapResult({ error: e.message });
+    }
+    setBootstrapping(false);
   };
 
   const handleRun = async () => {
@@ -88,6 +104,35 @@ export default function AdminActionsTab({ allBusinesses, onLogsRefresh }) {
                 {(migrateResult.errors || []).join('\n')}
               </pre>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Bootstrap existing accounts ─────────────────────────────── */}
+      <div className={`${CARD} p-5 space-y-3`}>
+        <div className="flex items-center gap-2">
+          <BrainCircuit className="w-4 h-4 text-indigo-400" />
+          <h3 className="text-[13px] font-semibold text-white">שדרוג חשבונות קיימים</h3>
+        </div>
+        <p className="text-[11px] text-slate-400">
+          מריץ ניתוח מגזר (sector_profile) ותכנון משימות (agent_missions) לכל החשבונות
+          שנרשמו לפני תהליך האונבורדינג החדש. הרצה ברקע — אין צורך להמתין.
+        </p>
+        <button
+          onClick={handleBulkBootstrap}
+          disabled={bootstrapping}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[12px] font-semibold bg-indigo-700 text-white hover:bg-indigo-800 disabled:opacity-50 transition-all"
+        >
+          {bootstrapping ? <Loader2 className="w-4 h-4 animate-spin" /> : <BrainCircuit className="w-4 h-4" />}
+          {bootstrapping ? 'מתחיל שדרוג...' : 'שדרג חשבונות קיימים'}
+        </button>
+        {bootstrapResult && (
+          <div className="p-3 bg-[#0d0f14] rounded-lg border border-[#2a3042]">
+            <p className="text-[10px] text-slate-400">
+              {bootstrapResult.error
+                ? <span className="text-red-400">{bootstrapResult.error}</span>
+                : bootstrapResult.message}
+            </p>
           </div>
         )}
       </div>
