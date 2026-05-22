@@ -536,6 +536,28 @@ router.post('/', async (req: Request, res: Response) => {
     `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS customer_sources TEXT`,
     `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS sector_profile TEXT`,
     `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS agent_missions TEXT`,
+
+    // ── Integration layer upgrades ────────────────────────────────────────────
+    // OAuth state persistence
+    `CREATE TABLE IF NOT EXISTS oauth_state_store (
+      id          TEXT        NOT NULL PRIMARY KEY,
+      business_id TEXT        NOT NULL,
+      platform    TEXT        NOT NULL,
+      expires_at  TIMESTAMPTZ NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_oauth_state_expires ON oauth_state_store(expires_at)`,
+
+    // social_accounts: refresh token + token expiry
+    `ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS refresh_token TEXT`,
+    `ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS expires_at    TEXT`,
+
+    // business_profiles: TikTok execution fields
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS tiktok_access_token TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS tiktok_open_id      TEXT`,
+
+    // business_profiles: email notification field
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS notification_email  TEXT`,
   ];
 
   for (const sql of statements) {

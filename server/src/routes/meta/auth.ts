@@ -174,7 +174,46 @@ router.post('/whatsapp/embedded-signup', async (req: Request, res: Response) => 
       },
     });
 
-    // Step 5: Create default lead-gen AI agent config if none exists for this connection
+    // Step 5: Bridge tokens → BusinessProfile so WhatsAppExecutor (outbound) can send messages
+    // without needing to decrypt MetaConnection tokens.
+    await prisma.businessProfile.updateMany({
+      where: { id: businessProfileId },
+      data: {
+        whatsapp_phone_number_id: phone_number_id,
+        whatsapp_access_token:    longToken,
+      },
+    }).catch(() => {});
+
+    // Also upsert SocialAccount record so the Integrations UI shows connected state
+    const existingSA = await prisma.socialAccount.findFirst({
+      where: { linked_business: businessProfileId, platform: 'whatsapp_business' },
+    });
+    if (existingSA) {
+      await prisma.socialAccount.update({
+        where: { id: existingSA.id },
+        data: {
+          account_name: phone_number_id,
+          access_token: longToken,
+          page_id:      phone_number_id,
+          is_connected: true,
+          last_sync:    new Date().toISOString(),
+        },
+      });
+    } else {
+      await prisma.socialAccount.create({
+        data: {
+          linked_business: businessProfileId,
+          platform:        'whatsapp_business',
+          account_name:    phone_number_id,
+          access_token:    longToken,
+          page_id:         phone_number_id,
+          is_connected:    true,
+          last_sync:       new Date().toISOString(),
+        },
+      });
+    }
+
+    // Step 6: Create default lead-gen AI agent config if none exists for this connection
     const existingConfig = await prisma.aIAgentConfig.findFirst({
       where: { meta_connection_id: connection.id },
     });

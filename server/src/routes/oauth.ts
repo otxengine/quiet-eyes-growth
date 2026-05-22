@@ -10,6 +10,9 @@
  *
  * Tokens are stored in the `social_accounts` table (SocialAccount model)
  * AND mirrored into BusinessProfile fields so executors can read them directly.
+ *
+ * State is persisted in the `oauth_state_store` DB table (created at startup)
+ * to survive server restarts and multi-instance deployments.
  */
 
 import { Router, Request, Response } from 'express';
@@ -19,34 +22,54 @@ import { prisma } from '../db';
 const router = Router();
 
 // ── Env — read lazily so dotenv has time to load ─────────────────────────────
-const env = () => ({
-  FACEBOOK_APP_ID:      process.env.FACEBOOK_APP_ID      || '',
-  FACEBOOK_APP_SECRET:  process.env.FACEBOOK_APP_SECRET  || '',
-  TIKTOK_CLIENT_KEY:    process.env.TIKTOK_CLIENT_KEY    || '',
-  TIKTOK_CLIENT_SECRET: process.env.TIKTOK_CLIENT_SECRET || '',
-  GOOGLE_CLIENT_ID:     process.env.GOOGLE_CLIENT_ID     || '',
-  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
-  FRONTEND_URL:         process.env.FRONTEND_URL         || 'http://localhost:5173',
-  SERVER_BASE_URL:      process.env.SERVER_BASE_URL      || 'http://localhost:3007',
-});
+// FACEBOOK_APP_ID and META_APP_ID are the same Meta app — support both names.
+const env = () => {
+  const fbId     = process.env.FACEBOOK_APP_ID     || process.env.META_APP_ID      || '';
+  const fbSecret = process.env.FACEBOOK_APP_SECRET || process.env.META_APP_SECRET  || '';
+  return {
+    FACEBOOK_APP_ID:      fbId,
+    FACEBOOK_APP_SECRET:  fbSecret,
+    TIKTOK_CLIENT_KEY:    process.env.TIKTOK_CLIENT_KEY    || '',
+    TIKTOK_CLIENT_SECRET: process.env.TIKTOK_CLIENT_SECRET || '',
+    GOOGLE_CLIENT_ID:     process.env.GOOGLE_CLIENT_ID     || '',
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
+    FRONTEND_URL:         process.env.FRONTEND_URL         || 'http://localhost:5173',
+    SERVER_BASE_URL:      process.env.SERVER_BASE_URL      || 'http://localhost:3007',
+  };
+};
 
-// In-memory state store (replace with Redis/DB in production for multi-instance)
-const stateStore = new Map<string, { businessId: string; platform: string; expiresAt: number }>();
+// ── DB-backed state store — survives restarts and multi-instance deployments ──
+// Table: oauth_state_store (id TEXT PK, business_id TEXT, platform TEXT, expires_at TIMESTAMPTZ)
+// Created at server startup (see index.ts).
 
-function generateState(platform: string, businessId: string): string {
-  const state = randomBytes(16).toString('hex');
-  stateStore.set(state, { businessId, platform, expiresAt: Date.now() + 10 * 60 * 1000 });
+async function generateState(platform: string, businessId: string): Promise<string> {
+  const state     = randomBytes(16).toString('hex');
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  try {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO oauth_state_store (id, business_id, platform, expires_at) VALUES ($1,$2,$3,$4::timestamptz)
+       ON CONFLICT (id) DO UPDATE SET expires_at = EXCLUDED.expires_at`,
+      state, businessId, platform, expiresAt,
+    );
+  } catch {
+    // Table might not exist yet on first run — fall through (state validation will fail gracefully)
+  }
   return state;
 }
 
-function consumeState(state: string): { businessId: string; platform: string } | null {
-  const entry = stateStore.get(state);
-  if (!entry || entry.expiresAt < Date.now()) {
-    stateStore.delete(state);
+async function consumeState(state: string): Promise<{ businessId: string; platform: string } | null> {
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<{ business_id: string; platform: string; expires_at: string }>>(
+      `DELETE FROM oauth_state_store WHERE id=$1 RETURNING business_id, platform, expires_at`,
+      state,
+    );
+    const row = rows[0];
+    if (!row) return null;
+    if (new Date(row.expires_at) < new Date()) return null;
+    return { businessId: row.business_id, platform: row.platform };
+  } catch {
     return null;
   }
-  stateStore.delete(state);
-  return entry;
 }
 
 function callbackUrl(platform: string): string {
@@ -81,25 +104,34 @@ async function upsertSocialAccount(
 }
 
 // ── Initiate OAuth ────────────────────────────────────────────────────────────
-router.get('/initiate/:platform', (req: Request, res: Response) => {
+router.get('/initiate/:platform', async (req: Request, res: Response) => {
   const { platform } = req.params;
   const businessId   = String(req.query.businessId || '');
 
   if (!businessId) return res.status(400).json({ error: 'Missing businessId' });
 
-  const state = generateState(String(platform), String(businessId));
+  // WhatsApp requires the Embedded Signup SDK — not a standard OAuth redirect.
+  // Return a signal to the frontend to show the Embedded Signup button instead.
+  if (platform === 'whatsapp_business') {
+    return res.json({
+      whatsapp_embedded_signup: true,
+      message: 'WhatsApp requires the Embedded Signup flow — use the dedicated WhatsApp connect button.',
+    });
+  }
 
+  const state = await generateState(String(platform), String(businessId));
   let authUrl: string;
 
-  if (platform === 'facebook_page' || platform === 'instagram_business' || platform === 'whatsapp_business') {
+  if (platform === 'facebook_page' || platform === 'instagram_business') {
     if (!env().FACEBOOK_APP_ID) {
       return res.status(503).json({ error: 'Facebook app not configured', demo: true });
     }
+
+    // instagram_content_publish is required for media publish
+    // pages_manage_posts is required for Facebook feed/photos
     const scope = platform === 'instagram_business'
-      ? 'pages_show_list,pages_read_engagement'
-      : platform === 'whatsapp_business'
-      ? 'whatsapp_business_management,whatsapp_business_messaging,business_management'
-      : 'pages_show_list,pages_read_engagement';
+      ? 'pages_show_list,pages_read_engagement,instagram_content_publish,instagram_basic'
+      : 'pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_engagement';
 
     authUrl =
       `https://www.facebook.com/v19.0/dialog/oauth?` +
@@ -113,10 +145,11 @@ router.get('/initiate/:platform', (req: Request, res: Response) => {
     if (!env().TIKTOK_CLIENT_KEY) {
       return res.status(503).json({ error: 'TikTok app not configured', demo: true });
     }
+    // TikTok Content Posting API v2 scopes
     authUrl =
-      `https://www.tiktok.com/auth/authorize/?` +
+      `https://www.tiktok.com/v2/auth/authorize/?` +
       `client_key=${env().TIKTOK_CLIENT_KEY}` +
-      `&scope=user.info.basic,video.upload,video.publish` +
+      `&scope=${encodeURIComponent('user.info.basic,video.upload,video.publish,video.list')}` +
       `&response_type=code` +
       `&redirect_uri=${encodeURIComponent(callbackUrl(platform))}` +
       `&state=${state}`;
@@ -311,7 +344,9 @@ async function handleGoogleCallback(code: string, businessId: string) {
   if (!tokenRes.ok) throw new Error('Google token exchange failed');
   const tokenData: any = await tokenRes.json();
   const accessToken  = tokenData.access_token  || '';
-  const refreshToken = tokenData.refresh_token || '';
+  const refreshToken = tokenData.refresh_token || '';  // long-lived; must be stored
+  const expiresIn    = (tokenData.expires_in as number) || 3600;
+  const expiresAt    = new Date(Date.now() + expiresIn * 1000).toISOString();
 
   // Get user info for display name
   const userRes  = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -320,8 +355,8 @@ async function handleGoogleCallback(code: string, businessId: string) {
   const userData: any = userRes.ok ? await userRes.json() : {};
   const accountName = userData.name || userData.email || 'Google Account';
 
-  // Try to get first Google Business location's place_id
-  let placeId = '';
+  // Try to get first Google Business location's path for the Reviews API
+  let locationPath = '';
   try {
     const acctRes = await fetch(
       'https://mybusinessaccountmanagement.googleapis.com/v1/accounts',
@@ -337,30 +372,40 @@ async function handleGoogleCallback(code: string, businessId: string) {
         );
         if (locRes.ok) {
           const locData: any = await locRes.json();
-          // location name looks like "accounts/123/locations/456" — extract place_id if present
           const loc = locData?.locations?.[0];
-          // Store the full GMB location path (e.g. "accounts/123/locations/456")
-        // so the Reviews API and reply endpoint can use it directly
-        if (loc?.name) placeId = loc.name;
+          if (loc?.name) locationPath = loc.name;
         }
       }
     }
   } catch (_) {}
 
-  // Persist to SocialAccount — page_id holds full GMB location path for API calls
-  await upsertSocialAccount(businessId, 'google_business', {
-    account_name: accountName,
-    access_token: accessToken,
-    page_id:      placeId || '',
+  // Upsert SocialAccount — store access_token, refresh_token, expiry
+  const existing = await prisma.socialAccount.findFirst({
+    where: { linked_business: businessId, platform: 'google_business' },
   });
+  if (existing) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE social_accounts
+       SET account_name=$1, access_token=$2, page_id=$3, is_connected=true,
+           last_sync=$4, refresh_token=$5, expires_at=$6
+       WHERE id=$7`,
+      accountName, accessToken, locationPath, new Date().toISOString(),
+      refreshToken || null, expiresAt, existing.id,
+    );
+  } else {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO social_accounts
+         (id, created_date, linked_business, platform, account_name, access_token, page_id, is_connected, last_sync, refresh_token, expires_at)
+       VALUES (gen_random_uuid()::text, now(), $1, 'google_business', $2, $3, $4, true, $5, $6, $7)`,
+      businessId, accountName, accessToken, locationPath,
+      new Date().toISOString(), refreshToken || null, expiresAt,
+    );
+  }
 
-  // Mirror directly into BusinessProfile so GoogleBusinessClient can read it
-  // google_place_id stays as the Places API ID (fetched separately by collectReviews)
+  // Mirror access token into BusinessProfile
   await prisma.businessProfile.updateMany({
     where: { id: businessId },
-    data: {
-      google_access_token: accessToken,
-    },
+    data:  { google_access_token: accessToken },
   });
 
   return { page_name: accountName, platform: 'google_business' };
@@ -368,7 +413,8 @@ async function handleGoogleCallback(code: string, businessId: string) {
 
 // ── TikTok callback ───────────────────────────────────────────────────────────
 async function handleTikTokCallback(code: string, businessId: string) {
-  const tokenRes = await fetch('https://open-api.tiktok.com/oauth/access_token/', {
+  // TikTok Content Posting API v2 token endpoint (new — replaces deprecated open-api.tiktok.com)
+  const tokenRes = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -381,13 +427,46 @@ async function handleTikTokCallback(code: string, businessId: string) {
   });
   if (!tokenRes.ok) throw new Error('TikTok token exchange failed');
   const tokenData: any = await tokenRes.json();
-  const { access_token, open_id, display_name } = tokenData?.data || {};
+  const access_token  = tokenData?.access_token  || tokenData?.data?.access_token  || '';
+  const refresh_token = tokenData?.refresh_token || tokenData?.data?.refresh_token || '';
+  const open_id       = tokenData?.open_id       || tokenData?.data?.open_id       || '';
+  const expiresIn     = tokenData?.expires_in    || tokenData?.data?.expires_in    || 86400;
+  const expiresAt     = new Date(Date.now() + expiresIn * 1000).toISOString();
 
-  await upsertSocialAccount(businessId, 'tiktok_business', {
-    account_name: display_name || 'TikTok Account',
-    access_token: access_token || '',
-    page_id:      open_id,
+  // Fetch display name from user info
+  let display_name = 'TikTok Account';
+  try {
+    const infoRes = await fetch('https://open.tiktokapis.com/v2/user/info/?fields=display_name,avatar_url', {
+      headers: { Authorization: `Bearer ${access_token}` },
+    });
+    if (infoRes.ok) {
+      const info: any = await infoRes.json();
+      display_name = info?.data?.user?.display_name || display_name;
+    }
+  } catch (_) {}
+
+  // Upsert SocialAccount with refresh_token + expiry
+  const existing = await prisma.socialAccount.findFirst({
+    where: { linked_business: businessId, platform: 'tiktok_business' },
   });
+  if (existing) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE social_accounts
+       SET account_name=$1, access_token=$2, page_id=$3, is_connected=true,
+           last_sync=$4, refresh_token=$5, expires_at=$6
+       WHERE id=$7`,
+      display_name, access_token, open_id, new Date().toISOString(),
+      refresh_token || null, expiresAt, existing.id,
+    );
+  } else {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO social_accounts
+         (id, created_date, linked_business, platform, account_name, access_token, page_id, is_connected, last_sync, refresh_token, expires_at)
+       VALUES (gen_random_uuid()::text, now(), $1, 'tiktok_business', $2, $3, $4, true, $5, $6, $7)`,
+      businessId, display_name, access_token, open_id,
+      new Date().toISOString(), refresh_token || null, expiresAt,
+    );
+  }
 
   return { platform: 'tiktok_business', page_name: display_name };
 }
@@ -404,7 +483,7 @@ router.get('/callback/:platform', async (req: Request, res: Response) => {
     return res.redirect(`${env().FRONTEND_URL}/integrations?oauth_error=missing_params`);
   }
 
-  const stateData = consumeState(state);
+  const stateData = await consumeState(state);
   if (!stateData) {
     return res.redirect(`${env().FRONTEND_URL}/integrations?oauth_error=invalid_state`);
   }

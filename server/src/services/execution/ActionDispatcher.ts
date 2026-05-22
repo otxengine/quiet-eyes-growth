@@ -104,6 +104,51 @@ async function socialChannelHandler(task: ExecutionTask, rec: Recommendation): P
   }
 }
 
+// TikTok channel handler
+async function tiktokChannelHandler(task: ExecutionTask, rec: Recommendation): Promise<DispatchResult> {
+  try {
+    await executeOrQueue({
+      businessProfileId: task.business_id,
+      agentName:         'ActionDispatcher',
+      actionType:        'tiktok_post',
+      description:       rec.title || task.task_type,
+      payload: {
+        caption:  rec.draft_content || rec.body || rec.title,
+        videoUrl: (rec as any).video_url || null,
+      },
+      revenueImpact: 0,
+      autoExecuteAfterHours: 24,
+    });
+    return { success: true, result: 'Queued via executeOrQueue → tiktok', metadata: {} };
+  } catch (e: any) {
+    return { success: false, result: e.message, metadata: {} };
+  }
+}
+
+// Email channel handler
+async function emailChannelHandler(task: ExecutionTask, rec: Recommendation): Promise<DispatchResult> {
+  try {
+    const payload: Record<string, any> = (rec as any).payload || {};
+    await executeOrQueue({
+      businessProfileId: task.business_id,
+      agentName:         'ActionDispatcher',
+      actionType:        'email_send',
+      description:       rec.title || task.task_type,
+      payload: {
+        to:      payload.email || payload.to || '',
+        subject: rec.title     || 'הודעה מ-OTX Engine',
+        body:    rec.draft_content || rec.body || rec.title,
+        customerName: payload.customerName || payload.name || null,
+      },
+      revenueImpact: 0,
+      autoExecuteAfterHours: 24,
+    });
+    return { success: true, result: 'Queued via executeOrQueue → email', metadata: {} };
+  } catch (e: any) {
+    return { success: false, result: e.message, metadata: {} };
+  }
+}
+
 const CHANNEL_HANDLERS: Record<string, ChannelHandler> = {
   dashboard: dashboardHandler,
   internal:  noopHandler,
@@ -111,7 +156,8 @@ const CHANNEL_HANDLERS: Record<string, ChannelHandler> = {
   facebook:  socialChannelHandler,
   whatsapp:  socialChannelHandler,
   google:    socialChannelHandler,
-  email:     noopHandler,
+  tiktok:    tiktokChannelHandler,
+  email:     emailChannelHandler,
 };
 
 // ─── Core dispatch ────────────────────────────────────────────────────────────

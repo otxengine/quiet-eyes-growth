@@ -3,7 +3,7 @@ import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
-import { CheckCircle, ExternalLink, Loader2, X } from 'lucide-react';
+import { CheckCircle, ExternalLink, Loader2, X, AlertTriangle, Clock } from 'lucide-react';
 import HubSpotConfig from '@/components/integrations/HubSpotConfig';
 import MondayConfig from '@/components/integrations/MondayConfig';
 import WebhookZapierConfig from '@/components/integrations/WebhookZapierConfig';
@@ -83,62 +83,86 @@ const CRM_PLATFORMS = [
 ];
 
 // ── Convert SocialAccount[] → connections map ──────────────────────────────────
-// Shape: { facebook_page: { connected: true, page_name: '...', ... }, ... }
+// Shape: { facebook_page: { connected: true, page_name: '...', account: {...} }, ... }
 
 function accountsToConnections(accounts = []) {
   const map = {};
   for (const acct of accounts) {
     if (acct.platform) {
       map[acct.platform] = {
-        connected: !!acct.is_connected,
-        page_name: acct.account_name,
-        page_id:   acct.page_id,
+        connected:    !!acct.is_connected,
+        page_name:    acct.account_name,
+        page_id:      acct.page_id,
         connected_at: acct.last_sync,
-        demo: false,
+        demo:         false,
+        account:      acct,  // full account record for expiry check
       };
     }
   }
   return map;
 }
 
+// ── Token expiry helper ────────────────────────────────────────────────────────
+
+function tokenExpiryStatus(account) {
+  if (!account?.expires_at) return null;
+  const diff = new Date(account.expires_at) - Date.now();
+  const days  = Math.floor(diff / 86400000);
+  if (diff < 0)        return { level: 'expired', label: 'פג תוקף', color: 'text-red-500' };
+  if (days < 3)        return { level: 'critical', label: `פג עוד ${days} ימים`, color: 'text-red-400' };
+  if (days < 7)        return { level: 'warning',  label: `פג עוד ${days} ימים`, color: 'text-amber-400' };
+  if (days < 30)       return { level: 'ok',       label: `תקף ${days} יום`,      color: 'text-emerald-500' };
+  return null; // long-lived — don't show
+}
+
 // ── Social Platform Card ───────────────────────────────────────────────────────
 
-function SocialPlatformCard({ platform, connection, onConnect, onDisconnect }) {
+function SocialPlatformCard({ platform, connection, account, onConnect, onDisconnect }) {
   const [loading, setLoading] = useState(false);
   const isConnected = connection?.connected;
+  const expiry      = isConnected ? tokenExpiryStatus(account) : null;
 
-  const handleConnect = async () => {
-    setLoading(true);
-    await onConnect();
-    setLoading(false);
-  };
+  const handleConnect = async () => { setLoading(true); await onConnect(); setLoading(false); };
+  const handleDisconnect = async () => { setLoading(true); await onDisconnect(); setLoading(false); };
 
-  const handleDisconnect = async () => {
-    setLoading(true);
-    await onDisconnect();
-    setLoading(false);
-  };
+  // WhatsApp uses Embedded Signup — show different UI
+  if (platform.id === 'whatsapp_business') {
+    return (
+      <WhatsAppEmbeddedCard
+        platform={platform}
+        connection={connection}
+        account={account}
+        expiry={expiry}
+        onDisconnect={handleDisconnect}
+        loading={loading}
+      />
+    );
+  }
 
   return (
     <div
       className="card-base p-4 flex items-center gap-4"
       style={{ borderLeft: `3px solid ${isConnected ? '#10b981' : platform.color}` }}
     >
-      {/* Icon */}
-      <div
-        className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-        style={{ background: platform.bg }}
-      >
+      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+           style={{ background: platform.bg }}>
         {platform.icon}
       </div>
 
-      {/* Info */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[13px] font-semibold text-foreground">{platform.name}</span>
           {isConnected && (
             <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-medium">
               <CheckCircle className="w-3 h-3" /> מחובר
+            </span>
+          )}
+          {expiry && (
+            <span className={`flex items-center gap-1 text-[10px] font-medium ${expiry.color}`}>
+              {expiry.level === 'expired'
+                ? <AlertTriangle className="w-3 h-3" />
+                : <Clock className="w-3 h-3" />}
+              {expiry.label}
             </span>
           )}
         </div>
@@ -148,28 +172,143 @@ function SocialPlatformCard({ platform, connection, onConnect, onDisconnect }) {
             עמוד: {connection.page_name}
           </p>
         )}
+        {expiry?.level === 'expired' && (
+          <p className="text-[10px] text-red-500 mt-0.5 font-medium">
+            יש לחבר מחדש כדי להמשיך לפרסם אוטומטית
+          </p>
+        )}
       </div>
 
-      {/* Action */}
       <div className="flex-shrink-0">
         {isConnected ? (
-          <button
-            onClick={handleDisconnect}
-            disabled={loading}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] text-red-600 bg-red-50 border border-red-100 hover:bg-red-100 transition-all disabled:opacity-50"
-          >
-            {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
-            נתק
-          </button>
+          <div className="flex flex-col gap-1.5 items-end">
+            <button onClick={handleDisconnect} disabled={loading}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] text-red-600 bg-red-50 border border-red-100 hover:bg-red-100 transition-all disabled:opacity-50">
+              {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+              נתק
+            </button>
+            {(expiry?.level === 'expired' || expiry?.level === 'critical') && (
+              <button onClick={handleConnect} disabled={loading}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] text-white transition-all disabled:opacity-50"
+                style={{ background: platform.color }}>
+                {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ExternalLink className="w-3 h-3" />}
+                חדש טוקן
+              </button>
+            )}
+          </div>
         ) : (
-          <button
-            onClick={handleConnect}
-            disabled={loading}
+          <button onClick={handleConnect} disabled={loading}
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] text-white transition-all disabled:opacity-50"
-            style={{ background: platform.color }}
-          >
+            style={{ background: platform.color }}>
             {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ExternalLink className="w-3 h-3" />}
             חבר
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── WhatsApp Embedded Signup Card ──────────────────────────────────────────────
+
+function WhatsAppEmbeddedCard({ platform, connection, account, expiry, onDisconnect, loading }) {
+  const isConnected = connection?.connected;
+  const [waBusy, setWaBusy]   = useState(false);
+
+  const launchEmbeddedSignup = () => {
+    // Meta Embedded Signup SDK — must be loaded separately via <script> in index.html
+    if (!window.FB) {
+      toast.error('Meta SDK לא נטען — נסה לרענן את הדף');
+      return;
+    }
+    setWaBusy(true);
+    window.FB.login(
+      async (response) => {
+        if (response.authResponse?.code) {
+          // Post the code to our backend
+          const SERVER_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api').replace(/\/api\/?$/, '');
+          try {
+            const res = await fetch(`${SERVER_BASE}/api/meta/auth/whatsapp/embedded-signup`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                code:             response.authResponse.code,
+                waba_id:          response.authResponse.extra?.waba_id      || '',
+                phone_number_id:  response.authResponse.extra?.phone_number_id || '',
+                businessProfileId: account?.linked_business || '',
+              }),
+            });
+            const data = await res.json();
+            if (data.success) {
+              toast.success('WhatsApp Business חובר בהצלחה ✓');
+            } else {
+              toast.error('שגיאה בחיבור WhatsApp: ' + (data.error || 'נסה שוב'));
+            }
+          } catch (e) {
+            toast.error('שגיאת חיבור: ' + e.message);
+          }
+        } else {
+          toast.info('חיבור WhatsApp בוטל');
+        }
+        setWaBusy(false);
+      },
+      {
+        config_id: import.meta.env.VITE_META_CONFIG_ID || '',
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: { setup: {}, featureType: 'whatsapp_embedded_signup' },
+      },
+    );
+  };
+
+  return (
+    <div className="card-base p-4 flex items-center gap-4"
+         style={{ borderLeft: `3px solid ${isConnected ? '#10b981' : platform.color}` }}>
+      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+           style={{ background: platform.bg }}>
+        {platform.icon}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[13px] font-semibold text-foreground">{platform.name}</span>
+          {isConnected && (
+            <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-medium">
+              <CheckCircle className="w-3 h-3" /> מחובר
+            </span>
+          )}
+          {expiry && (
+            <span className={`flex items-center gap-1 text-[10px] font-medium ${expiry.color}`}>
+              <Clock className="w-3 h-3" /> {expiry.label}
+            </span>
+          )}
+        </div>
+        <p className="text-[11px] text-foreground-muted">{platform.description}</p>
+        {isConnected && connection.page_name && (
+          <p className="text-[10px] text-foreground-muted opacity-70 mt-0.5">
+            מספר: {connection.page_name}
+          </p>
+        )}
+        {!isConnected && (
+          <p className="text-[10px] text-blue-500 mt-0.5">
+            דורש WhatsApp Business API — תהליך מהיר של 2 דקות
+          </p>
+        )}
+      </div>
+
+      <div className="flex-shrink-0 flex flex-col gap-1.5 items-end">
+        {!isConnected ? (
+          <button onClick={launchEmbeddedSignup} disabled={waBusy}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] text-white transition-all disabled:opacity-50"
+            style={{ background: platform.color }}>
+            {waBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <ExternalLink className="w-3 h-3" />}
+            חבר WhatsApp
+          </button>
+        ) : (
+          <button onClick={onDisconnect} disabled={loading}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] text-red-600 bg-red-50 border border-red-100 hover:bg-red-100 transition-all disabled:opacity-50">
+            {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+            נתק
           </button>
         )}
       </div>
@@ -226,6 +365,9 @@ export default function Integrations() {
   const connectSocial = async (platformId) => {
     try {
       const result = await initiateOAuth(platformId, bp?.id);
+
+      // WhatsApp uses Embedded Signup — handled by the card itself
+      if (result?.whatsapp_embedded_signup) return;
 
       if (result?.demo || result?.error) {
         // Server not configured — create a demo SocialAccount record
@@ -293,7 +435,7 @@ export default function Integrations() {
         <p className="text-[12px] text-foreground-muted mt-0.5">חבר את OTX לרשתות החברתיות ול-CRM שלך</p>
       </div>
 
-      <SyncStats bp={bp} />
+      <SyncStats bp={bp} socialAccounts={socialAccounts} />
 
       {/* Social Networks */}
       <div className="space-y-3">
@@ -309,6 +451,7 @@ export default function Integrations() {
               <SocialPlatformCard
                 platform={platform}
                 connection={connections[platform.id]}
+                account={connections[platform.id]?.account}
                 onConnect={() => connectSocial(platform.id)}
                 onDisconnect={() => disconnectSocial(platform.id)}
               />

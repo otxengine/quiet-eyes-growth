@@ -10,11 +10,13 @@ function timeAgo(dateStr) {
   return `לפני ${Math.floor(hours / 24)} ימים`;
 }
 
-export default function SyncStats({ bp }) {
-  const activeCount = [
+export default function SyncStats({ bp, socialAccounts = [] }) {
+  const socialCount = socialAccounts.filter(a => a.is_connected).length;
+  const crmCount    = [
     bp?.crm_hubspot_enabled, bp?.crm_monday_enabled,
     bp?.crm_webhook_enabled, bp?.crm_zapier_enabled,
   ].filter(Boolean).length;
+  const activeCount = socialCount + crmCount;
 
   return (
     <div className="grid grid-cols-3 gap-3">

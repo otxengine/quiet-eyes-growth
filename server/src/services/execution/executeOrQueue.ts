@@ -16,6 +16,8 @@ import { createLogger } from '../../infra/logger';
 import { sendWhatsApp } from './WhatsAppExecutor';
 import { postReviewReply } from './GoogleBusinessClient';
 import { publishPost } from './InstagramPublisher';
+import { publishTikTok } from './TikTokPublisher';
+import { sendEmail } from './EmailExecutor';
 
 const logger = createLogger('executeOrQueue');
 
@@ -23,7 +25,9 @@ export type ActionType =
   | 'review_reply'
   | 'whatsapp_send'
   | 'post_publish'
-  | 'review_request';
+  | 'review_request'
+  | 'tiktok_post'
+  | 'email_send';
 
 export interface QueuedAction {
   businessProfileId: string;
@@ -127,6 +131,27 @@ export async function dispatch(action: QueuedAction): Promise<string> {
       return r.published
         ? `פורסם ב: ${r.platforms.join(', ')}`
         : `מוכן לפרסום — ממתין לאישור`;
+    }
+
+    case 'tiktok_post': {
+      const r = await publishTikTok(businessProfileId, {
+        taskId:    payload.taskId,
+        caption:   payload.caption,
+        videoUrl:  payload.videoUrl,
+        coverTime: payload.coverTime,
+      });
+      return r.published ? `פורסם ב-TikTok` : `ממתין לפרסום TikTok`;
+    }
+
+    case 'email_send': {
+      const r = await sendEmail(businessProfileId, {
+        to:           payload.to,
+        subject:      payload.subject,
+        body:         payload.body,
+        customerName: payload.customerName,
+        leadId:       payload.leadId,
+      });
+      return r.sent ? `אימייל נשלח ל-${payload.to}` : `אימייל ממתין לשליחה ידנית`;
     }
 
     default:

@@ -25,6 +25,7 @@ import onboardingRouter from './routes/onboarding';
 registerAllHandlers();
 
 import { startScheduler } from './scheduler';
+import { refreshExpiringGoogleTokens } from './lib/googleTokenRefresh';
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -556,7 +557,34 @@ app.listen(PORT, async () => {
     updated_at               TEXT
   )`);
 
+  // ── OAuth state persistence (survives restarts + multi-instance) ──────────
+  await sql(`CREATE TABLE IF NOT EXISTS oauth_state_store (
+    id          TEXT        NOT NULL PRIMARY KEY,
+    business_id TEXT        NOT NULL,
+    platform    TEXT        NOT NULL,
+    expires_at  TIMESTAMPTZ NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_oauth_state_expires ON oauth_state_store(expires_at)`);
+  await sql(`DELETE FROM oauth_state_store WHERE expires_at < NOW()`);
+
+  // ── social_accounts: refresh token + expiry ───────────────────────────────
+  await sql(`ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS refresh_token TEXT`);
+  await sql(`ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS expires_at    TEXT`);
+
+  // ── business_profiles: TikTok + Email fields ──────────────────────────────
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS tiktok_access_token TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS tiktok_open_id      TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS notification_email  TEXT`);
+
   console.log('Startup SQL complete');
+
+  // ── Google token refresh scheduler — runs every 30 minutes ───────────────
+  setInterval(() => {
+    refreshExpiringGoogleTokens().catch(() => {});
+  }, 30 * 60 * 1000);
+  // Run once at startup too
+  refreshExpiringGoogleTokens().catch(() => {});
 
   startScheduler();
 });
