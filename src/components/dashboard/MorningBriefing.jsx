@@ -51,11 +51,14 @@ export default function MorningBriefing({ businessProfile, stats }) {
 
   const briefing = briefingData?.briefing;
   const lines = briefing?.lines || [];
+  const todayActions = briefing?.today_actions || [];
   // FIX 3: null = no data yet (show "—"), 0 = real score of zero
   const weeklyScore = briefing ? (briefing.weekly_score ?? null) : null;
   const scoreTrend = briefing?.score_trend || 'stable';
   const sourceCount = briefing?.source_count || 0;
   const generatedAt = briefingData?.generated_at;
+
+  const actionPriorityColor = (p) => p === 1 ? 'text-red-600' : p === 2 ? 'text-orange-500' : 'text-emerald-600';
 
   const hour = new Date().getHours();
   const briefingTitle = hour >= 5 && hour < 12 ? 'תדריך בוקר' : hour >= 12 && hour < 17 ? 'תדריך צהריים' : hour >= 17 && hour < 21 ? 'תדריך ערב' : 'תדריך לילה';
@@ -118,7 +121,7 @@ export default function MorningBriefing({ businessProfile, stats }) {
       {/* ── Collapsible body ──────────────────────────────────────────── */}
       <div
         style={{
-          maxHeight: collapsed ? 0 : '220px',
+          maxHeight: collapsed ? 0 : '320px',
           overflow: 'hidden',
           transition: 'max-height 0.2s ease',
         }}
@@ -152,7 +155,22 @@ export default function MorningBriefing({ businessProfile, stats }) {
             <p className="text-[11px] text-success">הכל שקט — המערכת ממשיכה לעקוב 24/7 ✓</p>
           )}
 
-          {/* Quick actions + today's actions in one compact row */}
+          {/* AI-generated today_actions */}
+          {!isLoading && todayActions.length > 0 && (
+            <div className="mt-3 pt-2 border-t border-border/40 space-y-1">
+              <p className="text-[9px] font-semibold text-foreground-muted uppercase tracking-wide mb-1.5">פעולות להיום</p>
+              {todayActions.slice(0, 3).map((ta, i) => (
+                <div key={i} className="flex items-start gap-1.5">
+                  <span className={`text-[10px] font-bold flex-shrink-0 mt-0.5 ${actionPriorityColor(ta.priority)}`}>
+                    {ta.priority === 1 ? '🔴' : ta.priority === 2 ? '🟠' : '🟢'}
+                  </span>
+                  <span className="text-[11px] text-foreground-secondary leading-snug">{ta.action}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Quick navigation links */}
           {!isLoading && (
             <div className="flex flex-wrap items-center gap-2 mt-3 pt-2 border-t border-border/40">
               {actions.slice(0, 3).map((action) => (

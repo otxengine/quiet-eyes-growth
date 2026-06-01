@@ -23,6 +23,8 @@ import { schedulePostPublisher } from './functions/schedulePostPublisher';
 import { analyzeInstagramComments } from './functions/analyzeInstagramComments';
 import { detectEvents } from './functions/detectEvents';
 import { detectDeliveryChanges } from './functions/detectDeliveryChanges';
+import { contentPerformanceAgent } from './functions/contentPerformanceAgent';
+import { reviewRequestTimingAgent } from './functions/reviewRequestTimingAgent';
 import {
   runViralCatalyst,
   runInfluenceIntegrity,
@@ -95,6 +97,11 @@ const AGENT_HANDLERS: Record<string, (req: Request, res: Response) => any> = {
   detectDeliveryChanges,
   DeliveryIntel: detectDeliveryChanges,
   Events: detectEvents,
+  // New performance + timing agents
+  contentPerformanceAgent,
+  reviewRequestTimingAgent,
+  ContentPerf:     contentPerformanceAgent,
+  ReviewTiming:    reviewRequestTimingAgent,
   // Layer 7 OTX agents — by functionName
   runViralCatalyst,
   runInfluenceIntegrity,

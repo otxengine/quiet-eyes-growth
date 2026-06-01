@@ -87,6 +87,9 @@ import { updateInsightMemory } from './updateInsightMemory';
 import { generateAdvisoryInsights } from './generateAdvisoryInsights';
 import { cleanupInsights } from './cleanupInsights';
 import { processEventBus } from './processEventBus';
+import { calculateROI } from './calculateROI';
+import { sectorBenchmark } from './sectorBenchmark';
+import { smartScheduler } from './smartScheduler';
 import { getBusinessConstraints, updateBusinessConstraints } from './manageConstraints';
 import { getEventBusStats, approveAction, rejectAction } from './getEventBusStats';
 import {
@@ -198,6 +201,10 @@ const FUNCTION_MAP: Record<string, any> = {
   getEventBusStats,
   approveAction,
   rejectAction,
+  // Analytics & intelligence
+  calculateROI,
+  sectorBenchmark,
+  smartScheduler,
   // Layer 7 advanced agents
   runViralCatalyst,
   runInfluenceIntegrity,

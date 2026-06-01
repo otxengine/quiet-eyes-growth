@@ -16,13 +16,19 @@ export async function generateMorningBriefing(req: Request, res: Response) {
   const cacheKey = `${businessProfileId}:${todayDate}`;
 
   try {
-    const [profiles, reviews, leads, competitors, signals, weeklyReports] = await Promise.all([
+    const [profiles, reviews, leads, competitors, signals, weeklyReports, pendingAlerts] = await Promise.all([
       prisma.businessProfile.findMany({ where: { id: businessProfileId } }),
       prisma.review.findMany({ where: { linked_business: businessProfileId }, orderBy: { created_date: 'desc' }, take: 20 }),
       prisma.lead.findMany({ where: { linked_business: businessProfileId }, orderBy: { score: 'desc' }, take: 30 }),
       prisma.competitor.findMany({ where: { linked_business: businessProfileId } }),
       prisma.marketSignal.findMany({ where: { linked_business: businessProfileId, is_read: false }, orderBy: { created_date: 'desc' }, take: 10 }),
       prisma.weeklyReport.findMany({ where: { linked_business: businessProfileId }, orderBy: { created_date: 'desc' }, take: 1 }),
+      prisma.proactiveAlert.findMany({
+        where: { linked_business: businessProfileId, is_dismissed: false, is_acted_on: false, priority: { in: ['critical', 'high'] } },
+        orderBy: { created_at: 'desc' },
+        take: 5,
+        select: { title: true, alert_type: true, priority: true },
+      }),
     ]);
 
     const bp = profiles[0];
@@ -58,6 +64,10 @@ export async function generateMorningBriefing(req: Request, res: Response) {
       weeklyFocus ? `מיקוד השבוע לסקטור זה: ${weeklyFocus}` : '',
     ].filter(Boolean).join('\n');
 
+    const activeAlertsBlock = pendingAlerts.length > 0
+      ? `Open alerts requiring action:\n${pendingAlerts.map(a => `• [${a.priority}] ${a.title}`).join('\n')}`
+      : '';
+
     const prompt = `You are a senior business intelligence advisor for "${bp.name}".
 Generate a sharp, actionable morning briefing tailored to this specific business and sector.
 
@@ -72,6 +82,7 @@ CURRENT DATA:
 - Average review rating: ${avgRating || 'N/A'}
 - Weekly score: ${weeklyScore || 'N/A'}/10
 - Monthly revenue closed: ₪${monthRevenue > 0 ? monthRevenue.toLocaleString() : 0}
+${activeAlertsBlock ? `- ${activeAlertsBlock}` : ''}
 ${missionContext ? `\n${missionContext}` : ''}
 
 Briefing rules:
@@ -90,9 +101,10 @@ priority 1=urgent (red), 2=important (orange), 3=helpful (green). Only include i
 Return ONLY valid JSON. ALL string values must be in Hebrew:
 {"lines":[{"emoji":"🔴","text":"...","link":"/reviews","type":"urgent"}],"weekly_score":${weeklyScore || 6.5},"score_trend":"stable","source_count":${totalSources},"today_actions":[{"action":"...","type":"review","priority":1}]}`;
 
-    // Return cached briefing if already generated today (skip LLM re-call)
+    // Return cached briefing if already generated today — but invalidate if new data arrived
     const cached = _dailyCache.get(cacheKey);
-    if (cached && cached.date === todayDate) {
+    const dataFingerprint = `${hotLeads.length}:${newLeadsToday.length}:${negativeReviews.length}:${pendingAlerts.length}:${signals.length}`;
+    if (cached && cached.date === todayDate && cached.fingerprint === dataFingerprint) {
       return res.json({
         briefing: cached.result,
         generated_at: new Date().toISOString(),
@@ -119,7 +131,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       result.month_revenue = monthRevenue;
     }
 
-    _dailyCache.set(cacheKey, { result, date: todayDate });
+    _dailyCache.set(cacheKey, { result, date: todayDate, fingerprint: dataFingerprint });
 
     await writeAutomationLog('generateMorningBriefing', businessProfileId, startTime, 1);
     return res.json({

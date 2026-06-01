@@ -76,6 +76,7 @@ export async function updateSectorKnowledge(req: Request, res: Response) {
         rawSignals,
         competitors,
         healthScores,
+        actedSignals,
       ] = await Promise.all([
         prisma.proactiveAlert.findMany({
           where: { linked_business: { in: ids } },
@@ -111,6 +112,12 @@ export async function updateSectorKnowledge(req: Request, res: Response) {
           orderBy: { created_date: 'desc' },
           take: ids.length,
         }),
+        // Acted-on AutoActions to understand what recommendations drive results
+        prisma.autoAction.findMany({
+          where: { linked_business: { in: ids }, status: 'completed' },
+          select: { action_type: true, description: true },
+          take: 100,
+        }).catch(() => [] as any[]),
       ]);
 
       // ── Alert conversion rates ────────────────────────────────────────────
@@ -196,6 +203,17 @@ export async function updateSectorKnowledge(req: Request, res: Response) {
         ? ratedComp.reduce((s, c) => s + (c.rating || 0), 0) / ratedComp.length
         : null;
 
+      // ── Acted-on recommendation patterns ─────────────────────────────────
+      const actedActionTypes = new Map<string, number>();
+      for (const a of actedSignals) {
+        const t = a.action_type || 'unknown';
+        actedActionTypes.set(t, (actedActionTypes.get(t) || 0) + 1);
+      }
+      const topActedActionTypes = [...actedActionTypes.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([type, count]) => ({ type, count }));
+
       // ── Health score baseline ─────────────────────────────────────────────
       const avgHealth = healthScores.length > 0
         ? Math.round(healthScores.reduce((s, h) => s + (h.overall_score || 0), 0) / healthScores.length)
@@ -273,6 +291,8 @@ Return ONLY valid JSON:
         total_signals_analyzed: marketSignals.length,
         top_signal_categories:  topSignalCategories,
         raw_signal_distribution: Object.fromEntries([...rawSigCount.entries()].slice(0, 10)),
+        top_acted_action_types: topActedActionTypes,
+        total_completed_actions: actedSignals.length,
         winning_patterns:       llmResult?.winning_patterns || '',
         risk_patterns:          llmResult?.risk_patterns    || '',
         peak_demand:            llmResult?.peak_demand      || '',

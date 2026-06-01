@@ -36,10 +36,14 @@ export async function reviewRequestAutomation(req: Request, res: Response) {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 3600000).toISOString();
 
     // Find recently closed leads with a phone number
+    // Include both status variants used across the system
     const closedLeads = await prisma.lead.findMany({
       where: {
         linked_business: businessProfileId,
-        status: 'closed_won',
+        OR: [
+          { status: { in: ['closed_won', 'completed'] } },
+          { lifecycle_stage: 'closed_won' },
+        ],
         contact_phone: { not: null },
       },
       orderBy: { created_date: 'desc' },

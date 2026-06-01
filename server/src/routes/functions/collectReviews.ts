@@ -425,6 +425,61 @@ export async function collectReviews(req: Request, res: Response) {
       }
     }
 
+    // ── Competitor mention detection in new reviews ──────────────────────────
+    if (newReviews > 0) {
+      try {
+        const knownCompetitors = await prisma.competitor.findMany({
+          where: { linked_business: businessProfileId },
+          select: { id: true, name: true },
+          take: 10,
+        });
+        if (knownCompetitors.length > 0) {
+          const freshReviews = await prisma.review.findMany({
+            where: { linked_business: businessProfileId, created_date: { gte: new Date(startTime) } },
+            select: { id: true, text: true, sentiment: true, rating: true, reviewer_name: true },
+          });
+          for (const rev of freshReviews) {
+            const textLower = (rev.text || '').toLowerCase();
+            for (const comp of knownCompetitors) {
+              if (!comp.name || !textLower.includes(comp.name.toLowerCase())) continue;
+              const sigTitle = `לקוח מזכיר "${comp.name}" בביקורת`;
+              const alreadyExists = await prisma.marketSignal.findFirst({
+                where: {
+                  linked_business: businessProfileId,
+                  category: 'competitor_mention',
+                  summary: { contains: comp.name },
+                  detected_at: { gte: new Date(Date.now() - 7 * 86400000).toISOString() },
+                },
+              });
+              if (alreadyExists) continue;
+              const isPositiveForUs = rev.sentiment === 'positive' || (rev.rating || 0) >= 4;
+              await prisma.marketSignal.create({
+                data: {
+                  linked_business: businessProfileId,
+                  summary: `${sigTitle} — ${isPositiveForUs ? 'בהשוואה לטובתנו' : 'השוואה שלילית — בדוק'}`,
+                  category: 'competitor_mention',
+                  impact_level: isPositiveForUs ? 'low' : 'high',
+                  confidence: 75,
+                  recommended_action: isPositiveForUs
+                    ? `השתמש בהשוואה כחומר שיווקי נגד ${comp.name}`
+                    : `בחן מה ${comp.name} מציע שאנו לא — ${(rev.text || '').slice(0, 80)}`,
+                  source_description: JSON.stringify({
+                    review_id: rev.id,
+                    reviewer: rev.reviewer_name,
+                    competitor_name: comp.name,
+                    review_snippet: (rev.text || '').slice(0, 200),
+                    sentiment: rev.sentiment,
+                  }),
+                  is_read: false,
+                  detected_at: new Date().toISOString(),
+                },
+              }).catch(() => {});
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
     setLastRun(businessProfileId, 'collectReviews');
     await writeAutomationLog('collectReviews', businessProfileId, startTime, newReviews);
     console.log(`collectReviews done: ${newReviews} new reviews (${googleAdded} from Google, ${sourcesScanCount} from other sources)`);

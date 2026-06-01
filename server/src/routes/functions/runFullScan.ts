@@ -31,6 +31,8 @@ import { marketMemoryEngine } from './marketMemoryEngine';
 import { microMomentDetector } from './microMomentDetector';
 import { sentimentVelocityMonitor } from './sentimentVelocityMonitor';
 import { bootstrapBusinessIntelligence } from '../../lib/bootstrapIntelligence';
+import { contentPerformanceAgent } from './contentPerformanceAgent';
+import { reviewRequestTimingAgent } from './reviewRequestTimingAgent';
 
 async function callHandler(fn: Function, businessProfileId: string): Promise<any> {
   return new Promise((resolve) => {
@@ -160,6 +162,9 @@ export async function runFullScan(req: Request, res: Response) {
     ['cleanupAndLearn',             cleanupAndLearn],
     // ── Sector learning — aggregates cross-business patterns ─────
     ['updateSectorKnowledge',       updateSectorKnowledge],
+    // ── Content & review performance agents ─────────────────────
+    ['contentPerformanceAgent',     contentPerformanceAgent],
+    ['reviewRequestTimingAgent',    reviewRequestTimingAgent],
     // ── Briefing (always last) ───────────────────────────────────
     ['generateMorningBriefing',     generateMorningBriefing],
   ];

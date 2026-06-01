@@ -25,7 +25,7 @@ export default function Reputation() {
   const [sendingRequests, setSendingRequests] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
-  const [selectedSources, setSelectedSources] = useState(['google', 'facebook', 'instagram', 'tripadvisor', 'waze', 'wolt', '10bis', 'easy', 'forums']);
+  const [selectedSources, setSelectedSources] = useState(['google', 'facebook', 'instagram', 'tripadvisor', 'waze', 'tiktok', 'wolt', '10bis', 'easy', 'forums']);
   const [dismissedAlerts, setDismissedAlerts] = useState(() => {
     try { return JSON.parse(localStorage.getItem('dismissed_rep_alerts') || '[]'); } catch { return []; }
   });
@@ -130,6 +130,17 @@ export default function Reputation() {
     },
     enabled: !!bpId,
     refetchInterval: 2 * 60 * 1000,
+  });
+
+  // Review timing recommendation from reviewRequestTimingAgent
+  const { data: reviewTimingSignal } = useQuery({
+    queryKey: ['reviewTimingSignal', bpId],
+    queryFn: () => base44.entities.MarketSignal.filter(
+      { linked_business: bpId, category: 'review_timing' },
+      '-detected_at', 1
+    ).then(r => r[0] || null),
+    enabled: !!bpId,
+    staleTime: 60 * 60 * 1000,
   });
 
   const visibleAlerts = negativeAlerts.filter(a => !dismissedAlerts.includes(a.id));
@@ -266,6 +277,17 @@ export default function Reputation() {
           </div>
         ))}
       </div>
+
+      {/* Review timing recommendation */}
+      {reviewTimingSignal && (
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-teal-50 border border-teal-200">
+          <MessageCircle className="w-4 h-4 text-teal-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[12px] font-semibold text-teal-800">המלצת תזמון לבקשות ביקורת</p>
+            <p className="text-[11px] text-teal-700 mt-0.5 line-clamp-2">{reviewTimingSignal.recommended_action || reviewTimingSignal.summary}</p>
+          </div>
+        </div>
+      )}
 
       {/* Real-time negative review alerts */}
       {visibleAlerts.length > 0 && (

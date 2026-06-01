@@ -3,10 +3,17 @@ import { AlertTriangle, Target, TrendingUp, Users, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const categoryConfig = {
-  threat: { icon: AlertTriangle, borderColor: 'border-l-[#dc2626]' },
-  opportunity: { icon: Target, borderColor: 'border-l-[#10b981]' },
-  trend: { icon: TrendingUp, borderColor: 'border-l-[#d97706]' },
-  competitor_move: { icon: Users, borderColor: 'border-l-[#999999]' },
+  threat:               { icon: AlertTriangle, borderColor: 'border-l-[#dc2626]' },
+  opportunity:          { icon: Target,        borderColor: 'border-l-[#10b981]' },
+  trend:                { icon: TrendingUp,    borderColor: 'border-l-[#d97706]' },
+  competitor_move:      { icon: Users,         borderColor: 'border-l-[#6366f1]' },
+  competitor_mention:   { icon: Users,         borderColor: 'border-l-[#818cf8]' },
+  demand_gap:           { icon: Target,        borderColor: 'border-l-[#06b6d4]' },
+  tiktok_sector_trend:  { icon: TrendingUp,    borderColor: 'border-l-[#ec4899]' },
+  content_performance:  { icon: TrendingUp,    borderColor: 'border-l-[#8b5cf6]' },
+  review_timing:        { icon: Target,        borderColor: 'border-l-[#14b8a6]' },
+  micro_moment:         { icon: Target,        borderColor: 'border-l-[#f59e0b]' },
+  sentiment_drop:       { icon: AlertTriangle, borderColor: 'border-l-[#ef4444]' },
 };
 
 function timeAgo(dateStr) {

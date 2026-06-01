@@ -26,7 +26,8 @@ export async function insightAutoResolve(businessProfileId: string): Promise<num
     if (pending.length === 0) return 0;
 
     // Load current state in parallel
-    const [hotLeads, negReviews] = await Promise.all([
+    const twoDaysAgo = new Date(now.getTime() - 2 * 86400000).toISOString();
+    const [hotLeads, negReviews, recentActions] = await Promise.all([
       prisma.lead.findMany({
         where: { linked_business: businessProfileId, status: 'hot' },
         select: { id: true, name: true },
@@ -34,6 +35,10 @@ export async function insightAutoResolve(businessProfileId: string): Promise<num
       prisma.review.findMany({
         where: { linked_business: businessProfileId, response_status: 'pending' },
         select: { id: true, rating: true, sentiment: true },
+      }),
+      prisma.action.findMany({
+        where: { linked_business: businessProfileId, created_date: { gte: new Date(twoDaysAgo) } },
+        select: { id: true, title: true, reasoning: true },
       }),
     ]);
 
@@ -72,6 +77,23 @@ export async function insightAutoResolve(businessProfileId: string): Promise<num
         });
         resolved++;
         continue;
+      }
+
+      // demand_gap → auto-resolve if a recent action addresses the same topic
+      if (alert.alert_type === 'demand_gap') {
+        const alertKeywords = (alert.title || alert.description || '').toLowerCase().split(/\s+/).filter(w => w.length > 3);
+        const hasMatchingAction = recentActions.some(a => {
+          const desc = ((a.title || '') + ' ' + (a.reasoning || '')).toLowerCase();
+          return alertKeywords.some(kw => desc.includes(kw));
+        });
+        if (hasMatchingAction) {
+          await prisma.proactiveAlert.update({
+            where: { id: alert.id },
+            data:  { is_acted_on: true },
+          });
+          resolved++;
+          continue;
+        }
       }
     }
 

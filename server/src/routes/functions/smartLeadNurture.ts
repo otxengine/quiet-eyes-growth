@@ -61,8 +61,33 @@ export async function smartLeadNurture(req: Request, res: Response) {
     // Best contact time from mission
     const bestContactTime = nurtureMission?.best_contact_time_he || '';
 
-    const fortyEightHoursAgo = new Date(Date.now() - 48 * 3600000);
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600000);
+    // Sector-dynamic timing: use sector knowledge to tune follow-up windows
+    const sectorKnowledge = await prisma.sectorKnowledge.findFirst({
+      where: { sector: category },
+      orderBy: { created_date: 'desc' },
+      select: { winner_lead_dna: true, peak_demand: true },
+    });
+    let followupWindowHours = 48;   // default: 48h before first follow-up
+    let coldWindowDays = 7;         // default: 7d before marking cold
+    if (sectorKnowledge?.winner_lead_dna) {
+      try {
+        const dna = JSON.parse(sectorKnowledge.winner_lead_dna);
+        // High-conversion sectors (>40%) get longer consideration window
+        if ((dna.lead_conversion_rate_pct || 0) > 40) {
+          followupWindowHours = 72;
+          coldWindowDays = 10;
+        }
+        // Low-conversion sectors get shorter, more aggressive follow-up
+        if ((dna.lead_conversion_rate_pct || 0) < 15) {
+          followupWindowHours = 24;
+          coldWindowDays = 5;
+        }
+      } catch {}
+    }
+    const sectorPeakDemand = sectorKnowledge?.peak_demand || '';
+
+    const fortyEightHoursAgo = new Date(Date.now() - followupWindowHours * 3600000);
+    const sevenDaysAgo = new Date(Date.now() - coldWindowDays * 24 * 3600000);
 
     // Find leads that are 'contacted' and were created 48h+ ago without progressing
     const staleLeads = await prisma.lead.findMany({
@@ -144,6 +169,7 @@ Style: ${toneInstruction}
 ${valuePropsBlock}
 ${templateBlock}
 ${bestContactTime ? `שעת פנייה מומלצת לסקטור זה: ${bestContactTime}` : ''}
+${sectorPeakDemand ? `זמני ביקוש שיא בסקטור: ${sectorPeakDemand}` : ''}
 
 Message rules:
 - Line 1: personal address by name + the specific thing they needed (not generic)

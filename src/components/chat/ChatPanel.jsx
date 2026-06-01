@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { X, Send, Loader2, MessageSquare, Trash2 } from 'lucide-react';
 import ChatMessage from './ChatMessage';
+import { useQuery } from '@tanstack/react-query';
 
 // Storage key is scoped to the specific business so histories never bleed between accounts.
 function storageKey(businessProfileId) {
@@ -24,6 +25,36 @@ function saveMessages(msgs, businessProfileId) {
   } catch {}
 }
 
+// Build context-aware suggested questions based on real business state
+function buildSuggestions(profile, alerts, leads, reviews) {
+  const questions = [];
+
+  // Hot leads
+  const hotLeads = (leads || []).filter(l => l.status === 'hot');
+  if (hotLeads.length > 0) {
+    questions.push(`יש לי ${hotLeads.length} לידים חמים — מה הפעולה הכי דחופה?`);
+  }
+
+  // Pending negative reviews
+  const negReviews = (reviews || []).filter(r => r.sentiment === 'negative' && r.response_status === 'pending');
+  if (negReviews.length > 0) {
+    questions.push(`יש ${negReviews.length} ביקורות שליליות ללא מענה — איך לטפל?`);
+  }
+
+  // Active alerts
+  const criticalAlerts = (alerts || []).filter(a => a.priority === 'high' || a.priority === 'critical');
+  if (criticalAlerts.length > 0) {
+    questions.push('מה ההתראות הדחופות ביותר שלי עכשיו?');
+  }
+
+  // Generic high-value questions if not enough context-specific ones
+  if (questions.length < 2) questions.push('מה הפעולה הכי משפיעה שאני יכול לעשות היום?');
+  if (questions.length < 3) questions.push('מה מצב הלידים שלי השבוע?');
+  if (questions.length < 4) questions.push('איך אני ביחס למתחרים שלי?');
+
+  return questions.slice(0, 4);
+}
+
 export default function ChatPanel({ onClose, businessProfile }) {
   const bpId = businessProfile?.id;
 
@@ -31,6 +62,28 @@ export default function ChatPanel({ onClose, businessProfile }) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const bottomRef = useRef(null);
+
+  // Fetch context to build smart suggested questions
+  const { data: alertsData = [] } = useQuery({
+    queryKey: ['chatAlerts', bpId],
+    queryFn: () => base44.entities.ProactiveAlert.filter({ linked_business: bpId, is_dismissed: false, is_acted_on: false }, '-created_at', 5),
+    enabled: !!bpId && messages.length === 0,
+    staleTime: 2 * 60 * 1000,
+  });
+  const { data: leadsData = [] } = useQuery({
+    queryKey: ['chatLeads', bpId],
+    queryFn: () => base44.entities.Lead.filter({ linked_business: bpId }, '-created_date', 20),
+    enabled: !!bpId && messages.length === 0,
+    staleTime: 2 * 60 * 1000,
+  });
+  const { data: reviewsData = [] } = useQuery({
+    queryKey: ['chatReviews', bpId],
+    queryFn: () => base44.entities.Review.filter({ linked_business: bpId }, '-created_date', 20),
+    enabled: !!bpId && messages.length === 0,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const suggestions = buildSuggestions(businessProfile, alertsData, leadsData, reviewsData);
 
   // When the business changes (or first load), reload the correct history.
   useEffect(() => {
@@ -172,10 +225,22 @@ ${history}
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3" style={{ scrollbarWidth: 'none' }}>
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <MessageSquare className="w-8 h-8 text-[#e0e0e0] mb-2" />
-            <p className="text-[13px] text-[#999999]">שלום! אני העוזר AI שלך.</p>
-            <p className="text-[11px] text-[#cccccc] mt-1">שאל אותי על הלידים, הביקורות או המתחרים שלך</p>
+          <div className="flex flex-col items-start justify-start h-full pt-2 gap-3">
+            <div className="w-full text-center pb-1">
+              <MessageSquare className="w-7 h-7 text-[#e0e0e0] mx-auto mb-1" />
+              <p className="text-[12px] text-[#999999] font-medium">שאל אותי על העסק שלך</p>
+            </div>
+            <div className="w-full space-y-1.5">
+              {suggestions.map((q, i) => (
+                <button
+                  key={i}
+                  onClick={() => { setInput(q); }}
+                  className="w-full text-right text-[11px] text-[#444444] bg-[#f8f8f8] hover:bg-[#f0f0f0] border border-[#eeeeee] rounded-xl px-3 py-2.5 transition-colors leading-relaxed"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           messages.filter(m => m.role !== 'system').map((msg, i) => (

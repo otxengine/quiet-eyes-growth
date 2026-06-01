@@ -49,8 +49,8 @@ export async function autoRespondToReviews(req: Request, res: Response) {
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 3600000).toISOString();
 
-    // Find reviews that need a response: no suggested_response yet, negative or low rating, last 30 days
-    const reviews = await prisma.review.findMany({
+    // Priority 1: negative/low reviews from last 30 days
+    const negativeReviews = await prisma.review.findMany({
       where: {
         linked_business: businessProfileId,
         suggested_response: null,
@@ -61,11 +61,11 @@ export async function autoRespondToReviews(req: Request, res: Response) {
         ],
       },
       orderBy: { created_date: 'desc' },
-      take: 10,
+      take: 8,
     });
 
     // Also grab all-time unresponded negative reviews if we got fewer than 5
-    const allUnresponded = reviews.length < 5
+    const allNegative = negativeReviews.length < 5
       ? await prisma.review.findMany({
           where: {
             linked_business: businessProfileId,
@@ -73,11 +73,31 @@ export async function autoRespondToReviews(req: Request, res: Response) {
             OR: [{ sentiment: 'negative' }, { rating: { lte: 3 } }],
           },
           orderBy: { created_date: 'desc' },
-          take: 10,
+          take: 8,
         })
-      : reviews;
+      : negativeReviews;
 
-    const toProcess = allUnresponded.slice(0, 10);
+    // Priority 2: positive reviews with no response — brand building (last 14 days, cap 3)
+    const positiveReviews = await prisma.review.findMany({
+      where: {
+        linked_business: businessProfileId,
+        suggested_response: null,
+        response_status: 'pending',
+        sentiment: 'positive',
+        rating: { gte: 4 },
+        created_date: { gte: new Date(Date.now() - 14 * 86400000).toISOString() },
+      },
+      orderBy: { created_date: 'desc' },
+      take: 3,
+    });
+
+    // Merge: negative first, then positive (deduplicated by id)
+    const seenIds = new Set<string>();
+    const merged: typeof allNegative = [];
+    for (const r of [...allNegative, ...positiveReviews]) {
+      if (!seenIds.has(r.id)) { seenIds.add(r.id); merged.push(r); }
+    }
+    const toProcess = merged.slice(0, 10);
 
     const existingAlerts = await prisma.proactiveAlert.findMany({
       where: { linked_business: businessProfileId, is_dismissed: false, alert_type: 'negative_review' },
@@ -110,7 +130,7 @@ Write a review response that turns ${isNegative ? 'a disappointed customer into 
 
 Reviewer: ${review.reviewer_name || 'לקוח'}
 Rating: ${review.rating || '?'}/5
-Review text: "${review.text.substring(0, 500)}"
+Review text: "${(review.text || '').substring(0, 500)}"
 
 Tone: ${toneInstruction}
 ${missionTemplate ? `Sector-tuned style guide (DO NOT copy, use as tone/structure inspiration):\n"${missionTemplate}"` : `Sector example: "${sectorExample}"`}
@@ -175,9 +195,11 @@ Write ONLY the final response text in Hebrew.`,
           constraintNotes: validation.constraintNotes,
         });
 
-        // ProactiveAlert for dashboard visibility (skip if already auto-executed)
-        const alertTitle = `ביקורת שלילית: ${reviewerLabel} (${review.rating || '?'}⭐)`;
-        if (!executed && !existingTitles.has(alertTitle)) {
+        // ProactiveAlert for dashboard visibility — only for negative/low reviews (skip for positive)
+        const alertTitle = isNegative
+          ? `ביקורת שלילית: ${reviewerLabel} (${review.rating || '?'}⭐)`
+          : null;
+        if (!executed && alertTitle && !existingTitles.has(alertTitle)) {
           const actionMeta = JSON.stringify({
             action_label: 'פרסם תגובה',
             action_type: 'respond',
@@ -190,8 +212,8 @@ Write ONLY the final response text in Hebrew.`,
           await prisma.proactiveAlert.create({
             data: {
               alert_type: 'negative_review',
-              title: alertTitle,
-              description: review.text.substring(0, 150),
+              title: alertTitle!,
+              description: (review.text || '').substring(0, 150),
               suggested_action: `פרסם תגובה מקצועית ל${reviewerLabel}`,
               priority: (review.rating || 5) <= 2 ? 'high' : 'medium',
               source_agent: actionMeta,
@@ -201,7 +223,7 @@ Write ONLY the final response text in Hebrew.`,
               linked_business: businessProfileId,
             },
           });
-          existingTitles.add(alertTitle);
+          if (alertTitle) existingTitles.add(alertTitle);
         }
 
         processed++;

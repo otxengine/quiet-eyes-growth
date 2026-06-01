@@ -128,12 +128,12 @@ export async function updateLeadFreshness(req: Request, res: Response) {
     stats.social_signals_deleted = r5.count;
 
     // ── Phase 6: Purge old market signals ─────────────────────────────────────
-    // Read signals: keep 14 days. Unread: keep 45 days.
+    // Aligned with cleanupAndLearn: read signals 30d, unread 90d
     const r6a = await prisma.marketSignal.deleteMany({
-      where: { linked_business: businessProfileId, is_read: true, created_date: { lt: DAYS(14) } },
+      where: { linked_business: businessProfileId, is_read: true, created_date: { lt: DAYS(30) } },
     });
     const r6b = await prisma.marketSignal.deleteMany({
-      where: { linked_business: businessProfileId, is_read: false, created_date: { lt: DAYS(45) } },
+      where: { linked_business: businessProfileId, is_read: false, created_date: { lt: DAYS(90) } },
     });
     stats.market_signals_deleted = r6a.count + r6b.count;
 

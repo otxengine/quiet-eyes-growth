@@ -2,6 +2,9 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 
+// Same-day cache to avoid burning LLM credits on rapid re-triggers
+const _weeklyCache = new Map<string, { result: any; date: string }>();
+
 /**
  * generateWeeklyReport
  * Generates a structured weekly performance report.
@@ -10,8 +13,17 @@ import { invokeLLM } from '../../lib/llm';
  * Returns: { report, stats }
  */
 export async function generateWeeklyReport(req: Request, res: Response) {
-  const { businessProfileId } = req.body;
+  const { businessProfileId, force } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+  const todayDate = new Date().toISOString().slice(0, 10);
+  const cacheKey = `${businessProfileId}:${todayDate}`;
+
+  // Return cached result for same-day re-triggers unless force=true
+  const cached = _weeklyCache.get(cacheKey);
+  if (cached && !force) {
+    return res.json({ ...cached.result, cached: true });
+  }
 
   try {
     const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
@@ -136,7 +148,9 @@ Score rule: 1-10. 10=excellent week. 7+=above average. 5=average. 3-=tough week.
       response_json_schema: { type: 'object' },
     });
 
-    return res.json({ report: result, stats });
+    const response = { report: result, stats };
+    _weeklyCache.set(cacheKey, { result: response, date: todayDate });
+    return res.json(response);
   } catch (err: any) {
     console.error('[generateWeeklyReport] error:', err.message);
     return res.status(500).json({ error: err.message });

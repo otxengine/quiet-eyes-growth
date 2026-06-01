@@ -2,7 +2,10 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
+
+const MIN_INTERVAL_MS = 48 * 60 * 60 * 1000; // 48h
 
 /**
  * detectDeliveryChanges — Universal Marketplace Intelligence Agent
@@ -237,6 +240,10 @@ export async function detectDeliveryChanges(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
+  if (shouldSkipAgent(businessProfileId, 'detectDeliveryChanges', MIN_INTERVAL_MS)) {
+    return res.json({ insights_created: 0, skipped: true, reason: 'ran_recently' });
+  }
+
   const startTime = new Date().toISOString();
   let insightsCreated = 0;
 
@@ -466,6 +473,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       } catch (_) {}
     }
 
+    setLastRun(businessProfileId, 'detectDeliveryChanges');
     await writeAutomationLog('detectDeliveryChanges', businessProfileId, startTime, insightsCreated);
     console.log(`[DeliveryIntel] done — sector: ${category} | platforms: ${platformKeys.join(',')} | insights: ${insightsCreated}`);
     return res.json({

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
+import { loadBusinessContext } from '../../lib/businessContext';
 
 /**
  * chatWithBusiness — context-aware AI assistant for a specific business.
@@ -18,107 +19,140 @@ export async function chatWithBusiness(req: Request, res: Response) {
   }
 
   try {
-    // Fetch business data in parallel — keep queries light
-    const [profile, recentSignals, competitors, recentReviews, recentLeads] = await Promise.all([
+    // Fetch business data in parallel — rich context for smarter responses
+    const [profile, recentSignals, competitors, recentReviews, recentLeads, pendingAlerts, bizMemory, healthScoreRow] = await Promise.all([
       prisma.businessProfile.findUnique({ where: { id: businessProfileId } }),
       prisma.marketSignal.findMany({
         where: { linked_business: businessProfileId },
         orderBy: { detected_at: 'desc' },
-        take: 5,
-        select: { summary: true, impact_level: true, category: true, recommended_action: true },
+        take: 8,
+        select: { summary: true, impact_level: true, category: true, recommended_action: true, detected_at: true },
       }),
       prisma.competitor.findMany({
         where: { linked_business: businessProfileId },
         take: 5,
-        select: { name: true, strengths: true, weaknesses: true },
+        select: { name: true, strengths: true, weaknesses: true, rating: true, trend_direction: true },
       }),
       prisma.review.findMany({
         where: { linked_business: businessProfileId },
         orderBy: { created_date: 'desc' },
-        take: 5,
-        select: { text: true, rating: true, sentiment: true },
+        take: 8,
+        select: { text: true, rating: true, sentiment: true, response_status: true },
       }),
       prisma.lead.findMany({
-        where: { linked_business: businessProfileId, status: { in: ['hot', 'new'] } },
+        where: { linked_business: businessProfileId },
         orderBy: { created_date: 'desc' },
-        take: 5,
-        select: { name: true, status: true, service_needed: true },
+        take: 10,
+        select: { name: true, status: true, service_needed: true, score: true, source: true },
       }),
+      prisma.proactiveAlert.findMany({
+        where: { linked_business: businessProfileId, is_dismissed: false, is_acted_on: false },
+        orderBy: { created_at: 'desc' },
+        take: 5,
+        select: { title: true, alert_type: true, priority: true, suggested_action: true },
+      }),
+      prisma.businessMemory.findFirst({ where: { linked_business: businessProfileId } }),
+      prisma.healthScore.findFirst({ where: { linked_business: businessProfileId }, orderBy: { created_date: 'desc' } }).catch(() => null),
     ]);
 
     if (!profile) {
       return res.status(404).json({ error: 'Business profile not found' });
     }
 
+    // Load learned business preferences (tone, rejected patterns)
+    const bizCtx = await loadBusinessContext(businessProfileId).catch(() => null);
+    const preferredTone = (bizCtx as any)?.preferredTone || (profile as any)?.tone_preference || 'professional';
+
     // Build context blocks
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    const weekSignalCount = recentSignals.filter(s => (s.detected_at || '') >= weekAgo).length;
+
+    const highImpactSignals = recentSignals.filter(s => s.impact_level === 'high' || s.impact_level === 'critical');
     const signalLines = recentSignals.length > 0
-      ? recentSignals.map(s => `• [${s.impact_level}] ${s.summary}: ${(s.recommended_action || '').slice(0, 60)}`).join('\n')
+      ? recentSignals.slice(0, 6).map(s => `• [${s.impact_level}/${s.category}] ${s.summary}${s.recommended_action ? ` → ${s.recommended_action.slice(0, 50)}` : ''}`).join('\n')
       : 'אין תובנות עדיין.';
 
     const competitorLines = competitors.length > 0
-      ? competitors.map(c => `• ${c.name}`).join('\n')
+      ? competitors.map(c => `• ${c.name} (${c.rating || '?'}⭐${c.trend_direction === 'up' ? ' ↑מגמה עולה' : c.trend_direction === 'down' ? ' ↓יורד' : ''})`).join('\n')
       : 'אין מתחרים מזוהים עדיין.';
 
+    const avgRating = recentReviews.length > 0
+      ? (recentReviews.reduce((s, r) => s + (r.rating || 0), 0) / recentReviews.length).toFixed(1)
+      : null;
+    const pendingReviewCount = recentReviews.filter(r => r.response_status === 'pending').length;
+    const negativeReviewCount = recentReviews.filter(r => r.sentiment === 'negative').length;
+
     const reviewLines = recentReviews.length > 0
-      ? recentReviews.map(r => `• [${r.sentiment || '?'} ${r.rating || '?'}⭐] "${(r.text || '').slice(0, 80)}"`).join('\n')
+      ? [
+          `סה"כ: ${recentReviews.length} ביקורות | ממוצע: ${avgRating}⭐ | ${pendingReviewCount} ממתינות לתגובה | ${negativeReviewCount} שליליות`,
+          ...recentReviews.filter(r => r.sentiment === 'negative').slice(0, 2).map(r =>
+            `  ⚠ "${(r.text || '').slice(0, 80)}" (${r.rating}⭐)`
+          ),
+        ].filter(Boolean).join('\n')
       : 'אין ביקורות עדיין.';
 
+    const hotLeads = recentLeads.filter(l => l.status === 'hot');
     const leadLines = recentLeads.length > 0
-      ? recentLeads.map(l => `• ${l.name || 'ליד'} — ${l.service_needed || ''} (${l.status})`).join('\n')
-      : 'אין לידים פעילים כרגע.';
+      ? [
+          `סה"כ: ${recentLeads.length} לידים | ${hotLeads.length} חמים`,
+          ...hotLeads.slice(0, 3).map(l => `  🔥 ${l.name || 'ליד'} — ${l.service_needed || ''} (ציון: ${l.score || '?'})`),
+          ...recentLeads.filter(l => l.status === 'new').slice(0, 2).map(l =>
+            `  🆕 ${l.name || 'ליד'} — ${l.service_needed || ''} מ-${l.source || 'לא ידוע'}`
+          ),
+        ].filter(Boolean).join('\n')
+      : 'אין לידים כרגע.';
 
-    // Compute a simple weekly score proxy
-    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-    const weekSignalCount = recentSignals.filter(s => (s as any).detected_at >= weekAgo).length;
-    const weeklyScore = Math.min(10, Math.max(1, Math.round(
-      (recentSignals.length > 0 ? 4 : 0) +
-      (recentLeads.length > 0 ? 3 : 0) +
-      (recentReviews.length > 0 ? 2 : 0) +
-      (weekSignalCount > 2 ? 1 : 0)
-    )));
+    const alertLines = pendingAlerts.length > 0
+      ? pendingAlerts.map(a => `• [${a.priority}] ${a.title}`).join('\n')
+      : null;
 
-    const systemContext = `You are a smart and experienced business advisor for the OTX Intelligence platform.
-You are speaking with the **business owner** — not their customer.
-ALL your responses must be written in Hebrew.
+    const healthScoreVal = (healthScoreRow as any)?.overall_score || null;
 
-Business details:
-• Name: ${profile.name}
-• Sector: ${profile.category}
-• City: ${profile.city}
-• Services: ${profile.relevant_services || 'לא צוינו'}
-${profile.description ? `• Description: ${profile.description}` : ''}
-• Weekly score: ${weeklyScore}/10
+    const systemContext = `You are OTX — a sharp, data-driven business intelligence advisor for the OTX platform.
+You are talking with **the business owner** — never with their customers.
+ALL responses must be in Hebrew.
 
-Current market signals:
+=== פרופיל עסק ===
+• שם: ${profile!.name}
+• סקטור: ${profile!.category} | עיר: ${profile!.city}
+• שירותים: ${(profile as any).relevant_services || 'לא צוינו'}
+${(profile as any).description ? `• תיאור: ${(profile as any).description}` : ''}
+${healthScoreVal ? `• ציון בריאות עסקית: ${healthScoreVal}/100` : ''}
+${preferredTone !== 'professional' ? `• סגנון תקשורת מועדף: ${preferredTone}` : ''}
+
+=== תובנות שוק (${weekSignalCount} השבוע, ${highImpactSignals.length} השפעה גבוהה) ===
 ${signalLines}
 
-Competitors:
+=== מתחרים (${competitors.length}) ===
 ${competitorLines}
 
-Recent reviews:
+=== ביקורות ===
 ${reviewLines}
 
-Active leads:
+=== לידים ===
 ${leadLines}
 
-Conversation rules:
-1. Always address the business owner in second person: "העסק שלך", "הלקוחות שלך", "אתה"
-2. Give focused business recommendations — not generic internet information
-3. Use the specific data above when relevant
-4. If asked about a domain you have no data on — say so and offer to scan
-5. Keep answers short — up to 3 sentences; longer only for complex questions
-6. Always respond in Hebrew
+${alertLines ? `=== התראות פעילות ===\n${alertLines}\n` : ''}
+=== כללי תגובה ===
+1. פנה לבעל העסק בגוף שני: "העסק שלך", "אתה", "הלקוחות שלך"
+2. השתמש בנתונים הספציפיים לעיל — לא עצות גנריות
+3. תשובות: עד 3 משפטים — קצר וישיר; מפורט רק לשאלות טכניות
+4. אם אין נתונים לתחום שנשאל — אמור זאת והצע לסרוק
+5. הצע פעולה אחת קונקרטית בסוף כל תגובה
+6. תגובה בעברית בלבד
 
-Correct tone: "הלקוחות שלך מחפשים X — כדאי שתעשה Y"
-Incorrect tone: "אנחנו שמחים לעזור" / "ניתן לשקול" / "מומלץ להתייעץ עם"`;
+סגנון נכון: "הלקוחות שלך מחפשים X — שלח WhatsApp ל-Y עכשיו"
+סגנון שגוי: "ניתן לשקול" / "מומלץ להתייעץ" / "אנחנו שמחים לעזור"`;
 
+
+    const safeHistory = (typeof history === 'string' ? history : '').replace(/<[^>]{0,200}>/g, '').slice(0, 2000);
 
     const fullPrompt = `${systemContext}
 
 Conversation history:
-${history}
+${safeHistory}
 
-User message: ${message}`;
+User message: ${message.slice(0, 1000)}`;
 
     const reply = await invokeLLM({
       model: 'sonnet',

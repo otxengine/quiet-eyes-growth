@@ -96,14 +96,18 @@ export async function tiktokPostTracker(req: Request, res: Response) {
     });
 
     let sectorAvgPlaysPerDay = 8000; // conservative default
+    const benchmarkValues: number[] = [];
     for (const sig of benchmarkSignals) {
       try {
         const meta = JSON.parse(sig.source_description || '{}');
         const benchmarkPlays = meta.evidence?.avg_plays_per_day;
-        if (benchmarkPlays && benchmarkPlays > 0) {
-          sectorAvgPlaysPerDay = Math.max(sectorAvgPlaysPerDay, benchmarkPlays);
-        }
+        if (benchmarkPlays && benchmarkPlays > 0) benchmarkValues.push(benchmarkPlays);
       } catch (_) {}
+    }
+    if (benchmarkValues.length > 0) {
+      sectorAvgPlaysPerDay = Math.round(
+        benchmarkValues.reduce((sum, v) => sum + v, 0) / benchmarkValues.length
+      );
     }
 
     // ── 5. Match and evaluate each published post ──────────────────────────

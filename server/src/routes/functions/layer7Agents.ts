@@ -15,6 +15,19 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
+import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+
+// Cooldown intervals per agent (milliseconds)
+const COOLDOWNS = {
+  runViralCatalyst:       24 * 3600_000,  // 24h — content patterns change daily
+  runInfluenceIntegrity:  48 * 3600_000,  // 48h — review authenticity is slow-moving
+  runDeepContextVision:   24 * 3600_000,  // 24h
+  runRetentionSentinel:   24 * 3600_000,  // 24h — customer churn window
+  runNegotiationPricing:  12 * 3600_000,  // 12h — prices can change quickly
+  runCampaignAutopilot:   24 * 3600_000,  // 24h
+  runExpansionScout:      48 * 3600_000,  // 48h — strategic, slow-changing
+  runReputationWarRoom:    6 * 3600_000,  //  6h — crisis detection needs higher frequency
+};
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -61,12 +74,7 @@ async function ensureOtxBusiness(businessProfileId: string) {
     if (rows[0]) return { otxId: rows[0].id, profile };
   } catch {}
 
-  try {
-    const rows = await prisma.$queryRaw<Array<{ id: string }>>`SELECT id FROM businesses LIMIT 1`;
-    if (rows[0]) return { otxId: rows[0].id, profile };
-  } catch {}
-
-  // Return with Prisma ID even if OTX table doesn't exist yet
+  // Return with Prisma ID — safe fallback when OTX table doesn't exist
   return { otxId: businessProfileId, profile };
 }
 
@@ -85,6 +93,9 @@ async function otxInsert(sql: string, ...args: any[]) {
 export async function runViralCatalyst(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+  if (shouldSkipAgent(businessProfileId, 'runViralCatalyst', COOLDOWNS.runViralCatalyst)) {
+    return res.json({ items_created: 0, skipped: true, reason: 'ran_recently' });
+  }
   const startTime = new Date().toISOString();
   try {
     const biz = await ensureOtxBusiness(businessProfileId);
@@ -136,6 +147,7 @@ Return a JSON array of 3 objects. ALL string values must be in Hebrew:
       inserted++;
     }
 
+    setLastRun(businessProfileId, 'runViralCatalyst');
     await writeAutomationLog('runViralCatalyst', businessProfileId, startTime, inserted, 'success');
     return res.json({ items_created: inserted, message: `${inserted} תבניות ויראליות נוצרו` });
   } catch (err: any) {
@@ -150,6 +162,9 @@ Return a JSON array of 3 objects. ALL string values must be in Hebrew:
 export async function runInfluenceIntegrity(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+  if (shouldSkipAgent(businessProfileId, 'runInfluenceIntegrity', COOLDOWNS.runInfluenceIntegrity)) {
+    return res.json({ items_created: 0, skipped: true, reason: 'ran_recently' });
+  }
   const startTime = new Date().toISOString();
   try {
     const biz = await ensureOtxBusiness(businessProfileId);
@@ -222,6 +237,7 @@ verdict must be one of: organic/suspicious/manipulated`,
       });
     }
 
+    setLastRun(businessProfileId, 'runInfluenceIntegrity');
     await writeAutomationLog('runInfluenceIntegrity', businessProfileId, startTime, 1, 'success');
     return res.json({ items_created: 1, verdict, message: `verdict: ${verdict} | אמינות ${result?.organic_pct ?? 80}%` });
   } catch (err: any) {
@@ -236,6 +252,9 @@ verdict must be one of: organic/suspicious/manipulated`,
 export async function runDeepContextVision(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+  if (shouldSkipAgent(businessProfileId, 'runDeepContextVision', COOLDOWNS.runDeepContextVision)) {
+    return res.json({ items_created: 0, skipped: true, reason: 'ran_recently' });
+  }
   const startTime = new Date().toISOString();
   try {
     const biz = await ensureOtxBusiness(businessProfileId);
@@ -304,6 +323,7 @@ sentiment_visual must be one of: positive/neutral/negative/urgent`,
       });
     }
 
+    setLastRun(businessProfileId, 'runDeepContextVision');
     await writeAutomationLog('runDeepContextVision', businessProfileId, startTime, 1, 'success');
     return res.json({ items_created: 1, unmet_demand: result?.unmet_demand_detected, message: result?.business_insight || 'תובנה ויזואלית נוצרה' });
   } catch (err: any) {
@@ -318,6 +338,9 @@ sentiment_visual must be one of: positive/neutral/negative/urgent`,
 export async function runRetentionSentinel(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+  if (shouldSkipAgent(businessProfileId, 'runRetentionSentinel', COOLDOWNS.runRetentionSentinel)) {
+    return res.json({ items_created: 0, skipped: true, reason: 'ran_recently' });
+  }
   const startTime = new Date().toISOString();
   try {
     const biz = await ensureOtxBusiness(businessProfileId);
@@ -400,6 +423,7 @@ export async function runRetentionSentinel(req: Request, res: Response) {
       },
     });
 
+    setLastRun(businessProfileId, 'runRetentionSentinel');
     await writeAutomationLog('runRetentionSentinel', businessProfileId, startTime, inserted, 'success');
     return res.json({ items_created: inserted, at_risk: atRisk.length, message: `${atRisk.length} לקוחות בסיכון זוהו` });
   } catch (err: any) {
@@ -414,6 +438,9 @@ export async function runRetentionSentinel(req: Request, res: Response) {
 export async function runNegotiationPricing(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+  if (shouldSkipAgent(businessProfileId, 'runNegotiationPricing', COOLDOWNS.runNegotiationPricing)) {
+    return res.json({ items_created: 0, skipped: true, reason: 'ran_recently' });
+  }
   const startTime = new Date().toISOString();
   try {
     const biz = await ensureOtxBusiness(businessProfileId);
@@ -490,6 +517,7 @@ recommended_tactic must be one of: premium/standard/discount/bundle`,
       },
     });
 
+    setLastRun(businessProfileId, 'runNegotiationPricing');
     await writeAutomationLog('runNegotiationPricing', businessProfileId, startTime, 1, 'success');
     return res.json({
       items_created: 1,
@@ -509,6 +537,9 @@ recommended_tactic must be one of: premium/standard/discount/bundle`,
 export async function runCampaignAutopilot(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+  if (shouldSkipAgent(businessProfileId, 'runCampaignAutopilot', COOLDOWNS.runCampaignAutopilot)) {
+    return res.json({ items_created: 0, skipped: true, reason: 'ran_recently' });
+  }
   const startTime = new Date().toISOString();
   try {
     const biz = await ensureOtxBusiness(businessProfileId);
@@ -580,6 +611,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       },
     });
 
+    setLastRun(businessProfileId, 'runCampaignAutopilot');
     await writeAutomationLog('runCampaignAutopilot', businessProfileId, startTime, 1, 'success');
     return res.json({
       items_created: 1,
@@ -599,6 +631,9 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
 export async function runExpansionScout(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+  if (shouldSkipAgent(businessProfileId, 'runExpansionScout', COOLDOWNS.runExpansionScout)) {
+    return res.json({ items_created: 0, skipped: true, reason: 'ran_recently' });
+  }
   const startTime = new Date().toISOString();
   try {
     const biz = await ensureOtxBusiness(businessProfileId);
@@ -671,6 +706,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       },
     });
 
+    setLastRun(businessProfileId, 'runExpansionScout');
     await writeAutomationLog('runExpansionScout', businessProfileId, startTime, 1, 'success');
     return res.json({
       items_created: 1,
@@ -690,6 +726,9 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
 export async function runReputationWarRoom(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+  if (shouldSkipAgent(businessProfileId, 'runReputationWarRoom', COOLDOWNS.runReputationWarRoom)) {
+    return res.json({ items_created: 0, skipped: true, reason: 'ran_recently' });
+  }
   const startTime = new Date().toISOString();
   try {
     const biz = await ensureOtxBusiness(businessProfileId);
@@ -768,6 +807,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       });
     }
 
+    setLastRun(businessProfileId, 'runReputationWarRoom');
     await writeAutomationLog('runReputationWarRoom', businessProfileId, startTime, 1, 'success');
     return res.json({
       items_created: 1,

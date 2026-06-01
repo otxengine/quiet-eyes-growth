@@ -64,7 +64,7 @@ export async function contentCalendarAgent(req: Request, res: Response) {
 
     // Load rich intelligence for high-quality content
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600000);
-    const [recentSignals, competitors, sectorKnowledge, audienceSignal, trendSignals, recentReviews] = await Promise.all([
+    const [recentSignals, competitors, sectorKnowledge, audienceSignal, trendSignals, recentReviews, recentPosts] = await Promise.all([
       prisma.marketSignal.findMany({
         where: { linked_business: businessProfileId, created_date: { gte: sevenDaysAgo } },
         orderBy: { created_date: 'desc' },
@@ -96,6 +96,13 @@ export async function contentCalendarAgent(req: Request, res: Response) {
         orderBy: { created_date: 'desc' },
         take: 3,
         select: { text: true, reviewer_name: true, rating: true },
+      }),
+      // Recent organic posts to avoid repeating topics
+      prisma.organicPost.findMany({
+        where: { linked_business: businessProfileId, created_date: { gte: new Date(Date.now() - 14 * 86400000) } },
+        orderBy: { created_date: 'desc' },
+        take: 10,
+        select: { content: true, post_type: true, signal_summary: true },
       }),
     ]);
 
@@ -159,6 +166,23 @@ export async function contentCalendarAgent(req: Request, res: Response) {
       ? `שירותים מבוקשים בתחום: ${sectorKnowledge.trending_services}`
       : '';
 
+    // Gap analysis: which post types haven't been used recently
+    const recentPostTypes = new Set(recentPosts.map(p => p.post_type).filter(Boolean));
+    const allPostTypes = ['חינוכי', 'מאחורי_קלעים', 'עדות', 'מוצר', 'ויראלי', 'מוטיבציה'];
+    const missingTypes = allPostTypes.filter(t => !recentPostTypes.has(t));
+    const gapContext = missingTypes.length > 0
+      ? `סוגי תוכן שלא פורסמו בשבועיים האחרונים (יש לכלול בלוח): ${missingTypes.join(', ')}`
+      : '';
+
+    // Recent topics to avoid repeating
+    const recentTopics = recentPosts
+      .slice(0, 7)
+      .map(p => (p.signal_summary || p.content || '').slice(0, 60))
+      .filter(Boolean);
+    const avoidTopics = recentTopics.length > 0
+      ? `נושאים שפורסמו לאחרונה — אל תחזור עליהם:\n${recentTopics.map(t => `- ${t}`).join('\n')}`
+      : '';
+
     const todayDate = new Date();
     const weekDates = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(todayDate);
@@ -194,6 +218,8 @@ ${competitorContext ? `\n${competitorContext}` : ''}
 ${socialProof ? `\n${socialProof}` : ''}
 ${sectorContext ? `\n${sectorContext}` : ''}
 ${contentStyle ? `\nסגנון תוכן מועדף: ${contentStyle}` : ''}
+${gapContext ? `\n${gapContext}` : ''}
+${avoidTopics ? `\n${avoidTopics}` : ''}
 
 Channels: ${activePlatforms}
 Tone: ${toneInstruction}

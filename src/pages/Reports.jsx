@@ -28,12 +28,16 @@ import MonthlyGrowthChart from '@/components/reports/MonthlyGrowthChart';
 import ConversionFunnel from '@/components/reports/ConversionFunnel';
 import SentimentBreakdown from '@/components/reports/SentimentBreakdown';
 import SignalCategoryChart from '@/components/reports/SignalCategoryChart';
+import ROICard from '@/components/reports/ROICard';
+import SectorBenchmarkCard from '@/components/reports/SectorBenchmarkCard';
 
 const TABS = [
   { id: 'weekly',      label: 'שבועי',    icon: '📅' },
   { id: 'monthly',     label: 'חודשי',    icon: '📆' },
   { id: 'competitors', label: 'מתחרים',   icon: '⚔️' },
   { id: 'leads',       label: 'לידים',    icon: '🎯' },
+  { id: 'roi',         label: 'ROI',      icon: '💰' },
+  { id: 'benchmark',   label: 'בנצ\'מרק', icon: '🏆' },
   { id: 'full',        label: 'דוח מלא',  icon: '⭐' },
 ];
 
@@ -180,7 +184,7 @@ JSON בלבד:
         ? `פעילות ברשתות חברתיות: ${posts.length} פוסטים, ${totalLikes} לייקים, ${totalComments} תגובות, ${totalReach} חשיפות.`
         : '';
 
-      const res = await base44.integrations.Core.InvokeLLM({
+      const res = await base44.functions.invoke('invokeLLM', {
         model: 'sonnet',
         maxTokens: 800,
         prompt: `אתה יועץ עסקי בכיר לעסקים קטנים ישראלים. הפק דוח ביצועים שמראה ערך אמיתי ועם תובנות מעשיות.
@@ -213,11 +217,11 @@ JSON בלבד:
     setFullLoading(false);
   }
 
-  async function handleGenerateWeeklyReport() {
+  async function handleGenerateWeeklyReport(force = false) {
     if (!bpId) return;
     setWeeklyLoading(true);
     try {
-      const res  = await base44.functions.invoke('generateWeeklyReport', { businessProfileId: bpId });
+      const res  = await base44.functions.invoke('generateWeeklyReport', { businessProfileId: bpId, force });
       const data = res?.data || res;
       setWeeklyReport(data);
     } catch {
@@ -347,7 +351,7 @@ JSON בלבד:
 
                 {/* Regenerate */}
                 <button
-                  onClick={handleGenerateWeeklyReport}
+                  onClick={() => handleGenerateWeeklyReport(true)}
                   disabled={weeklyLoading}
                   className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-[12px] hover:bg-gray-50 transition-all disabled:opacity-50"
                 >
@@ -585,6 +589,20 @@ JSON בלבד:
           <div className="pt-2 space-y-4">
             <ConversionFunnel leads={displayLeads} reviews={filteredReviews} />
           </div>
+        </div>
+      )}
+
+      {/* ── TAB: ROI ── */}
+      {activeTab === 'roi' && (
+        <div className="space-y-4">
+          <ROICard businessProfileId={bpId} />
+        </div>
+      )}
+
+      {/* ── TAB: Benchmark ── */}
+      {activeTab === 'benchmark' && (
+        <div className="space-y-4">
+          <SectorBenchmarkCard businessProfileId={bpId} />
         </div>
       )}
 

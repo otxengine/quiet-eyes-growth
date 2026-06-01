@@ -69,7 +69,15 @@ ${rawText}`,
 
     const services: any[] = Array.isArray(result?.services) ? result.services.slice(0, 15) : [];
 
-    // services_json column not yet migrated — return result without saving to DB
+    // Save extracted service names to relevant_services field
+    if (services.length > 0) {
+      const serviceNames = services.map((s: any) => s.name).filter(Boolean).join(', ');
+      await prisma.businessProfile.update({
+        where: { id: businessProfileId },
+        data: { relevant_services: serviceNames },
+      }).catch(() => {});
+    }
+
     return res.json({ services_count: services.length, services });
   } catch (err: any) {
     console.error('[scanServicesAndPrices]', err.message);

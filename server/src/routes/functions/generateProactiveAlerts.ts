@@ -8,6 +8,9 @@ import { getBusinessSectorContext } from '../../lib/sectorInsightConfig';
 import { getAgentMission, getAllMissions } from '../../lib/missionPlanner';
 import { getSectorContentStrategy } from '../../lib/sectorPrompts';
 import { getSectorContext as getAccumulatedSectorCtx } from '../../lib/sectorContext';
+import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+
+const MIN_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours between LLM generations
 
 export async function generateProactiveAlerts(req: Request, res: Response) {
   const { businessProfileId } = req.body;
@@ -16,7 +19,12 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
   const startTime = new Date().toISOString();
   try {
     // Auto-resolve stale / condition-cleared alerts before generating new ones
-    await insightAutoResolve(businessProfileId);
+    const resolved = await insightAutoResolve(businessProfileId);
+
+    // Cooldown: only run the expensive LLM generation every 4 hours
+    if (shouldSkipAgent(businessProfileId, 'generateProactiveAlerts', MIN_INTERVAL_MS)) {
+      return res.json({ alerts_created: 0, items_created: 0, skipped: true, reason: 'cooldown', auto_resolved: resolved });
+    }
 
     // Throttle: check how many active alerts exist — don't overwhelm the user
     const activeCount = await prisma.proactiveAlert.count({
@@ -222,7 +230,7 @@ Generate ${maxNewAlerts} diverse, non-duplicate alerts. Return ONLY valid JSON:
 {"alerts":[{
   "title": "כותרת ספציפית עם פרטים",
   "description": "הסבר ממוקד מה קרה ולמה זה חשוב עכשיו (עד 120 תווים)",
-  "alert_type": "negative_review|hot_lead|competitor_move|market_opportunity|retention_risk|demand_gap|content_opportunity",
+  "alert_type": "negative_review|hot_lead|competitor_move|competitor_attack|market_opportunity|retention_risk|demand_gap|content_opportunity|reputation_risk",
   "priority": "critical|high|medium|low",
   "suggested_action": "פעולה ספציפית מפורטת — ערוץ + תוכן + קהל",
   "action_label": "פועל + עצם (עד 4 מילים)",
@@ -308,6 +316,7 @@ Generate ${maxNewAlerts} diverse, non-duplicate alerts. Return ONLY valid JSON:
       created++;
     }
 
+    setLastRun(businessProfileId, 'generateProactiveAlerts');
     await writeAutomationLog('generateProactiveAlerts', businessProfileId, startTime, created);
     console.log(`generateProactiveAlerts done: ${created} alerts created`);
     return res.json({ alerts_created: created, items_created: created });
