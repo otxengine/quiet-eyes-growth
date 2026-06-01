@@ -712,20 +712,30 @@ Structure: Hook + specific value + CTA. Tone: ${toneInstruction}. Write only the
       } catch (_) {}
 
       const isLarge = event.audience_size === 'large';
+      const tavilyDaysAway = event.date_estimate
+        ? Math.ceil((new Date(event.date_estimate).getTime() - now.getTime()) / 86400000)
+        : null;
+      const tavilyUrgencyHours = tavilyDaysAway !== null && tavilyDaysAway <= 7 ? 24 : isLarge ? 48 : 72;
       const actionMeta = JSON.stringify({
         action_label: `נצל את ${event.name}`.split(' ').slice(0, 5).join(' '),
         action_type: 'social_post',
         action_window_days: 7,
         prefilled_text: prefilledText || `${event.name} בקרוב! ${event.opportunity || ''} — ${name}`,
-        urgency_hours: isLarge ? 48 : 72,
+        urgency_hours: tavilyUrgencyHours,
+        event_date: event.date_estimate || null,
+        days_away: tavilyDaysAway,
         impact_reason: `${event.name} צפוי להביא תנועה מוגברת לאזור ${city}`,
       });
+
+      const tavilyDateLabel = event.date_estimate
+        ? new Date(event.date_estimate).toLocaleDateString('he-IL')
+        : 'בקרוב';
 
       await prisma.proactiveAlert.create({
         data: {
           alert_type: 'market_opportunity',
           title: alertTitle,
-          description: `${event.name} — ${event.opportunity || 'אירוע עם פוטנציאל לעסק'}. תאריך: ${event.date_estimate || 'בקרוב'}`,
+          description: `${event.name} — ${event.opportunity || 'אירוע עם פוטנציאל לעסק'}. תאריך: ${tavilyDateLabel}`,
           suggested_action: `הכן תוכן/מבצע לרגל ${event.name}`,
           priority: isLarge ? 'high' : 'medium',
           source_agent: actionMeta,
@@ -749,7 +759,9 @@ Structure: Hook + specific value + CTA. Tone: ${toneInstruction}. Write only the
             action_type: 'social_post',
             prefilled_text: prefilledText || '',
             time_minutes: 10,
-            urgency_hours: isLarge ? 48 : 72,
+            urgency_hours: tavilyUrgencyHours,
+            event_date: event.date_estimate || null,
+            days_away: tavilyDaysAway,
           }),
           is_read: false,
           detected_at: new Date().toISOString(),

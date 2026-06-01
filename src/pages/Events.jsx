@@ -61,13 +61,35 @@ function formatEventDate(dateStr) {
 }
 
 function getEventMeta(item) {
-  try {
-    return JSON.parse(
-      item._type === 'alert' ? (item.source_agent || '{}') : (item.source_description || '{}')
-    );
-  } catch {
-    return {};
+  function safeParse(raw) {
+    if (!raw) return {};
+    try {
+      let p = JSON.parse(raw);
+      if (typeof p === 'string') p = JSON.parse(p); // handle double-encoded JSON
+      return (p && typeof p === 'object') ? p : {};
+    } catch { return {}; }
   }
+  const a = safeParse(item.source_agent);
+  const b = safeParse(item.source_description);
+  // Merge both fields; for alerts prefer source_agent, for signals prefer source_description
+  const meta = item._type === 'alert' ? { ...b, ...a } : { ...a, ...b };
+  // Fallback: derive event_date from days_away + created/detected timestamp
+  if (!meta.event_date && meta.days_away) {
+    const base = new Date(item.created_date || item.detected_at || Date.now()).getTime();
+    meta.event_date = new Date(base + Number(meta.days_away) * 86400000).toISOString().slice(0, 10);
+  }
+  // Fallback: parse date from description text (YYYY-MM-DD or DD/MM/YYYY)
+  if (!meta.event_date) {
+    const text = item.description || item.summary || '';
+    const iso = text.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) {
+      meta.event_date = iso[0];
+    } else {
+      const dmy = text.match(/(\d{1,2})[./](\d{1,2})[./](\d{4})/);
+      if (dmy) meta.event_date = `${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`;
+    }
+  }
+  return meta;
 }
 
 // ── Action sheet — פעל עכשיו ───────────────────────────────────────────────────
