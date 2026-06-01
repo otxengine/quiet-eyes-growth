@@ -69,9 +69,11 @@ export async function smartLeadNurture(req: Request, res: Response) {
     });
     let followupWindowHours = 48;   // default: 48h before first follow-up
     let coldWindowDays = 7;         // default: 7d before marking cold
+    let sectorPeakDemand = '';
     if (sectorKnowledge?.winner_lead_dna) {
       try {
         const dna = JSON.parse(sectorKnowledge.winner_lead_dna);
+        sectorPeakDemand = dna.peak_demand || '';
         // High-conversion sectors (>40%) get longer consideration window
         if ((dna.lead_conversion_rate_pct || 0) > 40) {
           followupWindowHours = 72;
@@ -84,7 +86,6 @@ export async function smartLeadNurture(req: Request, res: Response) {
         }
       } catch {}
     }
-    const sectorPeakDemand = '';
 
     const fortyEightHoursAgo = new Date(Date.now() - followupWindowHours * 3600000);
     const sevenDaysAgo = new Date(Date.now() - coldWindowDays * 24 * 3600000);

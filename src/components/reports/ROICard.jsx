@@ -150,7 +150,7 @@ export default function ROICard({ businessProfileId }) {
             <StatBox label="ממוצע עסקה"       value={`₪${summary.avg_deal_size}`}       color="gray" />
             <StatBox label="שיעור המרה"         value={`${summary.conversion_rate}%`}      color="indigo" />
             <StatBox label="לידים ממערכת"       value={summary.system_leads}               color="green" />
-            <StatBox label="סה"כ הכנסה (כל הזמן)" value={`₪${summary.total_revenue.toLocaleString()}`} color="amber" />
+            <StatBox label={'סה"כ הכנסה (כל הזמן)'} value={`₪${summary.total_revenue.toLocaleString()}`} color="amber" />
           </div>
         )}
       </div>
