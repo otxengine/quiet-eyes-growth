@@ -4,6 +4,8 @@ import { invokeLLM } from '../../lib/llm';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 import { writeAutomationLog } from '../../lib/automationLog';
 
+const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+
 /**
  * batchSnapshotCompetitors — daily agent that:
  * 1. Takes a fresh Tavily snapshot for every competitor of a business
@@ -40,6 +42,13 @@ export async function batchSnapshotCompetitors(req: Request, res: Response) {
     for (const comp of competitors) {
       if (isTavilyRateLimited()) break;
 
+      // Skip if scanned recently (6h guard per competitor)
+      const lastScannedMs = comp.last_scanned ? new Date(comp.last_scanned).getTime() : 0;
+      if (Date.now() - lastScannedMs < SIX_HOURS_MS) {
+        console.log(`[batchSnapshotCompetitors] skipping ${comp.name} — scanned recently`);
+        continue;
+      }
+
       try {
         // ── Search for fresh data ──────────────────────────────────────────────
         const queries = [
@@ -75,10 +84,9 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
   "promotions": ["specific active promotion with details"],
   "rating": null,
   "review_count": null,
-  "description": "what the business offers — 1 sentence",
-  "last_activity": "latest activity found (post, offer, event)",
-  "new_service": "new service/product if found, else null",
-  "negative_reviews": "main complaint from reviews, or null"
+  "services": "what the business offers — comma-separated list of services/products, up to 60 chars",
+  "new_service": "new service/product found recently, or null",
+  "negative_reviews": "main complaint theme from reviews, or null"
 }`,
           response_json_schema: { type: 'object' },
         });
@@ -96,10 +104,24 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
           last_scanned: new Date().toISOString(),
         };
         if (snap.promotions?.length)      updateData.current_promotions = snap.promotions[0];
-        if (snap.new_service)             updateData.menu_highlights    = snap.new_service;
         if (snap.negative_reviews)        updateData.recent_reviews_summary = snap.negative_reviews;
-        if (snap.rating != null)          updateData.rating             = snap.rating;
-        if (snap.review_count != null)    updateData.review_count       = snap.review_count;
+        // services: fill if empty, or prepend new_service discovered
+        if (snap.services && !comp.services) updateData.services = snap.services;
+        if (snap.new_service) {
+          const existing = comp.menu_highlights || '';
+          updateData.menu_highlights = `${snap.new_service}${existing ? ' | ' + existing : ''}`.slice(0, 300);
+        }
+        if (snap.rating != null) {
+          updateData.rating = snap.rating;
+          // Track trend_direction from rating delta
+          if (comp.rating != null) {
+            const delta = Number(snap.rating) - Number(comp.rating);
+            if (delta >= 0.15)       updateData.trend_direction = 'up';
+            else if (delta <= -0.15) updateData.trend_direction = 'down';
+            else                     updateData.trend_direction = 'stable';
+          }
+        }
+        if (snap.review_count != null)    updateData.review_count = snap.review_count;
         if (snap.prices?.length) {
           updateData.price_snapshot     = JSON.stringify(snap.prices);
           updateData.price_changed_at   = new Date().toISOString();

@@ -2,6 +2,9 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+
+const MIN_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h between runs
 
 /**
  * competitorMoveTracker — detects meaningful changes in competitor data over time.
@@ -22,6 +25,11 @@ export async function competitorMoveTracker(req: Request, res: Response) {
     if (competitors.length === 0) {
       await writeAutomationLog('competitorMoveTracker', businessProfileId, startTime, 0);
       return res.json({ moves_detected: 0, message: 'No competitors to track' });
+    }
+
+    // 24h delta guard
+    if (!req.body.force && shouldSkipAgent(businessProfileId, 'competitorMoveTracker', MIN_INTERVAL_MS)) {
+      return res.json({ moves_detected: 0, skipped: true, reason: 'ran_recently' });
     }
 
     const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
@@ -88,7 +96,8 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     "description": "description of the move — what the competitor changed",
     "threat_level": "high|medium|low",
     "recommended_response": "what to do in response — a specific action",
-    "opportunity": "is this an opportunity for us?"
+    "opportunity": "is this an opportunity for us?",
+    "has_actionable_move": true
   }]
 }`,
       response_json_schema: { type: 'object' },
@@ -99,6 +108,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
 
     for (const move of moves) {
       if (!move.competitor_name || !move.description) continue;
+      if (!move.has_actionable_move) continue;
       const title = `${move.competitor_name}: ${move.description.substring(0, 60)}`;
       if (recentTitles.has(title)) continue;
 
@@ -111,10 +121,10 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
           suggested_action: move.recommended_response || '',
           priority: move.threat_level === 'high' ? 'high' : move.threat_level === 'medium' ? 'medium' : 'low',
           source_agent: JSON.stringify({
-            action_label: 'הגב עכשיו',
+            action_label: move.recommended_response?.split(' ').slice(0, 5).join(' ') || 'בצע פעולה',
             action_type: 'task',
             urgency_hours: move.threat_level === 'high' ? 12 : 48,
-            impact_reason: `${move.competitor_name} ביצע מהלך — חלון תגובה קצר`,
+            impact_reason: `${move.competitor_name} עדכן — ${move.move_type === 'promotion' ? 'מבצע פעיל שעלול למשוך לקוחות' : move.move_type === 'price_change' ? 'שינוי מחירים שמשפיע על התחרותיות' : 'שינוי שדורש תגובה'}`,
           }),
           is_dismissed: false,
           is_acted_on: false,
@@ -125,6 +135,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       created++;
     }
 
+    setLastRun(businessProfileId, 'competitorMoveTracker');
     await writeAutomationLog('competitorMoveTracker', businessProfileId, startTime, created);
     return res.json({ moves_detected: created, items_created: created });
   } catch (err: any) {

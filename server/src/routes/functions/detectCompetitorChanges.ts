@@ -52,7 +52,13 @@ export async function detectCompetitorChanges(req: Request, res: Response) {
     const bizCtx = await loadBusinessContext(businessProfileId);
     const preferredChannel = bizCtx?.preferredChannels?.[0] || 'instagram';
 
+    const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+
     for (const comp of competitors) {
+      // Per-competitor 6h guard — don't re-scan the same competitor too often
+      const lastScannedMs = comp.last_scanned ? new Date(comp.last_scanned).getTime() : 0;
+      if (Date.now() - lastScannedMs < SIX_HOURS_MS) continue;
+
       try {
         const instagramHandle = (comp as any).instagram_handle
           ? `@${((comp as any).instagram_handle).replace('@', '')} ` : '';
@@ -121,25 +127,38 @@ Report only on concrete changes that appear in the data. Return ONLY valid JSON.
           }).catch(() => {});
         }
 
-        // Create a MarketSignal for significant changes
+        // Create a MarketSignal for significant changes — with dedup check
         if (analysis.overall_summary && analysis.changes_found) {
+          // Dedup: skip if similar signal for this competitor exists in last 48h
+          const signalSummary = `שינוי אצל ${comp.name}: ${analysis.overall_summary}`;
+          const existingSignal = await prisma.marketSignal.findFirst({
+            where: {
+              linked_business: businessProfileId,
+              category: 'competitor_move',
+              summary: { contains: comp.name },
+              detected_at: { gte: new Date(Date.now() - 48 * 3600000).toISOString() },
+            },
+            select: { id: true },
+          });
+          if (existingSignal) continue;
+
           // Build a specific action based on change type
-          let actionLabel = `בדוק שינויים אצל ${comp.name}`;
+          let actionLabel = `בדוק עדכונים אצל ${comp.name}`;
           let actionType  = 'task';
-          let prefillText = `שינוי אצל המתחרה ${comp.name}:\n\n${analysis.overall_summary}\n\nפעולה מומלצת: `;
+          let prefillText = `עדכון אצל ${comp.name}:\n\n${analysis.overall_summary}\n\nפעולה מומלצת: `;
 
           if (analysis.new_promotion?.found) {
-            actionLabel = `פרסם מבצע נגד ${comp.name}`;
+            actionLabel = `פרסם מבצע משלך ב${preferredChannel}`;
             actionType  = 'promote';
-            prefillText += `${comp.name} משיק מבצע חדש: "${analysis.new_promotion.summary}". פרסם מבצע מענה ב${preferredChannel} שמבליט את הערך הייחודי שלך.`;
+            prefillText += `${comp.name} מציע מבצע: "${analysis.new_promotion.summary}". פרסם מבצע מקביל שמבליט את הערך הייחודי שלך.`;
           } else if (analysis.price_change?.found) {
-            actionLabel = `עדכן מחירים בתגובה ל${comp.name}`;
+            actionLabel = `בדוק תמחור`;
             actionType  = 'task';
-            prefillText += `${comp.name} עדכן מחירים (${analysis.price_change.summary}) — בדוק האם המחירים שלך עדיין תחרותיים ושקול עדכון.`;
+            prefillText += `${comp.name} עדכן מחירים (${analysis.price_change.summary}) — בדוק האם המחירים שלך עדיין תחרותיים.`;
           } else if (analysis.new_post?.found) {
-            actionLabel = `פרסם תגובה ל${comp.name}`;
+            actionLabel = `פרסם תוכן ב${preferredChannel}`;
             actionType  = 'social_post';
-            prefillText += `${comp.name} פרסם: "${analysis.new_post.summary}". צור פוסט מקביל שמציג את היתרון הייחודי שלך על פניהם.`;
+            prefillText += `${comp.name} פרסם: "${analysis.new_post.summary}". צור פוסט שמציג את היתרון הייחודי שלך.`;
           }
 
           const sourceDesc = JSON.stringify({
@@ -163,7 +182,7 @@ Report only on concrete changes that appear in the data. Return ONLY valid JSON.
 
           await prisma.marketSignal.create({
             data: {
-              summary:            `שינוי אצל ${comp.name}: ${analysis.overall_summary}`,
+              summary:            signalSummary,
               category:           'competitor_move',
               impact_level:       analysis.price_change?.found ? 'high' : 'medium',
               recommended_action: actionLabel,
