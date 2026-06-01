@@ -434,14 +434,10 @@ export default function Events() {
     ...weatherSignals.map(s => ({ ...s, _type: 'signal', _isLocal: true })),
   ].filter(item => {
     if (item.is_dismissed) return false;
-    // Filter out dismissed items from local state
     if (dismissedIds.has(item.id)) return false;
-    // Filter stale DB items (created >7 days ago with no parseable future date)
-    const created = new Date(item.created_date || item.detected_at || 0).getTime();
-    if (created < Date.now() - 7 * 86400000) {
-      const eventTs = extractEventDate(item);
-      if (eventTs < Date.now()) return false;
-    }
+    // Always filter out events whose date has passed (more than 1 day ago)
+    const eventTs = extractEventDate(item);
+    if (eventTs < Date.now() - 86400000) return false;
     return true;
   });
 

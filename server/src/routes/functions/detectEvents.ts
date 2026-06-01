@@ -480,6 +480,32 @@ export async function detectEvents(req: Request, res: Response) {
       }
     } catch (_) {}
 
+    // ── Phase 0b: Clean up past MarketSignal event records ────────────────────
+    try {
+      const pastSignals = await prisma.marketSignal.findMany({
+        where: {
+          linked_business: businessProfileId,
+          category: { in: ['event', 'local_event'] },
+          detected_at: { lte: new Date(Date.now() - 30 * 86400000).toISOString() },
+        },
+        select: { id: true, source_description: true },
+      });
+      const pastSignalIds = pastSignals.filter(s => {
+        try {
+          const meta = JSON.parse(s.source_description || '{}');
+          if (!meta.event_date) return true; // no date → stale
+          return new Date(meta.event_date).getTime() < Date.now();
+        } catch { return true; }
+      }).map(s => s.id);
+      if (pastSignalIds.length > 0) {
+        await prisma.marketSignal.updateMany({
+          where: { id: { in: pastSignalIds } },
+          data: { is_dismissed: true },
+        });
+        console.log(`[detectEvents] dismissed ${pastSignalIds.length} past event signals`);
+      }
+    } catch (_) {}
+
     // ── Phase 1: Find upcoming calendar events ────────────────────────────────
     const upcomingEvents = CALENDAR_EVENTS.filter(ev => {
       const eventDate = new Date(ev.date);
