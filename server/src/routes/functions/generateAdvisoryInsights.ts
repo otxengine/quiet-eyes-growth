@@ -4,6 +4,7 @@ import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { getBusinessSectorContext } from '../../lib/sectorInsightConfig';
 import { getSectorContext } from '../../lib/sectorContext';
+import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
 
 /**
  * generateAdvisoryInsights — the strategic business advisor engine.
@@ -34,6 +35,11 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
 
     const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
     const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000);
+
+    // Load business memory for rejection filtering
+    const bizCtx = await loadBusinessContext(businessProfileId);
+    const memoryBlock = formatContextForPrompt(bizCtx, 'generateAdvisoryInsights');
+    const rejectedPatterns: string[] = bizCtx?.rejectedPatterns || [];
 
     // ── Pull all intelligence in parallel ──────────────────────────────────────
     const [
@@ -78,7 +84,7 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
       }),
       // Competitor intelligence
       prisma.marketSignal.findMany({
-        where: { linked_business: businessProfileId, category: 'competitor_move', detected_at: { gte: thirtyDaysAgo.toISOString() } },
+        where: { linked_business: businessProfileId, category: { in: ['competitor_move', 'competitor_mention'] }, detected_at: { gte: thirtyDaysAgo.toISOString() } },
         orderBy: { detected_at: 'desc' },
         take: 10,
       }),
@@ -138,6 +144,8 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
             'sector_shift', 'event_opportunity', 'competitive_gap',
             'social_viral', 'future_prediction', 'campaign_opportunity',
             'competitor_intel', 'competitor_move', 'reputation_risk',
+            'competitor_attack', 'content_performance', 'review_timing',
+            'micro_moment', 'sentiment_drop', 'competitor_mention',
           ]},
           created_at: { gte: sevenDaysAgo.toISOString() },
         },
@@ -312,7 +320,8 @@ RULES for high-quality insights:
 6. Be time-aware: if an event is soon, or a trend is peaking — say so explicitly
 
 ${sectorBlock}
-
+${memoryBlock}
+${rejectedPatterns.length > 0 ? `CRITICAL: Do NOT generate insights about these topics (user previously dismissed them): ${rejectedPatterns.slice(0, 6).join(', ')}\n` : ''}
 === INTELLIGENCE BRIEFING ===
 ${intelligenceBriefing}
 
@@ -361,6 +370,11 @@ Return ONLY valid JSON. ALL string values MUST be in Hebrew:
 
       const dedupKey = `${insight.alert_type}:${(insight.title as string).toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 50)}`;
       if (recentAdvisoryKeys.has(dedupKey)) continue;
+      // Skip insights that match previously rejected patterns
+      if (rejectedPatterns.length > 0) {
+        const insightText = ((insight.title || '') + ' ' + (insight.description || '')).toLowerCase();
+        if (rejectedPatterns.some((p: string) => p && insightText.includes(p.toLowerCase()))) continue;
+      }
 
       const actionMeta = JSON.stringify({
         action_label:    insight.action_label || insight.suggested_action?.split(' ').slice(0, 3).join(' ') || 'ראה תובנה',

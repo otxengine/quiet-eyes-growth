@@ -114,8 +114,9 @@ Rating: ${compRating != null ? compRating + '/5' : 'unknown'} (${compReviewCount
 Known weaknesses: ${compWeaknesses || 'unknown'}
 Strengths: ${compStrengths || 'unknown'}
 Notes: ${compNotes || 'none'}
-${freshReviewsText ? `\nFresh findings from the web (reviews/mentions):\n${freshReviewsText.slice(0, 800)}` : ''}
+${freshReviewsText ? `\nFresh findings from the web (reviews/mentions):\n${freshReviewsText.slice(0, 800)}` : '\nNote: No fresh web data available for this competitor.'}
 ${eventsContext ? `\nUpcoming events expected to cause high demand: ${eventsContext}` : ''}
+${!freshReviewsText && !compWeaknesses ? '\nDATA SCARCITY: Only basic rating data available. Set has_specific_insight=false unless you can derive a clear, specific pattern from the stored data.' : ''}
 
 Required analysis:
 1. What is the most prominent specific weakness of ${compName} evident from the data?
@@ -125,17 +126,24 @@ Required analysis:
 
 Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
+  "has_specific_insight": true,
   "insight_title": "specific title up to 8 words — with weakness name / number / action",
   "insight_body": "2-3 sentences: specific weakness of ${compName} + event context if relevant + why this is an opportunity now",
   "action": "imperative verb + channel + specific content — up to 12 words",
   "prefilled_text": "ready-to-publish text (2-3 Hebrew lines) — highlights our advantage vs the weakness, without naming the competitor",
   "impact": "high|medium",
-  "relevant_event": "name of the relevant event, or null"
+  "relevant_event": "name of the relevant event, or null",
+  "new_service_detected": "name of new service/feature competitor launched recently, or null",
+  "is_direct_attack": true/false
 }`,
           response_json_schema: { type: 'object' },
         });
 
         if (!insight?.insight_title || !insight?.action) continue;
+        if (insight.has_specific_insight === false) {
+          console.log(`[competitorIntelAgent] skipping ${compName} — insufficient data for specific insight`);
+          continue;
+        }
 
         // ── 3c. Deduplicate ───────────────────────────────────────────────────
         const alertTitle = `🔍 ${compName}: ${insight.insight_title}`;
@@ -198,6 +206,35 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
             linked_business: businessProfileId,
           },
         }).catch(() => {});
+
+        // ── 3e2. Attack detection: create separate high-priority alert ───────
+        if (insight.is_direct_attack && insight.new_service_detected) {
+          const attackTitle = `⚔️ ${compName} תוקף: ${insight.new_service_detected}`;
+          const attackExists = await prisma.proactiveAlert.findFirst({
+            where: { linked_business: businessProfileId, title: attackTitle, is_dismissed: false },
+          });
+          if (!attackExists) {
+            await prisma.proactiveAlert.create({
+              data: {
+                alert_type: 'competitor_attack',
+                title: attackTitle,
+                description: `${compName} השיק "${insight.new_service_detected}" — שירות שמתחרה ישירות בנו. ${insight.insight_body || ''}`,
+                suggested_action: insight.action,
+                priority: 'high',
+                source_agent: JSON.stringify({
+                  action_label: 'הגב על ההשקה',
+                  action_type: 'task',
+                  urgency_hours: 24,
+                  impact_reason: `${compName} מנסה לגנוב לקוחות בתחום הליבה שלנו`,
+                }),
+                is_dismissed: false,
+                is_acted_on: false,
+                created_at: new Date().toISOString(),
+                linked_business: businessProfileId,
+              },
+            }).catch(() => {});
+          }
+        }
 
         // ── 3f. Update competitor's last_scanned + weaknesses if enriched ─────
         if (freshReviewsText && insight.insight_body) {

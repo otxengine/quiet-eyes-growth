@@ -32,6 +32,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { tavilyAdvancedSearch } from '../../lib/tavily';
 import { shouldSkipAgent, setLastRun, cacheGet, cacheSet, TTL } from '../../lib/agentCache';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
+import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
 
 const MIN_INTERVAL_MS = 8 * 60 * 60 * 1000; // 8 שעות
 
@@ -76,23 +77,40 @@ const SECTOR_HASHTAGS: Record<string, string[]> = {
   // נדל"ן
   'נדלן':         ['נדלן', 'דירה', 'real_estate_israel', 'בית', 'השקעות'],
   "נדל\"ן":       ['נדלן', 'דירה', 'real_estate_israel', 'בית', 'השקעות'],
+  // יין ואלכוהול
+  'יין':          ['יין', 'wine_israel', 'יקב', 'בר_יין', 'winery', 'sommelier_israel'],
+  'בר יין':       ['יין', 'wine_israel', 'בר_יין', 'winery', 'יקב', 'kosher_wine'],
+  'בית יין':      ['יין', 'wine_israel', 'בר_יין', 'winery', 'יקב', 'kosher_wine'],
+  'יקב':          ['יקב', 'winery', 'יין', 'wine_israel', 'kosher_wine'],
+  'בירה':         ['בירה', 'beer_israel', 'craft_beer_israel', 'ברוארי', 'brewery_israel'],
+  'ברוארי':       ['ברוארי', 'brewery_israel', 'craft_beer_israel', 'בירה', 'beer_israel'],
+  // אירועים וקייטרינג
+  'קייטרינג':     ['קייטרינג', 'catering_israel', 'אירוע', 'event_food', 'אוכל'],
+  'אירועים':      ['אירוע', 'event_israel', 'חתונה', 'wedding_israel', 'קייטרינג'],
 };
 
 // Fuzzy match: if category doesn't match exactly, try prefix/keyword match
-function resolveHashtags(category: string): string[] {
+function resolveHashtags(category: string, services = ''): string[] {
+  // First: check relevant_services for a more specific match (e.g. "יין" beats "בר" → wine hashtags)
+  if (services) {
+    const serviceLower = services.toLowerCase();
+    for (const [key, tags] of Object.entries(SECTOR_HASHTAGS)) {
+      if (key.length > 2 && serviceLower.includes(key.toLowerCase())) return tags;
+    }
+  }
   if (SECTOR_HASHTAGS[category]) return SECTOR_HASHTAGS[category];
-  // Try case-insensitive substring match
+  // Try case-insensitive substring match on category
   const lower = category.toLowerCase();
   for (const [key, tags] of Object.entries(SECTOR_HASHTAGS)) {
     if (lower.includes(key) || key.includes(lower)) return tags;
   }
-  // Generic food fallback if category sounds like food
-  const foodKeywords = ['אוכל', 'מנה', 'מסעדה', 'בר', 'שף', 'בישול', 'קינוח'];
+  // Generic food fallback — only if category explicitly mentions food/cooking (not generic "בר")
+  const foodKeywords = ['אוכל', 'מנה', 'מסעדה', 'שף', 'בישול', 'קינוח'];
   if (foodKeywords.some(k => lower.includes(k) || category.includes(k))) {
     return ['אוכל', 'food_israel', 'מסעדה', 'restaurant_israel', 'שף'];
   }
-  // Final fallback: use category itself + generic Israel food
-  return [category, 'food_israel', 'israel', 'עסק_קטן_ישראל'];
+  // Final fallback
+  return [category, 'israel', 'עסק_קטן_ישראל'];
 }
 
 const CAT_EN: Record<string, string> = {
@@ -344,8 +362,13 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
     const tiktokUrl: string | null     = (profile as any).tiktok_url    || null;
     const tiktokEnabled: boolean       = (profile as any).channels_tiktok_enabled ?? true;
 
+    // Load business memory (rejection patterns + preferences)
+    const bizCtx = await loadBusinessContext(businessProfileId);
+    const memoryBlock = formatContextForPrompt(bizCtx, 'tiktokSectorTrendAgent');
+    const rejectedPatterns: string[] = bizCtx?.rejectedPatterns || [];
+
     const catEn = CAT_EN[category] || category;
-    const sectorHashtags = resolveHashtags(category);
+    const sectorHashtags = resolveHashtags(category, relevant_services);
     console.log(`[tiktokSectorTrendAgent] category="${category}" → hashtags: ${sectorHashtags.slice(0, 4).join(', ')}`);
 
     // ── 1. Apify A: sector hashtag scraping (trend detection) ─────────────
@@ -447,6 +470,10 @@ Task: find 2-4 **rising content patterns** that fit this specific business exact
 Name: "${name}" | Category: ${category} | City: ${city}
 ${profileCtx}
 Preferred tone: ${toneInstruction}
+${memoryBlock}
+CRITICAL — SERVICES LOCK: ONLY generate trends for these exact services this business offers: "${relevant_services || category}".
+Do NOT generate trends for services/products this business does NOT sell. If you see sushi trends but the business sells wine — skip them.
+${rejectedPatterns.length > 0 ? `NEVER generate trends related to: ${rejectedPatterns.slice(0, 6).join(', ')} (user rejected these before)` : ''}
 
 ${ownVideosCtx}
 
@@ -502,13 +529,23 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
 
     const rawTrends: any[] = result?.trends || [];
 
-    // Filter: only trends with real evidence + confidence
-    const validTrends = rawTrends.filter(t =>
-      t.pattern_name &&
-      t.content_script?.hook_3sec &&
-      t.evidence?.detail &&
-      (t.confidence || 0) >= 55
-    );
+    // Filter: only trends with real evidence + confidence + relevant to this business's services
+    const serviceKeywords = (relevant_services || category)
+      .toLowerCase().split(/[,\s]+/).filter((k: string) => k.length > 2);
+
+    const validTrends = rawTrends.filter(t => {
+      if (!t.pattern_name || !t.content_script?.hook_3sec || !t.evidence?.detail) return false;
+      if ((t.confidence || 0) < 55) return false;
+      // Skip if service_spotlight matches a rejected pattern
+      const spotlightText = ((t.service_spotlight || '') + ' ' + (t.pattern_name || '')).toLowerCase();
+      if (rejectedPatterns.some((p: string) => p && spotlightText.includes(p.toLowerCase()))) return false;
+      // Require trend to be relevant to at least one of the business's actual services
+      if (serviceKeywords.length > 0) {
+        const trendText = (spotlightText + ' ' + (t.why_it_works_in_sector || '').toLowerCase());
+        if (!serviceKeywords.some((k: string) => trendText.includes(k))) return false;
+      }
+      return true;
+    });
 
     // ── 4. Dedup against existing signals ─────────────────────────────────
     const existing = await prisma.marketSignal.findMany({

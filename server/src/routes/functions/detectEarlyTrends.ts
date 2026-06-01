@@ -23,6 +23,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 
 import { tavilyAdvancedSearch } from '../../lib/tavily';
+import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
 
 const SERP_API_KEY = process.env.SERP_API_KEY || '';
 
@@ -106,6 +107,11 @@ export async function detectEarlyTrends(req: Request, res: Response) {
 
     const { name, category, city, relevant_services = '' } = profile;
 
+    // Load business memory (rejected patterns + preferences)
+    const bizCtx = await loadBusinessContext(businessProfileId);
+    const memoryBlock = formatContextForPrompt(bizCtx, 'detectEarlyTrends');
+    const rejectedPatterns: string[] = bizCtx?.rejectedPatterns || [];
+
     // ── 1. Google Trends velocity scan ──────────────────────────────────────
     let trendsBlock = '';
     const trendKeywords = [
@@ -154,6 +160,33 @@ export async function detectEarlyTrends(req: Request, res: Response) {
     ];
     const competitorResults = (await Promise.all(competitorQueries.map(q => tavilyAdvancedSearch(q, 3)))).flat();
 
+    // ── 3b. Cross-sector borrowing — adjacent sector trends ─────────────────
+    // Find what's working in related sectors and see if it can be borrowed
+    const ADJACENT_SECTORS: Record<string, string[]> = {
+      'מסעדה': ['בית קפה', 'פיצה', 'קייטרינג'],
+      'יופי': ['ספא', 'כושר', 'אופנה'],
+      'כושר': ['ספא', 'יוגה', 'תזונה'],
+      'רפואה': ['פיזיו', 'יוגה', 'בריאות'],
+      'קמעונאות': ['אופנה', 'מתנות', 'מזון'],
+      'שיפוץ': ['עיצוב פנים', 'ריהוט', 'נדל"ן'],
+    };
+    const catLower = category.toLowerCase();
+    const adjacentSectors = Object.entries(ADJACENT_SECTORS)
+      .find(([key]) => catLower.includes(key.toLowerCase()))?.[1] || [];
+    let crossSectorContext = '';
+    if (adjacentSectors.length > 0) {
+      const crossQuery = `trending 2025 Israel ${adjacentSectors[0]} viral TikTok new service`;
+      const crossResults = await tavilyAdvancedSearch(crossQuery, 3).catch(() => []);
+      if (crossResults.length > 0) {
+        crossSectorContext = '\n\n=== CROSS-SECTOR BORROWING (adjacent sectors) ===\n' +
+          `Adjacent sectors: ${adjacentSectors.join(', ')}\n` +
+          crossResults.slice(0, 3)
+            .map(r => `[${r.url}] ${(r.content || r.title || '').slice(0, 150)}`)
+            .join('\n---\n') +
+          '\n(Consider: can trends from these adjacent sectors be adapted for this business?)';
+      }
+    }
+
     // ── 4. Build AI prompt ──────────────────────────────────────────────────
     const socialContext = uniqueSocial.slice(0, 18)
       .map(r => `[${r.url}] ${(r.content || r.title || '').slice(0, 250)}`)
@@ -167,6 +200,7 @@ export async function detectEarlyTrends(req: Request, res: Response) {
       socialContext ? `=== SOCIAL MEDIA SIGNALS ===\n${socialContext}` : '',
       trendsBlock,
       competitorContext ? `\n\n=== COMPETITOR/MARKET MOVES ===\n${competitorContext}` : '',
+      crossSectorContext,
     ].filter(Boolean).join('\n\n');
 
     // ── 5. AI analysis — pre-peak trend scoring ─────────────────────────────
@@ -177,6 +211,11 @@ Return ONLY valid JSON. ALL string values must be in Hebrew.
 
 Business: "${name}" — ${category} in ${city}
 Services: ${relevant_services || 'not specified'}
+${memoryBlock}
+CRITICAL: ONLY include trends that directly relate to what this business actually offers: "${relevant_services || category}".
+Do NOT include trends for products/services this business does not provide.
+${rejectedPatterns.length > 0 ? `SKIP any trend related to: ${rejectedPatterns.slice(0, 5).join(', ')} (user dismissed these before)` : ''}
+Set relevance_to_business="high" ONLY if the trend connects directly to at least one of the business's listed services.
 
 Data:
 ${fullContext.slice(0, 3500)}
@@ -187,6 +226,7 @@ Important instructions:
 • Prefer: high velocity + low volume = gold
 • Important: how many days until the trend reaches its peak? (range: 7-60 days)
 • opportunity_text — what the business needs to do right now, very specific
+• Cross-sector borrowing: if you see a trend succeeding in an adjacent sector that could apply here — flag it with stage="early_growing" and note the source sector in evidence
 
 Return ONLY valid JSON:
 {"trends":[{
@@ -208,13 +248,17 @@ Return ONLY valid JSON:
 
     const rawTrends: any[] = result?.trends || [];
 
-    // Filter: only truly early-stage with evidence
-    const earlyTrends = rawTrends.filter(t =>
-      t.evidence &&
-      t.name &&
-      ['emerging', 'early_growing'].includes(t.stage) &&
-      t.relevance_to_business !== 'low'
-    );
+    // Filter: only truly early-stage, high relevance, passing rejection check
+    const earlyTrends = rawTrends.filter(t => {
+      if (!t.evidence || !t.name) return false;
+      if (!['emerging', 'early_growing'].includes(t.stage)) return false;
+      // Require explicit high relevance — medium is too ambiguous
+      if (t.relevance_to_business !== 'high') return false;
+      // Reject if matches a previously dismissed pattern
+      const trendText = ((t.name || '') + ' ' + (t.description || '') + ' ' + (t.opportunity_text || '')).toLowerCase();
+      if (rejectedPatterns.some((p: string) => p && trendText.includes(p.toLowerCase()))) return false;
+      return true;
+    });
 
     // ── 6. Save as MarketSignals ────────────────────────────────────────────
     const existing = await prisma.marketSignal.findMany({
