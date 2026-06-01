@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
-import { invokeLLM } from '../../lib/llm';
 import { callGemini } from '../../lib/gemini';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || ''; // used for translation fallback only
@@ -11,9 +10,9 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 // Flux.1 via fal.ai
 const FAL_API_KEY = process.env.FAL_API_KEY || '';
 
-// ── Tier 1 (fallback): Google Imagen Ultra via Gemini API ───────────────────
+// ── Tier 1 (fallback): Google Imagen Ultra via Gemini API ──────────────────
 
-// Platform → aspect ratio mappings
+// Platform → aspect ratio mappings (for Imagen Ultra)
 const PLATFORM_ASPECT: Record<string, string> = {
   instagram_post:     '1:1',
   instagram_portrait: '3:4',   // 4:5 not supported by Imagen; 3:4 is closest
@@ -21,16 +20,18 @@ const PLATFORM_ASPECT: Record<string, string> = {
   tiktok:             '9:16',
   facebook:           '4:3',
   facebook_landscape: '16:9',
+  campaign:           '16:9',  // paid campaign banner (Facebook/Google)
 };
 
 // Platform → Flux image_size or custom dims
 const PLATFORM_FLUX_SIZE: Record<string, string | { width: number; height: number }> = {
-  instagram_post:     'square_hd',            // 1024×1024
+  instagram_post:     'square_hd',                   // 1024×1024
   instagram_portrait: { width: 864, height: 1080 }, // ~4:5
-  instagram_story:    'portrait_16_9',        // 576×1024
-  tiktok:             'portrait_16_9',
-  facebook:           'landscape_4_3',        // 1024×768
-  facebook_landscape: 'landscape_16_9',       // 1024×576
+  instagram_story:    'portrait_16_9',               // 576×1024
+  tiktok:             'portrait_16_9',               // 576×1024
+  facebook:           'landscape_4_3',               // 1024×768
+  facebook_landscape: 'landscape_16_9',              // 1024×576
+  campaign:           'landscape_16_9',              // 1024×576 — campaign banner
 };
 
 async function generateWithGeminiImagen(englishPrompt: string, platform = 'instagram_post'): Promise<string | null> {
@@ -335,10 +336,9 @@ async function buildAIImagePrompt(
   }
 
   try {
-    const result = await invokeLLM({
-      model:    'haiku',
-      maxTokens: 150,
-      prompt: `You are an expert commercial photographer writing an AI image generation prompt.
+    // Gemini Flash — fast, cheap, excellent at descriptive English prompts
+    const raw = await callGemini(
+      `You are an expert commercial photographer writing an AI image generation prompt.
 Based on the marketing context below, write ONE detailed photographic scene description in English.
 
 ${sourceText}
@@ -351,14 +351,10 @@ Rules:
 - Photographic style: professional commercial or editorial photography
 - Do NOT mention the business name or city
 - Return ONLY the prompt, no explanation`,
-      response_json_schema: undefined,
-    });
+      'gemini-flash', 150,
+    );
 
-    const text = (typeof result === 'string' ? result : JSON.stringify(result))
-      .replace(/^["']|["']$/g, '')
-      .replace(/\n/g, ' ')
-      .trim();
-
+    const text = raw.replace(/^["']|["']$/g, '').replace(/\n/g, ' ').trim();
     if (text.length > 20) return text.slice(0, 500);
   } catch { /* fall through to sector fallback */ }
 
@@ -388,7 +384,7 @@ function categoryToSector(category = ''): string {
  * generateImage — AI image generation.
  *
  * Tier 0: Flux.1 schnell via fal.ai (FAL_API_KEY) — primary
- * Tier 1: Google Imagen 3 via Gemini API (GEMINI_API_KEY) — fallback
+ * Tier 1: Google Imagen Ultra via Gemini API (GEMINI_API_KEY) — fallback
  *
  * Prompt strategy:
  *   custom_prompt → translated to English directly
@@ -453,14 +449,14 @@ export async function generateImage(req: Request, res: Response) {
     }
   }
 
-  // ── Tier 1: Google Imagen 3 (requires paid Google Cloud + Imagen API) ─────
+  // ── Tier 1: Google Imagen Ultra ──────────────────────────────────────────
   if (GEMINI_API_KEY) {
     try {
-      console.log('[generateImage] trying Gemini Imagen 3...');
+      console.log('[generateImage] trying Imagen Ultra...');
       const url = await generateWithGeminiImagen(finalPrompt, platform);
       if (url) {
-        console.log('[generateImage] Gemini Imagen 3 success, platform:', platform);
-        return res.json({ url, provider: 'imagen3', is_stock: false, platform });
+        console.log('[generateImage] Imagen Ultra success, platform:', platform);
+        return res.json({ url, provider: 'imagen_ultra', is_stock: false, platform });
       }
     } catch (err: any) {
       console.warn('[generateImage] Gemini Imagen failed:', err.message);

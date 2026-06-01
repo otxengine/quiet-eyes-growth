@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { callAI, callAIJson } from '../../lib/ai_router';
+import { callGemini } from '../../lib/gemini';
 import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
 import { buildAgentPromptContext } from '../../lib/businessProfile';
 import { getAllMissions } from '../../lib/missionPlanner';
@@ -8,12 +9,13 @@ import { getAllMissions } from '../../lib/missionPlanner';
 /**
  * generateSmartPost — Multi-brain post generation pipeline.
  *
- * Phase 1 (Claude Sonnet):  build per-insight audience profile
- * Phase 2 (GPT-4o):         write platform-optimised post copy
- * Phase 3 (GPT-4o-mini):    produce DALL-E image prompt (Hebrew→English)
+ * Phase 1a (Claude Sonnet):    deep audience profile from OSINT data
+ * Phase 1b (Gemini Flash):     behavioral keywords + targeting angle (parallel)
+ * Phase 2a (GPT-4o):           variant A post copy — creative/quality
+ * Phase 2b (Gemini Flash):     variant B post copy — fast/different angle
  *
  * Body: { businessProfileId, insight_text, action_label?, platform? }
- * Returns: { post, audience, imagePrompt }
+ * Returns: { post, variant_b, audience, imagePrompt }
  */
 export async function generateSmartPost(req: Request, res: Response) {
   const {
@@ -28,7 +30,7 @@ export async function generateSmartPost(req: Request, res: Response) {
   }
 
   try {
-    const [profile, leads, reviews, competitors, bizCtx] = await Promise.all([
+    const [profile, leads, reviews, competitors, bizCtx, recentPosts] = await Promise.all([
       prisma.businessProfile.findUnique({ where: { id: businessProfileId } }),
       prisma.lead.findMany({
         where: { linked_business: businessProfileId },
@@ -48,6 +50,12 @@ export async function generateSmartPost(req: Request, res: Response) {
         select: { name: true, strengths: true },
       }),
       loadBusinessContext(businessProfileId),
+      prisma.organicPost.findMany({
+        where: { linked_business: businessProfileId },
+        orderBy: { created_date: 'desc' },
+        take: 5,
+        select: { content: true },
+      }),
     ]);
 
     if (!profile) return res.status(404).json({ error: 'Business profile not found' });
@@ -64,6 +72,14 @@ export async function generateSmartPost(req: Request, res: Response) {
       ? `Sector hashtags — primary: ${(contentMissions.hashtags.primary || []).join(' ')} | local: ${(contentMissions.hashtags.local || []).join(' ')} | trending: ${(contentMissions.hashtags.trending || []).join(' ')}`
       : '';
 
+    // Recent post hooks to avoid repeating
+    const recentHooks = recentPosts
+      .map(p => (p.content || '').split('\n')[0].slice(0, 80))
+      .filter(Boolean);
+    const avoidHooksBlock = recentHooks.length > 0
+      ? `Recent post openers (DO NOT repeat these hooks):\n${recentHooks.map(h => `• ${h}`).join('\n')}`
+      : '';
+
     const leadSummary = leads
       .slice(0, 5)
       .map(l => `• [${l.source || '?'}] ${(l.service_needed || '').slice(0, 50)}`)
@@ -74,9 +90,10 @@ export async function generateSmartPost(req: Request, res: Response) {
       .map(r => `• [${r.sentiment || '?'}] "${(r.text || '').slice(0, 60)}"`)
       .join('\n') || 'אין ביקורות';
 
-    // ── Phase 1: Claude builds audience profile ──────────────────────────────
-    console.log('[generateSmartPost] Phase 1: Claude building audience...');
-    const audience = await callAIJson<any>('build_audience', `
+    // ── Phase 1: Dual-brain audience analysis (Claude + Gemini in parallel) ──
+    console.log('[generateSmartPost] Phase 1: building audience (Claude + Gemini)...');
+
+    const audienceBasePrompt = `
 ${sectorCtxBlock}
 
 Business: "${profile.name}" — ${profile.category} in ${profile.city}
@@ -86,11 +103,14 @@ Specific insight: "${insight_text}"
 Suggested action: "${action_label}"
 Platform: ${platform}
 
-Leads: ${leadSummary}
-Reviews: ${reviewSummary}
-Competitors: ${competitors.map(c => c.name).join(', ') || 'none'}
+Leads (OSINT): ${leadSummary}
+Reviews (OSINT): ${reviewSummary}
+Competitors: ${competitors.map(c => c.name).join(', ') || 'none'}`;
 
-Build a precise target-audience profile for this insight. Return ONLY valid JSON. ALL string values must be in Hebrew:
+    // Phase 1a: Claude Sonnet — deep demographic + behavioral profile
+    const claudeAudiencePromise = callAIJson<any>('build_audience', `${audienceBasePrompt}
+
+Build a precise target-audience profile. Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "age_range": "XX-XX",
   "gender": "נשים|גברים|מעורב",
@@ -106,16 +126,43 @@ Build a precise target-audience profile for this insight. Return ONLY valid JSON
       systemPrompt: 'You are an audience segmentation expert. Build a data-based profile, not general assumptions. ALL string values in the JSON must be in Hebrew.',
     });
 
-    // ── Phase 2: GPT-4o writes the post ─────────────────────────────────────
-    console.log('[generateSmartPost] Phase 2: GPT-4o writing post...');
+    // Phase 1b: Gemini Flash — behavioral keywords + content angle (fast, parallel)
+    const geminiAudiencePromise = callGemini(
+      `${audienceBasePrompt}
+
+Based on this data, suggest 3 behavioral targeting keywords and 1 content angle for ${platform}. Return ONLY valid JSON in Hebrew:
+{"behavioral_keywords":["מילה1","מילה2","מילה3"],"content_angle":"זווית תוכן ספציפית שתעבוד לקהל הזה — עד 10 מילים"}`,
+      'gemini-flash', 200,
+      { jsonMode: true },
+    ).then(raw => {
+      try {
+        const clean = raw.replace(/```json?|```/g, '').trim();
+        return JSON.parse(clean);
+      } catch { return null; }
+    }).catch(() => null);
+
+    const [audience, geminiAudienceHints] = await Promise.all([claudeAudiencePromise, geminiAudiencePromise]);
+
+    // Merge Gemini behavioral hints into audience
+    if (geminiAudienceHints?.behavioral_keywords?.length) {
+      audience.targeting_phrases = [
+        ...(audience.targeting_phrases || []),
+        ...geminiAudienceHints.behavioral_keywords,
+      ].slice(0, 6);
+    }
+    if (geminiAudienceHints?.content_angle) {
+      audience.gemini_angle = geminiAudienceHints.content_angle;
+    }
+
+    // ── Phase 2: Dual-brain post generation (GPT-4o variant A + Gemini Flash variant B) ──
+    console.log('[generateSmartPost] Phase 2: GPT-4o (A) + Gemini Flash (B) writing posts...');
     const platformStyle = {
       instagram: 'אימוג׳ים, hashtags, סגנון צעיר ויצירתי, מקסימום 120 מילים',
       facebook:  'קצת יותר טקסט, נרטיב, פחות אימוג׳ים, מקסימום 180 מילים',
       whatsapp:  'אישי, קצר, ישיר, מקסימום 50 מילים, ללא hashtags',
     }[platform as string] || 'קצר ומשפיע, מקסימום 120 מילים';
 
-    const post = await callAIJson<any>('generate_post', `
-Write a marketing post for ${platform} in Hebrew.
+    const postBaseContext = `
 ${mlContext}
 Business: "${profile.name}" — ${profile.category} in ${profile.city}
 ${profile.description ? `Description: ${profile.description}` : ''}
@@ -124,35 +171,68 @@ Audience: ${audience.age_range}, ${audience.gender}
 Pain point: ${audience.pain_point}
 Trigger: ${audience.purchase_trigger}
 Style: ${platformStyle}
-${hooksBlock ? `\nHook examples that work for this sector (DO NOT copy, use as tone guide):\n• ${hooksBlock}` : ''}
+${hooksBlock ? `\nHook examples for this sector (DO NOT copy, use as tone guide):\n• ${hooksBlock}` : ''}
 ${hashtagGuide ? `\n${hashtagGuide}` : ''}
+${avoidHooksBlock ? `\n${avoidHooksBlock}` : ''}
+${audience.gemini_angle ? `\nContent angle to explore: ${audience.gemini_angle}` : ''}`;
+
+    // Phase 2a: GPT-4o — variant A (question hook, high quality)
+    const gptPostPromise = callAIJson<any>('generate_post', `
+Write ONE marketing post (variant A) for ${platform} in Hebrew. Open with a QUESTION hook.
+${postBaseContext}
 
 Rules:
-• Open with a hook that grabs attention within 2 seconds — specific to this sector's audience pain point
-• Touch the audience's pain point precisely (not generic)
-• Offer a solution — specific to THIS business's unique value
+• Open with a question hook
+• Touch the pain point precisely (not generic)
 • End with a clear CTA
 • Write natural Hebrew, not a translation from English
-• Apply the learned tone and style preferences above (if provided)
-• Use sector-appropriate hashtags from the list above, not generic ones
 
-Return ONLY valid JSON. ALL string values must be in Hebrew, EXCEPT image_description which must be in English:
+Return ONLY valid JSON. image_description must be in English only:
 {
   "text": "הפוסט המלא",
-  "hook": "המשפט הפותח בלבד",
+  "hook": "ה-hook בלבד",
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"],
   "cta": "קריאה לפעולה — עד 5 מילים",
-  "audience_note": "למה הפוסט מדבר לקהל הזה — משפט קצר",
-  "image_description": "6-8 English words describing the ideal marketing photo for this post (no Hebrew, no punctuation, e.g.: fitness gym workout equipment modern bright)"
+  "audience_note": "למה הפוסט מדבר לקהל — משפט קצר",
+  "image_description": "6-8 English words for ideal marketing photo (no Hebrew, no punctuation)"
 }`, {
-      systemPrompt: `You are an experienced marketing copywriter for the Israeli market.
-Write natural Hebrew — not a translation.
-Avoid corporate speak such as "מומלץ לשקול" or "ניתן לשקול".
-Write the way a real person speaks.
-ALL string values in the JSON must be in Hebrew, except image_description which must be in English only.`,
+      systemPrompt: `You are an experienced marketing copywriter for the Israeli market. Write natural Hebrew — not a translation. Avoid corporate speak. ALL string values in Hebrew, except image_description which must be English only.`,
     });
 
-    // image_description is generated inline by GPT-4o in Phase 2 — no separate translation needed
+    // Phase 2b: Gemini Flash — variant B (bold statement hook, different angle, faster/cheaper)
+    const geminiPostPromise = callAI('generate_post_fast', `
+Write ONE marketing post (variant B) for ${platform} in Hebrew. Open with a BOLD STATEMENT or surprising fact.
+${postBaseContext}
+
+Rules:
+• Open with a bold statement or surprising fact — NOT a question
+• Use a different angle from the obvious one
+• Touch the pain point precisely
+• End with a clear CTA
+• Write natural Hebrew
+
+Return ONLY valid JSON. ALL string values in Hebrew:
+{
+  "text": "הפוסט המלא",
+  "hook": "ה-hook בלבד",
+  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"],
+  "cta": "קריאה לפעולה — עד 5 מילים"
+}`,
+    ).then(raw => {
+      try {
+        const clean = raw.replace(/```json?|```/g, '').trim();
+        const obj = JSON.parse(clean.match(/\{[\s\S]*\}/)?.[0] || clean);
+        return obj;
+      } catch { return null; }
+    }).catch(() => null);
+
+    const [postResult, geminiVariantB] = await Promise.all([gptPostPromise, geminiPostPromise]);
+
+    const post = postResult || {};
+    if (geminiVariantB?.text) {
+      post.variant_b = geminiVariantB;
+    }
+
     const imagePrompt = (post.image_description || '').trim().replace(/['"]/g, '');
 
     console.log('[generateSmartPost] Done. audience confidence:', audience?.confidence);
@@ -163,6 +243,7 @@ ALL string values in the JSON must be in Hebrew, except image_description which 
         platform,
         best_time: audience.best_time,
       },
+      variant_b: post.variant_b || null,
       audience,
       imagePrompt,
     });
