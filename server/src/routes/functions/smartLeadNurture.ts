@@ -65,7 +65,7 @@ export async function smartLeadNurture(req: Request, res: Response) {
     const sectorKnowledge = await prisma.sectorKnowledge.findFirst({
       where: { sector: category },
       orderBy: { created_date: 'desc' },
-      select: { winner_lead_dna: true, peak_demand: true },
+      select: { winner_lead_dna: true },
     });
     let followupWindowHours = 48;   // default: 48h before first follow-up
     let coldWindowDays = 7;         // default: 7d before marking cold
@@ -84,7 +84,7 @@ export async function smartLeadNurture(req: Request, res: Response) {
         }
       } catch {}
     }
-    const sectorPeakDemand = sectorKnowledge?.peak_demand || '';
+    const sectorPeakDemand = '';
 
     const fortyEightHoursAgo = new Date(Date.now() - followupWindowHours * 3600000);
     const sevenDaysAgo = new Date(Date.now() - coldWindowDays * 24 * 3600000);

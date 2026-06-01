@@ -5,7 +5,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { getAllMissions } from '../../lib/missionPlanner';
 
 // Process-level daily cache — resets on server restart (Render redeploys daily anyway)
-const _dailyCache = new Map<string, { result: any; date: string }>();
+const _dailyCache = new Map<string, { result: any; date: string; fingerprint?: string }>();
 
 export async function generateMorningBriefing(req: Request, res: Response) {
   const { businessProfileId } = req.body;
