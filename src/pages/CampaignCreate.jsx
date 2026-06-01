@@ -147,6 +147,7 @@ export default function CampaignCreate() {
   const [mediaAssetId,   setMediaAssetId]   = useState(null);
   const [genImage,       setGenImage]       = useState(false);
   const [analyzingImg,   setAnalyzingImg]   = useState(false);
+  const [imgPreview,     setImgPreview]     = useState(false);
   const fileRef = useRef(null);
 
   const [generatingPost,  setGeneratingPost]  = useState(false);
@@ -410,6 +411,22 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-4" dir="rtl">
 
+      {/* Image lightbox */}
+      {imgPreview && imageUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={() => setImgPreview(false)}
+        >
+          <div className="relative max-w-4xl w-full" onClick={e => e.stopPropagation()}>
+            <img src={imageUrl} alt="" className="w-full rounded-xl shadow-2xl" />
+            <button
+              onClick={() => setImgPreview(false)}
+              className="absolute top-3 left-3 w-8 h-8 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-black/80 text-[14px]"
+            >✕</button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-3 mb-2">
         <button onClick={() => navigate('/marketing')} className="text-foreground-muted hover:text-foreground">
@@ -514,7 +531,11 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
         <div className="p-4 space-y-3">
           {imageUrl ? (
             <div className="relative">
-              <img src={imageUrl} alt="" className="w-full aspect-video object-cover rounded-xl border border-border" />
+              <img
+                src={imageUrl} alt=""
+                onClick={() => setImgPreview(true)}
+                className="w-full aspect-video object-cover rounded-xl border border-border cursor-zoom-in"
+              />
               {analyzingImg && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl">
                   <div className="text-white text-[12px] flex items-center gap-2">
@@ -522,6 +543,9 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
                   </div>
                 </div>
               )}
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity pointer-events-none rounded-xl bg-black/10">
+                <span className="text-white text-[11px] bg-black/50 px-2 py-1 rounded-full">לחץ להגדלה</span>
+              </div>
               {imageDesc && <p className="text-[10px] text-foreground-muted mt-1">🔍 {imageDesc}</p>}
               <button
                 onClick={() => { setImageUrl(''); setMediaAssetId(null); setImageDesc(''); }}
