@@ -98,7 +98,7 @@ export async function callAnthropicVisionAPI(
 export async function callGeminiAPI(
   prompt: string,
   maxTokens = 800,
-  model = "gemini-3.1-flash",
+  model = "gemini-3.5-flash",
 ): Promise<string> {
   const apiKey = Deno.env.get("GEMINI_API_KEY");
   if (!apiKey) throw new Error("GEMINI_API_KEY not set");
@@ -145,7 +145,7 @@ export async function callGeminiVisionAPI(
   const b64 = btoa(String.fromCharCode(...new Uint8Array(imgBytes)));
   const mimeType = imgRes.headers.get("content-type") || "image/jpeg";
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
 
   const res = await fetch(url, {
     method: "POST",

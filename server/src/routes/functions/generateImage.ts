@@ -39,7 +39,7 @@ async function generateWithGeminiImagen(englishPrompt: string, platform = 'insta
   const aspectRatio = PLATFORM_ASPECT[platform] || '1:1';
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/imagen-ultra:predict?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-ultra-generate-001:predict?key=${GEMINI_API_KEY}`,
     {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -29,8 +29,8 @@ const MODEL_MAP: Record<string, string> = {
   haiku:         'claude-haiku-4-5-20251001',
   sonnet:        'claude-sonnet-4-6',
   opus:          'claude-opus-4-6',
-  'gemini-flash': 'gemini-3.1-flash',
-  'gemini-pro':   'gemini-3.1-pro',
+  'gemini-flash': 'gemini-3.5-flash',
+  'gemini-pro':   'gemini-3.1-pro-preview',
 };
 
 // Hard output caps per model — keeps token burn predictable
@@ -106,7 +106,7 @@ async function _invokeLLMRaw(
       // Fallback chain: Claude → Gemini Flash → OpenAI
       if (process.env.GEMINI_API_KEY) {
         try {
-          return await _callGemini(prompt, 'gemini-3.1-flash', maxTokens, response_json_schema);
+          return await _callGemini(prompt, 'gemini-3.5-flash', maxTokens, response_json_schema);
         } catch (geminiErr: any) {
           console.warn('[invokeLLM] Gemini Flash fallback failed:', geminiErr.message);
         }
@@ -133,7 +133,7 @@ async function _callGemini(
   response_json_schema: any,
 ): Promise<any> {
   // Map full model IDs back to keys for callGemini
-  const modelKey = modelId === 'gemini-3.1-pro' ? 'gemini-pro' : 'gemini-flash';
+  const modelKey = modelId === 'gemini-3.1-pro-preview' ? 'gemini-pro' : 'gemini-flash';
 
   const systemPrompt = response_json_schema
     ? 'You are a JSON-only assistant. Respond with a single valid JSON object only. No preamble, no explanation, no markdown fences. ALL string values must be in Hebrew unless the field explicitly requires English.'

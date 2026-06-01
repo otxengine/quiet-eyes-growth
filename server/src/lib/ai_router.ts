@@ -92,28 +92,28 @@ export const AI_ROUTER: Record<AITask, AIConfig> = {
   // ── Gemini Flash — fast/cheap tasks ───────────────────────────────────────
   generate_post_fast: {
     provider:    'gemini',
-    model:       'gemini-3.1-flash',
+    model:       'gemini-3.5-flash',
     max_tokens:  800,
     temperature: 0.8,
     reason:      'פוסט מהיר — Gemini Flash מהיר וזול לתוכן שיווקי',
   },
   generate_caption_fast: {
     provider:    'gemini',
-    model:       'gemini-3.1-flash',
+    model:       'gemini-3.5-flash',
     max_tokens:  200,
     temperature: 0.9,
     reason:      'כיתוב מהיר — Gemini Flash לטקסטים קצרים במחיר נמוך',
   },
   translate_hebrew_fast: {
     provider:    'gemini',
-    model:       'gemini-3.1-flash',
+    model:       'gemini-3.5-flash',
     max_tokens:  80,
     temperature: 0.1,
     reason:      'תרגום מהיר/זול — Gemini Flash לתרגום רב-כמות',
   },
   multimodal_vision: {
     provider:    'gemini',
-    model:       'gemini-3.1-flash',
+    model:       'gemini-3.5-flash',
     max_tokens:  600,
     temperature: 0.3,
     reason:      'vision/multimodal — Gemini Flash לניתוח תמונות',
@@ -197,7 +197,7 @@ async function callFallback(
     if (GEMINI_KEY()) {
       console.warn(`[AI_ROUTER] fallback: openai→gemini(flash) for task=${task}`);
       try {
-        return await callGeminiProvider(prompt, { ...config, provider: 'gemini', model: 'gemini-3.1-flash' }, options);
+        return await callGeminiProvider(prompt, { ...config, provider: 'gemini', model: 'gemini-3.5-flash' }, options);
       } catch (geminiErr: any) {
         console.warn(`[AI_ROUTER] Gemini fallback also failed: ${geminiErr.message}`);
       }
@@ -211,7 +211,7 @@ async function callFallback(
     if (GEMINI_KEY()) {
       console.warn(`[AI_ROUTER] fallback: anthropic→gemini(flash) for task=${task}`);
       try {
-        return await callGeminiProvider(prompt, { ...config, provider: 'gemini', model: 'gemini-3.1-flash' }, options);
+        return await callGeminiProvider(prompt, { ...config, provider: 'gemini', model: 'gemini-3.5-flash' }, options);
       } catch (geminiErr: any) {
         console.warn(`[AI_ROUTER] Gemini fallback also failed: ${geminiErr.message}`);
       }
@@ -235,7 +235,7 @@ async function callGeminiProvider(
   if (!key) throw new Error('GEMINI_API_KEY not set');
 
   // Normalize model to key
-  const modelKey = config.model === 'gemini-3.1-pro' ? 'gemini-pro' : 'gemini-flash';
+  const modelKey = config.model === 'gemini-3.1-pro-preview' ? 'gemini-pro' : 'gemini-flash';
 
   return callGemini(prompt, modelKey as 'gemini-flash' | 'gemini-pro', config.max_tokens || 800, {
     jsonMode:     options.jsonMode,

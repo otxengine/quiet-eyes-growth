@@ -4,8 +4,8 @@
  */
 
 const GEMINI_MODEL_MAP: Record<string, string> = {
-  'gemini-flash': 'gemini-3.1-flash',
-  'gemini-pro':   'gemini-3.1-pro',
+  'gemini-flash': 'gemini-3.5-flash',
+  'gemini-pro':   'gemini-3.1-pro-preview',
 };
 
 /**
@@ -28,7 +28,7 @@ export async function callGemini(
   const apiKey = process.env.GEMINI_API_KEY || '';
   if (!apiKey) throw new Error('GEMINI_API_KEY not set');
 
-  const modelId = GEMINI_MODEL_MAP[modelKey] || 'gemini-3.1-flash';
+  const modelId = GEMINI_MODEL_MAP[modelKey] || 'gemini-3.5-flash';
   const { jsonMode, systemPrompt, imageBase64 } = options;
 
   // Build parts array
