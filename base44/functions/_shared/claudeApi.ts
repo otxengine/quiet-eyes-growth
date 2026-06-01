@@ -76,7 +76,7 @@ export async function callGemini(
   const apiKey = Deno.env.get('GEMINI_API_KEY') || '';
   if (!apiKey) throw new Error('GEMINI_API_KEY not set');
 
-  const { maxTokens = 800, jsonMode = false, model = 'gemini-2.5-flash' } = options;
+  const { maxTokens = 800, jsonMode = false, model = 'gemini-3.1-flash' } = options;
 
   const body: Record<string, any> = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],

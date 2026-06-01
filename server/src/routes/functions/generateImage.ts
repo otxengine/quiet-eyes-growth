@@ -5,13 +5,13 @@ import { callGemini } from '../../lib/gemini';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || ''; // used for translation fallback only
 
-// Google Imagen 3 — simple API key (no Vertex / service account needed)
+// Google Imagen Ultra — simple API key (no Vertex / service account needed)
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 
 // Flux.1 via fal.ai
 const FAL_API_KEY = process.env.FAL_API_KEY || '';
 
-// ── Tier 1 (fallback): Google Imagen 3 via Gemini API ───────────────────────
+// ── Tier 1 (fallback): Google Imagen Ultra via Gemini API ───────────────────
 
 // Platform → aspect ratio mappings
 const PLATFORM_ASPECT: Record<string, string> = {
@@ -39,7 +39,7 @@ async function generateWithGeminiImagen(englishPrompt: string, platform = 'insta
   const aspectRatio = PLATFORM_ASPECT[platform] || '1:1';
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-fast-generate-001:predict?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/imagen-ultra:predict?key=${GEMINI_API_KEY}`,
     {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
