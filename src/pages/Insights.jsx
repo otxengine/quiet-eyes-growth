@@ -175,18 +175,15 @@ export default function Insights() {
     return 'market_opportunity';
   };
 
-  // Signals relevant to Insights — exclude event/local_event (those live on Events page)
-  const insightSignals = signals.filter(s =>
-    s.category !== 'event' &&
-    s.category !== 'local_event' &&
-    s.category !== 'weather_event'
-  );
+  // Signals relevant to Insights — only curated signal categories that are user-facing.
+  // Monitoring/intelligence data (tiktok trends, competitor moves, mentions, viral signals, etc.)
+  // is raw input that feeds the advisory engine (ProactiveAlerts) and must NOT appear here directly.
+  const INSIGHT_SIGNAL_CATEGORIES = new Set(['demand_gap', 'opportunity', 'expansion', 'threat', 'social']);
+  const insightSignals = signals.filter(s => INSIGHT_SIGNAL_CATEGORIES.has(s.category));
 
-  // Actions relevant to Insights — exclude event-category actions
-  const insightActions = actions.filter(a =>
-    a.category !== 'event' &&
-    a.category !== 'local_event'
-  );
+  // Actions relevant to Insights — exclude event-category actions and raw monitoring signals
+  const EXCLUDED_ACTION_CATEGORIES = new Set(['event', 'local_event', 'tiktok_sector_trend', 'competitor_move', 'viral_signal', 'early_trend']);
+  const insightActions = actions.filter(a => !EXCLUDED_ACTION_CATEGORIES.has(a.category));
 
   // Normalize to unified list
   const rawUnified = [
