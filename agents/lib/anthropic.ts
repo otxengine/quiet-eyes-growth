@@ -91,6 +91,89 @@ export async function callAnthropicVisionAPI(
   return text;
 }
 
+/**
+ * Call Gemini generative model (Flash or Pro).
+ * Raw fetch — consistent with the existing fetch pattern in this file.
+ */
+export async function callGeminiAPI(
+  prompt: string,
+  maxTokens = 800,
+  model = "gemini-2.5-flash",
+): Promise<string> {
+  const apiKey = Deno.env.get("GEMINI_API_KEY");
+  if (!apiKey) throw new Error("GEMINI_API_KEY not set");
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 },
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Gemini API HTTP ${res.status}: ${body.slice(0, 300)}`);
+  }
+
+  const data: { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> } =
+    await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("Empty Gemini response");
+  return text;
+}
+
+/**
+ * Call Gemini Vision API with an image URL + text prompt.
+ * Fetches the image and passes it as inlineData (base64).
+ */
+export async function callGeminiVisionAPI(
+  prompt: string,
+  imageUrl: string,
+  maxTokens = 400,
+): Promise<string> {
+  const apiKey = Deno.env.get("GEMINI_API_KEY");
+  if (!apiKey) throw new Error("GEMINI_API_KEY not set");
+
+  // Fetch image and encode as base64
+  const imgRes = await fetch(imageUrl);
+  if (!imgRes.ok) throw new Error(`Failed to fetch image for vision: ${imgRes.status}`);
+  const imgBytes = await imgRes.arrayBuffer();
+  const b64 = btoa(String.fromCharCode(...new Uint8Array(imgBytes)));
+  const mimeType = imgRes.headers.get("content-type") || "image/jpeg";
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{
+        role: "user",
+        parts: [
+          { inlineData: { mimeType, data: b64 } },
+          { text: prompt },
+        ],
+      }],
+      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.3 },
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Gemini Vision API HTTP ${res.status}: ${body.slice(0, 300)}`);
+  }
+
+  const data: { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> } =
+    await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("Empty Gemini Vision response");
+  return text;
+}
+
 /** Call OpenAI text-embedding-3-small. Returns 1536-dim vector. */
 export async function getEmbedding(text: string): Promise<number[]> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");

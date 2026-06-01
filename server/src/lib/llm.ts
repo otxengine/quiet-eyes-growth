@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { cacheGet, cacheSet, TTL, hashPrompt } from './agentCache';
 import { buildAgentPromptContext } from './businessProfile';
+import { callGemini } from './gemini';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' });
 
@@ -25,16 +26,20 @@ export interface LLMOptions {
 }
 
 const MODEL_MAP: Record<string, string> = {
-  haiku:  'claude-haiku-4-5-20251001',
-  sonnet: 'claude-sonnet-4-6',
-  opus:   'claude-opus-4-6',
+  haiku:         'claude-haiku-4-5-20251001',
+  sonnet:        'claude-sonnet-4-6',
+  opus:          'claude-opus-4-6',
+  'gemini-flash': 'gemini-2.5-flash',
+  'gemini-pro':   'gemini-2.5-pro',
 };
 
 // Hard output caps per model — keeps token burn predictable
 const MAX_TOKENS_DEFAULT: Record<string, number> = {
-  haiku:  600,   // raised: 350 was too low for structured JSON
-  sonnet: 1400,  // raised: complex agent outputs need more room
-  opus:   2000,
+  haiku:         600,   // raised: 350 was too low for structured JSON
+  sonnet:        1400,  // raised: complex agent outputs need more room
+  opus:          2000,
+  'gemini-flash': 800,
+  'gemini-pro':   2000,
 };
 
 /**
@@ -79,12 +84,33 @@ async function _invokeLLMRaw(
   response_json_schema: any,
 ): Promise<any> {
 
+  // Gemini models — route directly without trying Anthropic first
+  if (modelId.startsWith('gemini')) {
+    try {
+      return await _callGemini(prompt, modelId, maxTokens, response_json_schema);
+    } catch (err: any) {
+      console.warn('[invokeLLM] Gemini failed, trying OpenAI fallback:', err.message);
+      if (process.env.OPENAI_API_KEY) {
+        return await _callOpenAI(prompt, response_json_schema, maxTokens);
+      }
+      throw err;
+    }
+  }
+
   // Try Anthropic first
   if (process.env.ANTHROPIC_API_KEY) {
     try {
       return await _callAnthropic(prompt, modelId, maxTokens, response_json_schema);
     } catch (err: any) {
-      console.warn('[invokeLLM] Anthropic failed, trying OpenAI fallback:', err.message);
+      console.warn('[invokeLLM] Anthropic failed, trying Gemini Flash fallback:', err.message);
+      // Fallback chain: Claude → Gemini Flash → OpenAI
+      if (process.env.GEMINI_API_KEY) {
+        try {
+          return await _callGemini(prompt, 'gemini-2.0-flash', maxTokens, response_json_schema);
+        } catch (geminiErr: any) {
+          console.warn('[invokeLLM] Gemini Flash fallback failed:', geminiErr.message);
+        }
+      }
     }
   }
 
@@ -97,7 +123,33 @@ async function _invokeLLMRaw(
     }
   }
 
-  throw new Error('No AI provider available — set ANTHROPIC_API_KEY or OPENAI_API_KEY');
+  throw new Error('No AI provider available — set ANTHROPIC_API_KEY, GEMINI_API_KEY, or OPENAI_API_KEY');
+}
+
+async function _callGemini(
+  prompt: string,
+  modelId: string,
+  maxTokens: number,
+  response_json_schema: any,
+): Promise<any> {
+  // Map full model IDs back to keys for callGemini
+  const modelKey = modelId === 'gemini-2.5-pro' ? 'gemini-pro' : 'gemini-flash';
+
+  const systemPrompt = response_json_schema
+    ? 'You are a JSON-only assistant. Respond with a single valid JSON object only. No preamble, no explanation, no markdown fences. ALL string values must be in Hebrew unless the field explicitly requires English.'
+    : undefined;
+
+  const text = await callGemini(prompt, modelKey as 'gemini-flash' | 'gemini-pro', maxTokens, {
+    jsonMode: !!response_json_schema,
+    systemPrompt,
+  });
+
+  if (response_json_schema) {
+    const parsed = _parseJson(text);
+    if (!parsed) console.error('[LLM] Gemini _parseJson failed, raw (300):', text.substring(0, 300));
+    return parsed;
+  }
+  return text;
 }
 
 async function _callAnthropic(

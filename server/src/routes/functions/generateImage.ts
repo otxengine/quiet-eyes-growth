@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
-import Anthropic from '@anthropic-ai/sdk';
 import { invokeLLM } from '../../lib/llm';
+import { callGemini } from '../../lib/gemini';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || ''; // used for translation fallback only
 
@@ -39,7 +39,7 @@ async function generateWithGeminiImagen(englishPrompt: string, platform = 'insta
   const aspectRatio = PLATFORM_ASPECT[platform] || '1:1';
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-fast-generate-001:predict?key=${GEMINI_API_KEY}`,
     {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -106,18 +106,18 @@ async function generateWithFlux(englishPrompt: string, platform = 'instagram_pos
   return url;
 }
 
-// ── Claude-powered Hebrew → English translation (fallback) ───────────────────
-const _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' });
+// ── Gemini-powered Hebrew → English translation (primary) ────────────────────
 
-async function claudeTranslate(hebrewText: string): Promise<string | null> {
+async function geminiTranslate(hebrewText: string): Promise<string | null> {
+  if (!process.env.GEMINI_API_KEY) return null;
   try {
-    const msg = await _anthropic.messages.create({
-      model:      'claude-haiku-4-5-20251001',
-      max_tokens: 60,
-      messages:   [{ role: 'user', content: `Translate to English for image search (3-6 descriptive words only, no punctuation): "${hebrewText}"` }],
-    });
-    const text = (msg.content[0] as any).text?.trim();
-    return text && text.length > 2 ? text : null;
+    const text = await callGemini(
+      `Translate to English for image search (3-6 descriptive words only, no punctuation): "${hebrewText}"`,
+      'gemini-flash',
+      60,
+    );
+    const trimmed = text?.trim();
+    return trimmed && trimmed.length > 2 ? trimmed : null;
   } catch {
     return null;
   }
@@ -172,9 +172,9 @@ async function translateForSearch(text: string): Promise<string> {
   if (!text) return text;
   // If no Hebrew, nothing to translate
   if (!/[\u0590-\u05FF]/.test(text)) return text;
-  // Step 1: Claude Haiku — primary (Anthropic is our main provider)
-  const claude = await claudeTranslate(text);
-  if (claude) return claude;
+  // Step 1: Gemini Flash — primary (fast + cheap)
+  const gemini = await geminiTranslate(text);
+  if (gemini) return gemini;
   // Step 2: GPT-4o-mini — fallback
   const gpt = await gptTranslate(text);
   if (gpt) return gpt;

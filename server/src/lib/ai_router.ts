@@ -7,20 +7,28 @@
  *   OpenAI GPT-4o-mini → fast translation, classification
  *   OpenAI DALL-E 3   → images (via generateImage endpoint)
  *   OpenAI Embeddings → semantic search (future)
+ *   Gemini Flash      → fast/cheap posts, captions, translation, vision
+ *   Gemini Pro        → multimodal, advanced vision
  */
+
+import { callGemini } from './gemini';
 
 export type AITask =
   | 'analyze_market'
   | 'classify_intent'
   | 'build_audience'
   | 'generate_post'
+  | 'generate_post_fast'
   | 'generate_caption'
+  | 'generate_caption_fast'
   | 'translate_hebrew'
+  | 'translate_hebrew_fast'
   | 'embed_text'
-  | 'competitor_analysis';
+  | 'competitor_analysis'
+  | 'multimodal_vision';
 
 interface AIConfig {
-  provider: 'anthropic' | 'openai';
+  provider: 'anthropic' | 'openai' | 'gemini';
   model: string;
   max_tokens: number;
   temperature: number;
@@ -81,6 +89,36 @@ export const AI_ROUTER: Record<AITask, AIConfig> = {
     reason:      'תרגום מהיר — gpt-4o-mini זול ומדויק לתרגום',
   },
 
+  // ── Gemini Flash — fast/cheap tasks ───────────────────────────────────────
+  generate_post_fast: {
+    provider:    'gemini',
+    model:       'gemini-2.5-flash',
+    max_tokens:  800,
+    temperature: 0.8,
+    reason:      'פוסט מהיר — Gemini Flash מהיר וזול לתוכן שיווקי',
+  },
+  generate_caption_fast: {
+    provider:    'gemini',
+    model:       'gemini-2.5-flash',
+    max_tokens:  200,
+    temperature: 0.9,
+    reason:      'כיתוב מהיר — Gemini Flash לטקסטים קצרים במחיר נמוך',
+  },
+  translate_hebrew_fast: {
+    provider:    'gemini',
+    model:       'gemini-2.5-flash',
+    max_tokens:  80,
+    temperature: 0.1,
+    reason:      'תרגום מהיר/זול — Gemini Flash לתרגום רב-כמות',
+  },
+  multimodal_vision: {
+    provider:    'gemini',
+    model:       'gemini-2.5-flash',
+    max_tokens:  600,
+    temperature: 0.3,
+    reason:      'vision/multimodal — Gemini Flash לניתוח תמונות',
+  },
+
   // ── Embeddings (placeholder) ───────────────────────────────────────────────
   embed_text: {
     provider:    'openai',
@@ -94,6 +132,7 @@ export const AI_ROUTER: Record<AITask, AIConfig> = {
 // ── env keys ──────────────────────────────────────────────────────────────────
 const ANTHROPIC_KEY = () => process.env.ANTHROPIC_API_KEY || '';
 const OPENAI_KEY    = () => process.env.OPENAI_API_KEY    || '';
+const GEMINI_KEY    = () => process.env.GEMINI_API_KEY    || '';
 
 const TIMEOUT_MS = 20_000;
 
@@ -122,6 +161,8 @@ export async function callAI(
     let result: string;
     if (config.provider === 'anthropic') {
       result = await withTimeout(callClaude(prompt, config, options), TIMEOUT_MS);
+    } else if (config.provider === 'gemini') {
+      result = await withTimeout(callGeminiProvider(prompt, config, options), TIMEOUT_MS);
     } else {
       result = await withTimeout(callGPT(prompt, config, options), TIMEOUT_MS);
     }
@@ -129,7 +170,6 @@ export async function callAI(
     return result;
   } catch (err: any) {
     console.warn(`[AI_ROUTER] task=${task} FAILED (${err.message}), trying fallback`);
-    // Fallback: if GPT fails → try Claude sonnet; if Claude fails → try GPT-4o
     return callFallback(task, prompt, options, err);
   }
 }
@@ -141,16 +181,67 @@ async function callFallback(
   originalErr: Error,
 ): Promise<string> {
   const config = AI_ROUTER[task];
-  if (config.provider === 'openai' && ANTHROPIC_KEY()) {
-    // GPT failed → Claude Haiku fallback (cheap, fast)
-    console.warn(`[AI_ROUTER] fallback: openai→anthropic(haiku) for task=${task}`);
-    return callClaude(prompt, { ...config, provider: 'anthropic', model: 'claude-haiku-4-5-20251001' }, options);
-  } else if (config.provider === 'anthropic' && OPENAI_KEY()) {
-    // Claude failed → GPT-4o-mini fallback (cheap)
-    console.warn(`[AI_ROUTER] fallback: anthropic→openai(mini) for task=${task}`);
-    return callGPT(prompt, { ...config, provider: 'openai', model: 'gpt-4o-mini' }, options);
+
+  if (config.provider === 'gemini') {
+    // Gemini failed → OpenAI GPT-4o-mini fallback
+    if (OPENAI_KEY()) {
+      console.warn(`[AI_ROUTER] fallback: gemini→openai(mini) for task=${task}`);
+      return callGPT(prompt, { ...config, provider: 'openai', model: 'gpt-4o-mini' }, options);
+    }
+    if (ANTHROPIC_KEY()) {
+      console.warn(`[AI_ROUTER] fallback: gemini→anthropic(haiku) for task=${task}`);
+      return callClaude(prompt, { ...config, provider: 'anthropic', model: 'claude-haiku-4-5-20251001' }, options);
+    }
+  } else if (config.provider === 'openai') {
+    // OpenAI failed → Gemini Flash → Claude Haiku
+    if (GEMINI_KEY()) {
+      console.warn(`[AI_ROUTER] fallback: openai→gemini(flash) for task=${task}`);
+      try {
+        return await callGeminiProvider(prompt, { ...config, provider: 'gemini', model: 'gemini-2.5-flash' }, options);
+      } catch (geminiErr: any) {
+        console.warn(`[AI_ROUTER] Gemini fallback also failed: ${geminiErr.message}`);
+      }
+    }
+    if (ANTHROPIC_KEY()) {
+      console.warn(`[AI_ROUTER] fallback: openai→anthropic(haiku) for task=${task}`);
+      return callClaude(prompt, { ...config, provider: 'anthropic', model: 'claude-haiku-4-5-20251001' }, options);
+    }
+  } else if (config.provider === 'anthropic') {
+    // Claude failed → Gemini Flash → GPT-4o-mini
+    if (GEMINI_KEY()) {
+      console.warn(`[AI_ROUTER] fallback: anthropic→gemini(flash) for task=${task}`);
+      try {
+        return await callGeminiProvider(prompt, { ...config, provider: 'gemini', model: 'gemini-2.5-flash' }, options);
+      } catch (geminiErr: any) {
+        console.warn(`[AI_ROUTER] Gemini fallback also failed: ${geminiErr.message}`);
+      }
+    }
+    if (OPENAI_KEY()) {
+      console.warn(`[AI_ROUTER] fallback: anthropic→openai(mini) for task=${task}`);
+      return callGPT(prompt, { ...config, provider: 'openai', model: 'gpt-4o-mini' }, options);
+    }
   }
+
   throw originalErr;
+}
+
+// ── Gemini call ───────────────────────────────────────────────────────────────
+async function callGeminiProvider(
+  prompt: string,
+  config: AIConfig,
+  options: { systemPrompt?: string; jsonMode?: boolean; imageBase64?: string },
+): Promise<string> {
+  const key = GEMINI_KEY();
+  if (!key) throw new Error('GEMINI_API_KEY not set');
+
+  // Normalize model to key
+  const modelKey = config.model === 'gemini-2.5-pro' ? 'gemini-pro' : 'gemini-flash';
+
+  return callGemini(prompt, modelKey as 'gemini-flash' | 'gemini-pro', config.max_tokens || 800, {
+    jsonMode:     options.jsonMode,
+    systemPrompt: options.systemPrompt,
+    imageBase64:  (options as any).imageBase64,
+  });
 }
 
 // ── Claude call ───────────────────────────────────────────────────────────────

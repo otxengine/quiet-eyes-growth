@@ -65,6 +65,53 @@ export async function callClaude(prompt: string, options: ClaudeOptions = {}): P
 }
 
 /**
+ * Call Gemini generative model (Flash by default).
+ * Raw fetch — consistent with callClaude pattern above.
+ * parseClaudeJson() is fully compatible with Gemini text responses.
+ */
+export async function callGemini(
+  prompt: string,
+  options: { maxTokens?: number; jsonMode?: boolean; model?: string } = {},
+): Promise<string> {
+  const apiKey = Deno.env.get('GEMINI_API_KEY') || '';
+  if (!apiKey) throw new Error('GEMINI_API_KEY not set');
+
+  const { maxTokens = 800, jsonMode = false, model = 'gemini-2.5-flash' } = options;
+
+  const body: Record<string, any> = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 },
+  };
+
+  if (jsonMode) {
+    body.generationConfig.responseMimeType = 'application/json';
+  }
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+    );
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Gemini API ${res.status}: ${err}`);
+    }
+
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return text;
+  } catch (err) {
+    console.error('callGemini error:', (err as Error).message);
+    return '';
+  }
+}
+
+/**
  * Parse JSON from Claude response text, with robust extraction.
  * Returns parsed object or fallback value on failure.
  */
