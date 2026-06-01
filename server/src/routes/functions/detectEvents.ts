@@ -427,7 +427,7 @@ export async function detectEvents(req: Request, res: Response) {
     const rejectedPatterns: string[] = (bizCtx as any)?.rejectedPatterns || [];
 
     const now = new Date();
-    const windowEnd = new Date(now.getTime() + 45 * 24 * 3600000);
+    const windowEnd = new Date(now.getTime() + 90 * 24 * 3600000);
 
     // ── Phase 0: Clean up stale and duplicate event alerts ────────────────────
     try {

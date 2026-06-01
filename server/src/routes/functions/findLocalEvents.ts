@@ -112,7 +112,7 @@ export async function findLocalEvents(req: Request, res: Response) {
           if (!ev.title || !ev.date?.start_date) continue;
           serpEventRaw.push({
             name:               ev.title,
-            date_iso:           ev.date.start_date || new Date().toISOString().slice(0, 10),
+            date_iso:           ev.date.start_date || null,
             date_text:          ev.date.when || ev.date.start_date || '',
             venue:              ev.venue?.name || ev.address?.[0] || city,
             type:               'other',
@@ -291,7 +291,8 @@ ${weatherContext.slice(0, 600)}
 
 חוקים קריטיים:
 - שם האירוע חייב להיות ספציפי: "צרפת נגד סנגל" לא "משחק כדורגל", "הופעת אייגל" לא "הופעה", "פסטיבל הג'אז של חיפה" לא "פסטיבל"
-- תאריך: חובה תאריך מדויק YYYY-MM-DD. אם יש רק חודש — הכנס 01 של אותו חודש. אין תאריך כלל — דלג על האירוע לחלוטין
+- תאריך: חובה תאריך מדויק YYYY-MM-DD. אם יש רק חודש (ללא יום מדויק) — הכנס 15 של אותו חודש. אין תאריך כלל — דלג על האירוע לחלוטין
+- אל תכלול אירועים שתאריכם הוא היום בדיוק (${now.toISOString().slice(0, 10)}) — אלא אם כן זה אירוע מזג אוויר (weather_event)
 - רק אירועים בחודשיים הקרובים (עד ${nextMonth} ${yearStr})
 - relevance_score: 0-100 — כמה האירוע הזה רלוונטי ספציפית לעסק "${name}" (${category}).
   דוגמאות: הופעת מוזיקה למסעדה = 85, הופעת מוזיקה למפתח תוכנה = 20, כנס UX לחברת UX = 95, כנס UX למסעדה = 15, גל חום לחנות מזגנים = 90
@@ -355,8 +356,12 @@ ${weatherContext.slice(0, 600)}
     for (const ev of events.slice(0, 8)) {
       if (existingNames.has(ev.name.toLowerCase())) continue;
 
-      // Skip past events
-      if (ev.date_iso && new Date(ev.date_iso).getTime() < Date.now() - 86400000) continue;
+      // Skip past events and today's events (except weather — weather events are always timely)
+      if (ev.date_iso) {
+        const eventMs = new Date(ev.date_iso).getTime();
+        const minFuture = ev.type === 'weather_event' ? Date.now() - 86400000 : Date.now() + 86400000;
+        if (eventMs < minFuture) continue;
+      }
 
       // Skip event types that are irrelevant for this business's sector
       if (irrelevantEventTypes.includes(ev.type) || irrelevantEventTypes.includes('local_event')) continue;
