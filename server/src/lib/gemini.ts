@@ -1,11 +1,12 @@
 /**
  * gemini.ts — Gemini API wrapper (Google Generative AI)
- * Supports gemini-flash (fast/cheap) and gemini-pro (advanced/multimodal).
+ * gemini-flash  → gemini-3.5-flash     (text, fast/cheap)
+ * gemini-pro    → gemini-3-pro-image   (native image generation + multimodal)
  */
 
 const GEMINI_MODEL_MAP: Record<string, string> = {
   'gemini-flash': 'gemini-3.5-flash',
-  'gemini-pro':   'gemini-3.1-pro-preview',
+  'gemini-pro':   'gemini-3-pro-image',
 };
 
 /**
@@ -14,6 +15,7 @@ const GEMINI_MODEL_MAP: Record<string, string> = {
  * @param modelKey     'gemini-flash' | 'gemini-pro'
  * @param maxTokens    Max output tokens
  * @param options      jsonMode, systemPrompt, imageBase64 (vision)
+ * @returns            Text response, or "data:image/jpeg;base64,..." for pro image responses
  */
 export async function callGemini(
   prompt: string,
@@ -29,27 +31,26 @@ export async function callGemini(
   if (!apiKey) throw new Error('GEMINI_API_KEY not set');
 
   const modelId = GEMINI_MODEL_MAP[modelKey] || 'gemini-3.5-flash';
+  const isProImage = modelKey === 'gemini-pro';
   const { jsonMode, systemPrompt, imageBase64 } = options;
 
   // Build parts array
   const parts: any[] = [];
   if (imageBase64) {
-    parts.push({
-      inlineData: {
-        mimeType: 'image/jpeg',
-        data: imageBase64,
-      },
-    });
+    parts.push({ inlineData: { mimeType: 'image/jpeg', data: imageBase64 } });
   }
   parts.push({ text: prompt });
 
   const body: any = {
     contents: [{ role: 'user', parts }],
     generationConfig: {
-      maxOutputTokens: maxTokens,
+      // gemini-3-pro-image requires high token budget (images consume many tokens)
+      maxOutputTokens: isProImage ? Math.max(maxTokens, 8192) : maxTokens,
       temperature: 0.4,
+      // gemini-3-pro-image: request both image + text modalities
+      ...(isProImage ? { responseModalities: ['IMAGE', 'TEXT'] } : {}),
       // Disable thinking for Flash — saves tokens, faster response
-      ...(modelKey === 'gemini-flash' ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+      ...(!isProImage ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
     },
   };
 
@@ -57,7 +58,7 @@ export async function callGemini(
     body.systemInstruction = { parts: [{ text: systemPrompt }] };
   }
 
-  if (jsonMode) {
+  if (jsonMode && !isProImage) {
     body.generationConfig.responseMimeType = 'application/json';
   }
 
@@ -75,7 +76,19 @@ export async function callGemini(
   }
 
   const data: any = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const responseParts: any[] = data.candidates?.[0]?.content?.parts || [];
+
+  // For pro image model — return the first image as data URI, fall back to text
+  if (isProImage) {
+    const imgPart = responseParts.find((p: any) => p.inlineData?.data);
+    if (imgPart) {
+      const mime = imgPart.inlineData.mimeType || 'image/jpeg';
+      console.log(`[Gemini] ${modelId} returned image (${imgPart.inlineData.data.length} chars base64)`);
+      return `data:${mime};base64,${imgPart.inlineData.data}`;
+    }
+  }
+
+  const text = responseParts.find((p: any) => p.text)?.text || '';
 
   if (!text) {
     const reason = data.candidates?.[0]?.finishReason;

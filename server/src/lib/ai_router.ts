@@ -235,7 +235,7 @@ async function callGeminiProvider(
   if (!key) throw new Error('GEMINI_API_KEY not set');
 
   // Normalize model to key
-  const modelKey = config.model === 'gemini-3.1-pro-preview' ? 'gemini-pro' : 'gemini-flash';
+  const modelKey = config.model === 'gemini-3-pro-image' ? 'gemini-pro' : 'gemini-flash';
 
   return callGemini(prompt, modelKey as 'gemini-flash' | 'gemini-pro', config.max_tokens || 800, {
     jsonMode:     options.jsonMode,

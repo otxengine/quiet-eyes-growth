@@ -30,7 +30,7 @@ const MODEL_MAP: Record<string, string> = {
   sonnet:        'claude-sonnet-4-6',
   opus:          'claude-opus-4-6',
   'gemini-flash': 'gemini-3.5-flash',
-  'gemini-pro':   'gemini-3.1-pro-preview',
+  'gemini-pro':   'gemini-3-pro-image',
 };
 
 // Hard output caps per model — keeps token burn predictable
@@ -133,7 +133,7 @@ async function _callGemini(
   response_json_schema: any,
 ): Promise<any> {
   // Map full model IDs back to keys for callGemini
-  const modelKey = modelId === 'gemini-3.1-pro-preview' ? 'gemini-pro' : 'gemini-flash';
+  const modelKey = modelId === 'gemini-3-pro-image' ? 'gemini-pro' : 'gemini-flash';
 
   const systemPrompt = response_json_schema
     ? 'You are a JSON-only assistant. Respond with a single valid JSON object only. No preamble, no explanation, no markdown fences. ALL string values must be in Hebrew unless the field explicitly requires English.'
