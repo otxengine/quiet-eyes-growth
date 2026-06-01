@@ -400,6 +400,13 @@ function buildEventTavilyQueries(category: string, city: string): string[] {
   return [...new Set(queries)].slice(0, 6);
 }
 
+// ── Select action type based on event type + days away ────────────────────────
+function selectActionType(eventType: CalendarEvent['type'], daysAway: number): 'create_campaign' | 'create_offer' | 'social_post' {
+  if (eventType === 'commercial') return 'create_offer';
+  if ((eventType === 'holiday' || eventType === 'seasonal') && daysAway > 14) return 'create_campaign';
+  return 'social_post';
+}
+
 // ── Core agent ────────────────────────────────────────────────────────────────
 export async function detectEvents(req: Request, res: Response) {
   const { businessProfileId } = req.body;
@@ -622,10 +629,12 @@ Write one specific action to take right now to maximise revenue — up to 8 word
 
       const urgencyHours = daysAway <= 7 ? 24 : daysAway <= 14 ? 72 : 168;
       const priority = sectorCtx.boost === 'high' || daysAway <= 10 ? 'high' : 'medium';
+      const actionType = selectActionType(event.type, daysAway);
 
       const actionMeta = JSON.stringify({
         action_label: suggestedAction.split(' ').slice(0, 5).join(' '),
-        action_type: 'social_post',
+        action_type: actionType,
+        action_window_days: event.leadDays,
         prefilled_text: prefilledText,
         urgency_hours: urgencyHours,
         event_date: event.date,
@@ -706,6 +715,7 @@ Structure: Hook + specific value + CTA. Tone: ${toneInstruction}. Write only the
       const actionMeta = JSON.stringify({
         action_label: `נצל את ${event.name}`.split(' ').slice(0, 5).join(' '),
         action_type: 'social_post',
+        action_window_days: 7,
         prefilled_text: prefilledText || `${event.name} בקרוב! ${event.opportunity || ''} — ${name}`,
         urgency_hours: isLarge ? 48 : 72,
         impact_reason: `${event.name} צפוי להביא תנועה מוגברת לאזור ${city}`,

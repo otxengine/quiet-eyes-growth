@@ -130,16 +130,36 @@ export async function findLocalEvents(req: Request, res: Response) {
       }
     }
 
-    // ── Batch 1: Local events — concerts, festivals, shows ────────────────────
-    const localEventQueries = [
+    const lower = category.toLowerCase();
+
+    // ── Batch 1: Local events — sector-aware queries ──────────────────────────
+    const localEventQueries: string[] = [
       `site:kupat.co.il הופעה פסטיבל אירוע ${areaTerms} ${month} ${nextMonth} ${yearStr}`,
       `site:leaan.co.il הופעה פסטיבל אירוע ${areaTerms} ${month} ${nextMonth} ${yearStr}`,
       `site:timeout.co.il הופעות פסטיבלים אירועים ${city} ${month} ${nextMonth}`,
-      `site:goout.net הופעה פסטיבל ${areaTerms} ${month} ${yearStr}`,
       `הופעה זמר להקה פסטיבל אירוע ${areaTerms} ${month} ${nextMonth} ${yearStr} כרטיסים`,
-      `אמפיתיאטרון מרכז תרבות יקב פארק ${areaTerms} הופעה אירוע ${month} ${yearStr}`,
       `ירייד שוק אוכל פסטיבל ${areaTerms} ${month} ${nextMonth} ${yearStr}`,
     ];
+
+    // Tech / startup / digital / design sector — professional events
+    if (['tech', 'software', 'startup', 'digital', 'design', 'ui', 'ux', 'saas', 'product', 'developer', 'סטארטאפ', 'טכנולוגיה', 'עיצוב', 'תוכנה'].some(k => lower.includes(k))) {
+      localEventQueries.push(`startup tech conference meetup event Israel ${city} ${month} ${yearStr}`);
+      localEventQueries.push(`כנס טכנולוגיה סטארטאפ עיצוב UX ${city} ${month} ${yearStr}`);
+      localEventQueries.push(`UX design product management event meetup Israel ${month} ${yearStr}`);
+      localEventQueries.push(`hackathon developer event Israel ${month} ${yearStr}`);
+    }
+    // Beauty / fashion
+    if (['יופי', 'beauty', 'מספרה', 'salon', 'spa', 'ספא', 'אופנה', 'fashion'].some(k => lower.includes(k))) {
+      localEventQueries.push(`תצוגת אופנה כנס יופי מופע קוסמטיקה ${city} ${month} ${nextMonth} ${yearStr}`);
+    }
+    // Food / restaurant / cafe
+    if (['מסעדה', 'אוכל', 'food', 'restaurant', 'בית קפה', 'cafe', 'קייטרינג'].some(k => lower.includes(k))) {
+      localEventQueries.push(`פסטיבל אוכל שוק אוכל ירייד קולינרי ${city} ${month} ${nextMonth} ${yearStr}`);
+    }
+    // Fitness / wellness
+    if (['כושר', 'fitness', 'gym', 'יוגה', 'yoga', 'פילאטיס', 'pilates'].some(k => lower.includes(k))) {
+      localEventQueries.push(`מרוץ ריצה תחרות ספורט אירוע בריאות ${city} ${month} ${nextMonth} ${yearStr}`);
+    }
 
     // ── Batch 2: Sports matches — always run, high traffic potential ──────────
     // These generate massive foot traffic for restaurants/bars/retail
@@ -270,41 +290,39 @@ ${tvContext.slice(0, 800)}
 ${weatherContext.slice(0, 600)}
 
 חוקים קריטיים:
-- שם האירוע חייב להיות ספציפי עם פרטים: "צרפת נגד סנגל" (לא "משחק כדורגל"), "הופעת אייגל" (לא "הופעה"), "פסטיבל הג'אז של חיפה" (לא "פסטיבל"), "פינאלה של X-Factor ישראל" (לא "תוכנית ריאליטי")
-- למשחקי כדורגל/כדורסל: ציין תמיד שתי הקבוצות/נבחרות בשם מלא — "קבוצה א נגד קבוצה ב"
-- לשידורי טלוויזיה: ציין את שם התוכנית ומה מיוחד בשידור הזה (פינאלה, עונה חדשה, פרק מיוחד)
-- תאריך: אם יש תאריך מדויק — השתמש בו. אם יש רק חודש — הכנס את ה-1 של אותו חודש. אין מידע על תאריך — דלג על האירוע
+- שם האירוע חייב להיות ספציפי: "צרפת נגד סנגל" לא "משחק כדורגל", "הופעת אייגל" לא "הופעה", "פסטיבל הג'אז של חיפה" לא "פסטיבל"
+- תאריך: חובה תאריך מדויק YYYY-MM-DD. אם יש רק חודש — הכנס 01 של אותו חודש. אין תאריך כלל — דלג על האירוע לחלוטין
 - רק אירועים בחודשיים הקרובים (עד ${nextMonth} ${yearStr})
-- קבל גם אירועים מעיירות קרובות (רדיוס 30 ק"מ)
-- traffic_impact: גמר/פינאלה/ליגת העל/נבחרת לאומית/אמן ידוע/ריאליטי גדול/גל חום קיצוני = "high". ספורט מקומי/הופעה בינונית/סדרה רגילה/גשם כבד = "medium". שאר = "low"
-- type: השתמש ב-"tv_broadcast" עבור שידורי טלוויזיה, "weather_event" עבור גל חום/סערה/גשם קיצוני
-- לאירועי מזג אוויר (weather_event): שם = "גל חום קיצוני — [תאריך/תקופה]" או "סערה קיצונית — [תאריך]". date_iso = תאריך ההשפעה הצפויה. venue = "ישראל כללי" או שם האזור. לא לייצר weather_event אם אין אזהרה ממשית.
-- business_opportunity: ספציפי לסקטור "${category}" — מה הלקוחות של האירוע הזה יצטרכו מ"${name}"?
+- relevance_score: 0-100 — כמה האירוע הזה רלוונטי ספציפית לעסק "${name}" (${category}).
+  דוגמאות: הופעת מוזיקה למסעדה = 85, הופעת מוזיקה למפתח תוכנה = 20, כנס UX לחברת UX = 95, כנס UX למסעדה = 15, גל חום לחנות מזגנים = 90
+- אירועים עם relevance_score מתחת ל-50 — אל תכלול בתגובה
+- action_type: "social_post" (אירוע שיחצין עבור העסק עכשיו), "create_campaign" (דורש הכנה מראש), "create_offer" (הזדמנות למבצע)
+- business_opportunity: ספציפי לסקטור "${category}" — מה הלקוחות של האירוע הזה יצטרכו מ"${name}"? עד 10 מילים
 
 החזר JSON בלבד:
 {"events":[{
-  "name": "שם ספציפי: קבוצה א נגד קבוצה ב / שם האמן / שם הפסטיבל / גל חום קיצוני",
+  "name": "שם ספציפי",
   "date_iso": "YYYY-MM-DD",
   "date_text": "תאריך קריא בעברית",
   "venue": "מיקום האירוע",
-  "type": "concert|festival|market|sports|exhibition|community|conference|tv_broadcast|weather_event|other",
-  "artist_or_headliner": "שם האמן / שתי הקבוצות / שם הפסטיבל",
+  "type": "concert|festival|market|sports|conference|exhibition|community|tv_broadcast|weather_event|other",
+  "artist_or_headliner": "שם האמן / קבוצות / שם הפסטיבל",
   "expected_crowd": "large|medium|small",
   "traffic_impact": "high|medium|low",
+  "relevance_score": 0-100,
+  "action_type": "social_post|create_campaign|create_offer",
   "business_opportunity": "הזדמנות ספציפית ל${category} — עד 10 מילים",
   "source_url": "URL המקור"
 }]}
-אם אין שום אירוע — החזר {"events":[]}`,
+אם אין שום אירוע רלוונטי (relevance_score >= 50) — החזר {"events":[]}`,
         response_json_schema: { type: 'object' },
       });
-      const currentMonthIso = now.toISOString().slice(0, 8) + '01';
       events = (analysis?.events || [])
-        .filter((e: any) => e.name)
-        .map((e: any) => ({
-          ...e,
-          // If LLM returned no date_iso, use first of current month as fallback
-          date_iso: e.date_iso || currentMonthIso,
-        }));
+        .filter((e: any) =>
+          e.name &&
+          e.date_iso &&                              // require confirmed date — no fallback
+          (e.relevance_score ?? 100) >= 50           // skip irrelevant events (default 100 for legacy)
+        );
     } catch (_) {}
 
     if (events.length === 0) {
@@ -377,8 +395,10 @@ ${weatherContext.slice(0, 600)}
             event_date:           ev.date_iso || null,
             days_away:            daysAway,
             traffic_impact:       ev.traffic_impact || null,
+            relevance_score:      ev.relevance_score || null,
             source_url:           ev.source_url || null,
-            action_type:          'social_post',
+            action_type:          ev.action_type || 'social_post',
+            action_window_days:   ev.action_type === 'create_campaign' ? 14 : 7,
             action_label:         `${icon} ${ev.name}`,
             prefilled_text:       prefilledText,
             time_minutes:         10,

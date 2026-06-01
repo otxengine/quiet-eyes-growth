@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Calendar, Loader2, Zap, Clock, TrendingUp, X, Copy, CheckCheck, ListPlus, Megaphone } from 'lucide-react';
+import { Calendar, Loader2, Zap, Clock, TrendingUp, X, Copy, CheckCheck, ListPlus, Megaphone, AlertCircle } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import AiInsightsBar from '@/components/ai/AiInsightsBar';
 import EventDetailModal from '@/components/events/EventDetailModal';
@@ -22,368 +22,19 @@ const EVENT_TABS = [
   { key: 'weather',      label: 'מזג אוויר' },
 ];
 
-const HOLIDAY_KEYWORDS  = ['פסח', 'ראש השנה', 'סוכות', 'חנוכה', 'פורים', 'שבועות', 'יום כיפור', 'עצמאות', 'ירושלים', 'לג בעומר', 'ט"ו באב', 'שמחת תורה', 'holiday', 'jewish', 'yom_kippur', 'rosh_hashana'];
-const RELIGION_KEYWORDS = ['eid', 'עיד', 'רמדאן', 'ramadan', 'christmas', 'כריסמס', 'חג המולד', 'easter', 'פסחא', 'מולד', 'ביירם'];
-const SPORTS_KEYWORDS   = ['ליגת האלופות', 'גמר', 'ספורט', 'כדורגל', 'כדורסל', 'champions', 'europa', 'world cup', 'מונדיאל', 'ליגה', 'אצטדיון', 'יורו', 'euro', 'copa'];
-const SEASONAL_KEYWORDS = ['קיץ', 'חורף', 'אביב', 'סתיו', 'חזרה ללימודים', 'חתונה', 'עונה', 'summer', 'winter', 'spring', 'renovation', 'שיפוץ'];
-const COMMERCIAL_KEYWORDS = ['בלאק פריידי', 'ולנטיין', 'ינואר', 'כושר', 'דיאטה', 'החלטות', 'black friday', 'valentine', 'commercial', 'אמהות', 'אבות', 'הלווין', 'halloween'];
-
-const TV_KEYWORDS = ['tv_broadcast', 'פינאלה', 'ריאליטי', 'x-factor', 'הכוכב הבא', 'האח הגדול', 'מאסטרשף', 'ערוץ 12', 'ערוץ 13', 'hot', 'שידור חי', 'רייטינג'];
-const WEATHER_KEYWORDS = ['weather_event', 'גל חום', 'סערה', 'שיטפון', 'גשם כבד', 'heatwave', 'extreme weather', 'קיצוני'];
-
 function classifyEvent(title = '', description = '', tags = [], eventType = '') {
   if (eventType === 'tv_broadcast') return 'tv_broadcast';
   if (eventType === 'weather_event') return 'weather';
   const text = `${title} ${description} ${tags.join(' ')}`.toLowerCase();
-  if (WEATHER_KEYWORDS.some(k => text.includes(k.toLowerCase()))) return 'weather';
-  if (TV_KEYWORDS.some(k => text.includes(k.toLowerCase()))) return 'tv_broadcast';
-  if (RELIGION_KEYWORDS.some(k => text.includes(k.toLowerCase()))) return 'religion';
-  if (SPORTS_KEYWORDS.some(k => text.includes(k.toLowerCase()))) return 'sports';
-  if (HOLIDAY_KEYWORDS.some(k => text.includes(k.toLowerCase()))) return 'holiday';
-  if (SEASONAL_KEYWORDS.some(k => text.includes(k.toLowerCase()))) return 'seasonal';
-  if (COMMERCIAL_KEYWORDS.some(k => text.includes(k.toLowerCase()))) return 'commercial';
+  if (['גל חום', 'סערה', 'שיטפון', 'heatwave', 'extreme weather', 'weather_event'].some(k => text.includes(k))) return 'weather';
+  if (['פינאלה', 'ריאליטי', 'x-factor', 'האח הגדול', 'מאסטרשף', 'ערוץ', 'שידור חי', 'tv_broadcast'].some(k => text.includes(k))) return 'tv_broadcast';
+  if (['eid', 'עיד', 'רמדאן', 'ramadan', 'christmas', 'כריסמס', 'חג המולד', 'easter', 'פסחא', 'מולד'].some(k => text.includes(k))) return 'religion';
+  if (['ליגת האלופות', 'גמר', 'כדורגל', 'כדורסל', 'champions', 'europa', 'world cup', 'מונדיאל', 'ספורט', 'יורו', 'נבחרת'].some(k => text.includes(k))) return 'sports';
+  if (['פסח', 'ראש השנה', 'סוכות', 'חנוכה', 'פורים', 'שבועות', 'יום כיפור', 'יום עצמאות', 'לג בעומר', 'holiday', 'jewish', 'yom_kippur'].some(k => text.includes(k))) return 'holiday';
+  if (['קיץ', 'חורף', 'אביב', 'חתונה', 'שיפוץ', 'summer', 'winter', 'spring', 'renovation', 'wedding', 'עונת'].some(k => text.includes(k))) return 'seasonal';
+  if (['בלאק פריידי', 'ולנטיין', 'כושר', 'דיאטה', 'black friday', 'valentine', 'commercial', 'יום האם', 'יום האב', 'ינואר'].some(k => text.includes(k))) return 'commercial';
   return 'other';
 }
-
-/**
- * Compute sector relevance for STATIC_EVENTS based on business category.
- * Returns 'high', 'medium', or 'low'.
- * Holidays and religion are always relevant (universal consumer events).
- * Sports/commercial/seasonal relevance depends on sector keywords.
- */
-function computeStaticEventBoost(eventCategory, eventTags = [], businessCategory = '') {
-  if (!businessCategory) return 'medium'; // unknown category — show everything
-  const lower = businessCategory.toLowerCase();
-  const tags  = eventTags.join(' ').toLowerCase();
-
-  // Universal events — always relevant
-  if (eventCategory === 'holiday' || eventCategory === 'religion') return 'high';
-
-  if (eventCategory === 'seasonal') {
-    // Wedding season: beauty, catering, photography, music, hotels
-    if (tags.includes('חתונה')) {
-      return ['מספרה', 'beauty', 'salon', 'spa', 'קייטרינג', 'catering', 'מסעדה', 'food', 'restaurant', 'מלון', 'hotel', 'מוזיקה', 'music', 'צלם', 'photo', 'פרחים', 'flowers', 'אופנה', 'fashion'].some(k => lower.includes(k)) ? 'high' : 'low';
-    }
-    // Renovation season: contractors, cleaning, design, furniture
-    if (tags.includes('שיפוץ') || tags.includes('renovation')) {
-      return ['שיפוץ', 'renovation', 'contractor', 'קבלן', 'ניקיון', 'cleaning', 'עיצוב', 'design', 'ריהוט', 'furniture', 'גינון', 'garden'].some(k => lower.includes(k)) ? 'high' : 'low';
-    }
-    // Summer / winter — broad relevance
-    return 'medium';
-  }
-
-  if (eventCategory === 'sports') {
-    // Sports events: food/bar/entertainment get high. Most others get medium.
-    return ['מסעדה', 'אוכל', 'food', 'restaurant', 'בר', 'bar', 'פאב', 'pub', 'בידור', 'entertainment', 'ספורט', 'sports', 'משלוח', 'delivery', 'אלקטרוניקה', 'electronics'].some(k => lower.includes(k)) ? 'high' : 'medium';
-  }
-
-  if (eventCategory === 'commercial') {
-    // Valentine / Mother's Day / Father's Day
-    if (tags.includes('אהבה') || tags.includes('ולנטיין') || tags.includes('אמהות') || tags.includes('אבות')) {
-      return ['מסעדה', 'food', 'restaurant', 'מספרה', 'beauty', 'salon', 'spa', 'קמעונאות', 'retail', 'חנות', 'shop', 'מלון', 'hotel', 'פרחים', 'flowers', 'תכשיטים', 'jewelry'].some(k => lower.includes(k)) ? 'high' : 'medium';
-    }
-    // Black Friday
-    if (tags.includes('בלאק') || tags.includes('black')) {
-      return ['קמעונאות', 'retail', 'חנות', 'shop', 'אלקטרוניקה', 'electronics', 'tech', 'כושר', 'fitness', 'gym', 'אופנה', 'fashion'].some(k => lower.includes(k)) ? 'high' : 'medium';
-    }
-    // Back to school
-    if (tags.includes('לימודים') || tags.includes('ספטמבר')) {
-      if (['חינוך', 'education', 'kids', 'ילדים', 'retail', 'חנות', 'electronics', 'אלקטרוניקה', 'אופנה', 'fashion'].some(k => lower.includes(k))) return 'high';
-      return 'low';
-    }
-    // January fitness / New Year resolutions
-    if (tags.includes('כושר') || tags.includes('דיאטה') || tags.includes('החלטות')) {
-      if (['כושר', 'fitness', 'gym', 'תזונה', 'nutrition', 'חינוך', 'education', 'קורס', 'course'].some(k => lower.includes(k))) return 'high';
-      return 'low';
-    }
-    // Halloween
-    if (tags.includes('הלווין') || tags.includes('halloween')) {
-      return ['בידור', 'entertainment', 'אירועים', 'events', 'מסעדה', 'restaurant', 'בר', 'bar', 'ביגוד', 'clothing', 'costume'].some(k => lower.includes(k)) ? 'high' : 'medium';
-    }
-    return 'medium';
-  }
-
-  return 'medium';
-}
-
-// Static upcoming events — all religions, sports, commercial, seasonal
-// Dates are real upcoming dates from April 2026 onward
-const STATIC_EVENTS = [
-  // ─── Jewish Holidays ───
-  {
-    id: 'static_lag_baomer',
-    _type: 'static',
-    title: "לג בעומר — הדלקות והתכנסויות",
-    description: "עונת ההדלקות — עסקים קרובים למדורות (מזון, שתייה, ציוד) עם פוטנציאל מכירה גבוה. מומלץ הכנת מבצעים ממוקדים.",
-    event_date: '2026-05-14',
-    category: 'holiday',
-    tags: ['לג בעומר', 'חגים יהודיים'],
-  },
-  {
-    id: 'static_yom_yerushalayim',
-    _type: 'static',
-    title: "יום ירושלים — הזדמנות לאומית",
-    description: "יום ירושלים מציין את איחוד העיר — אירועים ציבוריים רבים ברחבי הארץ. הזדמנות לתכנים פטריוטיים ומבצעים ממוקדים.",
-    event_date: '2026-05-28',
-    category: 'holiday',
-    tags: ['ירושלים', 'חגים יהודיים'],
-  },
-  {
-    id: 'static_shavuot',
-    _type: 'static',
-    title: "שבועות — חג מתנת התורה",
-    description: "חג שבועות — מועד מרכזי לצריכת מוצרי חלב, מאפים, ולמפגשים משפחתיים. מותגי מזון, קונדיטוריה ואירועים — ביקוש גבוה.",
-    event_date: '2026-05-21',
-    category: 'holiday',
-    tags: ['שבועות', 'חגים יהודיים'],
-  },
-  {
-    id: 'static_tubeav',
-    _type: 'static',
-    title: 'ט"ו באב — חג האהבה הישראלי',
-    description: "חג האהבה הישראלי — הזדמנות עסקית מצוינת לפרחים, מסעדות, מתנות וחוויות זוגיות. קהל יעד: זוגות, מתאהבים.",
-    event_date: '2026-08-09',
-    category: 'holiday',
-    tags: ['ט"ו באב', 'אהבה'],
-  },
-  {
-    id: 'static_rosh_hashana',
-    _type: 'static',
-    title: "ראש השנה תשפ\"ז — שנה חדשה",
-    description: "ראש השנה 5787 — עונת הקניות החזקה ביותר בשנה. ביקוש גבוה למתנות, בגדים, אוכל ושירותים. שיא הפעילות העסקית.",
-    event_date: '2026-09-11',
-    category: 'holiday',
-    tags: ['ראש השנה', 'חגים יהודיים'],
-  },
-  {
-    id: 'static_yom_kippur',
-    _type: 'static',
-    title: "יום כיפור — לפניו ואחריו",
-    description: "יום כיפור — עסקים נסגרים אך יש הזדמנות עסקית רבה בימים שלפני: ארוחות לפני הצום, בגדי לבן, מזון לאחר הצום.",
-    event_date: '2026-09-20',
-    category: 'holiday',
-    tags: ['יום כיפור', 'חגים יהודיים'],
-  },
-  {
-    id: 'static_sukkot',
-    _type: 'static',
-    title: "סוכות — חג האסיף",
-    description: "סוכות — ביקוש גבוה לחומרי בניה, ריהוט, ציוד חוץ, ומוצרי מזון. שבוע חופשות — שיא לענף הבילוי והבידור.",
-    event_date: '2026-09-25',
-    category: 'holiday',
-    tags: ['סוכות', 'חגים יהודיים'],
-  },
-  {
-    id: 'static_simchat_torah',
-    _type: 'static',
-    title: "שמחת תורה — סיום החגים",
-    description: "שמחת תורה — סיום עונת החגים. הזדמנות אחרונה למבצעי חגים לפני חזרה לשגרה. לקוחות חוזרים לקניות יום-יומיות.",
-    event_date: '2026-10-02',
-    category: 'holiday',
-    tags: ['שמחת תורה', 'חגים יהודיים'],
-  },
-  {
-    id: 'static_hanukkah',
-    _type: 'static',
-    title: "חנוכה — חג האורות",
-    description: "חנוכה — עונת מתנות ופעילויות משפחתיות. מתאים לקמפיינים של מתנות, חוויות, סופגניות, ואורות. הזדמנות לתוכן יצירתי.",
-    event_date: '2026-12-04',
-    category: 'holiday',
-    tags: ['חנוכה', 'חגים יהודיים'],
-  },
-
-  // ─── Muslim Holidays ───
-  {
-    id: 'static_eid_adha',
-    _type: 'static',
-    title: "עיד אל-אדחא — חג הקורבן",
-    description: "עיד אל-אדחא — חג גדול בקהילות המוסלמיות. ביקוש גבוה לבשר, מתנות, בגדים ומסעדות. הזדמנות לפנות לקהל הערבי-ישראלי.",
-    event_date: '2026-06-05',
-    category: 'religion',
-    tags: ['עיד', 'מוסלמי', 'דתות אחרות'],
-  },
-  {
-    id: 'static_ramadan_2027',
-    _type: 'static',
-    title: "רמדאן — חודש הצום המוסלמי",
-    description: "חודש רמדאן — שינוי בדפוסי צריכה בקהילות המוסלמיות. ביקוש גבוה לאוכל בשעות הלילה, מתנות ופעילויות משפחתיות.",
-    event_date: '2027-02-07',
-    category: 'religion',
-    tags: ['רמדאן', 'מוסלמי'],
-  },
-  {
-    id: 'static_eid_fitr_2027',
-    _type: 'static',
-    title: "עיד אל-פיטר — חג שבירת הצום",
-    description: "עיד אל-פיטר — חג גדול בסוף חודש הצום. ביקוש גבוה לבגדים חדשים, מתנות, מסעדות ומאפים.",
-    event_date: '2027-03-10',
-    category: 'religion',
-    tags: ['עיד', 'מוסלמי'],
-  },
-
-  // ─── Christian Holidays ───
-  {
-    id: 'static_christmas',
-    _type: 'static',
-    title: "כריסמס — חג המולד הנוצרי",
-    description: "חג המולד — הזדמנות עסקית עולמית. עסקים בתיירות, אירוח ומסעדות נהנים מביקוש גבוה. מתאים לקמפיינים בינלאומיים.",
-    event_date: '2026-12-25',
-    category: 'religion',
-    tags: ['כריסמס', 'נוצרי', 'חג המולד'],
-  },
-  {
-    id: 'static_new_year_2027',
-    _type: 'static',
-    title: "ראש השנה הלועזי 2027",
-    description: "ראש השנה הלועזי — עונת חגיגות, מסעדות ואירועים. ביקוש גבוה לחבילות חגיגה, מסעדות, ובידור. ערב חגיגי ל-31.12.",
-    event_date: '2027-01-01',
-    category: 'religion',
-    tags: ['ראש השנה לועזי', 'כריסמס', 'נוצרי'],
-  },
-  {
-    id: 'static_easter_2027',
-    _type: 'static',
-    title: "פסחא — חג הפסחא הנוצרי",
-    description: "חג הפסחא — חשוב לקהל הנוצרי ולתיירות. הזדמנות לעסקים בירושלים ובאזורי תיירות לנוצרים מהארץ ומחו\"ל.",
-    event_date: '2027-04-04',
-    category: 'religion',
-    tags: ['פסחא', 'נוצרי'],
-  },
-
-  // ─── Sports ───
-  {
-    id: 'static_ucl_final',
-    _type: 'static',
-    title: "גמר ליגת האלופות 2026",
-    description: "גמר ליגת האלופות — אחד מהאירועים הנצפים ביותר בעולם. עסקי מזון, ספורט ובר-אירועים: זמן שיא לקמפיינים ממוקדי כדורגל.",
-    event_date: '2026-05-30',
-    category: 'sports',
-    tags: ['כדורגל', 'ליגת האלופות', 'ספורט'],
-  },
-  {
-    id: 'static_euro2026_start',
-    _type: 'static',
-    title: "יורו 2026 — אליפות אירופה בכדורגל",
-    description: "אליפות אירופה 2026 — טורניר כדורגל בין-לאומי עם מיליוני צופים. הזדמנות עסקית ענקית לברים, מסעדות ועסקי ספורט.",
-    event_date: '2026-06-10',
-    category: 'sports',
-    tags: ['כדורגל', 'יורו', 'ספורט'],
-  },
-  // מונדיאל 2026 — events come from detectEvents agent (group stage / knockouts / final)
-  // Removed static duplicate to avoid showing 2 world cup entries
-  {
-    id: 'static_premier_league_start',
-    _type: 'static',
-    title: "פתיחת עונת הפרמייר ליג 2026/27",
-    description: "עונת הפרמייר ליג הבאה מתחילה — שיא הביקוש לתכנים כדורגליים, ערבי צפייה ומוצרי ספורט.",
-    event_date: '2026-08-15',
-    category: 'sports',
-    tags: ['פרמייר ליג', 'כדורגל', 'ספורט'],
-  },
-
-  // ─── Commercial ───
-  {
-    id: 'static_mothers_day',
-    _type: 'static',
-    title: "יום האם — מבצעים ומתנות",
-    description: "יום האם — אחד מהימים החזקים ביותר לרכישת מתנות ושירותים. הזדמנות למסעדות, חנויות מתנות, ספא וטיפוח.",
-    event_date: '2026-05-10',
-    category: 'commercial',
-    tags: ['אמהות', 'מתנות', 'מסחרי'],
-  },
-  {
-    id: 'static_fathers_day',
-    _type: 'static',
-    title: "יום האב — הזדמנות מסחרית",
-    description: "יום האב — ביקוש לחוויות, ציוד ספורט, מסעדות ומוצרי גברים. מומלץ לפתח קמפיין ייעודי שבועיים מראש.",
-    event_date: '2026-06-21',
-    category: 'commercial',
-    tags: ['אבות', 'מתנות', 'מסחרי'],
-  },
-  {
-    id: 'static_back_to_school',
-    _type: 'static',
-    title: "חזרה לבית הספר — עונת ספטמבר",
-    description: "חזרה ללימודים — עונה של קניות ממוקדות: ציוד לימודים, ביגוד, תזונה, ספורט חוגים. הורים מחפשים שירותים לילדים.",
-    event_date: '2026-09-01',
-    category: 'commercial',
-    tags: ['חזרה ללימודים', 'ספטמבר', 'ילדים'],
-  },
-  {
-    id: 'static_halloween',
-    _type: 'static',
-    title: "הלווין — עונת תחפושות ואירועים",
-    description: "הלווין — גדל בישראל כאירוע חברתי. בארים, אירועים ומסעדות מארגנים מסיבות. הזדמנות לתחפושות, עיצוב ואירועים.",
-    event_date: '2026-10-31',
-    category: 'commercial',
-    tags: ['הלווין', 'halloween', 'אירועים'],
-  },
-  {
-    id: 'static_black_friday',
-    _type: 'static',
-    title: "בלאק פריידי — שיא עונת ההנחות",
-    description: "בלאק פריידי 2026 — הכנה מוקדמת: לקוחות מחכים לסייל. הכנת מבצעים 2-3 שבועות מראש מגדילה מכירות משמעותית.",
-    event_date: '2026-11-27',
-    category: 'commercial',
-    tags: ['בלאק פריידי', 'black friday', 'הנחות'],
-  },
-  {
-    id: 'static_january_fitness',
-    _type: 'static',
-    title: "ינואר — עונת כושר והחלטות שנה חדשה",
-    description: "ינואר 2027 — שיא ההרשמות לחדרי כושר, דיאטות, ויועצי בריאות. הזדמנות עסקית ענקית לענף הכושר והתזונה.",
-    event_date: '2027-01-01',
-    category: 'commercial',
-    tags: ['ינואר', 'כושר', 'דיאטה', 'החלטות'],
-  },
-  {
-    id: 'static_valentine',
-    _type: 'static',
-    title: "ולנטיין — יום האהבה הבינלאומי",
-    description: "יום האהבה — ביקוש גבוה למסעדות, מתנות, פרחים, טיפוח וחוויות זוגיות. קמפיין ממוקד זוגות שבועיים מראש.",
-    event_date: '2027-02-14',
-    category: 'commercial',
-    tags: ['ולנטיין', 'valentine', 'אהבה'],
-  },
-
-  // ─── Seasonal ───
-  {
-    id: 'static_summer_opening',
-    _type: 'static',
-    title: "פתיחת עונת הקיץ — יוני 2026",
-    description: "קיץ 2026 מגיע — עסקים בתחומי בריכות, חופשות, מזגנים, אופנת קיץ ומשקאות קרים ייהנו מגל ביקוש. הכנה מוקדמת חיונית.",
-    event_date: '2026-06-01',
-    category: 'seasonal',
-    tags: ['קיץ', 'summer', 'עונתי'],
-  },
-  {
-    id: 'static_wedding_season',
-    _type: 'static',
-    title: "עונת החתונות — שיא הקיץ",
-    description: "יוני–אוגוסט — עונת החתונות השיא. מספרות, מסעדות, ציוד לאירועים, ביגוד, פרחים ולוגיסטיקה — ביקוש בשיא.",
-    event_date: '2026-06-15',
-    category: 'seasonal',
-    tags: ['חתונה', 'עונתי', 'קיץ'],
-  },
-  {
-    id: 'static_renovation_fall',
-    _type: 'static',
-    title: "עונת השיפוצים — סתיו 2026",
-    description: "ספטמבר–נובמבר — עונת השיפוצים השנייה בשנה. ביקוש לקבלנים, עיצוב פנים, חנויות בניה ומוצרי בית.",
-    event_date: '2026-10-15',
-    category: 'seasonal',
-    tags: ['שיפוץ', 'renovation', 'עונתי'],
-  },
-  {
-    id: 'static_winter_season',
-    _type: 'static',
-    title: "פתיחת עונת החורף — דצמבר",
-    description: "חורף 2026 — ביקוש למוצרי חימום, ביגוד חורף, תחנות גז, טיפולי עור יבש ומסעדות חמות. זמן לקמפיין עונת החורף.",
-    event_date: '2026-12-01',
-    category: 'seasonal',
-    tags: ['חורף', 'winter', 'עונתי'],
-  },
-];
 
 function getCountdown(input, isDate = false) {
   if (!input) return null;
@@ -398,30 +49,41 @@ function getCountdown(input, isDate = false) {
   return { text: `${Math.ceil(days / 7)} שבועות`, urgent: false };
 }
 
-/** Simple action sheet for events — replaces ActionPopup which isn't designed for events */
+function formatEventDate(dateStr) {
+  if (!dateStr) return null;
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
+  } catch {
+    return null;
+  }
+}
+
+function getEventMeta(item) {
+  try {
+    return JSON.parse(
+      item._type === 'alert' ? (item.source_agent || '{}') : (item.source_description || '{}')
+    );
+  } catch {
+    return {};
+  }
+}
+
+// ── Action sheet — פעל עכשיו ───────────────────────────────────────────────────
 function EventActSheet({ item, type, businessProfile, onClose }) {
   const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
   const [creatingTask, setCreatingTask] = useState(false);
 
-  let title, description;
-  if (type === 'static') {
-    title = item.title;
-    description = item.description;
-  } else {
-    title = type === 'alert' ? item.title : (item.agent_name || item.summary);
-    description = type === 'alert' ? item.description : item.summary;
-  }
+  const meta = getEventMeta(item);
+  const actionType = meta.action_type || 'social_post';
 
-  let prefilled = '';
-  try {
-    const meta = JSON.parse(type === 'alert' ? (item.source_agent || '{}') : (item.source_description || '{}'));
-    prefilled = meta.prefilled_text || '';
-  } catch {}
-
-  if (!prefilled) {
-    prefilled = `🎉 ${(title || '').split(' — ')[0]}\n\n${(description || '').slice(0, 120)}\n\n${businessProfile?.name || ''}`;
-  }
+  const title = type === 'alert' ? item.title : (item.agent_name || item.summary);
+  const description = type === 'alert' ? item.description : item.summary;
+  const cleanTitle = (title || '').split(' — ')[0].replace(/^[^\u0590-\u05FFa-zA-Z0-9]*/, '').trim();
+  const prefilled = meta.prefilled_text || meta.prefilled || `🎉 ${cleanTitle}\n\n${(description || '').slice(0, 120)}\n\n${businessProfile?.name || ''}`;
+  const eventDate = meta.event_date ? formatEventDate(meta.event_date) : null;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(prefilled).then(() => {
@@ -434,7 +96,7 @@ function EventActSheet({ item, type, businessProfile, onClose }) {
     setCreatingTask(true);
     try {
       await base44.entities.Task.create({
-        title: `הכן תוכן לרגל: ${(title || '').split(' — ')[0].slice(0, 60)}`,
+        title: `הכן תוכן לרגל: ${cleanTitle.slice(0, 60)}`,
         description: description || '',
         status: 'pending',
         priority: 'medium',
@@ -449,7 +111,25 @@ function EventActSheet({ item, type, businessProfile, onClose }) {
     setCreatingTask(false);
   };
 
-  const cleanTitle = (title || '').split(' — ')[0].replace(/^[^\u0590-\u05FFa-zA-Z0-9]*/, '').trim();
+  const handlePrimaryAction = () => {
+    if (actionType === 'create_campaign') {
+      const params = new URLSearchParams({ type: 'seasonal', event: cleanTitle, summary: (description || '').slice(0, 120) });
+      navigate(`/marketing/create?${params.toString()}`);
+    } else if (actionType === 'create_offer') {
+      const params = new URLSearchParams({ type: 'offer', event: cleanTitle, summary: (description || '').slice(0, 120) });
+      navigate(`/marketing/create?${params.toString()}`);
+    } else {
+      const params = new URLSearchParams({ create: 'organic', summary: prefilled });
+      navigate(`/marketing?${params.toString()}`);
+    }
+    onClose();
+  };
+
+  const primaryLabel = {
+    create_campaign: '📢 צור קמפיין מראש',
+    create_offer:    '🎁 בנה מבצע מיוחד',
+    social_post:     '📣 פרסם פוסט ממוקד',
+  }[actionType] || '📣 פרסם פוסט ממוקד';
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
@@ -462,6 +142,7 @@ function EventActSheet({ item, type, businessProfile, onClose }) {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-[15px] font-bold text-foreground leading-snug">{cleanTitle}</h3>
+            {eventDate && <p className="text-[11px] text-primary font-medium mt-0.5">📅 {eventDate}</p>}
             <p className="text-[11px] text-foreground-muted mt-0.5 line-clamp-2">{description}</p>
           </div>
           <button onClick={onClose} className="text-foreground-muted hover:text-foreground p-1 -mt-1 -mr-1">
@@ -469,56 +150,42 @@ function EventActSheet({ item, type, businessProfile, onClose }) {
           </button>
         </div>
 
-        {/* Post text */}
+        {/* Action window hint */}
+        {meta.action_window_days && (
+          <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
+            <AlertCircle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+            <p className="text-[11px] text-amber-700">
+              מומלץ להתחיל {meta.action_window_days} ימים לפני האירוע
+            </p>
+          </div>
+        )}
+
+        {/* Post preview */}
         <div className="bg-secondary rounded-xl p-3 space-y-2">
-          <p className="text-[10px] font-semibold text-foreground-muted">תוכן מוכן לפרסום</p>
-          <p className="text-[12px] text-foreground leading-relaxed whitespace-pre-line">{prefilled}</p>
-          <button
-            onClick={handleCopy}
-            className="flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:opacity-70 transition-all"
-          >
+          <p className="text-[10px] font-semibold text-foreground-muted">תוכן מותאם לאירוע</p>
+          <p className="text-[12px] text-foreground leading-relaxed whitespace-pre-line line-clamp-4">{prefilled}</p>
+          <button onClick={handleCopy} className="flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:opacity-70 transition-all">
             {copied ? <CheckCheck className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
             {copied ? 'הועתק!' : 'העתק טקסט'}
           </button>
         </div>
 
-        {/* Action buttons */}
+        {/* Actions */}
         <div className="space-y-2">
           <button
-            onClick={() => {
-              const params = new URLSearchParams({
-                type: 'seasonal',
-                event: cleanTitle,
-                summary: description?.slice(0, 120) || '',
-              });
-              navigate(`/marketing/create?${params.toString()}`);
-              onClose();
-            }}
+            onClick={handlePrimaryAction}
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-foreground text-background text-[12px] font-semibold hover:opacity-90 transition-all"
           >
-            <Megaphone className="w-4 h-4" />
-            צור קמפיין לרגל האירוע
+            {primaryLabel}
           </button>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => {
-                const params = new URLSearchParams({ create: 'organic', summary: prefilled });
-                navigate(`/marketing?${params.toString()}`);
-                onClose();
-              }}
-              className="flex items-center justify-center gap-1.5 py-2 rounded-xl border border-border text-[11px] font-medium text-foreground hover:bg-secondary transition-all"
-            >
-              📣 פרסם ברשתות
-            </button>
-            <button
-              onClick={handleCreateTask}
-              disabled={creatingTask}
-              className="flex items-center justify-center gap-1.5 py-2 rounded-xl border border-border text-[11px] font-medium text-foreground hover:bg-secondary transition-all disabled:opacity-50"
-            >
-              {creatingTask ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ListPlus className="w-3.5 h-3.5" />}
-              הוסף כמשימה
-            </button>
-          </div>
+          <button
+            onClick={handleCreateTask}
+            disabled={creatingTask}
+            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-border text-[11px] font-medium text-foreground hover:bg-secondary transition-all disabled:opacity-50"
+          >
+            {creatingTask ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ListPlus className="w-3.5 h-3.5" />}
+            הוסף כמשימה
+          </button>
         </div>
       </div>
     </div>,
@@ -526,49 +193,31 @@ function EventActSheet({ item, type, businessProfile, onClose }) {
   );
 }
 
+// ── Event card ─────────────────────────────────────────────────────────────────
 function EventCard({ item, businessProfile, type, onCardClick, onDismissed }) {
   const [popup, setPopup] = useState(false);
+  const meta = getEventMeta(item);
 
-  let title, description, tags;
-  if (type === 'static') {
-    title = item.title;
-    description = item.description;
-    tags = item.tags || [];
-  } else {
-    title = type === 'alert' ? item.title : item.agent_name || item.summary?.slice(0, 60);
-    description = type === 'alert' ? item.description : item.summary;
-    tags = item.tags || [];
-  }
+  const title       = type === 'alert' ? item.title : (item.agent_name || item.summary?.slice(0, 60));
+  const description = type === 'alert' ? item.description : item.summary;
 
-  let meta = {};
-  if (type !== 'static') {
-    try { meta = JSON.parse(type === 'alert' ? (item.source_agent || '{}') : (item.source_description || '{}')); } catch {}
-  }
+  let evType = '';
+  try { evType = JSON.parse(item.source_description || '{}').event_type || ''; } catch {}
+  const category = classifyEvent(title, description, item.tags || [], evType);
 
-  const countdown = type === 'static'
-    ? getCountdown(item.event_date, true)
-    : meta.event_date
-      ? getCountdown(meta.event_date, true)      // real date stored in meta → always accurate
-      : getCountdown(meta.urgency_hours);         // fallback for old records
+  const countdown = meta.event_date
+    ? getCountdown(meta.event_date, true)
+    : getCountdown(meta.urgency_hours);
 
-  const category = type === 'static' ? item.category : classifyEvent(title, description, tags, meta.event_type || '');
+  const eventDate = meta.event_date ? formatEventDate(meta.event_date) : null;
 
   const categoryIcons = {
-    sports:      '⚽',
-    holiday:     '✡️',
-    religion:    '🕌',
-    seasonal:    '🌿',
-    commercial:  '🛍️',
-    tv_broadcast:'📺',
-    weather:     '🌡️',
-    local:       '📍',
-    other:       '📅',
+    sports: '⚽', holiday: '✡️', religion: '🕌', seasonal: '🌿',
+    commercial: '🛍️', tv_broadcast: '📺', weather: '🌡️', local: '📍', other: '📅',
   };
 
-  // Sector boost badge for static events
-  const sectorBoost = type === 'static' && businessProfile?.category
-    ? computeStaticEventBoost(item.category, item.tags, businessProfile.category)
-    : null;
+  const actionType  = meta.action_type || 'social_post';
+  const actionBadge = { create_campaign: 'קמפיין', create_offer: 'מבצע', social_post: 'פוסט' }[actionType] || 'פוסט';
 
   return (
     <div
@@ -577,10 +226,11 @@ function EventCard({ item, businessProfile, type, onCardClick, onDismissed }) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+
+          {/* Title */}
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="text-base">{categoryIcons[category] || '📅'}</span>
             <span className="text-[13px] font-semibold text-foreground leading-snug">{title}</span>
-            {/* Dismiss — only for DB-backed events, not static calendar entries */}
             {type !== 'static' && onDismissed && businessProfile?.id && (
               <div onClick={e => e.stopPropagation()}>
                 <DismissMenu
@@ -593,6 +243,15 @@ function EventCard({ item, businessProfile, type, onCardClick, onDismissed }) {
                 />
               </div>
             )}
+          </div>
+
+          {/* Date + countdown row */}
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+            {eventDate && (
+              <span className="text-[11px] font-semibold text-foreground-secondary">
+                📅 {eventDate}
+              </span>
+            )}
             {countdown && (
               <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
                 countdown.urgent
@@ -603,33 +262,28 @@ function EventCard({ item, businessProfile, type, onCardClick, onDismissed }) {
                 בעוד {countdown.text}
               </span>
             )}
-            {sectorBoost === 'high' && (
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-50 text-green-700 border border-green-200">
-                רלוונטי מאוד
-              </span>
-            )}
-            {type === 'static' && sectorBoost !== 'high' && (
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-secondary text-foreground-muted border border-border">
-                לוח שנה
-              </span>
-            )}
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-secondary text-foreground-muted border border-border">
+              {actionBadge}
+            </span>
           </div>
-          <p className="text-[12px] text-foreground-secondary leading-relaxed mb-2 line-clamp-3">{description}</p>
-          {/* Artist / headliner + venue for local events */}
+
+          <p className="text-[12px] text-foreground-secondary leading-relaxed mb-2 line-clamp-2">{description}</p>
+
           {(meta.artist_or_headliner || meta.venue) && (
             <div className="flex items-center gap-2 text-[11px] text-foreground-muted mb-1.5">
               {meta.artist_or_headliner && <span className="font-medium text-foreground-secondary">🎤 {meta.artist_or_headliner}</span>}
               {meta.venue && <span className="opacity-70">📍 {meta.venue}</span>}
             </div>
           )}
+
           {meta.action_label && (
             <div className="flex items-center gap-1.5 text-[11px] text-foreground-muted">
               <TrendingUp className="w-3.5 h-3.5 text-primary opacity-60" />
               <span>{meta.action_label}</span>
-              {meta.time_minutes && <span className="opacity-60">· {meta.time_minutes} דקות</span>}
             </div>
           )}
         </div>
+
         <button
           onClick={e => { e.stopPropagation(); setPopup(true); }}
           className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-medium bg-foreground text-background hover:opacity-90 transition-all"
@@ -651,80 +305,91 @@ function EventCard({ item, businessProfile, type, onCardClick, onDismissed }) {
   );
 }
 
+// ── Main page ──────────────────────────────────────────────────────────────────
 export default function Events() {
   const { businessProfile } = useOutletContext();
   const bpId = businessProfile?.id;
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState('all');
-  const [scanning, setScanning] = useState(false);
+  const [activeTab, setActiveTab]         = useState('all');
+  const [scanning, setScanning]           = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
-  const [dismissedIds, setDismissedIds] = useState(new Set());
+  const [dismissedIds, setDismissedIds]   = useState(new Set());
+  const [autoScanned, setAutoScanned]     = useState(false);
 
-  const handleEventDismissed = (item) => {
-    setDismissedIds(prev => new Set([...prev, item.id]));
-    if (item._type === 'alert') {
-      queryClient.invalidateQueries({ queryKey: ['eventAlerts', bpId] });
-    } else {
-      queryClient.invalidateQueries({ queryKey: ['eventSignals', bpId] });
-      queryClient.invalidateQueries({ queryKey: ['localEventSignals', bpId] });
-      queryClient.invalidateQueries({ queryKey: ['weatherSignals', bpId] });
-    }
-  };
-
-  // Polls every 20 min so new events discovered by the server scheduler appear automatically
   const POLL_INTERVAL = 20 * 60 * 1000;
 
   const { data: eventAlerts = [], isLoading: loadingAlerts } = useQuery({
     queryKey: ['eventAlerts', bpId],
-    queryFn: () => base44.entities.ProactiveAlert.filter({ linked_business: bpId, alert_type: 'market_opportunity' }, '-created_date', 50),
-    enabled: !!bpId,
+    queryFn:  () => base44.entities.ProactiveAlert.filter({ linked_business: bpId, alert_type: 'market_opportunity' }, '-created_date', 50),
+    enabled:  !!bpId,
     refetchInterval: POLL_INTERVAL,
     staleTime: 10 * 60 * 1000,
   });
 
   const { data: eventSignals = [], isLoading: loadingSignals } = useQuery({
     queryKey: ['eventSignals', bpId],
-    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'event' }, '-detected_at', 50),
-    enabled: !!bpId,
+    queryFn:  () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'event' }, '-detected_at', 50),
+    enabled:  !!bpId,
     refetchInterval: POLL_INTERVAL,
     staleTime: 10 * 60 * 1000,
   });
 
   const { data: localEventSignals = [], isLoading: loadingLocal } = useQuery({
     queryKey: ['localEventSignals', bpId],
-    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'local_event' }, '-detected_at', 30),
-    enabled: !!bpId,
+    queryFn:  () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'local_event' }, '-detected_at', 30),
+    enabled:  !!bpId,
     refetchInterval: POLL_INTERVAL,
     staleTime: 10 * 60 * 1000,
   });
 
   const { data: weatherSignals = [], isLoading: loadingWeather } = useQuery({
     queryKey: ['weatherSignals', bpId],
-    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'weather_event' }, '-detected_at', 10),
-    enabled: !!bpId,
+    queryFn:  () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'weather_event' }, '-detected_at', 10),
+    enabled:  !!bpId,
     refetchInterval: POLL_INTERVAL,
     staleTime: 10 * 60 * 1000,
   });
 
   const isLoading = loadingAlerts || loadingSignals || loadingLocal || loadingWeather;
+  const totalEvents = eventAlerts.length + eventSignals.length + localEventSignals.length;
+
+  // Auto-scan on first page load if no events exist
+  useEffect(() => {
+    if (!bpId || isLoading || autoScanned || totalEvents > 0) return;
+    setAutoScanned(true);
+    Promise.allSettled([
+      base44.functions.invoke('detectEvents',    { businessProfileId: bpId }),
+      base44.functions.invoke('findLocalEvents', { businessProfileId: bpId }),
+    ]).then(() => {
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['eventAlerts',      bpId] });
+        queryClient.invalidateQueries({ queryKey: ['eventSignals',     bpId] });
+        queryClient.invalidateQueries({ queryKey: ['localEventSignals', bpId] });
+        queryClient.invalidateQueries({ queryKey: ['weatherSignals',   bpId] });
+      }, 3000);
+    });
+  }, [bpId, isLoading, autoScanned, totalEvents, queryClient]);
+
+  const handleEventDismissed = (item) => {
+    setDismissedIds(prev => new Set([...prev, item.id]));
+    queryClient.invalidateQueries({ queryKey: ['eventAlerts',      bpId] });
+    queryClient.invalidateQueries({ queryKey: ['eventSignals',     bpId] });
+    queryClient.invalidateQueries({ queryKey: ['localEventSignals', bpId] });
+    queryClient.invalidateQueries({ queryKey: ['weatherSignals',   bpId] });
+  };
 
   function extractEventDate(item) {
-    // Static events have a structured event_date field — use it directly
-    if (item.event_date) return new Date(item.event_date).getTime();
-    // DB events: try metadata, then text regex, then urgency_hours, then push to end
-    const text = item._type === 'alert' ? (item.description || '') : (item.summary || '');
-    const m = text.match(/(\d{1,2})[./](\d{1,2})[./](\d{4})/);
-    if (m) return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1])).getTime();
     try {
-      const meta = JSON.parse(item._type === 'alert' ? (item.source_agent || '{}') : (item.source_description || '{}'));
+      const meta = getEventMeta(item);
       if (meta.event_date) return new Date(meta.event_date).getTime();
       if (meta.urgency_hours) return Date.now() + Number(meta.urgency_hours) * 3600000;
     } catch {}
-    // No date info — push to end of list rather than sorting by creation time
+    const text = item._type === 'alert' ? (item.description || '') : (item.summary || '');
+    const m = text.match(/(\d{1,2})[./](\d{1,2})[./](\d{4})/);
+    if (m) return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1])).getTime();
     return Date.now() + 365 * 86400000;
   }
 
-  // Normalize event title for dedup — strip leading icon, strip "— בעוד X ימים" suffix
   function normalizeEventTitle(item) {
     const raw = item._type === 'alert'
       ? (item.title || '')
@@ -732,33 +397,29 @@ export default function Events() {
     return raw
       .replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}⚽📅🛍🌿🎵🎯🏆🕌✡️🎤📍🎉🎊🎶📣💡]\s*/u, '')
       .split(' — ')[0]
-      .split(' בעוד ')[0]
       .trim()
       .toLowerCase();
   }
 
-  // Merge: DB items + static events, dedup by title, keep only future events from static
+  // Merge all DB events, filter stale, dedup by name, sort by date
   const rawDbItems = [
     ...eventAlerts.map(a => ({ ...a, _type: 'alert' })),
     ...eventSignals.map(s => ({ ...s, _type: 'signal' })),
     ...localEventSignals.map(s => ({ ...s, _type: 'signal', _isLocal: true })),
     ...weatherSignals.map(s => ({ ...s, _type: 'signal', _isLocal: true })),
   ].filter(item => {
-    // Filter out dismissed items (signal has is_dismissed)
     if (item.is_dismissed) return false;
-    // Filter out DB items that are clearly stale (creation date >7d ago and no parseable future date)
+    // Filter out dismissed items from local state
+    if (dismissedIds.has(item.id)) return false;
+    // Filter stale DB items (created >7 days ago with no parseable future date)
     const created = new Date(item.created_date || item.detected_at || 0).getTime();
     if (created < Date.now() - 7 * 86400000) {
-      const text = item._type === 'alert' ? (item.description || '') : (item.summary || '');
-      const m = text.match(/(\d{1,2})[./](\d{1,2})[./](\d{4})/);
-      if (!m) return false;
-      const eventDate = new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1])).getTime();
-      if (eventDate < Date.now()) return false; // event already passed
+      const eventTs = extractEventDate(item);
+      if (eventTs < Date.now()) return false;
     }
     return true;
   });
 
-  // Deduplicate: per normalized event name keep only the most recent DB record
   const seenEventKeys = new Map();
   rawDbItems.forEach(item => {
     const key = normalizeEventTitle(item);
@@ -767,50 +428,17 @@ export default function Events() {
     const prev = seenEventKeys.get(key);
     if (!prev || ts > prev.ts) seenEventKeys.set(key, { item, ts });
   });
-  const dbItems = Array.from(seenEventKeys.values()).map(v => v.item);
 
-  // Build combined text from deduped DB items for keyword matching against static events
-  const dbTextLower = dbItems
-    .map(i => i._type === 'alert'
-      ? ((i.title || '') + ' ' + (i.description || ''))
-      : ((i.agent_name || '') + ' ' + (i.summary || '')))
-    .join(' ')
-    .toLowerCase();
-
-  // Words that are too generic to use for dedup
-  const DEDUP_STOP = new Set(['2026', '2027', 'ימים', 'בעוד', 'אירוע', 'עסקי', 'הזדמנות', 'גמר', 'שלב', 'ליגה', 'קיץ', 'חורף', 'אביב', 'סתיו']);
-
-  const businessCategory = businessProfile?.category || '';
-  const staticFiltered = STATIC_EVENTS.filter(e => {
-    // Only show events within the next 120 days
-    const eventTs = new Date(e.event_date).getTime();
-    const isPast   = eventTs < Date.now() - 86400000;
-    const isTooFar = eventTs > Date.now() + 120 * 86400000;
-    if (isPast || isTooFar) return false;
-    // Filter by sector relevance — hide low-boost events when business category is known
-    if (businessCategory) {
-      const boost = computeStaticEventBoost(e.category, e.tags, businessCategory);
-      if (boost === 'low') return false;
-    }
-    // Dedup against DB: if normalized DB key matches this event's name, hide static
-    const staticKey = e.title.replace(/^[^\u0590-\u05FFa-zA-Z0-9]*/, '').split(' — ')[0].trim().toLowerCase();
-    if (seenEventKeys.has(staticKey)) return false;
-    // Dedup: if any specific keyword from this event's tags appears in DB events, hide static
-    const specificTags = (e.tags || []).filter(t => t.length > 3 && !DEDUP_STOP.has(t));
-    const isDup = specificTags.some(tag => dbTextLower.includes(tag.toLowerCase()));
-    return !isDup;
-  });
-
-  const allItems = [...dbItems, ...staticFiltered]
+  const allItems = Array.from(seenEventKeys.values())
+    .map(v => v.item)
     .sort((a, b) => extractEventDate(a) - extractEventDate(b));
 
   const categoryMap = useMemo(() => {
     const map = new Map();
     allItems.forEach(item => {
-      if (item._type === 'static') { map.set(item.id, item.category); return; }
       const title = item._type === 'alert' ? item.title : (item.agent_name || '');
       const desc  = item._type === 'alert' ? item.description : item.summary;
-      let evType = '';
+      let evType  = '';
       try { evType = JSON.parse(item.source_description || '{}').event_type || ''; } catch {}
       map.set(item.id, classifyEvent(title, desc, item.tags || [], evType));
     });
@@ -843,15 +471,15 @@ export default function Events() {
     toast.info('סורק אירועים קרובים...');
     try {
       const [evRes, localRes] = await Promise.allSettled([
-        base44.functions.invoke('detectEvents', { businessProfileId: bpId }),
+        base44.functions.invoke('detectEvents',    { businessProfileId: bpId }),
         base44.functions.invoke('findLocalEvents', { businessProfileId: bpId, force: true }),
       ]);
-      const evFound = evRes.status === 'fulfilled' ? (evRes.value?.data?.signals_created ?? 0) : 0;
+      const evFound    = evRes.status    === 'fulfilled' ? (evRes.value?.data?.signals_created    ?? 0) : 0;
       const localFound = localRes.status === 'fulfilled' ? (localRes.value?.data?.signals_created ?? 0) : 0;
-      queryClient.invalidateQueries({ queryKey: ['eventAlerts', bpId] });
-      queryClient.invalidateQueries({ queryKey: ['eventSignals', bpId] });
+      queryClient.invalidateQueries({ queryKey: ['eventAlerts',       bpId] });
+      queryClient.invalidateQueries({ queryKey: ['eventSignals',      bpId] });
       queryClient.invalidateQueries({ queryKey: ['localEventSignals', bpId] });
-      queryClient.invalidateQueries({ queryKey: ['weatherSignals', bpId] });
+      queryClient.invalidateQueries({ queryKey: ['weatherSignals',    bpId] });
       const total = evFound + localFound;
       toast.success(total > 0 ? `נמצאו ${total} אירועים רלוונטיים ✓` : 'הסריקה הושלמה — בדוק שוב בעוד מספר שניות');
     } catch {
@@ -864,13 +492,14 @@ export default function Events() {
     <div className="space-y-5">
       <AiInsightsBar
         title="תובנות AI — הזדמנויות עסקיות"
-        prompt={`נתח את לוח האירועים הקרובים לעסק: אלו חגים, עונות או אירועים ספורטיביים מציגים את ההזדמנות הכי גדולה לגידול במכירות, ואיזה קמפיין לבצע לפני כל אחד.`}
+        prompt="נתח את לוח האירועים הקרובים לעסק: אלו חגים, עונות או אירועים מציגים את ההזדמנות הגדולה ביותר לגידול במכירות, ואיזה פעולה לבצע לפני כל אחד."
       />
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[16px] font-bold text-foreground tracking-tight">אירועים והזדמנויות</h1>
           <p className="text-[12px] text-foreground-muted mt-0.5">
-            חגים מכל הדתות, אירועי ספורט, עונות מסחריות — הזדמנויות צמיחה לעסק שלך
+            חגים, ספורט, עונות מסחריות — אירועים רלוונטיים לעסק שלך עם תאריכים ופעולות מותאמות
           </p>
         </div>
         <button
@@ -886,10 +515,10 @@ export default function Events() {
       {/* Stat row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'סה"כ אירועים', value: allItems.length, color: 'text-primary' },
-          { label: 'חגים יהודיים',  value: countByTab.holiday,    color: 'text-purple-500' },
-          { label: 'ספורט/טלוויזיה', value: countByTab.sports + countByTab.tv_broadcast, color: 'text-green-600' },
-          { label: 'מסחרי/עונתי',  value: countByTab.commercial + countByTab.seasonal, color: 'text-amber-500' },
+          { label: 'סה"כ אירועים',   value: allItems.length,                                        color: 'text-primary' },
+          { label: 'חגים יהודיים',   value: countByTab.holiday,                                     color: 'text-purple-500' },
+          { label: 'ספורט/טלוויזיה', value: countByTab.sports + countByTab.tv_broadcast,            color: 'text-green-600' },
+          { label: 'מסחרי/עונתי',    value: countByTab.commercial + countByTab.seasonal,             color: 'text-amber-500' },
         ].map(card => (
           <div key={card.label} className="card-base p-4 fade-in-up">
             <p className="text-[10px] font-medium text-foreground-muted mb-1">{card.label}</p>
@@ -924,20 +553,30 @@ export default function Events() {
         <div className="card-base py-20 text-center fade-in-up">
           <Calendar className="w-12 h-12 text-foreground-muted opacity-20 mx-auto mb-3" />
           <p className="text-[13px] text-foreground-muted mb-1">
-            {activeTab === 'all' ? 'טרם זוהו אירועים רלוונטיים לעסק שלך' : activeTab === 'weather' ? 'אין אירועי מזג אוויר קיצוני שזוהו' : `אין אירועים בקטגוריית "${EVENT_TABS.find(t=>t.key===activeTab)?.label}"`}
+            {activeTab === 'all'
+              ? 'טרם זוהו אירועים רלוונטיים לעסק שלך'
+              : `אין אירועים בקטגוריית "${EVENT_TABS.find(t => t.key === activeTab)?.label}"`}
           </p>
-          <p className="text-[11px] text-foreground-muted opacity-50">לחץ "סרוק אירועים" לזהות הזדמנויות קרובות</p>
+          {activeTab === 'all' && (
+            <button
+              onClick={handleScan}
+              disabled={scanning}
+              className="mt-3 px-4 py-2 rounded-lg text-[12px] font-medium bg-foreground text-background hover:opacity-90 disabled:opacity-50"
+            >
+              {scanning ? 'סורק...' : 'סרוק אירועים עכשיו ←'}
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.filter(item => !dismissedIds.has(item.id)).map(item => (
+          {filtered.map(item => (
             <EventCard
               key={`${item._type}-${item.id}`}
               item={item}
               type={item._type}
               businessProfile={businessProfile}
               onCardClick={(ev, t) => setSelectedEvent({ item: ev, type: t })}
-              onDismissed={item._type !== 'static' ? handleEventDismissed : undefined}
+              onDismissed={handleEventDismissed}
             />
           ))}
         </div>
