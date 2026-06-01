@@ -41,8 +41,9 @@ function getCountdown(input, isDate = false) {
   const hours = isDate
     ? Math.ceil((new Date(input).getTime() - Date.now()) / 3600000)
     : Number(input);
+  // Events happening today (within last 24h or next 24h)
+  if (isDate && hours > -24 && hours <= 24) return { text: 'היום!', urgent: true };
   if (hours <= 0) return null;
-  if (hours <= 24) return { text: `${hours} שעות`, urgent: true };
   const days = Math.ceil(hours / 24);
   if (days <= 3) return { text: `${days} ימים`, urgent: true };
   if (days <= 14) return { text: `${days} ימים`, urgent: false };
@@ -406,9 +407,11 @@ export default function Events() {
       if (meta.event_date) return new Date(meta.event_date).getTime();
       if (meta.urgency_hours) return Date.now() + Number(meta.urgency_hours) * 3600000;
     } catch {}
-    const text = item._type === 'alert' ? (item.description || '') : (item.summary || '');
-    const m = text.match(/(\d{1,2})[./](\d{1,2})[./](\d{4})/);
-    if (m) return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1])).getTime();
+    const text = (item.description || item.summary || '');
+    const iso = text.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return new Date(iso[0]).getTime();
+    const dmy = text.match(/(\d{1,2})[./](\d{1,2})[./](\d{4})/);
+    if (dmy) return new Date(parseInt(dmy[3]), parseInt(dmy[2]) - 1, parseInt(dmy[1])).getTime();
     return Date.now() + 365 * 86400000;
   }
 
@@ -447,8 +450,17 @@ export default function Events() {
     const key = normalizeEventTitle(item);
     if (!key) return;
     const ts = new Date(item.created_date || item.detected_at || 0).getTime();
+    const hasDate = !!getEventMeta(item).event_date;
     const prev = seenEventKeys.get(key);
-    if (!prev || ts > prev.ts) seenEventKeys.set(key, { item, ts });
+    if (!prev) {
+      seenEventKeys.set(key, { item, ts, hasDate });
+    } else if (hasDate && !prev.hasDate) {
+      // Always prefer an item that has a parseable event_date
+      seenEventKeys.set(key, { item, ts, hasDate });
+    } else if (hasDate === prev.hasDate && ts > prev.ts) {
+      // Same quality: keep the more recently created item
+      seenEventKeys.set(key, { item, ts, hasDate });
+    }
   });
 
   const allItems = Array.from(seenEventKeys.values())
