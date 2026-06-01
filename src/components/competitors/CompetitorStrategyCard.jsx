@@ -68,7 +68,7 @@ export default function CompetitorStrategyCard({ competitor, businessProfileId }
     return (
       <button onClick={generate}
         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium text-[#888888] bg-[#fafafa] border border-[#f0f0f0] hover:bg-[#f5f5f5] hover:border-[#dddddd] transition-all">
-        <Target className="w-3 h-3" /> אסטרטגיה תחרותית
+        <Target className="w-3 h-3" /> המלצות לשבוע
       </button>
     );
   }
@@ -81,7 +81,7 @@ export default function CompetitorStrategyCard({ competitor, businessProfileId }
         onClick={() => setOpen(false)}>
         <div className="flex items-center gap-1.5">
           <Target className="w-3.5 h-3.5 text-[#666666]" />
-          <span className="text-[11px] font-semibold text-[#333333]">אסטרטגיה מול {competitor.name}</span>
+          <span className="text-[11px] font-semibold text-[#333333]">המלצות לשבוע — {competitor.name}</span>
         </div>
         <ChevronUp className="w-3.5 h-3.5 text-[#aaaaaa]" />
       </div>
@@ -103,7 +103,7 @@ export default function CompetitorStrategyCard({ competitor, businessProfileId }
           <div className="space-y-3">
             {/* Main strategy */}
             <div className="bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2.5">
-              <p className="text-[10px] font-semibold text-indigo-600 mb-0.5 uppercase tracking-wide">האסטרטגיה</p>
+              <p className="text-[10px] font-semibold text-indigo-600 mb-0.5 uppercase tracking-wide">הגישה המומלצת</p>
               <p className="text-[12px] font-medium text-indigo-900">{strategy.strategy}</p>
             </div>
 
@@ -111,7 +111,7 @@ export default function CompetitorStrategyCard({ competitor, businessProfileId }
             <div className="grid grid-cols-2 gap-2">
               {strategy.key_advantage && (
                 <div className="bg-green-50 border border-green-100 rounded-lg px-2.5 py-2">
-                  <p className="text-[9px] font-bold text-green-600 uppercase mb-0.5">היתרון שלנו</p>
+                  <p className="text-[9px] font-bold text-green-600 uppercase mb-0.5">היתרון שלך</p>
                   <p className="text-[10px] text-green-800">{strategy.key_advantage}</p>
                 </div>
               )}
@@ -131,7 +131,7 @@ export default function CompetitorStrategyCard({ competitor, businessProfileId }
             {/* Tactics */}
             {strategy.tactics?.length > 0 && (
               <div>
-                <p className="text-[10px] font-semibold text-[#333333] mb-1.5">🎯 טקטיקות</p>
+                <p className="text-[10px] font-semibold text-[#333333] mb-1.5">פעולות מומלצות</p>
                 <div className="space-y-1.5">
                   {strategy.tactics.map((tactic, i) => (
                     <button key={i}

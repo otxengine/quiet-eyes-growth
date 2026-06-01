@@ -1,24 +1,7 @@
 import React, { useState } from 'react';
-import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, MapPin, Briefcase, Banknote, ExternalLink, Instagram, Globe, Clock } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, MapPin, ArrowLeft, Clock, ExternalLink, Instagram, Globe } from 'lucide-react';
 import CompetitorSwotCard from '@/components/competitors/CompetitorSwotCard';
 import CompetitorStrategyCard from '@/components/competitors/CompetitorStrategyCard';
-import CompetitorNewsCard from '@/components/competitors/CompetitorNewsCard';
-import CompetitorNotesEditor from '@/components/competitors/CompetitorNotesEditor';
-import CompetitorPriceBadge from '@/components/competitors/CompetitorPriceBadge';
-import BattlecardSection from '@/components/competitors/BattlecardSection';
-
-function Sparkline({ trend }) {
-  const heights = trend === 'up' ? [15, 18, 20, 22, 28, 32, 36] : trend === 'down' ? [36, 32, 28, 22, 20, 18, 15] : [24, 26, 24, 25, 24, 26, 24];
-  return (
-    <div className="flex items-end gap-[2px]">
-      {heights.map((h, i) => {
-        const opacity = trend === 'up' ? 0.08 + (i * 0.035) : trend === 'down' ? 0.04 + (i * 0.02) : 0.04;
-        const color = trend === 'up' ? `rgba(16,185,129,${opacity})` : trend === 'down' ? `rgba(220,38,38,${opacity})` : `rgba(0,0,0,${opacity})`;
-        return <div key={i} className="w-[3px] rounded-t" style={{ height: h * 0.6, background: color }} />;
-      })}
-    </div>
-  );
-}
 
 function timeAgo(dateStr) {
   if (!dateStr) return '';
@@ -29,254 +12,206 @@ function timeAgo(dateStr) {
   return `לפני ${Math.floor(hours / 24)} ימים`;
 }
 
-export default function CompetitorDetailCard({ competitor, businessName, signals = [], businessProfileId, otxBizId }) {
+// Parse comma/newline separated list, strip bracketed dates, cap at `max`
+function parseList(str, max = 2) {
+  if (!str) return [];
+  return str
+    .split(/[,\n•]+/)
+    .map(s => s.replace(/^\[.*?\]\s*/, '').trim())
+    .filter(s => s.length > 2)
+    .slice(0, max);
+}
+
+export default function CompetitorDetailCard({
+  competitor,
+  businessName,
+  signals = [],
+  businessProfileId,
+  otxBizId,
+  intelChanges = [],
+}) {
   const [expanded, setExpanded] = useState(false);
   const comp = competitor;
-  const initials = comp.name?.substring(0, 2) || '??';
-  const tags = comp.tags ? comp.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+  const initials = (comp.name || '??').substring(0, 2);
+
+  // Find the most recent intel insight for this competitor
+  const firstName = (comp.name || '').split(' ')[0].toLowerCase();
+  const intelAlert = intelChanges.find(c =>
+    (c._kind === 'alert' || c.change_type === 'intel') &&
+    (c.competitor_name || '').toLowerCase().includes(firstName)
+  );
+
+  const strengths  = parseList(comp.strengths,  2);
+  const complaints = parseList(comp.weaknesses, 2);
+  const services   = comp.services || comp.menu_highlights || '';
+  const hasVoice   = strengths.length > 0 || complaints.length > 0 || comp.recent_reviews_summary;
+  const hasOffer   = services || comp.price_range || comp.current_promotions;
 
   return (
     <div className="card-base">
-      {/* Header - always visible */}
-      <div className="p-5 cursor-pointer" onClick={() => setExpanded(!expanded)}>
+      {/* ── Header (always visible) ───────────────────────────────────── */}
+      <div className="px-5 py-4 cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center text-foreground-muted text-[10px] font-bold flex-shrink-0">{initials}</div>
+          {/* Avatar */}
+          <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center text-foreground-muted text-[10px] font-bold flex-shrink-0">
+            {initials}
+          </div>
+
+          {/* Name + location */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-[14px] font-medium text-[#222222] truncate">{comp.name}</span>
-              {tags.length > 0 && (
-                <div className="flex gap-1 flex-shrink-0">
-                  {tags.slice(0, 2).map(tag => (
-                    <span key={tag} className="px-1.5 py-0.5 rounded-full text-[8px] font-medium bg-[#f5f5f5] text-[#888888]">{tag}</span>
-                  ))}
-                </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[13px] font-semibold text-foreground truncate">{comp.name}</span>
+              {comp.current_promotions && (
+                <span className="px-1.5 py-0.5 rounded-full text-[8px] font-bold bg-orange-50 border border-orange-200 text-orange-700 flex-shrink-0">
+                  מבצע פעיל
+                </span>
               )}
             </div>
-            <div className="flex items-center gap-2 mt-0.5">
-              {comp.category && <span className="text-[11px] text-[#999999]">{comp.category}</span>}
-              {comp.address && <span className="text-[10px] text-[#cccccc] flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5" />{comp.address}</span>}
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              {comp.category && <span className="text-[10px] text-foreground-muted">{comp.category}</span>}
+              {comp.address && (
+                <span className="text-[10px] text-foreground-muted flex items-center gap-0.5">
+                  <MapPin className="w-2.5 h-2.5" />{comp.address}
+                </span>
+              )}
             </div>
           </div>
+
+          {/* Rating + trend + chevron */}
           <div className="flex items-center gap-3 flex-shrink-0">
-            <div className="flex items-center gap-1.5">
-              <span className={`text-2xl font-bold ${comp.rating >= 4.3 ? 'text-[#10b981]' : comp.rating >= 4 ? 'text-[#d97706]' : 'text-[#dc2626]'}`}>
+            <div className="flex items-center gap-1">
+              <span className={`text-[20px] font-bold ${
+                comp.rating >= 4.3 ? 'text-success' :
+                comp.rating >= 4   ? 'text-warning'  : 'text-danger'
+              }`}>
                 {comp.rating != null ? Number(comp.rating).toFixed(1) : '—'}
               </span>
-              {comp.trend_direction === 'up' && <TrendingUp className="w-4 h-4 text-[#10b981]" />}
-              {comp.trend_direction === 'down' && <TrendingDown className="w-4 h-4 text-[#dc2626]" />}
-              {(!comp.trend_direction || comp.trend_direction === 'stable') && <Minus className="w-4 h-4 text-[#cccccc]" />}
-              <Sparkline trend={comp.trend_direction} />
+              {comp.trend_direction === 'up'   && <TrendingUp   className="w-3.5 h-3.5 text-success" />}
+              {comp.trend_direction === 'down' && <TrendingDown className="w-3.5 h-3.5 text-danger"  />}
+              {(!comp.trend_direction || comp.trend_direction === 'stable') && (
+                <Minus className="w-3.5 h-3.5 text-foreground-muted opacity-30" />
+              )}
             </div>
-            <span className="text-[11px] text-[#999999]">{comp.review_count || 0} ביקורות</span>
-            {expanded ? <ChevronUp className="w-4 h-4 text-[#cccccc]" /> : <ChevronDown className="w-4 h-4 text-[#cccccc]" />}
+            <span className="text-[10px] text-foreground-muted">{comp.review_count || 0} ביקורות</span>
+            {expanded
+              ? <ChevronUp   className="w-4 h-4 text-foreground-muted opacity-40" />
+              : <ChevronDown className="w-4 h-4 text-foreground-muted opacity-40" />}
           </div>
         </div>
-
-        {/* Quick info row */}
-        <div className="flex flex-wrap gap-3 mt-3">
-          {comp.strengths && (
-            <div className="flex items-start gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#10b981] mt-1 flex-shrink-0" />
-              <p className="text-[11px] text-[#444444]"><span className="font-medium text-[#10b981]">חוזקות:</span> {comp.strengths}</p>
-            </div>
-          )}
-          {comp.weaknesses && (
-            <div className="flex items-start gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#dc2626] mt-1 flex-shrink-0" />
-              <p className="text-[11px] text-[#444444]"><span className="font-medium text-[#dc2626]">חולשות:</span> {comp.weaknesses}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Social intelligence row */}
-        {(comp.strongest_channel || comp.engagement_level || comp.social_post_frequency || comp.current_promotions) && (
-          <div className="flex flex-wrap gap-2 mt-2">
-            {comp.strongest_channel && comp.strongest_channel !== 'unknown' && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-medium bg-pink-50 border border-pink-100 text-pink-600">
-                {comp.strongest_channel === 'instagram' ? '📸' : comp.strongest_channel === 'facebook' ? '👤' : comp.strongest_channel === 'tiktok' ? '🎵' : '🌐'} {comp.strongest_channel}
-              </span>
-            )}
-            {comp.engagement_level && (
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-medium border ${
-                comp.engagement_level === 'high' ? 'bg-green-50 border-green-100 text-green-700' :
-                comp.engagement_level === 'medium' ? 'bg-yellow-50 border-yellow-100 text-yellow-700' :
-                'bg-gray-50 border-gray-100 text-gray-500'}`}>
-                engagement {comp.engagement_level === 'high' ? 'גבוה' : comp.engagement_level === 'medium' ? 'בינוני' : 'נמוך'}
-              </span>
-            )}
-            {comp.social_post_frequency && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-medium bg-blue-50 border border-blue-100 text-blue-600">
-                🗓 {comp.social_post_frequency}
-              </span>
-            )}
-            {comp.current_promotions && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-orange-50 border border-orange-200 text-orange-700">
-                🔥 מבצע פעיל
-              </span>
-            )}
-            {comp.sentiment_from_reviews && comp.sentiment_from_reviews !== 'unknown' && (
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-medium border ${
-                comp.sentiment_from_reviews === 'positive' ? 'bg-green-50 border-green-100 text-green-600' :
-                comp.sentiment_from_reviews === 'negative' ? 'bg-red-50 border-red-100 text-red-600' :
-                'bg-gray-50 border-gray-100 text-gray-500'}`}>
-                {comp.sentiment_from_reviews === 'positive' ? '😊' : comp.sentiment_from_reviews === 'negative' ? '😠' : '😐'} {comp.sentiment_from_reviews === 'positive' ? 'ביקורות חיוביות' : comp.sentiment_from_reviews === 'negative' ? 'ביקורות שליליות' : 'ביקורות מעורבות'}
-              </span>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* Expanded section */}
+      {/* ── Expanded content ─────────────────────────────────────────── */}
       {expanded && (
         <div className="px-5 pb-5 border-t border-border pt-4 space-y-4 fade-in-up">
-          {/* Last scanned + social links bar */}
-          <div className="flex items-center gap-3 flex-wrap">
+
+          {/* SECTION 1 — What they offer */}
+          {hasOffer && (
+            <div>
+              <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide mb-2">
+                מה הם מציעים
+              </p>
+              <div className="space-y-1.5">
+                {services && (
+                  <p className="text-[11px] text-foreground-secondary leading-snug">
+                    {services.slice(0, 150)}
+                  </p>
+                )}
+                {comp.price_range && (
+                  <p className="text-[11px] text-foreground-muted">
+                    טווח מחירים:{' '}
+                    <span className="text-foreground font-medium">{comp.price_range}</span>
+                  </p>
+                )}
+                {comp.current_promotions && (
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-100 text-[11px] text-orange-700">
+                    <span className="font-medium">מבצע:</span>{' '}
+                    {comp.current_promotions.slice(0, 90)}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* SECTION 2 — What customers say */}
+          {hasVoice && (
+            <div>
+              <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide mb-2">
+                מה הלקוחות אומרים
+              </p>
+              <div className="space-y-1">
+                {strengths.map((s, i) => (
+                  <div key={`s${i}`} className="flex items-start gap-2">
+                    <span className="text-success text-[10px] mt-0.5 flex-shrink-0">✓</span>
+                    <p className="text-[11px] text-foreground-secondary">{s}</p>
+                  </div>
+                ))}
+                {complaints.map((w, i) => (
+                  <div key={`w${i}`} className="flex items-start gap-2">
+                    <span className="text-danger text-[10px] mt-0.5 flex-shrink-0">✗</span>
+                    <p className="text-[11px] text-foreground-secondary">{w}</p>
+                  </div>
+                ))}
+                {!strengths.length && !complaints.length && comp.recent_reviews_summary && (
+                  <p className="text-[11px] text-foreground-secondary italic">
+                    {comp.recent_reviews_summary.slice(0, 120)}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* SECTION 3 — Opportunity for you */}
+          {intelAlert && (
+            <div className="rounded-lg bg-primary/5 border border-primary/15 px-3 py-3">
+              <p className="text-[10px] font-semibold text-primary mb-1.5">ההזדמנות שלך</p>
+              <p className="text-[11px] text-foreground-secondary leading-snug">
+                {(intelAlert.change_summary || '').replace(/^🔍\s*[^:]+:\s*/, '').slice(0, 140)}
+              </p>
+              {intelAlert.action_label && (
+                <button className="mt-2 flex items-center gap-1 text-[11px] font-medium text-primary hover:opacity-75 transition-opacity">
+                  {intelAlert.action_label.slice(0, 45)}
+                  <ArrowLeft className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* On-demand deep analysis */}
+          <div className="flex flex-wrap gap-2 pt-1">
+            <CompetitorSwotCard
+              competitor={comp}
+              businessName={businessName}
+              otxBusinessId={otxBizId}
+            />
+            <CompetitorStrategyCard
+              competitor={comp}
+              businessProfileId={businessProfileId}
+            />
+          </div>
+
+          {/* Social links + last scanned */}
+          <div className="flex items-center gap-3 flex-wrap pt-1 border-t border-border">
             {comp.last_scanned && (
-              <span className="flex items-center gap-1 text-[10px] text-foreground-muted">
+              <span className="flex items-center gap-1 text-[10px] text-foreground-muted opacity-50">
                 <Clock className="w-3 h-3" />
                 נסרק {timeAgo(comp.last_scanned)}
               </span>
             )}
             {comp.instagram_handle && (
               <a href={comp.instagram_handle} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-1 text-[10px] text-pink-500 hover:underline">
+                className="flex items-center gap-1 text-[10px] text-pink-500 hover:underline"
+                onClick={e => e.stopPropagation()}>
                 <Instagram className="w-3 h-3" /> Instagram
               </a>
             )}
             {comp.facebook_url && (
               <a href={comp.facebook_url} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-1 text-[10px] text-blue-500 hover:underline">
+                className="flex items-center gap-1 text-[10px] text-blue-500 hover:underline"
+                onClick={e => e.stopPropagation()}>
                 <Globe className="w-3 h-3" /> Facebook
               </a>
             )}
-            {comp.social_followers_est && comp.social_followers_est !== 'unknown' && (
-              <span className="text-[10px] text-foreground-muted">~{comp.social_followers_est} עוקבים</span>
-            )}
           </div>
-
-          {/* Enriched data from agents */}
-          {(comp.menu_highlights || comp.price_points || comp.current_promotions || comp.recent_reviews_summary || comp.content_themes || comp.price_snapshot) && (
-            <div className="bg-secondary/50 rounded-lg p-4 space-y-3 border border-border">
-              <span className="text-[10px] font-semibold text-foreground-muted">מידע שנאסף אוטומטית</span>
-              {comp.menu_highlights && (
-                <div>
-                  <span className="text-[10px] font-medium text-primary block mb-0.5">🍽️ תפריט/מוצרים</span>
-                  <p className="text-[11px] text-foreground-secondary">{comp.menu_highlights}</p>
-                </div>
-              )}
-              {comp.price_points && (
-                <div>
-                  <span className="text-[10px] font-medium text-primary block mb-0.5">💰 מחירים שנמצאו</span>
-                  <p className="text-[11px] text-foreground-secondary">{comp.price_points}</p>
-                </div>
-              )}
-              {comp.current_promotions && (
-                <div className="flex items-start gap-1.5">
-                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-warning/10 text-warning border border-warning/20 flex-shrink-0">מבצע!</span>
-                  <p className="text-[11px] text-foreground-secondary">{comp.current_promotions}</p>
-                </div>
-              )}
-              {comp.opening_hours && (
-                <div>
-                  <span className="text-[10px] font-medium text-foreground-muted block mb-0.5">🕐 שעות פתיחה</span>
-                  <p className="text-[11px] text-foreground-secondary">{comp.opening_hours}</p>
-                </div>
-              )}
-              {comp.recent_reviews_summary && (
-                <div>
-                  <span className="text-[10px] font-medium text-foreground-muted block mb-0.5">💬 מה הלקוחות אומרים</span>
-                  <p className="text-[11px] text-foreground-secondary italic">{comp.recent_reviews_summary}</p>
-                </div>
-              )}
-              {comp.content_themes && (
-                <div>
-                  <span className="text-[10px] font-medium text-foreground-muted block mb-0.5">🎯 נושאי תוכן</span>
-                  <p className="text-[11px] text-foreground-secondary">{comp.content_themes}</p>
-                </div>
-              )}
-              {comp.price_snapshot && (() => {
-                try {
-                  const prices = JSON.parse(comp.price_snapshot);
-                  if (!Array.isArray(prices) || prices.length === 0) return null;
-                  return (
-                    <div>
-                      <span className="text-[10px] font-medium text-foreground-muted block mb-1">💰 מחירים שנמצאו</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {prices.slice(0, 5).map((p, i) => (
-                          <span key={i} className="px-2 py-0.5 rounded-md text-[10px] bg-white border border-border text-foreground-secondary">
-                            {p.item}: <span className="font-semibold">{p.price}</span>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                } catch { return null; }
-              })()}
-            </div>
-          )}
-
-          {/* Services & Pricing */}
-          <div className="flex flex-wrap gap-4">
-            {comp.services && (
-              <div className="flex items-start gap-1.5">
-                <Briefcase className="w-3.5 h-3.5 text-[#cccccc] mt-0.5" />
-                <div>
-                  <span className="text-[10px] font-medium text-[#999999] block mb-0.5">שירותים עיקריים</span>
-                  <p className="text-[11px] text-[#444444]">{comp.services}</p>
-                </div>
-              </div>
-            )}
-            {comp.price_range && (
-              <div className="flex items-start gap-1.5">
-                <Banknote className="w-3.5 h-3.5 text-[#cccccc] mt-0.5" />
-                <div>
-                  <span className="text-[10px] font-medium text-[#999999] block mb-0.5">טווח מחירים</span>
-                  <p className="text-[11px] text-[#444444]">{comp.price_range}</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Competitor Price Tracking */}
-          <CompetitorPriceBadge competitor={comp} />
-
-          {/* SWOT Analysis */}
-          <CompetitorSwotCard competitor={comp} businessName={businessName} otxBusinessId={otxBizId} />
-
-          {/* Competitor Strategy */}
-          <CompetitorStrategyCard competitor={comp} businessProfileId={businessProfileId} />
-
-          {/* News Feed */}
-          <CompetitorNewsCard signals={signals} competitorName={comp.name} />
-
-          {/* Battlecard */}
-          <BattlecardSection competitor={comp} businessProfileId={businessProfileId} />
-
-          {/* Notes & Tags */}
-          <CompetitorNotesEditor competitor={comp} />
-
-          {/* Source links */}
-          {comp.notes && comp.notes.includes('http') && (() => {
-            const urls = comp.notes.match(/(https?:\/\/[^\s|]+)/g) || [];
-            return urls.length > 0 ? (
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-medium text-[#999999]">קישורי מקור</span>
-                {urls.map((url, i) => (
-                  <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-[11px] text-primary hover:underline">
-                    <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                    <span className="truncate">{url}</span>
-                  </a>
-                ))}
-              </div>
-            ) : null;
-          })()}
-
-          {comp.last_scanned && (
-            <div className="pt-2 border-t border-[#f5f5f5]">
-              <span className="text-[10px] text-[#cccccc]">סריקה אחרונה: {timeAgo(comp.last_scanned)}</span>
-            </div>
-          )}
         </div>
       )}
     </div>

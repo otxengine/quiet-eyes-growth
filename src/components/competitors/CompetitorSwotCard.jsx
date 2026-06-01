@@ -10,7 +10,7 @@ const SWOT_COLS = [
   { key: 'strengths',     label: 'חוזקות',     icon: '✅', color: 'text-green-600' },
   { key: 'weaknesses',    label: 'חולשות',     icon: '⚠️', color: 'text-amber-600' },
   { key: 'opportunities', label: 'הזדמנויות',  icon: '🟢', color: 'text-blue-600'  },
-  { key: 'threats',       label: 'איומים',     icon: '🔴', color: 'text-red-600'   },
+  { key: 'threats',       label: 'סיכונים',    icon: '🔴', color: 'text-red-600'   },
 ];
 
 export default function CompetitorSwotCard({ competitor, businessName, otxBusinessId }) {
@@ -110,7 +110,7 @@ export default function CompetitorSwotCard({ competitor, businessName, otxBusine
       <>
         <button onClick={generate}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium text-[#888888] bg-[#fafafa] border border-[#f0f0f0] hover:bg-[#f5f5f5] hover:border-[#dddddd] transition-all">
-          <Shield className="w-3 h-3" /> ניתוח SWOT
+          <Shield className="w-3 h-3" /> ניתוח מעמיק
         </button>
         {popupSignal && (
           <ActionPopup signal={popupSignal} businessProfile={{ name: businessName }} onClose={() => setPopupSignal(null)} />
@@ -127,7 +127,7 @@ export default function CompetitorSwotCard({ competitor, businessName, otxBusine
         onClick={() => setOpen(false)}>
         <div className="flex items-center gap-1.5">
           <Shield className="w-3.5 h-3.5 text-[#666666]" />
-          <span className="text-[11px] font-semibold text-[#333333]">SWOT — {competitor.name}</span>
+          <span className="text-[11px] font-semibold text-[#333333]">ניתוח מעמיק — {competitor.name}</span>
           {dataSource === 'otx' && (
             <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200">
               נתונים אמיתיים
@@ -180,7 +180,7 @@ export default function CompetitorSwotCard({ competitor, businessName, otxBusine
             {/* 3 action buttons */}
             {swot.actions?.length > 0 && (
               <div>
-                <p className="text-[10px] font-semibold text-[#333333] mb-1.5">🚀 3 פעולות שנובעות מהניתוח</p>
+                <p className="text-[10px] font-semibold text-[#333333] mb-1.5">פעולות מומלצות</p>
                 <div className="space-y-1.5">
                   {swot.actions.map((action, i) => {
                     // Infer SWOT column from action label for better popup type

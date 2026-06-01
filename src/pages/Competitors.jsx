@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Users, Loader2, MapPin, ExternalLink, Activity, MessageSquare, X, FileText } from 'lucide-react';
+import { Users, Loader2, MapPin, ExternalLink, Activity, MessageSquare, X } from 'lucide-react';
 import DismissMenu from '@/components/ui/DismissMenu';
 import { toast } from 'sonner';
 import { usePlan } from '@/lib/usePlan';
@@ -13,7 +13,6 @@ import CompetitorScoreRow from '@/components/competitors/CompetitorScoreRow';
 import CompetitorDetailCard from '@/components/competitors/CompetitorDetailCard';
 import ComposerDrawer from '@/components/modals/ComposerDrawer';
 import ReplyDrawer from '@/components/modals/ReplyDrawer';
-import StrategicAnalysisPanel from '@/components/competitors/StrategicAnalysisPanel';
 import CompetitorTimeline from '@/components/intelligence/CompetitorTimeline';
 
 // Map base44 category names to OTX sector names
@@ -37,18 +36,20 @@ function cityToGeo(city) {
 }
 
 const CHANGE_TYPE_LABELS = {
-  price:        'שינוי מחיר',
-  price_change: 'שינוי מחיר',
-  website:      'שינוי אתר',
-  website_change: 'שינוי אתר',
-  social:       'פוסט חדש',
-  new_post:     'פוסט חדש',
-  reviews:      'שינוי ביקורות',
-  review_delta: 'שינוי ביקורות',
-  intel:        'תובנה אסטרטגית',
-  move:         'מהלך מתחרה',
-  new_promo:    'מבצע חדש',
-  new_offering: 'שירות חדש',
+  price:            'שינוי מחיר',
+  price_change:     'שינוי מחיר',
+  website:          'שינוי אתר',
+  website_change:   'שינוי אתר',
+  social:           'פוסט חדש',
+  new_post:         'פוסט חדש',
+  reviews:          'שינוי ביקורות',
+  review_delta:     'שינוי ביקורות',
+  intel:            'תובנה',
+  move:             'עדכון',
+  new_promo:        'מבצע חדש',
+  new_offering:     'שירות חדש',
+  competitor_attack: 'שינוי ישיר',
+  competitor_mention: 'אזכור',
 };
 
 const PLATFORM_BADGES = {
@@ -98,7 +99,7 @@ async function fetchCompetitorChanges(businessProfile) {
       ).catch(() => []),
       base44.entities.ProactiveAlert.filter(
         { linked_business: businessProfile.id,
-          alert_type: { in: ['competitor_move', 'competitor_intel'] },
+          alert_type: { in: ['competitor_move', 'competitor_intel', 'competitor_attack', 'competitor_mention'] },
           is_dismissed: false },
         '-created_at', 20
       ).catch(() => []),
@@ -182,8 +183,6 @@ export default function Competitors() {
   const [scanning,      setScanning]     = useState(false);
   const [autoScanning,  setAutoScanning] = useState(false);
   const [activeFilter,  setActiveFilter] = useState('all');
-  const [selectedComp,  setSelectedComp] = useState(null);
-  const analysisPanelRef = useRef(null);
   const [activeDrawer,  setActiveDrawer] = useState(null); // { type, props }
   const [dismissedAlerts, setDismissedAlerts] = useState(() => {
     try { return new Set(JSON.parse(sessionStorage.getItem('dismissed_competitor_alerts') || '[]')); }
@@ -197,12 +196,6 @@ export default function Competitors() {
       return next;
     });
   };
-
-  useEffect(() => {
-    if (selectedComp && analysisPanelRef.current) {
-      setTimeout(() => analysisPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
-    }
-  }, [selectedComp]);
 
   const openCounterResponse = (change) => {
     const isSocial = ['social', 'new_post', 'intel', 'move'].includes(change.change_type) || change.action_type === 'social_post';
@@ -527,7 +520,7 @@ export default function Competitors() {
                       className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium bg-primary/8 text-primary border border-primary/15 hover:bg-primary/15 transition-all"
                     >
                       <MessageSquare className="w-3 h-3" />
-                      תגובה נגדית
+                      פעולה מוצעת
                     </button>
                   </div>
                 </div>
@@ -578,54 +571,30 @@ export default function Competitors() {
             ))}
           </div>
 
-          {selectedComp && (
-            <div ref={analysisPanelRef}>
-              <StrategicAnalysisPanel
-                competitor={selectedComp}
-                businessProfile={businessProfile}
-                competitors={competitors}
-                signals={signals.filter(s => s.category === 'competitor_move')}
-                onClose={() => setSelectedComp(null)}
-              />
-            </div>
-          )}
-
           <div className="space-y-3">
             {filtered.length === 0 ? (
               <p className="text-[12px] text-[#999999] text-center py-8">אין מתחרים בפילטר הנוכחי</p>
             ) : (
               filtered.map((comp) => (
-                <div
-                  key={comp.id}
-                  onClick={() => setSelectedComp(prev => prev?.id === comp.id ? null : comp)}
-                  className={`rounded-xl overflow-hidden cursor-pointer transition-all ${selectedComp?.id === comp.id ? 'ring-2 ring-primary/40' : ''}`}
-                >
+                <div key={comp.id} className="rounded-xl overflow-hidden">
                   <CompetitorDetailCard
                     competitor={comp}
                     businessName={businessProfile?.name}
                     signals={signals}
                     businessProfileId={bpId}
                     otxBizId={otxBizId}
+                    intelChanges={mergedChanges}
                   />
-                  <div className={`w-full flex items-center justify-between gap-1.5 px-4 py-2 text-[11px] font-medium border border-t-0 border-border transition-colors ${selectedComp?.id === comp.id ? 'bg-primary/5 text-primary' : 'bg-secondary text-foreground-muted hover:bg-secondary/70'}`}>
-                    <div className="flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5" />
-                      {selectedComp?.id === comp.id ? 'הסתר ניתוח אסטרטגי' : 'SWOT · אסטרטגיה · קרב'}
-                    </div>
-                    <div onClick={e => e.stopPropagation()}>
-                      <DismissMenu
-                        entityType="competitor"
-                        entityId={comp.id}
-                        title={comp.name}
-                        businessProfileId={bpId}
-                        onDismissed={() => {
-                          queryClient.invalidateQueries({ queryKey: ['competitorsPage'] });
-                          if (selectedComp?.id === comp.id) setSelectedComp(null);
-                        }}
-                        buttonLabel="לא רלוונטי"
-                        buttonClassName="flex items-center gap-1 text-[10px] text-foreground-muted hover:text-red-500 transition-colors"
-                      />
-                    </div>
+                  <div className="w-full flex items-center justify-end gap-1.5 px-4 py-2 text-[11px] font-medium border border-t-0 border-border bg-secondary">
+                    <DismissMenu
+                      entityType="competitor"
+                      entityId={comp.id}
+                      title={comp.name}
+                      businessProfileId={bpId}
+                      onDismissed={() => queryClient.invalidateQueries({ queryKey: ['competitorsPage'] })}
+                      buttonLabel="לא רלוונטי"
+                      buttonClassName="flex items-center gap-1 text-[10px] text-foreground-muted hover:text-red-500 transition-colors"
+                    />
                   </div>
                 </div>
               ))
