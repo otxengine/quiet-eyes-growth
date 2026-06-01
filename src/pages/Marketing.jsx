@@ -149,6 +149,7 @@ function OrganicCreateDrawer({ businessProfile, signalContext, audienceData, rec
   const [genImage,    setGenImage]    = useState(false);
   const [analyzing,   setAnalyzing]   = useState(false);
   const [saving,      setSaving]      = useState(false);
+  const [imgPreview,  setImgPreview]  = useState(false);
 
   const fileRef = useRef(null);
 
@@ -295,6 +296,23 @@ ${formatInstr}
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40" dir="rtl" onClick={onClose}>
+
+      {/* Image lightbox — z-[60] to appear above the drawer */}
+      {imgPreview && imageUrl && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={() => setImgPreview(false)}
+        >
+          <div className="relative max-w-lg w-full" onClick={e => e.stopPropagation()}>
+            <img src={imageUrl} alt="" className="w-full rounded-xl shadow-2xl" />
+            <button
+              onClick={() => setImgPreview(false)}
+              className="absolute top-3 left-3 w-8 h-8 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-black/80 text-[14px]"
+            >✕</button>
+          </div>
+        </div>
+      )}
+
       <div
         className="w-full max-w-lg bg-card rounded-t-2xl md:rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
@@ -356,7 +374,11 @@ ${formatInstr}
             <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">תמונה</p>
             {imageUrl ? (
               <div className="relative">
-                <img src={imageUrl} alt="" className="w-full h-40 object-cover rounded-xl border border-border" />
+                <img
+                  src={imageUrl} alt=""
+                  onClick={() => setImgPreview(true)}
+                  className={`w-full object-cover rounded-xl border border-border cursor-zoom-in ${postType === 'story' ? 'aspect-[9/16] max-h-64' : 'h-40'}`}
+                />
                 {analyzing && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl">
                     <div className="text-white text-[12px] flex items-center gap-2">
@@ -364,6 +386,9 @@ ${formatInstr}
                     </div>
                   </div>
                 )}
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity pointer-events-none rounded-xl bg-black/10">
+                  <span className="text-white text-[11px] bg-black/50 px-2 py-1 rounded-full">לחץ להגדלה</span>
+                </div>
                 {imageDesc && <p className="text-[10px] text-foreground-muted mt-1">🔍 {imageDesc}</p>}
                 <button onClick={() => { setImageUrl(''); setMediaId(null); setImageDesc(''); }}
                   className="absolute top-2 left-2 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-black/80">
