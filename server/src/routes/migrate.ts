@@ -558,6 +558,72 @@ router.post('/', async (req: Request, res: Response) => {
 
     // business_profiles: email notification field
     `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS notification_email  TEXT`,
+
+    // ── P1: Lead Freshness + ROI tracking columns ─────────────────────────────
+    `ALTER TABLE leads ADD COLUMN IF NOT EXISTS discovered_at           TEXT`,
+    `ALTER TABLE leads ADD COLUMN IF NOT EXISTS freshness_score         DOUBLE PRECISION DEFAULT 100`,
+    `ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_contact_at         TEXT`,
+    `ALTER TABLE leads ADD COLUMN IF NOT EXISTS next_followup_date      TEXT`,
+    `ALTER TABLE leads ADD COLUMN IF NOT EXISTS followup_count          DOUBLE PRECISION DEFAULT 0`,
+    `ALTER TABLE leads ADD COLUMN IF NOT EXISTS referral_source         TEXT`,
+    `ALTER TABLE leads ADD COLUMN IF NOT EXISTS score_reasoning         TEXT`,
+    `ALTER TABLE leads ADD COLUMN IF NOT EXISTS suggested_first_message TEXT`,
+    `ALTER TABLE leads ADD COLUMN IF NOT EXISTS deal_value              DOUBLE PRECISION`,
+    `ALTER TABLE leads ADD COLUMN IF NOT EXISTS platform_sourced        BOOLEAN DEFAULT false`,
+
+    // ── P1: Review Sentiment Topic Extraction ────────────────────────────────
+    `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS topics          TEXT`,
+    `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS topic_sentiment TEXT`,
+    `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS google_review_id TEXT`,
+    `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS is_verified     BOOLEAN DEFAULT false`,
+
+    // ── P1: Health Score — Local SEO ─────────────────────────────────────────
+    `ALTER TABLE health_scores ADD COLUMN IF NOT EXISTS seo_score               DOUBLE PRECISION`,
+    `ALTER TABLE health_scores ADD COLUMN IF NOT EXISTS google_rank_estimate     TEXT`,
+    `ALTER TABLE health_scores ADD COLUMN IF NOT EXISTS reviews_needed_for_top3 DOUBLE PRECISION`,
+
+    // ── P1: Review Request Conversion Tracking ───────────────────────────────
+    `ALTER TABLE review_requests ADD COLUMN IF NOT EXISTS status              TEXT DEFAULT 'sent'`,
+    `ALTER TABLE review_requests ADD COLUMN IF NOT EXISTS review_link         TEXT`,
+    `ALTER TABLE review_requests ADD COLUMN IF NOT EXISTS sent_via            TEXT`,
+    `ALTER TABLE review_requests ADD COLUMN IF NOT EXISTS converted_review_id TEXT`,
+    `ALTER TABLE review_requests ADD COLUMN IF NOT EXISTS lead_id             TEXT`,
+
+    // ── P1: Sector Knowledge — Lead Feedback Loop ────────────────────────────
+    `ALTER TABLE sector_knowledge ADD COLUMN IF NOT EXISTS winner_lead_dna TEXT`,
+
+    // ── Competitor enrichment columns ────────────────────────────────────────
+    `ALTER TABLE competitors ADD COLUMN IF NOT EXISTS menu_highlights        TEXT`,
+    `ALTER TABLE competitors ADD COLUMN IF NOT EXISTS price_points           TEXT`,
+    `ALTER TABLE competitors ADD COLUMN IF NOT EXISTS current_promotions     TEXT`,
+    `ALTER TABLE competitors ADD COLUMN IF NOT EXISTS opening_hours          TEXT`,
+    `ALTER TABLE competitors ADD COLUMN IF NOT EXISTS recent_reviews_summary TEXT`,
+
+    // ── MarketSignal — agent/source tagging ──────────────────────────────────
+    `ALTER TABLE market_signals ADD COLUMN IF NOT EXISTS agent_name  TEXT`,
+    `ALTER TABLE market_signals ADD COLUMN IF NOT EXISTS source_type TEXT`,
+    `ALTER TABLE market_signals ADD COLUMN IF NOT EXISTS tags        TEXT`,
+
+    // ── business_profiles: geo + lead quality fields ──────────────────────────
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS search_radius_km    INT DEFAULT 15`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS additional_cities   TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS branches            TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS lead_intent_signals TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS lead_quality_notes  TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS google_place_id          TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS google_place_id_verified BOOLEAN DEFAULT false`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS google_rating             DOUBLE PRECISION`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS google_review_count       DOUBLE PRECISION`,
+
+    // ── business_profiles: API execution tokens ───────────────────────────────
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS autonomy_level             TEXT DEFAULT 'semi_auto'`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS whatsapp_phone_number_id  TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS whatsapp_access_token      TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS google_access_token        TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS instagram_access_token     TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS instagram_page_id          TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS facebook_page_token        TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS facebook_page_id           TEXT`,
   ];
 
   for (const sql of statements) {
