@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
-import { invokeLLM } from '../../lib/llm';
+import { callAIJson } from '../../lib/ai_router';
 import { writeAutomationLog } from '../../lib/automationLog';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
@@ -54,23 +54,20 @@ export async function detectCompetitorPricing(req: Request, res: Response) {
 
       let priceData: any = null;
       try {
-        priceData = await invokeLLM({
-          model: 'haiku',
-          maxTokens: 200,
-          prompt: `Analyze text from the website of an Israeli business: "${comp.name}".
-${pageText.slice(0, 3500)}
+        // Gemini Flash via page_parsing: handles noisy raw HTML universally
+        // across all business sectors without domain-specific tuning.
+        priceData = await callAIJson('page_parsing', `Extract prices from the website of an Israeli business: "${comp.name}".
+${pageText.slice(0, 4000)}
 
-Extract only prices that appear explicitly in the text. Do not invent prices. Return ONLY valid JSON. ALL string values must be in Hebrew:
+Extract ONLY prices that appear explicitly in the text. Do not invent prices. Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "price_min": number_or_null,
   "price_max": number_or_null,
   "price_unit": "לשעה|לביקור|לחודש|למנה|לסשן|לטיפול|אחר|null",
   "price_tier": "budget|mid|premium|unknown",
-  "evidence": "exact quote from the site from which the price was extracted (up to 80 characters)"
+  "evidence": "ציטוט מדויק מהאתר (עד 80 תווים)"
 }
-If there are no explicit prices: return price_min=null`,
-          response_json_schema: { type: 'object' },
-        });
+If there are no explicit prices: return price_min=null`);
       } catch (_) { continue; }
 
       if (!priceData || (!priceData.price_min && !priceData.price_max)) continue;

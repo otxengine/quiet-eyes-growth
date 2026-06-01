@@ -16,6 +16,7 @@ import { callGemini } from './gemini';
 export type AITask =
   | 'analyze_market'
   | 'classify_intent'
+  | 'classify_sector'
   | 'build_audience'
   | 'generate_post'
   | 'generate_post_fast'
@@ -25,7 +26,9 @@ export type AITask =
   | 'translate_hebrew_fast'
   | 'embed_text'
   | 'competitor_analysis'
-  | 'multimodal_vision';
+  | 'multimodal_vision'
+  | 'page_parsing'
+  | 'draft_strategy';
 
 interface AIConfig {
   provider: 'anthropic' | 'openai' | 'gemini';
@@ -117,6 +120,41 @@ export const AI_ROUTER: Record<AITask, AIConfig> = {
     max_tokens:  600,
     temperature: 0.3,
     reason:      'vision/multimodal — Gemini Flash לניתוח תמונות',
+  },
+
+  // ── Gemini Flash — web page parsing (Gatherers layer) ────────────────────
+  // Gemini Flash excels at extracting structured data from noisy HTML/web
+  // pages across ANY business sector — no hard-coded domain assumptions.
+  // Large context window handles full Tavily raw_content without truncation.
+  page_parsing: {
+    provider:    'gemini',
+    model:       'gemini-3.5-flash',
+    max_tokens:  600,
+    temperature: 0.1,
+    reason:      'חילוץ נתונים מדפי web — Gemini Flash מצטיין בניקוי רעשי HTML עם הקשר רחב',
+  },
+
+  // ── Claude Haiku — sector-agnostic fast classification ───────────────────
+  // Sector-universal intent/topic classification — works identically for
+  // a hair salon, a law firm, or a restaurant without prompt changes.
+  classify_sector: {
+    provider:    'anthropic',
+    model:       'claude-haiku-4-5-20251001',
+    max_tokens:  300,
+    temperature: 0.1,
+    reason:      'סיווג אגנוסטי לסקטור — Haiku מהיר לזיהוי נושאים/כוונות בכל סוג עסק',
+  },
+
+  // ── Claude Sonnet — Human-in-the-loop strategic drafts ───────────────────
+  // All Strategist agents output pending_approval AutoAction records.
+  // Sonnet produces richer, more nuanced recommendations than Haiku
+  // but the human still approves/rejects before any real-world action.
+  draft_strategy: {
+    provider:    'anthropic',
+    model:       'claude-sonnet-4-6',
+    max_tokens:  1200,
+    temperature: 0.4,
+    reason:      'טיוטת אסטרטגיה לאישור — Sonnet לניתוח עמוק, פלט ממתין לאישור אנושי',
   },
 
   // ── Embeddings (placeholder) ───────────────────────────────────────────────

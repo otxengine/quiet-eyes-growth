@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
-import { invokeLLM } from '../../lib/llm';
+import { callAIJson } from '../../lib/ai_router';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 
@@ -56,16 +56,15 @@ export async function scanServicesAndPrices(req: Request, res: Response) {
       return res.json({ services_count: 0, services: [], message: 'no_content_found' });
     }
 
-    const result = await invokeLLM({
-      model:     'haiku',
-      maxTokens: 350,
-      prompt: `Extract all services and prices from this website text for "${profile.name}" (${profile.category}, Israel).
-Extract only what is explicitly listed. Do not invent services or prices.
-Return ONLY valid JSON. ALL string values must be in Hebrew: {"services":[{"name":"service name in Hebrew","price":"price with ₪ symbol or empty string if unknown","category":"main category of this service in Hebrew"}]}
+    // Gemini Flash: better than Haiku at extracting structured data from
+    // noisy raw HTML/web content — works for any business sector universally.
+    const result = await callAIJson('page_parsing', `Extract all services and prices from this website text.
+Business: "${profile.name}" | Category: ${profile.category} | Country: Israel
+Extract ONLY items explicitly listed in the text. Do not invent services or prices.
+Return ONLY valid JSON. ALL string values must be in Hebrew:
+{"services":[{"name":"שם השירות בעברית","price":"מחיר עם סימן ₪ או מחרוזת ריקה אם לא ידוע","category":"קטגוריה ראשית בעברית"}]}
 Max 15 items. Website text:
-${rawText}`,
-      response_json_schema: { type: 'object' },
-    });
+${rawText}`);
 
     const services: any[] = Array.isArray(result?.services) ? result.services.slice(0, 15) : [];
 
