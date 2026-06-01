@@ -514,7 +514,7 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
         <div className="p-4 space-y-3">
           {imageUrl ? (
             <div className="relative">
-              <img src={imageUrl} alt="" className="w-full h-44 object-cover rounded-xl border border-border" />
+              <img src={imageUrl} alt="" className="w-full aspect-video object-cover rounded-xl border border-border" />
               {analyzingImg && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl">
                   <div className="text-white text-[12px] flex items-center gap-2">
@@ -538,6 +538,7 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
                       businessProfileId: bpId,
                       post_text: postContent,
                       insight_text: signalSummary,
+                      platform: 'campaign',
                     });
                     const d = res?.data || res;
                     if (d?.url) {
