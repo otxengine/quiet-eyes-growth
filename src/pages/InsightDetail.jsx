@@ -6,7 +6,8 @@ import {
   Lightbulb, Zap, Target, TrendingUp, AlertTriangle, Trophy,
   ArrowRight, CheckCircle2, Circle, ClipboardList, ChevronLeft,
   Loader2, Clock, CheckCheck, Bot, Send, ChevronDown, ChevronUp,
-  Sparkles, RotateCcw, Database
+  Sparkles, RotateCcw, Database, Copy, ExternalLink, DollarSign,
+  Users, BarChart2, MessageSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { fetchBusinessSnapshot, snapshotToPromptContext, logCompletedAction } from '@/lib/businessSnapshot';
@@ -425,6 +426,245 @@ ${insight.description ? `הקשר: ${(insight.description).slice(0, 150)}` : ''}
   );
 }
 
+// ── Source badge for trends ───────────────────────────────────────────────────
+
+const TREND_SOURCE_META = {
+  tiktok:    { label: 'TikTok',        color: 'text-slate-800',  bg: 'bg-slate-100',  border: 'border-slate-200' },
+  instagram: { label: 'Instagram',     color: 'text-pink-600',   bg: 'bg-pink-50',    border: 'border-pink-100' },
+  facebook:  { label: 'Facebook',      color: 'text-blue-700',   bg: 'bg-blue-50',    border: 'border-blue-100' },
+  google:    { label: 'Google Trends', color: 'text-green-700',  bg: 'bg-green-50',   border: 'border-green-100' },
+  general:   { label: 'כללי',          color: 'text-gray-600',   bg: 'bg-gray-100',   border: 'border-gray-200' },
+};
+
+function detectSource(title = '', description = '') {
+  const t = (title + ' ' + description).toLowerCase();
+  if (t.includes('tiktok') || t.includes('טיקטוק')) return 'tiktok';
+  if (t.includes('instagram') || t.includes('אינסטגרם') || t.includes('reels')) return 'instagram';
+  if (t.includes('facebook') || t.includes('פייסבוק')) return 'facebook';
+  if (t.includes('google trends') || t.includes('גוגל טרנדס')) return 'google';
+  return 'general';
+}
+
+// ── Type-specific context panels ─────────────────────────────────────────────
+
+function TypeContextPanel({ typeKey, title, description, actionMeta }) {
+  const [copied, setCopied] = React.useState(false);
+
+  const copyText = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  // ── TREND PANEL ─────────────────────────────────────────────────────────
+  if (['trend_opportunity', 'social_viral', 'sector_shift'].includes(typeKey)) {
+    const source = detectSource(title, description);
+    const srcMeta = TREND_SOURCE_META[source];
+    const prefilled = actionMeta?.prefilled_text;
+    const dataSourcesList = actionMeta?.data_sources
+      ? actionMeta.data_sources.split(',').map(s => s.trim()).filter(Boolean)
+      : [];
+
+    return (
+      <div className="card-base p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-[13px] font-semibold text-foreground flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-purple-500 opacity-80" />
+            פרטי הטרנד
+          </h2>
+          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${srcMeta.bg} ${srcMeta.color} ${srcMeta.border}`}>
+            {srcMeta.label}
+          </span>
+        </div>
+
+        {dataSourcesList.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            <span className="text-[10px] text-foreground-muted ml-1">מקורות:</span>
+            {dataSourcesList.map(src => (
+              <span key={src} className="text-[10px] px-2 py-0.5 rounded-full bg-secondary border border-border text-foreground-secondary">
+                {src}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {prefilled && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold text-foreground-muted flex items-center gap-1">
+                <MessageSquare className="w-3.5 h-3.5" />
+                תוכן מוכן לפרסום
+              </p>
+              <button
+                onClick={() => copyText(prefilled)}
+                className="flex items-center gap-1 text-[10px] text-primary hover:opacity-70 transition-all"
+              >
+                <Copy className="w-3 h-3" />
+                {copied ? 'הועתק!' : 'העתק'}
+              </button>
+            </div>
+            <div className="rounded-xl bg-purple-50 border border-purple-100 px-4 py-3">
+              <p className="text-[12px] text-purple-900 leading-relaxed whitespace-pre-wrap">{prefilled}</p>
+            </div>
+          </div>
+        )}
+
+        {actionMeta?.opportunity_size && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-100">
+            <BarChart2 className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+            <p className="text-[11px] text-green-700"><span className="font-semibold">פוטנציאל: </span>{actionMeta.opportunity_size}</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── OPPORTUNITY PANEL ────────────────────────────────────────────────────
+  if (['opportunity', 'market_opportunity', 'demand_gap', 'competitive_gap', 'new_service', 'campaign_opportunity', 'promotion_strategy', 'future_prediction'].includes(typeKey)) {
+    const prefilled = actionMeta?.prefilled_text;
+    return (
+      <div className="card-base p-5 space-y-3">
+        <h2 className="text-[13px] font-semibold text-foreground flex items-center gap-2">
+          <Target className="w-4 h-4 text-green-500 opacity-80" />
+          פרטי ההזדמנות
+        </h2>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {actionMeta?.opportunity_size && (
+            <div className="rounded-xl bg-green-50 border border-green-100 px-4 py-3">
+              <p className="text-[10px] font-bold text-green-700 mb-0.5 flex items-center gap-1">
+                <DollarSign className="w-3 h-3" /> פוטנציאל
+              </p>
+              <p className="text-[12px] text-green-600 leading-relaxed">{actionMeta.opportunity_size}</p>
+            </div>
+          )}
+          {actionMeta?.impact_reason && (
+            <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3">
+              <p className="text-[10px] font-bold text-red-700 mb-0.5 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" /> עלות אי-פעולה
+              </p>
+              <p className="text-[12px] text-red-600 leading-relaxed">{actionMeta.impact_reason}</p>
+            </div>
+          )}
+        </div>
+
+        {prefilled && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold text-foreground-muted">תוכן מוכן לשימוש</p>
+              <button onClick={() => copyText(prefilled)} className="flex items-center gap-1 text-[10px] text-primary hover:opacity-70 transition-all">
+                <Copy className="w-3 h-3" /> {copied ? 'הועתק!' : 'העתק'}
+              </button>
+            </div>
+            <div className="rounded-xl bg-secondary border border-border px-4 py-3">
+              <p className="text-[12px] text-foreground leading-relaxed whitespace-pre-wrap">{prefilled}</p>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── URGENT / REVIEW / LEAD PANEL ─────────────────────────────────────────
+  if (['negative_review', 'hot_lead', 'reputation_risk', 'action_needed'].includes(typeKey)) {
+    const prefilled = actionMeta?.prefilled_text;
+    const urgencyHours = actionMeta?.urgency_hours;
+    const platform = actionMeta?.action_platform;
+
+    return (
+      <div className="card-base p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-[13px] font-semibold text-foreground flex items-center gap-2">
+            <Zap className="w-4 h-4 text-red-500 opacity-80" />
+            פעולה מיידית נדרשת
+          </h2>
+          {urgencyHours && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              תוך {urgencyHours} שעות
+            </span>
+          )}
+        </div>
+
+        {platform && (
+          <p className="text-[11px] text-foreground-muted">
+            פלטפורמה מומלצת: <span className="font-semibold text-foreground">{platform}</span>
+            {actionMeta?.platform_reason ? ` — ${actionMeta.platform_reason}` : ''}
+          </p>
+        )}
+
+        {prefilled && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold text-foreground-muted">
+                {typeKey === 'negative_review' ? 'תגובה מוכנה לביקורת' : 'הודעה מוכנה לשליחה'}
+              </p>
+              <button onClick={() => copyText(prefilled)} className="flex items-center gap-1 text-[10px] text-primary hover:opacity-70 transition-all">
+                <Copy className="w-3 h-3" /> {copied ? 'הועתק!' : 'העתק'}
+              </button>
+            </div>
+            <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3">
+              <p className="text-[12px] text-amber-900 leading-relaxed whitespace-pre-wrap">{prefilled}</p>
+            </div>
+          </div>
+        )}
+
+        {actionMeta?.impact_reason && (
+          <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-100">
+            <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+            <p className="text-[11px] text-red-700">{actionMeta.impact_reason}</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── COMPETITOR PANEL ─────────────────────────────────────────────────────
+  if (['competitor_move', 'competitor_intel', 'competitor_mention', 'competitor_attack', 'competitive_gap'].includes(typeKey)) {
+    const prefilled = actionMeta?.prefilled_text;
+    const reasoning = actionMeta?.reasoning;
+    return (
+      <div className="card-base p-5 space-y-3">
+        <h2 className="text-[13px] font-semibold text-foreground flex items-center gap-2">
+          <Trophy className="w-4 h-4 text-indigo-500 opacity-80" />
+          ניתוח תחרותי
+        </h2>
+
+        {reasoning && (
+          <div className="rounded-xl bg-indigo-50 border border-indigo-100 px-4 py-3">
+            <p className="text-[10px] font-bold text-indigo-700 mb-1">מה זוהה</p>
+            <p className="text-[12px] text-indigo-800 leading-relaxed">{reasoning}</p>
+          </div>
+        )}
+
+        {actionMeta?.opportunity_size && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-100">
+            <BarChart2 className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+            <p className="text-[11px] text-green-700"><span className="font-semibold">הזדמנות: </span>{actionMeta.opportunity_size}</p>
+          </div>
+        )}
+
+        {prefilled && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold text-foreground-muted">תגובה אסטרטגית מוצעת</p>
+              <button onClick={() => copyText(prefilled)} className="flex items-center gap-1 text-[10px] text-primary hover:opacity-70 transition-all">
+                <Copy className="w-3 h-3" /> {copied ? 'הועתק!' : 'העתק'}
+              </button>
+            </div>
+            <div className="rounded-xl bg-secondary border border-border px-4 py-3">
+              <p className="text-[12px] text-foreground leading-relaxed whitespace-pre-wrap">{prefilled}</p>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return null;
+}
+
 // ── Related Card ─────────────────────────────────────────────────────────────
 
 function RelatedCard({ item, onClick }) {
@@ -680,6 +920,9 @@ export default function InsightDetail() {
           )}
         </div>
       )}
+
+      {/* ── B2. Type-specific context panel ── */}
+      <TypeContextPanel typeKey={typeKey} title={title} description={description} actionMeta={actionMeta} />
 
       {/* ── C. AI Agent Advisor ── */}
       <AgentAdvisor insight={insightForAgent} snapshot={snapshot} bpId={bpId} insightId={id} />

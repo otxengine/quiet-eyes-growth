@@ -167,11 +167,56 @@ export async function cleanupInsights(req: Request, res: Response) {
       }
     }
 
-    const total = dismissed + deduped + capped;
-    await writeAutomationLog('cleanupInsights', businessProfileId, startTime, total);
-    console.log(`[cleanupInsights] dismissed=${dismissed} deduped=${deduped} capped=${capped} total=${total}`);
+    // ── 4. SIGNAL TTL: dismiss stale MarketSignals by category ──────────────
+    const SIGNAL_TTL_DAYS: Record<string, number> = {
+      tiktok_sector_trend:  14,
+      viral_signal:         14,
+      early_trend:          21,
+      social:               21,
+      competitor_move:      30,
+      competitor_mention:   30,
+      demand_gap:           30,
+      opportunity:          30,
+      expansion:            45,
+      threat:               30,
+      event:                 1,  // event signals expire day-of
+      local_event:           1,
+      weather_event:         3,
+    };
 
-    return res.json({ dismissed, deduped, capped, total_cleaned: total });
+    let signalsDismissed = 0;
+    try {
+      const staleSignalIds: string[] = [];
+      for (const [category, ttlDays] of Object.entries(SIGNAL_TTL_DAYS)) {
+        const cutoff = new Date(Date.now() - ttlDays * 86400000);
+        const stale = await prisma.marketSignal.findMany({
+          where: {
+            linked_business: businessProfileId,
+            category,
+            is_dismissed: false,
+            detected_at: { lte: cutoff.toISOString() },
+          },
+          select: { id: true },
+        });
+        stale.forEach(s => staleSignalIds.push(s.id));
+      }
+      if (staleSignalIds.length > 0) {
+        await prisma.marketSignal.updateMany({
+          where: { id: { in: staleSignalIds } },
+          data: { is_dismissed: true },
+        });
+        signalsDismissed = staleSignalIds.length;
+        console.log(`[cleanupInsights] dismissed ${signalsDismissed} stale signals`);
+      }
+    } catch (sigErr: any) {
+      console.warn('[cleanupInsights] signal TTL cleanup non-fatal:', sigErr.message);
+    }
+
+    const total = dismissed + deduped + capped + signalsDismissed;
+    await writeAutomationLog('cleanupInsights', businessProfileId, startTime, total);
+    console.log(`[cleanupInsights] dismissed=${dismissed} deduped=${deduped} capped=${capped} signals=${signalsDismissed} total=${total}`);
+
+    return res.json({ dismissed, deduped, capped, signals_dismissed: signalsDismissed, total_cleaned: total });
 
   } catch (err: any) {
     console.error('[cleanupInsights] error:', err.message);
