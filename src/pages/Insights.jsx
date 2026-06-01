@@ -30,6 +30,15 @@ const ALERT_TYPE_META = {
   future_prediction:    { label: 'תחזית עתידית',   color: 'text-violet-600',  bg: 'bg-violet-50',   border: 'border-violet-100',  icon: TrendingUp },
   demand_gap:           { label: 'פער ביקוש',      color: 'text-cyan-600',    bg: 'bg-cyan-50',     border: 'border-cyan-100',    icon: Target },
   content_opportunity:  { label: 'תוכן לפרסום',   color: 'text-rose-600',    bg: 'bg-rose-50',     border: 'border-rose-100',    icon: Zap },
+  // New agent types
+  competitor_attack:    { label: 'מתקפת מתחרה',   color: 'text-red-700',     bg: 'bg-red-50',      border: 'border-red-200',     icon: AlertTriangle },
+  competitor_intel:     { label: 'מודיעין מתחרים', color: 'text-indigo-600',  bg: 'bg-indigo-50',   border: 'border-indigo-100',  icon: Trophy },
+  competitor_mention:   { label: 'אזכור מתחרה',   color: 'text-indigo-500',  bg: 'bg-indigo-50',   border: 'border-indigo-100',  icon: Trophy },
+  reputation_risk:      { label: 'סיכון מוניטין',  color: 'text-red-600',     bg: 'bg-red-50',      border: 'border-red-100',     icon: AlertTriangle },
+  content_performance:  { label: 'ביצועי תוכן',   color: 'text-violet-600',  bg: 'bg-violet-50',   border: 'border-violet-100',  icon: TrendingUp },
+  review_timing:        { label: 'תזמון ביקורות',  color: 'text-teal-600',    bg: 'bg-teal-50',     border: 'border-teal-100',    icon: Target },
+  micro_moment:         { label: 'רגע מכירה',      color: 'text-amber-600',   bg: 'bg-amber-50',    border: 'border-amber-100',   icon: Zap },
+  sentiment_drop:       { label: 'ירידת סנטימנט',  color: 'text-red-600',     bg: 'bg-red-50',      border: 'border-red-100',     icon: AlertTriangle },
 };
 
 const ACTION_STATUS_META = {
@@ -132,11 +141,21 @@ export default function Insights() {
 
   const { data: signals = [], isLoading: loadingSignals } = useQuery({
     queryKey: ['marketSignals', bpId, 'insights'],
-    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, is_dismissed: false }, '-detected_at', 50),
+    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, is_dismissed: false }, '-detected_at', 60),
     enabled: !!bpId,
   });
 
   const loading = loadingAlerts || loadingActions || loadingSignals;
+
+  // Normalize title for dedup (strips punctuation, lowercases, collapses spaces)
+  const normalizeTitle = (title) => {
+    if (!title) return '';
+    return title
+      .replace(/[^\u05D0-\u05EAa-zA-Z0-9\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  };
 
   // Map MarketSignal impact_level → priority
   const signalPriority = (s) => {
@@ -156,8 +175,21 @@ export default function Insights() {
     return 'market_opportunity';
   };
 
+  // Signals relevant to Insights — exclude event/local_event (those live on Events page)
+  const insightSignals = signals.filter(s =>
+    s.category !== 'event' &&
+    s.category !== 'local_event' &&
+    s.category !== 'weather_event'
+  );
+
+  // Actions relevant to Insights — exclude event-category actions
+  const insightActions = actions.filter(a =>
+    a.category !== 'event' &&
+    a.category !== 'local_event'
+  );
+
   // Normalize to unified list
-  const unified = [
+  const rawUnified = [
     ...alerts.map(a => ({
       id:          a.id,
       navId:       `alert-${a.id}`,
@@ -171,7 +203,7 @@ export default function Insights() {
       createdAt:   a.created_date || a.created_at,
       sourceAgent: null,
     })),
-    ...actions.map(a => ({
+    ...insightActions.map(a => ({
       id:          a.id,
       navId:       `action-${a.id}`,
       kind:        'action',
@@ -184,7 +216,7 @@ export default function Insights() {
       createdAt:   a.created_date || a.created_at,
       sourceAgent: a.source_agent,
     })),
-    ...signals.map(s => ({
+    ...insightSignals.map(s => ({
       id:          s.id,
       navId:       `signal-${s.id}`,
       kind:        'signal',
@@ -197,12 +229,32 @@ export default function Insights() {
       createdAt:   s.detected_at || s.created_date,
       sourceAgent: null,
     })),
-  ].filter(item => !dismissedIds.has(item.id))
-  .sort((a, b) => {
-    const po = (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3);
-    if (po !== 0) return po;
-    return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-  });
+  ]
+    .filter(item => !dismissedIds.has(item.id))
+    .sort((a, b) => {
+      const po = (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3);
+      if (po !== 0) return po;
+      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+    });
+
+  // Dedup by normalized title — keep first (highest priority) occurrence
+  const seenTitles = new Map();
+  const unified = [];
+  for (const item of rawUnified) {
+    const key = normalizeTitle(item.title);
+    if (!key) {
+      unified.push(item);
+      continue;
+    }
+    if (!seenTitles.has(key)) {
+      seenTitles.set(key, true);
+      unified.push(item);
+    }
+  }
+
+  // Cap total displayed to 40 most relevant
+  const MAX_INSIGHTS = 40;
+  const unifiedCapped = unified.slice(0, MAX_INSIGHTS);
 
   const TYPE_OPTIONS = [
     { value: 'all',              label: 'כל הסוגים' },
@@ -215,6 +267,10 @@ export default function Insights() {
     { value: 'social_viral',     label: 'ויראלי חברתי' },
     { value: 'future_prediction', label: 'תחזית עתידית' },
     { value: 'competitive_gap',  label: 'פער מתחרים' },
+    { value: 'competitor_attack', label: 'מתקפת מתחרה' },
+    { value: 'content_performance', label: 'ביצועי תוכן' },
+    { value: 'review_timing',    label: 'תזמון ביקורות' },
+    { value: 'reputation_risk',  label: 'סיכון מוניטין' },
   ];
 
   const STATUS_OPTIONS = [
@@ -224,19 +280,19 @@ export default function Insights() {
     { value: 'completed',   label: 'הושלם' },
   ];
 
-  const filtered = unified.filter(item => {
+  const filtered = unifiedCapped.filter(item => {
     if (filterType !== 'all') {
-      // group-match: opportunity covers market_opportunity/event_opportunity/demand_gap etc.
       const t = item.type;
+      // Group matches
       if (filterType === 'opportunity' && !t.includes('opportunity') && t !== 'demand_gap' && t !== 'new_service') return false;
-      if (filterType === 'risk'        && !t.includes('risk'))        return false;
+      if (filterType === 'risk' && !t.includes('risk') && t !== 'reputation_risk' && t !== 'sentiment_drop') return false;
       if (filterType !== 'opportunity' && filterType !== 'risk' && t !== filterType) return false;
     }
     if (filterStatus !== 'all' && item.rawStatus !== filterStatus) return false;
     return true;
   });
 
-  const activeCount = unified.filter(i => i.rawStatus !== 'completed').length;
+  const activeCount = unifiedCapped.filter(i => i.rawStatus !== 'completed').length;
 
   const handleDismiss = (item) => {
     // DismissMenu already called updateInsightMemory + entity update.
@@ -282,8 +338,8 @@ export default function Insights() {
         >
           {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        {filtered.length !== unified.length && (
-          <span className="text-[10px] text-foreground-muted">{filtered.length} מתוך {unified.length}</span>
+        {filtered.length !== unifiedCapped.length && (
+          <span className="text-[10px] text-foreground-muted">{filtered.length} מתוך {unifiedCapped.length}</span>
         )}
       </div>
 
