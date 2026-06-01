@@ -44,59 +44,55 @@ export async function competitorMoveTracker(req: Request, res: Response) {
     const competitorContext = competitors.map(c => {
       const changes: string[] = [];
 
-      // Detect rating change (comparing trend_direction field)
-      if (c.trend_direction === 'up') changes.push('דירוג עולה לאחרונה');
-      if (c.trend_direction === 'down') changes.push('דירוג יורד לאחרונה');
-
-      // Detect active promotions
-      if (c.current_promotions) changes.push(`מבצע פעיל: ${c.current_promotions.substring(0, 80)}`);
-
-      // Detect recent price changes
+      // Only real detected changes — not static data
+      if (c.trend_direction === 'up') changes.push('דירוג עלה לאחרונה');
+      if (c.trend_direction === 'down') changes.push('דירוג ירד לאחרונה');
       if (c.price_changed_at && new Date(c.price_changed_at) > new Date(Date.now() - 14 * 86400000)) {
         changes.push(`מחירים שונו לאחרונה: ${c.last_known_prices?.substring(0, 60) || 'עדכון מחירים'}`);
       }
+      if (c.current_promotions) changes.push(`מבצע חדש: ${c.current_promotions.substring(0, 80)}`);
+      if (c.menu_highlights) changes.push(`שירות/מוצר חדש: ${c.menu_highlights.substring(0, 80)}`);
 
       return {
         name: c.name,
-        rating: c.rating,
-        review_count: c.review_count,
-        services: c.services?.substring(0, 100),
-        strengths: c.strengths?.substring(0, 100),
         weaknesses: c.weaknesses?.substring(0, 100),
         changes,
-        price_range: c.price_range,
-        current_promotions: c.current_promotions,
       };
     });
+
+    // Only pass competitors that have real detected changes
+    const competitorsWithChanges = competitorContext.filter(c => c.changes.length > 0);
+    if (competitorsWithChanges.length === 0) {
+      setLastRun(businessProfileId, 'competitorMoveTracker');
+      await writeAutomationLog('competitorMoveTracker', businessProfileId, startTime, 0);
+      return res.json({ moves_detected: 0, message: 'No real changes detected' });
+    }
 
     const result = await invokeLLM({
       maxTokens: 600,
       prompt: `You are a competitive analyst for the business "${profile.name}" (${profile.category}, ${profile.city}).
 
-Competitors with their current data:
-${competitorContext.map(c => `
-Competitor: ${c.name} | Rating: ${c.rating || 'N/A'}⭐ | Reviews: ${c.review_count || 0}
-Services: ${c.services || 'unknown'}
-Strengths: ${c.strengths || 'N/A'} | Weaknesses: ${c.weaknesses || 'N/A'}
-Price range: ${c.price_range || 'N/A'}
-Detected changes: ${c.changes.join(', ') || 'no clear changes'}
-Promotions: ${c.current_promotions || 'none'}
+The following competitors have REAL DETECTED CHANGES from recent monitoring. Report ONLY on these specific changes — do NOT invent or generalize from static data.
+
+${competitorsWithChanges.map(c => `
+Competitor: ${c.name}
+Detected changes: ${c.changes.join(' | ')}
+Known weakness: ${c.weaknesses || 'N/A'}
 `).join('\n---\n')}
 
-Identify:
-1. Strategic competitor moves that require a response
-2. Opportunities created by competitor weaknesses
-3. Threats from competitor moves
+For each detected change, create ONE move entry describing what changed and what to do.
+Do NOT create entries for competitors with no changes.
+Do NOT invent moves based on rating comparisons or general market observations.
 
 Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "moves": [{
     "competitor_name": "competitor name",
-    "move_type": "price_change|new_service|promotion|rating_drop|expansion|weakness",
-    "description": "description of the move — what the competitor changed",
+    "move_type": "price_change|new_service|promotion|rating_drop|rating_rise",
+    "description": "exact description of the specific detected change — 10-15 words",
     "threat_level": "high|medium|low",
-    "recommended_response": "what to do in response — a specific action",
-    "opportunity": "is this an opportunity for us?",
+    "recommended_response": "one specific action to take — verb + channel + content",
+    "opportunity": "one specific opportunity this creates for us, or null",
     "has_actionable_move": true
   }]
 }`,
