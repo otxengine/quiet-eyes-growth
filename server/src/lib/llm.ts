@@ -106,7 +106,7 @@ async function _invokeLLMRaw(
       // Fallback chain: Claude → Gemini Flash → OpenAI
       if (process.env.GEMINI_API_KEY) {
         try {
-          return await _callGemini(prompt, 'gemini-2.0-flash', maxTokens, response_json_schema);
+          return await _callGemini(prompt, 'gemini-2.5-flash', maxTokens, response_json_schema);
         } catch (geminiErr: any) {
           console.warn('[invokeLLM] Gemini Flash fallback failed:', geminiErr.message);
         }
