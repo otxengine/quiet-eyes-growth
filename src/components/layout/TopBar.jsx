@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Bell, Menu, Eye, Star, CheckCircle, LogOut, Radar, Lightbulb } from 'lucide-react';
 import LocationSwitcher from './LocationSwitcher';
+import BranchSwitcher from './BranchSwitcher';
 
 export default function TopBar({ pageTitle, user, badges = {}, onMenuClick, showMenuButton, businessProfileId, selectedLocationId, onLocationChange }) {
   const userInitial = user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U';
@@ -36,6 +37,7 @@ export default function TopBar({ pageTitle, user, badges = {}, onMenuClick, show
             </button>
           )}
           <h1 className="text-[15px] font-semibold text-foreground">{pageTitle}</h1>
+          <BranchSwitcher />
           {businessProfileId && onLocationChange && (
             <LocationSwitcher businessProfileId={businessProfileId} selectedLocationId={selectedLocationId} onLocationChange={onLocationChange} />
           )}

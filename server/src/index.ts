@@ -20,6 +20,8 @@ import oauthRouter from './routes/oauth';
 import roiRouter from './routes/roi';
 import adminUsersRouter from './routes/adminUsers';
 import onboardingRouter from './routes/onboarding';
+import organizationsRouter from './routes/organizations';
+import agencyRouter from './routes/agency';
 
 // Wire up all event choreography handlers at startup
 registerAllHandlers();
@@ -93,6 +95,8 @@ app.use('/api/oauth', oauthRouter);
 app.use('/api', roiRouter);
 app.use('/api/admin', adminUsersRouter);
 app.use('/api/onboarding', onboardingRouter);
+app.use('/api/orgs', organizationsRouter);
+app.use('/api/agency', agencyRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
@@ -576,6 +580,48 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS tiktok_access_token TEXT`);
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS tiktok_open_id      TEXT`);
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS notification_email  TEXT`);
+
+  // ── Multi-branch / Multi-user / Agency tables ─────────────────────────────
+  await sql(`CREATE TABLE IF NOT EXISTS organizations (
+    id                  TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    name                TEXT NOT NULL,
+    owner_user_id       TEXT NOT NULL,
+    is_agency           BOOLEAN NOT NULL DEFAULT false,
+    plan_id             TEXT NOT NULL DEFAULT 'starter',
+    branch_count        INT NOT NULL DEFAULT 1,
+    subscription_status TEXT NOT NULL DEFAULT 'active',
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_orgs_owner ON organizations(owner_user_id)`);
+  await sql(`CREATE TABLE IF NOT EXISTS organization_members (
+    id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    org_id      TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id     TEXT NOT NULL,
+    email       TEXT,
+    role        TEXT NOT NULL DEFAULT 'manager',
+    branch_ids  TEXT,
+    invited_by  TEXT,
+    invited_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    status      TEXT NOT NULL DEFAULT 'active',
+    UNIQUE(org_id, user_id)
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_org_members_user ON organization_members(user_id, status)`);
+  await sql(`CREATE TABLE IF NOT EXISTS agency_clients (
+    id             TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    agency_org_id  TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    client_org_id  TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    status         TEXT NOT NULL DEFAULT 'active',
+    added_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(agency_org_id, client_org_id)
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_agency_clients_agency ON agency_clients(agency_org_id, status)`);
+  // ── business_profiles: branch columns ────────────────────────────────────
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS organization_id      TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS branch_display_name  TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS branch_role          TEXT DEFAULT 'standalone'`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS branch_sort_order    INT  DEFAULT 0`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS is_active            BOOLEAN DEFAULT true`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_bp_org ON business_profiles(organization_id) WHERE organization_id IS NOT NULL`);
 
   console.log('Startup SQL complete');
 

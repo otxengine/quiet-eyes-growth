@@ -4,8 +4,10 @@ import { base44 } from '@/api/base44Client';
 import {
   LayoutGrid, Eye, Users, Star, CheckCircle, Heart, Settings,
   ChevronRight, ChevronLeft, ChevronDown, LogOut, FileBarChart,
-  ClipboardList, Database, Bot, Plug, Crown, Sparkles, Calendar, Megaphone, ShieldAlert, Lightbulb, Target, SearchCheck
+  ClipboardList, Database, Bot, Plug, Crown, Sparkles, Calendar, Megaphone, ShieldAlert, Lightbulb, Target, SearchCheck,
+  Building2, GitBranch
 } from 'lucide-react';
+import { useOrganization } from '@/contexts/OrganizationContext';
 import { cn } from '@/lib/utils';
 
 // 2-level structure: standalone items always visible, groups collapsible
@@ -110,6 +112,7 @@ function NavLink({ item, collapsed, isActive, onNavigate, indented = false }) {
 export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate }) {
   const location = useLocation();
   const isAdmin = useIsAdmin();
+  const { isAgency, currentOrg } = useOrganization();
 
   const [openGroups, setOpenGroups] = useState(() => ({
     intel:  getDefaultOpen('intel'),
@@ -138,6 +141,11 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate }
     { path: '/admin-dashboard', label: 'Admin Dashboard',   icon: ShieldAlert },
     { path: '/learning',        label: 'מרכז למידה (admin)', icon: Sparkles },
     { path: '/agents',          label: 'סוכנים (admin)',     icon: Bot },
+  ];
+
+  const orgLinks = [
+    ...(isAgency ? [{ path: '/agency', label: 'לוח סוכנות', icon: Building2 }] : []),
+    { path: '/org/settings', label: 'הגדרות ארגון', icon: GitBranch },
   ];
 
   return (
@@ -189,6 +197,27 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate }
               );
             })}
             <div className="mx-2 my-1" style={{ borderTop: '1px solid hsl(var(--sidebar-border) / 0.5)' }} />
+          </div>
+        )}
+
+        {/* Org / Agency links */}
+        {currentOrg && (
+          <div className="px-2 mb-2">
+            <div className="mx-2 my-1" style={{ borderTop: '1px solid hsl(var(--sidebar-border) / 0.5)' }} />
+            {orgLinks.map(({ path, label, icon: Icon }) => {
+              const isActive = location.pathname === path;
+              return (
+                <Link key={path} to={path} onClick={() => onNavigate && onNavigate()}
+                  className={`flex items-center gap-2.5 h-8 rounded-md transition-all duration-150 text-[12px] relative ${collapsed ? 'justify-center px-0' : 'px-2.5'}`}
+                  style={{ background: isActive ? 'hsl(var(--sidebar-accent-active))' : 'transparent', color: isActive ? 'hsl(var(--sidebar-accent-foreground))' : 'hsl(var(--sidebar-foreground-muted))' }}
+                  onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = 'hsl(var(--sidebar-accent))'; e.currentTarget.style.color = 'hsl(var(--sidebar-accent-foreground))'; } }}
+                  onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'hsl(var(--sidebar-foreground-muted))'; } }}
+                >
+                  <Icon className="w-[14px] h-[14px] flex-shrink-0 opacity-60" />
+                  {!collapsed && <span className="flex-1 font-medium">{label}</span>}
+                </Link>
+              );
+            })}
           </div>
         )}
 

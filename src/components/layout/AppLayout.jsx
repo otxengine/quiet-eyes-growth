@@ -42,6 +42,7 @@ import TopBar from './TopBar';
 import ChatWidget from '@/components/chat/ChatWidget';
 import { cn } from '@/lib/utils';
 import { registerServiceWorker } from '@/lib/pushNotifications';
+import { useOrganization } from '@/contexts/OrganizationContext';
 
 const pageTitles = {
   '/': 'מרכז פיקוד',
@@ -68,6 +69,8 @@ const pageTitles = {
   '/strategy': 'אסטרטגיה חודשית',
   '/demand-gap': 'פערי ביקוש',
   '/otx': 'OTX Dashboard',
+  '/org/settings': 'הגדרות ארגון',
+  '/agency': 'לוח סוכנות',
 };
 
 export default function AppLayout() {
@@ -83,6 +86,9 @@ export default function AppLayout() {
   // Use reactive auth context for reliable admin detection
   const { user: authUser, isLoadingAuth } = useAuth();
   const isAdmin = checkIsAdmin(authUser?.email);
+
+  // Organization context: active branch
+  const { currentBranch: orgBranch, isLoading: orgLoading } = useOrganization();
 
   // Get current user
   const { data: user, isLoading: loadingUser, isError: userError } = useQuery({
@@ -100,7 +106,16 @@ export default function AppLayout() {
   });
 
   // Prefer a profile that completed onboarding; fall back to the first one
-  const businessProfile = businessProfiles?.find(p => p.onboarding_completed) || businessProfiles?.[0];
+  const legacyProfile = businessProfiles?.find(p => p.onboarding_completed) || businessProfiles?.[0];
+
+  // When org context has a branch selected, use its ID for queries but merge
+  // with the full legacy profile data so pages still have all fields available.
+  const activeBranchId = orgBranch?.id || legacyProfile?.id;
+  const businessProfile = activeBranchId && legacyProfile
+    ? (activeBranchId === legacyProfile.id
+        ? legacyProfile
+        : { ...legacyProfile, id: activeBranchId, name: orgBranch?.name || legacyProfile.name })
+    : legacyProfile;
 
   const stillLoading = loadingUser || (!!user?.email && loadingProfiles);
 
