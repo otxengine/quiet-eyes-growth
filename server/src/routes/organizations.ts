@@ -17,8 +17,32 @@
 import { Router, Request, Response, RequestHandler } from 'express';
 import { prisma } from '../db';
 import { getUserId } from '../middleware/auth';
+import { stripe, stripeEnabled } from '../lib/stripe';
 
 type Params = Record<string, string>;
+
+/** Sync branch count to Stripe subscription quantity (fire-and-forget). */
+async function syncStripeQuantity(orgId: string) {
+  if (!stripeEnabled) return;
+  try {
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT stripe_subscription_id, branch_count FROM organizations WHERE id = $1 LIMIT 1`, orgId,
+    );
+    const org = rows?.[0];
+    if (!org?.stripe_subscription_id) return;
+
+    const sub = await stripe.subscriptions.retrieve(org.stripe_subscription_id);
+    const item = sub.items.data[0];
+    if (!item) return;
+    const newQty = Math.max(1, org.branch_count || 1);
+    if (item.quantity !== newQty) {
+      await stripe.subscriptionItems.update(item.id, {
+        quantity: newQty,
+        proration_behavior: 'create_prorations',
+      });
+    }
+  } catch { /* non-fatal */ }
+}
 
 const router = Router();
 
@@ -366,6 +390,9 @@ router.post('/:id/branches', async (req: Request, res: Response) => {
     `UPDATE organizations SET branch_count = branch_count + 1 WHERE id = $1`, id,
   );
 
+  // Sync new quantity to Stripe (fire-and-forget)
+  syncStripeQuantity(id).catch(() => {});
+
   return res.json({ ...profile, organization_id: id, branch_display_name });
 });
 
@@ -385,6 +412,10 @@ router.delete('/:id/branches/:branchId', async (req: Request, res: Response) => 
   await prisma.$executeRawUnsafe(
     `UPDATE organizations SET branch_count = GREATEST(0, branch_count - 1) WHERE id = $1`, id,
   );
+
+  // Sync reduced quantity to Stripe (fire-and-forget)
+  syncStripeQuantity(id).catch(() => {});
+
   return res.json({ ok: true });
 });
 

@@ -22,6 +22,7 @@ import adminUsersRouter from './routes/adminUsers';
 import onboardingRouter from './routes/onboarding';
 import organizationsRouter from './routes/organizations';
 import agencyRouter from './routes/agency';
+import stripeRouter from './routes/stripe';
 
 // Wire up all event choreography handlers at startup
 registerAllHandlers();
@@ -54,6 +55,9 @@ app.get('/api/admin-verify', (req: any, res: any) => {
   if (key !== secret) return res.status(401).json({ error: 'bad_key' });
   return res.json({ ok: true });
 });
+
+// Stripe webhook — needs raw body before express.json() parses it
+app.use('/api/stripe/webhooks', stripeRouter);
 
 // Capture raw body for Meta webhook signature verification.
 // Must be registered BEFORE express.json() so we get the unmodified Buffer.
@@ -97,6 +101,7 @@ app.use('/api/admin', adminUsersRouter);
 app.use('/api/onboarding', onboardingRouter);
 app.use('/api/orgs', organizationsRouter);
 app.use('/api/agency', agencyRouter);
+app.use('/api/stripe', stripeRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
@@ -622,6 +627,26 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS branch_sort_order    INT  DEFAULT 0`);
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS is_active            BOOLEAN DEFAULT true`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_bp_org ON business_profiles(organization_id) WHERE organization_id IS NOT NULL`);
+
+  // ── Stripe billing columns on organizations ───────────────────────────────
+  await sql(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS stripe_customer_id     TEXT`);
+  await sql(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT`);
+  await sql(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS stripe_price_id        TEXT`);
+  await sql(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS current_period_end     TIMESTAMPTZ`);
+  await sql(`CREATE UNIQUE INDEX IF NOT EXISTS idx_orgs_stripe_sub ON organizations(stripe_subscription_id) WHERE stripe_subscription_id IS NOT NULL`);
+  await sql(`CREATE TABLE IF NOT EXISTS stripe_invoices (
+    id                TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    org_id            TEXT NOT NULL,
+    stripe_invoice_id TEXT NOT NULL UNIQUE,
+    amount_paid       INT  NOT NULL DEFAULT 0,
+    currency          TEXT NOT NULL DEFAULT 'ils',
+    status            TEXT NOT NULL DEFAULT 'paid',
+    invoice_url       TEXT,
+    period_start      TIMESTAMPTZ,
+    period_end        TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_stripe_invoices_org ON stripe_invoices(org_id, created_at DESC)`);
 
   console.log('Startup SQL complete');
 
