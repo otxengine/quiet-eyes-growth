@@ -33,6 +33,7 @@ import { tavilyAdvancedSearch } from '../../lib/tavily';
 import { shouldSkipAgent, setLastRun, cacheGet, cacheSet, TTL } from '../../lib/agentCache';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
+import { loadCheckpoint, saveCheckpoint, filterNewIds } from '../../lib/trendMemory';
 
 const MIN_INTERVAL_MS = 8 * 60 * 60 * 1000; // 8 שעות
 
@@ -343,6 +344,9 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
     return res.json({ trends_created: 0, skipped: true, reason: 'ran_recently' });
   }
 
+  // Persistent checkpoint — remembers video IDs across server restarts
+  const trendCp = await loadCheckpoint('tiktokSectorTrendAgent', businessProfileId, 'tiktok', 'IL');
+
   const startTime = new Date().toISOString();
   try {
     const profile = await prisma.businessProfile.findFirst({ where: { id: businessProfileId } });
@@ -379,7 +383,12 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
       console.log(`[tiktokSectorTrendAgent] Running Apify for hashtags: ${sectorHashtags.slice(0, 3).join(', ')}`);
       const rawVideos = await apifyTikTokHashtags(sectorHashtags, 40);
 
-      videoMetrics = rawVideos
+      // Filter to only NEW videos not yet processed by this agent
+      const rawIds = rawVideos.map((v: any) => v.id).filter(Boolean);
+      const newIds = filterNewIds(rawIds, trendCp);
+      const newRawVideos = rawVideos.filter((v: any) => newIds.includes(v.id));
+
+      videoMetrics = newRawVideos
         .map(computeMetrics)
         .filter((v): v is VideoMetrics => v !== null)
         .filter(v => v.plays > 5000)
@@ -654,6 +663,10 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
         });
       }
     }
+
+    // Save checkpoint: persist all processed video IDs
+    videoMetrics.forEach(v => trendCp.scannedIds.add(v.id));
+    await saveCheckpoint(trendCp, { trends_created: created, scanned_at: new Date().toISOString() });
 
     setLastRun(businessProfileId, 'tiktokSectorTrendAgent');
     await writeAutomationLog('tiktokSectorTrendAgent', businessProfileId, startTime, created);

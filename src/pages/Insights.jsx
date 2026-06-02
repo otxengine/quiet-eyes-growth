@@ -53,8 +53,11 @@ const PRIORITY_BADGE = {
 
 const URGENT_TYPES     = new Set(['negative_review','hot_lead','competitor_attack','reputation_risk','action_needed','retention_risk','sentiment_drop','micro_moment']);
 const OPP_ALERT_TYPES  = new Set(['opportunity','market_opportunity','demand_gap','competitive_gap','new_service','campaign_opportunity','promotion_strategy','future_prediction','event_opportunity','milestone','content_opportunity','review_timing','content_performance']);
-const TREND_ALERT_TYPES  = new Set(['trend_opportunity','social_viral','sector_shift']);
-const TREND_SIGNAL_CATS  = new Set(['tiktok_sector_trend','viral_signal','early_trend','social']);
+const TREND_ALERT_TYPES  = new Set(['trend_opportunity','social_viral','sector_shift','tiktok_opportunity']);
+const TREND_SIGNAL_CATS  = new Set([
+  'tiktok_sector_trend', 'viral_signal', 'early_trend', 'social', 'trend',
+  'instagram_trend', 'facebook_trend', 'google_trend', 'visual_trend',
+]);
 const COMP_ALERT_TYPES   = new Set(['competitor_move','competitor_intel','competitor_mention']);
 const COMP_SIGNAL_CATS   = new Set(['competitor_move','competitor_mention']);
 const OPP_SIGNAL_CATS    = new Set(['demand_gap','opportunity','expansion','threat']);
@@ -62,12 +65,34 @@ const OPP_SIGNAL_CATS    = new Set(['demand_gap','opportunity','expansion','thre
 // ── Trend source detection ────────────────────────────────────────────────────
 
 function getTrendSource(item) {
-  const text = ((item.title || '') + ' ' + (item.description || '')).toLowerCase();
   const cat  = item._sigCat || '';
-  if (cat === 'tiktok_sector_trend' || text.includes('tiktok') || text.includes('טיקטוק')) return 'tiktok';
+  const text = ((item.title || '') + ' ' + (item.description || '')).toLowerCase();
+
+  // 1. Category-based detection (most reliable)
+  if (cat === 'tiktok_sector_trend' || cat === 'trend') return 'tiktok';
+  if (cat === 'instagram_trend')  return 'instagram';
+  if (cat === 'facebook_trend')   return 'facebook';
+  if (cat === 'google_trend')     return 'google';
+  if (cat === 'visual_trend')     return 'general'; // could be any platform
+
+  // 2. source_description JSON platform field (set by instagramTrendAgent, facebookGroupTrendAgent, etc.)
+  if (item._sigMeta) {
+    try {
+      const meta = typeof item._sigMeta === 'string' ? JSON.parse(item._sigMeta) : item._sigMeta;
+      const platform = (meta.platform || '').toLowerCase();
+      if (platform === 'instagram') return 'instagram';
+      if (platform === 'facebook')  return 'facebook';
+      if (platform === 'tiktok')    return 'tiktok';
+      if (platform === 'google')    return 'google';
+    } catch {}
+  }
+
+  // 3. Text-based detection
+  if (text.includes('tiktok') || text.includes('טיקטוק')) return 'tiktok';
   if (text.includes('instagram') || text.includes('אינסטגרם') || text.includes('reels') || text.includes('ריל')) return 'instagram';
   if (text.includes('facebook') || text.includes('פייסבוק')) return 'facebook';
-  if (cat === 'early_trend' || text.includes('google trends') || text.includes('גוגל טרנדס')) return 'google';
+  if (text.includes('google trends') || text.includes('גוגל טרנדס') || text.includes('גוגל')) return 'google';
+
   return 'general';
 }
 
@@ -76,8 +101,18 @@ const SOURCE_META = {
   instagram: { label: 'Instagram',     color: 'text-pink-600',   bg: 'bg-pink-50',    border: 'border-pink-100' },
   facebook:  { label: 'Facebook',      color: 'text-blue-700',   bg: 'bg-blue-50',    border: 'border-blue-100' },
   google:    { label: 'Google Trends', color: 'text-green-700',  bg: 'bg-green-50',   border: 'border-green-100' },
-  general:   { label: 'כללי',          color: 'text-gray-600',   bg: 'bg-gray-100',   border: 'border-gray-200' },
+  general:   { label: 'ויזואלי',       color: 'text-purple-600', bg: 'bg-purple-50',  border: 'border-purple-100' },
 };
+
+function getUsLeadingBadge(item) {
+  if (!item._sigMeta) return null;
+  try {
+    const meta = typeof item._sigMeta === 'string' ? JSON.parse(item._sigMeta) : item._sigMeta;
+    if (!meta.is_us_leading_indicator) return null;
+    const days = meta.days_until_israel || meta.days_until_peak;
+    return days ? `מגמה מארה"ב — צפוי להגיע בעוד ~${days} ימים` : 'מגמה מארה"ב';
+  } catch { return null; }
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -127,6 +162,14 @@ function InsightCard({ item, onOpen, onDismiss, businessProfileId }) {
                 {srcMeta.label}
               </span>
             )}
+            {item.trendSource && (() => {
+              const usBadge = getUsLeadingBadge(item);
+              return usBadge ? (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200">
+                  {usBadge}
+                </span>
+              ) : null;
+            })()}
           </div>
           <p className="text-[13px] font-semibold text-foreground leading-snug mb-1">{item.title}</p>
           {item.description && (
@@ -344,7 +387,14 @@ export default function Insights() {
 
     const oppItems = sortByPriority([...oppFromAlerts, ...oppFromSignals]);
 
-    // 3 — Trends
+    // 3 — Trends (uses its own dedup Set — not shared with other sections)
+    const trendSeen = new Set();
+    const trendDedup = (item) => {
+      const key = normalizeTitle(item.title);
+      if (!key || trendSeen.has(key)) return false;
+      trendSeen.add(key);
+      return true;
+    };
     const buildTrendItem = (item) => ({ ...item, trendSource: getTrendSource(item) });
 
     const trendFromAlerts = activeAlerts
@@ -356,19 +406,23 @@ export default function Insights() {
         priority: a.priority || 'medium', rawStatus: 'proposed',
         createdAt: a.created_date || a.created_at,
       }))
-      .filter(dedup);
+      .filter(trendDedup);
 
     const trendFromSignals = activeSignals
       .filter(s => TREND_SIGNAL_CATS.has(s.category))
       .map(s => buildTrendItem({
         id: s.id, navId: `signal-${s.id}`, kind: 'signal', dismissType: 'trend',
         _sigCat: s.category,
+        _sigMeta: s.source_description,
         title: s.summary, description: s.recommended_action,
-        type: s.category === 'viral_signal' || s.category === 'social' ? 'social_viral' : 'trend_opportunity',
+        type: s.category === 'viral_signal' || s.category === 'social' ? 'social_viral'
+            : s.category === 'google_trend' ? 'trend_opportunity'
+            : s.category === 'instagram_trend' || s.category === 'facebook_trend' ? 'social_viral'
+            : 'trend_opportunity',
         priority: signalPriority(s), rawStatus: 'proposed',
         createdAt: s.detected_at,
       }))
-      .filter(dedup);
+      .filter(trendDedup);
 
     const trendItems = sortByPriority([...trendFromAlerts, ...trendFromSignals]);
 

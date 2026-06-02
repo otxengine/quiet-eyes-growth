@@ -18,6 +18,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { tavilyAdvancedSearch, isTavilyRateLimited } from '../../lib/tavily';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun, cacheGet, cacheSet, TTL } from '../../lib/agentCache';
+import { loadCheckpoint, saveCheckpoint, filterNewIds } from '../../lib/trendMemory';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
@@ -69,6 +70,9 @@ export async function detectViralSignals(req: Request, res: Response) {
     return res.json({ signals_created: 0, skipped: true, reason: 'ran_recently' });
   }
 
+  // Load persistent checkpoint (survives server restarts)
+  const trendCp = await loadCheckpoint('detectViralSignals', businessProfileId, 'tiktok', 'IL');
+
   const startTime = new Date().toISOString();
   try {
     const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
@@ -103,7 +107,11 @@ export async function detectViralSignals(req: Request, res: Response) {
           20,
         );
         if (apifyItems.length > 0) cacheSet(apifyCacheKey, apifyItems, TTL.API_RESULT);
-        console.log(`[detectViralSignals] Apify TikTok: ${apifyItems.length} videos from hashtags: ${sectorHashtags.slice(0, 4).join(', ')}`);
+        // Filter to only NEW videos not yet processed
+        const rawIds = apifyItems.map((v: any) => v.id || v.videoId).filter(Boolean);
+        const newIds = filterNewIds(rawIds, trendCp);
+        apifyItems = apifyItems.filter((v: any) => newIds.includes(v.id || v.videoId));
+        console.log(`[detectViralSignals] Apify TikTok: ${apifyItems.length} NEW videos (${rawIds.length - apifyItems.length} already seen)`);
       } catch (e: any) {
         console.warn('[detectViralSignals] Apify failed:', e.message);
       }
@@ -264,6 +272,13 @@ Return ONLY valid JSON:
       existingNames.add(summaryKey);
       created++;
     }
+
+    // Save checkpoint: mark all processed IDs/URLs as seen
+    apifyItems.forEach((v: any) => {
+      const id = v.id || v.videoId;
+      if (id) trendCp.scannedIds.add(id);
+    });
+    await saveCheckpoint(trendCp, { signals_created: created, scanned_at: new Date().toISOString() });
 
     setLastRun(businessProfileId, 'detectViralSignals');
     await writeAutomationLog('detectViralSignals', businessProfileId, startTime, created);

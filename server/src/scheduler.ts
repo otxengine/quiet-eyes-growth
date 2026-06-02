@@ -34,6 +34,10 @@ import { tiktokSectorTrendAgent } from './routes/functions/tiktokSectorTrendAgen
 import { tiktokAudienceAgent } from './routes/functions/tiktokAudienceAgent';
 import { tiktokPostTracker } from './routes/functions/tiktokPostTracker';
 import { findLocalEvents } from './routes/functions/findLocalEvents';
+import { instagramTrendAgent } from './routes/functions/instagramTrendAgent';
+import { facebookGroupTrendAgent } from './routes/functions/facebookGroupTrendAgent';
+import { googleTrendsScanAgent } from './routes/functions/googleTrendsScanAgent';
+import { visualTrendAnalyzer } from './routes/functions/visualTrendAnalyzer';
 
 const logger = createLogger('Scheduler');
 
@@ -140,6 +144,18 @@ export function startScheduler() {
     runForAll('DailyLearning', 'decision_only');
     runAgentForAll('AutoRespondToReviews', autoRespondToReviews);
     runAgentForAll('ReviewRequestAutomation', reviewRequestAutomation);
+  });
+
+  // ── Every 24 hours at 02:00 UTC: Multi-platform trend intelligence ────────────
+  // Order matters: Instagram/Facebook/Google first → then visualTrendAnalyzer
+  // processes the thumbnails they queued. Each agent has 20h checkpoint guard
+  // so double-runs (e.g. if server restarts) are safely skipped.
+  cron.schedule('0 2 * * *', () => {
+    runAgentForAll('InstagramTrendAgent',    instagramTrendAgent);    // 20h guard
+    runAgentForAll('FacebookGroupTrends',    facebookGroupTrendAgent); // 20h guard
+    runAgentForAll('GoogleTrendsScan',       googleTrendsScanAgent);   // 20h guard
+    // visualTrendAnalyzer runs after others so it has thumbnails to process
+    setTimeout(() => runAgentForAll('VisualTrendAnalyzer', visualTrendAnalyzer), 10 * 60 * 1000);
   });
 
   // ── Every Sunday at 20:00 UTC: weekly content calendar ──────────────────────

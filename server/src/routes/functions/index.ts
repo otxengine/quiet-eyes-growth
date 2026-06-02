@@ -102,6 +102,10 @@ import {
   runExpansionScout,
   runReputationWarRoom,
 } from './layer7Agents';
+import { instagramTrendAgent } from './instagramTrendAgent';
+import { facebookGroupTrendAgent } from './facebookGroupTrendAgent';
+import { googleTrendsScanAgent } from './googleTrendsScanAgent';
+import { visualTrendAnalyzer } from './visualTrendAnalyzer';
 
 const router = Router();
 
@@ -205,6 +209,11 @@ const FUNCTION_MAP: Record<string, any> = {
   calculateROI,
   sectorBenchmark,
   smartScheduler,
+  // ── Trend intelligence agents (multi-platform, US+IL, visual) ────────────
+  instagramTrendAgent,
+  facebookGroupTrendAgent,
+  googleTrendsScanAgent,
+  visualTrendAnalyzer,
   // Layer 7 advanced agents
   runViralCatalyst,
   runInfluenceIntegrity,
