@@ -346,12 +346,13 @@ export async function getSubscriptionStatus(req: Request, res: Response) {
 }
 
 export async function createCheckoutSession(req: Request, res: Response) {
-  if (!process.env.STRIPE_SECRET_KEY) return res.status(500).json({ error: 'Stripe not configured' });
-  return res.json({ error: 'Stripe checkout not implemented — add your price IDs' });
+  // Legacy endpoint — forward to new Stripe checkout (307 preserves POST + body)
+  return res.redirect(307, '/api/stripe/checkout');
 }
 
 export async function manageSubscription(req: Request, res: Response) {
-  return res.json({ error: 'Stripe portal not implemented' });
+  // Legacy endpoint — forward to new Stripe portal
+  return res.redirect(307, '/api/stripe/portal');
 }
 
 export async function collectSocialSignals(req: Request, res: Response) {

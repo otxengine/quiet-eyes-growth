@@ -18,12 +18,12 @@ const LS_ORG_KEY    = 'otx_current_org_id';
 const LS_BRANCH_KEY = 'otx_current_branch_id';
 
 export function OrganizationProvider({ children }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoadingAuth } = useAuth();
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['myOrgs'],
     queryFn: () => orgApi.getMyOrgs(),
-    enabled: !!isAuthenticated,
+    enabled: !!isAuthenticated && !isLoadingAuth,
     staleTime: 60_000,
     retry: 2,
   });
