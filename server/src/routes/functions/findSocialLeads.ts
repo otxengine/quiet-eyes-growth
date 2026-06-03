@@ -65,17 +65,96 @@ export async function findSocialLeads(req: Request, res: Response) {
 
     const svc = relevantServices || category;
     const area = preferredArea || city;
-    // Facebook groups + forums first (highest lead quality), then general web
-    const queries = [
+    const catLower = category.toLowerCase();
+
+    // ── Sector-aware query builder ──────────────────────────────────────────
+    // Base queries: Facebook groups + forums (highest lead quality)
+    const queries: string[] = [
       `site:facebook.com/groups "מחפש ${category}" OR "צריך ${category}" ${city}`,
       `site:facebook.com "מחפש ${svc}" ${area}`,
       `site:tapuz.co.il "מחפש ${category}" ${city}`,
-      `site:zap.co.il "מחפש ${svc}"`,
       `${category} ${city} מחפש המלצה`,
       `"צריך ${category}" OR "מחפש ${category}" ${city}`,
-      `${category} ${city} recommendation looking for`,
       `"${svc}" ${area} מחפש`,
     ];
+
+    // ── Construction / Real-estate / Renovation ─────────────────────────────
+    const isConstruction = ['קבלן', 'שיפוץ', 'בנייה', 'נדל', 'יזמות', 'contractor', 'renovation', 'construction', 'real estate'].some(k => catLower.includes(k));
+    if (isConstruction) {
+      queries.push(`site:facebook.com/groups "פרויקט" OR "בנייה חדשה" OR "שיפוץ" ${area}`);
+      queries.push(`site:yad2.co.il קרקע OR מגרש OR פרויקט בנייה ${area}`);
+      queries.push(`site:nadlan.co.il פרויקט חדש ${area} ${new Date().getFullYear()}`);
+      queries.push(`iplan.gov.il OR govmap.gov.il היתר בנייה ${area}`);
+      queries.push(`מכרז שיפוץ OR בנייה ${area} ${new Date().getFullYear()}`);
+      queries.push(`"מחפש קבלן" OR "מחפש יזם" OR "מחפש שיפוצניק" ${area} site:facebook.com`);
+    }
+
+    // ── Mortgage / Financial advisors ───────────────────────────────────────
+    const isMortgage = ['משכנתא', 'מימון', 'פיננסי', 'mortgage', 'financial', 'finance'].some(k => catLower.includes(k));
+    if (isMortgage) {
+      queries.push(`site:facebook.com/groups "קיבלתי הצעה מהבנק" OR "ריבית משכנתא" OR "פריים מינוס" ${area}`);
+      queries.push(`site:tapuz.co.il משכנתא ריבית הצעה בנק שאלה`);
+      queries.push(`"כמה משכנתא" OR "זכאות משכנתא" OR "מסלול משכנתא" site:facebook.com`);
+      queries.push(`מחפש יועץ משכנתא ${area} site:facebook.com`);
+      queries.push(`site:madlan.co.il OR site:mortgage.co.il ריבית פריים ${new Date().getFullYear()}`);
+    }
+
+    // ── eCommerce / Dropshipping ────────────────────────────────────────────
+    const isEcommerce = ['ecommerce', 'dropship', 'shopify', 'חנות', 'retail', 'קמעונאות', 'עיצוב הבית', 'home decor', 'lifestyle'].some(k => catLower.includes(k));
+    if (isEcommerce) {
+      queries.push(`tiktok trending home decor products ${new Date().getFullYear()} viral`);
+      queries.push(`site:facebook.com/groups "מחפשת" OR "מחפש" ${svc} משלוח ישראל`);
+      queries.push(`aliexpress trending ${svc} wholesale dropship ${new Date().getFullYear()}`);
+      queries.push(`pinterest trending home decor ${new Date().getFullYear()}`);
+    }
+
+    // ── Hotels / Boutique / Tourism ─────────────────────────────────────────
+    const isHotel = ['מלון', 'צימר', 'אכסניה', 'hotel', 'boutique', 'tourism', 'תיירות', 'נופש'].some(k => catLower.includes(k));
+    if (isHotel) {
+      queries.push(`site:booking.com ${area} מחירים זמינות ${new Date().toISOString().slice(0,7)}`);
+      queries.push(`פסטיבל OR כנס OR אירוע גדול ${area} ${new Date().getFullYear()} תיירות`);
+      queries.push(`site:facebook.com/groups "מחפש צימר" OR "מחפש מלון" ${area}`);
+    }
+
+    // ── Clinics / MedSpa / Aesthetics ───────────────────────────────────────
+    const isClinic = ['קליניקה', 'רפואה', 'אסתטיקה', 'clinic', 'medical', 'aesthetic', 'botox', 'פלסטיקה', 'שיניים', 'dentist'].some(k => catLower.includes(k));
+    if (isClinic) {
+      queries.push(`site:facebook.com/groups "מבצע" OR "הנחה" ${category} ${area}`);
+      queries.push(`"מחפש" OR "מחפשת" ${category} ${area} ביקורות מומלץ`);
+      queries.push(`מחיר ${svc} ${area} 2025 2024 site:google.com OR site:zap.co.il`);
+    }
+
+    // ── Event halls / Production / Clubs ────────────────────────────────────
+    const isEvents = ['אולם', 'הפקה', 'אירועים', 'מועדון', 'event', 'hall', 'venue', 'production', 'club'].some(k => catLower.includes(k));
+    if (isEvents) {
+      queries.push(`site:facebook.com/groups "מחפש אולם" OR "מחפש הפקה" ${area}`);
+      queries.push(`כנס OR פסטיבל OR הופעה ${area} ${new Date().getFullYear()} קהל גדול`);
+      queries.push(`"השכרת אולם" OR "מחיר אולם" ${area}`);
+    }
+
+    // ── Private colleges / Training courses ─────────────────────────────────
+    const isEducation = ['מכללה', 'קורס', 'הכשרה', 'לימודים', 'college', 'course', 'education', 'training'].some(k => catLower.includes(k));
+    if (isEducation) {
+      queries.push(`site:facebook.com/groups "מחפש קורס" OR "מחפש לימודים" ${svc} ${area}`);
+      queries.push(`ביקורות ${svc} ${area} מכללה סטודנטים 2024 2025`);
+      queries.push(`site:tapuz.co.il OR site:mako.co.il ${svc} קורס שווה מומלץ`);
+    }
+
+    // ── VIP / Luxury transport / Concierge ──────────────────────────────────
+    const isVip = ['vip', 'יוקרה', 'luxury', 'הסעה', 'ליווי', 'קונסיירז', 'transport', 'limousine', 'לימוזינה'].some(k => catLower.includes(k));
+    if (isVip) {
+      queries.push(`כנס בינלאומי OR conference ${area} ${new Date().getFullYear()} hotel`);
+      queries.push(`site:israel-conference.com OR site:iccj.org.il ${new Date().getFullYear()} כנס`);
+      queries.push(`"שירות הסעות" OR "הסעת VIP" ${area} מחיר`);
+    }
+
+    // ── Car dealerships ─────────────────────────────────────────────────────
+    const isCar = ['רכב', 'סוכנות רכב', 'יבוא', 'מוסך', 'car', 'auto', 'vehicle', 'dealership'].some(k => catLower.includes(k));
+    if (isCar) {
+      queries.push(`site:facebook.com/groups "מחפש רכב" OR "קונה רכב" ${area} תקציב`);
+      queries.push(`site:yad2.co.il רכב ${area} ${new Date().getFullYear()} מחיר`);
+      queries.push(`"תנאי מימון" OR "ליסינג" רכב ${area} 2025 site:facebook.com`);
+    }
 
     let leadsCreated = 0;
 
