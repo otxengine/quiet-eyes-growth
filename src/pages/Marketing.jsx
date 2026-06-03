@@ -668,7 +668,7 @@ export default function Marketing() {
   const [showWaBlast,     setShowWaBlast]     = useState(false);
   const [waBlastCtx,      setWaBlastCtx]      = useState(null);
 
-  // Auto-open organic drawer if URL says so
+  // Auto-open organic drawer / switch tab if URL says so
   useEffect(() => {
     if (searchParams.get('create') === 'organic') {
       setActiveTab('organic');
@@ -687,6 +687,9 @@ export default function Marketing() {
       });
       setShowWaBlast(true);
     }
+    // Handle tab param: /marketing?tab=audiences (etc.)
+    const tab = searchParams.get('tab');
+    if (tab) setActiveTab(tab);
   }, []); // eslint-disable-line
 
   // ── Paid campaigns ──

@@ -191,7 +191,7 @@ function AgentAdvisor({ insight, snapshot, bpId, insightId }) {
     setLoading(true);
     try {
       const res = await base44.integrations.Core.InvokeLLM({
-        model: 'sonnet',
+        model: 'haiku',
         maxTokens: 700,
         response_json_schema: GUIDANCE_SCHEMA,
         prompt: `אתה יועץ עסקי בכיר לעסקים קטנים ישראלים. המשימה: להפוך את התובנה לתוכנית ביצוע ברורה.
@@ -226,7 +226,7 @@ ${insight.impact_reason ? `השפעה: ${insight.impact_reason}` : ''}
     setChatLoading(true);
     try {
       const text = await base44.integrations.Core.InvokeLLM({
-        model: 'sonnet',
+        model: 'haiku',
         maxTokens: 450,
         prompt: `אתה יועץ עסקי AI לעסקים קטנים ישראלים. ענה בעברית, ישיר, מעשי, ספציפי לעסק.
 
@@ -489,7 +489,7 @@ function TypeContextPanel({ typeKey, title, description, actionMeta }) {
           </div>
         )}
 
-        {prefilled && (
+        {prefilled ? (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-[11px] font-semibold text-foreground-muted flex items-center gap-1">
@@ -508,7 +508,12 @@ function TypeContextPanel({ typeKey, title, description, actionMeta }) {
               <p className="text-[12px] text-purple-900 leading-relaxed whitespace-pre-wrap">{prefilled}</p>
             </div>
           </div>
-        )}
+        ) : description ? (
+          <div className="rounded-xl bg-purple-50 border border-purple-100 px-4 py-3">
+            <p className="text-[10px] font-bold text-purple-700 mb-1">ניתוח הטרנד</p>
+            <p className="text-[12px] text-purple-900 leading-relaxed">{description}</p>
+          </div>
+        ) : null}
 
         {actionMeta?.opportunity_size && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-100">
