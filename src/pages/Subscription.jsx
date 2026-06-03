@@ -77,7 +77,7 @@ const PLANS = [
   },
 ];
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+const STATUS_LABELS = {
   active:      { label: 'פעיל',        color: 'text-emerald-600' },
   past_due:    { label: 'תשלום באיחור', color: 'text-amber-600' },
   cancelled:   { label: 'בוטל',         color: 'text-red-500' },
