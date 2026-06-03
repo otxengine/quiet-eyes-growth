@@ -156,6 +156,51 @@ export async function findSocialLeads(req: Request, res: Response) {
       queries.push(`"תנאי מימון" OR "ליסינג" רכב ${area} 2025 site:facebook.com`);
     }
 
+    // ── Aviation / Private jets / Ground handling ───────────────────────────
+    const isAviation = ['תעופה', 'מטוס', 'aviation', 'private jet', 'ground handling', 'flight'].some(k => catLower.includes(k));
+    if (isAviation) {
+      queries.push(`site:ainonline.com OR site:avbuyer.com conference summit VIP ${new Date().getFullYear()}`);
+      queries.push(`כנס עסקי בינלאומי ${area} ${new Date().getFullYear()} executive`);
+      queries.push(`private jet charter Israel demand ${new Date().getFullYear()}`);
+      queries.push(`NBAA OR EBACE OR MEBA aviation conference ${new Date().getFullYear()}`);
+    }
+
+    // ── Music festivals / EDM / Nightlife production ────────────────────────
+    const isMusicEvent = ['מוזיקה', 'פסטיבל', 'dj', 'edm', 'rave', 'מועדון', 'הפקה', 'music', 'festival', 'nightlife', 'club'].some(k => catLower.includes(k));
+    if (isMusicEvent) {
+      queries.push(`tiktok trending dj edm music ${new Date().getFullYear()} viral israel`);
+      queries.push(`site:resident-advisor.net OR site:facebook.com/events פסטיבל מוזיקה ${area} ${new Date().getFullYear()}`);
+      queries.push(`dj lineup festival israel ${new Date().getFullYear()} tickets`);
+      queries.push(`"מחפש" OR "רוצה" כרטיסים פסטיבל ${area} site:facebook.com`);
+    }
+
+    // ── Nutrition supplements / Sports nutrition ────────────────────────────
+    const isNutrition = ['תוסף', 'תזונה', 'חלבון', 'קריאטין', 'supplement', 'protein', 'creatine', 'preworkout', 'nutrition'].some(k => catLower.includes(k));
+    if (isNutrition) {
+      queries.push(`tiktok trending protein supplement creatine ${new Date().getFullYear()} review`);
+      queries.push(`site:facebook.com/groups "תוסף" OR "חלבון" "מחיר" OR "מבצע" israel`);
+      queries.push(`supplement price drop promotion israel ${new Date().getFullYear()} competitor`);
+      queries.push(`"איזה תוסף" OR "מה עדיף" site:tapuz.co.il OR site:facebook.com`);
+    }
+
+    // ── Prop trading / Fintech / Investment platforms ───────────────────────
+    const isTrading = ['מסחר', 'trading', 'prop firm', 'forex', 'קריפטו', 'crypto', 'השקעות', 'fintech', 'broker'].some(k => catLower.includes(k));
+    if (isTrading) {
+      queries.push(`site:tapuz.co.il OR site:traders-il.com "תלונה" OR "בעיה" OR "ביצוע" פלטפורמת מסחר`);
+      queries.push(`site:facebook.com/groups "מחפש פלטפורמת מסחר" OR "עוזב" OR "מאוכזב" broker`);
+      queries.push(`forex prop firm Israel complaint slow execution ${new Date().getFullYear()}`);
+      queries.push(`site:reddit.com "prop firm" OR "forex broker" Israel review ${new Date().getFullYear()}`);
+    }
+
+    // ── Premium food import / B2B gourmet (Wagyu, truffles, etc.) ──────────
+    const isPremiumFood = ['וואגיו', 'wagyu', 'טרופל', 'truffle', 'יבוא מזון', 'פרימיום', 'premium food', 'gourmet', 'בשר יוקרה'].some(k => catLower.includes(k));
+    if (isPremiumFood) {
+      queries.push(`מסעדת שף ${area} תפריט חדש ${new Date().getFullYear()} בשר פרימיום`);
+      queries.push(`site:rest.co.il OR site:2eat.co.il מסעדה חדשה ${area} שף`);
+      queries.push(`chef restaurant ${area} new menu premium wagyu truffle ${new Date().getFullYear()}`);
+      queries.push(`"מחפש ספק" OR "מחפש יבואן" בשר OR מזון פרימיום site:facebook.com`);
+    }
+
     let leadsCreated = 0;
 
     // ── Collect all Tavily results first, then batch-qualify ────────────────

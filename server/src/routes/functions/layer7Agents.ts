@@ -16,6 +16,7 @@ import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { tavilySearch } from '../../lib/tavily';
 
 // Cooldown intervals per agent (milliseconds)
 const COOLDOWNS = {
@@ -267,14 +268,63 @@ export async function runDeepContextVision(req: Request, res: Response) {
     });
     const compSummary = competitors.map(c => c.name).join(', ') || 'אין מתחרים ידועים';
 
+    // ── Sector-specific OSINT context enrichment ────────────────────────────────
+    // For B2B premium food importers: scan restaurant menus to find who's using premium products
+    // For aviation: scan conference + demand signals
+    // For trading: scan competitor platform complaints
+    const catL = (profile.category || '').toLowerCase();
+    let liveContext = '';
+
+    const isPremiumFood = ['wagyu', 'ואאגיו', 'טרופל', 'truffle', 'premium food', 'gourmet', 'בשר פרימיום', 'יבוא מזון'].some(k => catL.includes(k));
+    const isAviation  = ['aviation', 'תעופה', 'private jet', 'מטוס'].some(k => catL.includes(k));
+    const isTrading   = ['trading', 'מסחר', 'prop firm', 'forex', 'broker', 'fintech'].some(k => catL.includes(k));
+
+    try {
+      if (isPremiumFood) {
+        // Scan restaurant menus for premium product usage in the target area
+        const menuResults = await tavilySearch(
+          `מסעדת שף ${profile.city} תפריט חדש ${new Date().getFullYear()} wagyu בשר פרימיום`,
+          4,
+        );
+        const menuContext = menuResults
+          .map(r => `${r.title}: ${(r.content || '').slice(0, 200)}`)
+          .join('\n');
+        if (menuContext) {
+          liveContext = `סריקת תפריטים מסעדות שף בעיר:\n${menuContext}`;
+        }
+        // Also scan for new restaurant openings that may need suppliers
+        const newRestaurants = await tavilySearch(
+          `מסעדה חדשה נפתחה ${profile.city} שף פרימיום ${new Date().getFullYear()}`,
+          3,
+        );
+        if (newRestaurants.length > 0) {
+          liveContext += `\n\nמסעדות חדשות שנפתחו לאחרונה (\u05dcקוחות B2B פוטנציאליים):\n${newRestaurants.map(r => r.title).join(', ')}`;
+        }
+      } else if (isAviation) {
+        const confResults = await tavilySearch(
+          `international conference summit ${profile.city} VIP executive ${new Date().getFullYear()} aviation private jet`,
+          4,
+        );
+        liveContext = confResults.map(r => `${r.title}: ${(r.content || '').slice(0, 150)}`).join('\n');
+      } else if (isTrading) {
+        const complaintResults = await tavilySearch(
+          `trading platform broker complaint slow execution Israel ${new Date().getFullYear()} site:tapuz.co.il OR site:facebook.com`,
+          4,
+        );
+        liveContext = complaintResults.map(r => `${r.title}: ${(r.content || '').slice(0, 150)}`).join('\n');
+      }
+    } catch (_) {}
+
     const result = await invokeLLM({
       prompt: `You are a business analysis expert. Create a strategic insight for the business "${profile.name}" (${profile.category}, ${profile.city}).
 Return ONLY valid JSON. ALL string values must be in Hebrew.
 Competitors: ${compSummary}
+${liveContext ? `\nLive market context (use this for specific, data-backed insights):\n${liveContext.slice(0, 800)}` : ''}
 
 Return ONLY valid JSON. ALL string values must be in Hebrew:
-{"business_insight":"...in Hebrew...","unmet_demand_detected":true,"demand_description":"...in Hebrew...","sentiment_visual":"positive","recommended_action":"...in Hebrew..."}
-sentiment_visual must be one of: positive/neutral/negative/urgent`,
+{"business_insight":"...in Hebrew...","unmet_demand_detected":true,"demand_description":"...in Hebrew...","sentiment_visual":"positive","recommended_action":"...in Hebrew...","target_leads": [{"name": "target name or entity", "reason": "why this is a lead"}]}
+sentiment_visual must be one of: positive/neutral/negative/urgent
+target_leads: up to 3 specific B2B leads identified from context (empty array if none)`,
       response_json_schema: { type: 'object' },
     });
 
@@ -321,6 +371,24 @@ sentiment_visual must be one of: positive/neutral/negative/urgent`,
           created_at: new Date().toISOString(),
         },
       });
+    }
+
+    // Save B2B target leads discovered from live context
+    const targetLeads: any[] = Array.isArray(result?.target_leads) ? result.target_leads.slice(0, 3) : [];
+    for (const lead of targetLeads) {
+      if (!lead?.name) continue;
+      await prisma.lead.create({
+        data: {
+          name: lead.name,
+          status: 'new',
+          score: 70,
+          source: 'deep_context_vision',
+          source_origin: 'ai_osint',
+          notes: lead.reason || '',
+          created_date: new Date(),
+          linked_business: businessProfileId,
+        },
+      }).catch(() => {});
     }
 
     setLastRun(businessProfileId, 'runDeepContextVision');

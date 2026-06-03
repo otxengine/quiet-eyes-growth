@@ -88,6 +88,28 @@ const SECTOR_HASHTAGS: Record<string, string[]> = {
   // אירועים וקייטרינג
   'קייטרינג':     ['קייטרינג', 'catering_israel', 'אירוע', 'event_food', 'אוכל'],
   'אירועים':      ['אירוע', 'event_israel', 'חתונה', 'wedding_israel', 'קייטרינג'],
+  // מוזיקה, פסטיבלים ואירועי לילה
+  'מוזיקה':       ['מוזיקה', 'music_israel', 'dj_israel', 'festival_israel', 'rave_israel', 'edm', 'techno_israel'],
+  'dj':           ['dj_israel', 'edm', 'rave_israel', 'festival_music', 'techno', 'music_israel'],
+  'פסטיבל':       ['festival_israel', 'dj_israel', 'edm', 'rave_israel', 'music_israel', 'nightlife'],
+  'מועדון':       ['nightlife_israel', 'clubbing', 'dj_israel', 'edm', 'rave_israel', 'party_israel'],
+  'הפקה':         ['event_israel', 'festival_israel', 'מוזיקה', 'dj_israel', 'nightlife_israel'],
+  // תוספי תזונה וספורט
+  'תוספי תזונה':  ['supplements_israel', 'protein_israel', 'preworkout', 'creatine', 'כושר', 'gym_israel'],
+  'תזונת ספורט':  ['sports_nutrition', 'protein_israel', 'supplements_israel', 'כושר', 'preworkout'],
+  'חלבון':        ['protein_israel', 'supplements_israel', 'whey', 'כושר', 'gym_israel'],
+  'קריאטין':      ['creatine', 'supplements_israel', 'protein_israel', 'preworkout', 'כושר'],
+  // מזון פרימיום ויבוא
+  'מזון פרימיום': ['premium_food', 'wagyu_israel', 'chef_israel', 'מסעדת_שף', 'fine_dining_israel'],
+  'בשר פרימיום':  ['wagyu_israel', 'premium_meat', 'שף', 'chef_israel', 'fine_dining_israel'],
+  'יבוא מזון':    ['premium_food', 'gourmet_israel', 'chef_israel', 'מסעדת_שף', 'food_import'],
+  'טרופל':        ['truffle_israel', 'פטריות_טרופל', 'chef_israel', 'fine_dining_israel', 'gourmet'],
+  // פיננסים ומסחר
+  'מסחר':         ['trading_il', 'stocks_israel', 'forex_israel', 'crypto_il', 'השקעות'],
+  'השקעות':       ['השקעות', 'stocks_israel', 'trading_il', 'finance_israel', 'investment_israel'],
+  'קריפטו':       ['crypto_il', 'bitcoin_israel', 'trading_il', 'defi_israel', 'web3_israel'],
+  'תעופה':        ['aviation_israel', 'private_jet', 'business_aviation', 'flight', 'luxury_travel'],
+  'מטוסים':       ['aviation_israel', 'private_jet', 'business_aviation', 'luxury_travel', 'vip_travel'],
 };
 
 // Fuzzy match: if category doesn't match exactly, try prefix/keyword match
