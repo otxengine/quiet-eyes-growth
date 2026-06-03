@@ -72,18 +72,34 @@ export default function DismissMenu({
 
   const chips = REASON_CHIPS[entityType] || REASON_CHIPS.alert;
 
+  // Map entityType → Prisma model name that has is_dismissed
+  const ENTITY_MODEL = {
+    alert:  'ProactiveAlert',
+    signal: 'MarketSignal',
+    trend:  'MarketSignal',
+    event:  'MarketSignal',
+  };
+
   const handleConfirm = async () => {
     if (!businessProfileId) return;
     setLoading(true);
     try {
-      await base44.functions.invoke('updateInsightMemory', {
+      // 1. Persist is_dismissed=true on the actual DB record so it survives refresh
+      const modelName = ENTITY_MODEL[entityType];
+      if (modelName && entityId) {
+        await base44.entities[modelName].update(entityId, { is_dismissed: true });
+      }
+
+      // 2. Write to insight memory for future learning (best-effort)
+      base44.functions.invoke('updateInsightMemory', {
         businessProfileId,
         action: 'dismissed',
         entityType,
         entityId: entityId || undefined,
         title,
         reason: reason.trim() || undefined,
-      });
+      }).catch(() => {});
+
       setOpen(false);
       setReason('');
       onDismissed?.();
