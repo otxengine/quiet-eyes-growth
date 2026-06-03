@@ -652,6 +652,346 @@ app.listen(PORT, async () => {
   )`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_stripe_invoices_org ON stripe_invoices(org_id, created_at DESC)`);
 
+  // ── OTX Engine v2 / v3 tables (idempotent — also in /api/migrate) ─────────
+  await sql(`CREATE TABLE IF NOT EXISTS otx_fused_insights (
+    id              TEXT        PRIMARY KEY,
+    business_id     TEXT        NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    urgency         TEXT        NOT NULL,
+    confidence      NUMERIC(4,3) NOT NULL,
+    summary         TEXT        NOT NULL,
+    key_signals     JSONB       NOT NULL DEFAULT '[]',
+    recommended_actions JSONB   NOT NULL DEFAULT '[]',
+    predicted_impact TEXT,
+    trace_id        TEXT
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_otx_fused_insights_biz ON otx_fused_insights(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS otx_recommendations (
+    id              TEXT        PRIMARY KEY,
+    decision_id     TEXT        NOT NULL,
+    business_id     TEXT        NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    title           TEXT        NOT NULL,
+    body            TEXT        NOT NULL,
+    cta             TEXT,
+    channel         TEXT        NOT NULL,
+    urgency         TEXT        NOT NULL,
+    action_steps    JSONB       NOT NULL DEFAULT '[]',
+    estimated_impact TEXT,
+    draft_content   TEXT,
+    status          TEXT        NOT NULL DEFAULT 'pending'
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_otx_recs_biz ON otx_recommendations(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS otx_execution_tasks (
+    id              TEXT        PRIMARY KEY,
+    decision_id     TEXT        NOT NULL,
+    business_id     TEXT        NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    started_at      TIMESTAMPTZ,
+    completed_at    TIMESTAMPTZ,
+    task_type       TEXT        NOT NULL,
+    channel         TEXT        NOT NULL,
+    payload         JSONB       NOT NULL DEFAULT '{}',
+    status          TEXT        NOT NULL DEFAULT 'pending',
+    attempts        INT         NOT NULL DEFAULT 0,
+    max_attempts    INT         NOT NULL DEFAULT 3,
+    error_message   TEXT
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_otx_tasks_biz ON otx_execution_tasks(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS otx_sent_actions (
+    id              TEXT        PRIMARY KEY,
+    task_id         TEXT        NOT NULL,
+    business_id     TEXT        NOT NULL,
+    sent_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    channel         TEXT        NOT NULL,
+    result          TEXT,
+    success         BOOLEAN     NOT NULL DEFAULT true
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_otx_sent_biz ON otx_sent_actions(business_id, sent_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS otx_outcome_events (
+    id              TEXT        PRIMARY KEY,
+    decision_id     TEXT        NOT NULL,
+    business_id     TEXT        NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    agent_name      TEXT        NOT NULL,
+    result          TEXT        NOT NULL,
+    revenue_impact  NUMERIC(12,2),
+    notes           TEXT
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_otx_outcomes_biz ON otx_outcome_events(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS otx_policy_weights (
+    id              TEXT        PRIMARY KEY DEFAULT md5(random()::text),
+    business_id     TEXT        NOT NULL,
+    agent_name      TEXT        NOT NULL,
+    action_type     TEXT        NOT NULL,
+    weight          NUMERIC(4,3) NOT NULL DEFAULT 0.5,
+    success_rate    NUMERIC(4,3) NOT NULL DEFAULT 0.5,
+    sample_size     INT         NOT NULL DEFAULT 0,
+    last_updated    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    policy_version  INT         NOT NULL DEFAULT 1,
+    UNIQUE(business_id, agent_name, action_type)
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_otx_weights_biz ON otx_policy_weights(business_id, agent_name)`);
+  await sql(`CREATE TABLE IF NOT EXISTS otx_pipeline_runs (
+    run_id          TEXT        PRIMARY KEY,
+    business_id     TEXT        NOT NULL,
+    trace_id        TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    started_at      TIMESTAMPTZ,
+    completed_at    TIMESTAMPTZ,
+    mode            TEXT        NOT NULL DEFAULT 'full',
+    triggered_by    TEXT        NOT NULL DEFAULT 'manual',
+    status          TEXT        NOT NULL DEFAULT 'completed',
+    signals_processed  INT      NOT NULL DEFAULT 0,
+    insights_created   INT      NOT NULL DEFAULT 0,
+    decisions_created  INT      NOT NULL DEFAULT 0,
+    actions_dispatched INT      NOT NULL DEFAULT 0,
+    duration_ms     INT         NOT NULL DEFAULT 0
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_otx_runs_biz ON otx_pipeline_runs(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS v3_approval_requests (
+    id                  TEXT        PRIMARY KEY,
+    business_id         TEXT        NOT NULL,
+    tenant_id           TEXT,
+    decision_id         TEXT        NOT NULL,
+    recommendation_id   TEXT,
+    execution_task_id   TEXT,
+    approval_type       TEXT        NOT NULL,
+    requested_by        TEXT        NOT NULL,
+    requested_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at          TIMESTAMPTZ,
+    status              TEXT        NOT NULL DEFAULT 'pending',
+    resolved_by         TEXT,
+    resolved_at         TIMESTAMPTZ,
+    notes               TEXT
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_approval_biz ON v3_approval_requests(business_id, status)`);
+  await sql(`CREATE TABLE IF NOT EXISTS market_insights (
+    id              TEXT        PRIMARY KEY,
+    business_id     TEXT        NOT NULL,
+    insight_type    TEXT        NOT NULL,
+    title           TEXT        NOT NULL,
+    description     TEXT        NOT NULL,
+    urgency         TEXT        NOT NULL DEFAULT 'medium',
+    confidence      NUMERIC(4,3) NOT NULL DEFAULT 0.5,
+    data_payload    JSONB       NOT NULL DEFAULT '{}',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_market_insights_biz ON market_insights(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS otx_trust_snapshots (
+    id              TEXT        PRIMARY KEY,
+    business_id     TEXT        NOT NULL,
+    trust_score     NUMERIC(5,2) NOT NULL,
+    gap_type        TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_trust_snapshots_biz ON otx_trust_snapshots(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS otx_churn_risk_logs (
+    id              TEXT        PRIMARY KEY,
+    business_id     TEXT        NOT NULL,
+    risk_level      TEXT        NOT NULL,
+    risk_score      NUMERIC(4,3) NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_churn_risk_biz ON otx_churn_risk_logs(business_id, created_at DESC)`);
+
+  // ── Demand / Trend intelligence tables ───────────────────────────────────
+  await sql(`CREATE TABLE IF NOT EXISTS hyper_local_events (
+    id                   TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    business_id          TEXT        NOT NULL,
+    event_name           TEXT        NOT NULL,
+    event_type           TEXT        NOT NULL,
+    venue_name           TEXT,
+    distance_meters      INT         NOT NULL DEFAULT 0,
+    event_datetime       TIMESTAMPTZ NOT NULL,
+    expected_attendance  INT,
+    digital_signal_match TEXT,
+    action_window_start  TIMESTAMPTZ,
+    action_window_end    TIMESTAMPTZ,
+    source_url           TEXT        NOT NULL DEFAULT '',
+    detected_at_utc      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    confidence_score     NUMERIC(3,2) NOT NULL DEFAULT 0.75
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_hyperlocal_biz_date ON hyper_local_events(business_id, event_datetime)`);
+  await sql(`CREATE TABLE IF NOT EXISTS demand_forecasts (
+    id                    TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    business_id           TEXT        NOT NULL,
+    forecast_date         DATE        NOT NULL,
+    hour_of_day           INT,
+    demand_index          NUMERIC(5,2),
+    demand_delta_pct      NUMERIC(5,2),
+    contributing_factors  JSONB,
+    weather_condition     TEXT,
+    local_event_id        TEXT,
+    confidence_score      NUMERIC(3,2) NOT NULL DEFAULT 0.75,
+    computed_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    source_url            TEXT        NOT NULL DEFAULT 'internal://demand-forecaster'
+  )`);
+  await sql(`CREATE TABLE IF NOT EXISTS resource_arbitrage_actions (
+    id                   TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    business_id          TEXT        NOT NULL,
+    trigger_type         TEXT        NOT NULL,
+    trigger_description  TEXT        NOT NULL,
+    recommended_action   TEXT        NOT NULL,
+    action_type          TEXT        NOT NULL,
+    target_segment       TEXT,
+    expected_uplift_pct  NUMERIC(5,2),
+    valid_from           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    valid_until          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    executed             BOOLEAN     DEFAULT FALSE,
+    source_url           TEXT        NOT NULL DEFAULT '',
+    detected_at_utc      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    confidence_score     NUMERIC(3,2) NOT NULL DEFAULT 0.75
+  )`);
+  await sql(`CREATE TABLE IF NOT EXISTS cross_sector_signals (
+    id                      TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    source_sector           TEXT        NOT NULL,
+    target_sector           TEXT        NOT NULL,
+    trend_description       TEXT        NOT NULL,
+    correlation_score       NUMERIC(3,2),
+    lag_days                INT,
+    opportunity_description TEXT,
+    source_url              TEXT        NOT NULL DEFAULT '',
+    detected_at_utc         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    confidence_score        NUMERIC(3,2) NOT NULL DEFAULT 0.75
+  )`);
+  await sql(`CREATE TABLE IF NOT EXISTS synthetic_personas (
+    id                        TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    business_id               TEXT        NOT NULL,
+    persona_name              TEXT        NOT NULL,
+    demographic_profile       JSONB       NOT NULL DEFAULT '{}',
+    behavioral_traits         JSONB       NOT NULL DEFAULT '{}',
+    simulated_conversion_rate NUMERIC(4,3),
+    simulated_response        JSONB,
+    embedding_vector          TEXT,
+    computed_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    source_url                TEXT        NOT NULL DEFAULT 'internal://persona-simulator'
+  )`);
+  await sql(`CREATE TABLE IF NOT EXISTS business_events (
+    id            TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    business_id   TEXT        NOT NULL,
+    event_type    TEXT        NOT NULL,
+    event_data    JSONB       NOT NULL DEFAULT '{}',
+    occurred_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    source        TEXT        DEFAULT 'system'
+  )`);
+  await sql(`CREATE TABLE IF NOT EXISTS trend_scan_checkpoint (
+    checkpoint_key    TEXT        PRIMARY KEY,
+    last_scan_at      TIMESTAMPTZ,
+    scanned_item_ids  TEXT        DEFAULT '[]',
+    scanned_urls      TEXT        DEFAULT '[]',
+    scan_meta         TEXT        DEFAULT '{}',
+    created_at        TIMESTAMPTZ DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  await sql(`CREATE TABLE IF NOT EXISTS platform_trend (
+    id                       TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    platform                 TEXT        NOT NULL,
+    region                   TEXT        NOT NULL DEFAULT 'IL',
+    trend_type               TEXT        NOT NULL,
+    trend_name               TEXT        NOT NULL,
+    applicable_sectors       TEXT        DEFAULT '[]',
+    growth_rate              REAL,
+    volume_estimate          REAL,
+    stage                    TEXT,
+    evidence_urls            TEXT        DEFAULT '[]',
+    visual_analysis          TEXT,
+    is_us_leading_indicator  BOOLEAN     DEFAULT false,
+    us_detected_at           TIMESTAMPTZ,
+    first_detected_at        TIMESTAMPTZ DEFAULT NOW(),
+    last_seen_at             TIMESTAMPTZ DEFAULT NOW(),
+    confidence               REAL        DEFAULT 70,
+    linked_business          TEXT,
+    source_agent             TEXT,
+    created_at               TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  await sql(`CREATE TABLE IF NOT EXISTS visual_trend_item (
+    id                  TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    platform_trend_id   TEXT,
+    url                 TEXT        NOT NULL UNIQUE,
+    thumbnail_url       TEXT,
+    media_type          TEXT,
+    platform            TEXT        NOT NULL,
+    region              TEXT        DEFAULT 'IL',
+    detected_products   TEXT        DEFAULT '[]',
+    detected_services   TEXT        DEFAULT '[]',
+    detected_keywords   TEXT        DEFAULT '[]',
+    aesthetic_tags      TEXT        DEFAULT '[]',
+    engagement_metrics  TEXT,
+    visual_analysis     TEXT,
+    analyzed_at         TIMESTAMPTZ DEFAULT NOW(),
+    linked_business     TEXT
+  )`);
+
+  // ── Backfill ALTER TABLE for all missing columns ──────────────────────────
+  await sql(`ALTER TABLE market_signals ADD COLUMN IF NOT EXISTS is_us_leading_indicator BOOLEAN DEFAULT false`);
+  await sql(`ALTER TABLE market_signals ADD COLUMN IF NOT EXISTS region TEXT DEFAULT 'IL'`);
+  await sql(`ALTER TABLE market_signals ADD COLUMN IF NOT EXISTS agent_name TEXT`);
+  await sql(`ALTER TABLE market_signals ADD COLUMN IF NOT EXISTS source_type TEXT`);
+  await sql(`ALTER TABLE market_signals ADD COLUMN IF NOT EXISTS tags TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS business_goal TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS price_tier TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS customer_sources TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS sector_profile TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS agent_missions TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS owner_name TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS phone TEXT`);
+  await sql(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS discovered_at TEXT`);
+  await sql(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS freshness_score DOUBLE PRECISION DEFAULT 100`);
+  await sql(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_contact_at TEXT`);
+  await sql(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS next_followup_date TEXT`);
+  await sql(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS followup_count DOUBLE PRECISION DEFAULT 0`);
+  await sql(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS referral_source TEXT`);
+  await sql(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS score_reasoning TEXT`);
+  await sql(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS suggested_first_message TEXT`);
+  await sql(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS deal_value DOUBLE PRECISION`);
+  await sql(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS platform_sourced BOOLEAN DEFAULT false`);
+  await sql(`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS topics TEXT`);
+  await sql(`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS topic_sentiment TEXT`);
+  await sql(`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS google_review_id TEXT`);
+  await sql(`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT false`);
+  await sql(`ALTER TABLE health_scores ADD COLUMN IF NOT EXISTS seo_score DOUBLE PRECISION`);
+  await sql(`ALTER TABLE health_scores ADD COLUMN IF NOT EXISTS google_rank_estimate TEXT`);
+  await sql(`ALTER TABLE health_scores ADD COLUMN IF NOT EXISTS reviews_needed_for_top3 DOUBLE PRECISION`);
+  await sql(`ALTER TABLE review_requests ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'sent'`);
+  await sql(`ALTER TABLE review_requests ADD COLUMN IF NOT EXISTS review_link TEXT`);
+  await sql(`ALTER TABLE review_requests ADD COLUMN IF NOT EXISTS sent_via TEXT`);
+  await sql(`ALTER TABLE review_requests ADD COLUMN IF NOT EXISTS converted_review_id TEXT`);
+  await sql(`ALTER TABLE review_requests ADD COLUMN IF NOT EXISTS lead_id TEXT`);
+  await sql(`ALTER TABLE sector_knowledge ADD COLUMN IF NOT EXISTS winner_lead_dna TEXT`);
+  await sql(`ALTER TABLE business_memory ADD COLUMN IF NOT EXISTS channel_preferences TEXT`);
+  await sql(`ALTER TABLE business_memory ADD COLUMN IF NOT EXISTS timing_preferences TEXT`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS title TEXT`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS reasoning TEXT`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS priority INT DEFAULT 5`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS score NUMERIC(8,3)`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS score_breakdown JSONB DEFAULT '{}'`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS confidence NUMERIC(5,3)`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS expected_roi NUMERIC(8,3)`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS context_snapshot TEXT`);
+  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS insight_id TEXT`);
+  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS opportunity_ids JSONB DEFAULT '[]'`);
+  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS signal_ids JSONB DEFAULT '[]'`);
+  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS trace_id TEXT`);
+  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS summary TEXT`);
+  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS why_now TEXT`);
+  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS recommended_steps JSONB DEFAULT '[]'`);
+  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS recommended_timing TEXT`);
+  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS user_visible_payload JSONB DEFAULT '{}'`);
+  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS recommendation_id TEXT`);
+  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS approval_required BOOLEAN DEFAULT false`);
+  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMPTZ`);
+  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS executed_at TIMESTAMPTZ`);
+  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS result_payload JSONB DEFAULT '{}'`);
+  await sql(`ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS execution_task_id TEXT`);
+  await sql(`ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS outcome_type TEXT DEFAULT 'execution'`);
+  await sql(`ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS outcome_score NUMERIC(4,3)`);
+  await sql(`ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS conversion_flag BOOLEAN DEFAULT false`);
+  await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS opportunities_found INT DEFAULT 0`);
+  await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS threats_found INT DEFAULT 0`);
+
   console.log('Startup SQL complete');
 
   // ── Google token refresh scheduler — runs every 30 minutes ───────────────
