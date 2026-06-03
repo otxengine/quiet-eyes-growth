@@ -100,7 +100,7 @@ export default function Reputation() {
     enabled: !!bpId
   });
 
-  const reviews = allReviewsRaw.filter(r => !r.is_historical);
+  const reviews = allReviewsRaw.filter(r => !r.is_historical && r.rating != null && Number(r.rating) > 0);
   const historicalReviews = allReviewsRaw.filter(r => r.is_historical);
   const [showHistorical, setShowHistorical] = useState(false);
 
