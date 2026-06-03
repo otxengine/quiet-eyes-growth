@@ -59,12 +59,27 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
 
     const existingTitles = new Set(pendingAlerts.map(a => a.title));
 
-    // Fuzzy dedup: 7-day window — prevents re-surfacing the same insight within a week
+    // Fuzzy dedup: 7-day window for active alerts
     const sevenDaysAgoStr = new Date(Date.now() - 7 * 24 * 3600000).toISOString();
     const recentAlerts = pendingAlerts.filter(a => (a.created_at || '') >= sevenDaysAgoStr);
     const recentFuzzyKeys = new Set(
       recentAlerts.map(a => `${a.alert_type}:${(a.title || '').toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 50)}`)
     );
+
+    // Dismissed dedup: suppress alerts the user manually dismissed for 30 days
+    // so they don't come back on the very next scan cycle
+    const thirtyDaysAgoStr = new Date(Date.now() - 30 * 24 * 3600000).toISOString();
+    const recentlyDismissed = await prisma.proactiveAlert.findMany({
+      where: {
+        linked_business: businessProfileId,
+        is_dismissed: true,
+        created_at: { gte: thirtyDaysAgoStr },
+      },
+      select: { alert_type: true, title: true },
+    });
+    for (const a of recentlyDismissed) {
+      recentFuzzyKeys.add(`${a.alert_type}:${(a.title || '').toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 50)}`);
+    }
 
     // Also block alert_types that were acted on in the past 3 days (user already acted)
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 3600000).toISOString();
