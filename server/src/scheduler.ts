@@ -38,6 +38,8 @@ import { instagramTrendAgent } from './routes/functions/instagramTrendAgent';
 import { facebookGroupTrendAgent } from './routes/functions/facebookGroupTrendAgent';
 import { googleTrendsScanAgent } from './routes/functions/googleTrendsScanAgent';
 import { visualTrendAnalyzer } from './routes/functions/visualTrendAnalyzer';
+import { cleanupInsights } from './routes/functions/cleanupInsights';
+import { cleanupAndLearn } from './routes/functions/cleanupAndLearn';
 
 const logger = createLogger('Scheduler');
 
@@ -107,9 +109,9 @@ async function runForAll(
 export function startScheduler() {
   logger.info('Starting background scheduler');
 
-  // ── Every 12 hours at 06:00 + 18:00 UTC (09:00 + 21:00 Israel time) ─────────
-  // Full pipeline + all agents — 2 runs/day reduces API costs ~60% vs previous 4h cadence
-  cron.schedule('0 6,18 * * *', () => {
+  // ── Every 24 hours at 07:00 UTC (10:00 Israel time) ─────────────────────────
+  // Full pipeline + all agents — once/day to minimize token costs
+  cron.schedule('0 7 * * *', () => {
     runForAll('TwiceDailyPipeline', 'full', []);
     runAgentForAll('GoogleRankMonitor', googleRankMonitor);
     runAgentForAll('SmartLeadNurture', smartLeadNurture);
@@ -139,8 +141,12 @@ export function startScheduler() {
     runAgentForAll('DetectEvents', detectEvents);
   });
 
-  // ── Every 24 hours at 03:00 UTC: ML learning + reviews ───────────────────────
+  // ── Every 24 hours at 03:00 UTC: cleanup + ML learning + reviews ─────────────
+  // cleanupInsights: dismisses stale alerts/signals (runs BEFORE generators)
+  // cleanupAndLearn: deletes old raw signals, duplicates, prunes OTX decisions
   cron.schedule('0 3 * * *', () => {
+    runAgentForAll('CleanupInsights', cleanupInsights);
+    runAgentForAll('CleanupAndLearn', cleanupAndLearn);
     runForAll('DailyLearning', 'decision_only');
     runAgentForAll('AutoRespondToReviews', autoRespondToReviews);
     runAgentForAll('ReviewRequestAutomation', reviewRequestAutomation);

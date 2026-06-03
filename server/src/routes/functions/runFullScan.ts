@@ -70,23 +70,23 @@ export async function runFullScan(req: Request, res: Response) {
     );
   }
 
-  // Cooldown: prevent burning API budget with multiple full scans within 12 hours
-  const sixHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+  // Cooldown: prevent burning API budget with multiple full scans within 24 hours
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
   try {
     const recentScan = await prisma.automationLog.findFirst({
       where: {
         automation_name: 'runFullScan',
         linked_business: businessProfileId,
-        created_date: { gt: sixHoursAgo },
+        created_date: { gt: oneDayAgo },
       },
       orderBy: { created_date: 'desc' },
     });
     if (recentScan) {
-      const nextScanAt = new Date(recentScan.created_date.getTime() + 6 * 60 * 60 * 1000);
+      const nextScanAt = new Date(recentScan.created_date.getTime() + 24 * 60 * 60 * 1000);
       return res.json({
         success: false,
         cooldown: true,
-        message: `סריקה מלאה כבר בוצעה לאחרונה. הסריקה הבאה אפשרית ב-${nextScanAt.toLocaleTimeString('he-IL')} (cooldown: 12 שעות).`,
+        message: `סריקה מלאה כבר בוצעה לאחרונה. הסריקה הבאה אפשרית ב-${nextScanAt.toLocaleTimeString('he-IL')} (cooldown: 24 שעות).`,
         last_scan: recentScan.created_date,
         next_scan_at: nextScanAt.toISOString(),
       });
