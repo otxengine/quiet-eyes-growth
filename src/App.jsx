@@ -58,6 +58,7 @@ import AdminLayout from '@/components/layout/AdminLayout';
 import DevUserSwitcher from '@/components/DevUserSwitcher';
 import OrganizationSettings from '@/pages/OrganizationSettings.jsx';
 import AgencyDashboard from '@/pages/AgencyDashboard.jsx';
+import JoinPage from '@/pages/JoinPage.jsx';
 import { OrganizationProvider } from '@/contexts/OrganizationContext';
 
 const AuthenticatedApp = () => {
@@ -121,6 +122,7 @@ const AuthenticatedApp = () => {
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
         </Route>
+        <Route path="/join" element={<JoinPage />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>
     );
@@ -140,6 +142,9 @@ const AuthenticatedApp = () => {
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
       </Route>
+
+      {/* Invite join — accessible without app layout */}
+      <Route path="/join" element={<JoinPage />} />
 
       {/* Onboarding flow */}
       <Route path="/onboarding/*" element={<Onboarding />} />

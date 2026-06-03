@@ -611,6 +611,10 @@ app.listen(PORT, async () => {
     UNIQUE(org_id, user_id)
   )`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_org_members_user ON organization_members(user_id, status)`);
+  // invite token columns (added later — safe to run on existing tables)
+  await sql(`ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS invite_token      TEXT`);
+  await sql(`ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS token_expires_at  TIMESTAMPTZ`);
+  await sql(`CREATE UNIQUE INDEX IF NOT EXISTS idx_org_members_invite_token ON organization_members(invite_token) WHERE invite_token IS NOT NULL`);
   await sql(`CREATE TABLE IF NOT EXISTS agency_clients (
     id             TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     agency_org_id  TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

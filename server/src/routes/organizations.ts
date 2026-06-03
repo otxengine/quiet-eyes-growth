@@ -18,6 +18,8 @@ import { Router, Request, Response, RequestHandler } from 'express';
 import { prisma } from '../db';
 import { getUserId } from '../middleware/auth';
 import { stripe, stripeEnabled } from '../lib/stripe';
+import { sendEmail, buildInviteEmail, FRONTEND_URL } from '../lib/email';
+import crypto from 'crypto';
 
 type Params = Record<string, string>;
 
@@ -270,20 +272,53 @@ router.post('/:id/members', async (req: Request, res: Response) => {
 
   if (!await isOrgOwnerOrAdmin(id, userId)) return res.status(403).json({ error: 'Insufficient role' });
 
-  const { user_id, email, role = 'manager', branch_ids } = req.body;
+  const { user_id, email, role = 'content_editor', branch_ids, inviter_name } = req.body;
   if (!user_id && !email) return res.status(400).json({ error: 'user_id or email required' });
+
+  // For email-only invites generate a unique token (7-day expiry)
+  const isEmailInvite = !user_id && !!email;
+  const inviteToken   = isEmailInvite ? crypto.randomBytes(32).toString('hex') : null;
+  const tokenExpiry   = isEmailInvite ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : null;
 
   const targetUserId = user_id || `invite:${email}`;
   try {
     await prisma.$executeRawUnsafe(
-      `INSERT INTO organization_members (id, org_id, user_id, email, role, branch_ids, invited_by, invited_at, status)
-       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, NOW(), 'active')
-       ON CONFLICT (org_id, user_id) DO UPDATE SET role = $4, branch_ids = $5, status = 'active'`,
+      `INSERT INTO organization_members
+         (id, org_id, user_id, email, role, branch_ids, invited_by, invited_at, status, invite_token, token_expires_at)
+       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, NOW(), 'pending', $7, $8)
+       ON CONFLICT (org_id, user_id) DO UPDATE
+         SET role = $4, branch_ids = $5, status = 'pending',
+             invite_token = $7, token_expires_at = $8`,
       id, targetUserId, email || null, role,
       branch_ids ? JSON.stringify(branch_ids) : null,
-      userId,
+      userId, inviteToken, tokenExpiry,
     );
-    return res.json({ ok: true });
+
+    // Fetch org name for the invite email
+    let orgName = 'הארגון';
+    let emailSent = false;
+    try {
+      const orgRows = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT name FROM organizations WHERE id = $1`, id,
+      );
+      orgName = orgRows?.[0]?.name || orgName;
+    } catch {}
+
+    if (isEmailInvite && inviteToken) {
+      emailSent = await sendEmail({
+        to:      email!,
+        subject: `הוזמנת להצטרף ל-${orgName} ב-OTX`,
+        html:    buildInviteEmail({
+          inviterName: inviter_name || 'מנהל הארגון',
+          orgName,
+          role,
+          inviteToken,
+        }),
+      });
+    }
+
+    const inviteLink = inviteToken ? `${FRONTEND_URL}/join?token=${inviteToken}` : null;
+    return res.json({ ok: true, emailSent, inviteLink });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
@@ -344,6 +379,38 @@ router.get('/:id/branches', async (req: Request, res: Response) => {
   return res.json(branches);
 });
 
+// ── POST /api/orgs/join/:token ────────────────────────────────────────────────
+// Called when an invited user clicks their invite link after signing in.
+
+router.post('/join/:token', async (req: Request, res: Response) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  const { token } = req.params as Params;
+
+  try {
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT * FROM organization_members
+       WHERE invite_token = $1 AND status = 'pending'
+         AND (token_expires_at IS NULL OR token_expires_at > NOW())
+       LIMIT 1`,
+      token,
+    );
+    if (!rows?.length) return res.status(404).json({ error: 'invite_not_found' });
+
+    const invite = rows[0];
+    // Claim the invite — replace the placeholder user_id with the real one
+    await prisma.$executeRawUnsafe(
+      `UPDATE organization_members
+       SET user_id = $1, status = 'active', invite_token = NULL, token_expires_at = NULL
+       WHERE id = $2`,
+      userId, invite.id,
+    );
+    return res.json({ ok: true, orgId: invite.org_id, role: invite.role });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ── POST /api/orgs/:id/branches ───────────────────────────────────────────────
 // Creates a new BusinessProfile linked to this org (new branch).
 
@@ -354,7 +421,10 @@ router.post('/:id/branches', async (req: Request, res: Response) => {
 
   if (!await isOrgOwnerOrAdmin(id, userId)) return res.status(403).json({ error: 'Insufficient role' });
 
-  const { name, city, category, branch_display_name } = req.body;
+  const {
+    name, city, category, branch_display_name,
+    full_address, phone, website_url, description, google_place_id,
+  } = req.body;
   if (!name || !city || !category) return res.status(400).json({ error: 'name, city, category required' });
 
   // Get the org's main profile for defaults
@@ -368,6 +438,11 @@ router.post('/:id/branches', async (req: Request, res: Response) => {
       category,
       created_by: userId,
       onboarding_completed: false,
+      ...(full_address  ? { full_address }  : {}),
+      ...(phone         ? { phone }         : {}),
+      ...(website_url   ? { website_url }   : {}),
+      ...(description   ? { description }   : {}),
+      ...(google_place_id ? { google_place_id } : {}),
     } as any,
   });
 
