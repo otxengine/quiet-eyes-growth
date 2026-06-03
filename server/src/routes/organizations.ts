@@ -87,18 +87,10 @@ router.get('/my', async (req: Request, res: Response) => {
       userId,
     );
 
-    // 2. For legacy users: find BusinessProfiles with created_by but no org
-    //    Auto-create an org for them so the system works seamlessly
-    const userRows = await prisma.$queryRawUnsafe<any[]>(
-      `SELECT email FROM users WHERE auth_id = $1 LIMIT 1`, userId,
-    ).catch(() => []);
-    const userEmail = userRows?.[0]?.email || '';
-
+    // 2. For legacy users: find BusinessProfiles with created_by = userId but no org.
+    //    In production, created_by stores the Clerk userId directly.
     const orphanProfiles = await prisma.businessProfile.findMany({
-      where: {
-        created_by: userEmail || undefined,
-        ...(userEmail ? {} : { id: 'NEVER' }), // skip if no email
-      },
+      where: { created_by: userId },
     }).catch(() => []);
 
     // Auto-create org for orphan profiles

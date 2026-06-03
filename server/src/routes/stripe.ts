@@ -41,12 +41,10 @@ async function getUserOrg(userId: string, orgId?: string): Promise<any | null> {
 }
 
 async function getUserEmail(userId: string): Promise<string> {
-  try {
-    const rows = await prisma.$queryRawUnsafe<any[]>(
-      `SELECT email FROM users WHERE auth_id = $1 LIMIT 1`, userId,
-    );
-    return rows?.[0]?.email || '';
-  } catch { return ''; }
+  // Try to get email from business_profiles created_by chain (Clerk userId stored there)
+  // In most deployments we don't have a separate users table, so we just return empty
+  // and let Stripe prompt the user for email during checkout.
+  return '';
 }
 
 // ── GET /api/stripe/status ────────────────────────────────────────────────────
