@@ -1,8 +1,22 @@
 import dotenv from 'dotenv';
 dotenv.config({ override: true }); // override empty system env vars with .env file values
+
+// ── Startup environment guard (production only) ────────────────────────────
+if (process.env.NODE_ENV === 'production') {
+  const required = ['CLERK_SECRET_KEY', 'CLERK_PUBLISHABLE_KEY', 'DATABASE_URL'];
+  for (const key of required) {
+    if (!process.env[key]) {
+      console.error(`FATAL: required env var ${key} is not set — refusing to start`);
+      process.exit(1);
+    }
+  }
+}
+
 import { registerAllHandlers } from './events/EventChoreographer';
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import entityRouter from './routes/entities';
 import functionRouter from './routes/functions/index';
 import agentTriggerRouter from './routes/agentTrigger';
@@ -32,6 +46,37 @@ import { refreshExpiringGoogleTokens } from './lib/googleTokenRefresh';
 
 const app = express();
 const PORT = process.env.PORT || 3002;
+
+// ── Security headers ───────────────────────────────────────────────────────
+app.use(helmet({ contentSecurityPolicy: false })); // CSP handled by frontend
+
+// ── Rate limiting ──────────────────────────────────────────────────────────
+// General API: 300 requests per 15 minutes per IP
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' },
+  skip: (req) => req.headers['x-admin-key'] === (process.env.ADMIN_SECRET || '__unset__'),
+});
+
+// Strict limiter for expensive LLM/scan endpoints: 20 per 15 min
+const strictLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Rate limit exceeded for scan/AI endpoints' },
+  skip: (req) => req.headers['x-admin-key'] === (process.env.ADMIN_SECRET || '__unset__'),
+});
+
+app.use('/api', generalLimiter);
+app.use('/api/functions/run-full-scan', strictLimiter);
+app.use('/api/functions/generate-post', strictLimiter);
+app.use('/api/functions/generate-image', strictLimiter);
+app.use('/api/functions/generate-advisory-insights', strictLimiter);
+app.use('/api/orchestrator', strictLimiter);
 
 const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .split(',')
@@ -109,7 +154,8 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 // Called by cron-job.org every 14 minutes to keep Render alive + run pipelines
 app.post('/api/cron/run', async (_req, res) => {
   const secret = _req.query.secret as string;
-  if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
+  // Always require CRON_SECRET — unprotected cron endpoint burns API budget
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: 'unauthorized' });
   }
   try {
@@ -133,7 +179,10 @@ app.post('/api/cron/run', async (_req, res) => {
 // Global JSON error handler — must be last, catches Clerk + any other middleware errors
 app.use((err: any, _req: any, res: any, _next: any) => {
   console.error('Unhandled error:', err.message);
-  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+  const isDev = process.env.NODE_ENV !== 'production';
+  res.status(err.status || 500).json({
+    error: isDev ? (err.message || 'Internal server error') : 'Internal server error',
+  });
 });
 
 // Debug endpoint — shows all data counts for a business profile

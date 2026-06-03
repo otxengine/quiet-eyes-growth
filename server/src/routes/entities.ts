@@ -3,6 +3,37 @@ import { prisma } from '../db';
 import { getUserId, isAdminKeyRequest } from '../middleware/auth';
 import { cleanupCompetitorsByRadius } from '../lib/competitorRadiusCleanup';
 
+// Column name allowlist for raw SQL fallback — prevents SQL injection via key names
+const SAFE_COLUMN = /^[a-z_][a-z0-9_]*$/i;
+
+/** Returns all businessProfileIds owned by (or accessible to) a given userId */
+async function getUserBusinessIds(userId: string): Promise<string[]> {
+  const profiles = await prisma.businessProfile.findMany({
+    where: { created_by: userId },
+    select: { id: true },
+  });
+  return profiles.map(p => p.id);
+}
+
+/** Returns true if the record with `id` on `model` belongs to `userId` */
+async function verifyRecordOwnership(model: any, id: string, userId: string): Promise<boolean> {
+  try {
+    const record = await model.findFirst({
+      where: { id },
+      select: { id: true, created_by: true, linked_business: true },
+    });
+    if (!record) return false;
+    if (record.created_by === userId) return true;
+    if (record.linked_business) {
+      const bizIds = await getUserBusinessIds(userId);
+      return bizIds.includes(record.linked_business);
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 const router = Router();
 
 // Map entity names (as used by frontend) to Prisma model delegate keys
@@ -108,11 +139,29 @@ router.get('/:entity', async (req: Request, res: Response) => {
     }
 
     const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
     const where = buildWhere(filter);
 
-    // Enforce tenant isolation for BusinessProfile
-    if (req.params.entity === 'BusinessProfile' && userId) {
+    if (req.params.entity === 'BusinessProfile') {
+      // BusinessProfile: scope to records owned by this user
       where.created_by = userId;
+    } else {
+      // All other entities: verify the requested linked_business belongs to this user
+      const requestedBizId = filter.linked_business as string | undefined;
+      const ownedBizIds = await getUserBusinessIds(userId);
+
+      if (requestedBizId) {
+        if (!ownedBizIds.includes(requestedBizId)) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+      } else if (ownedBizIds.length > 0) {
+        // No filter provided — restrict to user's own businesses
+        where.linked_business = { in: ownedBizIds };
+      } else {
+        // User has no businesses yet — return empty
+        return res.json([]);
+      }
     }
 
     const records = await model.findMany({
@@ -124,7 +173,8 @@ router.get('/:entity', async (req: Request, res: Response) => {
     res.json(records);
   } catch (err: any) {
     console.error(`GET /entities/${req.params.entity}:`, err.message);
-    res.status(500).json({ error: err.message });
+    const isDev = process.env.NODE_ENV !== 'production';
+    res.status(500).json({ error: isDev ? err.message : 'Internal server error' });
   }
 });
 
@@ -142,7 +192,8 @@ router.post('/:entity', async (req: Request, res: Response) => {
     res.status(201).json(record);
   } catch (err: any) {
     console.error(`POST /entities/${req.params.entity}:`, err.message);
-    res.status(500).json({ error: err.message });
+    const isDev = process.env.NODE_ENV !== 'production';
+    res.status(500).json({ error: isDev ? err.message : 'Internal server error' });
   }
 });
 
@@ -168,6 +219,12 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
       // P2025 = record not found. Happens when agents create records without
       // created_by (MarketSignal, ProactiveAlert, etc.) — retry by ID only.
       if (prismaErr.code === 'P2025') {
+        // Verify ownership before retrying without created_by
+        const userId = getUserId(req);
+        if (userId) {
+          const owned = await verifyRecordOwnership(model, String(req.params.id), userId);
+          if (!owned) return res.status(403).json({ error: 'Forbidden' });
+        }
         try {
           record = await model.update({ where: { id: req.params.id }, data });
         } catch (innerErr: any) {
@@ -185,10 +242,14 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
         const table = tableMap[entity];
         if (!table) throw prismaErr;
 
-        const setClauses = Object.entries(data)
+        // Validate column names — prevent SQL injection via key names
+        const safeEntries = Object.entries(data).filter(([k]) => SAFE_COLUMN.test(k));
+        if (safeEntries.length === 0) throw new Error('No valid fields to update');
+
+        const setClauses = safeEntries
           .map(([k], i) => `"${k}" = $${i + 2}`)
           .join(', ');
-        const values = [req.params.id, ...Object.values(data)];
+        const values = [req.params.id, ...safeEntries.map(([, v]) => v)];
         await prisma.$executeRawUnsafe(
           `UPDATE "${table}" SET ${setClauses} WHERE id = $1`,
           ...values
@@ -209,7 +270,8 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
     }
   } catch (err: any) {
     console.error(`PATCH /entities/${entity}/${req.params.id}:`, err.message);
-    res.status(500).json({ error: err.message });
+    const isDev = process.env.NODE_ENV !== 'production';
+    res.status(500).json({ error: isDev ? err.message : 'Internal server error' });
   }
 });
 
@@ -228,8 +290,13 @@ router.delete('/:entity/:id', async (req: Request, res: Response) => {
       await model.delete({ where });
     } catch (prismaErr: any) {
       // P2025 = record not found — happens when record was created by a server agent
-      // without the user's created_by. Retry by ID only.
+      // without the user's created_by. Verify ownership before retrying by ID only.
       if (prismaErr.code === 'P2025') {
+        const userId = getUserId(req);
+        if (userId) {
+          const owned = await verifyRecordOwnership(model, String(req.params.id), userId);
+          if (!owned) return res.status(403).json({ error: 'Forbidden' });
+        }
         await model.delete({ where: { id: req.params.id } });
       } else {
         throw prismaErr;
@@ -237,7 +304,9 @@ router.delete('/:entity/:id', async (req: Request, res: Response) => {
     }
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error(`DELETE /entities/${req.params.entity}/${req.params.id}:`, err.message);
+    const isDev = process.env.NODE_ENV !== 'production';
+    res.status(500).json({ error: isDev ? err.message : 'Internal server error' });
   }
 });
 
