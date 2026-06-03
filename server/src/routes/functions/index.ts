@@ -86,6 +86,7 @@ import { tiktokPostTracker } from './tiktokPostTracker';
 import { updateInsightMemory } from './updateInsightMemory';
 import { generateAdvisoryInsights } from './generateAdvisoryInsights';
 import { cleanupInsights } from './cleanupInsights';
+import { weeklyEmailDigest } from './weeklyEmailDigest';
 import { processEventBus } from './processEventBus';
 import { calculateROI } from './calculateROI';
 import { sectorBenchmark } from './sectorBenchmark';
@@ -238,6 +239,7 @@ const FUNCTION_MAP: Record<string, any> = {
   createCheckoutSession,
   manageSubscription,
   identifyKnowledgeGaps,
+  weeklyEmailDigest,
 };
 
 // POST /api/functions/:name

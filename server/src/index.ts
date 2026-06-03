@@ -185,9 +185,25 @@ app.use((err: any, _req: any, res: any, _next: any) => {
   });
 });
 
+// ── Monitoring endpoint (admin only) ──────────────────────────────────────────
+app.get('/api/monitoring/status', async (req: any, res: any) => {
+  const { isAdminKeyRequest } = await import('./middleware/auth');
+  if (!isAdminKeyRequest(req)) return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { getAgentStatusSummary } = await import('./lib/agentMonitor');
+    const summary = await getAgentStatusSummary();
+    return res.json(summary);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // Debug endpoint — shows all data counts for a business profile
 // Lead-finding diagnostic — shows exactly what Tavily returns and what the LLM says
-app.get('/api/debug/leads/:bpId', async (req, res) => {
+// Requires admin key — exposes env key status and raw business data
+app.get('/api/debug/leads/:bpId', async (req: any, res: any) => {
+  const { isAdminKeyRequest } = await import('./middleware/auth');
+  if (!isAdminKeyRequest(req)) return res.status(403).json({ error: 'Forbidden' });
   const bpId = req.params.bpId;
   const { prisma: db } = await import('./db');
   const { invokeLLM } = await import('./lib/llm');
@@ -268,7 +284,9 @@ Set is_lead=false if no clear intent to purchase/hire a service.`,
   return res.json(report);
 });
 
-app.get('/api/debug/:bpId', async (req, res) => {
+app.get('/api/debug/:bpId', async (req: any, res: any) => {
+  const { isAdminKeyRequest } = await import('./middleware/auth');
+  if (!isAdminKeyRequest(req)) return res.status(403).json({ error: 'Forbidden' });
   const { prisma } = await import('./db');
   const bpId = req.params.bpId;
   const [profile, rawSignals, marketSignals, leads, reviews, competitors, automationLogs] = await Promise.all([
@@ -330,6 +348,8 @@ app.listen(PORT, async () => {
   )`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_otx_decisions_biz ON otx_decisions(business_id, created_at DESC)`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_agent_heartbeat_name ON agent_heartbeat(agent_name, last_ping_utc DESC)`);
+  // Unique constraint on agent_name — enables ON CONFLICT upsert in writeHeartbeat
+  await sql(`CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_heartbeat_agent_name_unique ON agent_heartbeat(agent_name)`);
   await sql(`CREATE TABLE IF NOT EXISTS otx_competitor_snapshots (
     id            TEXT PRIMARY KEY DEFAULT md5(random()::text),
     competitor_id TEXT NOT NULL,
@@ -1041,7 +1061,29 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS opportunities_found INT DEFAULT 0`);
   await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS threats_found INT DEFAULT 0`);
 
+  // ── Performance indexes on high-traffic columns ───────────────────────────
+  // These are the most-queried fields across all entity list calls. Adding
+  // indexes here dramatically reduces full-table scan time at scale.
+  await sql(`CREATE INDEX IF NOT EXISTS idx_leads_biz_status   ON leads(linked_business, status, created_date DESC)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_leads_biz_score    ON leads(linked_business, score DESC NULLS LAST)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_reviews_biz_status ON reviews(linked_business, response_status, created_date DESC)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_reviews_biz_rating ON reviews(linked_business, rating)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_mkt_signals_biz    ON market_signals(linked_business, created_date DESC)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_raw_signals_biz    ON raw_signals(linked_business, created_date DESC)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_actions_biz_date   ON actions(linked_business, created_date DESC)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_auto_actions_biz   ON auto_actions(linked_business, status, created_date DESC)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_alerts_biz_active  ON proactive_alerts(linked_business, is_dismissed, is_acted_on, created_at DESC)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_predictions_biz    ON predictions(linked_business, created_date DESC)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_health_biz         ON health_scores(linked_business, created_date DESC)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_automation_biz_name ON automation_logs(linked_business, automation_name, created_date DESC)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_competitors_biz    ON competitors(linked_business, not_relevant, created_date DESC)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_organic_posts_biz  ON organic_posts(linked_business, status, created_date DESC)`);
+
   console.log('Startup SQL complete');
+
+  if (!process.env.NODE_ENV) {
+    console.warn('[WARN] NODE_ENV is not set. Set NODE_ENV=production on Render to enable security hardening and error sanitization.');
+  }
 
   // ── Google token refresh scheduler — runs every 30 minutes ───────────────
   setInterval(() => {

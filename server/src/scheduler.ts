@@ -40,6 +40,8 @@ import { googleTrendsScanAgent } from './routes/functions/googleTrendsScanAgent'
 import { visualTrendAnalyzer } from './routes/functions/visualTrendAnalyzer';
 import { cleanupInsights } from './routes/functions/cleanupInsights';
 import { cleanupAndLearn } from './routes/functions/cleanupAndLearn';
+import { weeklyEmailDigest } from './routes/functions/weeklyEmailDigest';
+import { writeHeartbeat } from './lib/agentMonitor';
 
 const logger = createLogger('Scheduler');
 
@@ -67,14 +69,19 @@ async function runAgentForAll(label: string, agentFn: Function) {
   for (let i = 0; i < ids.length; i += CONCURRENCY) {
     const batch = ids.slice(i, i + CONCURRENCY);
     await Promise.allSettled(
-      batch.map(id => {
+      batch.map(async (id) => {
         const fakeReq = { body: { businessProfileId: id } } as any;
         const fakeRes = {
           json: (data: any) => logger.info(`${label} result`, { id, data }),
           status: () => ({ json: (e: any) => logger.error(`${label} error`, { id, e }) }),
         } as any;
-        return agentFn(fakeReq, fakeRes)
-          .catch((err: any) => logger.error(`${label}: failed`, { id, error: err.message }));
+        try {
+          await agentFn(fakeReq, fakeRes);
+          await writeHeartbeat(label, id, 'ok');
+        } catch (err: any) {
+          logger.error(`${label}: failed`, { id, error: err.message });
+          await writeHeartbeat(label, id, 'failed', err.message);
+        }
       }),
     );
   }
@@ -164,9 +171,11 @@ export function startScheduler() {
     setTimeout(() => runAgentForAll('VisualTrendAnalyzer', visualTrendAnalyzer), 10 * 60 * 1000);
   });
 
-  // ── Every Sunday at 20:00 UTC: weekly content calendar ──────────────────────
+  // ── Every Sunday at 20:00 UTC: weekly content calendar + email digest ────────
   cron.schedule('0 20 * * 0', () => {
     runAgentForAll('ContentCalendarAgent', contentCalendarAgent);
+    // WeeklyEmailDigest runs 10 min after contentCalendar so digest can include latest posts
+    setTimeout(() => runAgentForAll('WeeklyEmailDigest', weeklyEmailDigest), 10 * 60 * 1000);
   });
 
   // ── Every day at 04:00 UTC: competitor snapshot diff (was weekly, now daily) ──
