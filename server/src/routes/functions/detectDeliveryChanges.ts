@@ -146,6 +146,19 @@ interface PlatformResult {
   snippet?: string | null;
 }
 
+function normalizeRestName(name: string): string {
+  return name.toLowerCase().replace(/^(מסעדת|פיצריית|בית קפה|קפה|בית ה)/u, '').trim();
+}
+function nameScore(listName: string, query: string): number {
+  const a = normalizeRestName(query), b = normalizeRestName(listName);
+  if (b === a) return 1.0;
+  if (b.includes(a) || a.includes(b)) return 0.9;
+  const wa = a.split(/\s+/).filter(w => w.length > 1);
+  const wb = b.split(/\s+/).filter(w => w.length > 1);
+  const overlap = wa.filter(w => wb.some(bw => bw.includes(w) || w.includes(bw))).length;
+  return overlap / Math.max(wa.length, 1);
+}
+
 async function fetch10bisData(name: string, city: string): Promise<PlatformResult> {
   try {
     const cityId = getTenbisCity(city);
@@ -156,17 +169,21 @@ async function fetch10bisData(name: string, city: string): Promise<PlatformResul
     if (!res.ok) return { platform: '10bis', found: false };
     const data: any = await res.json();
     const list: any[] = data?.Data?.restaurantsList || [];
-    const firstWord = name.toLowerCase().split(' ')[0];
-    const match = list.find((r: any) =>
-      r.restaurantName?.toLowerCase().includes(firstWord)
-    );
-    if (!match) return { platform: '10bis', found: false };
+    if (list.length === 0) return { platform: '10bis', found: false };
+    const scored = list
+      .map((r: any) => ({ r, score: nameScore(r.restaurantName || '', name) }))
+      .filter(x => x.score >= 0.5)
+      .sort((a, b) => b.score - a.score);
+    const best = scored[0];
+    if (!best) return { platform: '10bis', found: false };
+    const match = best.r;
     return {
       platform: '10bis', found: true,
       rating: match.reviewsScore ?? null,
       delivery_time: match.deliveryTimeInMinutes ?? null,
       min_order: match.minimumOrder ?? null,
       url: `https://www.10bis.co.il/restaurants/${match.restaurantId}`,
+      snippet: `${match.restaurantName} | ${match.deliveryTimeInMinutes ?? '?'}min | min₪${match.minimumOrder ?? '?'}`,
     };
   } catch {
     return { platform: '10bis', found: false };
@@ -265,6 +282,60 @@ export async function detectDeliveryChanges(req: Request, res: Response) {
     );
     const ownReviews = await fetchReviewText(bizName, city, platformKeys);
     const ownSummary = buildProfileSummary(bizName, ownPlatformResults, ownReviews);
+
+    // ── Step 2b: Save own-business snapshot (enables delivery-time trend alerts) ─
+    try {
+      const ownSnap: Record<string, any> = { scanned_at: new Date().toISOString().slice(0, 10), platforms: {} };
+      for (const r of ownPlatformResults) {
+        ownSnap.platforms[r.platform] = { found: r.found, rating: r.rating ?? null, delivery_time: r.delivery_time ?? null, min_order: r.min_order ?? null };
+      }
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO otx_competitor_snapshots (competitor_id, business_id, snapshot_json) VALUES ($1, $2, $3::jsonb)`,
+        `own:${businessProfileId}`, businessProfileId, JSON.stringify(ownSnap),
+      );
+      const prevOwnRows = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT snapshot_json FROM otx_competitor_snapshots WHERE competitor_id = $1 ORDER BY taken_at DESC OFFSET 1 LIMIT 1`,
+        `own:${businessProfileId}`,
+      ).catch(() => [] as any[]);
+      if (prevOwnRows[0]) {
+        const prevOwn = prevOwnRows[0].snapshot_json as any;
+        for (const [platform, curr] of Object.entries(ownSnap.platforms as Record<string, any>)) {
+          const prev = prevOwn?.platforms?.[platform];
+          if (!prev || !curr.found) continue;
+          if (curr.delivery_time != null && prev.delivery_time != null) {
+            const delta = curr.delivery_time - prev.delivery_time;
+            if (delta >= 8) {
+              await prisma.proactiveAlert.create({ data: {
+                alert_type: 'operational',
+                title: `⏱ זמן משלוח ב-${platform} עלה ב-${delta} דקות`,
+                description: `זמן המשלוח שלך ב-${platform} עלה מ-${prev.delivery_time} ל-${curr.delivery_time} דקות — לקוחות עשויים לעבור למתחרים`,
+                suggested_action: 'בדוק עם שליחים מה גורם לעיכוב ועדכן את הזמן המוצג',
+                priority: delta >= 15 ? 'high' : 'medium',
+                source_agent: 'detectDeliveryChanges',
+                is_dismissed: false, is_acted_on: false,
+                created_at: new Date().toISOString(),
+                linked_business: businessProfileId,
+              }}).catch(() => {});
+              insightsCreated++;
+            }
+          }
+          if (curr.rating != null && prev.rating != null && (curr.rating - prev.rating) <= -0.3) {
+            await prisma.proactiveAlert.create({ data: {
+              alert_type: 'reputation',
+              title: `⭐ דירוג ב-${platform} ירד ל-${curr.rating.toFixed(1)}`,
+              description: `הדירוג שלך ב-${platform} ירד מ-${prev.rating.toFixed(1)} ל-${curr.rating.toFixed(1)} — שווה לבדוק ביקורות חדשות`,
+              suggested_action: 'קרא ביקורות חדשות וענה להן בהקדם',
+              priority: 'high',
+              source_agent: 'detectDeliveryChanges',
+              is_dismissed: false, is_acted_on: false,
+              created_at: new Date().toISOString(),
+              linked_business: businessProfileId,
+            }}).catch(() => {});
+            insightsCreated++;
+          }
+        }
+      }
+    } catch (_) {}
 
     // ── Step 3: Scan competitors ──────────────────────────────────────────────
     const competitors = await prisma.competitor.findMany({
@@ -415,11 +486,15 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
           };
         }
 
-        // Detect rating drops from previous snapshot
-        const notesStr = dbComp.notes || '';
-        const snapMatch = notesStr.match(/marketplace_snapshot:\s*(\{.*?\}(?:\n|}$))/s);
+        // Load previous snapshot from JSONB table
         let prevSnapshot: any = {};
-        try { if (snapMatch) prevSnapshot = JSON.parse(snapMatch[1]); } catch (_) {}
+        try {
+          const prevRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT snapshot_json FROM otx_competitor_snapshots WHERE competitor_id = $1 ORDER BY taken_at DESC LIMIT 1`,
+            scanned.id,
+          );
+          if (prevRows[0]) prevSnapshot = prevRows[0].snapshot_json;
+        } catch (_) {}
 
         // Check per-platform rating changes
         for (const r of scanned.results) {
@@ -453,16 +528,19 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
         const woltResult   = scanned.results.find(r => r.platform === 'Wolt' && r.found);
         const otherSnippet = scanned.results.find(r => r.found && r.snippet)?.snippet;
 
-        const cleanNotes = notesStr.replace(/marketplace_snapshot:\s*\{.*?\}/s, '').trim();
+        // Persist snapshot in dedicated JSONB table (append-only, enables trend queries)
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO otx_competitor_snapshots (competitor_id, business_id, snapshot_json) VALUES ($1, $2, $3::jsonb)`,
+          scanned.id, businessProfileId, JSON.stringify(newSnapshot),
+        ).catch(() => {});
 
         await prisma.competitor.update({
           where: { id: scanned.id },
           data: {
             last_scanned: new Date().toISOString(),
-            notes: `${cleanNotes}\nmarketplace_snapshot: ${JSON.stringify(newSnapshot)}`.trim().slice(0, 2000),
             price_points: tenbisResult
               ? `10bis: מינימום ₪${tenbisResult.min_order ?? '?'} | ${tenbisResult.delivery_time ?? '?'} דק׳`
-              : undefined,
+              : (woltResult?.delivery_time != null ? `Wolt: ${woltResult.delivery_time} דק׳` : undefined),
             menu_highlights: (woltResult?.snippet || otherSnippet || '').slice(0, 200) || undefined,
             current_promotions: scanned.results
               .filter(r => r.found)
