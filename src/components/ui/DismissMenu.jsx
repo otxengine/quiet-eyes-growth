@@ -74,10 +74,12 @@ export default function DismissMenu({
 
   // Map entityType → Prisma model name that has is_dismissed
   const ENTITY_MODEL = {
-    alert:  'ProactiveAlert',
-    signal: 'MarketSignal',
-    trend:  'MarketSignal',
-    event:  'MarketSignal',
+    alert:      'ProactiveAlert',
+    signal:     'MarketSignal',
+    trend:      'MarketSignal',
+    event:      'MarketSignal',
+    competitor: 'Competitor',
+    action:     'Action',
   };
 
   const handleConfirm = async () => {

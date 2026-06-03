@@ -343,7 +343,7 @@ export default function Events() {
 
   const { data: eventAlerts = [], isLoading: loadingAlerts } = useQuery({
     queryKey: ['eventAlerts', bpId],
-    queryFn:  () => base44.entities.ProactiveAlert.filter({ linked_business: bpId, alert_type: 'market_opportunity' }, '-created_date', 50),
+    queryFn:  () => base44.entities.ProactiveAlert.filter({ linked_business: bpId, alert_type: 'market_opportunity', is_dismissed: false }, '-created_date', 50),
     enabled:  !!bpId,
     refetchInterval: POLL_INTERVAL,
     staleTime: 10 * 60 * 1000,
@@ -351,7 +351,7 @@ export default function Events() {
 
   const { data: eventSignals = [], isLoading: loadingSignals } = useQuery({
     queryKey: ['eventSignals', bpId],
-    queryFn:  () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'event' }, '-detected_at', 50),
+    queryFn:  () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'event', is_dismissed: false }, '-detected_at', 50),
     enabled:  !!bpId,
     refetchInterval: POLL_INTERVAL,
     staleTime: 10 * 60 * 1000,
@@ -359,7 +359,7 @@ export default function Events() {
 
   const { data: localEventSignals = [], isLoading: loadingLocal } = useQuery({
     queryKey: ['localEventSignals', bpId],
-    queryFn:  () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'local_event' }, '-detected_at', 30),
+    queryFn:  () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'local_event', is_dismissed: false }, '-detected_at', 30),
     enabled:  !!bpId,
     refetchInterval: POLL_INTERVAL,
     staleTime: 10 * 60 * 1000,
@@ -367,7 +367,7 @@ export default function Events() {
 
   const { data: weatherSignals = [], isLoading: loadingWeather } = useQuery({
     queryKey: ['weatherSignals', bpId],
-    queryFn:  () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'weather_event' }, '-detected_at', 10),
+    queryFn:  () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'weather_event', is_dismissed: false }, '-detected_at', 10),
     enabled:  !!bpId,
     refetchInterval: POLL_INTERVAL,
     staleTime: 10 * 60 * 1000,

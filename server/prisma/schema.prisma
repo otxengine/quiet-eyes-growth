@@ -225,6 +225,7 @@ model Competitor {
   current_promotions   String?
   opening_hours        String?
   recent_reviews_summary String?
+  is_dismissed         Boolean? @default(false)
 
   @@map("competitors")
 }
@@ -391,6 +392,7 @@ model Action {
   execution_plan  String?
   status          String?  @default("proposed")
   created_at      String?
+  is_dismissed    Boolean? @default(false)
 
   @@map("actions")
 }

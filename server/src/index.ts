@@ -381,6 +381,14 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS price_snapshot TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS content_themes TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS sentiment_from_reviews TEXT`);
+  // ── is_dismissed: persistent dismiss for competitors + actions ───────────
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS is_dismissed BOOLEAN DEFAULT false`);
+  await sql(`ALTER TABLE actions ADD COLUMN IF NOT EXISTS is_dismissed BOOLEAN DEFAULT false`);
+  // Normalize historical NULL → false so {is_dismissed:false} queries work correctly
+  await sql(`UPDATE proactive_alerts SET is_dismissed = false WHERE is_dismissed IS NULL`);
+  await sql(`UPDATE market_signals SET is_dismissed = false WHERE is_dismissed IS NULL`);
+  await sql(`UPDATE competitors SET is_dismissed = false WHERE is_dismissed IS NULL`);
+  await sql(`UPDATE actions SET is_dismissed = false WHERE is_dismissed IS NULL`);
   await sql(`CREATE TABLE IF NOT EXISTS media_assets (
     id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     created_date    TIMESTAMPTZ NOT NULL DEFAULT NOW(),

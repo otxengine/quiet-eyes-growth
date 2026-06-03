@@ -16,6 +16,19 @@ import { invokeLLM } from '../../lib/llm';
 import { tavilySearch } from '../../lib/tavily';
 import { getBenchmark, getBudgetTiers } from '../../lib/campaignBenchmarks';
 
+// ── Tavily benchmark cache (24h TTL, process-level) ──────────────────────────
+const _tavilyCache = new Map<string, { data: { snippets: string[]; urls: string[] }; ts: number }>();
+const TAVILY_CACHE_TTL = 24 * 60 * 60 * 1000;
+
+function getCachedBenchmarks(key: string) {
+  const entry = _tavilyCache.get(key);
+  if (entry && Date.now() - entry.ts < TAVILY_CACHE_TTL) return entry.data;
+  return null;
+}
+function setCachedBenchmarks(key: string, data: { snippets: string[]; urls: string[] }) {
+  _tavilyCache.set(key, { data, ts: Date.now() });
+}
+
 type Platform  = 'meta' | 'instagram' | 'google';
 type Objective = 'awareness' | 'traffic' | 'leads' | 'conversions';
 
@@ -96,6 +109,10 @@ async function fetchLiveBenchmarks(
   platform: Platform,
   businessDescription: string,
 ): Promise<{ snippets: string[]; urls: string[] }> {
+  const cacheKey = `${category}||${platform}`;
+  const cached = getCachedBenchmarks(cacheKey);
+  if (cached) return cached;
+
   const platformLabel = platform === 'meta' ? 'Facebook Meta' : platform === 'instagram' ? 'Instagram' : 'Google Ads';
 
   // Two complementary searches: one broad sector, one Israel-specific
@@ -116,7 +133,9 @@ async function fetchLiveBenchmarks(
     .filter(Boolean);
   const urls = all.map(r => r.url).filter(Boolean);
 
-  return { snippets, urls };
+  const result = { snippets, urls };
+  setCachedBenchmarks(cacheKey, result);
+  return result;
 }
 
 // ── Step 3: LLM parses live search results into structured benchmarks ─────────

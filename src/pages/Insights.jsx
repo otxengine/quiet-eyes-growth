@@ -319,7 +319,7 @@ export default function Insights() {
   const { data: actions = [], isLoading: loadingActions } = useQuery({
     queryKey: ['actions', bpId, 'insights-v2'],
     queryFn: () => base44.entities.Action.filter(
-      { linked_business: bpId }, '-created_date', 30
+      { linked_business: bpId, is_dismissed: false }, '-created_date', 30
     ),
     enabled: !!bpId,
   });
@@ -346,7 +346,7 @@ export default function Insights() {
 
     const activeAlerts  = alerts.filter(a => !dismissedIds.has(a.id) && !a.is_acted_on);
     const activeSignals = signals.filter(s => !dismissedIds.has(s.id));
-    const activeActions = actions.filter(a => !dismissedIds.has(a.id) && a.status !== 'completed');
+    const activeActions = actions.filter(a => !dismissedIds.has(a.id) && a.status !== 'completed' && !a.is_dismissed);
 
     // 1 — Urgent
     const urgentItems = sortByPriority(

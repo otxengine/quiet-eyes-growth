@@ -79,8 +79,15 @@ async function runAgentForAll(label: string, agentFn: Function) {
           await agentFn(fakeReq, fakeRes);
           await writeHeartbeat(label, id, 'ok');
         } catch (err: any) {
-          logger.error(`${label}: failed`, { id, error: err.message });
-          await writeHeartbeat(label, id, 'failed', err.message);
+          // Retry once after 3s before marking as failed
+          try {
+            await new Promise(r => setTimeout(r, 3000));
+            await agentFn(fakeReq, fakeRes);
+            await writeHeartbeat(label, id, 'ok');
+          } catch (retryErr: any) {
+            logger.error(`${label}: failed after retry`, { id, error: retryErr.message });
+            await writeHeartbeat(label, id, 'failed', retryErr.message);
+          }
         }
       }),
     );
