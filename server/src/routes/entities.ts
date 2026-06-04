@@ -3,16 +3,46 @@ import { prisma } from '../db';
 import { getUserId, isAdminKeyRequest } from '../middleware/auth';
 import { cleanupCompetitorsByRadius } from '../lib/competitorRadiusCleanup';
 
+// ── Clerk email lookup cache ───────────────────────────────────────────────────
+// Maps userId → email, TTL 10 minutes. Avoids repeated Clerk API calls.
+const _emailCache = new Map<string, { email: string; expires: number }>();
+
+async function getUserEmail(userId: string): Promise<string | null> {
+  const cached = _emailCache.get(userId);
+  if (cached && cached.expires > Date.now()) return cached.email;
+
+  try {
+    const secretKey = process.env.CLERK_SECRET_KEY || '';
+    if (!secretKey || secretKey.includes('your_key_here')) return null;
+    const { createClerkClient } = require('@clerk/express');
+    const cc = createClerkClient({ secretKey });
+    const user = await cc.users.getUser(userId);
+    const email = user?.emailAddresses?.[0]?.emailAddress || null;
+    if (email) _emailCache.set(userId, { email, expires: Date.now() + 10 * 60_000 });
+    return email;
+  } catch {
+    return null;
+  }
+}
+
 // Column name allowlist for raw SQL fallback — prevents SQL injection via key names
 const SAFE_COLUMN = /^[a-z_][a-z0-9_]*$/i;
 
 /** Returns all businessProfileIds owned by (or accessible to) a given userId */
 async function getUserBusinessIds(userId: string): Promise<string[]> {
-  const profiles = await prisma.businessProfile.findMany({
+  const byId = await prisma.businessProfile.findMany({
     where: { created_by: userId },
     select: { id: true },
   });
-  return profiles.map(p => p.id);
+  if (byId.length > 0) return byId.map(p => p.id);
+  // Fallback: admin-created profiles store email as created_by
+  const email = await getUserEmail(userId);
+  if (!email) return [];
+  const byEmail = await prisma.businessProfile.findMany({
+    where: { created_by: email },
+    select: { id: true },
+  });
+  return byEmail.map(p => p.id);
 }
 
 /** Returns true if the record with `id` on `model` belongs to `userId` */
