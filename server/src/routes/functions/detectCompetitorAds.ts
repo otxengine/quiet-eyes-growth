@@ -5,7 +5,8 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { searchAllAds, hasSearchApiKey, AdResult } from '../../lib/searchapi';
 
-const MIN_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h between runs
+const MIN_INTERVAL_MS     = 48 * 60 * 60 * 1000; // 48h between full runs (saves API credits)
+const PER_COMP_INTERVAL_MS = 48 * 60 * 60 * 1000; // skip individual competitor if scanned within 48h
 
 /**
  * detectCompetitorAds — scans Meta Ads Library, TikTok Ads Library and Google Ads
@@ -55,6 +56,15 @@ export async function detectCompetitorAds(req: Request, res: Response) {
 
     for (const comp of competitors) {
       try {
+        // Per-competitor 48h guard — skip if scanned recently
+        const c = comp as any;
+        const lastScanned = c.sponsored_ads_updated_at
+          ? new Date(c.sponsored_ads_updated_at).getTime() : 0;
+        if (!req.body.force && Date.now() - lastScanned < PER_COMP_INTERVAL_MS) {
+          console.log(`[detectCompetitorAds] skipping ${comp.name} — scanned recently`);
+          continue;
+        }
+
         console.log(`[detectCompetitorAds] scanning ads for: ${comp.name}`);
 
         const ads = await searchAllAds(comp.name, profile.category || '', profile.city || '');
@@ -128,6 +138,42 @@ Analyze and return ONLY valid JSON. ALL string values MUST be in Hebrew:
             data: {
               last_promo_detected:    `${analysis.platforms_summary}: ${analysis.promoted_product}`,
               last_promo_detected_at: new Date().toISOString(),
+            },
+          }).catch(() => {});
+        }
+
+        // ── Claude Sonnet deep intel analysis ────────────────────────────────
+        // Extracts strategic signals: target audience, spend level, gaps = our opportunities
+        const deepIntel: any = await invokeLLM({
+          model: 'sonnet',
+          maxTokens: 600,
+          prompt: `You are a senior competitive intelligence analyst for Israeli businesses.
+My business: "${profile.name}" (${profile.category}, ${profile.city}).
+Competitor "${comp.name}" is running ${ads.length} paid ad campaigns across ${platforms.join(', ')}.
+
+Campaign data:
+${adSummary.slice(0, 2500)}
+
+Based on the ad creatives, targeting signals, and messaging — perform a deep strategic analysis.
+Return ONLY valid JSON. ALL string values MUST be in Hebrew:
+{
+  "ad_target_audience": "מי הם מנסים להגיע אליו — גיל/מגדר/תחומי עניין/בולטת גיאוגרפית",
+  "ad_strategy_summary": "מה האסטרטגיה הכוללת שלהם ב-1-2 משפטים — מותג/מחיר/רגש/נישה",
+  "ad_spend_signal": "low|medium|high",
+  "ad_gaps": "מה הם לא מפרסמים — מוצרים/שירותים/קהלים שפנויים לנו לתפוס"
+}`,
+          response_json_schema: { type: 'object' },
+        }) as any;
+
+        if (deepIntel) {
+          await (prisma.competitor.update as any)({
+            where: { id: comp.id },
+            data: {
+              ad_target_audience:  deepIntel.ad_target_audience  || null,
+              ad_strategy_summary: deepIntel.ad_strategy_summary || null,
+              ad_spend_signal:     deepIntel.ad_spend_signal     || null,
+              ad_gaps:             deepIntel.ad_gaps             || null,
+              ad_intel_updated_at: new Date().toISOString(),
             },
           }).catch(() => {});
         }

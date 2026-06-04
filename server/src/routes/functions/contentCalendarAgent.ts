@@ -3,6 +3,7 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
+import { loadCompetitorAdsIntel, formatCompetitorAdsForPrompt } from '../../lib/competitorAdsIntel';
 import { getSectorContentStrategy } from '../../lib/sectorPrompts';
 import { getAgentMission, getAllMissions } from '../../lib/missionPlanner';
 
@@ -156,6 +157,10 @@ export async function contentCalendarAgent(req: Request, res: Response) {
         ).join('\n')}`
       : '';
 
+    // Load competitor paid ad intelligence to inform counter-content strategy
+    const adsIntel = await loadCompetitorAdsIntel(businessProfileId);
+    const adsIntelContext = formatCompetitorAdsForPrompt(adsIntel);
+
     const socialProof = recentReviews.length > 0
       ? `ביקורות חיוביות לשימוש בפוסטים:\n${recentReviews.map(r =>
           `- "${(r.text || '').substring(0, 100)}" — ${r.reviewer_name || 'לקוח מרוצה'}`
@@ -215,6 +220,7 @@ ${audienceCtx ? `=== מחקר קהל יעד ===\n${audienceCtx}\n===` : ''}
 ${signalContext ? `\n${signalContext}` : ''}
 ${trendContext ? `\n${trendContext}` : ''}
 ${competitorContext ? `\n${competitorContext}` : ''}
+${adsIntelContext ? `\n${adsIntelContext}` : ''}
 ${socialProof ? `\n${socialProof}` : ''}
 ${sectorContext ? `\n${sectorContext}` : ''}
 ${contentStyle ? `\nסגנון תוכן מועדף: ${contentStyle}` : ''}

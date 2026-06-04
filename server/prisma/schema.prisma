@@ -246,6 +246,12 @@ model Competitor {
   active_ad_platforms      String?  // comma-separated: 'facebook, instagram, tiktok, google'
   active_ad_count          Int?     @default(0)
   active_ads_summary       String?  // JSON: [{platform, title, body, cta, start}]
+  // ── Deep Claude analysis of ad campaigns ─────────────────────────────────
+  ad_target_audience       String?  // who they're targeting based on ad copy
+  ad_strategy_summary      String?  // their overall ad strategy (1-2 sentences)
+  ad_spend_signal          String?  // 'low'|'medium'|'high' — based on platform count + ad count
+  ad_gaps                  String?  // what they're NOT advertising = our opportunity
+  ad_intel_updated_at      String?  // when Claude last analyzed their ads
 
   @@map("competitors")
 }

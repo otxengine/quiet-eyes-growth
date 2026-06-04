@@ -3,6 +3,7 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
+import { loadCompetitorAdsIntel } from '../../lib/competitorAdsIntel';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 
 // Intent scoring — used for lead scoring bonus only (not as a gate)
@@ -199,6 +200,16 @@ export async function findSocialLeads(req: Request, res: Response) {
       queries.push(`site:rest.co.il OR site:2eat.co.il מסעדה חדשה ${area} שף`);
       queries.push(`chef restaurant ${area} new menu premium wagyu truffle ${new Date().getFullYear()}`);
       queries.push(`"מחפש ספק" OR "מחפש יבואן" בשר OR מזון פרימיום site:facebook.com`);
+    }
+
+    // ── Competitor ad gap queries — target audiences competitors ignore ────────
+    const adsIntel = await loadCompetitorAdsIntel(businessProfileId);
+    for (const ai of adsIntel) {
+      if (ai.gaps && ai.gaps.length > 10) {
+        // Search for leads in the gap audiences competitors aren't targeting
+        queries.push(`${ai.gaps.slice(0, 60)} ${area} מחפש OR צריך site:facebook.com`);
+        queries.push(`${ai.gaps.slice(0, 60)} ${area} ${category}`);
+      }
     }
 
     let leadsCreated = 0;

@@ -392,9 +392,15 @@ app.listen(PORT, async () => {
   // ── is_dismissed: persistent dismiss for competitors + actions ───────────
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS is_dismissed BOOLEAN DEFAULT false`);
   await sql(`ALTER TABLE actions ADD COLUMN IF NOT EXISTS is_dismissed BOOLEAN DEFAULT false`);
-  // ── Competitor paid ads tracking fields ──────────────────────────────────
+  // ── Competitor paid ads tracking + deep Claude analysis ─────────────────
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS active_ad_platforms TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS active_ad_count INT DEFAULT 0`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS active_ads_summary TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS ad_target_audience TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS ad_strategy_summary TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS ad_spend_signal TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS ad_gaps TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS ad_intel_updated_at TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS active_ads_summary TEXT`);
   // Normalize historical NULL → false so {is_dismissed:false} queries work correctly
   await sql(`UPDATE proactive_alerts SET is_dismissed = false WHERE is_dismissed IS NULL`);
