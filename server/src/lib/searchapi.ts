@@ -121,6 +121,37 @@ export async function searchGoogleAds(query: string): Promise<AdResult[]> {
   }));
 }
 
+// ── Google Trends Trending Now ────────────────────────────────────────────────
+export interface TrendingNowResult {
+  title:            string;
+  traffic:          string; // e.g. "500K+"
+  related_articles: string[];
+}
+
+export async function searchTrendingNow(geo = 'IL'): Promise<TrendingNowResult[]> {
+  const data = await _fetch({ engine: 'google_trends_trending_now', geo });
+  if (!data?.trending_searches) return [];
+  return (data.trending_searches as any[]).slice(0, 15).map((t: any) => ({
+    title:            t.title || t.query || '',
+    traffic:          t.formattedTraffic || t.traffic || '',
+    related_articles: ((t.articles || []) as any[]).slice(0, 2).map((a: any) => a.title || ''),
+  })).filter(t => t.title);
+}
+
+// ── YouTube Trends ─────────────────────────────────────────────────────────────
+export async function searchYouTubeTrends(query: string): Promise<string[]> {
+  const data = await _fetch({ engine: 'youtube', q: query, order: 'viewCount' });
+  if (!data?.videos) return [];
+  return (data.videos as any[]).slice(0, 8).map((v: any) => v.title || '').filter(Boolean);
+}
+
+// ── Google News ───────────────────────────────────────────────────────────────
+export async function searchGoogleNews(query: string, lang = 'he'): Promise<string[]> {
+  const data = await _fetch({ engine: 'google_news', q: query, hl: lang, gl: 'il' });
+  if (!data?.news_results) return [];
+  return (data.news_results as any[]).slice(0, 8).map((n: any) => n.title || '').filter(Boolean);
+}
+
 // ── Combined: search all three platforms ──────────────────────────────────────
 export async function searchAllAds(
   competitorName: string,

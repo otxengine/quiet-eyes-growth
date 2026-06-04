@@ -21,11 +21,15 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { callAIJson } from '../../lib/ai_router';
+import { invokeLLM } from '../../lib/llm';
 import { tavilyAdvancedSearch } from '../../lib/tavily';
 import { writeAutomationLog } from '../../lib/automationLog';
 import {
   loadCheckpoint, saveCheckpoint, shouldSkipByTime, filterNewUrls,
 } from '../../lib/trendMemory';
+import {
+  hasSearchApiKey, searchTrendingNow, searchYouTubeTrends, searchGoogleNews,
+} from '../../lib/searchapi';
 
 const SERP_API_KEY  = process.env.SERP_API_KEY  || '';
 const MIN_INTERVAL  = 20 * 60 * 60 * 1000; // 20h — slightly less than 24h to handle schedule jitter
@@ -130,6 +134,246 @@ async function savePlatformTrend(
     );
     return rows?.[0]?.id || null;
   } catch { return null; }
+}
+
+// ── Cross-platform gap analysis ───────────────────────────────────────────────
+/**
+ * Aggregates trend signals from all platforms (Google, TikTok, Instagram, viral),
+ * enriches with SearchAPI real-time data, and runs gap analysis against the
+ * business's known services.
+ *
+ * Anti-spam rules:
+ *   • Max 2 ProactiveAlert (trend_gap) per week
+ *   • 14-day dedup per trend name
+ *   • Confidence ≥ 70 + evidence from 2+ platforms
+ *   • Content trends saved silently as MarketSignal (no alert)
+ */
+async function runCrossPlatformGapAnalysis(
+  businessProfileId: string,
+  profile: {
+    name: string;
+    category: string;
+    city: string;
+    relevant_services?: string | null;
+    description?: string | null;
+  },
+): Promise<{ gapsFound: number; contentTrendsFound: number }> {
+
+  // ── Anti-spam: max 2 gap alerts per week ─────────────────────────────────
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  const existingGapAlerts = await prisma.proactiveAlert.findMany({
+    where: { linked_business: businessProfileId, alert_type: 'trend_gap', created_at: { gte: weekAgo } },
+    select: { id: true },
+  });
+  if (existingGapAlerts.length >= 2) {
+    console.log('[trendGap] weekly cap reached (2 alerts) — skipping');
+    return { gapsFound: 0, contentTrendsFound: 0 };
+  }
+  const remainingSlots = 2 - existingGapAlerts.length;
+
+  // ── Load recent signals from all platform agents (last 14 days) ──────────
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 86400000).toISOString();
+  const platformSignals = await prisma.marketSignal.findMany({
+    where: {
+      linked_business: businessProfileId,
+      category: { in: ['google_trend', 'tiktok_sector_trend', 'instagram_trend', 'viral'] },
+      detected_at: { gte: fourteenDaysAgo },
+    },
+    select: { summary: true, category: true, recommended_action: true },
+    orderBy: { detected_at: 'desc' },
+    take: 40,
+  });
+
+  if (platformSignals.length < 2) {
+    console.log('[trendGap] not enough cross-platform signals yet — skipping');
+    return { gapsFound: 0, contentTrendsFound: 0 };
+  }
+
+  // ── SearchAPI real-time enrichment ───────────────────────────────────────
+  let trendingNowBlock = '';
+  let ytBlock = '';
+  let newsBlock = '';
+
+  if (hasSearchApiKey()) {
+    const [trendingNow, ytTrends, newsHeadlines] = await Promise.allSettled([
+      searchTrendingNow('IL'),
+      searchYouTubeTrends(`${profile.category} ${profile.city}`),
+      searchGoogleNews(`${profile.category} ישראל`),
+    ]);
+
+    const tn = trendingNow.status === 'fulfilled' ? trendingNow.value : [];
+    const yt = ytTrends.status === 'fulfilled' ? ytTrends.value : [];
+    const news = newsHeadlines.status === 'fulfilled' ? newsHeadlines.value : [];
+
+    if (tn.length > 0)
+      trendingNowBlock = `\nטרנדים חמים עכשיו בישראל (Google Trending Now):\n${tn.map(t => `• ${t.title} (${t.traffic})`).join('\n')}`;
+    if (yt.length > 0)
+      ytBlock = `\nYouTube — תוכן מוביל בסקטור:\n${yt.map(t => `• ${t}`).join('\n')}`;
+    if (news.length > 0)
+      newsBlock = `\nחדשות סקטור:\n${news.map(h => `• ${h}`).join('\n')}`;
+  }
+
+  // ── Claude Sonnet: gap analysis + content trends ─────────────────────────
+  const platformBlock = platformSignals
+    .map(s => `[${s.category.toUpperCase().replace('_', ' ')}] ${s.summary}`)
+    .join('\n');
+
+  const result = await invokeLLM({
+    model: 'sonnet',
+    maxTokens: 1200,
+    prompt: `You are a business growth analyst for Israeli small businesses.
+Business: "${profile.name}" (${profile.category}, ${profile.city})
+Current services/products: ${profile.relevant_services || profile.description || 'not specified'}
+
+Trend signals from the last 14 days across multiple platforms:
+${platformBlock}
+${trendingNowBlock}
+${ytBlock}
+${newsBlock}
+
+TASK 1 — SERVICE/PRODUCT GAPS: Find 1-2 things trending in this sector that this business does NOT offer yet.
+Be strict: only include if evidence appears in 2+ sources above AND it's realistic for this business to add.
+
+TASK 2 — CONTENT TRENDS: Find 1-3 content formats/styles going viral for this type of business.
+These are HOW to create content, not what product to sell.
+
+Rules:
+• Product gaps: confidence ≥ 70, platform_count ≥ 2, actionable within 2 weeks
+• Content trends: confidence ≥ 60, specific enough to act on immediately
+• If no clear evidence → return empty arrays. Do NOT invent opportunities.
+• ALL string values in Hebrew
+
+Return ONLY valid JSON:
+{
+  "product_gaps": [{
+    "trend_name": "שם הטרנד — קצר",
+    "what_is_missing": "מה העסק לא מציע כרגע",
+    "evidence": "מאיפה רואים את זה — ציין פלטפורמות",
+    "platform_count": 2,
+    "confidence": 75,
+    "action_plan": "שלב 1: X | שלב 2: Y | שלב 3: לאנץ' + תוכן",
+    "launch_post": "פוסט הכרזה מוכן — 3-4 משפטים בעברית, לא שיווקי מדי",
+    "urgency": "high|medium"
+  }],
+  "content_trends": [{
+    "trend_name": "שם תבנית התוכן",
+    "description": "מה עובד ולמה בסקטור זה",
+    "example_hook": "שורה ראשונה לפוסט/ריל שעובדת",
+    "platform": "tiktok|instagram|both",
+    "confidence": 65
+  }]
+}`,
+    response_json_schema: { type: 'object' },
+  }) as any;
+
+  if (!result) return { gapsFound: 0, contentTrendsFound: 0 };
+
+  const productGaps: any[]    = result.product_gaps    || [];
+  const contentTrends: any[]  = result.content_trends  || [];
+  let gapsFound          = 0;
+  let contentTrendsFound = 0;
+
+  // ── Save product gap ProactiveAlerts ────────────────────────────────────
+  for (const gap of productGaps.slice(0, remainingSlots)) {
+    if ((gap.confidence || 0) < 70 || (gap.platform_count || 0) < 2) continue;
+
+    // 14-day dedup
+    const dupCheck = await prisma.proactiveAlert.findFirst({
+      where: {
+        linked_business: businessProfileId,
+        alert_type:      'trend_gap',
+        title:           { contains: (gap.trend_name || '').slice(0, 20) },
+        created_at:      { gte: fourteenDaysAgo },
+      },
+      select: { id: true },
+    });
+    if (dupCheck) continue;
+
+    await prisma.proactiveAlert.create({
+      data: {
+        linked_business:  businessProfileId,
+        alert_type:       'trend_gap',
+        title:            `📈 טרנד בסקטור שלך: ${gap.trend_name}`,
+        description:      `🎯 מה חסר: ${gap.what_is_missing}\n📊 ראיות: ${gap.evidence}\n\n📋 תוכנית: ${gap.action_plan}`,
+        suggested_action: gap.launch_post || gap.action_plan || '',
+        priority:         gap.urgency === 'high' ? 'high' : 'medium',
+        source_agent:     JSON.stringify({
+          action_label:    'צור תוכן לאנץ\'',
+          action_type:     'social_post',
+          prefilled_text:  gap.launch_post || '',
+          urgency_hours:   gap.urgency === 'high' ? 72 : 168,
+          impact_reason:   `${gap.trend_name} עולה ב-${gap.evidence}`,
+          trend_name:      gap.trend_name,
+          platform_count:  gap.platform_count,
+          confidence:      gap.confidence,
+        }),
+        is_dismissed: false,
+        is_acted_on:  false,
+        created_at:   new Date().toISOString(),
+      },
+    }).catch(() => {});
+
+    // Also save as MarketSignal for agent consumption
+    await prisma.marketSignal.create({
+      data: {
+        linked_business:    businessProfileId,
+        summary:            `📈 ${gap.trend_name} — טרנד עולה שחסר בשירותים שלך`,
+        impact_level:       gap.urgency === 'high' ? 'high' : 'medium',
+        category:           'trend_gap',
+        recommended_action: gap.action_plan || '',
+        confidence:         gap.confidence || 70,
+        source_type:        'agent',
+        agent_name:         'googleTrendsScanAgent',
+        source_description: gap.evidence || '',
+        is_dismissed:       false,
+        detected_at:        new Date().toISOString(),
+      },
+    }).catch(() => {});
+
+    gapsFound++;
+  }
+
+  // ── Save content trends silently as MarketSignal (feeds content agents) ──
+  for (const ct of contentTrends.slice(0, 3)) {
+    if ((ct.confidence || 0) < 60) continue;
+
+    // 7-day dedup
+    const ctDup = await prisma.marketSignal.findFirst({
+      where: {
+        linked_business: businessProfileId,
+        category:        'content_trend',
+        summary:         { contains: (ct.trend_name || '').slice(0, 20) },
+        detected_at:     { gte: weekAgo },
+      },
+      select: { id: true },
+    });
+    if (ctDup) continue;
+
+    await prisma.marketSignal.create({
+      data: {
+        linked_business:    businessProfileId,
+        summary:            `🎬 תבנית תוכן ויראלי: ${ct.trend_name}`,
+        impact_level:       'medium',
+        category:           'content_trend',
+        recommended_action: ct.example_hook || ct.description || '',
+        confidence:         ct.confidence || 60,
+        source_type:        'agent',
+        agent_name:         'googleTrendsScanAgent',
+        source_description: JSON.stringify({
+          description:  ct.description,
+          example_hook: ct.example_hook,
+          platform:     ct.platform,
+        }),
+        is_dismissed:       false,
+        detected_at:        new Date().toISOString(),
+      },
+    }).catch(() => {});
+
+    contentTrendsFound++;
+  }
+
+  console.log(`[trendGap] gaps=${gapsFound} content_trends=${contentTrendsFound}`);
+  return { gapsFound, contentTrendsFound };
 }
 
 // ── Main agent ─────────────────────────────────────────────────────────────────
@@ -322,9 +566,18 @@ Return ONLY valid JSON. ALL string values in Hebrew:
       });
     }
 
+    // ── Cross-platform gap analysis (runs after Google signals are saved) ────
+    const { gapsFound, contentTrendsFound } = await runCrossPlatformGapAnalysis(
+      businessProfileId,
+      { name: name as string, category: category as string, city: city as string,
+        relevant_services: (profile as any).relevant_services,
+        description: (profile as any).description },
+    );
+    signalsCreated += gapsFound + contentTrendsFound;
+
     await writeAutomationLog('googleTrendsScanAgent', businessProfileId, startTime, signalsCreated);
-    console.log(`[googleTrendsScanAgent] done: ${signalsCreated} signals`);
-    return res.json({ signals_created: signalsCreated });
+    console.log(`[googleTrendsScanAgent] done: ${signalsCreated} signals (gaps=${gapsFound} content_trends=${contentTrendsFound})`);
+    return res.json({ signals_created: signalsCreated, gaps_found: gapsFound, content_trends_found: contentTrendsFound });
 
   } catch (err: any) {
     console.error('[googleTrendsScanAgent] error:', err.message);
