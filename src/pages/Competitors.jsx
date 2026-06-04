@@ -262,7 +262,6 @@ export default function Competitors() {
         base44.functions.invoke('batchSnapshotCompetitors',   { businessProfileId: bpId }),
         base44.functions.invoke('detectCompetitorChanges',    { businessProfileId: bpId }),
         base44.functions.invoke('analyzeCompetitorSocial',    { businessProfileId: bpId }),
-        base44.functions.invoke('competitorSocialTracker',    { businessProfileId: bpId }),
       ]);
 
       // Step 4: intel + advisory insights

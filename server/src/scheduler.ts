@@ -29,7 +29,6 @@ import { diffCompetitorSnapshot } from './routes/functions/diffCompetitorSnapsho
 import { batchSnapshotCompetitors } from './routes/functions/batchSnapshotCompetitors';
 import { detectCompetitorChanges } from './routes/functions/detectCompetitorChanges';
 import { analyzeCompetitorSocial } from './routes/functions/analyzeCompetitorSocial';
-import { competitorSocialTracker } from './routes/functions/competitorSocialTracker';
 import { competitorMoveTracker } from './routes/functions/competitorMoveTracker';
 import { tiktokSectorTrendAgent } from './routes/functions/tiktokSectorTrendAgent';
 import { tiktokAudienceAgent } from './routes/functions/tiktokAudienceAgent';
@@ -134,8 +133,7 @@ export function startScheduler() {
     // ── Competitor intelligence pipeline (ordered: snapshot → changes → social → intel → moves) ──
     runAgentForAll('BatchSnapshotCompetitors', batchSnapshotCompetitors); // takes fresh snapshots
     runAgentForAll('DetectCompetitorChanges',  detectCompetitorChanges);  // prices/promos/posts → MarketSignals
-    runAgentForAll('AnalyzeCompetitorSocial',   analyzeCompetitorSocial);   // social enrichment → new fields
-    runAgentForAll('CompetitorSocialTracker',   competitorSocialTracker);   // discover social pages + monitor promos/ads/new products
+    runAgentForAll('AnalyzeCompetitorSocial',   analyzeCompetitorSocial);   // social enrichment + promo/ads/product detection → new fields + alerts
     runAgentForAll('CompetitorIntel',           competitorIntelAgent);      // OSINT × events → ProactiveAlerts
     runAgentForAll('CompetitorMoveTracker',     competitorMoveTracker);     // DB-level moves → ProactiveAlerts
     // ── Social agents ────────────────────────────────────────────────────────

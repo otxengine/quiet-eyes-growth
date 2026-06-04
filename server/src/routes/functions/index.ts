@@ -41,7 +41,6 @@ import { analyzeSentiment } from './analyzeSentiment';
 import { detectCompetitorChanges } from './detectCompetitorChanges';
 import { getAudienceSegments } from './getAudienceSegments';
 import { analyzeCompetitorSocial } from './analyzeCompetitorSocial';
-import { competitorSocialTracker } from './competitorSocialTracker';
 import { detectEvents } from './detectEvents';
 import { findLocalEvents } from './findLocalEvents';
 import { detectDeliveryChanges } from './detectDeliveryChanges';
@@ -153,7 +152,6 @@ const FUNCTION_MAP: Record<string, any> = {
   detectCompetitorChanges,
   getAudienceSegments,
   analyzeCompetitorSocial,
-  competitorSocialTracker,
   detectEvents,
   findLocalEvents,
   detectDeliveryChanges,

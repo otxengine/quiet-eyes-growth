@@ -4,14 +4,16 @@ import { invokeLLM } from '../../lib/llm';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 import { writeAutomationLog } from '../../lib/automationLog';
 
-const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+const SIX_HOURS_MS       = 6 * 60 * 60 * 1000;
+const SOCIAL_CRAWL_MS    = 7 * 24 * 60 * 60 * 1000; // re-discover social links every 7 days
 
 /**
  * batchSnapshotCompetitors — daily agent that:
  * 1. Takes a fresh Tavily snapshot for every competitor of a business
  * 2. Saves to otx_competitor_snapshots for diff detection (diffCompetitorSnapshot)
  * 3. Updates competitor.last_scanned + price/promotion fields from latest data
- * 4. Publishes event to agent_data_bus so downstream agents can react
+ * 4. Discovers social page URLs (Instagram/Facebook/TikTok/website) if not known or stale (7d)
+ * 5. Publishes event to agent_data_bus so downstream agents can react
  *
  * Called by scheduler at 06:00 + 18:00 UTC (alongside detectCompetitorChanges).
  */
@@ -149,6 +151,41 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
         ).catch(() => {});
 
         snapshotsTaken++;
+
+        // ── Social page discovery (if URLs unknown or >7 days old) ────────────
+        const c = comp as any;
+        const lastCrawlMs = c.social_pages_crawled_at
+          ? new Date(c.social_pages_crawled_at).getTime() : 0;
+        if (Date.now() - lastCrawlMs >= SOCIAL_CRAWL_MS && !isTavilyRateLimited()) {
+          try {
+            const [igR, fbR, tikR, siteR] = await Promise.all([
+              tavilySearch(`"${comp.name}" ${city} site:instagram.com`, 2, 30),
+              tavilySearch(`"${comp.name}" ${city} site:facebook.com`, 2, 30),
+              tavilySearch(`"${comp.name}" ${city} site:tiktok.com`, 2, 30),
+              tavilySearch(`"${comp.name}" ${city} ${category} אתר רשמי`, 2, 30),
+            ]);
+            const socialUpdate: Record<string, any> = {
+              social_pages_crawled_at: new Date().toISOString(),
+            };
+            const igUrl   = igR.find((r: any)   => r.url?.includes('instagram.com/'))?.url;
+            const fbUrl   = fbR.find((r: any)   => r.url?.includes('facebook.com/'))?.url;
+            const tikUrl  = tikR.find((r: any)  => r.url?.includes('tiktok.com/'))?.url;
+            const siteUrl = siteR.find((r: any) =>
+              r.url &&
+              !r.url.includes('instagram.com') &&
+              !r.url.includes('facebook.com') &&
+              !r.url.includes('tiktok.com') &&
+              !r.url.includes('google.com') &&
+              !r.url.includes('yad2')
+            )?.url;
+            if (igUrl  && !c.instagram_url)  socialUpdate.instagram_url = igUrl;
+            if (fbUrl  && !c.facebook_url)   socialUpdate.facebook_url  = fbUrl;
+            if (tikUrl && !c.tiktok_url)     socialUpdate.tiktok_url    = tikUrl;
+            if (siteUrl && !c.website_url)   socialUpdate.website_url   = siteUrl;
+            await prisma.competitor.update({ where: { id: comp.id }, data: socialUpdate }).catch(() => {});
+            console.log(`[batchSnapshotCompetitors] ${comp.name} social pages: ig=${!!igUrl} fb=${!!fbUrl} tik=${!!tikUrl}`);
+          } catch (_) {}
+        }
       } catch (e: any) {
         console.warn(`[batchSnapshotCompetitors] competitor ${comp.name} failed:`, e.message);
       }

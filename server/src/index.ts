@@ -368,28 +368,21 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE proactive_alerts ADD COLUMN IF NOT EXISTS dismiss_reason TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS not_relevant BOOLEAN DEFAULT false`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS not_relevant_reason TEXT`);
-  // ── Competitor enrichment columns (social + pricing intelligence) ─────────
-  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS instagram_handle TEXT`);
-  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS facebook_url TEXT`);
-  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS google_business_url TEXT`);
-  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS tiktok_handle TEXT`);
-  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS social_post_frequency TEXT`);
-  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS last_post_date TEXT`);
-  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS social_followers_est TEXT`);
-  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS engagement_level TEXT`);
-  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS strongest_channel TEXT`);
-  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS price_snapshot TEXT`);
-  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS content_themes TEXT`);
-  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS sentiment_from_reviews TEXT`);
-  // ── Social page discovery & monitoring fields ─────────────────────────────
+  // ── Competitor enrichment: social presence + pricing + page discovery ───────
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS website_url TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS instagram_url TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS facebook_url TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS tiktok_url TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS google_business_url TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS social_pages_crawled_at TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS strongest_channel TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS social_post_frequency TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS last_post_date TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS social_followers_est TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS engagement_level TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS content_themes TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS sentiment_from_reviews TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS price_snapshot TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS last_promo_detected TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS last_promo_detected_at TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS last_product_detected TEXT`);
