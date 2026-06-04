@@ -1,0 +1,220 @@
+import { Request, Response } from 'express';
+import { prisma } from '../../db';
+import { invokeLLM } from '../../lib/llm';
+import { writeAutomationLog } from '../../lib/automationLog';
+import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { searchAllAds, hasSearchApiKey, AdResult } from '../../lib/searchapi';
+
+const MIN_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h between runs
+
+/**
+ * detectCompetitorAds — scans Meta Ads Library, TikTok Ads Library and Google Ads
+ * for every known competitor, then:
+ *
+ * 1. Detects active paid campaigns across all three platforms
+ * 2. LLM extracts: what product/service is being promoted, messaging angle, CTA
+ * 3. Updates Competitor record: sponsored_ads_detected, last_promo_detected,
+ *    active_ad_platforms, active_ad_count, active_ads_summary
+ * 4. Creates ProactiveAlert (alert_type='competitor_ads') when active campaign found
+ *
+ * Requires: SEARCHAPI_API_KEY env var
+ */
+export async function detectCompetitorAds(req: Request, res: Response) {
+  const { businessProfileId } = req.body;
+  if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+  const startTime = new Date().toISOString();
+
+  if (!hasSearchApiKey()) {
+    await writeAutomationLog('detectCompetitorAds', businessProfileId, startTime, 0);
+    return res.json({ processed: 0, skipped: true, reason: 'SEARCHAPI_API_KEY not set' });
+  }
+
+  if (!req.body.force && shouldSkipAgent(businessProfileId, 'detectCompetitorAds', MIN_INTERVAL_MS)) {
+    return res.json({ processed: 0, skipped: true, reason: 'ran_recently' });
+  }
+
+  try {
+    const profile = await prisma.businessProfile.findFirst({ where: { id: businessProfileId } });
+    if (!profile) return res.status(404).json({ error: 'No business profile' });
+
+    const competitors = await prisma.competitor.findMany({
+      where: { linked_business: businessProfileId },
+      orderBy: { last_scanned: 'asc' },
+      take: 6,
+    });
+
+    if (competitors.length === 0) {
+      await writeAutomationLog('detectCompetitorAds', businessProfileId, startTime, 0);
+      return res.json({ processed: 0, note: 'No competitors' });
+    }
+
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    let processed = 0;
+    let alertsCreated = 0;
+
+    for (const comp of competitors) {
+      try {
+        console.log(`[detectCompetitorAds] scanning ads for: ${comp.name}`);
+
+        const ads = await searchAllAds(comp.name, profile.category || '', profile.city || '');
+
+        // ── Update competitor record ─────────────────────────────────────────
+        const platforms = [...new Set(ads.map(a => a.platform))];
+        const compUpdate: Record<string, any> = {
+          sponsored_ads_detected:   ads.length > 0,
+          sponsored_ads_updated_at: new Date().toISOString(),
+        };
+        if (ads.length > 0) {
+          compUpdate.active_ad_platforms = platforms.join(', ');
+          compUpdate.active_ad_count     = ads.length;
+          // Store compact summary of active ads
+          compUpdate.active_ads_summary  = JSON.stringify(
+            ads.slice(0, 5).map(a => ({
+              platform: a.platform,
+              title:    a.title?.slice(0, 80),
+              body:     a.body?.slice(0, 120),
+              cta:      a.cta,
+              start:    a.start_date,
+            }))
+          );
+        } else {
+          compUpdate.active_ad_platforms = null;
+          compUpdate.active_ad_count     = 0;
+        }
+
+        await prisma.competitor.update({ where: { id: comp.id }, data: compUpdate }).catch(() => {});
+
+        if (ads.length === 0) { processed++; continue; }
+
+        // ── LLM analysis ─────────────────────────────────────────────────────
+        const adSummary = ads
+          .map(a =>
+            `[${a.platform.toUpperCase()}] ${a.title ? `כותרת: ${a.title} | ` : ''}` +
+            `${a.body ? `טקסט: ${a.body} | ` : ''}` +
+            `${a.cta ? `CTA: ${a.cta} | ` : ''}` +
+            `${a.audience_est ? `קהל: ${a.audience_est} | ` : ''}` +
+            `${a.start_date ? `פעיל מ: ${a.start_date?.slice(0,10)}` : ''}`
+          )
+          .join('\n');
+
+        const analysis = await invokeLLM({
+          model: 'haiku',
+          maxTokens: 500,
+          prompt: `You are a competitive intelligence analyst. My business is "${profile.name}" (${profile.category}, ${profile.city}).
+The competitor "${comp.name}" is currently running paid ad campaigns.
+
+Active campaigns found:
+${adSummary.slice(0, 2000)}
+
+Analyze and return ONLY valid JSON. ALL string values MUST be in Hebrew:
+{
+  "platforms_summary": "פייסבוק / אינסטגרם / טיקטוק / גוגל — פירוט קצר",
+  "promoted_product": "מה הם מקדמים — מוצר/שירות ספציפי",
+  "messaging_angle": "מה הזווית השיווקית — מחיר/רגש/מבצע/חדשנות",
+  "cta_action": "מה קוראים לעשות — 'הזמן עכשיו' / 'קבל הצעה' / וכו'",
+  "urgency": "high|medium|low",
+  "our_counter_action": "פעולה ספציפית שאנחנו צריכים לעשות עכשיו כדי להתמודד"
+}`,
+          response_json_schema: { type: 'object' },
+        }) as any;
+
+        if (!analysis) { processed++; continue; }
+
+        // Save promo description to competitor
+        if (analysis.promoted_product) {
+          await (prisma.competitor.update as any)({
+            where: { id: comp.id },
+            data: {
+              last_promo_detected:    `${analysis.platforms_summary}: ${analysis.promoted_product}`,
+              last_promo_detected_at: new Date().toISOString(),
+            },
+          }).catch(() => {});
+        }
+
+        // ── ProactiveAlert ───────────────────────────────────────────────────
+        const existingAlert = await prisma.proactiveAlert.findFirst({
+          where: {
+            linked_business: businessProfileId,
+            alert_type:      'competitor_ads',
+            title:           { contains: comp.name },
+            is_dismissed:    false,
+            created_at:      { gte: sevenDaysAgo },
+          },
+          select: { id: true },
+        });
+
+        if (!existingAlert) {
+          const platformEmojis: Record<string, string> = {
+            facebook: '📘', instagram: '📸', tiktok: '🎵', google: '🔍',
+          };
+          const platformBadges = platforms.map(p => `${platformEmojis[p] || '📣'}${p}`).join(' + ');
+
+          const alertTitle  = `${comp.name}: קמפיין ממומן פעיל — ${platformBadges}`;
+          const description = [
+            `📍 פלטפורמות: ${analysis.platforms_summary}`,
+            `🎯 מקדמים: ${analysis.promoted_product}`,
+            `💬 זווית: ${analysis.messaging_angle}`,
+            `👆 CTA: ${analysis.cta_action}`,
+          ].join('\n');
+
+          await prisma.proactiveAlert.create({
+            data: {
+              linked_business:  businessProfileId,
+              alert_type:       'competitor_ads',
+              title:            alertTitle,
+              description,
+              suggested_action: analysis.our_counter_action || '',
+              priority:         analysis.urgency === 'high' ? 'high' : 'medium',
+              source_agent:     JSON.stringify({
+                action_label:    'צור תגובה שיווקית',
+                action_type:     'social_post',
+                prefilled_text:  `${comp.name} מריץ קמפיין:\n\n${description}\n\n💡 המלצה: ${analysis.our_counter_action}`,
+                urgency_hours:   analysis.urgency === 'high' ? 24 : 48,
+                impact_reason:   `${comp.name} מפרסם ממומן ב-${platforms.join('/')}`,
+                competitor_id:   comp.id,
+                competitor_name: comp.name,
+                ad_platforms:    platforms,
+                ad_count:        ads.length,
+              }),
+              is_dismissed: false,
+              is_acted_on:  false,
+              created_at:   new Date().toISOString(),
+            },
+          }).catch(() => {});
+
+          alertsCreated++;
+        }
+
+        // ── MarketSignal ─────────────────────────────────────────────────────
+        await prisma.marketSignal.create({
+          data: {
+            linked_business:    businessProfileId,
+            summary:            `${comp.name} מריץ ${ads.length} מודעות ממומנות (${platforms.join(', ')})`,
+            impact_level:       analysis.urgency === 'high' ? 'high' : 'medium',
+            category:           'competitor_ads',
+            recommended_action: analysis.our_counter_action || '',
+            confidence:         0.9,
+            source_type:        'agent',
+            agent_name:         'detectCompetitorAds',
+            source_description: `${analysis.promoted_product} | ${analysis.messaging_angle}`,
+            is_dismissed:       false,
+            detected_at:        new Date().toISOString(),
+          },
+        }).catch(() => {});
+
+        processed++;
+      } catch (e: any) {
+        console.warn(`[detectCompetitorAds] ${comp.name}:`, e.message);
+      }
+    }
+
+    setLastRun(businessProfileId, 'detectCompetitorAds');
+    await writeAutomationLog('detectCompetitorAds', businessProfileId, startTime, processed);
+    return res.json({ processed, alerts_created: alertsCreated });
+  } catch (err: any) {
+    console.error('[detectCompetitorAds]', err.message);
+    await writeAutomationLog('detectCompetitorAds', businessProfileId, startTime, 0, 'failed', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+}

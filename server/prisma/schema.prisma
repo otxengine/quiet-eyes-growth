@@ -243,6 +243,9 @@ model Competitor {
   last_product_detected_at String?  // ISO timestamp
   sponsored_ads_detected   Boolean? @default(false)  // are they running paid ads?
   sponsored_ads_updated_at String?
+  active_ad_platforms      String?  // comma-separated: 'facebook, instagram, tiktok, google'
+  active_ad_count          Int?     @default(0)
+  active_ads_summary       String?  // JSON: [{platform, title, body, cta, start}]
 
   @@map("competitors")
 }

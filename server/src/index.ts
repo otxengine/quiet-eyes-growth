@@ -392,6 +392,10 @@ app.listen(PORT, async () => {
   // ── is_dismissed: persistent dismiss for competitors + actions ───────────
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS is_dismissed BOOLEAN DEFAULT false`);
   await sql(`ALTER TABLE actions ADD COLUMN IF NOT EXISTS is_dismissed BOOLEAN DEFAULT false`);
+  // ── Competitor paid ads tracking fields ──────────────────────────────────
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS active_ad_platforms TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS active_ad_count INT DEFAULT 0`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS active_ads_summary TEXT`);
   // Normalize historical NULL → false so {is_dismissed:false} queries work correctly
   await sql(`UPDATE proactive_alerts SET is_dismissed = false WHERE is_dismissed IS NULL`);
   await sql(`UPDATE market_signals SET is_dismissed = false WHERE is_dismissed IS NULL`);

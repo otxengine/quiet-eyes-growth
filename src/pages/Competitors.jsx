@@ -264,8 +264,10 @@ export default function Competitors() {
         base44.functions.invoke('analyzeCompetitorSocial',    { businessProfileId: bpId }),
       ]);
 
-      // Step 4: intel + advisory insights
+      // Step 4: paid ads detection + intel + advisory insights
+      toast.info('מזהה קמפיינים ממומנים...');
       await Promise.allSettled([
+        base44.functions.invoke('detectCompetitorAds',       { businessProfileId: bpId }),
         base44.functions.invoke('competitorIntelAgent',      { businessProfileId: bpId }),
         base44.functions.invoke('competitorMoveTracker',     { businessProfileId: bpId }),
         base44.functions.invoke('runMarketIntelligence',     { businessProfileId: bpId }),
