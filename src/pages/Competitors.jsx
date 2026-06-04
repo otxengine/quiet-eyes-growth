@@ -508,7 +508,7 @@ export default function Competitors() {
                         {Math.round((change.confidence_score ?? 0) * 100)}%
                       </span>
                       <DismissMenu
-                        entityType="signal"
+                        entityType={change._kind === 'alert' ? 'alert' : 'signal'}
                         entityId={change._fromBase44 ? change.id : undefined}
                         title={change.change_summary || change.competitor_name}
                         businessProfileId={bpId}
