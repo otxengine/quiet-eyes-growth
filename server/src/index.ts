@@ -381,6 +381,21 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS price_snapshot TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS content_themes TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS sentiment_from_reviews TEXT`);
+  // ── Social page discovery & monitoring fields ─────────────────────────────
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS website_url TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS instagram_url TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS facebook_url TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS tiktok_url TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS social_pages_crawled_at TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS strongest_channel TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS social_post_frequency TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS content_themes TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS last_promo_detected TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS last_promo_detected_at TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS last_product_detected TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS last_product_detected_at TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS sponsored_ads_detected BOOLEAN DEFAULT false`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS sponsored_ads_updated_at TEXT`);
   // ── is_dismissed: persistent dismiss for competitors + actions ───────────
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS is_dismissed BOOLEAN DEFAULT false`);
   await sql(`ALTER TABLE actions ADD COLUMN IF NOT EXISTS is_dismissed BOOLEAN DEFAULT false`);

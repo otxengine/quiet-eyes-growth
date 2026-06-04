@@ -257,11 +257,12 @@ export default function Competitors() {
       const { new_competitors_created = 0, existing_competitors_updated = 0 } = res?.data || {};
 
       // Step 3: competitor intelligence pipeline
-      toast.info('סורק שינויים, מחירים ורשתות חברתיות...');
+      toast.info('סורק שינויים, מחירים, מבצעים ורשתות חברתיות...');
       await Promise.allSettled([
-        base44.functions.invoke('batchSnapshotCompetitors',  { businessProfileId: bpId }),
-        base44.functions.invoke('detectCompetitorChanges',   { businessProfileId: bpId }),
-        base44.functions.invoke('analyzeCompetitorSocial',   { businessProfileId: bpId }),
+        base44.functions.invoke('batchSnapshotCompetitors',   { businessProfileId: bpId }),
+        base44.functions.invoke('detectCompetitorChanges',    { businessProfileId: bpId }),
+        base44.functions.invoke('analyzeCompetitorSocial',    { businessProfileId: bpId }),
+        base44.functions.invoke('competitorSocialTracker',    { businessProfileId: bpId }),
       ]);
 
       // Step 4: intel + advisory insights

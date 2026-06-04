@@ -3,23 +3,9 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { tavilySearch } from '../../lib/tavily';
 
-const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12h between runs
-
-async function tavilySearch(query: string, maxResults = 5): Promise<any[]> {
-  if (!TAVILY_API_KEY) return [];
-  try {
-    const res = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: TAVILY_API_KEY, query, search_depth: 'basic', max_results: maxResults }),
-    });
-    if (!res.ok) return [];
-    const data: any = await res.json();
-    return data.results || [];
-  } catch { return []; }
-}
 
 /**
  * analyzeCompetitorSocial
@@ -116,8 +102,8 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
         // Extract social URLs from search results
         const igUrl = allResults.find(r => r.url?.includes('instagram.com'))?.url;
         const fbUrl = allResults.find(r => r.url?.includes('facebook.com'))?.url;
-        if (igUrl) socialUpdate.instagram_handle = igUrl;
-        if (fbUrl) socialUpdate.facebook_url     = fbUrl;
+        if (igUrl) socialUpdate.instagram_url = igUrl;
+        if (fbUrl) socialUpdate.facebook_url  = fbUrl;
 
         await prisma.competitor.update({
           where: { id: comp.id },
