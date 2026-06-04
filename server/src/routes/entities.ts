@@ -48,15 +48,30 @@ async function getUserBusinessIds(userId: string): Promise<string[]> {
 /** Returns true if the record with `id` on `model` belongs to `userId` */
 async function verifyRecordOwnership(model: any, id: string, userId: string): Promise<boolean> {
   try {
-    const record = await model.findFirst({
+    // Step 1: check created_by match (works for all models)
+    const base = await model.findFirst({
       where: { id },
-      select: { id: true, created_by: true, linked_business: true },
+      select: { id: true, created_by: true },
     });
-    if (!record) return false;
-    if (record.created_by === userId) return true;
-    if (record.linked_business) {
+    if (!base) return false;
+    if (base.created_by === userId) return true;
+    // Step 2: also accept email fallback (admin-created profiles store email in created_by)
+    const email = await getUserEmail(userId);
+    if (email && base.created_by === email) return true;
+
+    // Step 3: check linked_business — not all models have this field
+    let linkedBusiness: string | null = null;
+    try {
+      const ext = await model.findFirst({
+        where: { id },
+        select: { linked_business: true },
+      });
+      linkedBusiness = ext?.linked_business ?? null;
+    } catch { /* model has no linked_business field */ }
+
+    if (linkedBusiness) {
       const bizIds = await getUserBusinessIds(userId);
-      return bizIds.includes(record.linked_business);
+      return bizIds.includes(linkedBusiness);
     }
     return false;
   } catch {
@@ -234,35 +249,25 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
   if (!model) return res.status(404).json({ error: `Unknown entity: ${entity}` });
 
   try {
-    const where: any = { id: req.params.id };
-    if (!isAdminKeyRequest(req)) {
-      const userId = getUserId(req);
-      if (userId) where.created_by = userId;
-    }
-
-    let data = { ...req.body };
+    const data = { ...req.body };
     let record: any;
 
+    // For non-admin requests: verify ownership before touching the DB.
+    // Doing this upfront (instead of using created_by in the WHERE clause) avoids
+    // the P2025 → retry dance for agent-created records that have no created_by.
+    if (!isAdminKeyRequest(req)) {
+      const userId = getUserId(req);
+      if (userId) {
+        const owned = await verifyRecordOwnership(model, String(req.params.id), userId);
+        if (!owned) return res.status(403).json({ error: 'Forbidden' });
+      }
+    }
+
     try {
-      record = await model.update({ where, data });
+      record = await model.update({ where: { id: req.params.id }, data });
     } catch (prismaErr: any) {
-      // P2025 = record not found. Happens when agents create records without
-      // created_by (MarketSignal, ProactiveAlert, etc.) — retry by ID only.
       if (prismaErr.code === 'P2025') {
-        // Verify ownership before retrying without created_by
-        const userId = getUserId(req);
-        if (userId) {
-          const owned = await verifyRecordOwnership(model, String(req.params.id), userId);
-          if (!owned) return res.status(403).json({ error: 'Forbidden' });
-        }
-        try {
-          record = await model.update({ where: { id: req.params.id }, data });
-        } catch (innerErr: any) {
-          if (innerErr.code === 'P2025') {
-            return res.status(404).json({ error: 'Record not found' });
-          }
-          throw innerErr;
-        }
+        return res.status(404).json({ error: 'Record not found' });
       // Prisma rejects fields added via raw ALTER TABLE that aren't in schema.prisma yet.
       // Fall back to raw SQL SET for those fields so settings always save.
       } else if (prismaErr.message?.includes('Unknown field') || prismaErr.message?.includes('Unknown argument')) {
@@ -311,26 +316,21 @@ router.delete('/:entity/:id', async (req: Request, res: Response) => {
   if (!model) return res.status(404).json({ error: `Unknown entity: ${req.params.entity}` });
 
   try {
-    const where: any = { id: req.params.id };
+    // Verify ownership upfront — same pattern as PATCH
     if (!isAdminKeyRequest(req)) {
       const userId = getUserId(req);
-      if (userId) where.created_by = userId;
+      if (userId) {
+        const owned = await verifyRecordOwnership(model, String(req.params.id), userId);
+        if (!owned) return res.status(403).json({ error: 'Forbidden' });
+      }
     }
     try {
-      await model.delete({ where });
+      await model.delete({ where: { id: req.params.id } });
     } catch (prismaErr: any) {
-      // P2025 = record not found — happens when record was created by a server agent
-      // without the user's created_by. Verify ownership before retrying by ID only.
       if (prismaErr.code === 'P2025') {
-        const userId = getUserId(req);
-        if (userId) {
-          const owned = await verifyRecordOwnership(model, String(req.params.id), userId);
-          if (!owned) return res.status(403).json({ error: 'Forbidden' });
-        }
-        await model.delete({ where: { id: req.params.id } });
-      } else {
-        throw prismaErr;
+        return res.status(404).json({ error: 'Record not found' });
       }
+      throw prismaErr;
     }
     res.json({ success: true });
   } catch (err: any) {
