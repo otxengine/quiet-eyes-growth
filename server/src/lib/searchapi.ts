@@ -121,6 +121,62 @@ export async function searchGoogleAds(query: string): Promise<AdResult[]> {
   }));
 }
 
+// ── Instagram profile posts (fallback when Apify is unavailable) ─────────────
+export interface InstagramPost {
+  caption:        string;
+  likes:          number;
+  comments_count: number;
+  timestamp:      string;
+}
+
+export async function searchInstagramPosts(username: string): Promise<InstagramPost[]> {
+  // Try Instagram engine first
+  const data = await _fetch({ engine: 'instagram', q: username });
+  if (data?.posts?.length) {
+    return (data.posts as any[]).slice(0, 10).map((p: any) => ({
+      caption:        p.caption || p.description || '',
+      likes:          p.likes_count || p.likes || 0,
+      comments_count: p.comments_count || 0,
+      timestamp:      p.timestamp || p.created_at || '',
+    })).filter(p => p.caption);
+  }
+  // Fallback: Google search on instagram.com profile
+  const gData = await _fetch({ engine: 'google', q: `site:instagram.com/${username}`, gl: 'il' });
+  if (gData?.organic_results?.length) {
+    return (gData.organic_results as any[]).slice(0, 8).map((r: any) => ({
+      caption:        r.snippet || r.title || '',
+      likes:          0,
+      comments_count: 0,
+      timestamp:      '',
+    })).filter(p => p.caption);
+  }
+  return [];
+}
+
+// ── TikTok profile videos (fallback when Apify is unavailable) ────────────────
+export interface TikTokVideo {
+  title:         string;
+  views:         number;
+  likes:         number;
+  comments:      number;
+  url:           string;
+}
+
+export async function searchTikTokProfileVideos(username: string): Promise<TikTokVideo[]> {
+  const query = username.startsWith('@') ? username : `@${username}`;
+  const data = await _fetch({ engine: 'tiktok', q: query });
+  if (data?.videos?.length) {
+    return (data.videos as any[]).slice(0, 10).map((v: any) => ({
+      title:    v.title || v.desc || '',
+      views:    v.play_count || v.views || 0,
+      likes:    v.digg_count || v.likes || 0,
+      comments: v.comment_count || v.comments || 0,
+      url:      v.url || v.share_url || '',
+    })).filter(v => v.title);
+  }
+  return [];
+}
+
 // ── Google Trends Trending Now ────────────────────────────────────────────────
 export interface TrendingNowResult {
   title:            string;

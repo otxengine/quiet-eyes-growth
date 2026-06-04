@@ -4,6 +4,8 @@ import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { tavilySearch } from '../../lib/tavily';
+import { hasSearchApiKey, searchInstagramPosts } from '../../lib/searchapi';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
@@ -168,6 +170,34 @@ export async function analyzeInstagramComments(req: Request, res: Response) {
       await writeAutomationLog('analyzeInstagramComments', businessProfileId, startTime, result.commentsAnalyzed);
       console.log(`analyzeInstagramComments done (Apify): ${result.commentsAnalyzed} comments, ${result.negativeCount} negative`);
       return res.json({ comments_analyzed: result.commentsAnalyzed, negative_count: result.negativeCount, urgent_alerts: result.urgentAlerts, source: 'apify' });
+    }
+
+    // ── Path C: SearchAPI + Tavily — when Apify unavailable ──────────────────
+    if (hasSearchApiKey() || true) { // Tavily always available
+      const username = instagramUrl
+        ? (instagramUrl.match(/instagram\.com\/@?([\w.]+)/)?.[1] || '')
+        : '';
+
+      const texts: string[] = [];
+
+      // SearchAPI: get recent post captions
+      if (hasSearchApiKey() && username) {
+        const posts = await searchInstagramPosts(username).catch(() => []);
+        texts.push(...posts.map(p => p.caption).filter(Boolean));
+      }
+
+      // Tavily: web mentions and reviews about this business on Instagram
+      const mentionQuery = `"${profile.name}" instagram ביקורות תגובות`;
+      const mentions = await tavilySearch(mentionQuery, 5).catch(() => []);
+      texts.push(...mentions.map(r => (r.content || r.title || '').slice(0, 200)).filter(t => t.length > 20));
+
+      if (texts.length > 0) {
+        const result = await analyzeAndSave(profile, businessProfileId, texts);
+        setLastRun(businessProfileId, 'analyzeInstagramComments');
+        await writeAutomationLog('analyzeInstagramComments', businessProfileId, startTime, result.commentsAnalyzed);
+        console.log(`analyzeInstagramComments done (SearchAPI+Tavily): ${texts.length} texts, ${result.negativeCount} negative`);
+        return res.json({ comments_analyzed: result.commentsAnalyzed, negative_count: result.negativeCount, urgent_alerts: result.urgentAlerts, source: 'searchapi_tavily' });
+      }
     }
 
     // ── No data source available ──────────────────────────────────────────────

@@ -5,6 +5,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { tavilySearch } from '../../lib/tavily';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { hasSearchApiKey, searchTikTokProfileVideos } from '../../lib/searchapi';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 const GRAPH_BASE = 'https://open-api.tiktok.com';
@@ -94,6 +95,23 @@ export async function analyzeTikTokContent(req: Request, res: Response) {
     if (videos.length === 0 && tiktokAccount?.account_name) {
       const apifyVideos = await apifyTikTokProfile(tiktokAccount.account_name);
       if (apifyVideos.length > 0) { videos = apifyVideos; dataSource = 'apify'; }
+    }
+
+    // ── 3b. SearchAPI TikTok — when Apify unavailable (HTTP 403) ─────────────
+    if (videos.length === 0 && hasSearchApiKey() && tiktokUsernameFromUrl) {
+      const tkVideos = await searchTikTokProfileVideos(tiktokUsernameFromUrl).catch(() => []);
+      if (tkVideos.length > 0) {
+        // Normalize to expected shape
+        videos = tkVideos.map(v => ({
+          title:         v.title,
+          view_count:    v.views,
+          like_count:    v.likes,
+          comment_count: v.comments,
+          share_url:     v.url,
+        }));
+        dataSource = 'searchapi';
+        console.log(`[analyzeTikTokContent] SearchAPI fallback: ${videos.length} videos found`);
+      }
     }
 
     // ── 3. Sector TikTok trends via Tavily (always runs) ────────────────────

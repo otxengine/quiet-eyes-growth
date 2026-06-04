@@ -4,6 +4,7 @@ import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { tavilySearch } from '../../lib/tavily';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
@@ -193,6 +194,27 @@ export async function analyzeSocialComments(req: Request, res: Response) {
         negative_count:    analysis?.negative_count,
         source:            'apify',
       });
+    }
+
+    // ── Path C: Tavily — web mentions + reviews when Apify unavailable ────────
+    {
+      const texts: string[] = [];
+      const queries = [
+        `"${profile.name}" ביקורות פייסבוק תגובות`,
+        `"${profile.name}" ${profile.city || ''} facebook המלצות`,
+      ];
+      for (const q of queries) {
+        const results = await tavilySearch(q, 4).catch(() => []);
+        texts.push(...results.map((r: any) => (r.content || r.title || '').slice(0, 200)).filter((t: string) => t.length > 20));
+      }
+
+      if (texts.length > 0) {
+        const { signalsCreated, analysis } = await analyzeAndSave(profile, businessProfileId, texts);
+        setLastRun(businessProfileId, 'analyzeSocialComments');
+        await writeAutomationLog('analyzeSocialComments', businessProfileId, startTime, signalsCreated);
+        console.log(`analyzeSocialComments done (Tavily): ${texts.length} texts, ${signalsCreated} signals`);
+        return res.json({ comments_analyzed: texts.length, signals_created: signalsCreated, page_connected: false, sentiment: analysis?.overall_sentiment, source: 'tavily' });
+      }
     }
 
     // ── No data source available ──────────────────────────────────────────────
