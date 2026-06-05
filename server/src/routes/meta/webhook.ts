@@ -153,6 +153,69 @@ interface IncomingMessage {
   text:          string;
 }
 
+
+// ── Dynamic Prompt Builder ────────────────────────────────────────────────────
+
+function buildDynamicPrompt(bp: {
+  name?: string | null;
+  category?: string | null;
+  city?: string | null;
+  bot_greeting?: string | null;
+  bot_qualification_questions?: string | null;
+  bot_good_lead_criteria?: string | null;
+  bot_bad_lead_criteria?: string | null;
+  bot_services_info?: string | null;
+}): string {
+  const questions = (bp.bot_qualification_questions ?? '')
+    .split('\n')
+    .map(q => q.trim())
+    .filter(Boolean);
+
+  const parts: string[] = [
+    `You are a WhatsApp sales assistant for "${bp.name ?? 'this business'}"${bp.category ? ` (${bp.category})` : ''}${bp.city ? `, based in ${bp.city}` : ''}.`,
+    '',
+    "Your job: have a natural, friendly conversation to understand the customer's needs and qualify them as a lead.",
+    '',
+  ];
+
+  if (bp.bot_greeting) {
+    parts.push(`Opening greeting to use on the very first message: "${bp.bot_greeting}"`);
+    parts.push('');
+  }
+
+  if (questions.length > 0) {
+    parts.push('Ask these qualification questions ONE AT A TIME, naturally woven into the conversation:');
+    questions.forEach((q, i) => parts.push(`  ${i + 1}. ${q}`));
+    parts.push('');
+  }
+
+  if (bp.bot_services_info) {
+    parts.push('Information about our services (use this to answer customer questions):');
+    parts.push(bp.bot_services_info);
+    parts.push('');
+  }
+
+  if (bp.bot_good_lead_criteria) {
+    parts.push('Signs of a great lead (customers who match these are a strong fit):');
+    parts.push(bp.bot_good_lead_criteria);
+    parts.push('');
+  }
+
+  if (bp.bot_bad_lead_criteria) {
+    parts.push('Signs of a poor fit (these customers are unlikely to convert):');
+    parts.push(bp.bot_bad_lead_criteria);
+    parts.push('');
+  }
+
+  parts.push('Rules:');
+  parts.push('- Always respond in the same language the customer uses (Hebrew or English)');
+  parts.push('- Keep messages short and conversational — this is WhatsApp, not email');
+  parts.push('- Ask only ONE question at a time');
+  parts.push('- If the customer asks to speak to a human, or you cannot help, begin your reply ONLY with the exact token [HANDOFF]');
+
+  return parts.join('\n');
+}
+
 async function handleIncomingMessage(msg: IncomingMessage): Promise<void> {
   // 4a. Find the MetaConnection for this destination ID
   const connection = await prisma.metaConnection.findFirst({
@@ -175,8 +238,52 @@ async function handleIncomingMessage(msg: IncomingMessage): Promise<void> {
     return;
   }
 
+  // 4b-extra. Load BusinessProfile for bot settings
+  const businessProfile = connection.business_profile_id
+    ? await prisma.businessProfile.findUnique({
+        where: { id: connection.business_profile_id },
+        select: {
+          name: true, category: true, city: true,
+          bot_enabled: true,
+          bot_greeting: true,
+          bot_qualification_questions: true,
+          bot_good_lead_criteria: true,
+          bot_bad_lead_criteria: true,
+          bot_services_info: true,
+          bot_working_hours_start: true,
+          bot_working_hours_end: true,
+          bot_off_hours_message: true,
+        },
+      })
+    : null;
+
+  // Stop if the bot has been disabled by the business owner
+  if (businessProfile && businessProfile.bot_enabled === false) {
+    console.log(`[Meta webhook] Bot disabled for business ${connection.business_profile_id}`);
+    return;
+  }
+
   // 4b. Decrypt access token (throws if tampered)
   const accessToken = decryptToken(connection.encrypted_token);
+
+  // 4c. Working hours check — reply with off-hours message if outside window
+  if (businessProfile?.bot_working_hours_start && businessProfile?.bot_working_hours_end) {
+    const nowHour    = new Date().getHours();
+    const startHour  = parseInt(businessProfile.bot_working_hours_start, 10);
+    const endHour    = parseInt(businessProfile.bot_working_hours_end, 10);
+    const inWindow   = nowHour >= startHour && nowHour < endHour;
+    if (!inWindow && businessProfile.bot_off_hours_message) {
+      await metaApi.sendTextMessage({
+        platform:      msg.platform,
+        recipientId:   msg.senderId,
+        phoneNumberId: connection.phone_number_id ?? undefined,
+        pageId:        connection.page_id ?? undefined,
+        text:          businessProfile.bot_off_hours_message,
+        accessToken,
+      });
+      return;
+    }
+  }
 
   // 5. Upsert conversation record — creates on first message, updates timestamp on subsequent
   const conversation = await prisma.conversation.upsert({
@@ -210,8 +317,11 @@ async function handleIncomingMessage(msg: IncomingMessage): Promise<void> {
     JSON.parse(conversation.context ?? '[]');
   history.push({ role: 'user', content: msg.text });
 
-  // 8. Call AI
-  const aiResult = await runAgent(msg.text, history, agentConfig);
+  // 8. Call AI with dynamic prompt built from BusinessProfile settings
+  const dynamicPrompt = businessProfile
+    ? buildDynamicPrompt(businessProfile)
+    : agentConfig.system_prompt;
+  const aiResult = await runAgent(msg.text, history, { ...agentConfig, system_prompt: dynamicPrompt });
 
   // 9. Send AI reply
   await metaApi.sendTextMessage({

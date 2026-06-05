@@ -35,6 +35,9 @@ model BusinessProfile {
   bot_good_lead_criteria     String?
   bot_bad_lead_criteria      String?
   bot_services_info          String?
+  bot_working_hours_start    String?
+  bot_working_hours_end      String?
+  bot_off_hours_message      String?
   channels_whatsapp          String?
   channels_whatsapp_enabled  Boolean? @default(false)
   channels_instagram         String?
