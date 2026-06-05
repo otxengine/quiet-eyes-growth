@@ -45,6 +45,7 @@ import { registerServiceWorker } from '@/lib/pushNotifications';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
 const pageTitles = {
+  '/command': 'בית',
   '/': 'מרכז פיקוד',
   '/dashboard': 'מרכז פיקוד',
   '/signals': 'העיניים — מודיעין שוק',

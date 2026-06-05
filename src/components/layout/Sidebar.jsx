@@ -5,14 +5,15 @@ import {
   LayoutGrid, Eye, Users, Star, CheckCircle, Heart, Settings,
   ChevronRight, ChevronLeft, ChevronDown, LogOut, FileBarChart,
   ClipboardList, Database, Bot, Plug, Crown, Sparkles, Calendar, Megaphone, ShieldAlert, Lightbulb, Target, SearchCheck,
-  Building2, GitBranch
+  Building2, GitBranch, Home
 } from 'lucide-react';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { cn } from '@/lib/utils';
 
 // 2-level structure: standalone items always visible, groups collapsible
 const NAV_STRUCTURE = [
-  { type: 'item',  path: '/',      label: 'מרכז פיקוד',   icon: LayoutGrid },
+  { type: 'item',  path: '/command', label: 'בית',          icon: Home },
+  { type: 'item',  path: '/',        label: 'מרכז פיקוד',   icon: LayoutGrid },
   {
     type: 'group', key: 'intel', label: 'מודיעין', icon: Eye,
     items: [
