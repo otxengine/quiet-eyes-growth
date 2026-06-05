@@ -214,8 +214,12 @@ function buildDynamicPrompt(bp: {
   parts.push('- If the customer asks to speak to a human, or you cannot help, begin your reply ONLY with the exact token [HANDOFF]');
   parts.push('- When ALL qualification questions have been answered, output this on its own line BEFORE your closing message:');
   parts.push('  [LEAD_QUALIFIED score=<0-100>|name=<customer name or Unknown>|budget=<budget amount or Unknown>|service=<service needed>]');
-  parts.push('  Score guide: 90-100 = matches ALL good criteria, 70-89 = matches most good criteria, 40-69 = partial/unknown, 0-39 = matches bad criteria.');
-  parts.push('  If budget meets the good criteria threshold, score should be 80+ unless other factors are negative.');
+  parts.push('  SCORING RULES (follow strictly):');
+  parts.push('  - 85-100: Budget clearly meets good criteria AND no bad criteria matched. Use this range when the customer is a clear fit.');
+  parts.push('  - 50-84: Budget is in range but customer refused to share some info. Max 5 point deduction per missing piece of info.');
+  parts.push('  - 10-49: Budget is borderline or unclear.');
+  parts.push('  - 0-9: Customer explicitly matches the bad criteria (e.g. stated budget is below the minimum threshold).');
+  parts.push('  Do NOT give warm scores (40-79) just because info is missing. If budget criteria is met, default to 85.');
   parts.push('  After the token, send a warm closing message e.g. "Thanks! Our team will be in touch shortly."');
 
   return parts.join('\n');
@@ -495,6 +499,7 @@ async function runAgent(
 
   // Detect LEAD_QUALIFIED token and extract structured data
   const leadMatch = cleanResponse.match(/\[LEAD_QUALIFIED([^\]]+)\]/i);
+  if (leadMatch) console.log('[Meta webhook] LEAD_QUALIFIED token:', leadMatch[0]);
   let leadData: LeadData | undefined;
   let finalResponse = cleanResponse;
   if (leadMatch) {
