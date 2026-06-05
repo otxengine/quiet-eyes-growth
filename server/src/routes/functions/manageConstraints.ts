@@ -9,7 +9,8 @@ import { Request, Response } from 'express';
 import { getConstraints, updateConstraints, ensureConstraints } from '../../lib/constraintValidator';
 
 export async function getBusinessConstraints(req: Request, res: Response) {
-  const { businessProfileId } = req.query as { businessProfileId: string };
+  // functions.invoke sends POST body; also support GET query for direct calls
+  const businessProfileId = (req.body?.businessProfileId || req.query.businessProfileId) as string;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
   try {
