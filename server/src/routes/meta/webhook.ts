@@ -212,6 +212,10 @@ function buildDynamicPrompt(bp: {
   parts.push('- Keep messages short and conversational — this is WhatsApp, not email');
   parts.push('- Ask only ONE question at a time');
   parts.push('- If the customer asks to speak to a human, or you cannot help, begin your reply ONLY with the exact token [HANDOFF]');
+  parts.push('- When ALL qualification questions have been answered, output this on its own line BEFORE your closing message:');
+  parts.push('  [LEAD_QUALIFIED score=<0-100> name=<customer name or Unknown> budget=<budget or Unknown> service=<service needed>]');
+  parts.push('  Score: 85-100 = clearly matches good criteria, 40-84 = partial/unknown, 0-39 = matches bad criteria.');
+  parts.push('  After the token, send a warm closing message e.g. "Thanks! Our team will be in touch shortly."');
 
   return parts.join('\n');
 }
@@ -340,6 +344,17 @@ async function handleIncomingMessage(msg: IncomingMessage): Promise<void> {
   const trimmed = history.slice(-20);
 
   if (aiResult.requiresHuman) {
+    // Create lead record if bot finished qualifying
+    if (aiResult.leadQualified && aiResult.leadData) {
+      await createLeadFromConversation({
+        leadData:   aiResult.leadData,
+        senderId:   msg.senderId,
+        platform:   msg.platform,
+        businessId: connection.business_profile_id,
+        history:    trimmed,
+      });
+    }
+
     // Update conversation status and trigger handover
     await prisma.conversation.update({
       where: { id: conversation.id },
@@ -367,12 +382,62 @@ async function handleIncomingMessage(msg: IncomingMessage): Promise<void> {
   }
 }
 
+// ── Lead Creator ─────────────────────────────────────────────────────────────
+
+async function createLeadFromConversation(opts: {
+  leadData:   LeadData;
+  senderId:   string;
+  platform:   string;
+  businessId: string | null;
+  history:    Array<{ role: string; content: string }>;
+}): Promise<void> {
+  const { leadData, senderId, platform, businessId, history } = opts;
+
+  const chatSummary = history
+    .map(m => (m.role === 'user' ? 'Customer' : 'Bot') + ': ' + m.content)
+    .join('\n');
+
+  const scoreLabel = leadData.score >= 80 ? 'hot' : leadData.score >= 40 ? 'warm' : 'cold';
+
+  await prisma.lead.create({
+    data: {
+      name:                  leadData.name,
+      contact_info:          platform + ': ' + senderId,
+      contact_phone:         platform === 'whatsapp' ? senderId : undefined,
+      source:                'WhatsApp Bot',
+      source_origin:         'bot',
+      score:                 leadData.score,
+      score_reasoning:       'Bot scored ' + leadData.score + '/100 - ' + scoreLabel + '. Budget: ' + leadData.budget + '. Service: ' + leadData.service + '.',
+      service_needed:        leadData.service !== 'Unknown' ? leadData.service : undefined,
+      budget_range:          leadData.budget !== 'Unknown' ? leadData.budget : undefined,
+      status:                scoreLabel,
+      lifecycle_stage:       'new',
+      linked_business:       businessId ?? undefined,
+      platform_sourced:      true,
+      questionnaire_answers: chatSummary,
+      discovered_at:         new Date().toISOString(),
+      freshness_score:       100,
+    },
+  });
+
+  console.log('[Meta webhook] Lead created - ' + leadData.name + ' score=' + leadData.score + ' (' + scoreLabel + ')');
+}
+
 // ── AI Agent Runner ───────────────────────────────────────────────────────────
+
+interface LeadData {
+  score:   number;
+  name:    string;
+  budget:  string;
+  service: string;
+}
 
 interface AIResult {
   responseText:   string;
   requiresHuman:  boolean;
   handoffReason?: string;
+  leadQualified?: boolean;
+  leadData?:      LeadData;
 }
 
 async function runAgent(
@@ -427,10 +492,32 @@ async function runAgent(
     ? responseText.replace(/^\[HANDOFF\]\s*/i, '').trim()
     : responseText.trim();
 
+  // Detect LEAD_QUALIFIED token and extract structured data
+  const leadMatch = cleanResponse.match(/\[LEAD_QUALIFIED([^\]]+)\]/i);
+  let leadData: LeadData | undefined;
+  let finalResponse = cleanResponse;
+  if (leadMatch) {
+    const attrs = leadMatch[1];
+    const num = (key: string) => {
+      const m = attrs.match(new RegExp(key + '=([\\d.]+)', 'i'));
+      return m ? parseFloat(m[1]) : 50;
+    };
+    const str = (key: string) => {
+      const m = attrs.match(new RegExp(key + '=([^\\s\\]]+(?:\\s[^=\\s\\]]+)*)', 'i'));
+      return m ? m[1].trim() : 'Unknown';
+    };
+    leadData = { score: num('score'), name: str('name'), budget: str('budget'), service: str('service') };
+    finalResponse = cleanResponse.replace(/\[LEAD_QUALIFIED[^\]]+\]\s*/i, '').trim();
+  }
+
   return {
-    responseText:  cleanResponse,
-    requiresHuman,
-    handoffReason: requiresHuman ? 'LLM requested human handoff' : undefined,
+    responseText:  finalResponse || cleanResponse,
+    requiresHuman: requiresHuman || !!leadData,
+    handoffReason: requiresHuman ? 'LLM requested human handoff'
+                 : leadData      ? 'Lead qualified by bot'
+                 : undefined,
+    leadQualified: !!leadData,
+    leadData,
   };
 }
 
