@@ -402,7 +402,7 @@ export default function Insights() {
     const trendFromAlerts = activeAlerts
       .filter(a => TREND_ALERT_TYPES.has(a.alert_type))
       .map(a => buildTrendItem({
-        id: a.id, navId: `alert-${a.id}`, kind: 'alert', dismissType: 'trend',
+        id: a.id, navId: `alert-${a.id}`, kind: 'alert', dismissType: 'alert',
         title: a.title, description: a.description,
         type: a.alert_type,
         priority: a.priority || 'medium', rawStatus: 'proposed',
@@ -432,7 +432,7 @@ export default function Insights() {
     const compFromAlerts = activeAlerts
       .filter(a => COMP_ALERT_TYPES.has(a.alert_type))
       .map(a => ({
-        id: a.id, navId: `alert-${a.id}`, kind: 'alert', dismissType: 'competitor',
+        id: a.id, navId: `alert-${a.id}`, kind: 'alert', dismissType: 'alert',
         title: a.title, description: a.description,
         type: a.alert_type,
         priority: a.priority || 'medium', rawStatus: 'proposed',
@@ -443,7 +443,7 @@ export default function Insights() {
     const compFromSignals = activeSignals
       .filter(s => COMP_SIGNAL_CATS.has(s.category))
       .map(s => ({
-        id: s.id, navId: `signal-${s.id}`, kind: 'signal', dismissType: 'competitor',
+        id: s.id, navId: `signal-${s.id}`, kind: 'signal', dismissType: 'signal',
         title: s.summary, description: s.recommended_action,
         type: 'competitor_move',
         priority: signalPriority(s), rawStatus: 'proposed',
@@ -457,7 +457,7 @@ export default function Insights() {
     const actionItems = sortByPriority(
       activeActions
         .map(a => ({
-          id: a.id, navId: `action-${a.id}`, kind: 'action', dismissType: 'alert',
+          id: a.id, navId: `action-${a.id}`, kind: 'action', dismissType: 'action',
           title: a.title, description: a.description,
           type: a.category || 'opportunity',
           priority: a.priority || 'medium',
