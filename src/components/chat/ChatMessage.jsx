@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Zap, CheckCircle, AlertCircle, Loader2, Clock, Sparkles } from 'lucide-react';
+import { Zap, CheckCircle, AlertCircle, Loader2, Clock, Sparkles, Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
 
 function ToolCallBubble({ toolCall }) {
   const [expanded, setExpanded] = useState(false);
@@ -31,11 +32,39 @@ function ToolCallBubble({ toolCall }) {
   );
 }
 
-export default function ChatMessage({ message }) {
+function formatTime(ts) {
+  if (!ts) return '';
+  try {
+    const d = new Date(ts);
+    return d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
+}
+
+export default function ChatMessage({ message, onChipAction }) {
   const isUser = message.role === 'user';
+  const [copied, setCopied] = useState(false);
+  const navigate = useNavigate();
+
+  const handleCopy = () => {
+    if (!message.content) return;
+    navigator.clipboard.writeText(message.content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  };
+
+  const handleChip = (chip) => {
+    if (chip.path) {
+      navigate(chip.path);
+    } else if (chip.action && onChipAction) {
+      onChipAction(chip);
+    }
+  };
 
   return (
-    <div className={cn('flex gap-2.5 max-w-full', isUser ? 'justify-end' : 'justify-start')}>
+    <div className={cn('flex gap-2.5 max-w-full group', isUser ? 'justify-end' : 'justify-start')}>
       {!isUser && (
         <div
           className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
@@ -66,6 +95,37 @@ export default function ChatMessage({ message }) {
             {message.tool_calls.map((tc, i) => <ToolCallBubble key={i} toolCall={tc} />)}
           </div>
         )}
+
+        {/* Action chips — navigation shortcuts detected from AI response */}
+        {!isUser && message.chips?.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {message.chips.map(chip => (
+              <button
+                key={chip.label}
+                onClick={() => handleChip(chip)}
+                className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-primary/8 text-primary border border-primary/20 hover:bg-primary/15 transition-all"
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Footer: timestamp + copy button */}
+        <div className={cn('flex items-center gap-2 mt-1', isUser ? 'justify-end' : 'justify-between')}>
+          {message.timestamp ? (
+            <span className="text-[9px] text-foreground-muted/40">{formatTime(message.timestamp)}</span>
+          ) : <span />}
+          {!isUser && message.content && (
+            <button
+              onClick={handleCopy}
+              className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-foreground-muted/40 hover:text-foreground-muted"
+              title="העתק"
+            >
+              {copied ? <Check className="w-3 h-3 text-[#10b981]" /> : <Copy className="w-3 h-3" />}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

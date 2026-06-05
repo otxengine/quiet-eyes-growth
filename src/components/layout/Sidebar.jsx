@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 const NAV_STRUCTURE = [
   { type: 'item',  path: '/command', label: 'בית',          icon: Home },
   { type: 'item',  path: '/',        label: 'מרכז פיקוד',   icon: LayoutGrid },
+  { type: 'item',  path: '/chat',    label: 'יועץ AI',      icon: Bot },
   {
     type: 'group', key: 'intel', label: 'מודיעין', icon: Eye,
     items: [

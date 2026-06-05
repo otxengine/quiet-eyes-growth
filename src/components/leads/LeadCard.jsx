@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Phone, MessageSquare, CheckCircle, ChevronDown, ChevronUp, MapPin, Briefcase, Wallet, Clock, User, ExternalLink, Loader2 } from 'lucide-react';
+import { Phone, MessageSquare, CheckCircle, ChevronDown, ChevronUp, MapPin, Briefcase, Wallet, Clock, User, ExternalLink, Loader2, Bot } from 'lucide-react';
 import { toast } from 'sonner';
 import LeadEnrichmentBadge from '@/components/leads/LeadEnrichmentBadge';
 import WhatsAppTemplates from '@/components/leads/WhatsAppTemplates';
@@ -118,6 +118,12 @@ export default function LeadCard({ lead, businessProfile, onOpenDetail }) {
 
   const urgencyMap = { 'today': 'היום', 'this_week': 'השבוע', 'this_month': 'החודש', 'browsing': 'מתעניין', 'היום': 'היום', 'השבוע': 'השבוע', 'החודש': 'החודש', 'מתעניין': 'מתעניין' };
   const urgency = urgencyMap[lead.urgency] || lead.urgency || '—';
+
+  const openChatWithLead = (e) => {
+    e.stopPropagation();
+    const msg = `מה הגישה הטובה ביותר לליד ${lead.name} (${st.text.replace(/\s*[🔥✓]/g, '').trim()}, שירות: ${lead.service_needed || '?'}${lead.budget_range ? `, תקציב: ${lead.budget_range}` : ''})?`;
+    window.dispatchEvent(new CustomEvent('chat:open', { detail: { message: msg } }));
+  };
 
   return (
     <div className="bg-white rounded-[10px] border border-border/50 hover:border-border transition-colors">
@@ -254,6 +260,10 @@ export default function LeadCard({ lead, businessProfile, onOpenDetail }) {
                 פתח פרטים מלאים
               </button>
             )}
+            <button onClick={openChatWithLead}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-foreground-muted/70 bg-white border border-border/60 hover:border-primary/30 hover:text-primary transition-colors">
+              <Bot className="w-3.5 h-3.5" /> שאל AI
+            </button>
           </div>
 
           {/* Suggested first message for social leads */}

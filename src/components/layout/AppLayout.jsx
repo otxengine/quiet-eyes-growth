@@ -72,6 +72,7 @@ const pageTitles = {
   '/otx': 'OTX Dashboard',
   '/org/settings': 'הגדרות ארגון',
   '/agency': 'לוח סוכנות',
+  '/chat': 'יועץ AI',
 };
 
 export default function AppLayout() {
@@ -297,7 +298,7 @@ export default function AppLayout() {
           <Outlet context={{ businessProfile, user, badges, selectedLocationId }} />
         </main>
       </div>
-      <ChatWidget businessProfile={businessProfile} />
+      <ChatWidget businessProfile={businessProfile} urgentCount={(badges.activeInsights || 0) + (badges.hotLeads || 0)} />
 
       {/* Global Scan Overlay — active on all non-Dashboard pages */}
       {showGlobalScan && businessProfile && (

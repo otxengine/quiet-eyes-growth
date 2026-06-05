@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
-import { X, Send, Loader2, Sparkles, Trash2 } from 'lucide-react';
+import { X, Send, Loader2, Sparkles, Trash2, Maximize2 } from 'lucide-react';
 import ChatMessage from './ChatMessage';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 
-// Storage key is scoped to the specific business so histories never bleed between accounts.
 function storageKey(businessProfileId) {
   return businessProfileId
     ? `quieteyes_chat_${businessProfileId}`
@@ -25,29 +25,24 @@ function saveMessages(msgs, businessProfileId) {
   } catch {}
 }
 
-// Build context-aware suggested questions based on real business state
 function buildSuggestions(profile, alerts, leads, reviews) {
   const questions = [];
 
-  // Hot leads
   const hotLeads = (leads || []).filter(l => l.status === 'hot');
   if (hotLeads.length > 0) {
     questions.push({ text: `יש לי ${hotLeads.length} לידים חמים — מה הפעולה הכי דחופה?`, icon: '🎯' });
   }
 
-  // Pending negative reviews
   const negReviews = (reviews || []).filter(r => r.sentiment === 'negative' && r.response_status === 'pending');
   if (negReviews.length > 0) {
     questions.push({ text: `יש ${negReviews.length} ביקורות שליליות ללא מענה — איך לטפל?`, icon: '⭐' });
   }
 
-  // Active alerts
   const criticalAlerts = (alerts || []).filter(a => a.priority === 'high' || a.priority === 'critical');
   if (criticalAlerts.length > 0) {
     questions.push({ text: 'מה ההתראות הדחופות ביותר שלי עכשיו?', icon: '🎯' });
   }
 
-  // Generic high-value questions if not enough context-specific ones
   if (questions.length < 2) questions.push({ text: 'מה הפעולה הכי משפיעה שאני יכול לעשות היום?', icon: '🎯' });
   if (questions.length < 3) questions.push({ text: 'מה מצב הלידים שלי השבוע?', icon: '📊' });
   if (questions.length < 4) questions.push({ text: 'איך אני ביחס למתחרים שלי?', icon: '❓' });
@@ -55,21 +50,70 @@ function buildSuggestions(profile, alerts, leads, reviews) {
   return questions.slice(0, 4);
 }
 
-const QUICK_ACTIONS = [
+// Build a local greeting from suggestion data (no API call)
+function buildGreeting(alerts, leads, reviews) {
+  const hotLeads = (leads || []).filter(l => l.status === 'hot');
+  const pendingReviews = (reviews || []).filter(r => r.response_status === 'pending' || r.response_status === 'suggested');
+  const criticalAlerts = (alerts || []).filter(a => a.priority === 'high' || a.priority === 'critical');
+
+  const parts = [];
+  if (hotLeads.length > 0) parts.push(`${hotLeads.length} לידים חמים`);
+  if (pendingReviews.length > 0) parts.push(`${pendingReviews.length} ביקורות ממתינות`);
+  if (criticalAlerts.length > 0) parts.push(`${criticalAlerts.length} התראות דחופות`);
+
+  if (parts.length === 0) return 'שלום! אני כאן לעזור לך לנהל ולצמח את העסק. מה תרצה לבדוק?';
+  return `שלום! יש לך ${parts.join(' ו-')} — רוצה לטפל בהם עכשיו?`;
+}
+
+// Detect navigation chips from AI response text
+function detectChips(text) {
+  const chips = [];
+  if (/לידים?/.test(text)) chips.push({ label: '← לידים', path: '/leads' });
+  if (/ביקורות?|מוניטין/.test(text)) chips.push({ label: '← מוניטין', path: '/reviews' });
+  if (/מתחרי/.test(text)) chips.push({ label: '← מתחרים', path: '/competitors' });
+  if (/תובנ|התראה/.test(text)) chips.push({ label: '← תובנות', path: '/insights' });
+  if (/פעולה|כדאי|משימה/.test(text)) chips.push({ label: '+ צור משימה', action: 'create_task' });
+  return chips;
+}
+
+const DEFAULT_QUICK_ACTIONS = [
   { label: '📋 תקציר יומי', prompt: 'תן לי תקציר של מה שקרה בעסק היום' },
   { label: '🔥 פעולה דחופה', prompt: 'מה הפעולה הכי דחופה שאני צריך לעשות עכשיו?' },
   { label: '📈 מצב שוק', prompt: 'מה מצב השוק והמתחרים שלי עכשיו?' },
 ];
 
-export default function ChatPanel({ onClose, businessProfile }) {
+const PAGE_QUICK_ACTIONS = {
+  '/leads': [
+    { label: '🔥 ליד חם הבא', prompt: 'מה לעשות עם הליד החם הבא שלי?' },
+    { label: '📊 סיכום לידים', prompt: 'תן לי סיכום מצב הלידים שלי' },
+    { label: '🎯 טיפ לסגירה', prompt: 'תן לי טיפ לסגירת עסקה' },
+  ],
+  '/reviews': [
+    { label: '⭐ ביקורת ממתינה', prompt: 'עזור לי לטפל בביקורת הממתינה' },
+    { label: '📝 נוסח תגובה', prompt: 'עזור לי לנסח תגובה מקצועית לביקורת שלילית' },
+    { label: '📊 סיכום מוניטין', prompt: 'מה מצב המוניטין שלי עכשיו?' },
+  ],
+  '/competitors': [
+    { label: '🥊 SWOT מהיר', prompt: 'תעשה SWOT מהיר על המתחרה הכי חזק שלי' },
+    { label: '📈 שינוי מתחרה', prompt: 'מה השינויים האחרונים אצל המתחרים שלי?' },
+    { label: '💡 הזדמנות', prompt: 'איפה יש לי הזדמנות ביחס למתחרים?' },
+  ],
+  '/insights': [
+    { label: '🎯 תובנה דחופה', prompt: 'מה התובנה הדחופה ביותר שצריכה את תשומת הלב שלי?' },
+    { label: '📋 סיכום תובנות', prompt: 'תסכם את התובנות האחרונות שלי' },
+    { label: '⚡ פעולה מיידית', prompt: 'מה הפעולה המיידית הכי חשובה שעולה מהתובנות?' },
+  ],
+};
+
+export default function ChatPanel({ onClose, businessProfile, prefilledMessage, onPrefilledConsumed, pageKey }) {
   const bpId = businessProfile?.id;
+  const navigate = useNavigate();
 
   const [messages, setMessages] = useState(() => loadMessages(bpId));
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const bottomRef = useRef(null);
 
-  // Fetch context to build smart suggested questions
   const { data: alertsData = [] } = useQuery({
     queryKey: ['chatAlerts', bpId],
     queryFn: () => base44.entities.ProactiveAlert.filter({ linked_business: bpId, is_dismissed: false, is_acted_on: false }, '-created_at', 5),
@@ -91,7 +135,10 @@ export default function ChatPanel({ onClose, businessProfile }) {
 
   const suggestions = buildSuggestions(businessProfile, alertsData, leadsData, reviewsData);
 
-  // When the business changes (or first load), reload the correct history.
+  // Page-specific quick actions
+  const quickActions = PAGE_QUICK_ACTIONS[pageKey] || DEFAULT_QUICK_ACTIONS;
+
+  // Reload history when business changes
   useEffect(() => {
     setMessages(loadMessages(bpId));
   }, [bpId]);
@@ -100,27 +147,31 @@ export default function ChatPanel({ onClose, businessProfile }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || sending) return;
-    const text = input.trim();
+  // When a prefilled message arrives (from chat:open event), inject it and send
+  useEffect(() => {
+    if (!prefilledMessage) return;
+    setInput(prefilledMessage);
+    onPrefilledConsumed?.();
+  }, [prefilledMessage]);
+
+  const handleSend = async (overrideText) => {
+    const text = (overrideText || input).trim();
+    if (!text || sending) return;
     setInput('');
 
-    const userMsg = { role: 'user', content: text };
+    const userMsg = { role: 'user', content: text, timestamp: Date.now() };
     const updated = [...messages, userMsg];
     setMessages(updated);
     saveMessages(updated, bpId);
     setSending(true);
 
     try {
-      // Last 8 turns as plain history string for context
       const history = updated.slice(-8)
         .map(m => `${m.role === 'user' ? 'משתמש' : 'עוזר'}: ${m.content}`)
         .join('\n');
 
       let replyText;
 
-      // Prefer the server-side function when a business is loaded —
-      // it fetches real signals / competitors and builds a rich system prompt.
       if (bpId) {
         try {
           const res = await base44.functions.invoke('chatWithBusiness', {
@@ -131,12 +182,10 @@ export default function ChatPanel({ onClose, businessProfile }) {
           const data = res?.data || res;
           replyText = data?.reply || data?.content || JSON.stringify(data);
         } catch (_) {
-          // Fall back to generic LLM if server function not available
           replyText = null;
         }
       }
 
-      // Generic fallback (no business context)
       if (!replyText) {
         const bp = businessProfile;
         const bpContext = bp
@@ -163,13 +212,18 @@ ${history}
         replyText = typeof reply === 'string' ? reply : (reply?.content || JSON.stringify(reply));
       }
 
-      const assistantMsg = { role: 'assistant', content: replyText };
+      const assistantMsg = {
+        role: 'assistant',
+        content: replyText,
+        chips: detectChips(replyText),
+        timestamp: Date.now(),
+      };
       const withReply = [...updated, assistantMsg];
       setMessages(withReply);
       saveMessages(withReply, bpId);
     } catch (err) {
       console.error('[Chat] Error:', err);
-      const errMsg = { role: 'assistant', content: 'מצטער, אין חיבור כרגע. נסה שוב.' };
+      const errMsg = { role: 'assistant', content: 'מצטער, אין חיבור כרגע. נסה שוב.', timestamp: Date.now() };
       const withErr = [...updated, errMsg];
       setMessages(withErr);
       saveMessages(withErr, bpId);
@@ -189,6 +243,15 @@ ${history}
     setMessages([]);
     saveMessages([], bpId);
   };
+
+  const handleChipAction = (chip) => {
+    if (chip.action === 'create_task') {
+      navigate('/tasks');
+    }
+  };
+
+  // Personal greeting computed locally from context data
+  const greeting = buildGreeting(alertsData, leadsData, reviewsData);
 
   return (
     <div
@@ -226,6 +289,13 @@ ${history}
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            onClick={() => navigate('/chat')}
+            title="פתח בדף מלא"
+            className="p-1.5 rounded-md hover:bg-secondary transition-colors"
+          >
+            <Maximize2 className="w-3.5 h-3.5 text-foreground-muted/60" />
+          </button>
           {messages.length > 0 && (
             <button onClick={clearHistory} title="נקה שיחה" className="p-1.5 rounded-md hover:bg-secondary transition-colors">
               <Trash2 className="w-3.5 h-3.5 text-foreground-muted/60 hover:text-danger transition-colors" />
@@ -248,7 +318,8 @@ ${history}
               >
                 <Sparkles className="w-5 h-5 text-primary/60" />
               </div>
-              <p className="text-[12px] text-foreground-muted font-medium">שאל אותי על העסק שלך</p>
+              {/* Personalized greeting based on business state */}
+              <p className="text-[12px] text-foreground-muted font-medium px-2">{greeting}</p>
             </div>
             <div className="w-full space-y-1.5">
               {suggestions.map((q, i) => (
@@ -267,7 +338,7 @@ ${history}
           </div>
         ) : (
           messages.filter(m => m.role !== 'system').map((msg, i) => (
-            <ChatMessage key={i} message={msg} />
+            <ChatMessage key={i} message={msg} onChipAction={handleChipAction} />
           ))
         )}
         {sending && (
@@ -281,9 +352,9 @@ ${history}
 
       {/* Quick Actions + Input */}
       <div className="border-t border-border/50">
-        {/* Quick Action Bar */}
+        {/* Page-aware Quick Action Bar */}
         <div className="px-3 pt-2 flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-          {QUICK_ACTIONS.map(a => (
+          {quickActions.map(a => (
             <button
               key={a.label}
               onClick={() => setInput(a.prompt)}
@@ -306,7 +377,7 @@ ${history}
               disabled={sending}
             />
             <button
-              onClick={handleSend}
+              onClick={() => handleSend()}
               disabled={!input.trim() || sending}
               className="p-1.5 rounded-lg text-white transition-all disabled:opacity-30"
               style={{

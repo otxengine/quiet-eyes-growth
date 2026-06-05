@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Star, Loader2, RefreshCw, ExternalLink, ShieldCheck, ShieldX, Copy, CheckCheck } from 'lucide-react';
+import { Star, Loader2, RefreshCw, ExternalLink, ShieldCheck, ShieldX, Copy, CheckCheck, Bot } from 'lucide-react';
 
 const PLATFORM_ICON = {
   'Google Maps':  '📍',
@@ -263,6 +263,16 @@ export default function ReviewCard({ review, businessProfile, compact = false })
               <button onClick={() => generateResponse('professional')} disabled={generating}
                 className="px-3 py-1.5 text-[11px] font-medium bg-[#111111] text-white rounded-md hover:bg-[#333333] transition-colors flex items-center gap-1 disabled:opacity-50">
                 {buttonLabel('professional', 'הצע תגובה מקצועית')}
+              </button>
+              <button
+                onClick={() => {
+                  const reviewSnippet = (review.text || '').slice(0, 120);
+                  window.dispatchEvent(new CustomEvent('chat:open', {
+                    detail: { message: `קיבלתי ביקורת שלילית מ${review.reviewer_name || 'לקוח'}: "${reviewSnippet}" — תעזור לי לנסח תגובה מקצועית` }
+                  }));
+                }}
+                className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium text-foreground-muted/70 bg-white border border-border/60 rounded-md hover:border-primary/30 hover:text-primary transition-colors">
+                <Bot className="w-3 h-3" /> שאל AI
               </button>
               <button onClick={() => setDismissed(true)} disabled={generating}
                 className="px-3 py-1.5 text-[11px] font-medium text-foreground-muted/70 bg-white border border-border/60 rounded-md hover:border-border-hover hover:text-foreground-secondary transition-colors">
