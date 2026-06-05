@@ -29,8 +29,8 @@ function DayBar({ day, day_short, count, max }) {
           title={`${day}: ${count} לידים`}
         />
       </div>
-      <span className={`text-[10px] font-medium ${isActive ? 'text-primary' : 'text-gray-400'}`}>{day_short}</span>
-      {count > 0 && <span className="text-[9px] text-gray-300">{count}</span>}
+      <span className={`text-[10px] font-medium ${isActive ? 'text-primary' : 'text-foreground-muted/70'}`}>{day_short}</span>
+      {count > 0 && <span className="text-[9px] text-foreground-muted/50">{count}</span>}
     </div>
   );
 }
@@ -46,9 +46,9 @@ export default function SmartSchedulerPanel({ businessProfileId }) {
 
   if (isLoading) {
     return (
-      <div className="rounded-2xl border border-gray-100 bg-white px-5 py-6 shadow-sm flex items-center justify-center gap-3">
+      <div className="rounded-2xl border border-border/60 bg-white px-5 py-6 shadow-sm flex items-center justify-center gap-3">
         <Loader2 className="w-4 h-4 animate-spin text-primary/50" />
-        <span className="text-[12px] text-gray-400">מנתח דפוסי פעילות...</span>
+        <span className="text-[12px] text-foreground-muted/70">מנתח דפוסי פעילות...</span>
       </div>
     );
   }
@@ -64,12 +64,12 @@ export default function SmartSchedulerPanel({ businessProfileId }) {
   const maxDayCount = Math.max(...day_of_week_distribution.map(d => d.count), 1);
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+    <div className="rounded-2xl border border-border/60 bg-white shadow-sm overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-border/40">
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-primary/70" />
-          <span className="text-[13px] font-bold text-gray-800">תזמון חכם</span>
+          <span className="text-[13px] font-bold text-foreground">תזמון חכם</span>
         </div>
         {!has_data && (
           <span className="flex items-center gap-1 text-[10px] text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full">
@@ -82,7 +82,7 @@ export default function SmartSchedulerPanel({ businessProfileId }) {
         {/* Recommended scan windows */}
         {recommended_windows.length > 0 && (
           <div>
-            <p className="text-[10px] text-gray-400 mb-2 font-medium">חלונות סריקה מומלצים</p>
+            <p className="text-[10px] text-foreground-muted/70 mb-2 font-medium">חלונות סריקה מומלצים</p>
             <div className="flex gap-2 flex-wrap">
               {recommended_windows.map((w, i) => (
                 <div key={i} className="flex-1 min-w-[140px] bg-primary/8 border border-primary/15 rounded-xl px-3 py-2.5">
@@ -101,7 +101,7 @@ export default function SmartSchedulerPanel({ businessProfileId }) {
         <div className="grid grid-cols-2 gap-3">
           {peak_lead_hours.length > 0 && (
             <div>
-              <p className="text-[10px] text-gray-400 mb-2">שיא לידים (שעה)</p>
+              <p className="text-[10px] text-foreground-muted/70 mb-2">שיא לידים (שעה)</p>
               <div className="flex flex-wrap gap-1.5">
                 {peak_lead_hours.map(h => (
                   <HourBadge key={h} hour={h} />
@@ -111,7 +111,7 @@ export default function SmartSchedulerPanel({ businessProfileId }) {
           )}
           {peak_review_hours.length > 0 && (
             <div>
-              <p className="text-[10px] text-gray-400 mb-2">שיא ביקורות (שעה)</p>
+              <p className="text-[10px] text-foreground-muted/70 mb-2">שיא ביקורות (שעה)</p>
               <div className="flex flex-wrap gap-1.5">
                 {peak_review_hours.map(h => (
                   <HourBadge key={h} hour={h} />
@@ -125,7 +125,7 @@ export default function SmartSchedulerPanel({ businessProfileId }) {
         {day_of_week_distribution.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] text-gray-400 font-medium">פילוח לידים לפי יום</p>
+              <p className="text-[10px] text-foreground-muted/70 font-medium">פילוח לידים לפי יום</p>
               {peak_day && (
                 <span className="text-[10px] text-primary bg-primary/8 px-2 py-0.5 rounded-full">יום {peak_day} — שיא</span>
               )}
@@ -140,20 +140,20 @@ export default function SmartSchedulerPanel({ businessProfileId }) {
 
         {/* Scan stats */}
         {scan_stats.total_scans > 0 && (
-          <div className="bg-gray-50 rounded-xl px-3 py-2.5">
-            <p className="text-[10px] text-gray-400 mb-1.5 font-medium">סטטיסטיקת סריקות</p>
+          <div className="bg-secondary/50 rounded-xl px-3 py-2.5">
+            <p className="text-[10px] text-foreground-muted/70 mb-1.5 font-medium">סטטיסטיקת סריקות</p>
             <div className="grid grid-cols-3 gap-2 text-center">
               <div>
-                <p className="text-[13px] font-bold text-gray-700">{scan_stats.total_scans}</p>
-                <p className="text-[9px] text-gray-400">סריקות</p>
+                <p className="text-[13px] font-bold text-foreground-secondary">{scan_stats.total_scans}</p>
+                <p className="text-[9px] text-foreground-muted/70">סריקות</p>
               </div>
               <div>
-                <p className="text-[13px] font-bold text-gray-700">{scan_stats.avg_interval_hours ?? '—'}h</p>
-                <p className="text-[9px] text-gray-400">מרווח ממוצע</p>
+                <p className="text-[13px] font-bold text-foreground-secondary">{scan_stats.avg_interval_hours ?? '—'}h</p>
+                <p className="text-[9px] text-foreground-muted/70">מרווח ממוצע</p>
               </div>
               <div>
-                <p className="text-[13px] font-bold text-gray-700">{scan_stats.hours_since_last_scan != null ? `${scan_stats.hours_since_last_scan}h` : '—'}</p>
-                <p className="text-[9px] text-gray-400">מסריקה אחרונה</p>
+                <p className="text-[13px] font-bold text-foreground-secondary">{scan_stats.hours_since_last_scan != null ? `${scan_stats.hours_since_last_scan}h` : '—'}</p>
+                <p className="text-[9px] text-foreground-muted/70">מסריקה אחרונה</p>
               </div>
             </div>
           </div>

@@ -87,7 +87,7 @@ ${toneInstructions[tone] || toneInstructions.friendly}
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const inputCls = "w-full bg-[#fafafa] border border-[#eeeeee] rounded-lg px-3 py-2 text-[13px] text-foreground placeholder-[#cccccc] focus:outline-none focus:border-[#dddddd]";
+  const inputCls = "w-full bg-secondary/50 border border-border/60 rounded-lg px-3 py-2 text-[13px] text-foreground placeholder-[#cccccc] focus:outline-none focus:border-border";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -95,19 +95,19 @@ ${toneInstructions[tone] || toneInstructions.friendly}
       <div className="relative bg-white border border-border rounded-[10px] p-5 w-full max-w-md mx-4 z-10 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-bold text-foreground">בקש ביקורת מלקוח</h3>
-          <button onClick={onClose} className="text-[#cccccc] hover:text-[#999999]"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="text-foreground-muted/50 hover:text-foreground-muted"><X className="w-4 h-4" /></button>
         </div>
         <div className="space-y-3">
           <div>
-            <label className="text-[12px] text-[#999999] mb-1 block">שם הלקוח *</label>
+            <label className="text-[12px] text-foreground-muted mb-1 block">שם הלקוח *</label>
             <input value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} className={inputCls} placeholder="שם הלקוח..." />
           </div>
           <div>
-            <label className="text-[12px] text-[#999999] mb-1 block">טלפון *</label>
+            <label className="text-[12px] text-foreground-muted mb-1 block">טלפון *</label>
             <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={inputCls} placeholder="05X-XXXXXXX" dir="ltr" />
           </div>
           <div>
-            <label className="text-[12px] text-[#999999] mb-1 block">פלטפורמה</label>
+            <label className="text-[12px] text-foreground-muted mb-1 block">פלטפורמה</label>
             <div className="flex gap-2">
               {platforms.map((p) => (
                 <button key={p} onClick={() => setForm({ ...form, platform: p })}
@@ -127,8 +127,8 @@ ${toneInstructions[tone] || toneInstructions.friendly}
 
           {message && !generating && (
             <div>
-              <label className="text-[12px] text-[#999999] mb-1 block">תצוגה מקדימה</label>
-              <div className="bg-[#fafafa] border border-[#eeeeee] rounded-lg p-4 text-[13px] text-[#444444] whitespace-pre-wrap leading-relaxed">
+              <label className="text-[12px] text-foreground-muted mb-1 block">תצוגה מקדימה</label>
+              <div className="bg-secondary/50 border border-border/60 rounded-lg p-4 text-[13px] text-foreground-secondary whitespace-pre-wrap leading-relaxed">
                 {message}
               </div>
             </div>

@@ -19,8 +19,8 @@ export default function Onboarding() {
 
   if (isLoadingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="w-8 h-8 border-4 border-gray-200 border-t-gray-800 rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-secondary/50">
+        <div className="w-8 h-8 border-4 border-border border-t-gray-800 rounded-full animate-spin" />
       </div>
     );
   }

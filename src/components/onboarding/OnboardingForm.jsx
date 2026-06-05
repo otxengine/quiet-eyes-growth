@@ -60,7 +60,7 @@ export default function OnboardingForm() {
     CHANNEL_OPTIONS.reduce((acc, ch) => acc + (formData[ch.field] ? ch.pct : 0), 0)
   );
 
-  const inputCls = "w-full bg-[#fafafa] border border-[#eeeeee] rounded-lg px-3 py-2.5 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-[#bbbbbb] transition-colors";
+  const inputCls = "w-full bg-secondary/50 border border-border/60 rounded-lg px-3 py-2.5 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-[#bbbbbb] transition-colors";
 
   const toggleSource = (val) => {
     setFormData(prev => ({
@@ -116,7 +116,7 @@ export default function OnboardingForm() {
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-4" dir="rtl">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-[10px] p-8 border border-[#f0f0f0]">
+        <div className="bg-white rounded-[10px] p-8 border border-border/50">
 
           {/* Progress bar */}
           <div className="mb-8">
@@ -125,14 +125,14 @@ export default function OnboardingForm() {
                 <div key={n} className={`h-1 flex-1 rounded-full transition-colors duration-300 ${n <= step ? 'bg-[#111111]' : 'bg-[#eeeeee]'}`} />
               ))}
             </div>
-            <p className="text-[11px] text-[#cccccc]">שלב {step} מתוך 4</p>
+            <p className="text-[11px] text-foreground-muted/50">שלב {step} מתוך 4</p>
           </div>
 
           {/* ── STEP 1: Identity ─────────────────────────────────────────────── */}
           {step === 1 && (
             <div>
               <h1 className="text-2xl font-bold text-[#111111] mb-1">ספר לנו על העסק שלך</h1>
-              <p className="text-[#999999] text-sm mb-7">כתוב בחופשיות — ככל שתפרט יותר, הסוכנים שלנו יהיו מדויקים יותר</p>
+              <p className="text-foreground-muted text-sm mb-7">כתוב בחופשיות — ככל שתפרט יותר, הסוכנים שלנו יהיו מדויקים יותר</p>
               <div className="space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-[#111111] mb-2">שם העסק</label>
@@ -146,7 +146,7 @@ export default function OnboardingForm() {
                 <div>
                   <label className="block text-sm font-medium text-[#111111] mb-2">
                     תאר את העסק שלך
-                    <span className="text-[#cccccc] font-normal mr-1">(מה אתה עושה, למי, ומה מייחד אותך)</span>
+                    <span className="text-foreground-muted/50 font-normal mr-1">(מה אתה עושה, למי, ומה מייחד אותך)</span>
                   </label>
                   <textarea
                     placeholder={`לדוגמה:\n"אני מעצב UI/UX לסטרטאפים ב-SaaS. עובד בעיקר עם חברות שמחפשות לשפר את מוצר הדיגיטלי שלהן. מתמחה בעיצוב מערכות מורכבות."\n\nאו:\n"בית קפה קטן ואינטימי בתל אביב. אנחנו מתמחים בקפה מיוחד ועוגות ביתיות. הקהל שלנו הוא אנשי הייטק שעובדים מהבית."`}
@@ -155,7 +155,7 @@ export default function OnboardingForm() {
                     className={inputCls + " resize-none"}
                     rows={5}
                   />
-                  <p className="text-[10px] text-[#cccccc] mt-1">מידע זה עוזר לסוכנים להבין בדיוק מה העסק שלך ולמי לא לשלוח תובנות לא רלוונטיות</p>
+                  <p className="text-[10px] text-foreground-muted/50 mt-1">מידע זה עוזר לסוכנים להבין בדיוק מה העסק שלך ולמי לא לשלוח תובנות לא רלוונטיות</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[#111111] mb-2">עיר</label>
@@ -181,7 +181,7 @@ export default function OnboardingForm() {
           {step === 2 && (
             <div>
               <h1 className="text-2xl font-bold text-[#111111] mb-1">מה הכי חשוב לך עכשיו?</h1>
-              <p className="text-[#999999] text-sm mb-7">הסוכנים יתמקדו בהתאם לעדיפות שלך</p>
+              <p className="text-foreground-muted text-sm mb-7">הסוכנים יתמקדו בהתאם לעדיפות שלך</p>
               <div className="grid grid-cols-1 gap-3">
                 {GOAL_OPTIONS.map(opt => (
                   <button
@@ -189,21 +189,21 @@ export default function OnboardingForm() {
                     onClick={() => { setFormData(p => ({ ...p, goal: opt.value })); setStep(3); }}
                     className={`text-right p-4 rounded-xl border-2 transition-all duration-150 ${
                       formData.goal === opt.value
-                        ? 'border-[#111111] bg-[#fafafa]'
-                        : 'border-[#eeeeee] hover:border-[#cccccc]'
+                        ? 'border-[#111111] bg-secondary/50'
+                        : 'border-border/60 hover:border-border-hover'
                     }`}
                   >
                     <div className="flex items-center gap-3">
                       <span className="text-2xl">{opt.icon}</span>
                       <div>
                         <div className="font-medium text-[#111111] text-[14px]">{opt.label}</div>
-                        <div className="text-[11px] text-[#999999] mt-0.5">{opt.sub}</div>
+                        <div className="text-[11px] text-foreground-muted mt-0.5">{opt.sub}</div>
                       </div>
                     </div>
                   </button>
                 ))}
               </div>
-              <button onClick={() => setStep(1)} className="mt-6 text-[12px] text-[#cccccc] hover:text-[#999999] transition-colors">
+              <button onClick={() => setStep(1)} className="mt-6 text-[12px] text-foreground-muted/50 hover:text-foreground-muted transition-colors">
                 ← חזרה
               </button>
             </div>
@@ -213,7 +213,7 @@ export default function OnboardingForm() {
           {step === 3 && (
             <div>
               <h1 className="text-2xl font-bold text-[#111111] mb-1">כמה עוד פרטים</h1>
-              <p className="text-[#999999] text-sm mb-7">עוזר לנו לכוון את הניתוח לתחרות ולאסטרטגיה הנכונה לך</p>
+              <p className="text-foreground-muted text-sm mb-7">עוזר לנו לכוון את הניתוח לתחרות ולאסטרטגיה הנכונה לך</p>
               <div className="space-y-7">
                 {/* Price tier */}
                 <div>
@@ -225,12 +225,12 @@ export default function OnboardingForm() {
                         onClick={() => setFormData(p => ({ ...p, price_tier: opt.value }))}
                         className={`p-3 rounded-xl border-2 transition-all text-center ${
                           formData.price_tier === opt.value
-                            ? 'border-[#111111] bg-[#fafafa]'
-                            : 'border-[#eeeeee] hover:border-[#cccccc]'
+                            ? 'border-[#111111] bg-secondary/50'
+                            : 'border-border/60 hover:border-border-hover'
                         }`}
                       >
                         <div className="font-medium text-[#111111] text-[13px]">{opt.label}</div>
-                        <div className="text-[10px] text-[#999999] mt-0.5">{opt.sub}</div>
+                        <div className="text-[10px] text-foreground-muted mt-0.5">{opt.sub}</div>
                       </button>
                     ))}
                   </div>
@@ -240,7 +240,7 @@ export default function OnboardingForm() {
                 <div>
                   <label className="block text-sm font-medium text-[#111111] mb-3">
                     מאיפה מגיעים הלקוחות שלך?
-                    <span className="text-[#cccccc] font-normal mr-1">(בחר את כל שרלוונטי)</span>
+                    <span className="text-foreground-muted/50 font-normal mr-1">(בחר את כל שרלוונטי)</span>
                   </label>
                   <div className="flex flex-wrap gap-2">
                     {SOURCE_OPTIONS.map(opt => {
@@ -252,7 +252,7 @@ export default function OnboardingForm() {
                           className={`px-3 py-1.5 rounded-full text-[12px] border transition-all ${
                             selected
                               ? 'bg-[#111111] text-white border-[#111111]'
-                              : 'border-[#eeeeee] text-[#666666] hover:border-[#cccccc]'
+                              : 'border-border/60 text-foreground-secondary hover:border-border-hover'
                           }`}
                         >
                           {selected && <Check className="w-3 h-3 inline ml-1" />}
@@ -265,7 +265,7 @@ export default function OnboardingForm() {
               </div>
 
               <div className="flex gap-3 mt-8">
-                <button onClick={() => setStep(2)} className="text-[12px] text-[#cccccc] hover:text-[#999999] transition-colors">
+                <button onClick={() => setStep(2)} className="text-[12px] text-foreground-muted/50 hover:text-foreground-muted transition-colors">
                   ← חזרה
                 </button>
                 <button
@@ -283,12 +283,12 @@ export default function OnboardingForm() {
           {step === 4 && (
             <div>
               <h1 className="text-2xl font-bold text-[#111111] mb-1">חבר מקורות מידע</h1>
-              <p className="text-[#999999] text-sm mb-2">אופציונלי — ברגע שהמקורות יחוברו הסוכנים ילמדו יותר טוב על העסק</p>
+              <p className="text-foreground-muted text-sm mb-2">אופציונלי — ברגע שהמקורות יחוברו הסוכנים ילמדו יותר טוב על העסק</p>
 
               {/* Intelligence meter */}
-              <div className="bg-[#fafafa] border border-[#eeeeee] rounded-xl p-4 mb-6">
+              <div className="bg-secondary/50 border border-border/60 rounded-xl p-4 mb-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[12px] text-[#666666] font-medium">דיוק אינטליגנציה</span>
+                  <span className="text-[12px] text-foreground-secondary font-medium">דיוק אינטליגנציה</span>
                   <span className="text-[14px] font-bold text-[#111111]">{intelPct}%</span>
                 </div>
                 <div className="h-2 bg-[#eeeeee] rounded-full overflow-hidden">
@@ -300,7 +300,7 @@ export default function OnboardingForm() {
                     }}
                   />
                 </div>
-                <p className="text-[10px] text-[#cccccc] mt-1.5">
+                <p className="text-[10px] text-foreground-muted/50 mt-1.5">
                   {intelPct < 60
                     ? 'חבר מקורות כדי שהסוכנים יוכלו לסרוק ולנתח בצורה מדויקת יותר'
                     : intelPct < 85
@@ -311,13 +311,13 @@ export default function OnboardingForm() {
 
               <div className="space-y-3">
                 {CHANNEL_OPTIONS.map(ch => (
-                  <div key={ch.key} className={`border rounded-xl p-3 transition-all ${formData[ch.field] ? 'border-[#111111] bg-[#fafafa]' : 'border-[#eeeeee]'}`}>
+                  <div key={ch.key} className={`border rounded-xl p-3 transition-all ${formData[ch.field] ? 'border-[#111111] bg-secondary/50' : 'border-border/60'}`}>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <span className="text-lg">{ch.icon}</span>
                         <span className="text-[13px] font-medium text-[#111111]">{ch.label}</span>
                       </div>
-                      <span className="text-[11px] text-[#999999]">+{ch.pct}% דיוק</span>
+                      <span className="text-[11px] text-foreground-muted">+{ch.pct}% דיוק</span>
                     </div>
                     <input
                       placeholder={ch.placeholder}
@@ -331,7 +331,7 @@ export default function OnboardingForm() {
               </div>
 
               <div className="flex gap-3 mt-7">
-                <button onClick={() => setStep(3)} className="text-[12px] text-[#cccccc] hover:text-[#999999] transition-colors">
+                <button onClick={() => setStep(3)} className="text-[12px] text-foreground-muted/50 hover:text-foreground-muted transition-colors">
                   ← חזרה
                 </button>
                 <button
@@ -346,7 +346,7 @@ export default function OnboardingForm() {
                   )}
                 </button>
               </div>
-              <p className="text-[11px] text-[#cccccc] text-center mt-3">
+              <p className="text-[11px] text-foreground-muted/50 text-center mt-3">
                 ניתן לחבר מקורות נוספים גם לאחר הרישום
               </p>
             </div>

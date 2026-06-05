@@ -13,7 +13,7 @@ const steps = [
           {[{ label: 'שם העסק', value: 'מסעדת הגינה' }, { label: 'קטגוריה', value: 'מסעדה' }, { label: 'עיר', value: 'תל אביב' }].map(f => (
             <div key={f.label}>
               <span className="text-[9px] text-[#999] block mb-0.5">{f.label}</span>
-              <div className="rounded-lg border border-[#e8e8e8] bg-[#fafafa] px-3 py-2 text-[10px] text-[#444]">{f.value}</div>
+              <div className="rounded-lg border border-[#e8e8e8] bg-secondary/50 px-3 py-2 text-[10px] text-[#444]">{f.value}</div>
             </div>
           ))}
           <div className="rounded-lg bg-[#111] text-white text-center py-2.5 text-[10px] font-semibold mt-2">התחל סריקה ←</div>
@@ -51,7 +51,7 @@ const steps = [
             { color: '#10b981', text: '2 לידים חמים זוהו — ציון 90+', icon: '🔥' },
             { color: '#d97706', text: 'מתחרה חדש נפתח ב-300 מטר', icon: '⚠️' },
           ].map((s, i) => (
-            <div key={i} className="rounded-lg bg-[#fafafa] p-2.5 flex items-start gap-2" style={{ borderRight: `2px solid ${s.color}` }}>
+            <div key={i} className="rounded-lg bg-secondary/50 p-2.5 flex items-start gap-2" style={{ borderRight: `2px solid ${s.color}` }}>
               <span className="text-[11px]">{s.icon}</span>
               <p className="text-[9px] text-[#444]">{s.text}</p>
             </div>
@@ -66,7 +66,7 @@ const steps = [
     desc: 'תדריך בוקר, מודיעין שוק, לידים, מוניטין — הכל במקום אחד.',
     mockup: (
       <div className="rounded-2xl border border-[#eee] bg-white overflow-hidden max-w-[380px]" style={{ boxShadow: '0 20px 60px rgba(0,0,0,0.06)' }}>
-        <div className="p-3 border-b border-[#f0f0f0] bg-[#fafafa]" style={{ borderRight: '3px solid #10b981' }}>
+        <div className="p-3 border-b border-border/50 bg-secondary/50" style={{ borderRight: '3px solid #10b981' }}>
           <span className="text-[9px] font-semibold text-[#222] block mb-1">תדריך בוקר</span>
           <div className="space-y-1">
             <p className="text-[8px] text-[#555]">🔴 ביקורת שלילית דורשת תגובה</p>
@@ -75,7 +75,7 @@ const steps = [
         </div>
         <div className="grid grid-cols-4 gap-1 p-2">
           {[{ v: '12', l: 'תובנות' }, { v: '8', l: 'מתחרים' }, { v: '47', l: 'ביקורות' }, { v: '23', l: 'לידים' }].map(c => (
-            <div key={c.l} className="rounded-md border border-[#f0f0f0] p-1.5 text-center">
+            <div key={c.l} className="rounded-md border border-border/50 p-1.5 text-center">
               <span className="text-[12px] font-bold text-[#111] block">{c.v}</span>
               <span className="text-[6px] text-[#999]">{c.l}</span>
             </div>

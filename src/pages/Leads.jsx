@@ -11,6 +11,7 @@ import PipelineView from '@/components/leads/PipelineView';
 import LeadDetailPanel from '@/components/leads/LeadDetailPanel';
 import AiInsightBox from '@/components/ai/AiInsightBox';
 import ScanOverlay from '@/components/dashboard/ScanOverlay';
+import EmptyState from '@/components/ui/EmptyState';
 
 const filterTabs = [
   { key: 'all', label: 'הכל' },
@@ -21,7 +22,7 @@ const filterTabs = [
 ];
 
 const stages = [
-  { key: 'new', label: 'חדש', color: 'bg-gray-100 text-gray-600' },
+  { key: 'new', label: 'חדש', color: 'bg-secondary text-foreground-secondary' },
   { key: 'contacted', label: 'נוצר קשר', color: 'bg-blue-50 text-blue-600' },
   { key: 'meeting', label: 'פגישה', color: 'bg-amber-50 text-amber-600' },
   { key: 'negotiation', label: 'משא ומתן', color: 'bg-purple-50 text-purple-600' },
@@ -264,7 +265,7 @@ export default function Leads() {
           )}
           {searchState === 'empty' && (
             <button onClick={() => setSearchState('idle')}
-              className="btn-subtle flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium text-gray-500 bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-all">
+              className="btn-subtle flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium text-foreground-muted bg-secondary/50 border border-border hover:bg-secondary transition-all">
               <Target className="w-4 h-4" /> לא נמצאו — נסה שוב
             </button>
           )}
@@ -322,22 +323,23 @@ export default function Leads() {
         <PipelineView leads={leads} businessProfile={businessProfile} />
       ) : (
         <>
-          <div className="flex gap-0.5 border-b border-border">
+          <div className="flex gap-1 p-1 bg-secondary/50 rounded-xl w-fit">
             {filterTabs.map((tab) => (
               <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                className={`px-4 py-2.5 text-[12px] font-medium transition-all duration-150 relative ${activeTab === tab.key ? 'text-foreground' : 'text-foreground-muted hover:text-foreground-secondary'}`}>
+                className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-all ${activeTab === tab.key ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'}`}>
                 {tab.label}
-                {activeTab === tab.key && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-foreground rounded-t" />}
               </button>
             ))}
           </div>
 
           {filtered.length === 0 ? (
-            <div className="card-base py-20 text-center">
-              <Target className="w-12 h-12 text-foreground-muted opacity-20 mx-auto mb-3" />
-              <p className="text-[13px] text-foreground-muted mb-4">עוד אין לידים</p>
-              <button onClick={() => setShowAddModal(true)} className="btn-subtle px-5 py-2.5 rounded-lg text-[12px] font-medium bg-foreground text-background hover:opacity-90 transition-all">+ הוסף ליד ראשון</button>
-            </div>
+            <EmptyState
+              icon={Target}
+              title="עוד אין לידים"
+              description="הסוכן ימצא לידים אוטומטית, או הוסף ידנית"
+              action={() => setShowAddModal(true)}
+              actionLabel="+ הוסף ליד ראשון"
+            />
           ) : (
             <div className="space-y-2">
               {filtered.map((lead) => (

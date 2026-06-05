@@ -19,7 +19,7 @@ const POSITION_LABELS = {
   leader:     { label: 'מוביל שוק',   color: 'bg-green-50 text-green-700 border-green-200'  },
   challenger: { label: 'מתחרה עיקרי', color: 'bg-blue-50 text-blue-700 border-blue-200'    },
   niche:      { label: 'נישה',         color: 'bg-purple-50 text-purple-700 border-purple-200' },
-  new:        { label: 'עסק חדש',      color: 'bg-gray-50 text-gray-600 border-gray-200'    },
+  new:        { label: 'עסק חדש',      color: 'bg-secondary/50 text-foreground-secondary border-border'    },
 };
 
 const SIZE_LABELS = { גדול: 'גדול', בינוני: 'בינוני', קטן: 'קטן' };

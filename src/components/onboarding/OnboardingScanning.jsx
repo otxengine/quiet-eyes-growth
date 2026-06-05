@@ -154,7 +154,7 @@ export default function OnboardingScanning() {
 
         <h2 className="text-lg font-semibold text-[#222222] mb-1">{statusText}</h2>
         {narrativeText && (
-          <p className="text-[12px] text-[#aaaaaa] mb-6 transition-all duration-300">{narrativeText}</p>
+          <p className="text-[12px] text-foreground-muted/70 mb-6 transition-all duration-300">{narrativeText}</p>
         )}
 
         {/* Step list */}
@@ -172,12 +172,12 @@ export default function OnboardingScanning() {
                     <Check className="w-3 h-3 text-[#10b981]" />
                   </div>
                 ) : index === currentStep ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-[#999999]" />
+                  <Loader2 className="w-4 h-4 animate-spin text-foreground-muted" />
                 ) : (
                   <div className="w-2.5 h-2.5 rounded-full bg-[#eeeeee]" />
                 )}
               </div>
-              <span className={`text-[12px] ${completedSteps.includes(index) ? 'text-[#10b981]' : 'text-[#999999]'}`}>
+              <span className={`text-[12px] ${completedSteps.includes(index) ? 'text-[#10b981]' : 'text-foreground-muted'}`}>
                 {step.text}
               </span>
             </div>

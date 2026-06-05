@@ -92,7 +92,7 @@ export default function DataQualityDashboard({ bpId }) {
           return (
             <div key={item.name} className="flex items-center gap-2">
               <span className="text-[11px] text-foreground-secondary w-24 flex-shrink-0">{item.name}</span>
-              <div className="flex-1 h-2 bg-[#f0f0f0] rounded-full overflow-hidden">
+              <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
                 <div className="h-full rounded-full transition-all" style={{ width: `${item.score}%`, background: item.color }} />
               </div>
               <span className="text-[10px] font-medium flex-shrink-0 w-8 text-left" style={{ color: item.color }}>{item.score}%</span>

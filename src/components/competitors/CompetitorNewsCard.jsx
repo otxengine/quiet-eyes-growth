@@ -27,17 +27,17 @@ export default function CompetitorNewsCard({ signals, competitorName }) {
   return (
     <div className="mt-3 space-y-1.5">
       <div className="flex items-center gap-1.5">
-        <Newspaper className="w-3 h-3 text-[#cccccc]" />
-        <span className="text-[10px] font-medium text-[#999999]">חדשות אחרונות</span>
+        <Newspaper className="w-3 h-3 text-foreground-muted/50" />
+        <span className="text-[10px] font-medium text-foreground-muted">חדשות אחרונות</span>
       </div>
       {filtered.map((signal) => (
-        <div key={signal.id} className="flex items-start gap-2 px-2.5 py-1.5 rounded-md bg-[#fafafa] border border-[#f5f5f5]">
-          <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-medium mt-0.5 flex-shrink-0 ${categoryColors[signal.category] || 'bg-[#f5f5f5] text-[#999999]'}`}>
+        <div key={signal.id} className="flex items-start gap-2 px-2.5 py-1.5 rounded-md bg-secondary/50 border border-border/40">
+          <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-medium mt-0.5 flex-shrink-0 ${categoryColors[signal.category] || 'bg-secondary/60 text-foreground-muted'}`}>
             {signal.category === 'competitor_move' ? 'מהלך' : signal.category === 'threat' ? 'איום' : signal.category === 'opportunity' ? 'הזדמנות' : 'מגמה'}
           </span>
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] text-[#444444] truncate">{signal.summary}</p>
-            <span className="text-[9px] text-[#cccccc] flex items-center gap-1 mt-0.5">
+            <p className="text-[11px] text-foreground-secondary truncate">{signal.summary}</p>
+            <span className="text-[9px] text-foreground-muted/50 flex items-center gap-1 mt-0.5">
               <Clock className="w-2.5 h-2.5" /> {timeAgo(signal.detected_at || signal.created_date)}
             </span>
           </div>

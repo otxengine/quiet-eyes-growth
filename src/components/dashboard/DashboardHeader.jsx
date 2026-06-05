@@ -71,7 +71,7 @@ export default function DashboardHeader({ businessProfile, stats = {} }) {
             <button
               key={kpi.key}
               onClick={() => navigate(kpi.route)}
-              className={`flex flex-col items-center justify-center w-14 h-14 rounded-xl border border-border ${kpi.bg} hover:shadow-sm transition-all group cursor-pointer`}
+              className={`card-stat flex flex-col items-center justify-center w-14 h-14 group cursor-pointer hover:shadow-md`}
             >
               <span className={`text-[17px] font-bold leading-none ${kpi.color} group-hover:scale-110 transition-transform`}>
                 {fmtKpi(kpi.key, stats[kpi.key])}

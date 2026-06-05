@@ -16,9 +16,9 @@ export default function SignalCategoryChart({ signals = [] }) {
   }, [signals]);
 
   return (
-    <div className="bg-white rounded-[10px] border border-[#f0f0f0] p-5">
+    <div className="bg-white rounded-[10px] border border-border/50 p-5">
       <h3 className="text-[14px] font-semibold text-[#222222] mb-1">פילוח תובנות לפי קטגוריה</h3>
-      <p className="text-[10px] text-[#cccccc] mb-4">התפלגות סוגי התובנות שזוהו</p>
+      <p className="text-[10px] text-foreground-muted/50 mb-4">התפלגות סוגי התובנות שזוהו</p>
       <div className="h-44">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>

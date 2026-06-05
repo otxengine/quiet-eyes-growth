@@ -15,7 +15,7 @@ export default function SettingsWhatsAppBot({ form, setForm, onSave, saving, bus
   const [copied, setCopied] = useState(false);
   const [generatingDefaults, setGeneratingDefaults] = useState(false);
 
-  const inputCls = "w-full bg-[#fafafa] border border-[#eeeeee] rounded-lg px-3 py-2 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-[#dddddd]";
+  const inputCls = "w-full bg-secondary/50 border border-border/60 rounded-lg px-3 py-2 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-border";
   const textareaCls = `${inputCls} resize-none`;
 
   const whatsappUrl = base44.agents?.getWhatsAppConnectURL
@@ -65,7 +65,7 @@ export default function SettingsWhatsAppBot({ form, setForm, onSave, saving, bus
   };
 
   return (
-    <div className="bg-white rounded-[10px] border border-[#f0f0f0] p-5 space-y-5">
+    <div className="bg-white rounded-[10px] border border-border/50 p-5 space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
@@ -74,7 +74,7 @@ export default function SettingsWhatsAppBot({ form, setForm, onSave, saving, bus
           </div>
           <div>
             <h2 className="text-[14px] font-semibold text-[#222222]">בוט וואטסאפ חכם</h2>
-            <p className="text-[11px] text-[#999999]">הבוט משוחח עם לקוחות, מסנן אותם ומזין לידים למערכת</p>
+            <p className="text-[11px] text-foreground-muted">הבוט משוחח עם לקוחות, מסנן אותם ומזין לידים למערכת</p>
           </div>
         </div>
         <Switch
@@ -107,7 +107,7 @@ export default function SettingsWhatsAppBot({ form, setForm, onSave, saving, bus
           )}
 
           {/* Meta Cloud API — optional real sending */}
-          <div className="border border-[#f0f0f0] rounded-xl p-4 space-y-3">
+          <div className="border border-border/50 rounded-xl p-4 space-y-3">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-md bg-[#f0fdf8] flex items-center justify-center">
                 <Send className="w-3.5 h-3.5 text-[#10b981]" />
@@ -157,14 +157,14 @@ export default function SettingsWhatsAppBot({ form, setForm, onSave, saving, bus
 
           {/* Smart generate */}
           <button onClick={generateSmartDefaults} disabled={generatingDefaults}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[12px] font-medium bg-[#fafafa] border border-[#eeeeee] text-[#444444] hover:bg-[#f5f5f5] hover:border-[#dddddd] transition-colors">
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[12px] font-medium bg-secondary/50 border border-border/60 text-foreground-secondary hover:bg-secondary/60 hover:border-border transition-colors">
             {generatingDefaults ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
             {generatingDefaults ? 'יוצר הגדרות חכמות...' : '✨ צור הגדרות חכמות אוטומטית'}
           </button>
 
           {/* Greeting */}
           <div>
-            <label className="text-[12px] text-[#999999] mb-1 block">הודעת פתיחה</label>
+            <label className="text-[12px] text-foreground-muted mb-1 block">הודעת פתיחה</label>
             <textarea
               value={form.bot_greeting || ''}
               onChange={(e) => setForm(f => ({ ...f, bot_greeting: e.target.value }))}
@@ -172,12 +172,12 @@ export default function SettingsWhatsAppBot({ form, setForm, onSave, saving, bus
               rows={2}
               className={textareaCls}
             />
-            <p className="text-[10px] text-[#cccccc] mt-0.5">ההודעה הראשונה שהלקוח יקבל כשפונה לבוט</p>
+            <p className="text-[10px] text-foreground-muted/50 mt-0.5">ההודעה הראשונה שהלקוח יקבל כשפונה לבוט</p>
           </div>
 
           {/* Qualification questions */}
           <div>
-            <label className="text-[12px] text-[#999999] mb-1 block">שאלות סינון</label>
+            <label className="text-[12px] text-foreground-muted mb-1 block">שאלות סינון</label>
             <textarea
               value={form.bot_qualification_questions || ''}
               onChange={(e) => setForm(f => ({ ...f, bot_qualification_questions: e.target.value }))}
@@ -185,7 +185,7 @@ export default function SettingsWhatsAppBot({ form, setForm, onSave, saving, bus
               rows={4}
               className={textareaCls}
             />
-            <p className="text-[10px] text-[#cccccc] mt-0.5">שאלה אחת בכל שורה — הבוט ישאל אותן בצורה טבעית בשיחה</p>
+            <p className="text-[10px] text-foreground-muted/50 mt-0.5">שאלה אחת בכל שורה — הבוט ישאל אותן בצורה טבעית בשיחה</p>
           </div>
 
           {/* Good lead / Bad lead criteria side by side */}
@@ -220,7 +220,7 @@ export default function SettingsWhatsAppBot({ form, setForm, onSave, saving, bus
 
           {/* Services info for bot */}
           <div>
-            <label className="text-[12px] text-[#999999] mb-1 block">מידע על שירותים ומחירים</label>
+            <label className="text-[12px] text-foreground-muted mb-1 block">מידע על שירותים ומחירים</label>
             <textarea
               value={form.bot_services_info || ''}
               onChange={(e) => setForm(f => ({ ...f, bot_services_info: e.target.value }))}
@@ -269,7 +269,7 @@ export default function SettingsWhatsAppBot({ form, setForm, onSave, saving, bus
           </div>
 
           {/* Bot Flow Preview */}
-          <div className="border border-[#f0f0f0] rounded-xl p-4 space-y-3">
+          <div className="border border-border/50 rounded-xl p-4 space-y-3">
             <div className="flex items-center gap-2">
               <Bot className="w-4 h-4 text-[#10b981]" />
               <h3 className="text-[12px] font-semibold text-[#222]">תצוגה מקדימה של השיחה</h3>
@@ -316,7 +316,7 @@ export default function SettingsWhatsAppBot({ form, setForm, onSave, saving, bus
           </div>
 
           {/* Meta Setup Guide */}
-          <details className="border border-[#f0f0f0] rounded-xl">
+          <details className="border border-border/50 rounded-xl">
             <summary className="flex items-center gap-2 px-4 py-3 cursor-pointer text-[12px] font-semibold text-[#444] list-none">
               <ExternalLink className="w-3.5 h-3.5 shrink-0" />
               מדריך הגדרת WhatsApp Cloud API — צעד אחר צעד
@@ -340,7 +340,7 @@ export default function SettingsWhatsAppBot({ form, setForm, onSave, saving, bus
                   </div>
                 ))}
               </div>
-              <div className="bg-[#f8f8f8] rounded-lg p-3 space-y-2">
+              <div className="bg-secondary/50 rounded-lg p-3 space-y-2">
                 <p className="text-[10px] font-medium text-[#999]">Webhook URL</p>
                 <code className="text-[10px] text-[#444] block break-all">
                   [Base44 Project URL]/functions/channelWebhook

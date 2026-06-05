@@ -53,7 +53,7 @@ export default function ScheduledReviewRequests({ bpId }) {
                 <Send className="w-3 h-3" /> שלח עכשיו
               </button>
               <button onClick={() => cancel.mutate(alert.id)}
-                className="p-1.5 rounded-md text-[#cccccc] hover:text-[#999999] hover:bg-secondary transition-colors">
+                className="p-1.5 rounded-md text-foreground-muted/50 hover:text-foreground-muted hover:bg-secondary transition-colors">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>

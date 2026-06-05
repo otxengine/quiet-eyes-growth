@@ -55,14 +55,14 @@ const CHANGE_TYPE_LABELS = {
 const PLATFORM_BADGES = {
   instagram: { label: 'Instagram', color: 'bg-pink-50 text-pink-600 border-pink-100',  icon: '📸' },
   facebook:  { label: 'Facebook',  color: 'bg-blue-50 text-blue-600 border-blue-100',   icon: '👤' },
-  tiktok:    { label: 'TikTok',    color: 'bg-[#f0f0f0] text-[#333] border-[#e0e0e0]', icon: '🎵' },
+  tiktok:    { label: 'TikTok',    color: 'bg-secondary text-[#333] border-[#e0e0e0]', icon: '🎵' },
   google:    { label: 'Google',    color: 'bg-red-50 text-red-600 border-red-100',       icon: '⭐' },
-  website:   { label: 'אתר',       color: 'bg-[#f5f5f5] text-[#555] border-[#e8e8e8]', icon: '🌐' },
+  website:   { label: 'אתר',       color: 'bg-secondary/60 text-[#555] border-[#e8e8e8]', icon: '🌐' },
 };
 
 const SENTIMENT_COLORS = {
   positive: 'text-green-600',
-  neutral:  'text-[#888888]',
+  neutral:  'text-foreground-muted',
   negative: 'text-red-500',
 };
 
@@ -381,8 +381,8 @@ export default function Competitors() {
           <h1 className="text-[16px] font-bold text-foreground tracking-tight">מתחרים</h1>
           {address && (
             <div className="flex items-center gap-1 mt-0.5">
-              <MapPin className="w-3 h-3 text-[#cccccc]" />
-              <span className="text-[10px] text-[#bbbbbb]">אזור: {address}</span>
+              <MapPin className="w-3 h-3 text-foreground-muted/50" />
+              <span className="text-[10px] text-foreground-muted/70">אזור: {address}</span>
             </div>
           )}
         </div>
@@ -533,9 +533,9 @@ export default function Competitors() {
       </div>
 
       {competitors.length === 0 ? (
-        <div className="bg-white rounded-[10px] border border-[#f0f0f0] py-16 text-center">
-          <Users className="w-12 h-12 text-[#cccccc] mx-auto mb-3" />
-          <p className="text-[13px] text-[#999999] mb-3">טרם זוהו מתחרים — לחץ "סרוק מתחרים" לזהות מתחרים באזור שלך</p>
+        <div className="bg-white rounded-[10px] border border-border/50 py-16 text-center">
+          <Users className="w-12 h-12 text-foreground-muted/50 mx-auto mb-3" />
+          <p className="text-[13px] text-foreground-muted mb-3">טרם זוהו מתחרים — לחץ "סרוק מתחרים" לזהות מתחרים באזור שלך</p>
           {!businessProfile?.full_address && (
             <p className="text-[11px] text-[#d97706] mb-3">💡 טיפ: הוסף כתובת מלאה בהגדרות לקבלת תוצאות מדויקות יותר</p>
           )}
@@ -563,19 +563,18 @@ export default function Competitors() {
 
           <CompetitorScoreRow business={businessProfile} avgRating={avgRating} reviewCount={reviews.length} competitors={competitors} />
 
-          <div className="flex gap-0.5 border-b border-border">
+          <div className="flex gap-1 p-1 bg-secondary/50 rounded-xl w-fit">
             {filterTabs.map((tab) => (
               <button key={tab.key} onClick={() => setActiveFilter(tab.key)}
-                className={`px-4 py-2.5 text-[12px] font-medium transition-all duration-150 relative ${activeFilter === tab.key ? 'text-foreground' : 'text-foreground-muted hover:text-foreground-secondary'}`}>
+                className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-all ${activeFilter === tab.key ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'}`}>
                 {tab.label}
-                {activeFilter === tab.key && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-foreground rounded-t" />}
               </button>
             ))}
           </div>
 
           <div className="space-y-3">
             {filtered.length === 0 ? (
-              <p className="text-[12px] text-[#999999] text-center py-8">אין מתחרים בפילטר הנוכחי</p>
+              <p className="text-[12px] text-foreground-muted text-center py-8">אין מתחרים בפילטר הנוכחי</p>
             ) : (
               filtered.map((comp) => (
                 <div key={comp.id} className="rounded-xl overflow-hidden">

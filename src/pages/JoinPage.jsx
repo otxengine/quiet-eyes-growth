@@ -47,7 +47,7 @@ export default function JoinPage() {
   }, [token, isAuthenticated, isLoadingAuth]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4" dir="rtl">
+    <div className="min-h-screen flex items-center justify-center bg-secondary/50 p-4" dir="rtl">
       <div className="bg-white rounded-2xl shadow-md p-10 max-w-md w-full text-center">
         <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center mx-auto mb-5">
           <span className="text-white text-xl font-bold">OTX</span>
@@ -55,8 +55,8 @@ export default function JoinPage() {
 
         {status === 'idle' || status === 'loading' ? (
           <>
-            <h1 className="text-xl font-bold text-gray-900 mb-2">מצטרף לארגון...</h1>
-            <p className="text-gray-500 text-sm mb-6">אנא המתן</p>
+            <h1 className="text-xl font-bold text-foreground mb-2">מצטרף לארגון...</h1>
+            <p className="text-foreground-muted text-sm mb-6">אנא המתן</p>
             <div className="w-8 h-8 border-4 border-purple-100 border-t-purple-600 rounded-full animate-spin mx-auto" />
           </>
         ) : status === 'success' ? (
@@ -66,8 +66,8 @@ export default function JoinPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h1 className="text-xl font-bold text-gray-900 mb-2">ברוך הבא לארגון!</h1>
-            <p className="text-gray-500 text-sm">מעביר אותך לדשבורד...</p>
+            <h1 className="text-xl font-bold text-foreground mb-2">ברוך הבא לארגון!</h1>
+            <p className="text-foreground-muted text-sm">מעביר אותך לדשבורד...</p>
           </>
         ) : (
           <>
@@ -76,7 +76,7 @@ export default function JoinPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
-            <h1 className="text-xl font-bold text-gray-900 mb-2">שגיאה בהצטרפות</h1>
+            <h1 className="text-xl font-bold text-foreground mb-2">שגיאה בהצטרפות</h1>
             <p className="text-red-500 text-sm mb-6">{errorMsg}</p>
             <button
               onClick={() => navigate('/')}

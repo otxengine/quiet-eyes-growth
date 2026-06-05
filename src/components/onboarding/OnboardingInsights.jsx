@@ -54,7 +54,7 @@ export default function OnboardingInsights() {
   const topSignals = (signals || []).slice(0, 3);
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5] py-8 px-4" dir="rtl">
+    <div className="min-h-screen bg-secondary/60 py-8 px-4" dir="rtl">
       <div className="max-w-lg mx-auto space-y-4">
 
         {/* ── Header ─────────────────────────────────────────────── */}
@@ -64,7 +64,7 @@ export default function OnboardingInsights() {
             <span className="text-[13px] font-medium text-emerald-700">הסריקה הושלמה בהצלחה</span>
           </div>
           <h1 className="text-[22px] font-bold text-[#111111] mb-1">התוכנית שלך מוכנה</h1>
-          <p className="text-[13px] text-[#888888]">{businessProfile.name} · {businessProfile.city}</p>
+          <p className="text-[13px] text-foreground-muted">{businessProfile.name} · {businessProfile.city}</p>
         </div>
 
         {/* ── Goal banner ─────────────────────────────────────────── */}
@@ -79,10 +79,10 @@ export default function OnboardingInsights() {
         {/* ── Quick wins from agent missions ──────────────────────── */}
         {quickWins.length > 0 && (
           <div>
-            <p className="text-[11px] font-semibold text-[#aaaaaa] uppercase tracking-wider px-1 mb-2">
+            <p className="text-[11px] font-semibold text-foreground-muted/70 uppercase tracking-wider px-1 mb-2">
               3 פעולות שיקדמו אותך הכי מהר
             </p>
-            <div className="bg-white rounded-2xl border border-[#eeeeee] overflow-hidden">
+            <div className="bg-white rounded-2xl border border-border/60 overflow-hidden">
               {quickWins.map((win, i) => (
                 <div
                   key={i}
@@ -101,17 +101,17 @@ export default function OnboardingInsights() {
         {/* ── Proactive alerts with direct CTAs ───────────────────── */}
         {topAlerts.length > 0 && (
           <div>
-            <p className="text-[11px] font-semibold text-[#aaaaaa] uppercase tracking-wider px-1 mb-2">
+            <p className="text-[11px] font-semibold text-foreground-muted/70 uppercase tracking-wider px-1 mb-2">
               פעולות שמחכות לך עכשיו
             </p>
             <div className="space-y-2">
               {topAlerts.map((alert, i) => {
                 const cta = ALERT_CTA[alert.alert_type] || DEFAULT_ALERT_CTA;
                 return (
-                  <div key={alert.id || i} className="bg-white border border-[#eeeeee] rounded-2xl p-4">
+                  <div key={alert.id || i} className="bg-white border border-border/60 rounded-2xl p-4">
                     <p className="text-[14px] font-semibold text-[#111111] mb-1">{alert.title}</p>
                     {alert.description && (
-                      <p className="text-[12px] text-[#888888] leading-relaxed mb-3">{alert.description}</p>
+                      <p className="text-[12px] text-foreground-muted leading-relaxed mb-3">{alert.description}</p>
                     )}
                     <button
                       onClick={() => completeOnboarding(cta.path)}
@@ -130,7 +130,7 @@ export default function OnboardingInsights() {
         {/* ── Market signals ───────────────────────────────────────── */}
         {topSignals.length > 0 && (
           <div>
-            <p className="text-[11px] font-semibold text-[#aaaaaa] uppercase tracking-wider px-1 mb-2">
+            <p className="text-[11px] font-semibold text-foreground-muted/70 uppercase tracking-wider px-1 mb-2">
               מה הסוכן גילה על השוק שלך
             </p>
             <div className="space-y-2">
@@ -140,7 +140,7 @@ export default function OnboardingInsights() {
                   <div key={signal.id || i} className={`border ${style.border} ${style.bg} rounded-2xl p-4`}>
                     <p className="text-[13px] font-semibold text-[#111111] mb-1">{signal.summary}</p>
                     {signal.recommended_action && (
-                      <p className="text-[12px] text-[#555555] leading-relaxed mb-3">{signal.recommended_action}</p>
+                      <p className="text-[12px] text-foreground-secondary leading-relaxed mb-3">{signal.recommended_action}</p>
                     )}
                     <button
                       onClick={() => completeOnboarding(style.path)}
@@ -164,7 +164,7 @@ export default function OnboardingInsights() {
             כניסה למרכז הפיקוד
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <p className="text-[11px] text-[#bbbbbb] text-center mt-3">
+          <p className="text-[11px] text-foreground-muted/70 text-center mt-3">
             הסוכנים ימשיכו לעבוד ברקע — תקבל עדכונים בזמן אמת
           </p>
         </div>

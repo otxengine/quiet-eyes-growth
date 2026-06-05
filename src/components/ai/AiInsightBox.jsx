@@ -113,12 +113,12 @@ export default function AiInsightBox({ title, prompt, icon, accentColor = '#1111
         <div className="px-5 pb-5 border-t border-border">
           {loading ? (
             <div className="animate-pulse space-y-2.5 pt-4">
-              <div className="h-3 w-3/4 bg-gray-200 rounded" />
-              <div className="h-3 w-full bg-gray-100 rounded" />
-              <div className="h-3 w-5/6 bg-gray-100 rounded" />
-              <div className="h-3 w-2/3 bg-gray-200 rounded mt-2" />
-              <div className="h-3 w-full bg-gray-100 rounded" />
-              <div className="h-3 w-4/5 bg-gray-100 rounded" />
+              <div className="h-3 w-3/4 bg-secondary/70 rounded" />
+              <div className="h-3 w-full bg-secondary rounded" />
+              <div className="h-3 w-5/6 bg-secondary rounded" />
+              <div className="h-3 w-2/3 bg-secondary/70 rounded mt-2" />
+              <div className="h-3 w-full bg-secondary rounded" />
+              <div className="h-3 w-4/5 bg-secondary rounded" />
             </div>
           ) : error ? (
             <div className="py-5 text-center">

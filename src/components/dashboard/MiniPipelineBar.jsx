@@ -23,7 +23,7 @@ export default function MiniPipelineBar({ leads }) {
   return (
     <div className="cursor-pointer" onClick={() => navigate('/leads?view=pipeline')}>
       {/* Bar */}
-      <div className="flex h-5 rounded-md overflow-hidden bg-[#f5f5f5]">
+      <div className="flex h-5 rounded-md overflow-hidden bg-secondary/60">
         {stages.map(stage => {
           const pct = (counts[stage.key] / total) * 100;
           if (pct === 0) return null;

@@ -59,7 +59,7 @@ const channels = [
 
 export default function SettingsChannels({ form, setForm, onSave, saving }) {
   const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
-  const inputCls = "w-full bg-[#fafafa] border border-[#eeeeee] rounded-lg px-3 py-2.5 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-[#dddddd]";
+  const inputCls = "w-full bg-secondary/50 border border-border/60 rounded-lg px-3 py-2.5 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-border";
 
   const enabledCount = channels.filter(ch => form[`channels_${ch.key}_enabled`]).length;
 
@@ -77,7 +77,7 @@ export default function SettingsChannels({ form, setForm, onSave, saving }) {
   };
 
   return (
-    <div className="bg-white rounded-[10px] border border-[#f0f0f0] p-5 space-y-5">
+    <div className="bg-white rounded-[10px] border border-border/50 p-5 space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
@@ -86,7 +86,7 @@ export default function SettingsChannels({ form, setForm, onSave, saving }) {
           </div>
           <div>
             <h2 className="text-[14px] font-semibold text-[#222222]">ערוצי תקשורת</h2>
-            <p className="text-[11px] text-[#999999]">חבר את הערוצים שלך — הבוט יענה ללקוחות ויזין לידים אוטומטית</p>
+            <p className="text-[11px] text-foreground-muted">חבר את הערוצים שלך — הבוט יענה ללקוחות ויזין לידים אוטומטית</p>
           </div>
         </div>
         {enabledCount > 0 && (
@@ -109,7 +109,7 @@ export default function SettingsChannels({ form, setForm, onSave, saving }) {
               className={`rounded-xl border-2 transition-all duration-200 ${
                 isEnabled 
                   ? `${ch.activeBg} ${ch.activeBorder}` 
-                  : 'border-[#f0f0f0] bg-white hover:border-[#e0e0e0]'
+                  : 'border-border/50 bg-white hover:border-[#e0e0e0]'
               }`}>
               {/* Toggle row */}
               <div className="flex items-center justify-between p-3.5">
@@ -145,7 +145,7 @@ export default function SettingsChannels({ form, setForm, onSave, saving }) {
                     dir={ch.inputType === 'tel' || ch.inputType === 'url' ? 'ltr' : 'rtl'}
                     className={inputCls}
                   />
-                  <p className="text-[10px] text-[#aaaaaa] mt-1">{ch.helpText}</p>
+                  <p className="text-[10px] text-foreground-muted/70 mt-1">{ch.helpText}</p>
                 </div>
               )}
             </div>
@@ -175,9 +175,9 @@ export default function SettingsChannels({ form, setForm, onSave, saving }) {
       )}
 
       {/* Simple explanation */}
-      <div className="bg-[#fafafa] rounded-xl p-3.5">
-        <p className="text-[11px] text-[#999999] leading-relaxed">
-          <strong className="text-[#666666]">איך זה עובד?</strong> ברגע שתחבר ערוץ ותפעיל את הבוט, הוא יתחיל לענות אוטומטית להודעות של לקוחות. 
+      <div className="bg-secondary/50 rounded-xl p-3.5">
+        <p className="text-[11px] text-foreground-muted leading-relaxed">
+          <strong className="text-foreground-secondary">איך זה עובד?</strong> ברגע שתחבר ערוץ ותפעיל את הבוט, הוא יתחיל לענות אוטומטית להודעות של לקוחות. 
           לידים מוסמכים יתווספו אוטומטית למערכת — בלי שתצטרך לעשות כלום. 🚀
         </p>
       </div>

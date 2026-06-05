@@ -99,7 +99,7 @@ export default function NotificationSettings({ businessId }) {
               <div
                 onClick={() => update(item.key, !settings[item.key])}
                 className={`relative w-10 h-5 rounded-full transition-colors cursor-pointer ${
-                  settings[item.key] ? 'bg-primary' : 'bg-gray-200'
+                  settings[item.key] ? 'bg-primary' : 'bg-border'
                 }`}
               >
                 <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${

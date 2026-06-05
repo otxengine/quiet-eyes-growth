@@ -26,15 +26,15 @@ export default function MonthCompareCards({ signals = [], leads = [], reviews = 
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       {data.map((card) => {
         const TrendIcon = card.change > 0 ? TrendingUp : card.change < 0 ? TrendingDown : Minus;
-        const trendColor = card.change > 0 ? 'text-[#10b981]' : card.change < 0 ? 'text-[#dc2626]' : 'text-[#cccccc]';
+        const trendColor = card.change > 0 ? 'text-[#10b981]' : card.change < 0 ? 'text-[#dc2626]' : 'text-foreground-muted/50';
         return (
-          <div key={card.label} className="bg-white rounded-[10px] border border-[#f0f0f0] p-5">
-            <p className="text-[10px] text-[#bbbbbb] mb-1">{card.label}</p>
+          <div key={card.label} className="bg-white rounded-[10px] border border-border/50 p-5">
+            <p className="text-[10px] text-foreground-muted/70 mb-1">{card.label}</p>
             <span className="text-[30px] font-bold text-[#111111] leading-none">{card.current}</span>
             {card.label !== 'מתחרים במעקב' && (
               <div className="flex items-center gap-1 mt-1">
                 <span className={`text-[9px] font-medium ${trendColor}`}>{card.change > 0 ? '+' : ''}{card.change}%</span>
-                <span className="text-[8px] text-[#cccccc]">מחודש שעבר</span>
+                <span className="text-[8px] text-foreground-muted/50">מחודש שעבר</span>
               </div>
             )}
           </div>

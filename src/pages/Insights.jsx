@@ -46,7 +46,7 @@ const PRIORITY_BADGE = {
   critical: { label: 'קריטי', color: 'text-red-700',    bg: 'bg-red-100' },
   high:     { label: 'גבוה',  color: 'text-orange-700', bg: 'bg-orange-100' },
   medium:   { label: 'בינוני',color: 'text-yellow-700', bg: 'bg-yellow-100' },
-  low:      { label: 'נמוך',  color: 'text-gray-600',   bg: 'bg-gray-100' },
+  low:      { label: 'נמוך',  color: 'text-foreground-secondary',   bg: 'bg-secondary' },
 };
 
 // ── Section bucket assignments ─────────────────────────────────────────────────
@@ -535,7 +535,7 @@ export default function Insights() {
 
       {loading ? (
         <div className="space-y-3">
-          {[0,1,2,3].map(i => <div key={i} className="h-24 rounded-xl bg-gray-100 animate-pulse" />)}
+          {[0,1,2,3].map(i => <div key={i} className="h-24 rounded-xl bg-secondary animate-pulse" />)}
         </div>
       ) : (
         <>

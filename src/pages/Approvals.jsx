@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 const ACTION_TYPE_META = {
-  social_post:    { label: 'פוסט שיווקי',   icon: Megaphone,     color: 'text-indigo-600',  bg: 'bg-indigo-50',  border: 'border-indigo-100' },
+  social_post:    { label: 'פוסט שיווקי',   icon: Megaphone,     color: 'text-primary',  bg: 'bg-primary/8',  border: 'border-primary/20' },
   review_reply:   { label: 'תגובה לביקורת', icon: MessageSquare,  color: 'text-blue-600',    bg: 'bg-blue-50',    border: 'border-blue-100' },
   whatsapp_send:  { label: 'הודעת וואטסאפ', icon: Zap,            color: 'text-green-600',   bg: 'bg-green-50',   border: 'border-green-100' },
   campaign:       { label: 'קמפיין',         icon: TrendingUp,     color: 'text-orange-600',  bg: 'bg-orange-50',  border: 'border-orange-100' },
@@ -19,7 +19,7 @@ const ACTION_TYPE_META = {
 const DECISION_META = {
   auto_execute:        { label: 'ביצוע אוטומטי', color: 'text-green-700',  bg: 'bg-green-100' },
   present_for_approval:{ label: 'ממתין לאישור',  color: 'text-amber-700',  bg: 'bg-amber-100' },
-  discard:             { label: 'בוטל',           color: 'text-gray-600',   bg: 'bg-gray-100' },
+  discard:             { label: 'בוטל',           color: 'text-foreground-secondary',   bg: 'bg-secondary' },
 };
 
 const STATUS_META = {
@@ -35,7 +35,7 @@ function ConfidenceBar({ score }) {
   const color = score >= 85 ? 'bg-green-500' : score >= 60 ? 'bg-amber-400' : 'bg-red-400';
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+      <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
         <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${score}%` }} />
       </div>
       <span className="text-[10px] text-foreground-muted w-7 text-left">{score}%</span>
@@ -97,7 +97,7 @@ function ActionCard({ action, onApprove, onReject, approving, rejecting }) {
             {action.predicted_impact && (
               <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
                 action.predicted_impact === 'high' ? 'bg-red-100 text-red-700' :
-                action.predicted_impact === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'
+                action.predicted_impact === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-secondary text-foreground-secondary'
               }`}>
                 השפעה: {action.predicted_impact === 'high' ? 'גבוהה' : action.predicted_impact === 'medium' ? 'בינונית' : 'נמוכה'}
               </span>

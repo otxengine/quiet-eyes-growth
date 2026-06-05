@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 export default function PublicFooter() {
   return (
-    <footer className="bg-[#fafafa] border-t border-[#f0f0f0]">
+    <footer className="bg-secondary/50 border-t border-border/50">
       <div className="max-w-[1120px] mx-auto px-5 py-16">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
           {/* Brand */}
@@ -45,7 +45,7 @@ export default function PublicFooter() {
           </div>
         </div>
 
-        <div className="border-t border-[#f0f0f0] pt-6 text-center">
+        <div className="border-t border-border/50 pt-6 text-center">
           <p className="text-[12px] text-[#bbb]">© 2026 OTX. כל הזכויות שמורות.</p>
         </div>
       </div>

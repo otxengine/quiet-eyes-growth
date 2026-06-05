@@ -8,7 +8,7 @@ import LeadDetailPanel from './LeadDetailPanel';
 import LostReasonPicker from './LostReasonPicker';
 
 const stages = [
-  { key: 'new', label: 'חדש', color: 'bg-gray-100 text-gray-600' },
+  { key: 'new', label: 'חדש', color: 'bg-secondary text-foreground-secondary' },
   { key: 'contacted', label: 'נוצר קשר', color: 'bg-blue-50 text-blue-600' },
   { key: 'meeting', label: 'פגישה', color: 'bg-amber-50 text-amber-600' },
   { key: 'negotiation', label: 'משא ומתן', color: 'bg-purple-50 text-purple-600' },

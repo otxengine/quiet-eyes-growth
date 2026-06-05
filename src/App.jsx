@@ -68,7 +68,7 @@ const AuthenticatedApp = () => {
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-white">
-        <div className="w-8 h-8 border-4 border-[#f0f0f0] border-t-[#111111] rounded-full animate-spin"></div>
+        <div className="w-8 h-8 border-4 border-border/50 border-t-[#111111] rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -103,12 +103,12 @@ const AuthenticatedApp = () => {
     return (
       <Routes>
         <Route path="/sign-in/*" element={
-          <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="min-h-screen flex items-center justify-center bg-secondary/50">
             <SignIn routing="path" path="/sign-in" fallbackRedirectUrl="/" />
           </div>
         } />
         <Route path="/sign-up/*" element={
-          <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="min-h-screen flex items-center justify-center bg-secondary/50">
             <SignUp routing="path" path="/sign-up" fallbackRedirectUrl="/onboarding" />
           </div>
         } />

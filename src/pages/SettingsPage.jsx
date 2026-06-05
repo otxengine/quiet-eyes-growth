@@ -416,7 +416,7 @@ function ConstraintsSection({ businessProfileId }) {
       <label className="flex items-center gap-3 cursor-pointer">
         <div
           onClick={() => setForm(f => ({ ...f, allow_competitor_mention: !f.allow_competitor_mention }))}
-          className={`relative w-10 h-5 rounded-full transition-colors ${form.allow_competitor_mention ? 'bg-primary' : 'bg-gray-200'}`}
+          className={`relative w-10 h-5 rounded-full transition-colors ${form.allow_competitor_mention ? 'bg-primary' : 'bg-border'}`}
         >
           <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.allow_competitor_mention ? 'translate-x-5' : 'translate-x-0.5'}`} />
         </div>

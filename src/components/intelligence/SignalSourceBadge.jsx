@@ -7,7 +7,7 @@ const sourceConfig = {
   competitor: { icon: Users, label: 'מתחרים', cls: 'bg-orange-50 text-orange-600 border-orange-100' },
   trend: { icon: TrendingUp, label: 'מגמה עולה', cls: 'bg-emerald-50 text-emerald-600 border-emerald-100' },
   group: { icon: Users, label: 'קבוצות/פורומים', cls: 'bg-violet-50 text-violet-600 border-violet-100' },
-  unknown: { icon: Search, label: 'מקור', cls: 'bg-gray-50 text-gray-500 border-gray-100' },
+  unknown: { icon: Search, label: 'מקור', cls: 'bg-secondary/50 text-foreground-muted border-border/60' },
 };
 
 const platformConfig = {
@@ -16,13 +16,13 @@ const platformConfig = {
   tiktok: { label: 'TikTok', cls: 'bg-gray-900 text-white border-gray-700' },
   google: { label: 'Google', cls: 'bg-green-50 text-green-600 border-green-100' },
   forum: { label: 'פורום', cls: 'bg-violet-50 text-violet-600 border-violet-100' },
-  website: { label: 'אתר', cls: 'bg-gray-50 text-gray-600 border-gray-100' },
+  website: { label: 'אתר', cls: 'bg-secondary/50 text-foreground-secondary border-border/60' },
 };
 
 const sentimentConfig = {
   positive: { label: 'חיובי', cls: 'bg-emerald-50 text-emerald-600 border-emerald-100', emoji: '😊' },
   negative: { label: 'שלילי', cls: 'bg-red-50 text-red-600 border-red-100', emoji: '😟' },
-  neutral: { label: 'ניטרלי', cls: 'bg-gray-50 text-gray-500 border-gray-100', emoji: '😐' },
+  neutral: { label: 'ניטרלי', cls: 'bg-secondary/50 text-foreground-muted border-border/60', emoji: '😐' },
 };
 
 export function SourceTypeBadge({ sourceType }) {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
-import { X, Send, Loader2, MessageSquare, Trash2 } from 'lucide-react';
+import { X, Send, Loader2, Sparkles, Trash2 } from 'lucide-react';
 import ChatMessage from './ChatMessage';
 import { useQuery } from '@tanstack/react-query';
 
@@ -32,28 +32,34 @@ function buildSuggestions(profile, alerts, leads, reviews) {
   // Hot leads
   const hotLeads = (leads || []).filter(l => l.status === 'hot');
   if (hotLeads.length > 0) {
-    questions.push(`יש לי ${hotLeads.length} לידים חמים — מה הפעולה הכי דחופה?`);
+    questions.push({ text: `יש לי ${hotLeads.length} לידים חמים — מה הפעולה הכי דחופה?`, icon: '🎯' });
   }
 
   // Pending negative reviews
   const negReviews = (reviews || []).filter(r => r.sentiment === 'negative' && r.response_status === 'pending');
   if (negReviews.length > 0) {
-    questions.push(`יש ${negReviews.length} ביקורות שליליות ללא מענה — איך לטפל?`);
+    questions.push({ text: `יש ${negReviews.length} ביקורות שליליות ללא מענה — איך לטפל?`, icon: '⭐' });
   }
 
   // Active alerts
   const criticalAlerts = (alerts || []).filter(a => a.priority === 'high' || a.priority === 'critical');
   if (criticalAlerts.length > 0) {
-    questions.push('מה ההתראות הדחופות ביותר שלי עכשיו?');
+    questions.push({ text: 'מה ההתראות הדחופות ביותר שלי עכשיו?', icon: '🎯' });
   }
 
   // Generic high-value questions if not enough context-specific ones
-  if (questions.length < 2) questions.push('מה הפעולה הכי משפיעה שאני יכול לעשות היום?');
-  if (questions.length < 3) questions.push('מה מצב הלידים שלי השבוע?');
-  if (questions.length < 4) questions.push('איך אני ביחס למתחרים שלי?');
+  if (questions.length < 2) questions.push({ text: 'מה הפעולה הכי משפיעה שאני יכול לעשות היום?', icon: '🎯' });
+  if (questions.length < 3) questions.push({ text: 'מה מצב הלידים שלי השבוע?', icon: '📊' });
+  if (questions.length < 4) questions.push({ text: 'איך אני ביחס למתחרים שלי?', icon: '❓' });
 
   return questions.slice(0, 4);
 }
+
+const QUICK_ACTIONS = [
+  { label: '📋 תקציר יומי', prompt: 'תן לי תקציר של מה שקרה בעסק היום' },
+  { label: '🔥 פעולה דחופה', prompt: 'מה הפעולה הכי דחופה שאני צריך לעשות עכשיו?' },
+  { label: '📈 מצב שוק', prompt: 'מה מצב השוק והמתחרים שלי עכשיו?' },
+];
 
 export default function ChatPanel({ onClose, businessProfile }) {
   const bpId = businessProfile?.id;
@@ -186,38 +192,47 @@ ${history}
 
   return (
     <div
-      className="fixed z-50 bg-white rounded-xl border border-[#eeeeee] shadow-lg flex flex-col overflow-hidden"
+      className="fixed z-50 flex flex-col overflow-hidden"
       style={{
-        bottom: 80,
+        bottom: 88,
         left: 16,
-        width: 'min(380px, calc(100vw - 32px))',
-        height: 'min(520px, calc(100vh - 100px))',
+        width: 'min(440px, calc(100vw - 32px))',
+        height: 'min(620px, calc(100vh - 104px))',
+        background: 'rgba(255,255,255,0.88)',
+        backdropFilter: 'blur(24px) saturate(200%)',
+        WebkitBackdropFilter: 'blur(24px) saturate(200%)',
+        border: '1px solid rgba(255,255,255,0.7)',
+        boxShadow: '0 16px 40px rgba(0,0,0,0.12), 0 8px 16px rgba(0,0,0,0.08)',
+        borderRadius: '20px',
       }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#f0f0f0]">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-[#f5f5f5] flex items-center justify-center">
-            <MessageSquare className="w-3.5 h-3.5 text-[#10b981]" />
+          <div
+            className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg, #E8344D, #FF6B6B)' }}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-white" />
           </div>
           <div>
-            <span className="text-[13px] font-semibold text-[#111111]">עוזר AI</span>
+            <span className="text-[13px] font-semibold text-foreground">יועץ AI</span>
             {businessProfile?.name && (
-              <span className="text-[10px] text-[#999999] block leading-none">{businessProfile.name}</span>
+              <span className="text-[10px] text-foreground-muted block leading-none">{businessProfile.name}</span>
             )}
             {!businessProfile?.name && (
-              <span className="text-[10px] text-[#10b981] block leading-none">פעיל</span>
+              <span className="text-[10px] text-primary/70 block leading-none">פעיל</span>
             )}
           </div>
         </div>
         <div className="flex items-center gap-1">
           {messages.length > 0 && (
-            <button onClick={clearHistory} title="נקה שיחה" className="p-1.5 rounded-md hover:bg-[#f5f5f5] transition-colors">
-              <Trash2 className="w-3.5 h-3.5 text-[#bbbbbb] hover:text-red-400 transition-colors" />
+            <button onClick={clearHistory} title="נקה שיחה" className="p-1.5 rounded-md hover:bg-secondary transition-colors">
+              <Trash2 className="w-3.5 h-3.5 text-foreground-muted/60 hover:text-danger transition-colors" />
             </button>
           )}
-          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-[#f5f5f5] transition-colors">
-            <X className="w-4 h-4 text-[#999999]" />
+          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-secondary transition-colors">
+            <X className="w-4 h-4 text-foreground-muted" />
           </button>
         </div>
       </div>
@@ -227,17 +242,25 @@ ${history}
         {messages.length === 0 ? (
           <div className="flex flex-col items-start justify-start h-full pt-2 gap-3">
             <div className="w-full text-center pb-1">
-              <MessageSquare className="w-7 h-7 text-[#e0e0e0] mx-auto mb-1" />
-              <p className="text-[12px] text-[#999999] font-medium">שאל אותי על העסק שלך</p>
+              <div
+                className="w-10 h-10 rounded-2xl mx-auto mb-2 flex items-center justify-center"
+                style={{ background: 'linear-gradient(135deg, rgba(232,52,77,0.1), rgba(232,52,77,0.05))' }}
+              >
+                <Sparkles className="w-5 h-5 text-primary/60" />
+              </div>
+              <p className="text-[12px] text-foreground-muted font-medium">שאל אותי על העסק שלך</p>
             </div>
             <div className="w-full space-y-1.5">
               {suggestions.map((q, i) => (
                 <button
                   key={i}
-                  onClick={() => { setInput(q); }}
-                  className="w-full text-right text-[11px] text-[#444444] bg-[#f8f8f8] hover:bg-[#f0f0f0] border border-[#eeeeee] rounded-xl px-3 py-2.5 transition-colors leading-relaxed"
+                  onClick={() => setInput(q.text)}
+                  className="w-full text-right text-[11px] bg-white border border-border/60 rounded-xl px-3 py-2.5 hover:border-primary/30 hover:bg-primary/4 transition-all text-foreground-secondary hover:text-foreground group"
                 >
-                  {q}
+                  <span className="flex items-center gap-2">
+                    <span className="text-primary/60 group-hover:text-primary text-[14px]">{q.icon}</span>
+                    {q.text}
+                  </span>
                 </button>
               ))}
             </div>
@@ -249,31 +272,51 @@ ${history}
         )}
         {sending && (
           <div className="flex items-center gap-2 px-3 py-2">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#cccccc]" />
-            <span className="text-[12px] text-[#cccccc]">חושב...</span>
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-primary/50" />
+            <span className="text-[12px] text-primary/50">חושב...</span>
           </div>
         )}
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className="px-3 pb-3 pt-2 border-t border-[#f0f0f0]">
-        <div className="flex items-center gap-2 bg-[#fafafa] border border-[#eeeeee] rounded-lg px-3 py-2">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="שאל שאלה..."
-            className="flex-1 bg-transparent text-[13px] text-[#111111] placeholder-[#cccccc] outline-none"
-            disabled={sending}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || sending}
-            className="p-1.5 rounded-md bg-[#111111] text-white hover:bg-[#333333] transition-colors disabled:opacity-30"
-          >
-            {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-          </button>
+      {/* Quick Actions + Input */}
+      <div className="border-t border-border/50">
+        {/* Quick Action Bar */}
+        <div className="px-3 pt-2 flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+          {QUICK_ACTIONS.map(a => (
+            <button
+              key={a.label}
+              onClick={() => setInput(a.prompt)}
+              className="flex-shrink-0 text-[10px] font-medium px-2.5 py-1 rounded-lg bg-secondary/60 text-foreground-muted hover:bg-primary/8 hover:text-primary border border-border/50 transition-all whitespace-nowrap"
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Input area */}
+        <div className="px-3 pb-3 pt-2">
+          <div className="flex items-center gap-2 bg-secondary/40 border border-border/60 rounded-xl px-3 py-2">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="שאל שאלה..."
+              className="flex-1 bg-transparent text-[13px] text-foreground placeholder-foreground-muted/50 outline-none"
+              disabled={sending}
+            />
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || sending}
+              className="p-1.5 rounded-lg text-white transition-all disabled:opacity-30"
+              style={{
+                background: 'linear-gradient(135deg, #E8344D, #FF6B6B)',
+                boxShadow: '0 2px 8px rgba(232,52,77,0.3)',
+              }}
+            >
+              {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+            </button>
+          </div>
         </div>
       </div>
     </div>

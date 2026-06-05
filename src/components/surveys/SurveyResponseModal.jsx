@@ -58,7 +58,7 @@ export default function SurveyResponseModal({ survey, businessProfile, onClose }
             <div className="flex gap-1">
               {[1, 2, 3, 4, 5].map(n => (
                 <button key={n} onClick={() => setRating(n)} className="p-1">
-                  <Star className={`w-6 h-6 ${n <= rating ? 'text-amber-400 fill-amber-400' : 'text-gray-200'}`} />
+                  <Star className={`w-6 h-6 ${n <= rating ? 'text-amber-400 fill-amber-400' : 'text-border'}`} />
                 </button>
               ))}
             </div>

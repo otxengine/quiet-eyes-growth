@@ -119,7 +119,7 @@ export default function SettingsCrmSync({ form, setForm, businessProfile, onTogg
     setTesting(false);
   };
 
-  const inputCls = "w-full bg-[#fafafa] border border-[#eeeeee] rounded-lg px-3 py-2 text-[13px] text-foreground placeholder-[#cccccc] focus:outline-none focus:border-[#dddddd]";
+  const inputCls = "w-full bg-secondary/50 border border-border/60 rounded-lg px-3 py-2 text-[13px] text-foreground placeholder-[#cccccc] focus:outline-none focus:border-border";
   const syncEvents = (form.crm_sync_events || 'create,update').split(',').map(s => s.trim());
 
   const toggleEvent = (evt) => {

@@ -220,7 +220,7 @@ function StrategyTab({ competitor, businessProfile, competitors, signals }) {
   }
 
   if (loading) {
-    return <div className="space-y-2 py-2 animate-pulse">{[0,1,2].map(i => <div key={i} className="h-12 rounded-xl bg-gray-100" />)}</div>;
+    return <div className="space-y-2 py-2 animate-pulse">{[0,1,2].map(i => <div key={i} className="h-12 rounded-xl bg-secondary" />)}</div>;
   }
 
   return (

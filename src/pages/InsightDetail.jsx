@@ -45,7 +45,7 @@ const PRIORITY_BADGE = {
   critical: { label: 'קריטי', color: 'text-red-700',    bg: 'bg-red-100',    dot: 'bg-red-500' },
   high:     { label: 'גבוה',  color: 'text-orange-700', bg: 'bg-orange-100', dot: 'bg-orange-400' },
   medium:   { label: 'בינוני',color: 'text-yellow-700', bg: 'bg-yellow-100', dot: 'bg-yellow-400' },
-  low:      { label: 'נמוך',  color: 'text-gray-600',   bg: 'bg-gray-100',   dot: 'bg-gray-300' },
+  low:      { label: 'נמוך',  color: 'text-foreground-secondary',   bg: 'bg-secondary',   dot: 'bg-gray-300' },
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -433,7 +433,7 @@ const TREND_SOURCE_META = {
   instagram: { label: 'Instagram',     color: 'text-pink-600',   bg: 'bg-pink-50',    border: 'border-pink-100' },
   facebook:  { label: 'Facebook',      color: 'text-blue-700',   bg: 'bg-blue-50',    border: 'border-blue-100' },
   google:    { label: 'Google Trends', color: 'text-green-700',  bg: 'bg-green-50',   border: 'border-green-100' },
-  general:   { label: 'כללי',          color: 'text-gray-600',   bg: 'bg-gray-100',   border: 'border-gray-200' },
+  general:   { label: 'כללי',          color: 'text-foreground-secondary',   bg: 'bg-secondary',   border: 'border-border' },
 };
 
 function detectSource(title = '', description = '') {

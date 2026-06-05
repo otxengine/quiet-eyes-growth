@@ -44,7 +44,7 @@ const TABS = [
 const TREND_ICON = {
   up:     <TrendingUp  className="w-4 h-4 text-green-500" />,
   down:   <TrendingDown className="w-4 h-4 text-red-500" />,
-  stable: <Minus        className="w-4 h-4 text-gray-400" />,
+  stable: <Minus        className="w-4 h-4 text-foreground-muted/70" />,
 };
 
 function ScoreBadge({ score }) {
@@ -59,13 +59,13 @@ function ScoreBadge({ score }) {
 }
 
 function MetricCard({ label, value, sub, color = 'gray' }) {
-  const bg = { indigo: 'bg-primary/8 border-primary/15', green: 'bg-green-50 border-green-100', amber: 'bg-amber-50 border-amber-100', red: 'bg-red-50 border-red-100', gray: 'bg-gray-50 border-gray-100' }[color];
-  const txt = { indigo: 'text-primary', green: 'text-green-700', amber: 'text-amber-700', red: 'text-red-700', gray: 'text-gray-700' }[color];
+  const bg = { indigo: 'bg-primary/8 border-primary/15', green: 'bg-green-50 border-green-100', amber: 'bg-amber-50 border-amber-100', red: 'bg-red-50 border-red-100', gray: 'bg-secondary/50 border-border/60' }[color];
+  const txt = { indigo: 'text-primary', green: 'text-green-700', amber: 'text-amber-700', red: 'text-red-700', gray: 'text-foreground-secondary' }[color];
   return (
     <div className={`rounded-xl border px-4 py-3 ${bg}`}>
-      <p className="text-[10px] text-gray-400 mb-0.5">{label}</p>
+      <p className="text-[10px] text-foreground-muted/70 mb-0.5">{label}</p>
       <p className={`text-[18px] font-bold ${txt}`}>{value ?? '—'}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
+      {sub && <p className="text-[10px] text-foreground-muted/70 mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -248,13 +248,13 @@ JSON בלבד:
       <h1 className="text-[16px] font-bold text-foreground tracking-tight">דוחות וניתוח</h1>
 
       {/* Tab bar */}
-      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
+      <div className="flex gap-1 bg-secondary rounded-xl p-1 overflow-x-auto">
         {TABS.map(t => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
             className={`flex-shrink-0 flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium transition-all ${
-              activeTab === t.id ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              activeTab === t.id ? 'bg-white text-primary shadow-sm' : 'text-foreground-muted hover:text-foreground-secondary'
             }`}
           >
             <span>{t.icon}</span>
@@ -266,13 +266,13 @@ JSON בלבד:
       {/* Date range filter — shown for leads/competitors/full tabs */}
       {['leads', 'competitors', 'full'].includes(activeTab) && (
         <div className="flex items-center gap-2 flex-wrap">
-          <Calendar className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-          <span className="text-[11px] text-gray-500">מ:</span>
+          <Calendar className="w-3.5 h-3.5 text-foreground-muted/70 flex-shrink-0" />
+          <span className="text-[11px] text-foreground-muted">מ:</span>
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-            className="border border-gray-200 rounded-lg px-2 py-1 text-[11px] text-gray-700 focus:outline-none focus:border-primary/40" />
-          <span className="text-[11px] text-gray-500">עד:</span>
+            className="border border-border rounded-lg px-2 py-1 text-[11px] text-foreground-secondary focus:outline-none focus:border-primary/40" />
+          <span className="text-[11px] text-foreground-muted">עד:</span>
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-            className="border border-gray-200 rounded-lg px-2 py-1 text-[11px] text-gray-700 focus:outline-none focus:border-primary/40" />
+            className="border border-border rounded-lg px-2 py-1 text-[11px] text-foreground-secondary focus:outline-none focus:border-primary/40" />
           <button onClick={() => { setDateFrom(defaultFrom); setDateTo(defaultTo); }}
             className="text-[10px] text-primary/70 hover:underline">אפס</button>
         </div>
@@ -284,7 +284,7 @@ JSON בלבד:
           {/* Generate button */}
           {!weeklyReport && (
             <div className="rounded-2xl border border-dashed border-primary/20 bg-primary/5 p-6 text-center">
-              <p className="text-[13px] text-gray-600 mb-3">
+              <p className="text-[13px] text-foreground-secondary mb-3">
                 דוח AI שבועי — סיכום ביצועים, הדגשת נקודת מפתח ופעולה לשבוע הבא
               </p>
               <button
@@ -304,16 +304,16 @@ JSON בלבד:
             return (
               <div className="space-y-3">
                 {/* Score + summary */}
-                <div className="rounded-2xl border border-gray-100 bg-white px-5 py-4 shadow-sm">
+                <div className="rounded-2xl border border-border/60 bg-white px-5 py-4 shadow-sm">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-[13px] font-bold text-gray-800">סיכום שבועי</p>
+                    <p className="text-[13px] font-bold text-foreground">סיכום שבועי</p>
                     {report?.score != null && <ScoreBadge score={report.score} />}
                   </div>
                   {report?.summary && (
-                    <p className="text-[12px] text-gray-700 leading-relaxed mb-3">{report.summary}</p>
+                    <p className="text-[12px] text-foreground-secondary leading-relaxed mb-3">{report.summary}</p>
                   )}
                   {report?.score_reason && (
-                    <p className="text-[10px] text-gray-400">{report.score_reason}</p>
+                    <p className="text-[10px] text-foreground-muted/70">{report.score_reason}</p>
                   )}
                 </div>
 
@@ -353,7 +353,7 @@ JSON בלבד:
                 <button
                   onClick={() => handleGenerateWeeklyReport(true)}
                   disabled={weeklyLoading}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-[12px] hover:bg-gray-50 transition-all disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 border border-border text-foreground-secondary rounded-xl text-[12px] hover:bg-secondary/50 transition-all disabled:opacity-50"
                 >
                   {weeklyLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : '↻'}
                   {weeklyLoading ? 'מחדש...' : 'צור דוח מחדש'}
@@ -377,7 +377,7 @@ JSON בלבד:
           {monthlyLoading && !monthlyReport ? (
             <div className="flex items-center justify-center py-16 gap-3">
               <Loader2 className="w-5 h-5 animate-spin text-primary/70" />
-              <span className="text-[13px] text-gray-500">מייצר דוח חודשי...</span>
+              <span className="text-[13px] text-foreground-muted">מייצר דוח חודשי...</span>
             </div>
           ) : !monthlyReport ? (
             <div className="rounded-2xl border border-dashed border-primary/20 bg-primary/5 p-6 text-center">
@@ -392,7 +392,7 @@ JSON בלבד:
               {/* Header */}
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[15px] font-bold text-gray-800">{monthlyReport.month_name}</p>
+                  <p className="text-[15px] font-bold text-foreground">{monthlyReport.month_name}</p>
                   {monthlyReport.score != null && <ScoreBadge score={monthlyReport.score} />}
                 </div>
                 <div className="flex gap-2">
@@ -401,10 +401,10 @@ JSON בלבד:
                       [['לידים', 'לידים חמים', 'ביקורות', 'ממוצע דירוג', 'תובנות'],
                        [monthlyReport._stats.leads, monthlyReport._stats.hotLeads, monthlyReport._stats.reviews, monthlyReport._stats.avgRating || '', monthlyReport._stats.signals]],
                       ['מדד', 'ערך']);
-                  }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[11px] text-gray-500 hover:bg-gray-50 transition-colors">
+                  }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[11px] text-foreground-muted hover:bg-secondary/50 transition-colors">
                     <Download className="w-3.5 h-3.5" /> ייצא CSV
                   </button>
-                  <button onClick={() => window.print()} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[11px] text-gray-500 hover:bg-gray-50 transition-colors">
+                  <button onClick={() => window.print()} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[11px] text-foreground-muted hover:bg-secondary/50 transition-colors">
                     <Printer className="w-3.5 h-3.5" /> הדפס
                   </button>
                 </div>
@@ -422,9 +422,9 @@ JSON בלבד:
 
               {/* Summary */}
               {monthlyReport.summary && (
-                <div className="rounded-xl border border-gray-100 bg-white px-5 py-4">
-                  <p className="text-[10px] text-gray-400 mb-1 font-medium uppercase tracking-wide">סיכום חודשי</p>
-                  <p className="text-[12px] text-gray-700 leading-relaxed">{monthlyReport.summary}</p>
+                <div className="rounded-xl border border-border/60 bg-white px-5 py-4">
+                  <p className="text-[10px] text-foreground-muted/70 mb-1 font-medium uppercase tracking-wide">סיכום חודשי</p>
+                  <p className="text-[12px] text-foreground-secondary leading-relaxed">{monthlyReport.summary}</p>
                 </div>
               )}
 
@@ -458,7 +458,7 @@ JSON בלבד:
               )}
 
               <button onClick={() => { setMonthlyReport(null); handleGenerateMonthlyReport(); }} disabled={monthlyLoading}
-                className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-[12px] hover:bg-gray-50 transition-all disabled:opacity-50">
+                className="w-full flex items-center justify-center gap-2 py-2.5 border border-border text-foreground-secondary rounded-xl text-[12px] hover:bg-secondary/50 transition-all disabled:opacity-50">
                 {monthlyLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : '↻'}
                 {monthlyLoading ? 'מחדש...' : 'צור דוח מחדש'}
               </button>
@@ -471,7 +471,7 @@ JSON בלבד:
       {activeTab === 'competitors' && (
         <div className="space-y-3">
           {competitors.length === 0 ? (
-            <div className="text-center py-12 text-[12px] text-gray-400">
+            <div className="text-center py-12 text-[12px] text-foreground-muted/70">
               <span className="text-3xl block mb-2">⚔️</span>
               אין מתחרים מזוהים עדיין — הפעל זיהוי מתחרים
             </div>
@@ -487,15 +487,15 @@ JSON בלבד:
               {/* Competitor list */}
               <div className="space-y-2">
                 {competitors.map((c, i) => (
-                  <div key={c.id || i} className="rounded-xl border border-gray-100 bg-white px-4 py-3 flex items-center justify-between">
+                  <div key={c.id || i} className="rounded-xl border border-border/60 bg-white px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-[12px] font-bold text-gray-500">
+                      <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-[12px] font-bold text-foreground-muted">
                         {(c.name || '?')[0]}
                       </div>
                       <div>
-                        <p className="text-[12px] font-semibold text-gray-800">{c.name}</p>
+                        <p className="text-[12px] font-semibold text-foreground">{c.name}</p>
                         {c.strengths && (
-                          <p className="text-[10px] text-gray-400 truncate max-w-[180px]">{c.strengths}</p>
+                          <p className="text-[10px] text-foreground-muted/70 truncate max-w-[180px]">{c.strengths}</p>
                         )}
                       </div>
                     </div>
@@ -503,7 +503,7 @@ JSON בלבד:
                       {c.rating && (
                         <div className="flex items-center gap-0.5">
                           <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                          <span className="text-[11px] font-medium text-gray-700">{c.rating}</span>
+                          <span className="text-[11px] font-medium text-foreground-secondary">{c.rating}</span>
                         </div>
                       )}
                       {TREND_ICON[c.trend_direction] || TREND_ICON.stable}
@@ -529,7 +529,7 @@ JSON בלבד:
             <button onClick={() => exportCSV('לידים.csv',
               displayLeads.map(l => [l.name || '', l.score || '', l.source || '', l.status || '', l.service_needed || '', l.created_date || l.discovered_at || '']),
               ['שם', 'ציון', 'מקור', 'סטטוס', 'שירות', 'תאריך'])}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[11px] text-gray-500 hover:bg-gray-50 transition-colors">
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[11px] text-foreground-muted hover:bg-secondary/50 transition-colors">
               <Download className="w-3.5 h-3.5" /> ייצא CSV ({displayLeads.length})
             </button>
           </div>
@@ -543,18 +543,18 @@ JSON בלבד:
 
           {/* Lead sources breakdown */}
           {topSources.length > 0 && (
-            <div className="rounded-2xl border border-gray-100 bg-white px-5 py-4">
-              <p className="text-[12px] font-bold text-gray-700 mb-3">מקורות לידים</p>
+            <div className="rounded-2xl border border-border/60 bg-white px-5 py-4">
+              <p className="text-[12px] font-bold text-foreground-secondary mb-3">מקורות לידים</p>
               <div className="space-y-2">
                 {topSources.map(([src, count]) => {
                   const pct = Math.round((count / leads.length) * 100);
                   return (
                     <div key={src}>
                       <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-[11px] text-gray-600">{src}</span>
-                        <span className="text-[11px] font-semibold text-gray-700">{count} ({pct}%)</span>
+                        <span className="text-[11px] text-foreground-secondary">{src}</span>
+                        <span className="text-[11px] font-semibold text-foreground-secondary">{count} ({pct}%)</span>
                       </div>
-                      <div className="w-full bg-gray-100 rounded-full h-1.5">
+                      <div className="w-full bg-secondary rounded-full h-1.5">
                         <div
                           className="bg-primary h-1.5 rounded-full"
                           style={{ width: `${pct}%` }}
@@ -568,8 +568,8 @@ JSON בלבד:
           )}
 
           {/* Status breakdown */}
-          <div className="rounded-2xl border border-gray-100 bg-white px-5 py-4">
-            <p className="text-[12px] font-bold text-gray-700 mb-3">סטטוס לידים</p>
+          <div className="rounded-2xl border border-border/60 bg-white px-5 py-4">
+            <p className="text-[12px] font-bold text-foreground-secondary mb-3">סטטוס לידים</p>
             {[
               { label: 'חמים',    count: hotLeads,                                                       color: 'bg-red-400' },
               { label: 'פעילים',  count: displayLeads.filter(l => l.status === 'active').length,   color: 'bg-primary/50' },
@@ -579,8 +579,8 @@ JSON בלבד:
             ].filter(s => s.count > 0).map(s => (
               <div key={s.label} className="flex items-center gap-3 mb-2">
                 <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s.color}`} />
-                <span className="text-[11px] text-gray-600 flex-1">{s.label}</span>
-                <span className="text-[11px] font-semibold text-gray-700">{s.count}</span>
+                <span className="text-[11px] text-foreground-secondary flex-1">{s.label}</span>
+                <span className="text-[11px] font-semibold text-foreground-secondary">{s.count}</span>
               </div>
             ))}
           </div>
@@ -611,8 +611,8 @@ JSON בלבד:
         <div className="space-y-4">
           {!fullReport ? (
             <div className="rounded-2xl border border-dashed border-purple-200 bg-purple-50/40 p-8 text-center">
-              <p className="text-[14px] font-semibold text-gray-700 mb-1">דוח ביצועים מלא</p>
-              <p className="text-[11px] text-gray-400 mb-5">לידים · ביקורות · מתחרים · הכנסות משוערות · המלצות</p>
+              <p className="text-[14px] font-semibold text-foreground-secondary mb-1">דוח ביצועים מלא</p>
+              <p className="text-[11px] text-foreground-muted/70 mb-5">לידים · ביקורות · מתחרים · הכנסות משוערות · המלצות</p>
               <button onClick={handleGenerateFullReport} disabled={fullLoading}
                 className="inline-flex items-center gap-2 px-6 py-2.5 bg-purple-600 text-white rounded-xl text-[13px] font-semibold hover:bg-purple-700 transition-all disabled:opacity-70">
                 {fullLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : '⭐'}
@@ -624,27 +624,27 @@ JSON בלבד:
               {/* Header + print */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-[15px] font-bold text-gray-800">{businessProfile?.name}</span>
+                  <span className="text-[15px] font-bold text-foreground">{businessProfile?.name}</span>
                   {fullReport.health_score != null && <ScoreBadge score={fullReport.health_score} />}
                 </div>
                 <button onClick={() => {
                   exportCSV('דוח-מלא.csv',
                     [['לידים', leads.length], ['לידים חמים', hotLeads], ['אחוז המרה', `${conversionRate}%`], ['ביקורות', reviews.length], ['מתחרים', competitors.length], ['ציון בריאות', fullReport.health_score ?? ''], ['הכנסה משוערת', fullReport.roi_estimate ?? '']],
                     ['מדד', 'ערך']);
-                }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[11px] text-gray-500 hover:bg-gray-50 transition-colors">
+                }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[11px] text-foreground-muted hover:bg-secondary/50 transition-colors">
                   <Download className="w-3.5 h-3.5" /> ייצא CSV
                 </button>
                 <button onClick={() => window.print()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[11px] text-gray-500 hover:bg-gray-50 transition-colors">
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[11px] text-foreground-muted hover:bg-secondary/50 transition-colors">
                   <Printer className="w-3.5 h-3.5" /> הדפס
                 </button>
               </div>
 
               {/* Executive summary */}
               {fullReport.executive_summary && (
-                <div className="rounded-xl border border-gray-100 bg-white px-5 py-4">
-                  <p className="text-[10px] text-gray-400 mb-1 font-medium uppercase tracking-wide">סיכום מנהלים</p>
-                  <p className="text-[12px] text-gray-700 leading-relaxed">{fullReport.executive_summary}</p>
+                <div className="rounded-xl border border-border/60 bg-white px-5 py-4">
+                  <p className="text-[10px] text-foreground-muted/70 mb-1 font-medium uppercase tracking-wide">סיכום מנהלים</p>
+                  <p className="text-[12px] text-foreground-secondary leading-relaxed">{fullReport.executive_summary}</p>
                 </div>
               )}
 
@@ -683,13 +683,13 @@ JSON בלבד:
 
               {/* Top wins */}
               {fullReport.top_wins?.length > 0 && (
-                <div className="rounded-xl border border-gray-100 bg-white px-5 py-4">
-                  <p className="text-[12px] font-bold text-gray-700 mb-2.5">הישגים מרכזיים</p>
+                <div className="rounded-xl border border-border/60 bg-white px-5 py-4">
+                  <p className="text-[12px] font-bold text-foreground-secondary mb-2.5">הישגים מרכזיים</p>
                   <div className="space-y-1.5">
                     {fullReport.top_wins.map((w, i) => (
                       <div key={i} className="flex items-start gap-2">
                         <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0 mt-0.5" />
-                        <p className="text-[11px] text-gray-600">{w}</p>
+                        <p className="text-[11px] text-foreground-secondary">{w}</p>
                       </div>
                     ))}
                   </div>
@@ -720,7 +720,7 @@ JSON בלבד:
               )}
 
               <button onClick={handleGenerateFullReport} disabled={fullLoading}
-                className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-[12px] hover:bg-gray-50 transition-all disabled:opacity-50">
+                className="w-full flex items-center justify-center gap-2 py-2.5 border border-border text-foreground-secondary rounded-xl text-[12px] hover:bg-secondary/50 transition-all disabled:opacity-50">
                 {fullLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : '↻'}
                 {fullLoading ? 'מחדש...' : 'צור דוח מחדש'}
               </button>

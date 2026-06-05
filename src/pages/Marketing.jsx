@@ -25,7 +25,7 @@ const ORGANIC_PLATFORMS = [
 ];
 
 const STATUS_CONFIG = {
-  draft:          { label: 'טיוטה',          cls: 'bg-gray-100 text-gray-600' },
+  draft:          { label: 'טיוטה',          cls: 'bg-secondary text-foreground-secondary' },
   pending_launch: { label: 'ממתין לפרסום',   cls: 'bg-amber-50 text-amber-700' },
   published:      { label: 'פורסם',           cls: 'bg-blue-50 text-blue-700' },
   active:         { label: 'פעיל',            cls: 'bg-green-50 text-green-700' },
@@ -33,7 +33,7 @@ const STATUS_CONFIG = {
 };
 
 const ORGANIC_STATUS = {
-  draft:     { label: 'טיוטה',  cls: 'bg-gray-100 text-gray-600' },
+  draft:     { label: 'טיוטה',  cls: 'bg-secondary text-foreground-secondary' },
   published: { label: 'פורסם',  cls: 'bg-green-50 text-green-700' },
 };
 
@@ -496,15 +496,15 @@ ${audienceHint ? `${audienceHint}` : ''}
     <div className="fixed inset-0 z-[9999] flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-white rounded-t-2xl w-full max-w-lg shadow-2xl" dir="rtl" style={{ maxHeight: '85vh', overflowY: 'auto' }}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
           <div className="flex items-center gap-2">
             <span className="text-2xl">💬</span>
             <div>
-              <p className="text-[14px] font-bold text-gray-800">WhatsApp Blast</p>
-              <p className="text-[11px] text-gray-400">שלח הודעה שיווקית ללקוחות</p>
+              <p className="text-[14px] font-bold text-foreground">WhatsApp Blast</p>
+              <p className="text-[11px] text-foreground-muted/70">שלח הודעה שיווקית ללקוחות</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-foreground-muted/70 hover:text-foreground-secondary"><X className="w-5 h-5" /></button>
         </div>
 
         <div className="px-5 py-4 space-y-4">
@@ -517,24 +517,24 @@ ${audienceHint ? `${audienceHint}` : ''}
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[12px] font-semibold text-gray-700">הודעה:</p>
+              <p className="text-[12px] font-semibold text-foreground-secondary">הודעה:</p>
               <button onClick={generateMessage} disabled={loading}
-                className="flex items-center gap-1.5 px-2.5 py-1 border border-gray-200 text-gray-500 rounded-lg text-[11px] hover:bg-gray-50 disabled:opacity-50">
+                className="flex items-center gap-1.5 px-2.5 py-1 border border-border text-foreground-muted rounded-lg text-[11px] hover:bg-secondary/50 disabled:opacity-50">
                 <Sparkles className="w-3 h-3" />
                 {loading ? 'יוצר...' : 'צור מחדש'}
               </button>
             </div>
             {loading ? (
-              <div className="flex items-center justify-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                <Loader2 className="w-5 h-5 animate-spin text-gray-400 ml-2" />
-                <span className="text-[12px] text-gray-400">יוצר הודעה...</span>
+              <div className="flex items-center justify-center py-10 bg-secondary/50 rounded-xl border border-dashed border-border">
+                <Loader2 className="w-5 h-5 animate-spin text-foreground-muted/70 ml-2" />
+                <span className="text-[12px] text-foreground-muted/70">יוצר הודעה...</span>
               </div>
             ) : (
               <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={5} dir="rtl"
-                className="w-full px-3 py-2.5 text-[13px] border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-green-200"
+                className="w-full px-3 py-2.5 text-[13px] border border-border rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-green-200"
                 placeholder="הודעת WhatsApp..." />
             )}
-            <p className="text-[10px] text-gray-400 mt-1">{msg.length} / 4096 תווים</p>
+            <p className="text-[10px] text-foreground-muted/70 mt-1">{msg.length} / 4096 תווים</p>
           </div>
 
           <div className="space-y-2.5">
@@ -548,12 +548,12 @@ ${audienceHint ? `${audienceHint}` : ''}
               setCopied(true);
               setTimeout(() => setCopied(false), 2000);
             }}
-              className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-[13px] hover:bg-gray-50 transition-all">
+              className="w-full flex items-center justify-center gap-2 py-2.5 border border-border text-foreground-secondary rounded-xl text-[13px] hover:bg-secondary/50 transition-all">
               {copied ? '✓ הועתק' : '📋 העתק הודעה'}
             </button>
           </div>
 
-          <p className="text-[11px] text-gray-400 text-center">
+          <p className="text-[11px] text-foreground-muted/70 text-center">
             WhatsApp Blast עובד דרך הפתחת WhatsApp Web — העתק את ההודעה ושלח ישירות.
           </p>
         </div>

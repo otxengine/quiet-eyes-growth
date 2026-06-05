@@ -46,7 +46,7 @@ export default function HubSpotConfig({ bp, saveField }) {
     setTesting(false);
   };
 
-  const inputCls = "w-full bg-[#fafafa] border border-[#eeeeee] rounded-lg px-3 py-2 text-[13px] text-foreground placeholder-[#cccccc] focus:outline-none focus:border-[#dddddd]";
+  const inputCls = "w-full bg-secondary/50 border border-border/60 rounded-lg px-3 py-2 text-[13px] text-foreground placeholder-[#cccccc] focus:outline-none focus:border-border";
 
   return (
     <IntegrationCard
@@ -85,7 +85,7 @@ export default function HubSpotConfig({ bp, saveField }) {
               <input value={fieldMap[f.key] || f.default}
                 onChange={(e) => setFieldMap({ ...fieldMap, [f.key]: e.target.value })}
                 onBlur={handleSave} dir="ltr"
-                className="w-full bg-white border border-[#eeeeee] rounded px-2 py-1 text-[11px] text-foreground" />
+                className="w-full bg-white border border-border/60 rounded px-2 py-1 text-[11px] text-foreground" />
             </div>
           ))}
         </div>

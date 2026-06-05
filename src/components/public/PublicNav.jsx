@@ -25,7 +25,7 @@ export default function PublicNav() {
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
   return (
-    <nav aria-label="ניווט ראשי" className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 ${scrolled ? 'bg-white/95 backdrop-blur-md border-b border-[#f0f0f0]' : 'bg-transparent'}`}>
+    <nav aria-label="ניווט ראשי" className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 ${scrolled ? 'bg-white/95 backdrop-blur-md border-b border-border/50' : 'bg-transparent'}`}>
       <div className="max-w-[1120px] mx-auto px-5 h-16 flex items-center justify-between">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2">

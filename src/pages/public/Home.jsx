@@ -59,27 +59,21 @@ const SECTORS = [
 const FEATURES = [
   {
     icon: Eye,
-    color: 'text-indigo-600',
-    bg: 'bg-indigo-50',
-    border: 'border-indigo-100',
+    color: 'text-primary',
     title: 'עיניים שקטות — מודיעין 24/7',
     desc: '8 סוכני AI סורקים את הרשת בשבילך. כל שינוי אצל מתחרה, כל אזכור של עסקך, כל מגמת שוק — מגיע אליך לפני שמישהו אחר יודע.',
     points: ['סריקה של גוגל, רשתות חברתיות ופורומים', 'התראות בזמן אמת', 'ניתוח AI אוטומטי'],
   },
   {
     icon: Target,
-    color: 'text-purple-600',
-    bg: 'bg-purple-50',
-    border: 'border-purple-100',
+    color: 'text-violet-600',
     title: 'ניתוח מתחרים מעמיק',
     desc: 'SWOT, אסטרטגיה, וכרטיס קרב לכל מתחרה. המערכת מזהה שינויי מחיר, תפריטים ושירותים חדשים — ומציעה לך תגובה נגדית.',
     points: ['ניתוח SWOT אוטומטי', 'שינויי מחיר ותפריט', 'תגובה נגדית מוכנה'],
   },
   {
     icon: Shield,
-    color: 'text-green-600',
-    bg: 'bg-green-50',
-    border: 'border-green-100',
+    color: 'text-emerald-600',
     title: 'ניהול מוניטין מרכזי',
     desc: 'ביקורות מגוגל, פייסבוק, אינסטגרם, TripAdvisor ועוד — במקום אחד. תגובות AI מותאמות לטון שלך, בלחיצה.',
     points: ['כל הפלטפורמות במקום אחד', 'תגובות AI אוטומטיות', 'ניתוח סנטימנט'],
@@ -87,8 +81,6 @@ const FEATURES = [
   {
     icon: TrendingUp,
     color: 'text-amber-600',
-    bg: 'bg-amber-50',
-    border: 'border-amber-100',
     title: 'לידים חכמים עם AI',
     desc: 'הסוכן מזהה אנשים שמחפשים בדיוק מה שאתה מוכר — ברשתות חברתיות, בפורומים, בקבוצות. מסנן לפי קריטריונים שאתה קובע.',
     points: ['זיהוי כוונת קנייה', 'ניקוד לידים אוטומטי', 'הודעת WhatsApp מוכנה'],
@@ -96,8 +88,6 @@ const FEATURES = [
   {
     icon: Users,
     color: 'text-rose-600',
-    bg: 'bg-rose-50',
-    border: 'border-rose-100',
     title: 'שימור לקוחות',
     desc: 'המערכת מזהה לקוחות בסיכון לפני שהם עוזבים. סקרי שביעות רצון, הצעות ממוקדות, ומעקב אחרי לקוחות לא פעילים.',
     points: ['זיהוי לקוחות בסיכון', 'סקרי שביעות רצון', 'הצעות אוטומטיות'],
@@ -105,8 +95,6 @@ const FEATURES = [
   {
     icon: BarChart2,
     color: 'text-blue-600',
-    bg: 'bg-blue-50',
-    border: 'border-blue-100',
     title: 'דוחות ביצועים שמרשימים',
     desc: 'דוח שבועי שמראה בדיוק מה המערכת עשתה בשבילך — כמה לידים, ביקורות, תובנות, ושינויים שזוהו. ערך שניתן למדוד.',
     points: ['דוח שבועי אוטומטי', 'ROI מדיד', 'תובנות ברשתות חברתיות'],
@@ -213,14 +201,14 @@ export default function PublicHome() {
             <div className="flex flex-wrap gap-3 mb-8">
               <button
                 onClick={() => base44.auth.redirectToLogin()}
-                className="flex items-center gap-2 px-8 py-3.5 rounded-xl bg-foreground text-background text-[14px] font-semibold hover:opacity-90 transition-all shadow-sm"
+                className="btn-primary flex items-center gap-2 text-[14px]"
               >
                 התחל בחינם
                 <ArrowLeft className="w-4 h-4" />
               </button>
               <Link
                 to="/how-it-works"
-                className="flex items-center gap-2 px-8 py-3.5 rounded-xl border border-border text-[14px] font-medium text-foreground-secondary hover:bg-secondary transition-all"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border bg-white/80 hover:bg-white text-[14px] font-medium text-foreground-secondary transition-all"
               >
                 ראה איך זה עובד
               </Link>
@@ -238,7 +226,7 @@ export default function PublicHome() {
       </section>
 
       {/* ── Animated Stats ── */}
-      <section className="py-10 border-y border-border bg-secondary/20">
+      <section className="py-10 border-y border-border gradient-surface">
         <div className="max-w-4xl mx-auto px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {STATS.map(stat => (
@@ -282,8 +270,11 @@ export default function PublicHome() {
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {FEATURES.map(f => (
-              <div key={f.title} className={`card-base p-6 border-t-4 ${f.border}`}>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 ${f.bg} ${f.border} border`}>
+              <div key={f.title} className="card-interactive p-6">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
+                  style={{ background: 'linear-gradient(135deg, rgba(232,52,77,0.1), rgba(232,52,77,0.05))' }}
+                >
                   <f.icon className={`w-5 h-5 ${f.color}`} />
                 </div>
                 <h3 className="text-[14px] font-bold text-foreground mb-2">{f.title}</h3>
@@ -340,7 +331,7 @@ export default function PublicHome() {
           </div>
           <div className="grid md:grid-cols-3 gap-5">
             {TESTIMONIALS.map((t, i) => (
-              <div key={i} className="card-base p-6">
+              <div key={i} className="card-lifted p-6">
                 <div className="flex items-center gap-1 mb-3">
                   {Array.from({ length: t.stars }).map((_, j) => (
                     <Star key={j} className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
@@ -372,7 +363,11 @@ export default function PublicHome() {
           </div>
           <div className="grid md:grid-cols-3 gap-5">
             {PLANS.map(plan => (
-              <div key={plan.name} className={`card-base p-6 border-2 relative ${plan.color}`}>
+              <div
+                key={plan.name}
+                className={`p-6 relative ${plan.badge ? 'card-elevated' : 'card-base border-2 ' + plan.color}`}
+                style={plan.badge ? { boxShadow: 'var(--shadow-xl), 0 0 0 2px hsl(352 77% 55%)' } : undefined}
+              >
                 {plan.badge && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-background text-[10px] font-bold px-3 py-1 rounded-full">
                     {plan.badge}

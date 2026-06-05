@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const stages = [
-  { key: 'new', label: 'חדש', color: 'bg-gray-200 text-gray-700' },
+  { key: 'new', label: 'חדש', color: 'bg-gray-200 text-foreground-secondary' },
   { key: 'contacted', label: 'קשר', color: 'bg-blue-100 text-blue-700' },
   { key: 'meeting', label: 'פגישה', color: 'bg-amber-100 text-amber-700' },
   { key: 'negotiation', label: 'מו"מ', color: 'bg-purple-100 text-purple-700' },

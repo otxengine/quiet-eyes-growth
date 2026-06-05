@@ -19,30 +19,30 @@ export default function AddReviewModal({ bpId, onClose, onAdded }) {
     onAdded();
   };
 
-  const inputCls = "w-full bg-[#fafafa] border border-[#eeeeee] rounded-lg px-3 py-2 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-[#dddddd]";
+  const inputCls = "w-full bg-secondary/50 border border-border/60 rounded-lg px-3 py-2 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-border";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white border border-[#f0f0f0] rounded-[10px] p-5 w-full max-w-md mx-4 z-10">
+      <div className="relative bg-white border border-border/50 rounded-[10px] p-5 w-full max-w-md mx-4 z-10">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-bold text-[#111111]">הוסף ביקורת</h3>
-          <button onClick={onClose} className="text-[#cccccc] hover:text-[#999999]"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="text-foreground-muted/50 hover:text-foreground-muted"><X className="w-4 h-4" /></button>
         </div>
         <div className="space-y-3">
           <div>
-            <label className="text-[12px] text-[#999999] mb-1 block">פלטפורמה</label>
+            <label className="text-[12px] text-foreground-muted mb-1 block">פלטפורמה</label>
             <div className="flex gap-2">
               {platforms.map((p) => (
                 <button key={p} onClick={() => setForm({ ...form, platform: p })}
-                  className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${form.platform === p ? 'bg-[#111111] text-white' : 'text-[#aaaaaa] border border-[#eeeeee] hover:border-[#cccccc]'}`}>
+                  className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${form.platform === p ? 'bg-[#111111] text-white' : 'text-foreground-muted/70 border border-border/60 hover:border-border-hover'}`}>
                   {p}
                 </button>
               ))}
             </div>
           </div>
           <div>
-            <label className="text-[12px] text-[#999999] mb-1 block">דירוג</label>
+            <label className="text-[12px] text-foreground-muted mb-1 block">דירוג</label>
             <div className="flex gap-1">
               {[1, 2, 3, 4, 5].map((i) => (
                 <button key={i} onClick={() => setForm({ ...form, rating: i })}>
@@ -52,15 +52,15 @@ export default function AddReviewModal({ bpId, onClose, onAdded }) {
             </div>
           </div>
           <div>
-            <label className="text-[12px] text-[#999999] mb-1 block">שם המבקר</label>
+            <label className="text-[12px] text-foreground-muted mb-1 block">שם המבקר</label>
             <input value={form.reviewer_name} onChange={(e) => setForm({ ...form, reviewer_name: e.target.value })} className={inputCls} placeholder="שם..." />
           </div>
           <div>
-            <label className="text-[12px] text-[#999999] mb-1 block">קישור לביקורת (אופציונלי)</label>
+            <label className="text-[12px] text-foreground-muted mb-1 block">קישור לביקורת (אופציונלי)</label>
             <input value={form.source_url} onChange={(e) => setForm({ ...form, source_url: e.target.value })} className={inputCls} placeholder="https://..." />
           </div>
           <div>
-            <label className="text-[12px] text-[#999999] mb-1 block">תוכן הביקורת</label>
+            <label className="text-[12px] text-foreground-muted mb-1 block">תוכן הביקורת</label>
             <textarea value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} rows={4} className={`${inputCls} resize-none`} placeholder="כתוב את הביקורת..." />
           </div>
           <button onClick={handleSubmit} disabled={saving || !form.text || form.rating === 0}

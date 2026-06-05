@@ -13,14 +13,14 @@ export default function SentimentBreakdown({ reviews = [] }) {
 
   const total = reviews.length;
   if (total === 0) return (
-    <div className="bg-white rounded-[10px] border border-[#f0f0f0] p-5">
+    <div className="bg-white rounded-[10px] border border-border/50 p-5">
       <h3 className="text-[14px] font-semibold text-[#222222] mb-2">ניתוח סנטימנט</h3>
-      <p className="text-[11px] text-[#999999] text-center py-8">אין ביקורות לניתוח</p>
+      <p className="text-[11px] text-foreground-muted text-center py-8">אין ביקורות לניתוח</p>
     </div>
   );
 
   return (
-    <div className="bg-white rounded-[10px] border border-[#f0f0f0] p-5">
+    <div className="bg-white rounded-[10px] border border-border/50 p-5">
       <h3 className="text-[14px] font-semibold text-[#222222] mb-2">ניתוח סנטימנט</h3>
       <div className="flex items-center gap-4">
         <div className="w-32 h-32">
@@ -37,9 +37,9 @@ export default function SentimentBreakdown({ reviews = [] }) {
           {data.map((item) => (
             <div key={item.key} className="flex items-center gap-2">
               <span className="w-1 h-1 rounded-full flex-shrink-0" style={{ background: COLORS[item.key] }} />
-              <span className="text-[8.5px] text-[#bbbbbb] flex-1">{item.name}</span>
+              <span className="text-[8.5px] text-foreground-muted/70 flex-1">{item.name}</span>
               <span className="text-[11px] font-semibold text-[#222222]">{item.value}</span>
-              <span className="text-[10px] text-[#cccccc]">({Math.round((item.value / total) * 100)}%)</span>
+              <span className="text-[10px] text-foreground-muted/50">({Math.round((item.value / total) * 100)}%)</span>
             </div>
           ))}
         </div>

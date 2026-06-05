@@ -51,27 +51,27 @@ function DashboardReviewItem({ review, businessProfile }) {
     <div className="px-4 py-2.5">
       <div className="flex items-center justify-between mb-1">
         <StarRating rating={review.rating} />
-        <span className="text-[7.5px] text-[#bbbbbb] bg-[#f8f8f8] px-1.5 py-0.5 rounded">{review.platform}</span>
+        <span className="text-[7.5px] text-foreground-muted/70 bg-secondary/50 px-1.5 py-0.5 rounded">{review.platform}</span>
       </div>
-      <p className="text-[10px] text-[#666666] line-clamp-2 mb-1">{review.text}</p>
+      <p className="text-[10px] text-foreground-secondary line-clamp-2 mb-1">{review.text}</p>
       <div className="flex items-center gap-2">
-        <span className="text-[10px] text-[#cccccc]">{review.reviewer_name}</span>
+        <span className="text-[10px] text-foreground-muted/50">{review.reviewer_name}</span>
         <button onClick={generate} disabled={generating}
           className="mr-auto px-2 py-1 text-[10px] font-medium bg-[#111111] text-white rounded hover:bg-[#333333] transition-colors flex items-center gap-1 disabled:opacity-50">
           {generating ? <><Loader2 className="w-2.5 h-2.5 animate-spin" /> מייצר...</> : (isNeg ? 'הצע תגובה' : 'הודה ושתף')}
         </button>
       </div>
       {expanded && (
-        <div className="mt-2 pt-2 border-t border-[#f5f5f5]">
+        <div className="mt-2 pt-2 border-t border-border/40">
           <textarea value={responseText} onChange={(e) => setResponseText(e.target.value)}
-            rows={2} className="w-full bg-[#fafafa] border border-[#eeeeee] rounded-lg p-2 text-[11px] text-[#333333] resize-none focus:outline-none focus:border-[#dddddd]" />
+            rows={2} className="w-full bg-secondary/50 border border-border/60 rounded-lg p-2 text-[11px] text-[#333333] resize-none focus:outline-none focus:border-border" />
           <div className="flex gap-1.5 mt-1.5">
             {saved ? (
               <span className="text-[10px] text-[#10b981] font-medium">✓ נשמר</span>
             ) : (
               <>
                 <button onClick={save} className="px-2.5 py-1 text-[10px] font-medium bg-[#111111] text-white rounded hover:bg-[#333333] transition-colors">אשר ✓</button>
-                <button onClick={() => { setExpanded(false); setResponseText(''); }} className="px-2.5 py-1 text-[10px] font-medium text-[#aaaaaa] border border-[#eeeeee] rounded hover:border-[#cccccc] transition-colors">בטל</button>
+                <button onClick={() => { setExpanded(false); setResponseText(''); }} className="px-2.5 py-1 text-[10px] font-medium text-foreground-muted/70 border border-border/60 rounded hover:border-border-hover transition-colors">בטל</button>
               </>
             )}
           </div>
@@ -91,15 +91,15 @@ export default function CompactPendingReviews({ reviews = [], businessProfile })
   });
 
   return (
-    <div className="bg-white rounded-[10px] border border-[#f0f0f0] flex flex-col">
-      <div className="px-4 py-3 border-b border-[#f5f5f5] flex items-center justify-between cursor-pointer" onClick={() => navigate('/reviews')}>
+    <div className="bg-white rounded-[10px] border border-border/50 flex flex-col">
+      <div className="px-4 py-3 border-b border-border/40 flex items-center justify-between cursor-pointer" onClick={() => navigate('/reviews')}>
         <h3 className="text-[13px] font-semibold text-[#222222]">ביקורות ממתינות</h3>
-        {reviews.length > 0 && <span className="text-[10px] text-[#999999]">{reviews.length} ממתינות</span>}
+        {reviews.length > 0 && <span className="text-[10px] text-foreground-muted">{reviews.length} ממתינות</span>}
       </div>
       {reviews.length === 0 ? (
         <div className="p-6 text-center">
-          <Star className="w-8 h-8 text-[#cccccc] mx-auto mb-1.5" />
-          <p className="text-[11px] text-[#999999]">אין ביקורות ממתינות</p>
+          <Star className="w-8 h-8 text-foreground-muted/50 mx-auto mb-1.5" />
+          <p className="text-[11px] text-foreground-muted">אין ביקורות ממתינות</p>
         </div>
       ) : (
         <div className="divide-y divide-[#f5f5f5]">

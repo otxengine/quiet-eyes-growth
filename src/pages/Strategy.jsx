@@ -19,7 +19,7 @@ const CAT_BADGE = {
   retention:   'bg-purple-100 text-purple-700',
   reputation:  'bg-amber-100 text-amber-700',
   marketing:   'bg-pink-100 text-pink-700',
-  operations:  'bg-gray-100 text-gray-700',
+  operations:  'bg-secondary text-foreground-secondary',
 };
 const PRIORITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#10b981' };
 

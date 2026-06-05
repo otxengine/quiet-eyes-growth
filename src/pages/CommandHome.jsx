@@ -87,11 +87,11 @@ function AlertCard({ alert, onAction }) {
       style={{ background: '#EDE8F5' }}
       dir="rtl"
     >
-      <p className="text-[11px] text-gray-500">אתמול</p>
+      <p className="text-[11px] text-foreground-muted">אתמול</p>
       <div>
-        <p className="text-[15px] font-bold text-gray-900 leading-snug">{alert.title}</p>
+        <p className="text-[15px] font-bold text-foreground leading-snug">{alert.title}</p>
         {alert.description && (
-          <p className="text-[12px] text-gray-600 mt-1 leading-relaxed">{alert.description}</p>
+          <p className="text-[12px] text-foreground-secondary mt-1 leading-relaxed">{alert.description}</p>
         )}
       </div>
       <div className="flex items-center gap-3 mt-1">
@@ -102,7 +102,7 @@ function AlertCard({ alert, onAction }) {
         >
           הגב עכשיו
         </button>
-        <div className="flex items-center gap-1 text-[11px] text-gray-500">
+        <div className="flex items-center gap-1 text-[11px] text-foreground-muted">
           <Clock className="w-3.5 h-3.5" />
           <span>{ago}</span>
         </div>
@@ -164,10 +164,10 @@ export default function CommandHome() {
         />
 
         {/* Greeting */}
-        <h1 className="text-[28px] font-bold text-gray-900 text-center leading-tight">
+        <h1 className="text-[28px] font-bold text-foreground text-center leading-tight">
           {greeting} {bizName},
         </h1>
-        <p className="text-[20px] text-gray-700 text-center mt-1">
+        <p className="text-[20px] text-foreground-secondary text-center mt-1">
           מה תרצה לבצע היום?
         </p>
 
@@ -191,14 +191,14 @@ export default function CommandHome() {
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
             placeholder="תאר במילים מה תרצה לבצע והמערכת תתחיל בעבודה"
-            className="flex-1 h-12 rounded-full bg-white border border-gray-200 px-5 text-[13px] text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-all"
+            className="flex-1 h-12 rounded-full bg-white border border-border px-5 text-[13px] text-foreground-secondary placeholder:text-foreground-muted/70 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-all"
             dir="rtl"
           />
         </form>
       </div>
 
       {/* ── Divider ─────────────────────────────────────────────────────────── */}
-      <div className="border-t border-gray-200/70 mx-0" />
+      <div className="border-t border-border/70 mx-0" />
 
       {/* ── Bottom section: shortcuts + alert ───────────────────────────────── */}
       <div className="flex items-end gap-4 px-6 py-8 overflow-x-auto">
@@ -208,10 +208,10 @@ export default function CommandHome() {
           <button
             key={key}
             onClick={() => navigate(path)}
-            className="bg-white rounded-2xl p-4 flex flex-col gap-2 text-right min-w-[155px] flex-1 max-w-[200px] hover:shadow-md transition-all border border-transparent hover:border-gray-100"
+            className="bg-white rounded-2xl p-4 flex flex-col gap-2 text-right min-w-[155px] flex-1 max-w-[200px] hover:shadow-md transition-all border border-transparent hover:border-border/60"
           >
             <div className="flex items-center gap-2 justify-end">
-              <span className="text-[13px] font-semibold text-gray-800">{label}</span>
+              <span className="text-[13px] font-semibold text-foreground">{label}</span>
               <div
                 className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
                 style={{ background: '#FEE2E8' }}
@@ -219,7 +219,7 @@ export default function CommandHome() {
                 <Icon className="w-3.5 h-3.5" style={{ color: '#E8344D' }} />
               </div>
             </div>
-            <p className="text-[11px] text-gray-400 leading-relaxed">{desc}</p>
+            <p className="text-[11px] text-foreground-muted/70 leading-relaxed">{desc}</p>
           </button>
         ))}
 
