@@ -16,7 +16,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 import { prisma } from '../db';
 
 const router = Router();
@@ -42,34 +42,48 @@ const env = () => {
 // Table: oauth_state_store (id TEXT PK, business_id TEXT, platform TEXT, expires_at TIMESTAMPTZ)
 // Created at server startup (see index.ts).
 
-async function generateState(platform: string, businessId: string): Promise<string> {
+async function generateState(platform: string, businessId: string, codeVerifier?: string): Promise<string> {
   const state     = randomBytes(16).toString('hex');
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
   try {
     await prisma.$executeRawUnsafe(
-      `INSERT INTO oauth_state_store (id, business_id, platform, expires_at) VALUES ($1,$2,$3,$4::timestamptz)
-       ON CONFLICT (id) DO UPDATE SET expires_at = EXCLUDED.expires_at`,
-      state, businessId, platform, expiresAt,
+      `INSERT INTO oauth_state_store (id, business_id, platform, expires_at, code_verifier)
+       VALUES ($1,$2,$3,$4::timestamptz,$5)
+       ON CONFLICT (id) DO UPDATE SET expires_at = EXCLUDED.expires_at, code_verifier = EXCLUDED.code_verifier`,
+      state, businessId, platform, expiresAt, codeVerifier ?? null,
     );
   } catch {
-    // Table might not exist yet on first run — fall through (state validation will fail gracefully)
+    // Fallback: try without code_verifier column (older schema)
+    try {
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO oauth_state_store (id, business_id, platform, expires_at) VALUES ($1,$2,$3,$4::timestamptz)
+         ON CONFLICT (id) DO UPDATE SET expires_at = EXCLUDED.expires_at`,
+        state, businessId, platform, expiresAt,
+      );
+    } catch {}
   }
   return state;
 }
 
-async function consumeState(state: string): Promise<{ businessId: string; platform: string } | null> {
+async function consumeState(state: string): Promise<{ businessId: string; platform: string; codeVerifier?: string } | null> {
   try {
-    const rows = await prisma.$queryRawUnsafe<Array<{ business_id: string; platform: string; expires_at: string }>>(
-      `DELETE FROM oauth_state_store WHERE id=$1 RETURNING business_id, platform, expires_at`,
+    const rows = await prisma.$queryRawUnsafe<Array<{ business_id: string; platform: string; expires_at: string; code_verifier?: string }>>(
+      `DELETE FROM oauth_state_store WHERE id=$1 RETURNING business_id, platform, expires_at, code_verifier`,
       state,
     );
     const row = rows[0];
     if (!row) return null;
     if (new Date(row.expires_at) < new Date()) return null;
-    return { businessId: row.business_id, platform: row.platform };
+    return { businessId: row.business_id, platform: row.platform, codeVerifier: row.code_verifier ?? undefined };
   } catch {
     return null;
   }
+}
+
+function generatePKCE(): { codeVerifier: string; codeChallenge: string } {
+  const codeVerifier  = randomBytes(32).toString('base64url');
+  const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url');
+  return { codeVerifier, codeChallenge };
 }
 
 function callbackUrl(platform: string): string {
@@ -119,7 +133,9 @@ router.get('/initiate/:platform', async (req: Request, res: Response) => {
     });
   }
 
-  const state = await generateState(String(platform), String(businessId));
+  // TikTok requires PKCE — generate verifier before state so it's stored together
+  const pkce = platform === 'tiktok_business' ? generatePKCE() : null;
+  const state = await generateState(String(platform), String(businessId), pkce?.codeVerifier);
   let authUrl: string;
 
   if (platform === 'facebook_page' || platform === 'instagram_business') {
@@ -145,14 +161,15 @@ router.get('/initiate/:platform', async (req: Request, res: Response) => {
     if (!env().TIKTOK_CLIENT_KEY) {
       return res.status(503).json({ error: 'TikTok app not configured', demo: true });
     }
-    // TikTok Content Posting API v2 scopes
     authUrl =
       `https://www.tiktok.com/v2/auth/authorize/?` +
       `client_key=${env().TIKTOK_CLIENT_KEY}` +
-      `&scope=${encodeURIComponent('user.info.basic,video.upload,video.publish,video.list')}` +
+      `&scope=${encodeURIComponent('user.info.basic,video.upload,video.list')}` +
       `&response_type=code` +
       `&redirect_uri=${encodeURIComponent(callbackUrl(platform))}` +
-      `&state=${state}`;
+      `&state=${state}` +
+      `&code_challenge=${pkce!.codeChallenge}` +
+      `&code_challenge_method=S256`;
 
   } else if (platform === 'google_business') {
     if (!env().GOOGLE_CLIENT_ID) {
@@ -412,18 +429,20 @@ async function handleGoogleCallback(code: string, businessId: string) {
 }
 
 // ── TikTok callback ───────────────────────────────────────────────────────────
-async function handleTikTokCallback(code: string, businessId: string) {
-  // TikTok Content Posting API v2 token endpoint (new — replaces deprecated open-api.tiktok.com)
+async function handleTikTokCallback(code: string, businessId: string, codeVerifier?: string) {
+  const tokenParams: Record<string, string> = {
+    client_key:    env().TIKTOK_CLIENT_KEY,
+    client_secret: env().TIKTOK_CLIENT_SECRET,
+    code,
+    grant_type:    'authorization_code',
+    redirect_uri:  callbackUrl('tiktok_business'),
+  };
+  if (codeVerifier) tokenParams.code_verifier = codeVerifier;
+
   const tokenRes = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_key:    env().TIKTOK_CLIENT_KEY,
-      client_secret: env().TIKTOK_CLIENT_SECRET,
-      code,
-      grant_type:    'authorization_code',
-      redirect_uri:  callbackUrl('tiktok_business'),
-    }).toString(),
+    body: new URLSearchParams(tokenParams).toString(),
   });
   if (!tokenRes.ok) throw new Error('TikTok token exchange failed');
   const tokenData: any = await tokenRes.json();
@@ -497,7 +516,7 @@ router.get('/callback/:platform', async (req: Request, res: Response) => {
     } else if (platform === 'google_business') {
       result = await handleGoogleCallback(code, stateData.businessId);
     } else if (platform === 'tiktok_business') {
-      result = await handleTikTokCallback(code, stateData.businessId);
+      result = await handleTikTokCallback(code, stateData.businessId, stateData.codeVerifier);
     } else {
       return res.redirect(`${env().FRONTEND_URL}/integrations?oauth_error=unknown_platform`);
     }

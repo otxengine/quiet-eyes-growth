@@ -137,17 +137,32 @@ router.post('/whatsapp/embedded-signup', async (req: Request, res: Response) => 
     }
 
     // Step 1: Exchange Embedded Signup code → short-lived token
-    const qs = new URLSearchParams({ client_id: appId, client_secret: appSecret, code });
-    const tokenRes = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?${qs}`);
-    if (!tokenRes.ok) {
-      const err = await tokenRes.json().catch(() => ({}));
-      return res.status(400).json({ error: 'Embedded Signup token exchange failed', detail: err });
+    // If caller passes a direct access token (starts with "EAA"), skip the exchange
+    let shortToken: string;
+    if (code.startsWith('EAA')) {
+      shortToken = code;
+    } else {
+      const qs = new URLSearchParams({ client_id: appId, client_secret: appSecret, code });
+      const tokenRes = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?${qs}`);
+      if (!tokenRes.ok) {
+        const err = await tokenRes.json().catch(() => ({}));
+        return res.status(400).json({ error: 'Embedded Signup token exchange failed', detail: err });
+      }
+      ({ access_token: shortToken } = await tokenRes.json() as any);
     }
-    const { access_token: shortToken } = await tokenRes.json() as any;
 
     // Step 2: Exchange for long-lived token
-    const { token: longToken, expiresIn } = await metaApi.getLongLivedToken(shortToken);
-    const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+    let longToken: string;
+    let expiresAt: string;
+    try {
+      const result = await metaApi.getLongLivedToken(shortToken);
+      longToken = result.token;
+      expiresAt = new Date(Date.now() + result.expiresIn * 1000).toISOString();
+    } catch {
+      // Test tokens cannot be exchanged for long-lived — use as-is
+      longToken = shortToken;
+      expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+    }
 
     // Step 3: Subscribe this app to the WABA to receive webhook events
     await metaApi.subscribeToWABA(waba_id, longToken);

@@ -559,12 +559,14 @@ app.listen(PORT, async () => {
 
   // ── OAuth state persistence (survives restarts + multi-instance) ──────────
   await sql(`CREATE TABLE IF NOT EXISTS oauth_state_store (
-    id          TEXT        NOT NULL PRIMARY KEY,
-    business_id TEXT        NOT NULL,
-    platform    TEXT        NOT NULL,
-    expires_at  TIMESTAMPTZ NOT NULL,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id             TEXT        NOT NULL PRIMARY KEY,
+    business_id    TEXT        NOT NULL,
+    platform       TEXT        NOT NULL,
+    expires_at     TIMESTAMPTZ NOT NULL,
+    code_verifier  TEXT,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
+  await sql(`ALTER TABLE oauth_state_store ADD COLUMN IF NOT EXISTS code_verifier TEXT`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_oauth_state_expires ON oauth_state_store(expires_at)`);
   await sql(`DELETE FROM oauth_state_store WHERE expires_at < NOW()`);
 
