@@ -307,11 +307,13 @@ export default function Insights() {
   const [compFilter, setCompFilter]     = useState('all');
   const [pages, setPages] = useState({ urgent: 8, opportunities: 8, trends: 8, competitors: 8, actions: 8 });
 
-  // ── Queries ──────────────────────────────────────────────────────────────
+  // ── Queries — only last 90 days to avoid stale records ──────────────────
+  const cutoff90 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+
   const { data: alerts = [], isLoading: loadingAlerts } = useQuery({
     queryKey: ['proactiveAlerts', bpId, 'insights-v2'],
     queryFn: () => base44.entities.ProactiveAlert.filter(
-      { linked_business: bpId, is_dismissed: false }, '-created_at', 60
+      { linked_business: bpId, is_dismissed: false, created_date: { gte: cutoff90 } }, '-created_at', 60
     ),
     enabled: !!bpId,
   });
@@ -319,7 +321,7 @@ export default function Insights() {
   const { data: actions = [], isLoading: loadingActions } = useQuery({
     queryKey: ['actions', bpId, 'insights-v2'],
     queryFn: () => base44.entities.Action.filter(
-      { linked_business: bpId, is_dismissed: false }, '-created_date', 30
+      { linked_business: bpId, is_dismissed: false, created_date: { gte: cutoff90 } }, '-created_date', 30
     ),
     enabled: !!bpId,
   });
@@ -327,7 +329,7 @@ export default function Insights() {
   const { data: signals = [], isLoading: loadingSignals } = useQuery({
     queryKey: ['marketSignals', bpId, 'insights-v2'],
     queryFn: () => base44.entities.MarketSignal.filter(
-      { linked_business: bpId, is_dismissed: false }, '-detected_at', 80
+      { linked_business: bpId, is_dismissed: false, created_date: { gte: cutoff90 } }, '-detected_at', 80
     ),
     enabled: !!bpId,
   });

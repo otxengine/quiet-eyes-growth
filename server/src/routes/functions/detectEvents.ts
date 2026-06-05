@@ -5,6 +5,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 import { publishEvent } from '../../lib/eventBus';
+import { loadDismissedTitles } from '../../lib/insightDedup';
 
 // ── Sector opportunity entry ───────────────────────────────────────────────────
 // Each event can have multiple sector entries. The first matching entry wins.
@@ -620,22 +621,13 @@ If no events with specific details found — return {"events":[]}.`,
       } catch (_) {}
     }
 
-    // ── Phase 4: Deduplication ────────────────────────────────────────────────
-    const existingAlerts = await prisma.proactiveAlert.findMany({
-      where: { linked_business: businessProfileId, is_dismissed: false, alert_type: 'market_opportunity' },
-      select: { title: true },
-    });
-    const existingTitles = new Set(existingAlerts.map(a => a.title));
-
-    const existingSignals = await prisma.marketSignal.findMany({
-      where: {
-        linked_business: businessProfileId,
-        category: 'event',
-        detected_at: { gte: new Date(Date.now() - 20 * 24 * 3600000).toISOString() },
-      },
-      select: { summary: true },
-    });
-    const existingSignalNames = new Set(existingSignals.map(s => s.summary));
+    // ── Phase 4: Deduplication — includes dismissed records (last 30 days) ───
+    // loadDismissedTitles covers both active AND recently-dismissed records so
+    // agents don't recreate insights the user already dismissed.
+    const dedup = await loadDismissedTitles(businessProfileId, 30);
+    // Keep legacy sets for the addToSet pattern used below
+    const existingTitles = new Set<string>();
+    const existingSignalNames = new Set<string>();
 
     let created = 0;
 
@@ -665,7 +657,8 @@ If no events with specific details found — return {"events":[]}.`,
       // Title uses stable event name (no day counter) so dedup works across multiple runs
       const alertTitle = `${icon} ${event.name}`;
 
-      if (existingTitles.has(alertTitle) || existingSignalNames.has(event.name)) continue;
+      if (existingTitles.has(alertTitle) || existingSignalNames.has(event.name) ||
+          dedup.hasAlert(alertTitle) || dedup.hasSignal(event.name)) continue;
 
       // Skip if the user previously dismissed a similar event
       const eventText = `${event.name} ${sectorCtx.opportunity}`.toLowerCase();
@@ -762,11 +755,11 @@ Write one specific action to take right now to maximise revenue — up to 8 word
 
     // ── Phase 6: Create alerts for Tavily-discovered events ───────────────────
     for (const event of extraEvents.slice(0, 3)) {
-      if (!event.name || existingSignalNames.has(event.name)) continue;
+      if (!event.name || existingSignalNames.has(event.name) || dedup.hasSignal(event.name)) continue;
 
       const icon = event.type === 'sports' ? '⚽' : event.type === 'concert' ? '🎵' : event.type === 'tv_premiere' ? '📺' : '🎯';
       const alertTitle = `${icon} ${event.name} — הזדמנות עסקית`;
-      if (existingTitles.has(alertTitle)) continue;
+      if (existingTitles.has(alertTitle) || dedup.hasAlert(alertTitle)) continue;
 
       // Skip if user previously dismissed a similar event
       const extraEventText = `${event.name} ${event.opportunity || ''}`.toLowerCase();

@@ -30,6 +30,7 @@ import {
 import {
   hasSearchApiKey, searchTrendingNow, searchYouTubeTrends, searchGoogleNews,
 } from '../../lib/searchapi';
+import { loadDismissedTitles } from '../../lib/insightDedup';
 
 const SERP_API_KEY  = process.env.SERP_API_KEY  || '';
 const MIN_INTERVAL  = 20 * 60 * 60 * 1000; // 20h — slightly less than 24h to handle schedule jitter
@@ -273,11 +274,17 @@ Return ONLY valid JSON:
   let gapsFound          = 0;
   let contentTrendsFound = 0;
 
+  // Load dismissed titles to prevent recreating insights the user dismissed
+  const dedup = await loadDismissedTitles(businessProfileId, 30);
+
   // ── Save product gap ProactiveAlerts ────────────────────────────────────
   for (const gap of productGaps.slice(0, remainingSlots)) {
     if ((gap.confidence || 0) < 70 || (gap.platform_count || 0) < 2) continue;
 
-    // 14-day dedup
+    const gapTitle = `📈 טרנד בסקטור שלך: ${gap.trend_name}`;
+    if (dedup.hasAlert(gapTitle)) continue;
+
+    // 14-day dedup (also catches active undismissed records)
     const dupCheck = await prisma.proactiveAlert.findFirst({
       where: {
         linked_business: businessProfileId,
@@ -293,7 +300,7 @@ Return ONLY valid JSON:
       data: {
         linked_business:  businessProfileId,
         alert_type:       'trend_gap',
-        title:            `📈 טרנד בסקטור שלך: ${gap.trend_name}`,
+        title:            gapTitle,
         description:      `🎯 מה חסר: ${gap.what_is_missing}\n📊 ראיות: ${gap.evidence}\n\n📋 תוכנית: ${gap.action_plan}`,
         suggested_action: gap.launch_post || gap.action_plan || '',
         priority:         gap.urgency === 'high' ? 'high' : 'medium',
@@ -492,7 +499,7 @@ Return ONLY valid JSON. ALL string values in Hebrew:
         t.name && t.evidence && (t.confidence || 0) >= 55,
       );
 
-      // Dedup against existing 24h signals
+      // Dedup against existing 24h signals + dismissed records (last 30 days)
       const existing = await prisma.marketSignal.findMany({
         where: {
           linked_business: businessProfileId,
@@ -502,11 +509,12 @@ Return ONLY valid JSON. ALL string values in Hebrew:
         select: { summary: true },
       });
       const existingNames = new Set(existing.map(s => s.summary));
+      const signalDedup = await loadDismissedTitles(businessProfileId, 30);
 
       for (const trend of validTrends) {
         const prefix = region === 'US' ? '🇺🇸 גוגל US: ' : 'גוגל: ';
         const summaryKey = `${prefix}${trend.name}`;
-        if (existingNames.has(summaryKey)) continue;
+        if (existingNames.has(summaryKey) || signalDedup.hasSignal(summaryKey)) continue;
 
         const meta = JSON.stringify({
           action_type:           'content_opportunity',
