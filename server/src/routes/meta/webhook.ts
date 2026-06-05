@@ -213,8 +213,9 @@ function buildDynamicPrompt(bp: {
   parts.push('- Ask only ONE question at a time');
   parts.push('- If the customer asks to speak to a human, or you cannot help, begin your reply ONLY with the exact token [HANDOFF]');
   parts.push('- When ALL qualification questions have been answered, output this on its own line BEFORE your closing message:');
-  parts.push('  [LEAD_QUALIFIED score=<0-100> name=<customer name or Unknown> budget=<budget or Unknown> service=<service needed>]');
-  parts.push('  Score: 85-100 = clearly matches good criteria, 40-84 = partial/unknown, 0-39 = matches bad criteria.');
+  parts.push('  [LEAD_QUALIFIED score=<0-100>|name=<customer name or Unknown>|budget=<budget amount or Unknown>|service=<service needed>]');
+  parts.push('  Score guide: 90-100 = matches ALL good criteria, 70-89 = matches most good criteria, 40-69 = partial/unknown, 0-39 = matches bad criteria.');
+  parts.push('  If budget meets the good criteria threshold, score should be 80+ unless other factors are negative.');
   parts.push('  After the token, send a warm closing message e.g. "Thanks! Our team will be in touch shortly."');
 
   return parts.join('\n');
@@ -498,14 +499,17 @@ async function runAgent(
   let finalResponse = cleanResponse;
   if (leadMatch) {
     const attrs = leadMatch[1];
+    // Parse pipe-delimited key=value pairs: score=75|name=John|budget=1000|service=Web
+    const pairs: Record<string, string> = {};
+    attrs.trim().split('|').forEach(part => {
+      const eq = part.indexOf('=');
+      if (eq !== -1) pairs[part.slice(0, eq).trim().toLowerCase()] = part.slice(eq + 1).trim();
+    });
     const num = (key: string) => {
-      const m = attrs.match(new RegExp(key + '=([\\d.]+)', 'i'));
-      return m ? parseFloat(m[1]) : 50;
+      const v = pairs[key];
+      return v ? parseFloat(v) : 50;
     };
-    const str = (key: string) => {
-      const m = attrs.match(new RegExp(key + '=([^\\s\\]]+(?:\\s[^=\\s\\]]+)*)', 'i'));
-      return m ? m[1].trim() : 'Unknown';
-    };
+    const str = (key: string) => pairs[key] ?? 'Unknown';
     leadData = { score: num('score'), name: str('name'), budget: str('budget'), service: str('service') };
     finalResponse = cleanResponse.replace(/\[LEAD_QUALIFIED[^\]]+\]\s*/i, '').trim();
   }
