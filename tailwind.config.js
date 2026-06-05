@@ -9,9 +9,9 @@ module.exports = {
   			inter: ['var(--font-inter)']
   		},
   		borderRadius: {
-  			lg: '12px',
-  			md: '8px',
-  			sm: '6px'
+  			lg: '16px',
+  			md: '12px',
+  			sm: '8px'
   		},
   		colors: {
   			background: {

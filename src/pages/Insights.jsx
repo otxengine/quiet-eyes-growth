@@ -17,9 +17,9 @@ const ALERT_TYPE_META = {
   market_opportunity:   { label: 'הזדמנות שוק',    color: 'text-green-600',  bg: 'bg-green-50',   border: 'border-green-100',  icon: TrendingUp },
   risk:                 { label: 'סיכון',           color: 'text-amber-600',  bg: 'bg-amber-50',   border: 'border-amber-100',  icon: AlertTriangle },
   retention_risk:       { label: 'סיכון שימור',    color: 'text-amber-600',  bg: 'bg-amber-50',   border: 'border-amber-100',  icon: AlertTriangle },
-  competitor_move:      { label: 'מהלך מתחרה',     color: 'text-indigo-600', bg: 'bg-indigo-50',  border: 'border-indigo-100', icon: Trophy },
-  competitor_intel:     { label: 'מודיעין מתחרים', color: 'text-indigo-600', bg: 'bg-indigo-50',  border: 'border-indigo-100', icon: Trophy },
-  competitor_mention:   { label: 'אזכור מתחרה',    color: 'text-indigo-500', bg: 'bg-indigo-50',  border: 'border-indigo-100', icon: Trophy },
+  competitor_move:      { label: 'מהלך מתחרה',     color: 'text-violet-600', bg: 'bg-violet-50',  border: 'border-violet-100', icon: Trophy },
+  competitor_intel:     { label: 'מודיעין מתחרים', color: 'text-violet-600', bg: 'bg-violet-50',  border: 'border-violet-100', icon: Trophy },
+  competitor_mention:   { label: 'אזכור מתחרה',    color: 'text-violet-500', bg: 'bg-violet-50',  border: 'border-violet-100', icon: Trophy },
   competitor_attack:    { label: 'מתקפת מתחרה',    color: 'text-red-700',    bg: 'bg-red-50',     border: 'border-red-200',    icon: AlertTriangle },
   milestone:            { label: 'אבן דרך',         color: 'text-purple-600', bg: 'bg-purple-50',  border: 'border-purple-100', icon: Trophy },
   hot_lead:             { label: 'ליד חם',          color: 'text-amber-600',  bg: 'bg-amber-50',   border: 'border-amber-100',  icon: Zap },
@@ -28,7 +28,7 @@ const ALERT_TYPE_META = {
   promotion_strategy:   { label: 'אסטרטגיית מבצע', color: 'text-orange-600', bg: 'bg-orange-50',  border: 'border-orange-100', icon: Zap },
   sector_shift:         { label: 'שינוי בתחום',     color: 'text-purple-600', bg: 'bg-purple-50',  border: 'border-purple-100', icon: AlertTriangle },
   event_opportunity:    { label: 'הזדמנות אירוע',   color: 'text-green-600',  bg: 'bg-green-50',   border: 'border-green-100',  icon: Target },
-  competitive_gap:      { label: 'פער מתחרים',      color: 'text-indigo-600', bg: 'bg-indigo-50',  border: 'border-indigo-100', icon: Trophy },
+  competitive_gap:      { label: 'פער מתחרים',      color: 'text-violet-600', bg: 'bg-violet-50',  border: 'border-violet-100', icon: Trophy },
   social_viral:         { label: 'ויראלי חברתי',    color: 'text-pink-600',   bg: 'bg-pink-50',    border: 'border-pink-100',   icon: TrendingUp },
   future_prediction:    { label: 'תחזית עתידית',    color: 'text-violet-600', bg: 'bg-violet-50',  border: 'border-violet-100', icon: TrendingUp },
   demand_gap:           { label: 'פער ביקוש',       color: 'text-cyan-600',   bg: 'bg-cyan-50',    border: 'border-cyan-100',   icon: Target },
@@ -589,8 +589,8 @@ export default function Insights() {
             {...sectionProps('competitors', filteredComp)}
             title="מהלכי מתחרים"
             icon={Trophy}
-            iconColor="text-indigo-500"
-            badgeColor="bg-indigo-100 text-indigo-700"
+            iconColor="text-violet-500"
+            badgeColor="bg-violet-100 text-violet-700"
             filters={compFilters}
             activeFilter={compFilter}
             onFilterChange={setCompFilter}

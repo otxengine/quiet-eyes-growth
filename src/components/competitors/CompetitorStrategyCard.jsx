@@ -102,9 +102,9 @@ export default function CompetitorStrategyCard({ competitor, businessProfileId }
         {!loading && strategy && (
           <div className="space-y-3">
             {/* Main strategy */}
-            <div className="bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2.5">
-              <p className="text-[10px] font-semibold text-indigo-600 mb-0.5 uppercase tracking-wide">הגישה המומלצת</p>
-              <p className="text-[12px] font-medium text-indigo-900">{strategy.strategy}</p>
+            <div className="bg-violet-50 border border-violet-100 rounded-lg px-3 py-2.5">
+              <p className="text-[10px] font-semibold text-violet-600 mb-0.5 uppercase tracking-wide">הגישה המומלצת</p>
+              <p className="text-[12px] font-medium text-violet-900">{strategy.strategy}</p>
             </div>
 
             {/* Key advantage + risk row */}
@@ -150,9 +150,9 @@ export default function CompetitorStrategyCard({ competitor, businessProfileId }
                           impact_level: 'high',
                         });
                       }}
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-[#e8e8e8] text-[11px] hover:border-indigo-300 hover:bg-indigo-50/50 transition-all text-right group">
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-[#e8e8e8] text-[11px] hover:border-violet-300 hover:bg-violet-50/50 transition-all text-right group">
                       <span className="text-[#333333]">{i + 1}. {tactic}</span>
-                      <CheckCheck className="w-3 h-3 text-[#bbbbbb] group-hover:text-indigo-500 flex-shrink-0 transition-colors" />
+                      <CheckCheck className="w-3 h-3 text-[#bbbbbb] group-hover:text-violet-500 flex-shrink-0 transition-colors" />
                     </button>
                   ))}
                 </div>

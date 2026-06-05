@@ -5,7 +5,7 @@ import { TrendingUp, Zap, DollarSign, Target, Loader2, RefreshCw } from 'lucide-
 
 function StatBox({ label, value, sub, color = 'indigo' }) {
   const colors = {
-    indigo: 'bg-indigo-50 border-indigo-100 text-indigo-700',
+    indigo: 'bg-primary/8 border-primary/15 text-primary',
     green:  'bg-green-50  border-green-100  text-green-700',
     amber:  'bg-amber-50  border-amber-100  text-amber-700',
     gray:   'bg-gray-50   border-gray-100   text-gray-700',
@@ -27,12 +27,12 @@ function MonthBar({ month, total, system, max }) {
       <div className="w-full flex items-end gap-1" style={{ height: 60 }}>
         <div className="flex-1 flex items-end gap-0.5 h-full">
           <div
-            className="flex-1 rounded-t bg-indigo-200"
+            className="flex-1 rounded-t bg-primary/15"
             style={{ height: `${totalPct}%`, minHeight: totalPct > 0 ? 4 : 0 }}
             title={`סה"כ: ₪${total.toLocaleString()}`}
           />
           <div
-            className="flex-1 rounded-t bg-indigo-500"
+            className="flex-1 rounded-t bg-primary"
             style={{ height: `${systemPct}%`, minHeight: systemPct > 0 ? 4 : 0 }}
             title={`מיוחס מערכת: ₪${system.toLocaleString()}`}
           />
@@ -57,7 +57,7 @@ export default function ROICard({ businessProfileId }) {
   if (isLoading) {
     return (
       <div className="rounded-2xl border border-gray-100 bg-white px-5 py-8 shadow-sm flex items-center justify-center gap-3">
-        <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+        <Loader2 className="w-4 h-4 animate-spin text-primary/50" />
         <span className="text-[12px] text-gray-400">מחשב ROI...</span>
       </div>
     );
@@ -83,7 +83,7 @@ export default function ROICard({ businessProfileId }) {
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
         <div className="flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-indigo-500" />
+          <TrendingUp className="w-4 h-4 text-primary/70" />
           <span className="text-[13px] font-bold text-gray-800">ROI — תשואה על השקעה</span>
         </div>
         <button
@@ -131,8 +131,8 @@ export default function ROICard({ businessProfileId }) {
               ))}
             </div>
             <div className="flex items-center gap-3 mt-2">
-              <span className="flex items-center gap-1 text-[9px] text-gray-400"><span className="w-2 h-2 rounded-sm bg-indigo-200 inline-block" /> סה"כ הכנסה</span>
-              <span className="flex items-center gap-1 text-[9px] text-gray-400"><span className="w-2 h-2 rounded-sm bg-indigo-500 inline-block" /> מיוחס מערכת</span>
+              <span className="flex items-center gap-1 text-[9px] text-gray-400"><span className="w-2 h-2 rounded-sm bg-primary/15 inline-block" /> סה"כ הכנסה</span>
+              <span className="flex items-center gap-1 text-[9px] text-gray-400"><span className="w-2 h-2 rounded-sm bg-primary inline-block" /> מיוחס מערכת</span>
             </div>
           </div>
         )}
@@ -140,7 +140,7 @@ export default function ROICard({ businessProfileId }) {
         {/* Toggle details */}
         <button
           onClick={() => setExpanded(e => !e)}
-          className="w-full text-[11px] text-indigo-500 hover:text-indigo-700 py-1"
+          className="w-full text-[11px] text-primary/70 hover:text-primary py-1"
         >
           {expanded ? 'הסתר פרטים ▲' : 'פרטים נוספים ▼'}
         </button>

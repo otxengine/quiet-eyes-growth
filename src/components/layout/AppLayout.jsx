@@ -293,7 +293,7 @@ export default function AppLayout() {
           onLocationChange={setSelectedLocationId}
         />
         {/* FIX 1: prevent horizontal scroll in main content */}
-        <main className="px-4 md:px-6 py-4 overflow-x-hidden">
+        <main className="px-4 md:px-6 py-4 overflow-x-hidden bg-dot-grid min-h-screen">
           <Outlet context={{ businessProfile, user, badges, selectedLocationId }} />
         </main>
       </div>

@@ -49,7 +49,7 @@ export default function SectorBenchmarkCard({ businessProfileId }) {
   if (isLoading) {
     return (
       <div className="rounded-2xl border border-gray-100 bg-white px-5 py-8 shadow-sm flex items-center justify-center gap-3">
-        <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+        <Loader2 className="w-4 h-4 animate-spin text-primary/50" />
         <span className="text-[12px] text-gray-400">טוען השוואת סקטור...</span>
       </div>
     );
@@ -78,7 +78,7 @@ export default function SectorBenchmarkCard({ businessProfileId }) {
           <span className="text-[13px] font-bold text-gray-800">בנצ'מרק — השוואה לסקטור</span>
         </div>
         {data.sector && (
-          <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-medium">{data.sector}</span>
+          <span className="text-[10px] bg-primary/8 text-primary px-2 py-0.5 rounded-full font-medium">{data.sector}</span>
         )}
       </div>
 
@@ -110,9 +110,9 @@ export default function SectorBenchmarkCard({ businessProfileId }) {
 
         {/* Winner insight */}
         {sector_winner_insight && (
-          <div className="flex items-start gap-2 bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2.5">
-            <TrendingUp className="w-3.5 h-3.5 text-indigo-500 flex-shrink-0 mt-0.5" />
-            <p className="text-[11px] text-indigo-700">{sector_winner_insight}</p>
+          <div className="flex items-start gap-2 bg-primary/8 border border-primary/15 rounded-xl px-3 py-2.5">
+            <TrendingUp className="w-3.5 h-3.5 text-primary/70 flex-shrink-0 mt-0.5" />
+            <p className="text-[11px] text-primary">{sector_winner_insight}</p>
           </div>
         )}
       </div>

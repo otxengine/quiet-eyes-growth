@@ -59,8 +59,8 @@ function ScoreBadge({ score }) {
 }
 
 function MetricCard({ label, value, sub, color = 'gray' }) {
-  const bg = { indigo: 'bg-indigo-50 border-indigo-100', green: 'bg-green-50 border-green-100', amber: 'bg-amber-50 border-amber-100', red: 'bg-red-50 border-red-100', gray: 'bg-gray-50 border-gray-100' }[color];
-  const txt = { indigo: 'text-indigo-700', green: 'text-green-700', amber: 'text-amber-700', red: 'text-red-700', gray: 'text-gray-700' }[color];
+  const bg = { indigo: 'bg-primary/8 border-primary/15', green: 'bg-green-50 border-green-100', amber: 'bg-amber-50 border-amber-100', red: 'bg-red-50 border-red-100', gray: 'bg-gray-50 border-gray-100' }[color];
+  const txt = { indigo: 'text-primary', green: 'text-green-700', amber: 'text-amber-700', red: 'text-red-700', gray: 'text-gray-700' }[color];
   return (
     <div className={`rounded-xl border px-4 py-3 ${bg}`}>
       <p className="text-[10px] text-gray-400 mb-0.5">{label}</p>
@@ -254,7 +254,7 @@ JSON בלבד:
             key={t.id}
             onClick={() => setActiveTab(t.id)}
             className={`flex-shrink-0 flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-[11px] font-medium transition-all ${
-              activeTab === t.id ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              activeTab === t.id ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             <span>{t.icon}</span>
@@ -269,12 +269,12 @@ JSON בלבד:
           <Calendar className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
           <span className="text-[11px] text-gray-500">מ:</span>
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-            className="border border-gray-200 rounded-lg px-2 py-1 text-[11px] text-gray-700 focus:outline-none focus:border-indigo-400" />
+            className="border border-gray-200 rounded-lg px-2 py-1 text-[11px] text-gray-700 focus:outline-none focus:border-primary/40" />
           <span className="text-[11px] text-gray-500">עד:</span>
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-            className="border border-gray-200 rounded-lg px-2 py-1 text-[11px] text-gray-700 focus:outline-none focus:border-indigo-400" />
+            className="border border-gray-200 rounded-lg px-2 py-1 text-[11px] text-gray-700 focus:outline-none focus:border-primary/40" />
           <button onClick={() => { setDateFrom(defaultFrom); setDateTo(defaultTo); }}
-            className="text-[10px] text-indigo-500 hover:underline">אפס</button>
+            className="text-[10px] text-primary/70 hover:underline">אפס</button>
         </div>
       )}
 
@@ -283,14 +283,14 @@ JSON בלבד:
         <div className="space-y-4">
           {/* Generate button */}
           {!weeklyReport && (
-            <div className="rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/40 p-6 text-center">
+            <div className="rounded-2xl border border-dashed border-primary/20 bg-primary/5 p-6 text-center">
               <p className="text-[13px] text-gray-600 mb-3">
                 דוח AI שבועי — סיכום ביצועים, הדגשת נקודת מפתח ופעולה לשבוע הבא
               </p>
               <button
                 onClick={handleGenerateWeeklyReport}
                 disabled={weeklyLoading}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-[13px] font-semibold hover:bg-indigo-700 transition-all disabled:opacity-70"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl text-[13px] font-semibold hover:bg-primary/90 transition-all disabled:opacity-70"
               >
                 {weeklyLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
                 {weeklyLoading ? 'מנתח...' : 'צור דוח שבועי'}
@@ -329,11 +329,11 @@ JSON בלבד:
                     </div>
                   )}
                   {report?.next_week_action && (
-                    <div className="flex items-start gap-3 rounded-xl bg-indigo-50 border border-indigo-100 px-4 py-3">
-                      <Target className="w-4 h-4 text-indigo-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex items-start gap-3 rounded-xl bg-primary/8 border border-primary/15 px-4 py-3">
+                      <Target className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-[10px] text-indigo-500 mb-0.5 font-medium">פעולה לשבוע הבא</p>
-                        <p className="text-[12px] text-indigo-800 font-medium">{report.next_week_action}</p>
+                        <p className="text-[10px] text-primary/70 mb-0.5 font-medium">פעולה לשבוע הבא</p>
+                        <p className="text-[12px] text-foreground font-medium">{report.next_week_action}</p>
                       </div>
                     </div>
                   )}
@@ -376,13 +376,13 @@ JSON בלבד:
         <div className="space-y-4">
           {monthlyLoading && !monthlyReport ? (
             <div className="flex items-center justify-center py-16 gap-3">
-              <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
+              <Loader2 className="w-5 h-5 animate-spin text-primary/70" />
               <span className="text-[13px] text-gray-500">מייצר דוח חודשי...</span>
             </div>
           ) : !monthlyReport ? (
-            <div className="rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/40 p-6 text-center">
+            <div className="rounded-2xl border border-dashed border-primary/20 bg-primary/5 p-6 text-center">
               <button onClick={handleGenerateMonthlyReport} disabled={monthlyLoading}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-[13px] font-semibold hover:bg-indigo-700 transition-all disabled:opacity-70">
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl text-[13px] font-semibold hover:bg-primary/90 transition-all disabled:opacity-70">
                 {monthlyLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
                 {monthlyLoading ? 'מייצר...' : 'צור דוח חודשי'}
               </button>
@@ -451,9 +451,9 @@ JSON בלבד:
                 </div>
               )}
               {monthlyReport.next_action && (
-                <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-5 py-4">
-                  <p className="text-[10px] text-indigo-400 font-medium mb-0.5">פעולה לחודש הבא</p>
-                  <p className="text-[13px] text-indigo-800 font-semibold">{monthlyReport.next_action}</p>
+                <div className="rounded-xl border border-primary/15 bg-primary/8 px-5 py-4">
+                  <p className="text-[10px] text-primary/50 font-medium mb-0.5">פעולה לחודש הבא</p>
+                  <p className="text-[13px] text-foreground font-semibold">{monthlyReport.next_action}</p>
                 </div>
               )}
 
@@ -556,7 +556,7 @@ JSON בלבד:
                       </div>
                       <div className="w-full bg-gray-100 rounded-full h-1.5">
                         <div
-                          className="bg-indigo-500 h-1.5 rounded-full"
+                          className="bg-primary h-1.5 rounded-full"
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -572,7 +572,7 @@ JSON בלבד:
             <p className="text-[12px] font-bold text-gray-700 mb-3">סטטוס לידים</p>
             {[
               { label: 'חמים',    count: hotLeads,                                                       color: 'bg-red-400' },
-              { label: 'פעילים',  count: displayLeads.filter(l => l.status === 'active').length,   color: 'bg-indigo-400' },
+              { label: 'פעילים',  count: displayLeads.filter(l => l.status === 'active').length,   color: 'bg-primary/50' },
               { label: 'קרים',    count: coldLeads,                                                  color: 'bg-blue-300' },
               { label: 'הושלמו',  count: completedLeads,                                             color: 'bg-green-400' },
               { label: 'אבדו',    count: displayLeads.filter(l => l.status === 'lost').length,       color: 'bg-gray-300' },
@@ -713,9 +713,9 @@ JSON בלבד:
 
               {/* Top recommendation */}
               {fullReport.recommendation && (
-                <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-5 py-4">
-                  <p className="text-[10px] text-indigo-400 font-medium mb-1">המלצה מרכזית לחודש הבא</p>
-                  <p className="text-[13px] text-indigo-800 font-semibold">{fullReport.recommendation}</p>
+                <div className="rounded-xl border border-primary/15 bg-primary/8 px-5 py-4">
+                  <p className="text-[10px] text-primary/50 font-medium mb-1">המלצה מרכזית לחודש הבא</p>
+                  <p className="text-[13px] text-foreground font-semibold">{fullReport.recommendation}</p>
                 </div>
               )}
 

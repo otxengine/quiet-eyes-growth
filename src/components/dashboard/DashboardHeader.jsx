@@ -18,7 +18,7 @@ function localScore(stats) {
 }
 
 const KPIS = [
-  { key: 'unreadSignals',  label: 'סיגנלים',  icon: '📊', route: '/signals',     color: 'text-indigo-600', bg: 'bg-indigo-50' },
+  { key: 'unreadSignals',  label: 'סיגנלים',  icon: '📊', route: '/signals',     color: 'text-primary', bg: 'bg-primary/8' },
   { key: 'pendingReviews', label: 'ביקורות',  icon: '⭐', route: '/reviews',     color: 'text-amber-600',  bg: 'bg-amber-50'  },
   { key: 'hotLeads',       label: 'לידים חמים', icon: '🔥', route: '/leads',    color: 'text-orange-600', bg: 'bg-orange-50' },
   { key: 'monthRevenue',   label: 'הכנסה חודשית', icon: '₪', route: '/leads',  color: 'text-green-600',  bg: 'bg-green-50'  },

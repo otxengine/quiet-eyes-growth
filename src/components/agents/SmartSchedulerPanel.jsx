@@ -7,11 +7,11 @@ const DAY_LABEL = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
 
 function HourBadge({ hour, label }) {
   return (
-    <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2">
-      <Clock className="w-3.5 h-3.5 text-indigo-500 flex-shrink-0" />
+    <div className="flex items-center gap-1.5 bg-primary/8 border border-primary/15 rounded-xl px-3 py-2">
+      <Clock className="w-3.5 h-3.5 text-primary/70 flex-shrink-0" />
       <div>
-        <p className="text-[13px] font-bold text-indigo-700">{String(hour).padStart(2, '0')}:00</p>
-        {label && <p className="text-[9px] text-indigo-400">{label}</p>}
+        <p className="text-[13px] font-bold text-primary">{String(hour).padStart(2, '0')}:00</p>
+        {label && <p className="text-[9px] text-primary/50">{label}</p>}
       </div>
     </div>
   );
@@ -24,12 +24,12 @@ function DayBar({ day, day_short, count, max }) {
     <div className="flex flex-col items-center gap-1">
       <div className="w-full flex items-end justify-center" style={{ height: 48 }}>
         <div
-          className={`w-full rounded-t transition-all ${isActive ? 'bg-indigo-500' : 'bg-indigo-100'}`}
+          className={`w-full rounded-t transition-all ${isActive ? 'bg-primary' : 'bg-primary/10'}`}
           style={{ height: `${Math.max(pct, 4)}%` }}
           title={`${day}: ${count} לידים`}
         />
       </div>
-      <span className={`text-[10px] font-medium ${isActive ? 'text-indigo-600' : 'text-gray-400'}`}>{day_short}</span>
+      <span className={`text-[10px] font-medium ${isActive ? 'text-primary' : 'text-gray-400'}`}>{day_short}</span>
       {count > 0 && <span className="text-[9px] text-gray-300">{count}</span>}
     </div>
   );
@@ -47,7 +47,7 @@ export default function SmartSchedulerPanel({ businessProfileId }) {
   if (isLoading) {
     return (
       <div className="rounded-2xl border border-gray-100 bg-white px-5 py-6 shadow-sm flex items-center justify-center gap-3">
-        <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+        <Loader2 className="w-4 h-4 animate-spin text-primary/50" />
         <span className="text-[12px] text-gray-400">מנתח דפוסי פעילות...</span>
       </div>
     );
@@ -68,7 +68,7 @@ export default function SmartSchedulerPanel({ businessProfileId }) {
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
         <div className="flex items-center gap-2">
-          <Clock className="w-4 h-4 text-indigo-500" />
+          <Clock className="w-4 h-4 text-primary/70" />
           <span className="text-[13px] font-bold text-gray-800">תזמון חכם</span>
         </div>
         {!has_data && (
@@ -85,12 +85,12 @@ export default function SmartSchedulerPanel({ businessProfileId }) {
             <p className="text-[10px] text-gray-400 mb-2 font-medium">חלונות סריקה מומלצים</p>
             <div className="flex gap-2 flex-wrap">
               {recommended_windows.map((w, i) => (
-                <div key={i} className="flex-1 min-w-[140px] bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2.5">
+                <div key={i} className="flex-1 min-w-[140px] bg-primary/8 border border-primary/15 rounded-xl px-3 py-2.5">
                   <div className="flex items-center gap-1.5 mb-1">
-                    <Clock className="w-3.5 h-3.5 text-indigo-500" />
-                    <span className="text-[14px] font-bold text-indigo-700">{w.label}</span>
+                    <Clock className="w-3.5 h-3.5 text-primary/70" />
+                    <span className="text-[14px] font-bold text-primary">{w.label}</span>
                   </div>
-                  <p className="text-[10px] text-indigo-500">{w.reason}</p>
+                  <p className="text-[10px] text-primary/70">{w.reason}</p>
                 </div>
               ))}
             </div>
@@ -127,7 +127,7 @@ export default function SmartSchedulerPanel({ businessProfileId }) {
             <div className="flex items-center justify-between mb-2">
               <p className="text-[10px] text-gray-400 font-medium">פילוח לידים לפי יום</p>
               {peak_day && (
-                <span className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">יום {peak_day} — שיא</span>
+                <span className="text-[10px] text-primary bg-primary/8 px-2 py-0.5 rounded-full">יום {peak_day} — שיא</span>
               )}
             </div>
             <div className="flex items-end gap-1.5" style={{ height: 64 }}>

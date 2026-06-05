@@ -31,20 +31,29 @@ html, body {
     --font-heebo: 'Heebo', sans-serif;
     --font-inter: 'Inter', sans-serif;
 
-    /* Warm off-white background */
-    --background: 36 20% 97%;
+    /* Lavender-gray background */
+    --background: 240 9% 95%;
     --background-card: 0 0% 100%;
-    --background-card-hover: 36 14% 95%;
-    --background-surface: 36 14% 96%;
+    --background-card-hover: 240 7% 93%;
+    --background-surface: 240 8% 94%;
 
     /* Deep ink foreground */
     --foreground: 222 47% 11%;
     --foreground-secondary: 220 9% 36%;
     --foreground-muted: 220 9% 55%;
 
-    /* Deep indigo primary */
-    --primary: 243 75% 59%;
+    /* Red-pink primary */
+    --primary: 352 77% 55%;
     --primary-foreground: 0 0% 100%;
+
+    /* Shadow system */
+    --shadow-xs: 0 1px 2px 0 rgba(0,0,0,0.04);
+    --shadow-sm: 0 2px 6px 0 rgba(0,0,0,0.06), 0 1px 2px 0 rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px 0 rgba(0,0,0,0.08), 0 2px 4px 0 rgba(0,0,0,0.05);
+    --shadow-lg: 0 8px 24px 0 rgba(0,0,0,0.10), 0 4px 8px 0 rgba(0,0,0,0.06);
+    --shadow-xl: 0 16px 40px 0 rgba(0,0,0,0.12), 0 8px 16px 0 rgba(0,0,0,0.08);
+    --shadow-primary: 0 4px 20px 0 rgba(232,52,77,0.25), 0 2px 6px 0 rgba(232,52,77,0.15);
+    --shadow-primary-lg: 0 8px 32px 0 rgba(232,52,77,0.30), 0 4px 12px 0 rgba(232,52,77,0.18);
 
     --success: 160 84% 39%;
     --success-foreground: 0 0% 100%;
@@ -64,37 +73,37 @@ html, body {
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    --secondary: 220 14% 96%;
+    --secondary: 240 9% 94%;
     --secondary-foreground: 222 47% 11%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 55%;
+    --muted: 240 9% 94%;
+    --muted-foreground: 240 5% 52%;
 
-    --accent: 243 75% 59%;
+    --accent: 352 77% 55%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 91%;
-    --border-hover: 220 13% 82%;
+    --border: 240 8% 90%;
+    --border-hover: 240 8% 82%;
 
-    --input: 220 13% 91%;
-    --ring: 243 75% 59%;
+    --input: 240 8% 90%;
+    --ring: 352 77% 55%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    /* Dark sidebar — Notion/Linear style */
-    --sidebar-background: 220 18% 13%;
-    --sidebar-foreground: 220 14% 85%;
-    --sidebar-foreground-muted: 220 10% 50%;
-    --sidebar-primary: 243 75% 68%;
+    /* Light sidebar — Cortexi style */
+    --sidebar-background: 240 9% 95%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-foreground-muted: 220 9% 45%;
+    --sidebar-primary: 352 77% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 15% 20%;
-    --sidebar-accent-active: 220 15% 24%;
-    --sidebar-accent-foreground: 220 14% 90%;
-    --sidebar-border: 220 15% 20%;
-    --sidebar-ring: 243 75% 59%;
+    --sidebar-accent: 240 8% 90%;
+    --sidebar-accent-active: 352 77% 96%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 240 8% 88%;
+    --sidebar-ring: 352 77% 55%;
   }
 }
 
@@ -147,23 +156,45 @@ html, body {
     text-wrap: balance;
   }
 
+  /* Dot grid background */
+  .bg-dot-grid {
+    background-image: radial-gradient(circle, hsl(240 8% 82%) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+
   /* Refined card system */
   .card-base {
-    @apply bg-white rounded-xl border border-border transition-all duration-200;
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+    @apply bg-white rounded-2xl border border-white/80 transition-all duration-200;
+    box-shadow: var(--shadow-sm);
   }
   .card-base:hover {
-    border-color: hsl(var(--border-hover));
-    box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.05);
+    border-color: rgba(255,255,255,1);
+    box-shadow: var(--shadow-md);
   }
 
   .card-interactive {
-    @apply card-base cursor-pointer;
+    @apply bg-white rounded-2xl border border-white/80 cursor-pointer transition-all duration-200;
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
   }
   .card-interactive:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.06);
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+    @apply border-white;
   }
+  .card-interactive::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(90deg, transparent 30%, rgba(255,255,255,0.3) 50%, transparent 70%);
+    background-size: 200% 100%;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  .card-interactive:hover::after { opacity: 1; animation: card-shimmer 0.6s ease; }
 
   /* Micro-interactions */
   .btn-subtle {
@@ -181,28 +212,80 @@ html, body {
 
   /* Card elevation system */
   .card-flat {
-    @apply bg-white rounded-xl border border-border;
+    @apply bg-white rounded-2xl border border-gray-100/80;
   }
   .card-lifted {
-    @apply bg-white rounded-xl border border-border;
-    box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+    @apply bg-white rounded-2xl border border-white/80;
+    box-shadow: var(--shadow-md);
   }
   .card-lifted:hover {
-    box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.08), 0 2px 4px 0 rgba(0, 0, 0, 0.04);
+    box-shadow: var(--shadow-lg);
+  }
+  .card-elevated {
+    @apply bg-white rounded-2xl border border-white/80;
+    box-shadow: var(--shadow-xl);
   }
 
-  /* Stat card with top accent border */
+  /* Glassmorphism */
+  .glass {
+    background: rgba(255,255,255,0.70);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255,255,255,0.55);
+    box-shadow: var(--shadow-md);
+  }
+  .glass-strong {
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(24px) saturate(200%);
+    -webkit-backdrop-filter: blur(24px) saturate(200%);
+    border: 1px solid rgba(255,255,255,0.70);
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* Gradient utilities */
+  .gradient-primary {
+    background: linear-gradient(135deg, #E8344D 0%, #FF6B6B 100%);
+    box-shadow: var(--shadow-primary);
+  }
+  .gradient-primary:hover {
+    background: linear-gradient(135deg, #d42a42 0%, #f05a5a 100%);
+    box-shadow: var(--shadow-primary-lg);
+    transform: translateY(-1px);
+  }
+  .gradient-avatar {
+    background: linear-gradient(135deg, #9B59B6 0%, #F1C40F 100%);
+    box-shadow: 0 8px 32px rgba(155,89,182,0.25);
+  }
+  .gradient-surface {
+    background: linear-gradient(135deg, rgba(232,52,77,0.04) 0%, rgba(155,89,182,0.04) 100%);
+  }
+
+  /* Primary button with glow */
+  .btn-primary {
+    @apply text-white font-semibold rounded-xl px-5 py-2.5 transition-all duration-200;
+    background: linear-gradient(135deg, #E8344D 0%, #FF6B6B 100%);
+    box-shadow: var(--shadow-primary);
+  }
+  .btn-primary:hover {
+    background: linear-gradient(135deg, #d42a42 0%, #f05a5a 100%);
+    box-shadow: var(--shadow-primary-lg);
+    transform: translateY(-1px);
+  }
+  .btn-primary:active { transform: translateY(0) scale(0.98); }
+
+  /* Stat card with gradient top accent border */
   .card-stat {
     @apply card-base relative overflow-hidden;
   }
   .card-stat::before {
     content: '';
-    @apply absolute top-0 left-0 right-0 h-[3px] rounded-t-xl;
-    background: hsl(var(--primary));
+    @apply absolute top-0 left-0 right-0 h-[3px] rounded-t-2xl;
+    background: linear-gradient(90deg, #E8344D, #FF6B6B);
+    box-shadow: 0 2px 8px rgba(232,52,77,0.3);
   }
-  .card-stat-success::before { background: hsl(var(--success)); }
-  .card-stat-warning::before { background: hsl(var(--warning)); }
-  .card-stat-danger::before { background: hsl(var(--danger)); }
+  .card-stat-success::before { background: hsl(var(--success)); box-shadow: none; }
+  .card-stat-warning::before { background: hsl(var(--warning)); box-shadow: none; }
+  .card-stat-danger::before  { background: hsl(var(--danger));  box-shadow: none; }
 
   /* Signal border utility classes */
   .signal-border-threat {
@@ -262,4 +345,9 @@ html, body {
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
+}
+
+@keyframes card-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
 }

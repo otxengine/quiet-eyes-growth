@@ -152,7 +152,7 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate }
   return (
     <aside
       className={cn('fixed top-0 right-0 h-screen z-40 transition-all duration-300 flex flex-col border-l', collapsed ? 'w-16' : 'w-60')}
-      style={{ background: 'hsl(var(--sidebar-background))', borderColor: 'hsl(var(--sidebar-border))' }}
+      style={{ background: 'hsl(var(--sidebar-background))', borderColor: 'hsl(var(--sidebar-border))', boxShadow: '-4px 0 24px rgba(0,0,0,0.06)' }}
     >
       {/* Logo */}
       <div className="h-14 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: '1px solid hsl(var(--sidebar-border))' }}>
@@ -179,7 +179,7 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate }
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto min-h-0 pt-2 pb-4" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(0,0,0,0.28) transparent' }}>
+      <nav className="flex-1 overflow-y-auto min-h-0 pt-2 pb-4" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(0,0,0,0.12) transparent' }}>
         {/* Admin-only links */}
         {isAdmin && (
           <div className="px-2 mb-2">

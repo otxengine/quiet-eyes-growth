@@ -28,7 +28,7 @@ export default function TopBar({ pageTitle, user, badges = {}, onMenuClick, show
   ];
 
   return (
-    <header className="sticky top-0 z-30 h-14 bg-background/90 backdrop-blur-md border-b border-border/60">
+    <header className="sticky top-0 z-30 h-14 glass border-b border-white/40">
       <div className="h-full px-4 md:px-8 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {showMenuButton && (

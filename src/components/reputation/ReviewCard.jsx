@@ -350,7 +350,7 @@ export default function ReviewCard({ review, businessProfile, compact = false })
                 <button onClick={saveResponse} className="px-4 py-2 text-[12px] font-medium bg-[#111111] text-white rounded-md hover:bg-[#333333] transition-colors">
                   שמור והעתק ✓
                 </button>
-                <button onClick={copyToClipboard} className="px-3 py-1.5 text-[12px] font-medium text-[#6366f1] bg-indigo-50 border border-indigo-100 rounded-md hover:bg-indigo-100 transition-colors flex items-center gap-1">
+                <button onClick={copyToClipboard} className="px-3 py-1.5 text-[12px] font-medium text-[#6366f1] bg-primary/8 border border-primary/15 rounded-md hover:bg-primary/10 transition-colors flex items-center gap-1">
                   {copied ? <><CheckCheck className="w-3 h-3" /> הועתק</> : <><Copy className="w-3 h-3" /> העתק</>}
                 </button>
                 {review.source_url && (

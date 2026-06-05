@@ -96,7 +96,7 @@ function ActionButton({ alert, actionMeta, bpId, onActed }) {
           <button
             onClick={handlePublish}
             disabled={publishing || published}
-            className="flex items-center gap-1.5 text-[11px] font-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-2.5 py-1 rounded-lg transition-all disabled:opacity-60"
+            className="flex items-center gap-1.5 text-[11px] font-semibold text-white bg-primary hover:bg-primary/90 px-2.5 py-1 rounded-lg transition-all disabled:opacity-60"
           >
             {publishing ? <Loader2 className="w-3 h-3 animate-spin" /> : published ? <CheckCheck className="w-3 h-3" /> : <Send className="w-3 h-3" />}
             {published ? 'פורסם!' : publishing ? 'מפרסם...' : action_label || 'פרסם עכשיו'}
@@ -310,7 +310,7 @@ export default function ProactiveAlertsPanel({ bpId }) {
                                 impact_level: alert.priority === 'high' || alert.priority === 'critical' ? 'high' : 'medium',
                               });
                             }}
-                            className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 transition-all"
+                            className="flex items-center gap-1 text-[10px] font-semibold text-primary hover:text-primary transition-all"
                           >
                             <Zap className="w-3 h-3" /> פעל עכשיו
                           </button>

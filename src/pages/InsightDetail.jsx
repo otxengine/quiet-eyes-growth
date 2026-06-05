@@ -23,10 +23,10 @@ const TYPE_META = {
   market_opportunity: { label: 'הזדמנות שוק',   color: 'text-green-600',  bg: 'bg-green-50',  border: 'border-green-100',  icon: TrendingUp },
   risk:               { label: 'סיכון',          color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-100',  icon: AlertTriangle },
   retention_risk:     { label: 'סיכון שימור',   color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-100',  icon: AlertTriangle },
-  competitor_move:    { label: 'מהלך מתחרה',    color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', icon: Trophy },
+  competitor_move:    { label: 'מהלך מתחרה',    color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-100', icon: Trophy },
   milestone:          { label: 'אבן דרך',        color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100', icon: Trophy },
   hot_lead:           { label: 'ליד חם',         color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-100',  icon: Zap },
-  competitive:        { label: 'תחרותי',         color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', icon: Target },
+  competitive:        { label: 'תחרותי',         color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-100', icon: Target },
   defensive:          { label: 'הגנתי',          color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-100',  icon: AlertTriangle },
   general:            { label: 'כללי',           color: 'text-blue-600',   bg: 'bg-blue-50',   border: 'border-blue-100',   icon: Lightbulb },
   // Advisory insight types
@@ -34,9 +34,9 @@ const TYPE_META = {
   campaign_opportunity:{ label: 'הזדמנות קמפיין', color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100', icon: Zap },
   new_service:        { label: 'שירות חדש',       color: 'text-green-600',  bg: 'bg-green-50',  border: 'border-green-100',  icon: Sparkles },
   promotion_strategy: { label: 'מבצע',            color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-100', icon: Zap },
-  sector_shift:       { label: 'שינוי סקטור',     color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', icon: TrendingUp },
+  sector_shift:       { label: 'שינוי סקטור',     color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-100', icon: TrendingUp },
   event_opportunity:  { label: 'אירוע',            color: 'text-green-600',  bg: 'bg-green-50',  border: 'border-green-100',  icon: Target },
-  competitive_gap:    { label: 'פער תחרותי',       color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', icon: Trophy },
+  competitive_gap:    { label: 'פער תחרותי',       color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-100', icon: Trophy },
   social_viral:       { label: 'ויראלי',           color: 'text-pink-600',   bg: 'bg-pink-50',   border: 'border-pink-100',   icon: Sparkles },
   future_prediction:  { label: 'תחזית AI',         color: 'text-blue-600',   bg: 'bg-blue-50',   border: 'border-blue-100',   icon: Lightbulb },
 };
@@ -632,14 +632,14 @@ function TypeContextPanel({ typeKey, title, description, actionMeta }) {
     return (
       <div className="card-base p-5 space-y-3">
         <h2 className="text-[13px] font-semibold text-foreground flex items-center gap-2">
-          <Trophy className="w-4 h-4 text-indigo-500 opacity-80" />
+          <Trophy className="w-4 h-4 text-violet-500 opacity-80" />
           ניתוח תחרותי
         </h2>
 
         {reasoning && (
-          <div className="rounded-xl bg-indigo-50 border border-indigo-100 px-4 py-3">
-            <p className="text-[10px] font-bold text-indigo-700 mb-1">מה זוהה</p>
-            <p className="text-[12px] text-indigo-800 leading-relaxed">{reasoning}</p>
+          <div className="rounded-xl bg-violet-50 border border-violet-100 px-4 py-3">
+            <p className="text-[10px] font-bold text-violet-700 mb-1">מה זוהה</p>
+            <p className="text-[12px] text-violet-800 leading-relaxed">{reasoning}</p>
           </div>
         )}
 

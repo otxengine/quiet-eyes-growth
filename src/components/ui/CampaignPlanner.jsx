@@ -207,14 +207,14 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
             <input type="number" min={10} max={10000} step={10}
               value={budget}
               onChange={e => { setBudget(Math.max(10, Number(e.target.value))); setResult(null); }}
-              className="w-full border-2 border-gray-200 rounded-xl py-2.5 pr-8 pl-3 text-[14px] font-bold text-gray-800 focus:outline-none focus:border-indigo-400 transition-colors" />
+              className="w-full border-2 border-gray-200 rounded-xl py-2.5 pr-8 pl-3 text-[14px] font-bold text-gray-800 focus:outline-none focus:border-primary/40 transition-colors" />
           </div>
           {/* Budget tier quick-select will be shown after first estimate */}
           {result?.budget_tiers && (
             <div className="flex gap-1 mt-1.5">
               {[['מינימלי', result.budget_tiers.starter], ['צמיחה', result.budget_tiers.growth], ['אגרסיבי', result.budget_tiers.aggressive]].map(([lbl, val]) => (
                 <button key={lbl} onClick={() => { setBudget(val); setResult(null); }}
-                  className="flex-1 text-[9px] py-1 rounded-lg bg-gray-50 border border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 transition-all font-medium">
+                  className="flex-1 text-[9px] py-1 rounded-lg bg-gray-50 border border-gray-200 text-gray-500 hover:border-primary/30 hover:text-primary transition-all font-medium">
                   ₪{val}<br /><span className="text-[8px]">{lbl}</span>
                 </button>
               ))}
@@ -386,18 +386,18 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
 
                   {/* Custom Audiences */}
                   {(t.lookalike_seed || t.custom_audience_tip) && (
-                    <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 space-y-2">
-                      <p className="text-[10px] font-semibold text-indigo-700">🔁 Custom & Lookalike Audiences</p>
+                    <div className="bg-primary/8 border border-primary/15 rounded-xl p-3 space-y-2">
+                      <p className="text-[10px] font-semibold text-primary">🔁 Custom & Lookalike Audiences</p>
                       {t.lookalike_seed && (
                         <div>
-                          <p className="text-[9px] text-indigo-400 mb-0.5">Lookalike seed:</p>
-                          <p className="text-[10px] text-indigo-800">{t.lookalike_seed}</p>
+                          <p className="text-[9px] text-primary/50 mb-0.5">Lookalike seed:</p>
+                          <p className="text-[10px] text-foreground">{t.lookalike_seed}</p>
                         </div>
                       )}
                       {t.custom_audience_tip && (
                         <div>
-                          <p className="text-[9px] text-indigo-400 mb-0.5">Custom Audience:</p>
-                          <p className="text-[10px] text-indigo-800">{t.custom_audience_tip}</p>
+                          <p className="text-[9px] text-primary/50 mb-0.5">Custom Audience:</p>
+                          <p className="text-[10px] text-foreground">{t.custom_audience_tip}</p>
                         </div>
                       )}
                     </div>

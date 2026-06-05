@@ -106,12 +106,12 @@ export default function HealthScoreCard({ bpId }) {
 
       {/* Competitive rank badge */}
       {rankItem && (
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-100 mb-2">
+        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-primary/8 border border-primary/15 mb-2">
           <div className="flex items-center gap-2">
-            <Users className="w-3.5 h-3.5 text-indigo-500" />
-            <span className="text-[11px] text-indigo-700 font-medium">דירוג תחרותי</span>
+            <Users className="w-3.5 h-3.5 text-primary/70" />
+            <span className="text-[11px] text-primary font-medium">דירוג תחרותי</span>
           </div>
-          <span className="text-[12px] font-bold text-indigo-700">
+          <span className="text-[12px] font-bold text-primary">
             #{rankItem.rank} מתוך {rankItem.total}
           </span>
         </div>

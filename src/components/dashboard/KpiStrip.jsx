@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const ITEMS = [
-  { key: 'signals',   label: 'סיגנלים',  icon: '📊', route: '/signals',     color: 'text-indigo-600' },
+  { key: 'signals',   label: 'סיגנלים',  icon: '📊', route: '/signals',     color: 'text-primary' },
   { key: 'reviews',   label: 'ביקורות',  icon: '⭐', route: '/reviews',     color: 'text-amber-600'  },
   { key: 'leads',     label: 'לידים',    icon: '🔥', route: '/leads',       color: 'text-orange-600' },
   { key: 'revenue',   label: 'הכנסה',    icon: '₪',  route: '/leads',       color: 'text-green-600'  },

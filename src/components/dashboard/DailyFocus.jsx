@@ -10,7 +10,7 @@ import { Loader2, CheckCheck, ChevronLeft } from 'lucide-react';
 const P = {
   0: { dot: 'bg-red-500',    border: 'border-r-red-400',    label: 'דחוף' },
   1: { dot: 'bg-orange-400', border: 'border-r-orange-300', label: 'היום' },
-  2: { dot: 'bg-indigo-400', border: 'border-r-indigo-300', label: 'מעקב' },
+  2: { dot: 'bg-primary/50', border: 'border-r-primary/30', label: 'מעקב' },
 };
 
 function timeAgo(d) {
@@ -333,7 +333,7 @@ export default function DailyFocus({ reviews, leads, signals, competitors, pendi
             const cnt = items.filter(i => i.priority === lvl).length;
             if (!cnt) return null;
             return (
-              <span key={lvl} className={`text-[9px] font-medium flex items-center gap-1 ${lvl === 0 ? 'text-red-500' : lvl === 1 ? 'text-orange-500' : 'text-indigo-500'}`}>
+              <span key={lvl} className={`text-[9px] font-medium flex items-center gap-1 ${lvl === 0 ? 'text-red-500' : lvl === 1 ? 'text-orange-500' : 'text-primary/70'}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${P[lvl].dot}`} />
                 {cnt} {P[lvl].label}
               </span>

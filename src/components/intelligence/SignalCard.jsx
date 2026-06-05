@@ -301,7 +301,7 @@ ACTION_TIME: [זמן ביצוע ריאלי]
                   return (
                     <>
                       {m.action_label && m.action_type && (
-                        <span className="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full border border-indigo-100">
+                        <span className="text-[10px] px-2 py-0.5 bg-primary/8 text-primary rounded-full border border-primary/15">
                           {ACTION_ICON[m.action_type] || '⚡'} {m.action_label}
                         </span>
                       )}
