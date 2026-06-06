@@ -109,6 +109,7 @@ import { facebookGroupTrendAgent } from './facebookGroupTrendAgent';
 import { googleTrendsScanAgent } from './googleTrendsScanAgent';
 import { visualTrendAnalyzer } from './visualTrendAnalyzer';
 import { commandChat } from './commandChat';
+import { submitSupportTicket } from './submitSupportTicket';
 
 const router = Router();
 
@@ -162,6 +163,7 @@ const FUNCTION_MAP: Record<string, any> = {
   generateImage,
   chatWithBusiness,
   commandChat,
+  submitSupportTicket,
   buildInsightAudience,
   generateWeeklyReport,
   generateMarketAnalysis,

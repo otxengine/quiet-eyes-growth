@@ -80,20 +80,28 @@ export default function SupportPanel({ onClose, businessProfile, onTicketCreated
         .map(m => m.text)
         .join(' | ') || 'פנייה ללא תיאור';
 
-      let recordingRef = '';
-      if (withRecording && recordingBlob) {
-        recordingRef = `recording_${Date.now()}.webm`;
-      }
-
-      await base44.entities.SupportTicket.create({
+      // Send email notification to admin + create ticket
+      await base44.functions.invoke('submitSupportTicket', {
         description,
-        recording_url: recordingRef,
-        status: 'open',
-        user_email: businessProfile?.created_by || '',
-        business_id: businessProfile?.id || '',
+        userEmail: businessProfile?.created_by || '',
+        businessId: businessProfile?.id || '',
+        hasRecording: withRecording && !!recordingBlob,
       });
+
+      // Also save entity record for Admin Dashboard tab
+      try {
+        await base44.entities.SupportTicket.create({
+          description,
+          recording_url: withRecording && recordingBlob ? `recording_${Date.now()}.webm` : '',
+          status: 'open',
+          user_email: businessProfile?.created_by || '',
+          business_id: businessProfile?.id || '',
+        });
+      } catch (_) {
+        // Entity may not exist yet — email was already sent
+      }
     } catch (err) {
-      console.error('[Support] Ticket create error:', err);
+      console.error('[Support] Ticket submit error:', err);
     }
 
     onTicketCreated?.();
