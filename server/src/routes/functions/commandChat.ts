@@ -111,50 +111,53 @@ ${marketSignals.slice(0, 4).map(s => `  • [${s.impact_level}] ${s.summary}`).j
 
 ${contextBlock}
 
+חובה: ענה אך ורק ב-JSON תקין ללא טקסט נוסף, ללא markdown fences, ללא הסברים מחוץ ל-JSON.
+
+מבנה התשובה (JSON בלבד):
+{"reply":"תשובה בעברית 2-4 משפטים קצרים","chips":[{"label":"← לידים","path":"/leads"}],"pendingAction":null,"needsWebSearch":false,"webSearchQuery":""}
+
 כללים:
-1. ענה תמיד בעברית
-2. תשובות קצרות ומעשיות (2-4 משפטים) אלא אם נשאל להסבר
-3. אם הבקשה דורשת פעולה (יצירת משימה, עדכון ליד, מענה לביקורת, סגירת התראה, ניווט) — כלול pendingAction
-4. הצע chips לניווט רלוונטי
-5. אם צריך מידע חיצוני/עדכני — החזר needsWebSearch: true
+1. reply — תשובה בעברית, קצרה ומעשית (2-4 משפטים). זהו הטקסט שיוצג למשתמש.
+2. chips — מערך קישורים רלוונטיים (אופציונלי, יכול להיות [])
+3. pendingAction — אם הבקשה דורשת פעולה:
+   - create_task: {"type":"create_task","label":"הסבר","payload":{"title":"...","description":"..."}}
+   - update_lead: {"type":"update_lead","label":"הסבר","payload":{"id":"...","status":"..."}}
+   - respond_review: {"type":"respond_review","label":"הסבר","payload":{"id":"...","suggested_response":"..."}}
+   - dismiss_alert: {"type":"dismiss_alert","label":"הסבר","payload":{"id":"..."}}
+   - navigate: {"type":"navigate","label":"הסבר","payload":{"path":"/..."}}
+   - אם אין פעולה — null
+4. needsWebSearch — true רק אם צריך מידע עדכני שאינו בנתוני העסק
+5. webSearchQuery — שאילתת חיפוש אם needsWebSearch הוא true, אחרת ""
 
-תבנית JSON:
-{
-  "reply": "תשובה בעברית",
-  "chips": [{"label": "← לידים", "path": "/leads"}],
-  "pendingAction": {"type": "create_task", "label": "תיאור הפעולה", "payload": {}},
-  "needsWebSearch": false,
-  "webSearchQuery": ""
-}
+חשוב: שדה reply חייב להכיל תמיד טקסט קריא בעברית בלבד, לא JSON.`;
 
-סוגי pendingAction:
-- create_task: payload = { title, description, due_date? }
-- update_lead: payload = { id, ...fields }
-- respond_review: payload = { id, suggested_response }
-- dismiss_alert: payload = { id }
-- navigate: payload = { path }`;
-
-    const firstResult = await invokeLLM({
+    const rawFirst = await invokeLLM({
       prompt: `${systemPrompt}\n\nהיסטוריה:\n${historyText}\n\nמשתמש: ${message}`,
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          reply: { type: 'string' },
-          chips: { type: 'array', items: { type: 'object' } },
-          pendingAction: { type: 'object' },
-          needsWebSearch: { type: 'boolean' },
-          webSearchQuery: { type: 'string' },
-        },
-        required: ['reply'],
-      },
+      model: 'gemini-flash',
       maxTokens: 800,
     });
 
     let parsed: any = {};
-    if (typeof firstResult === 'string') {
-      try { parsed = JSON.parse(firstResult); } catch { parsed = { reply: firstResult }; }
-    } else {
-      parsed = firstResult || {};
+    const rawText = typeof rawFirst === 'string' ? rawFirst : JSON.stringify(rawFirst);
+
+    // Extract JSON block from LLM response (may be wrapped in markdown fences)
+    const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/) ||
+                      rawText.match(/(\{[\s\S]*\})/);
+    const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]).trim() : rawText.trim();
+
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      // LLM returned plain text — use as reply directly
+      parsed = { reply: rawText.replace(/```(?:json)?|```/g, '').trim() };
+    }
+
+    // Safety: if reply itself looks like JSON (double-encoded), unwrap it
+    if (typeof parsed.reply === 'string' && parsed.reply.trimStart().startsWith('{')) {
+      try {
+        const inner = JSON.parse(parsed.reply);
+        if (inner?.reply) parsed = { ...parsed, ...inner };
+      } catch { /* ignore */ }
     }
 
     // Web search fallback
@@ -168,16 +171,17 @@ ${contextBlock}
           .join('\n\n');
 
         if (snippets) {
-          const secondResult = await invokeLLM({
+          const rawSecond = await invokeLLM({
             prompt: `${systemPrompt}\n\nתוצאות חיפוש עבור "${parsed.webSearchQuery}":\n${snippets}\n\nהיסטוריה:\n${historyText}\n\nמשתמש: ${message}`,
+            model: 'gemini-flash',
             maxTokens: 800,
           });
           let sp: any = {};
-          if (typeof secondResult === 'string') {
-            try { sp = JSON.parse(secondResult); } catch { sp = { reply: secondResult }; }
-          } else {
-            sp = secondResult || {};
-          }
+          const rawSecondText = typeof rawSecond === 'string' ? rawSecond : JSON.stringify(rawSecond);
+          const jsonMatch2 = rawSecondText.match(/```(?:json)?\s*([\s\S]*?)```/) ||
+                             rawSecondText.match(/(\{[\s\S]*\})/);
+          const jsonStr2 = jsonMatch2 ? (jsonMatch2[1] || jsonMatch2[0]).trim() : rawSecondText.trim();
+          try { sp = JSON.parse(jsonStr2); } catch { sp = { reply: rawSecondText.replace(/```(?:json)?|```/g, '').trim() }; }
           parsed = { ...parsed, ...sp, webSearch: { query: parsed.webSearchQuery, results: snippets.slice(0, 300) } };
         }
       } catch (searchErr: any) {

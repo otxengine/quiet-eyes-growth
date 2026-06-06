@@ -195,7 +195,15 @@ export default function CommandHome() {
             history: updated.slice(-10).map(m => ({ role: m.role, content: m.content })),
           });
           const data = res?.data || res;
-          reply = data?.reply || '';
+          let rawReply = data?.reply || '';
+          // Safety: unwrap if reply is itself a JSON string
+          if (typeof rawReply === 'string' && rawReply.trimStart().startsWith('{')) {
+            try {
+              const inner = JSON.parse(rawReply);
+              if (inner?.reply) rawReply = inner.reply;
+            } catch { /* use rawReply as-is */ }
+          }
+          reply = rawReply;
           chips = data?.chips || [];
           action = data?.pendingAction || null;
         } catch (_) {}
