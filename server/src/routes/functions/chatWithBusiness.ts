@@ -138,11 +138,27 @@ ${alertLines ? `=== התראות פעילות ===\n${alertLines}\n` : ''}
 2. השתמש בנתונים הספציפיים לעיל — לא עצות גנריות
 3. תשובות: עד 3 משפטים — קצר וישיר; מפורט רק לשאלות טכניות
 4. אם אין נתונים לתחום שנשאל — אמור זאת והצע לסרוק
-5. הצע פעולה אחת קונקרטית בסוף כל תגובה
+5. בסוף כל תגובה הצע פעולה קונקרטית אחת ב-pendingAction
 6. תגובה בעברית בלבד
 
 סגנון נכון: "הלקוחות שלך מחפשים X — שלח WhatsApp ל-Y עכשיו"
-סגנון שגוי: "ניתן לשקול" / "מומלץ להתייעץ" / "אנחנו שמחים לעזור"`;
+סגנון שגוי: "ניתן לשקול" / "מומלץ להתייעץ" / "אנחנו שמחים לעזור"
+
+=== פורמט תשובה — JSON בלבד ===
+{
+  "reply": "תשובה בעברית",
+  "pendingAction": {
+    "type": "create_task|update_lead|respond_review|dismiss_alert",
+    "label": "תיאור קצר בעברית",
+    "payload": {}
+  }
+}
+
+מתי להחזיר pendingAction:
+- המלצה על פנייה ללידים חמים → create_task { title:"פנה ל-[שם]", description:"..." }
+- בקשת יצירת משימה → create_task { title, description }
+- המלצה לענות לביקורת → respond_review { suggested_response:"..." }
+- אם אין פעולה ברורה — השמט את pendingAction לגמרי`;
 
 
     const safeHistory = (typeof history === 'string' ? history : '').replace(/<[^>]{0,200}>/g, '').slice(0, 2000);
@@ -154,15 +170,32 @@ ${safeHistory}
 
 User message: ${message.slice(0, 1000)}`;
 
-    const reply = await invokeLLM({
+    const raw = await invokeLLM({
       model: 'sonnet',
-      maxTokens: 350,
+      maxTokens: 500,
       skipCache: true,
       prompt: fullPrompt,
+      response_json_schema: {
+        type: 'object',
+        properties: {
+          reply: { type: 'string' },
+          pendingAction: { type: 'object' },
+        },
+        required: ['reply'],
+      },
     });
 
-    const replyText = typeof reply === 'string' ? reply : JSON.stringify(reply);
-    return res.json({ reply: replyText });
+    let parsed: any = {};
+    if (typeof raw === 'string') {
+      try { parsed = JSON.parse(raw); } catch { parsed = { reply: raw }; }
+    } else {
+      parsed = raw || {};
+    }
+
+    return res.json({
+      reply: parsed.reply || (typeof raw === 'string' ? raw : 'שגיאה בעיבוד התגובה'),
+      pendingAction: parsed.pendingAction || null,
+    });
   } catch (err: any) {
     console.error('[chatWithBusiness] error:', err.message);
     return res.status(500).json({ error: err.message });

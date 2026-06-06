@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
-import { X, Send, Loader2, Sparkles, Trash2, Maximize2 } from 'lucide-react';
+import { X, Send, Loader2, Sparkles, Trash2, Maximize2, CheckCircle, Zap } from 'lucide-react';
 import ChatMessage from './ChatMessage';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -105,6 +105,41 @@ const PAGE_QUICK_ACTIONS = {
   ],
 };
 
+// ── Pending Action Confirmation Card ─────────────────────────────────────────
+function ConfirmationCard({ action, onApprove, onCancel, loading }) {
+  if (!action) return null;
+  return (
+    <div
+      className="rounded-2xl p-3 border mx-1 my-1"
+      style={{ background: 'rgba(232,52,77,0.04)', borderColor: 'rgba(232,52,77,0.2)' }}
+      dir="rtl"
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <Zap className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#E8344D' }} />
+        <p className="text-[12px] font-semibold text-foreground">{action.label}</p>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={onApprove}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white transition-opacity disabled:opacity-60"
+          style={{ background: '#E8344D' }}
+        >
+          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+          אשר
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={loading}
+          className="px-3 py-1.5 rounded-lg text-[11px] border border-border text-foreground-muted hover:bg-secondary transition-colors"
+        >
+          בטל
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ChatPanel({ onClose, businessProfile, prefilledMessage, onPrefilledConsumed, pageKey }) {
   const bpId = businessProfile?.id;
   const navigate = useNavigate();
@@ -112,6 +147,8 @@ export default function ChatPanel({ onClose, businessProfile, prefilledMessage, 
   const [messages, setMessages] = useState(() => loadMessages(bpId));
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
   const bottomRef = useRef(null);
 
   const { data: alertsData = [] } = useQuery({
@@ -181,6 +218,7 @@ export default function ChatPanel({ onClose, businessProfile, prefilledMessage, 
           });
           const data = res?.data || res;
           replyText = data?.reply || data?.content || JSON.stringify(data);
+          if (data?.pendingAction) setPendingAction(data.pendingAction);
         } catch (_) {
           replyText = null;
         }
@@ -245,8 +283,58 @@ ${history}
   };
 
   const handleChipAction = (chip) => {
-    if (chip.action === 'create_task') {
-      navigate('/tasks');
+    if (chip.path) {
+      navigate(chip.path);
+    }
+    // create_task chips are handled via pendingAction confirmation card — no navigation
+  };
+
+  const executePendingAction = async () => {
+    if (!pendingAction) return;
+    setActionLoading(true);
+    try {
+      switch (pendingAction.type) {
+        case 'create_task':
+          await base44.entities.Task.create({
+            ...pendingAction.payload,
+            linked_business: bpId,
+            status: 'pending',
+          });
+          break;
+        case 'update_lead':
+          if (pendingAction.payload?.id) {
+            await base44.entities.Lead.update(pendingAction.payload.id, pendingAction.payload);
+          }
+          break;
+        case 'respond_review':
+          if (pendingAction.payload?.id) {
+            await base44.entities.Review.update(pendingAction.payload.id, {
+              suggested_response: pendingAction.payload.suggested_response,
+            });
+          }
+          break;
+        case 'dismiss_alert':
+          if (pendingAction.payload?.id) {
+            await base44.entities.ProactiveAlert.update(pendingAction.payload.id, { is_dismissed: true });
+          }
+          break;
+        case 'navigate':
+          navigate(pendingAction.payload?.path || '/');
+          break;
+      }
+      const successMsg = {
+        role: 'assistant',
+        content: `בוצע! ${pendingAction.label}`,
+        timestamp: Date.now(),
+      };
+      const withSuccess = [...messages, successMsg];
+      setMessages(withSuccess);
+      saveMessages(withSuccess, bpId);
+    } catch (err) {
+      console.error('[ChatPanel] Action error:', err);
+    } finally {
+      setActionLoading(false);
+      setPendingAction(null);
     }
   };
 
@@ -346,6 +434,14 @@ ${history}
             <Loader2 className="w-3.5 h-3.5 animate-spin text-primary/50" />
             <span className="text-[12px] text-primary/50">חושב...</span>
           </div>
+        )}
+        {pendingAction && (
+          <ConfirmationCard
+            action={pendingAction}
+            onApprove={executePendingAction}
+            onCancel={() => setPendingAction(null)}
+            loading={actionLoading}
+          />
         )}
         <div ref={bottomRef} />
       </div>

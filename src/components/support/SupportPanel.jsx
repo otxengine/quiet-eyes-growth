@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
-import { X, Send, Video, Square, CheckCircle, MessageSquare, User } from 'lucide-react';
+import { X, Send, Video, Square, CheckCircle, MessageSquare, User, Loader2 } from 'lucide-react';
 import { getBotResponse } from './SupportBot';
 
 export default function SupportPanel({ onClose, businessProfile, onTicketCreated }) {
@@ -12,6 +12,7 @@ export default function SupportPanel({ onClose, businessProfile, onTicketCreated
   const [issueDescription, setIssueDescription] = useState('');
   const [escalated, setEscalated] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [botThinking, setBotThinking] = useState(false);
 
   // Recording
   const [recording, setRecording] = useState(false);
@@ -25,22 +26,25 @@ export default function SupportPanel({ onClose, businessProfile, onTicketCreated
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const text = input.trim();
-    if (!text) return;
+    if (!text || botThinking) return;
     setInput('');
 
     if (!issueDescription) setIssueDescription(text);
 
-    const botResp = getBotResponse(text);
-    setMessages(prev => [
-      ...prev,
-      { role: 'user', text },
-      { role: 'bot', text: botResp.text },
-    ]);
-
-    if (botResp.suggest_escalate) setEscalated(true);
+    setMessages(prev => [...prev, { role: 'user', text }]);
+    setBotThinking(true);
     setTimeout(scrollToBottom, 50);
+
+    try {
+      const botResp = await getBotResponse(text);
+      setMessages(prev => [...prev, { role: 'bot', text: botResp.text }]);
+      if (botResp.suggest_escalate) setEscalated(true);
+    } finally {
+      setBotThinking(false);
+      setTimeout(scrollToBottom, 50);
+    }
   };
 
   const startRecording = async () => {
@@ -227,6 +231,19 @@ export default function SupportPanel({ onClose, businessProfile, onTicketCreated
                 </div>
               </div>
             ))}
+            {botThinking && (
+              <div className="flex gap-2 justify-start">
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                  style={{ background: 'linear-gradient(135deg, #E8344D, #FF6B6B)' }}
+                >
+                  <MessageSquare className="w-3 h-3 text-white" />
+                </div>
+                <div className="rounded-2xl px-3 py-2" style={{ background: '#F3F4F6' }}>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: '#E8344D' }} />
+                </div>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </>
         )}
@@ -253,10 +270,11 @@ export default function SupportPanel({ onClose, businessProfile, onTicketCreated
               placeholder="תאר את הבעיה..."
               className="flex-1 bg-transparent text-[12px] text-foreground placeholder-foreground-muted/50 outline-none"
               dir="rtl"
+              disabled={botThinking}
             />
             <button
               onClick={handleSend}
-              disabled={!input.trim()}
+              disabled={!input.trim() || botThinking}
               className="p-1.5 rounded-lg text-white transition-all disabled:opacity-30"
               style={{ background: 'linear-gradient(135deg, #E8344D, #FF6B6B)' }}
             >
