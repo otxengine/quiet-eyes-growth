@@ -13,6 +13,7 @@ import ApprovalsTab          from '@/components/admin/ApprovalsTab';
 import CustomerManagementTab from '@/components/admin/CustomerManagementTab';
 import AgentLogsTab          from '@/components/admin/AgentLogsTab';
 import AdminActionsTab       from '@/components/admin/AdminActionsTab';
+import SupportTicketsTab    from '@/components/admin/SupportTicketsTab';
 
 function useIsAdmin() {
   try {
@@ -30,6 +31,7 @@ const TABS = [
   { key: 'customers',  label: 'ניהול לקוחות' },
   { key: 'logs',       label: 'לוגים' },
   { key: 'actions',    label: 'פעולות' },
+  { key: 'support',   label: 'פניות תמיכה' },
 ];
 
 export default function AdminDashboard({ skipAdminCheck = false }) {
@@ -141,6 +143,7 @@ export default function AdminDashboard({ skipAdminCheck = false }) {
             onLogsRefresh={() => qc.invalidateQueries({ queryKey: ['admin_logs'] })}
           />
         )}
+        {tab === 'support'   && <SupportTicketsTab />}
       </div>
     </div>
   );

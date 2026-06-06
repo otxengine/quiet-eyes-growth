@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {
   ChevronLeft, ChevronRight, LogOut,
   ShieldAlert, Sparkles, Bot, Building2, GitBranch, User,
   LayoutGrid, Eye, Users, Star, CheckCircle, Heart, Settings,
   FileBarChart, ClipboardList, Database, Plug, Crown, Calendar,
-  Megaphone, Lightbulb, Target, SearchCheck, Home
+  Megaphone, Lightbulb, Target, SearchCheck, Home, CreditCard
 } from 'lucide-react';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { cn } from '@/lib/utils';
@@ -60,10 +60,25 @@ function useIsAdmin() {
   } catch { return false; }
 }
 
-export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate }) {
+export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, user }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const isAdmin = useIsAdmin();
   const { isAgency, currentOrg } = useOrganization();
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
+
+  // Close popover on outside click
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const handler = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [userMenuOpen]);
 
   const [openGroups, setOpenGroups] = useState(() => ({
     intel:  getDefaultOpen('intel'),
@@ -323,23 +338,101 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate }
 
       {/* Footer — אזור אישי */}
       <div
-        className={cn('shrink-0 flex items-center gap-3 py-4', collapsed ? 'flex-col justify-center px-2' : 'px-5')}
+        ref={userMenuRef}
+        className={cn('shrink-0 relative py-4', collapsed ? 'flex flex-col items-center px-2' : 'px-5')}
         style={{ borderTop: '1px solid hsl(var(--sidebar-border))' }}
       >
-        <button
-          onClick={() => base44.auth.logout('/')}
-          className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
-          style={{ background: '#f0f0f0' }}
-          title="התנתק"
-          onMouseEnter={e => e.currentTarget.style.background = '#e0e0e0'}
-          onMouseLeave={e => e.currentTarget.style.background = '#f0f0f0'}
-        >
-          <User className="w-4 h-4" style={{ color: '#555' }} />
-        </button>
-        {!collapsed && (
-          <span className="text-[13px]" style={{ color: '#888' }}>אזור אישי</span>
+        {/* Popover — opens above the button */}
+        {userMenuOpen && (
+          <div
+            className="absolute left-0 right-0 mx-2 bg-white rounded-2xl shadow-xl border border-border/60 overflow-hidden"
+            style={{
+              bottom: '100%',
+              marginBottom: 8,
+              animation: 'fadeInUp 0.15s ease-out',
+              zIndex: 60,
+            }}
+          >
+            {/* User info */}
+            <div className="px-4 py-3 border-b border-border/50">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-white text-[13px] font-semibold flex-shrink-0"
+                  style={{ background: 'linear-gradient(135deg, #E8344D, #FF6B6B)' }}
+                >
+                  {(user?.full_name || user?.email || 'U')[0].toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  {user?.full_name && (
+                    <p className="text-[13px] font-semibold text-foreground truncate">{user.full_name}</p>
+                  )}
+                  <p className="text-[11px] text-foreground-muted truncate">{user?.email || ''}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Menu items */}
+            <div className="py-1">
+              {[
+                { icon: Settings, label: 'הגדרות', path: '/settings' },
+                { icon: CreditCard, label: 'מנוי', path: '/subscription' },
+                ...(currentOrg ? [{ icon: GitBranch, label: 'הגדרות ארגון', path: '/org/settings' }] : []),
+              ].map(({ icon: Icon, label, path }) => (
+                <button
+                  key={path}
+                  onClick={() => { setUserMenuOpen(false); navigate(path); onNavigate?.(); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] text-foreground-secondary hover:bg-secondary transition-colors text-right"
+                >
+                  <Icon className="w-4 h-4 text-foreground-muted flex-shrink-0" />
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Divider + Logout */}
+            <div className="border-t border-border/50 py-1">
+              <button
+                onClick={() => base44.auth.logout('/')}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] hover:bg-red-50 transition-colors text-right"
+                style={{ color: '#E8344D' }}
+              >
+                <LogOut className="w-4 h-4 flex-shrink-0" />
+                התנתק
+              </button>
+            </div>
+          </div>
         )}
+
+        {/* Trigger button */}
+        <button
+          onClick={() => setUserMenuOpen(!userMenuOpen)}
+          className="flex items-center gap-3 w-full transition-opacity hover:opacity-80"
+          title="אזור אישי"
+        >
+          <div
+            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[13px] font-semibold"
+            style={{ background: userMenuOpen ? 'linear-gradient(135deg, #E8344D, #FF6B6B)' : '#f0f0f0' }}
+          >
+            {userMenuOpen ? (
+              <span style={{ color: 'white' }}>
+                {(user?.full_name || user?.email || 'U')[0].toUpperCase()}
+              </span>
+            ) : (
+              <User className="w-4 h-4" style={{ color: '#555' }} />
+            )}
+          </div>
+          {!collapsed && (
+            <span className="text-[13px]" style={{ color: '#888' }}>אזור אישי</span>
+          )}
+        </button>
       </div>
+
+      <style>{`
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </aside>
   );
 }

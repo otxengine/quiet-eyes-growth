@@ -39,7 +39,7 @@ function usePageVisits(pathname) {
 }
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
-import ChatWidget from '@/components/chat/ChatWidget';
+import SupportWidget from '@/components/support/SupportWidget';
 import { cn } from '@/lib/utils';
 import { registerServiceWorker } from '@/lib/pushNotifications';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -253,10 +253,11 @@ export default function AppLayout() {
     <div className="min-h-screen bg-background">
       {/* Sidebar - Desktop */}
       <div className="hidden lg:block">
-        <Sidebar 
+        <Sidebar
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
           badges={badges}
+          user={user}
         />
       </div>
 
@@ -268,10 +269,11 @@ export default function AppLayout() {
             onClick={() => setMobileMenuOpen(false)} 
           />
           <div className="relative z-[51]">
-            <Sidebar 
+            <Sidebar
               collapsed={false}
               onToggle={() => setMobileMenuOpen(false)}
               badges={badges}
+              user={user}
               onNavigate={() => setMobileMenuOpen(false)}
             />
           </div>
@@ -298,7 +300,7 @@ export default function AppLayout() {
           <Outlet context={{ businessProfile, user, badges, selectedLocationId }} />
         </main>
       </div>
-      <ChatWidget businessProfile={businessProfile} urgentCount={(badges.activeInsights || 0) + (badges.hotLeads || 0)} />
+      <SupportWidget businessProfile={businessProfile} />
 
       {/* Global Scan Overlay — active on all non-Dashboard pages */}
       {showGlobalScan && businessProfile && (

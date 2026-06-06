@@ -108,6 +108,7 @@ import { instagramTrendAgent } from './instagramTrendAgent';
 import { facebookGroupTrendAgent } from './facebookGroupTrendAgent';
 import { googleTrendsScanAgent } from './googleTrendsScanAgent';
 import { visualTrendAnalyzer } from './visualTrendAnalyzer';
+import { commandChat } from './commandChat';
 
 const router = Router();
 
@@ -160,6 +161,7 @@ const FUNCTION_MAP: Record<string, any> = {
   analyzeSocialComments,
   generateImage,
   chatWithBusiness,
+  commandChat,
   buildInsightAudience,
   generateWeeklyReport,
   generateMarketAnalysis,
