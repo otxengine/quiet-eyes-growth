@@ -320,6 +320,19 @@ model Task {
   @@map("tasks")
 }
 
+model SupportTicket {
+  id            String   @id @default(cuid())
+  created_date  DateTime @default(now())
+  created_by    String?
+  user_email    String?
+  business_id   String?
+  description   String
+  status        String?  @default("open")
+  recording_url String?
+
+  @@map("support_tickets")
+}
+
 model AutomationLog {
   id               String   @id @default(cuid())
   created_date     DateTime @default(now())

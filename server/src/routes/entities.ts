@@ -109,6 +109,7 @@ const ENTITY_MAP: Record<string, string> = {
   Campaign: 'campaign',
   MediaAsset: 'mediaAsset',
   OrganicPost: 'organicPost',
+  SupportTicket: 'supportTicket',
 };
 
 function getModel(entity: string): any {
