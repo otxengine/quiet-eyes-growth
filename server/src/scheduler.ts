@@ -2,10 +2,15 @@
  * Background scheduler — runs agent pipelines for all active business profiles.
  *
  * Schedule (all times UTC):
- *  - Every hour:   full intelligence pipeline (signals, trends, competitors)
- *  - Every 6h:     lead generation + freshness decay
- *  - Every 24h:    ML learning cycle + weekly report prep
- *  - Every 15min:  health-check ping logged (keeps process alive)
+ *  - 02:00 daily:  multi-platform trend intelligence (Instagram/Facebook/Google trends)
+ *  - 03:00 daily:  cleanup + ML learning + HealthScore + SectorKnowledge + forecasting
+ *  - 04:00 daily:  competitor snapshot diff
+ *  - 05:30 daily:  data ingestion (reviews, web signals, lead gen, social leads)
+ *  - 07:00 daily:  full intelligence pipeline + competitors + social + insight generators
+ *  - Mon+Thu 07:00: local events + calendar events sync
+ *  - Sunday 20:00: content calendar + sector benchmark + weekly email digest
+ *  - Every 30min:  execute queued semi_auto actions
+ *  - Every 15min:  keep-alive heartbeat
  */
 
 import cron from 'node-cron';
@@ -43,6 +48,27 @@ import { cleanupInsights } from './routes/functions/cleanupInsights';
 import { cleanupAndLearn } from './routes/functions/cleanupAndLearn';
 import { weeklyEmailDigest } from './routes/functions/weeklyEmailDigest';
 import { writeHeartbeat } from './lib/agentMonitor';
+import { generateMorningBriefing } from './routes/functions/generateMorningBriefing';
+import { generateProactiveAlerts } from './routes/functions/generateProactiveAlerts';
+import { generateAdvisoryInsights } from './routes/functions/generateAdvisoryInsights';
+import { calculateHealthScore } from './routes/functions/calculateHealthScore';
+import { updateSectorKnowledge } from './routes/functions/updateSectorKnowledge';
+import { runMLLearningCycle } from './routes/functions/runMLLearningCycle';
+import { runMLLearning as learnFromClosedDeals } from './routes/functions/learnFromClosedDeals';
+import { updateLeadFreshness } from './routes/functions/updateLeadFreshness';
+import { collectReviews } from './routes/functions/collectReviews';
+import { collectWebSignals } from './routes/functions/collectWebSignals';
+import { runLeadGeneration } from './routes/functions/runLeadGeneration';
+import { findSocialLeads } from './routes/functions/findSocialLeads';
+import { sentimentVelocityMonitor } from './routes/functions/sentimentVelocityMonitor';
+import { pricingIntelligence } from './routes/functions/pricingIntelligence';
+import { lostLeadRecovery } from './routes/functions/lostLeadRecovery';
+import { revenueForecaster } from './routes/functions/revenueForecaster';
+import { marketMemoryEngine } from './routes/functions/marketMemoryEngine';
+import { demandGapEngine } from './routes/functions/demandGapEngine';
+import { microMomentDetector } from './routes/functions/microMomentDetector';
+import { sectorBenchmark } from './routes/functions/sectorBenchmark';
+import { intentClassification } from './routes/functions/intentClassification';
 
 const logger = createLogger('Scheduler');
 
@@ -121,8 +147,54 @@ async function runForAll(
   }
 }
 
+/** Enriches newly discovered leads with Haiku intent classification (per-lead API) */
+async function enrichNewLeadsWithIntent() {
+  const ids = await getActiveProfiles();
+  for (const businessProfileId of ids) {
+    try {
+      // Only fetch leads without intent_strength created in the last 48h
+      const newLeads = await prisma.lead.findMany({
+        where: {
+          linked_business: businessProfileId,
+          intent_strength: null,
+          created_at: { gte: new Date(Date.now() - 48 * 3600000).toISOString() },
+        },
+        select: { id: true },
+        take: 20,
+      });
+      for (const lead of newLeads) {
+        const fakeReq = { body: { leadId: lead.id, businessProfileId } } as any;
+        const fakeRes = {
+          json: () => {},
+          status: () => ({ json: () => {} }),
+        } as any;
+        try {
+          await intentClassification(fakeReq, fakeRes);
+        } catch (err: any) {
+          logger.warn('intentClassification failed for lead', { leadId: lead.id, error: err.message });
+        }
+      }
+    } catch (err: any) {
+      logger.error('enrichNewLeadsWithIntent failed', { businessProfileId, error: err.message });
+    }
+  }
+}
+
 export function startScheduler() {
   logger.info('Starting background scheduler');
+
+  // ── Every 24 hours at 05:30 UTC: data ingestion (runs BEFORE main pipeline) ──
+  // Fresh data must be in DB before the 07:00 pipeline classifies & fuses it.
+  cron.schedule('30 5 * * *', () => {
+    runAgentForAll('CollectReviews', collectReviews);
+    runAgentForAll('CollectWebSignals', collectWebSignals);
+    runAgentForAll('RunLeadGeneration', runLeadGeneration);
+    runAgentForAll('FindSocialLeads', findSocialLeads);
+    // Enrich newly created leads with Haiku intent classification (5min after lead gen)
+    setTimeout(() => enrichNewLeadsWithIntent()
+      .catch(err => logger.error('enrichNewLeadsWithIntent error', { error: err.message })),
+    5 * 60 * 1000);
+  });
 
   // ── Every 24 hours at 07:00 UTC (10:00 Israel time) ─────────────────────────
   // Full pipeline + all agents — once/day to minimize token costs
@@ -146,6 +218,18 @@ export function startScheduler() {
     runAgentForAll('TikTokSectorTrendAgent', tiktokSectorTrendAgent); // 8h guard
     runAgentForAll('TikTokAudienceAgent', tiktokAudienceAgent);       // 24h guard
     runAgentForAll('TikTokPostTracker', tiktokPostTracker);           // 12h guard
+    // ── Insight generators (run after pipeline so they have fresh signals) ───
+    // 15min delay: ensure MasterOrchestrator has finished fusing insights first
+    setTimeout(() => {
+      runAgentForAll('GenerateMorningBriefing', generateMorningBriefing);
+      runAgentForAll('GenerateProactiveAlerts', generateProactiveAlerts);
+      runAgentForAll('GenerateAdvisoryInsights', generateAdvisoryInsights);
+      runAgentForAll('SentimentVelocityMonitor', sentimentVelocityMonitor);
+      runAgentForAll('PricingIntelligence', pricingIntelligence);
+      runAgentForAll('LostLeadRecovery', lostLeadRecovery);
+      runAgentForAll('DemandGapEngine', demandGapEngine);
+      runAgentForAll('MicroMomentDetector', microMomentDetector);
+    }, 15 * 60 * 1000); // 15 min
   });
 
   // ── Twice a week (Mon + Thu, 07:00 UTC = 10:00 Israel): events online sync ──
@@ -157,15 +241,27 @@ export function startScheduler() {
     runAgentForAll('DetectEvents', detectEvents);
   });
 
-  // ── Every 24 hours at 03:00 UTC: cleanup + ML learning + reviews ─────────────
-  // cleanupInsights: dismisses stale alerts/signals (runs BEFORE generators)
-  // cleanupAndLearn: deletes old raw signals, duplicates, prunes OTX decisions
+  // ── Every 24 hours at 03:00 UTC: cleanup + learning + forecasting ────────────
+  // Order: cleanup first → then learning agents consume clean data
   cron.schedule('0 3 * * *', () => {
     runAgentForAll('CleanupInsights', cleanupInsights);
     runAgentForAll('CleanupAndLearn', cleanupAndLearn);
     runForAll('DailyLearning', 'decision_only');
     runAgentForAll('AutoRespondToReviews', autoRespondToReviews);
     runAgentForAll('ReviewRequestAutomation', reviewRequestAutomation);
+    // ── Learning & memory agents ──────────────────────────────────────────────
+    runAgentForAll('RunMLLearningCycle', runMLLearningCycle);    // FeedbackEvent → BusinessMemory + AgentLearningProfile
+    runAgentForAll('LearnFromClosedDeals', learnFromClosedDeals); // closed deals → SectorKnowledge
+    runAgentForAll('UpdateLeadFreshness', updateLeadFreshness);   // decay stale lead scores
+    // ── Analytics & scoring ───────────────────────────────────────────────────
+    runAgentForAll('CalculateHealthScore', calculateHealthScore); // computes HealthScore for UI card
+    runAgentForAll('RevenueForecaster', revenueForecaster);
+    runAgentForAll('MarketMemoryEngine', marketMemoryEngine);
+    // ── Cross-business sector learning (after deals + ML cycle) ──────────────
+    // 10min delay: ensure learnFromClosedDeals has written to SectorKnowledge first
+    setTimeout(() => {
+      runAgentForAll('UpdateSectorKnowledge', updateSectorKnowledge);
+    }, 10 * 60 * 1000); // 10 min
   });
 
   // ── Every 24 hours at 02:00 UTC: Multi-platform trend intelligence ────────────
@@ -183,6 +279,7 @@ export function startScheduler() {
   // ── Every Sunday at 20:00 UTC: weekly content calendar + email digest ────────
   cron.schedule('0 20 * * 0', () => {
     runAgentForAll('ContentCalendarAgent', contentCalendarAgent);
+    runAgentForAll('SectorBenchmark', sectorBenchmark); // cross-business benchmarking (weekly cadence)
     // WeeklyEmailDigest runs 10 min after contentCalendar so digest can include latest posts
     setTimeout(() => runAgentForAll('WeeklyEmailDigest', weeklyEmailDigest), 10 * 60 * 1000);
   });
