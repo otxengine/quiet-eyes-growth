@@ -105,7 +105,10 @@ export async function getBotResponse(message) {
       maxTokens: 350,
       prompt: `${SUPPORT_SYSTEM_PROMPT}\n\nשאלת המשתמש: ${message}`,
     });
-    const text = typeof response === 'string' ? response : response?.content || '';
+    // Handle multiple response shapes: string, { content }, { text }, { reply }
+    const text = typeof response === 'string'
+      ? response
+      : response?.content || response?.text || response?.reply || '';
     if (text && text.length > 10) {
       // Detect if AI is escalating
       const shouldEscalate = /נציג|פנייה|צור קשר|לא יכול|לא בטוח/.test(text);

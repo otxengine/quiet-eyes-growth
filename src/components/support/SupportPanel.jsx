@@ -114,7 +114,7 @@ export default function SupportPanel({ onClose, businessProfile, onTicketCreated
       className="fixed z-50 flex flex-col overflow-hidden"
       style={{
         bottom: 96,
-        left: 24,
+        right: 24,
         width: 'min(400px, calc(100vw - 32px))',
         height: 'min(520px, calc(100vh - 104px))',
         background: 'rgba(255,255,255,0.97)',
