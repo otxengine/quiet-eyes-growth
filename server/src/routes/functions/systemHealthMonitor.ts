@@ -14,9 +14,9 @@ export async function systemHealthMonitor(req: Request, res: Response) {
   const startTime = new Date().toISOString();
 
   try {
-    const cutoff48h = new Date(Date.now() - 48 * 3600000);
+    const cutoff48h = new Date(Date.now() - 48 * 3600000).toISOString();
 
-    // Fetch recent automation logs
+    // Fetch recent automation logs (start_time is String in schema)
     const where: any = { start_time: { gte: cutoff48h } };
     if (businessProfileId) where.linked_business = businessProfileId;
 
