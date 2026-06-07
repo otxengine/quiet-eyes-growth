@@ -13,6 +13,7 @@ import MarketIntelColumn from '@/components/dashboard/MarketIntelColumn';
 import SentimentVelocityCard from '@/components/dashboard/SentimentVelocityCard';
 import AutoActionsPanel from '@/components/dashboard/AutoActionsPanel';
 import ScanOverlay from '@/components/dashboard/ScanOverlay';
+import HealthScoreCard from '@/components/dashboard/HealthScoreCard';
 
 export default function Dashboard() {
   const { businessProfile } = useOutletContext();
@@ -129,6 +130,7 @@ export default function Dashboard() {
 
         {/* RIGHT: intelligence panel */}
         <div className="lg:col-span-5 flex flex-col gap-4">
+          <HealthScoreCard businessProfileId={bpId} />
           <MorningBriefing businessProfile={businessProfile} stats={stats} />
           <MarketIntelColumn signals={allSignals} />
           <SentimentVelocityCard bpId={bpId} />

@@ -110,6 +110,11 @@ import { googleTrendsScanAgent } from './googleTrendsScanAgent';
 import { visualTrendAnalyzer } from './visualTrendAnalyzer';
 import { commandChat } from './commandChat';
 import { submitSupportTicket } from './submitSupportTicket';
+import { submitFeedback } from './submitFeedback';
+import { systemHealthMonitor } from './systemHealthMonitor';
+import { intentClassification } from './intentClassification';
+import { otxSyncBridge } from './otxSyncBridge';
+import { competitorDataBootstrap } from './competitorDataBootstrap';
 
 const router = Router();
 
@@ -230,6 +235,12 @@ const FUNCTION_MAP: Record<string, any> = {
   runCampaignAutopilot,
   runExpansionScout,
   runReputationWarRoom,
+  // New agents (Phase: audit & feedback loop)
+  submitFeedback,
+  systemHealthMonitor,
+  intentClassification,
+  otxSyncBridge,
+  competitorDataBootstrap,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,

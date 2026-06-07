@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
-import { Loader2, CheckCheck, ChevronLeft } from 'lucide-react';
+import { Loader2, CheckCheck, ChevronLeft, ThumbsUp, ThumbsDown } from 'lucide-react';
 
 // ─── Priority levels ──────────────────────────────────────────────────────────
 // P0 = red (act now), P1 = orange (today), P2 = purple (monitor)
@@ -22,13 +22,29 @@ function timeAgo(d) {
 }
 
 // ─── Single action row ────────────────────────────────────────────────────────
-function ActionRow({ item, onDone }) {
+function ActionRow({ item, onDone, bpId }) {
   const navigate   = useNavigate();
   const qc         = useQueryClient();
   const [busy, setBusy]     = useState(false);
   const [done, setDone]     = useState(false);
   const [replyText, setReply] = useState(null);
   const [edited, setEdited]   = useState('');
+  const [feedback, setFeedback] = useState(null); // 'positive' | 'negative'
+
+  const handleFeedback = async (isPositive) => {
+    if (feedback) return;
+    setFeedback(isPositive ? 'positive' : 'negative');
+    try {
+      await base44.functions.invoke('submitFeedback', {
+        businessProfileId: bpId || item.meta?.linked_business || item.meta?.bpId,
+        entity_type: item.type === 'signal' ? 'MarketSignal' : 'ProactiveAlert',
+        entity_id: item.id,
+        rating: isPositive ? 5 : 1,
+        tags: [isPositive ? 'relevant' : 'irrelevant'],
+        agent_name: item.type,
+      });
+    } catch { /* non-fatal */ }
+  };
 
   if (done) return null;
 
@@ -182,11 +198,29 @@ function ActionRow({ item, onDone }) {
                 <button onClick={handleRejectAction} className="px-2.5 py-1 text-[10px] text-foreground-muted border border-border rounded-lg hover:bg-secondary">דחה</button>
               </>
             )}
-            {(item.type === 'signal' || item.type === 'competitor' || item.type === 'alert') && item.link && (
-              <button onClick={() => navigate(item.link)}
-                className="flex items-center gap-1 text-[10px] font-medium text-foreground-muted hover:text-foreground transition-all">
-                צפה <ChevronLeft className="w-3 h-3" />
-              </button>
+            {(item.type === 'signal' || item.type === 'competitor' || item.type === 'alert') && (
+              <>
+                {item.link && (
+                  <button onClick={() => navigate(item.link)}
+                    className="flex items-center gap-1 text-[10px] font-medium text-foreground-muted hover:text-foreground transition-all">
+                    צפה <ChevronLeft className="w-3 h-3" />
+                  </button>
+                )}
+                {feedback ? (
+                  <span className="text-[9px] text-foreground-muted">✓</span>
+                ) : (
+                  <div className="flex items-center gap-0.5 mr-1">
+                    <button onClick={() => handleFeedback(true)} title="רלוונטי"
+                      className="p-0.5 rounded hover:bg-emerald-100 text-foreground-muted hover:text-emerald-600 transition-all">
+                      <ThumbsUp className="w-3 h-3" />
+                    </button>
+                    <button onClick={() => handleFeedback(false)} title="לא רלוונטי"
+                      className="p-0.5 rounded hover:bg-red-100 text-foreground-muted hover:text-red-500 transition-all">
+                      <ThumbsDown className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -348,6 +382,7 @@ export default function DailyFocus({ reviews, leads, signals, competitors, pendi
           <ActionRow
             key={item.id}
             item={item}
+            bpId={bpId}
             onDone={() => setDoneIds(prev => new Set([...prev, item.id]))}
           />
         ))}

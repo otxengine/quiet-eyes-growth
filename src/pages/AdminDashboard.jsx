@@ -14,6 +14,7 @@ import CustomerManagementTab from '@/components/admin/CustomerManagementTab';
 import AgentLogsTab          from '@/components/admin/AgentLogsTab';
 import AdminActionsTab       from '@/components/admin/AdminActionsTab';
 import SupportTicketsTab    from '@/components/admin/SupportTicketsTab';
+import AgentHealthTab       from '@/components/admin/AgentHealthTab';
 
 function useIsAdmin() {
   try {
@@ -32,6 +33,7 @@ const TABS = [
   { key: 'logs',       label: 'לוגים' },
   { key: 'actions',    label: 'פעולות' },
   { key: 'support',   label: 'פניות תמיכה' },
+  { key: 'agents',   label: 'ניטור סוכנים' },
 ];
 
 export default function AdminDashboard({ skipAdminCheck = false }) {
@@ -144,6 +146,7 @@ export default function AdminDashboard({ skipAdminCheck = false }) {
           />
         )}
         {tab === 'support'   && <SupportTicketsTab />}
+        {tab === 'agents'    && <AgentHealthTab allLogs={allLogs} />}
       </div>
     </div>
   );

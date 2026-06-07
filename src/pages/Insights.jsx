@@ -1,12 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import {
   Lightbulb, Zap, Target, TrendingUp, AlertTriangle, Trophy,
-  ChevronLeft, ChevronDown, ChevronUp,
+  ChevronLeft, ChevronDown, ChevronUp, ThumbsUp, ThumbsDown, CheckCircle2,
 } from 'lucide-react';
 import DismissMenu from '@/components/ui/DismissMenu';
+import SectorBenchmarkBanner from '@/components/insights/SectorBenchmarkBanner';
 
 // ── Type meta ─────────────────────────────────────────────────────────────────
 
@@ -137,11 +138,28 @@ function sortByPriority(arr) {
 
 // ── InsightCard ───────────────────────────────────────────────────────────────
 
-function InsightCard({ item, onOpen, onDismiss, businessProfileId }) {
+function InsightCard({ item, onOpen, onDismiss, businessProfileId, onFeedback }) {
   const typeMeta     = ALERT_TYPE_META[item.type] || ALERT_TYPE_META.action_needed;
   const Icon         = typeMeta.icon;
   const priorityMeta = PRIORITY_BADGE[item.priority] || PRIORITY_BADGE.medium;
   const srcMeta      = item.trendSource ? SOURCE_META[item.trendSource] : null;
+  const [feedbackSent, setFeedbackSent] = useState(null); // 'positive' | 'negative'
+
+  const handleFeedback = async (isPositive) => {
+    if (feedbackSent) return;
+    setFeedbackSent(isPositive ? 'positive' : 'negative');
+    onFeedback?.(item, isPositive);
+    try {
+      await base44.functions.invoke('submitFeedback', {
+        businessProfileId,
+        entity_type: item.kind === 'alert' ? 'ProactiveAlert' : item.kind === 'signal' ? 'MarketSignal' : 'Action',
+        entity_id: item.id,
+        rating: isPositive ? 5 : 1,
+        tags: [isPositive ? 'relevant' : 'irrelevant'],
+        agent_name: item.type,
+      });
+    } catch { /* non-fatal */ }
+  };
 
   return (
     <div className={`rounded-xl border ${typeMeta.border} ${typeMeta.bg} p-4 hover:shadow-sm transition-all duration-150`}>
@@ -180,6 +198,30 @@ function InsightCard({ item, onOpen, onDismiss, businessProfileId }) {
               {item.createdAt ? new Date(item.createdAt).toLocaleDateString('he-IL') : ''}
             </span>
             <div className="flex items-center gap-3">
+              {/* Feedback buttons */}
+              {feedbackSent ? (
+                <span className="flex items-center gap-1 text-[10px] text-foreground-muted">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                  תודה!
+                </span>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleFeedback(true)}
+                    title="רלוונטי"
+                    className="p-1 rounded hover:bg-emerald-100 text-foreground-muted hover:text-emerald-600 transition-all"
+                  >
+                    <ThumbsUp className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={() => handleFeedback(false)}
+                    title="לא רלוונטי"
+                    className="p-1 rounded hover:bg-red-100 text-foreground-muted hover:text-red-500 transition-all"
+                  >
+                    <ThumbsDown className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
               {item.rawStatus !== 'completed' && (
                 <DismissMenu
                   entityType={item.dismissType || 'alert'}
@@ -209,7 +251,7 @@ function InsightCard({ item, onOpen, onDismiss, businessProfileId }) {
 function SectionBlock({
   sectionId, title, icon: Icon, iconColor, badgeColor,
   items, filters, activeFilter, onFilterChange,
-  shownCount, onLoadMore, businessProfileId, onOpen, onDismiss, emptyMsg,
+  shownCount, onLoadMore, businessProfileId, onOpen, onDismiss, onFeedback, emptyMsg,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const visible = items.slice(0, shownCount);
@@ -273,6 +315,7 @@ function SectionBlock({
                   item={item}
                   onOpen={onOpen}
                   onDismiss={onDismiss}
+                  onFeedback={onFeedback}
                   businessProfileId={businessProfileId}
                 />
               ))}
@@ -335,6 +378,16 @@ export default function Insights() {
   });
 
   const loading = loadingAlerts || loadingActions || loadingSignals;
+
+  // OutcomeLog for "מה הצלחנו" panel
+  const { data: successOutcomes = [] } = useQuery({
+    queryKey: ['successOutcomes', bpId],
+    queryFn: () => base44.entities.OutcomeLog.filter(
+      { linked_business: bpId, was_accepted: true }, '-created_date', 10
+    ),
+    enabled: !!bpId,
+    staleTime: 10 * 60 * 1000,
+  });
 
   // ── Build 5 section buckets ───────────────────────────────────────────────
   const { urgentItems, oppItems, trendItems, compItems, actionItems } = useMemo(() => {
@@ -509,6 +562,27 @@ export default function Insights() {
     setPages(prev => ({ ...prev, [sectionId]: prev[sectionId] + 8 }));
   };
 
+  const handleFeedback = useCallback(async (item, isPositive) => {
+    if (!isPositive) {
+      // Negative feedback → also dismiss the alert
+      if (item.kind === 'alert') {
+        try {
+          await base44.entities.ProactiveAlert.update(item.id, { is_dismissed: true });
+          handleDismiss(item);
+        } catch {}
+      }
+    }
+    try {
+      await base44.functions.invoke('logOutcome', {
+        action_type: item.type,
+        was_accepted: isPositive,
+        linked_business: bpId,
+        linked_action: item.id,
+        outcome_description: isPositive ? 'User marked as relevant' : 'User marked as irrelevant',
+      });
+    } catch {}
+  }, [bpId]);
+
   const totalActive = urgentItems.length + oppItems.length + trendItems.length + compItems.length + actionItems.length;
 
   const sectionProps = (sectionId, items, onOpen = navId => navigate(`/insights/${navId}`)) => ({
@@ -517,6 +591,7 @@ export default function Insights() {
     businessProfileId: bpId,
     onOpen,
     onDismiss: handleDismiss,
+    onFeedback: handleFeedback,
   });
 
   return (
@@ -532,6 +607,9 @@ export default function Insights() {
           </span>
         )}
       </div>
+
+      {/* Sector Benchmark Banner */}
+      <SectorBenchmarkBanner businessProfileId={bpId} businessProfile={businessProfile} />
 
       {loading ? (
         <div className="space-y-3">
@@ -611,6 +689,32 @@ export default function Insights() {
             onFilterChange={() => {}}
             emptyMsg="אין פעולות ממתינות"
           />
+
+          {/* ── 6. מה הצלחנו ── */}
+          {successOutcomes.length > 0 && (
+            <>
+              <div className="border-t border-border/60" />
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  <h2 className="text-[15px] font-bold text-foreground">מה הצלחנו</h2>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                    {successOutcomes.length}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {successOutcomes.map(o => (
+                    <div key={o.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                      <span className="text-[11px] text-emerald-800 font-medium">
+                        {o.outcome_description || o.action_type || 'פעולה הושלמה'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
