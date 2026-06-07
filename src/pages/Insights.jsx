@@ -379,15 +379,6 @@ export default function Insights() {
 
   const loading = loadingAlerts || loadingActions || loadingSignals;
 
-  // OutcomeLog for "מה הצלחנו" panel
-  const { data: successOutcomes = [] } = useQuery({
-    queryKey: ['successOutcomes', bpId],
-    queryFn: () => base44.entities.OutcomeLog.filter(
-      { linked_business: bpId, was_accepted: true }, '-created_date', 10
-    ),
-    enabled: !!bpId,
-    staleTime: 10 * 60 * 1000,
-  });
 
   // ── Build 5 section buckets ───────────────────────────────────────────────
   const { urgentItems, oppItems, trendItems, compItems, actionItems } = useMemo(() => {
@@ -690,31 +681,6 @@ export default function Insights() {
             emptyMsg="אין פעולות ממתינות"
           />
 
-          {/* ── 6. מה הצלחנו ── */}
-          {successOutcomes.length > 0 && (
-            <>
-              <div className="border-t border-border/60" />
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <h2 className="text-[15px] font-bold text-foreground">מה הצלחנו</h2>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                    {successOutcomes.length}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {successOutcomes.map(o => (
-                    <div key={o.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span className="text-[11px] text-emerald-800 font-medium">
-                        {o.outcome_description || o.action_type || 'פעולה הושלמה'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
         </>
       )}
     </div>
