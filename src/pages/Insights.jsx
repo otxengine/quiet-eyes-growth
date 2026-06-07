@@ -542,8 +542,19 @@ export default function Insights() {
   ];
 
   // ── Handlers ─────────────────────────────────────────────────────────────
-  const handleDismiss = (item) => {
+  const handleDismiss = async (item) => {
+    // Optimistic: hide immediately
     setDismissedIds(prev => new Set([...prev, item.id]));
+    // Persist to DB so refetch doesn't bring it back
+    try {
+      if (item.kind === 'action') {
+        await base44.entities.Action.update(item.id, { is_dismissed: true });
+      } else if (item.kind === 'signal') {
+        await base44.entities.MarketSignal.update(item.id, { is_dismissed: true });
+      } else {
+        await base44.entities.ProactiveAlert.update(item.id, { is_dismissed: true });
+      }
+    } catch {}
     const key = item.kind === 'signal' ? 'marketSignals' : item.kind === 'action' ? 'actions' : 'proactiveAlerts';
     queryClient.invalidateQueries({ queryKey: [key] });
     queryClient.invalidateQueries({ queryKey: ['activeInsights'] });
@@ -555,13 +566,8 @@ export default function Insights() {
 
   const handleFeedback = useCallback(async (item, isPositive) => {
     if (!isPositive) {
-      // Negative feedback → also dismiss the alert
-      if (item.kind === 'alert') {
-        try {
-          await base44.entities.ProactiveAlert.update(item.id, { is_dismissed: true });
-          handleDismiss(item);
-        } catch {}
-      }
+      // Negative feedback → also dismiss (works for all kinds via handleDismiss)
+      handleDismiss(item);
     }
     try {
       await base44.functions.invoke('logOutcome', {
