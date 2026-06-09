@@ -835,6 +835,7 @@ model BusinessConstraints {
 model MediaAsset {
   id              String   @id @default(cuid())
   created_date    DateTime @default(now())
+  created_by      String?
   linked_business String?
   image_base64    String?  // base64-encoded image data
   mime_type       String?  @default("image/jpeg")
@@ -848,6 +849,7 @@ model MediaAsset {
 model OrganicPost {
   id              String    @id @default(cuid())
   created_date    DateTime  @default(now())
+  created_by      String?
   linked_business String?
   signal_id       String?
   signal_summary  String?
@@ -865,6 +867,7 @@ model OrganicPost {
 model Campaign {
   id               String    @id @default(cuid())
   created_date     DateTime  @default(now())
+  created_by       String?
   linked_business  String?
   signal_id        String?   // source MarketSignal id
   signal_summary   String?   // signal context text
@@ -889,4 +892,28 @@ model Campaign {
   actual_spend_ils Float?
 
   @@map("campaigns")
+}
+
+model SocialComment {
+  id                  String    @id @default(cuid())
+  created_date        DateTime  @default(now())
+  linked_business     String?
+  platform            String    // 'facebook' | 'instagram'
+  platform_comment_id String    // ID from Graph API — used for dedup
+  platform_post_id    String?   // post/media ID the comment is on
+  post_message        String?   // brief excerpt of the post for context
+  author_name         String?
+  author_id           String?
+  comment_text        String
+  sentiment           String?   // 'positive' | 'negative' | 'neutral'
+  created_time        DateTime? // when the comment was posted on platform
+  fetched_at          DateTime  @default(now())
+  ai_suggested_reply  String?
+  reply_sent          Boolean   @default(false)
+  reply_text          String?
+  reply_sent_at       DateTime?
+  is_dismissed        Boolean   @default(false)
+
+  @@unique([platform, platform_comment_id])
+  @@map("social_comments")
 }

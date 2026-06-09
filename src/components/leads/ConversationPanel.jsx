@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
-import { MessageSquare, User, Bot, UserCheck, Phone, Loader2 } from 'lucide-react';
+import { MessageSquare, User, Bot, UserCheck, Phone, Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 function timeAgo(d) {
   if (!d) return '';
@@ -13,61 +14,74 @@ function timeAgo(d) {
   return `לפני ${Math.floor(mins / 60)} שעות`;
 }
 
-const statusConfig = {
-  active:     { label: 'בתהליך', color: 'text-warning' },
-  qualified:  { label: 'מוסמך', color: 'text-success' },
-  rejected:   { label: 'לא מתאים', color: 'text-danger' },
-  handed_off: { label: 'הועבר לאנוש', color: 'text-primary' },
-  closed:     { label: 'סגור', color: 'text-foreground-muted' },
-};
+async function apiFetch(path) {
+  const token = window.__clerk?.session
+    ? await window.__clerk.session.getToken().catch(() => null)
+    : window.__clerk_session_token || localStorage.getItem('clerk_session_token') || null;
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : { 'x-dev-user': 'dev-user' },
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function apiPatch(path) {
+  const token = window.__clerk?.session
+    ? await window.__clerk.session.getToken().catch(() => null)
+    : window.__clerk_session_token || localStorage.getItem('clerk_session_token') || null;
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : { 'x-dev-user': 'dev-user' }),
+    },
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
 
 export default function ConversationPanel({ lead, businessProfile }) {
   const qc = useQueryClient();
-  const [sending, setSending] = useState(false);
-  const [customMsg, setCustomMsg] = useState('');
+  const [restarting, setRestarting] = useState(false);
 
-  const { data: convos = [], isLoading } = useQuery({
-    queryKey: ['conversations', lead?.id],
-    queryFn: () => base44.entities.ConversationHistory.filter({ lead_id: String(lead.id) }),
-    enabled: !!lead?.id,
+  // Use contact_phone (set by bot) or extract from contact_info
+  const phone = lead?.contact_phone
+    || lead?.contact_info?.match(/[\d\-+()]{7,}/)?.[0]?.replace(/[^0-9+]/g, '')
+    || null;
+
+  const { data: convo, isLoading } = useQuery({
+    queryKey: ['botConversation', phone],
+    queryFn:  () => phone ? apiFetch(`/conversations/by-phone/${phone}`) : null,
+    enabled:  !!phone,
     refetchInterval: 30000,
   });
 
-  const convo = convos[0];
-  const messages = (() => { try { return JSON.parse(convo?.messages || '[]'); } catch { return []; } })();
+  const messages = convo?.messages ?? [];
 
-  const handleHumanTakeover = async () => {
-    await base44.functions.invoke('whatsappBotHandler', {
-      mode: 'human_takeover',
-      lead_id: lead.id,
-    });
-    qc.invalidateQueries({ queryKey: ['conversations', lead.id] });
-    toast.success('הבוט עצר — עכשיו אתה מנהל את השיחה');
-  };
+  const intl = phone
+    ? phone.replace(/[^0-9]/g, '').replace(/^0/, '972')
+    : '';
 
-  const handleSendCustom = async () => {
-    if (!customMsg.trim()) return;
-    setSending(true);
-    const phone = lead.contact_info?.match(/[\d\-+()]{7,}/)?.[0] || '';
-    const normalized = phone.replace(/[^0-9]/g, '');
-    const intl = normalized.startsWith('0') ? '972' + normalized.slice(1) : normalized;
-    if (intl) {
-      window.open(`https://wa.me/${intl}?text=${encodeURIComponent(customMsg)}`, '_blank');
+  const handleRestartBot = async () => {
+    if (!convo?.id) return;
+    setRestarting(true);
+    try {
+      await apiPatch(`/conversations/${convo.id}/reactivate`);
+      qc.invalidateQueries({ queryKey: ['botConversation', phone] });
+      toast.success('הבוט הופעל מחדש — ימשיך לענות להודעות הבאות');
+    } catch (err) {
+      toast.error('שגיאה: ' + err.message);
     }
-    setCustomMsg('');
-    setSending(false);
-    toast.success('נפתח WhatsApp ✓');
+    setRestarting(false);
   };
 
   if (!lead) return null;
+
   if (isLoading) return (
     <div className="flex items-center justify-center py-8">
       <Loader2 className="w-4 h-4 animate-spin text-foreground-muted" />
     </div>
   );
-
-  const phone = lead.contact_info?.match(/[\d\-+()]{7,}/)?.[0] || '';
-  const intl = phone.replace(/[^0-9]/g, '').replace(/^0/, '972');
 
   return (
     <div className="space-y-3">
@@ -77,8 +91,8 @@ export default function ConversationPanel({ lead, businessProfile }) {
           <MessageSquare className="w-4 h-4 text-foreground-muted" />
           <span className="text-[13px] font-semibold text-foreground">שיחה עם {lead.name}</span>
           {convo && (
-            <span className={`text-[10px] font-medium ${statusConfig[convo.status]?.color || ''}`}>
-              {statusConfig[convo.status]?.label}
+            <span className={`text-[10px] font-medium ${convo.status === 'human_handoff' ? 'text-primary' : 'text-success'}`}>
+              {convo.status === 'human_handoff' ? 'הועבר לאנוש' : 'פעיל'}
             </span>
           )}
         </div>
@@ -89,10 +103,11 @@ export default function ConversationPanel({ lead, businessProfile }) {
               <Phone className="w-3 h-3" /> פתח WhatsApp
             </a>
           )}
-          {convo && !convo.human_takeover && (
-            <button onClick={handleHumanTakeover}
-              className="text-[11px] text-primary border border-primary/30 rounded-md px-2.5 py-1 hover:bg-primary/5 flex items-center gap-1">
-              <UserCheck className="w-3 h-3" /> קח שליטה
+          {convo?.human_takeover && (
+            <button onClick={handleRestartBot} disabled={restarting}
+              className="text-[11px] text-primary border border-primary/30 rounded-md px-2.5 py-1 hover:bg-primary/5 flex items-center gap-1 disabled:opacity-50">
+              {restarting ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              הפעל בוט מחדש
             </button>
           )}
         </div>
@@ -124,7 +139,9 @@ export default function ConversationPanel({ lead, businessProfile }) {
                 {msg.role === 'bot' ? <Bot className="w-3 h-3" /> : <User className="w-3 h-3" />}
               </div>
               <div className={`max-w-[80%] rounded-xl px-3 py-2 ${
-                msg.role === 'bot' ? 'bg-primary/10 text-foreground' : 'bg-white border border-border text-foreground-secondary'
+                msg.role === 'bot'
+                  ? 'bg-primary/10 text-foreground'
+                  : 'bg-white border border-border text-foreground-secondary'
               }`}>
                 <p className="text-[11px] leading-relaxed whitespace-pre-wrap">{msg.text}</p>
                 <p className="text-[9px] text-foreground-muted mt-1 opacity-60">{timeAgo(msg.time)}</p>
@@ -134,46 +151,13 @@ export default function ConversationPanel({ lead, businessProfile }) {
         </div>
       )}
 
-      {/* Qualification progress */}
-      {convo && convo.status === 'active' && (
-        <div className="flex items-center gap-2">
-          <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary rounded-full transition-all"
-              style={{ width: `${((convo.qualification_step || 0) / (convo.total_steps || 1)) * 100}%` }}
-            />
-          </div>
-          <span className="text-[10px] text-foreground-muted shrink-0">
-            שאלה {convo.qualification_step || 0}/{convo.total_steps || '?'}
-          </span>
-        </div>
-      )}
-
-      {/* Human takeover active */}
+      {/* Human handoff banner */}
       {convo?.human_takeover && (
         <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 flex items-center gap-2">
           <UserCheck className="w-3.5 h-3.5 text-primary" />
-          <p className="text-[11px] text-primary">אתה מנהל את השיחה — הבוט שקט</p>
-        </div>
-      )}
-
-      {/* Custom message send when human is in control */}
-      {convo?.human_takeover && (
-        <div className="flex gap-2">
-          <input
-            value={customMsg}
-            onChange={(e) => setCustomMsg(e.target.value)}
-            placeholder="כתוב הודעה ושלח דרך WhatsApp..."
-            className="flex-1 border border-border rounded-lg px-3 py-2 text-[12px] focus:outline-none focus:border-primary"
-            onKeyDown={(e) => e.key === 'Enter' && handleSendCustom()}
-          />
-          <button
-            onClick={handleSendCustom}
-            disabled={sending || !customMsg.trim()}
-            className="bg-[#25D366] text-white rounded-lg px-3 py-2 text-[11px] font-medium hover:opacity-90 disabled:opacity-40"
-          >
-            שלח
-          </button>
+          <p className="text-[11px] text-primary">
+            הבוט סיים — {convo.handoff_reason || 'הליד הועבר לטיפול אנושי'}
+          </p>
         </div>
       )}
     </div>

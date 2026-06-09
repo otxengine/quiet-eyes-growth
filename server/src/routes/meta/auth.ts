@@ -121,13 +121,16 @@ router.get('/facebook/callback', async (req: Request, res: Response) => {
  * Body: { code, waba_id, phone_number_id, businessProfileId }
  */
 router.post('/whatsapp/embedded-signup', async (req: Request, res: Response) => {
-  const { code, waba_id, phone_number_id, businessProfileId } = req.body;
+  const { code, waba_id, phone_number_id, businessProfileId, redirect_uri } = req.body;
 
-  if (!code || !waba_id || !phone_number_id || !businessProfileId) {
+  if (!code || !businessProfileId) {
     return res.status(400).json({
-      error: 'Required fields: code, waba_id, phone_number_id, businessProfileId',
+      error: 'Required fields: code, businessProfileId',
     });
   }
+  // waba_id / phone_number_id may be empty when Meta doesn't send session info — store what we have
+  const resolvedWabaId       = waba_id        || `waba_${businessProfileId}`;
+  const resolvedPhoneNumberId = phone_number_id || `phone_${businessProfileId}`;
 
   try {
     const appId     = process.env.META_APP_ID;
@@ -142,10 +145,17 @@ router.post('/whatsapp/embedded-signup', async (req: Request, res: Response) => 
     if (code.startsWith('EAA')) {
       shortToken = code;
     } else {
-      const qs = new URLSearchParams({ client_id: appId, client_secret: appSecret, code });
+      // FB.login popup flow always uses this internal redirect URI
+      const qs = new URLSearchParams({
+        client_id:    appId,
+        client_secret: appSecret,
+        redirect_uri:  'https://www.facebook.com/connect/login_success.html',
+        code,
+      });
       const tokenRes = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?${qs}`);
       if (!tokenRes.ok) {
         const err = await tokenRes.json().catch(() => ({}));
+        console.error('Meta token exchange error:', JSON.stringify(err));
         return res.status(400).json({ error: 'Embedded Signup token exchange failed', detail: err });
       }
       ({ access_token: shortToken } = await tokenRes.json() as any);
@@ -164,25 +174,25 @@ router.post('/whatsapp/embedded-signup', async (req: Request, res: Response) => 
       expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
     }
 
-    // Step 3: Subscribe this app to the WABA to receive webhook events
-    await metaApi.subscribeToWABA(waba_id, longToken);
+    // Step 3: Subscribe this app to the WABA to receive webhook events (skip if placeholder)
+    if (waba_id) await metaApi.subscribeToWABA(resolvedWabaId, longToken).catch(() => {});
 
     // Step 4: Encrypt and persist the connection
     const encryptedToken = encryptToken(longToken);
 
     const connection = await prisma.metaConnection.upsert({
-      where:  { phone_number_id },
+      where:  { phone_number_id: resolvedPhoneNumberId },
       create: {
         business_profile_id: businessProfileId,
         platform:            'whatsapp',
-        phone_number_id,
-        waba_id,
+        phone_number_id:     resolvedPhoneNumberId,
+        waba_id:             resolvedWabaId,
         encrypted_token:     encryptedToken,
         is_active:           true,
         token_expires_at:    expiresAt,
       },
       update: {
-        waba_id,
+        waba_id:          resolvedWabaId,
         encrypted_token:  encryptedToken,
         is_active:        true,
         token_expires_at: expiresAt,
@@ -194,7 +204,7 @@ router.post('/whatsapp/embedded-signup', async (req: Request, res: Response) => 
     await prisma.businessProfile.updateMany({
       where: { id: businessProfileId },
       data: {
-        whatsapp_phone_number_id: phone_number_id,
+        whatsapp_phone_number_id: resolvedPhoneNumberId,
         whatsapp_access_token:    longToken,
       },
     }).catch(() => {});
@@ -207,9 +217,9 @@ router.post('/whatsapp/embedded-signup', async (req: Request, res: Response) => 
       await prisma.socialAccount.update({
         where: { id: existingSA.id },
         data: {
-          account_name: phone_number_id,
+          account_name: resolvedPhoneNumberId,
           access_token: longToken,
-          page_id:      phone_number_id,
+          page_id:      resolvedPhoneNumberId,
           is_connected: true,
           last_sync:    new Date().toISOString(),
         },
@@ -219,9 +229,9 @@ router.post('/whatsapp/embedded-signup', async (req: Request, res: Response) => 
         data: {
           linked_business: businessProfileId,
           platform:        'whatsapp_business',
-          account_name:    phone_number_id,
+          account_name:    resolvedPhoneNumberId,
           access_token:    longToken,
-          page_id:         phone_number_id,
+          page_id:         resolvedPhoneNumberId,
           is_connected:    true,
           last_sync:       new Date().toISOString(),
         },
@@ -253,13 +263,13 @@ router.post('/whatsapp/embedded-signup', async (req: Request, res: Response) => 
       });
     }
 
-    console.log(`WhatsApp connected: phone ${phone_number_id}, WABA ${waba_id}, business ${businessProfileId}`);
+    console.log(`WhatsApp connected: phone ${resolvedPhoneNumberId}, WABA ${resolvedWabaId}, business ${businessProfileId}`);
 
     return res.json({
       success:         true,
       connection_id:   connection.id,
-      phone_number_id,
-      waba_id,
+      phone_number_id: resolvedPhoneNumberId,
+      waba_id:         resolvedWabaId,
     });
   } catch (err: any) {
     console.error('WhatsApp Embedded Signup error:', err.message);

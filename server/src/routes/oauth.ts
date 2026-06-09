@@ -21,6 +21,19 @@ import { prisma } from '../db';
 
 const router = Router();
 
+// Temporary in-memory store for page picker sessions (TTL 10 min)
+const pagePickerSessions = new Map<string, { businessId: string; platform: string; pages: any[]; expires: number }>();
+function createPickerSession(businessId: string, platform: string, pages: any[]): string {
+  const key = randomBytes(16).toString('hex');
+  pagePickerSessions.set(key, { businessId, platform, pages, expires: Date.now() + 10 * 60 * 1000 });
+  return key;
+}
+function getPickerSession(key: string) {
+  const s = pagePickerSessions.get(key);
+  if (!s || s.expires < Date.now()) { pagePickerSessions.delete(key); return null; }
+  return s;
+}
+
 // ── Env — read lazily so dotenv has time to load ─────────────────────────────
 // FACEBOOK_APP_ID and META_APP_ID are the same Meta app — support both names.
 const env = () => {
@@ -143,10 +156,10 @@ router.get('/initiate/:platform', async (req: Request, res: Response) => {
       return res.status(503).json({ error: 'Facebook app not configured', demo: true });
     }
 
-    // instagram_content_publish is required for media publish
+    // instagram_manage_comments is required to read comment usernames + reply to comments
     // pages_manage_posts is required for Facebook feed/photos
     const scope = platform === 'instagram_business'
-      ? 'pages_show_list,pages_read_engagement,instagram_content_publish,instagram_basic'
+      ? 'pages_show_list,pages_read_engagement,instagram_content_publish,instagram_basic,instagram_manage_comments'
       : 'pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_engagement';
 
     authUrl =
@@ -224,32 +237,55 @@ async function handleFacebookCallback(code: string, platform: string, businessId
 
   if (pages.length === 0) throw new Error('No Facebook Pages found for this account');
 
-  const page      = pages[0];
+  console.log(`[oauth/facebook] found ${pages.length} page(s):`, pages.map((p: any) => `${p.name} (${p.id})`));
+
+  // If multiple pages → store in session and return picker flag
+  if (pages.length > 1) {
+    const sessionKey = createPickerSession(businessId, platform,
+      pages.map((p: any) => ({ id: p.id, name: p.name, access_token: p.access_token })));
+    return { needs_page_selection: true, platform, sessionKey };
+  }
+
+  // Single page — save automatically
+  return await saveFacebookPage(businessId, platform, pages[0]);
+}
+
+async function saveFacebookPage(businessId: string, platform: string, page: any) {
   const pageToken = page.access_token;
   const pageId    = page.id;
   const pageName  = page.name;
 
-  // 4. For Instagram: get linked Instagram Business Account ID and store separately
+  // For Instagram: get linked Instagram Business Account ID and store separately
   if (platform === 'instagram_business') {
     const igRes = await fetch(
       `https://graph.facebook.com/v19.0/${pageId}?fields=instagram_business_account&access_token=${pageToken}`,
     );
     const igData: any = igRes.ok ? await igRes.json() : {};
     const igId = igData?.instagram_business_account?.id ?? null;
-    const resolvedIgId = igId ?? pageId;
+
+    console.log(`[oauth/instagram] page "${pageName}" (${pageId}) → ig_business_account:`, igId ?? 'NOT FOUND');
+
+    if (!igId) {
+      // The Facebook Page doesn't have a linked Instagram Business/Creator account.
+      // Storing the Facebook Page ID would cause silent failures at publish time.
+      throw new Error(
+        `הדף "${pageName}" לא מחובר לחשבון Instagram עסקי. ` +
+        `כדי לחבר: עבור להגדרות דף Facebook → Instagram → "Connect account". ` +
+        `ודא שחשבון ה-Instagram שלך מוגדר כ-Business או Creator.`
+      );
+    }
 
     await upsertSocialAccount(businessId, 'instagram_business', {
       account_name: pageName,
       access_token: pageToken,
-      page_id: resolvedIgId,
+      page_id: igId,
     });
 
-    // Bridge: write tokens to BusinessProfile so InstagramPublisher can read them
     await prisma.businessProfile.updateMany({
       where: { id: businessId },
       data: {
         instagram_access_token: pageToken,
-        instagram_page_id: resolvedIgId,
+        instagram_page_id: igId,
       },
     });
   } else {
@@ -259,7 +295,6 @@ async function handleFacebookCallback(code: string, platform: string, businessId
       page_id: pageId,
     });
 
-    // Bridge: write tokens to BusinessProfile so InstagramPublisher can read them
     await prisma.businessProfile.updateMany({
       where: { id: businessId },
       data: {
@@ -521,6 +556,41 @@ router.get('/callback/:platform', async (req: Request, res: Response) => {
       return res.redirect(`${env().FRONTEND_URL}/integrations?oauth_error=unknown_platform`);
     }
 
+    // Multiple pages — show picker (uses plain links, no fetch, no CORS issues)
+    if (result.needs_page_selection) {
+      const session = getPickerSession(result.sessionKey);
+      const pages   = session?.pages ?? [];
+      const serverBase = env().SERVER_BASE_URL;
+
+      const pageButtons = pages.map((_p: any, i: number) =>
+        `<a href="${serverBase}/api/oauth/confirm-page?session=${result.sessionKey}&idx=${i}" class="page-btn">
+          <div class="icon">📘</div>
+          <div><div class="name">${_p.name}</div><div class="pid">ID: ${_p.id}</div></div>
+        </a>`
+      ).join('');
+
+      const pickerHtml = `<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head><meta charset="UTF-8"><title>בחר עמוד</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:sans-serif;padding:24px;background:#f9fafb;min-height:100vh}
+h2{font-size:15px;font-weight:700;color:#111;margin-bottom:4px}
+p{font-size:12px;color:#6b7280;margin-bottom:16px}
+.page-btn{width:100%;display:flex;align-items:center;gap:12px;padding:12px 14px;background:white;border:1px solid #e5e7eb;border-radius:10px;cursor:pointer;margin-bottom:8px;text-align:right;transition:all .15s;text-decoration:none}
+.page-btn:hover{border-color:#1877f2;background:#eff6ff}
+.icon{width:36px;height:36px;border-radius:50%;background:#1877f2;color:white;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.name{font-size:13px;font-weight:600;color:#111}
+.pid{font-size:10px;color:#9ca3af}
+</style></head>
+<body>
+<h2>בחר את הדף שברצונך לחבר</h2>
+<p>נמצאו מספר דפים — בחר את הדף הנכון לעסק זה</p>
+${pageButtons}
+</body></html>`;
+      return res.send(pickerHtml);
+    }
+
     const html = `<!DOCTYPE html>
 <html dir="rtl" lang="he">
 <head><meta charset="UTF-8"><title>חיבור הצליח</title>
@@ -598,6 +668,47 @@ router.post('/disconnect', async (req: Request, res: Response) => {
     return res.json({ ok: true });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Confirm page selection (plain GET link from picker — no CORS) ──────────────
+router.get('/confirm-page', async (req: Request, res: Response) => {
+  const { session, idx } = req.query as Record<string, string>;
+  const s = getPickerSession(session);
+  if (!s) {
+    return res.send('<html><body><p>Session expired — please reconnect.</p></body></html>');
+  }
+
+  const page = s.pages[Number(idx)];
+  if (!page) {
+    return res.send('<html><body><p>Invalid selection.</p></body></html>');
+  }
+
+  try {
+    const result = await saveFacebookPage(s.businessId, s.platform, page);
+    pagePickerSessions.delete(session);
+
+    return res.send(`<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head><meta charset="UTF-8"><title>חיבור הצליח</title>
+<style>
+body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f0fdf4}
+.box{text-align:center;padding:40px;background:white;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.08)}
+h2{color:#10b981;margin-bottom:8px}p{color:#6b7280;font-size:14px}
+</style></head>
+<body><div class="box">
+<h2>✓ ${result.page_name} חובר בהצלחה!</h2>
+<p>החלון יסגר אוטומטית...</p>
+</div>
+<script>
+  if (window.opener) {
+    window.opener.postMessage({ type: 'oauth_success', platform: '${s.platform}', page_name: '${result.page_name.replace(/'/g, "\\'")}' }, '*');
+  }
+  setTimeout(function(){ window.close(); }, 1500);
+</script></body></html>`);
+  } catch (err: any) {
+    console.error('[oauth/confirm-page]', err.message);
+    return res.send(`<html><body><p>Error: ${err.message}</p></body></html>`);
   }
 });
 

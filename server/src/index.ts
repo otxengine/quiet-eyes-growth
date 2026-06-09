@@ -12,6 +12,7 @@ import learningRouter from './routes/learning';
 import migrateRouter from './routes/migrate';
 import metaAuthRouter from './routes/meta/auth';
 import metaWebhookRouter from './routes/meta/webhook';
+import conversationsRouter from './routes/conversations';
 import orchestratorRouter from './routes/orchestrator';
 import approvalsRouter from './routes/approvals';
 import explainabilityRouter from './routes/explainability';
@@ -20,6 +21,7 @@ import oauthRouter from './routes/oauth';
 import roiRouter from './routes/roi';
 import adminUsersRouter from './routes/adminUsers';
 import onboardingRouter from './routes/onboarding';
+import socialRouter from './routes/social';
 
 // Wire up all event choreography handlers at startup
 registerAllHandlers();
@@ -57,7 +59,9 @@ app.get('/api/admin-verify', (req: any, res: any) => {
 // Must be registered BEFORE express.json() so we get the unmodified Buffer.
 app.use(express.json({
   verify: (req: any, _res, buf) => { req.rawBody = buf; },
+  limit: '20mb',
 }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 // Only mount Clerk middleware when a real secret key is configured
 const clerkKey = process.env.CLERK_SECRET_KEY || '';
@@ -85,6 +89,7 @@ app.use('/api/learning', learningRouter);
 app.use('/api/migrate', migrateRouter);
 app.use('/api/meta/auth', metaAuthRouter);
 app.use('/api/webhooks/meta', metaWebhookRouter);
+app.use('/api/conversations', conversationsRouter);
 app.use('/api/orchestrator', orchestratorRouter);
 app.use('/api/approvals', approvalsRouter);
 app.use('/api/explain', explainabilityRouter);
@@ -93,6 +98,7 @@ app.use('/api/oauth', oauthRouter);
 app.use('/api', roiRouter);
 app.use('/api/admin', adminUsersRouter);
 app.use('/api/onboarding', onboardingRouter);
+app.use('/api/social', socialRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 

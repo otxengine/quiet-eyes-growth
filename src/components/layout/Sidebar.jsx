@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import {
   LayoutGrid, Eye, Users, Star, CheckCircle, Heart, Settings,
   ChevronRight, ChevronLeft, ChevronDown, LogOut, FileBarChart,
-  ClipboardList, Database, Bot, Plug, Crown, Sparkles, Calendar, Megaphone, ShieldAlert, Lightbulb, Target, SearchCheck
+  ClipboardList, Database, Bot, Plug, Crown, Sparkles, Calendar, Megaphone, ShieldAlert, Lightbulb, Target, SearchCheck, MessageCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -26,8 +26,9 @@ const NAV_STRUCTURE = [
     type: 'group', key: 'manage', label: 'שיווק וניהול', icon: Megaphone,
     items: [
       { path: '/marketing',  label: 'מרכז שיווק',   icon: Megaphone },
-      { path: '/reviews',    label: 'מוניטין',      icon: Star, badgeKey: 'pendingReviews' },
-      { path: '/retention',  label: 'שימור לקוחות', icon: Heart },
+      { path: '/reviews',          label: 'מוניטין',       icon: Star, badgeKey: 'pendingReviews' },
+      { path: '/social-comments',  label: 'תגובות סושיאל', icon: MessageCircle },
+      { path: '/retention',        label: 'שימור לקוחות',  icon: Heart },
       { path: '/tasks',      label: 'משימות',       icon: ClipboardList },
       { path: '/reports',    label: 'דוחות',        icon: FileBarChart },
     ],

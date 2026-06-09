@@ -246,25 +246,43 @@ ${formatInstr}
     reader.onload = async (e) => {
       const dataUrl = e.target.result;
       setImageUrl(dataUrl);
-      // Analyze with Vision
       setAnalyzing(true);
       try {
         const b64 = dataUrl.split(',')[1];
         const mime = file.type || 'image/jpeg';
-        const res = await base44.functions.invoke('analyzeImageForPost', {
-          businessProfileId: businessProfile.id,
-          imageBase64: b64,
-          mimeType: mime,
-          platform,
-        });
-        const data = res?.data || res;
-        if (data?.mediaAssetId) setMediaId(data.mediaAssetId);
-        if (data?.description) setImageDesc(data.description);
-        if (data?.suggested_post) {
-          toast('התוכן עודכן לפי התמונה ✨', { duration: 3000 });
-          setContent(data.suggested_post);
-        }
-      } catch { toast.error('שגיאה בניתוח התמונה'); }
+
+        // Always save MediaAsset immediately so we have an ID for Instagram publishing.
+        // analyzeImageForPost may fail (LLM credits), but the asset must exist first.
+        let assetId = null;
+        try {
+          const asset = await base44.entities.MediaAsset.create({
+            linked_business: businessProfile.id,
+            image_base64:    b64,
+            mime_type:       mime,
+            source:          'uploaded',
+            used_in:         postType,
+          });
+          assetId = asset.id;
+          setMediaId(asset.id);
+        } catch { /* DB save failed — Instagram publish will fall back to error */ }
+
+        // Try AI analysis (may enrich the asset, but failure is non-blocking)
+        try {
+          const res = await base44.functions.invoke('analyzeImageForPost', {
+            businessProfileId: businessProfile.id,
+            imageBase64: b64,
+            mimeType: mime,
+            platform,
+          });
+          const data = res?.data || res;
+          if (data?.mediaAssetId) setMediaId(data.mediaAssetId);
+          if (data?.description) setImageDesc(data.description);
+          if (data?.suggested_post) {
+            toast('התוכן עודכן לפי התמונה ✨', { duration: 3000 });
+            setContent(data.suggested_post);
+          }
+        } catch { /* AI analysis failed — image still works, just no caption suggestion */ }
+      } catch { toast.error('שגיאה בטעינת התמונה'); }
       setAnalyzing(false);
     };
     reader.readAsDataURL(file);
@@ -274,7 +292,8 @@ ${formatInstr}
     if (!content.trim()) { toast.error('יש להזין תוכן'); return; }
     setSaving(true);
     try {
-      await base44.entities.OrganicPost.create({
+      // 1. Save to DB (as draft first, so we have an ID)
+      const post = await base44.entities.OrganicPost.create({
         linked_business: businessProfile.id,
         signal_id:       signalContext?.signalId || null,
         signal_summary:  signalContext?.summary  || null,
@@ -283,14 +302,38 @@ ${formatInstr}
         content,
         media_asset_id:  mediaId || null,
         image_url:       imageUrl || null,
-        status:          publish ? 'published' : 'draft',
-        published_at:    publish ? new Date().toISOString() : null,
+        status:          'draft',
+        published_at:    null,
       });
+
+      if (publish) {
+        // 2. Actually publish to social platform via API
+        const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api');
+        const res = await fetch(`${apiBase}/social/publish-organic`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-dev-user': 'dev-user' },
+          body: JSON.stringify({
+            businessProfileId: businessProfile.id,
+            postId:        post.id,
+            content,
+            imageUrl:      imageUrl || null,
+            mediaAssetId:  mediaId  || null,
+            platform,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'שגיאת פרסום');
+        toast.success('פורסם בהצלחה! 🎉');
+      } else {
+        toast.success('נשמר כטיוטה');
+      }
+
       queryClient.invalidateQueries({ queryKey: ['organicPosts', businessProfile.id] });
-      toast.success(publish ? 'פורסם! 🎉' : 'נשמר כטיוטה');
       onSaved?.();
       onClose();
-    } catch { toast.error('שגיאה בשמירה'); }
+    } catch (err) {
+      toast.error('שגיאה: ' + (err?.message || 'נסה שוב'));
+    }
     setSaving(false);
   };
 
