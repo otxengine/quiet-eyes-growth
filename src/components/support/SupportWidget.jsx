@@ -35,8 +35,10 @@ export default function SupportWidget({ businessProfile }) {
         onClick={() => setOpen(!open)}
         className="fixed z-[60] w-14 h-14 rounded-full text-white flex items-center justify-center transition-all duration-200 relative"
         style={{
-          bottom: '24px',
-          right: '24px',
+          position: 'fixed',
+          bottom: '1.5rem',
+          left: '1.5rem',
+          right: 'auto',
           background: 'linear-gradient(135deg, #E8344D, #FF6B6B)',
           boxShadow: '0 4px 20px rgba(232,52,77,0.35), 0 2px 6px rgba(232,52,77,0.2)',
         }}
