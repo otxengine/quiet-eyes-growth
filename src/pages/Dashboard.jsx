@@ -15,6 +15,21 @@ function getGreeting() {
   return 'לילה טוב';
 }
 
+function renderMarkdown(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^##\s+(.+)$/gm, '<p class="font-semibold text-[13px] mt-2 mb-1">$1</p>')
+    .replace(/^[•\-]\s+(.+)$/gm, '<li class="mr-3 list-disc text-[12px]">$1</li>');
+}
+
+const NAV_CHIPS = [
+  { pattern: /לידים?/, label: 'לידים →', path: '/leads' },
+  { pattern: /ביקורות|מוניטין/, label: 'מוניטין →', path: '/reputation' },
+  { pattern: /מתחרי/, label: 'מתחרים →', path: '/competitors' },
+  { pattern: /תובנ|התראה/, label: 'תובנות →', path: '/insights' },
+  { pattern: /קמפיין|שיווק/, label: 'שיווק →', path: '/marketing' },
+];
+
 const ACTION_TYPE_LABELS = {
   social_post:   'פוסט',
   review_reply:  'תגובה',
@@ -269,9 +284,27 @@ export default function Dashboard() {
                 /* AI bubble — left-aligned with Kori avatar */
                 <div className="flex gap-3 justify-end">
                   <div className="flex-1 max-w-[85%]">
-                    <div className="bg-white border border-gray-100 rounded-2xl px-4 py-3 text-[13px] text-gray-800 leading-relaxed whitespace-pre-line shadow-sm">
-                      {msg.text}
+                    <div className="bg-white border border-gray-100 rounded-2xl px-4 py-3 text-[13px] text-gray-800 leading-relaxed shadow-sm">
+                      <div dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }} />
                     </div>
+
+                    {/* Nav chips — detect topics in AI response */}
+                    {(() => {
+                      const chips = NAV_CHIPS.filter(c => c.pattern.test(msg.text));
+                      return chips.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {chips.map((c, ci) => (
+                            <button
+                              key={ci}
+                              onClick={() => navigate(c.path)}
+                              className="text-[11px] font-medium bg-white border border-gray-200 text-[#e8344d] px-3 py-1 rounded-full hover:bg-red-50 transition-colors shadow-sm"
+                            >
+                              {c.label}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null;
+                    })()}
 
                     {/* Action proposal card */}
                     {msg.pendingAction && (
@@ -321,6 +354,16 @@ export default function Dashboard() {
 
           {/* Scroll anchor */}
           <div ref={threadRef} />
+
+          {/* Expand to full chat link */}
+          <div className="flex justify-center mt-1">
+            <button
+              onClick={() => navigate('/chat')}
+              className="text-[11px] text-gray-400 hover:text-[#e8344d] transition-colors flex items-center gap-1"
+            >
+              הרחב לצ'אט מלא →
+            </button>
+          </div>
         </div>
       )}
 

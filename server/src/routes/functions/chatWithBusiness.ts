@@ -171,7 +171,8 @@ ${leadLines}
 ${alertLines ? `=== התראות פעילות ===\n${alertLines}\n` : ''}${sectorKnowledgeLines ? `=== תובנות סקטור (למידה חוצת-עסקים) ===\n${sectorKnowledgeLines}\n` : ''}${agentMissionsLines ? `=== משימות הסוכנים ===\n${agentMissionsLines}\n` : ''}=== כללי תגובה ===
 1. פנה לבעל העסק בגוף שני: "העסק שלך", "אתה", "הלקוחות שלך"
 2. השתמש בנתונים הספציפיים לעיל — לא עצות גנריות
-3. תשובות: עד 3 משפטים — קצר וישיר; מפורט רק לשאלות טכניות
+3. תן תשובה מפורטת ככל שנדרש. לשאלות פשוטות — 2-3 משפטים. לניתוח או בקשת תוכן — השלם את המשימה במלואה.
+   תמיכה ב-Markdown: השתמש ב-**מודגש**, רשימות (•), וכותרות (##) לתשובות ארוכות
 4. אם אין נתונים לתחום שנשאל — אמור זאת והצע לסרוק
 5. בסוף כל תגובה הצע פעולה קונקרטית אחת ב-pendingAction
 6. תגובה בעברית בלבד
@@ -183,7 +184,7 @@ ${alertLines ? `=== התראות פעילות ===\n${alertLines}\n` : ''}${secto
 {
   "reply": "תשובה בעברית",
   "pendingAction": {
-    "type": "create_task|update_lead|respond_review|dismiss_alert",
+    "type": "create_task|update_lead|respond_review|dismiss_alert|publish_post|generate_report|create_campaign|schedule_meeting|analyze_competitor",
     "label": "תיאור קצר בעברית",
     "payload": {}
   }
@@ -193,6 +194,9 @@ ${alertLines ? `=== התראות פעילות ===\n${alertLines}\n` : ''}${secto
 - המלצה על פנייה ללידים חמים → create_task { title:"פנה ל-[שם]", description:"..." }
 - בקשת יצירת משימה → create_task { title, description }
 - המלצה לענות לביקורת → respond_review { suggested_response:"..." }
+- פרסום תוכן → publish_post { platform:"facebook|instagram|google", text:"..." }
+- דוח ניתוח → generate_report { reportType:"leads|reviews|competitors|weekly" }
+- קמפיין שיווקי → create_campaign { channel:"whatsapp|email|social", goal:"..." }
 - אם אין פעולה ברורה — השמט את pendingAction לגמרי`;
 
     // Convert history to safe string — supports both legacy string and new array format
@@ -210,7 +214,7 @@ ${alertLines ? `=== התראות פעילות ===\n${alertLines}\n` : ''}${secto
 
     const raw = await invokeLLM({
       model: 'sonnet',
-      maxTokens: 500,
+      maxTokens: 1500,
       skipCache: true,
       prompt: userTurn,
       systemPrompt: systemContext,
