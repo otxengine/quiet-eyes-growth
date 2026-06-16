@@ -121,9 +121,11 @@ async function _invokeLLMRaw(
         console.warn('[invokeLLM] Anthropic failed, trying Gemini Flash fallback:', err.message);
       }
       // Fallback chain: Claude → Gemini Flash → OpenAI
+      // Prepend systemPrompt so Gemini gets the full business context
       if (process.env.GEMINI_API_KEY) {
         try {
-          return await _callGemini(prompt, 'gemini-3.5-flash', maxTokens, response_json_schema);
+          const geminiPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+          return await _callGemini(geminiPrompt, 'gemini-3.5-flash', maxTokens, response_json_schema);
         } catch (geminiErr: any) {
           console.warn('[invokeLLM] Gemini Flash fallback failed:', geminiErr.message);
         }

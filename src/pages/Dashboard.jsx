@@ -149,8 +149,11 @@ export default function Dashboard() {
         });
       }
 
+      // Support all response shapes: chatWithBusiness {reply}, Gemini {message/content}, plain string
       const text = result?.reply || result?.response || result?.message || result?.content || result?.text
-        || (typeof result === 'string' ? result : 'לא הצלחתי לקבל תשובה.');
+        || (typeof result === 'string' ? result : null)
+        || (typeof result === 'object' && result !== null ? Object.values(result).find(v => typeof v === 'string' && v.length > 5) : null)
+        || 'לא הצלחתי לקבל תשובה.';
       const pendingAction = result?.pendingAction || null;
 
       const aiMsg = { role: 'ai', text, pendingAction };
