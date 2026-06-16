@@ -1,3 +1,6 @@
+# ── Personal progress tracker (local only) ───────────────────────────────────
+PROJECT_PROGRESS.md
+
 # ── Environment / secrets (NEVER commit these) ───────────────────────────────
 .env
 .env.local

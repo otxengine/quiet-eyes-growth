@@ -4,6 +4,7 @@
  */
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
+import { dispatch, ActionType } from '../../services/execution/executeOrQueue';
 
 const baseAutoSelect = {
   id: true, created_date: true, linked_business: true,
@@ -112,9 +113,38 @@ export async function approveAction(req: Request, res: Response) {
     });
     if (!action) return res.status(404).json({ error: 'Action not found' });
 
+    if (action.status !== 'pending_approval') {
+      return res.status(409).json({ error: `Action is already ${action.status}` });
+    }
+
+    // Mark as executing so the UI reflects progress immediately
     await prisma.autoAction.update({
       where: { id: actionId },
-      data: { status: 'approved', executed_at: new Date().toISOString() },
+      data: { status: 'executing' },
+    });
+
+    let result = '';
+    let finalStatus = 'completed';
+
+    try {
+      let payload: Record<string, any> = {};
+      try { payload = JSON.parse(action.payload || '{}'); } catch {}
+
+      result = await dispatch({
+        businessProfileId: action.linked_business,
+        agentName:         action.agent_name,
+        actionType:        action.action_type as ActionType,
+        description:       action.description,
+        payload,
+      });
+    } catch (execErr: any) {
+      result = execErr.message;
+      finalStatus = 'failed';
+    }
+
+    await prisma.autoAction.update({
+      where: { id: actionId },
+      data: { status: finalStatus, executed_at: new Date().toISOString(), result },
     });
 
     // Log outcome
@@ -123,13 +153,13 @@ export async function approveAction(req: Request, res: Response) {
         linked_business:     businessProfileId,
         action_type:         action.action_type,
         was_accepted:        true,
-        outcome_description: 'approved_by_user',
+        outcome_description: finalStatus === 'completed' ? result : `failed: ${result}`,
         linked_action:       actionId,
         created_at:          new Date().toISOString(),
       },
     }).catch(() => {});
 
-    return res.json({ success: true, status: 'approved' });
+    return res.json({ success: true, status: finalStatus, result });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

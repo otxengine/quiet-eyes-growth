@@ -191,14 +191,20 @@ export function ApprovalsPanel({ bpId }) {
     refetchInterval: 30000,
   });
 
-  const pendingActions = stats?.pending_actions || [];
-  const recentActions  = stats?.recent_actions  || [];
+  const pendingActions = stats?.data?.pending_actions || stats?.pending_actions || [];
+  const recentActions  = stats?.data?.recent_actions  || stats?.recent_actions  || [];
 
   const handleApprove = async (actionId) => {
     setApproving(actionId);
     try {
-      await base44.functions.invoke('approveAction', { actionId, businessProfileId: bpId });
-      toast.success('פעולה אושרה ✓');
+      const res = await base44.functions.invoke('approveAction', { actionId, businessProfileId: bpId });
+      if (res?.status === 'completed') {
+        toast.success(`בוצע: ${res.result || 'הפעולה הושלמה'}`);
+      } else if (res?.status === 'failed') {
+        toast.error(`האישור נרשם אך הביצוע נכשל: ${res.result}`);
+      } else {
+        toast.success('פעולה אושרה ✓');
+      }
       queryClient.invalidateQueries({ queryKey: ['eventBusStats'] });
     } catch { toast.error('שגיאה באישור'); }
     setApproving(null);
