@@ -114,7 +114,12 @@ async function _invokeLLMRaw(
     try {
       return await _callAnthropic(prompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache);
     } catch (err: any) {
-      console.warn('[invokeLLM] Anthropic failed, trying Gemini Flash fallback:', err.message);
+      const isTokenExhausted = err.status === 429 || /credit|quota|rate.limit|overloaded/i.test(err.message || '');
+      if (isTokenExhausted) {
+        console.warn('[invokeLLM] Anthropic tokens/rate-limit — falling back to Gemini Flash');
+      } else {
+        console.warn('[invokeLLM] Anthropic failed, trying Gemini Flash fallback:', err.message);
+      }
       // Fallback chain: Claude → Gemini Flash → OpenAI
       if (process.env.GEMINI_API_KEY) {
         try {

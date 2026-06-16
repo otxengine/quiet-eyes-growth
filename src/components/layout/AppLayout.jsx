@@ -39,7 +39,7 @@ function usePageVisits(pathname) {
 }
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
-import SupportWidget from '@/components/support/SupportWidget';
+import ChatWidget from '@/components/chat/ChatWidget';
 import { cn } from '@/lib/utils';
 import { registerServiceWorker } from '@/lib/pushNotifications';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -301,7 +301,7 @@ export default function AppLayout() {
           <Outlet context={{ businessProfile, user, badges, selectedLocationId }} />
         </main>
       </div>
-      <SupportWidget businessProfile={businessProfile} />
+      <ChatWidget businessProfile={businessProfile} urgentCount={badges.activeInsights || 0} />
 
       {/* Global Scan Overlay — active on all non-Dashboard pages */}
       {showGlobalScan && businessProfile && (

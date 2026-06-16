@@ -38,7 +38,7 @@ export default function ChatWidget({ businessProfile, urgentCount = 0 }) {
       )}
       <button
         onClick={() => setOpen(!open)}
-        className="fixed z-50 w-14 h-14 rounded-full text-white flex items-center justify-center transition-all duration-200 relative"
+        className="fixed z-[60] w-14 h-14 rounded-full text-white flex items-center justify-center transition-all duration-200 relative"
         style={{
           bottom: '1rem',
           left: '1.5rem',
