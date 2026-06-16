@@ -2,8 +2,9 @@ import React, { useState, useRef } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Send, ChevronLeft, X } from 'lucide-react';
+import { ChevronLeft, X, ArrowUpRight, Sparkles, Zap, Flame, Clock } from 'lucide-react';
 import LiveStreamCard from '@/components/shared/LiveStreamCard';
+import KoriAvatar from '@/components/onboarding/KoriAvatar';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -15,11 +16,11 @@ function getGreeting() {
 }
 
 const ACTION_TYPE_LABELS = {
-  social_post:    'פוסט',
-  review_reply:   'תגובה',
-  lead_followup:  'ליד',
-  email:          'מייל',
-  whatsapp:       'WhatsApp',
+  social_post:   'פוסט',
+  review_reply:  'תגובה',
+  lead_followup: 'ליד',
+  email:         'מייל',
+  whatsapp:      'WhatsApp',
 };
 
 export default function Dashboard() {
@@ -29,6 +30,7 @@ export default function Dashboard() {
   const [aiInput, setAiInput] = useState('');
   const [aiResponse, setAiResponse] = useState(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [urgentDismissed, setUrgentDismissed] = useState(false);
   const inputRef = useRef(null);
 
   const { data: allLeads = [] } = useQuery({
@@ -49,7 +51,6 @@ export default function Dashboard() {
     enabled: !!bpId,
   });
 
-  // Fetch pending approvals for "זרם חי"
   const { data: eventBusStats } = useQuery({
     queryKey: ['eventBusStats', bpId],
     queryFn: () => base44.functions.invoke('getEventBusStats', { businessProfileId: bpId }),
@@ -63,11 +64,10 @@ export default function Dashboard() {
   const hotLeads = allLeads.filter(l => l.status === 'hot');
   const actionsCompleted = allLeads.filter(l => l.status === 'completed' || l.lifecycle_stage === 'closed_won');
   const urgentSignals = allSignals.filter(s => !s.is_read && s.impact_level === 'high');
-
   const urgentItem = urgentSignals[0] || allSignals[0];
   const urgentReview = allReviews.find(r => r.response_status === 'pending' && (r.sentiment === 'negative' || (r.rating && r.rating <= 2)));
 
-  // ── Live stream: prefer real pending actions, fallback to leads/signals ──────
+  // Live stream items
   const pendingActions = eventBusStats?.pending_actions || [];
   const liveItems = pendingActions.length > 0
     ? pendingActions.slice(0, 4).map(action => ({
@@ -81,15 +81,15 @@ export default function Dashboard() {
       }))
     : [
         ...hotLeads.slice(0, 2).map(l => ({
-          type: 'ליד חם',
-          typeBg: 'bg-amber-100 text-amber-700',
+          type: 'לידים',
+          typeBg: 'bg-green-100 text-green-700',
           time: 'לפני 5 דקות',
           description: `${l.name || 'ליד חדש'} — ${l.company || l.source || 'ממתין לטיפול'}`,
           ctaLabel: 'צפיה ושליחה',
           timerMinutes: 2,
         })),
         ...urgentSignals.slice(0, 2).map(s => ({
-          type: 'תובנה',
+          type: 'תוכן',
           typeBg: 'bg-purple-100 text-purple-700',
           time: 'לפני 12 דקות',
           description: s.title || s.summary || 'תובנה חדשה מהמערכת',
@@ -98,133 +98,100 @@ export default function Dashboard() {
         })),
       ];
 
+  // Shortcut cards
   const shortcuts = [
-    { label: 'בוצע לאחרונה',   sub: `${actionsCompleted.length} פעולות`,   bg: '#fce4ec', path: '/approvals' },
-    { label: 'תמונת מצב',       sub: `${allLeads.length} לידים פעילים`,      bg: '#e3f2fd', path: '/leads' },
-    { label: 'התובנות שלי',     sub: `${urgentSignals.length} דחופות`,        bg: '#f3e5f5', path: '/insights' },
-    { label: 'דחוף להיום',      sub: urgentItem ? urgentItem.title?.slice(0, 25) || '...' : 'הכל תקין', bg: '#fff8e1', path: '/insights' },
+    { label: 'בוצע לאחרונה',  sub: `הצג את הפעולות שבוצעו לאחרונה במערכת`, path: '/approvals',  Icon: ArrowUpRight },
+    { label: 'תמונת מצב',      sub: `הצג את תמונת המצב העדכנית של designeed`, path: '/leads',       Icon: Sparkles    },
+    { label: 'התובנות שלי',    sub: `הצג את כל התובנות וההמלצות המותאמות אישית`, path: '/insights',    Icon: Zap         },
+    { label: 'דחוף להיום',     sub: `הצג את התובנות החשובות ביותר להיום`,      path: '/insights',    Icon: Flame       },
   ];
 
-  // ── AI chat ──────────────────────────────────────────────────────────────────
+  const quickChips = [
+    { label: 'בנה קמפיין חדש',   path: '/marketing/create' },
+    { label: 'בצע מחקר שוק',      prompt: 'תעשה לי מחקר שוק קצר על העסק שלי' },
+    { label: 'הצג פעולות לאישור', path: '/approvals' },
+    { label: 'סכם לי את השבוע',   prompt: 'תסכם לי את השבוע — מה קרה, מה הישגים, מה הצעדים הבאים' },
+  ];
+
+  // AI chat
   const sendAiMessage = async (message) => {
     const msg = message || aiInput;
     if (!msg.trim() || isAiLoading) return;
-
     setAiInput('');
     setIsAiLoading(true);
     setAiResponse(null);
-
     try {
       let result;
       try {
-        result = await base44.functions.invoke('chatWithBusiness', {
-          message: msg,
-          businessProfileId: bpId,
-          history: [],
-        });
+        result = await base44.functions.invoke('chatWithBusiness', { message: msg, businessProfileId: bpId, history: [] });
       } catch (_) {
-        // Fallback to generic LLM
-        result = await base44.integrations.Core.InvokeLLM({
-          prompt: `אתה עוזר עסקי חכם. ענה בעברית בקצרה ובאופן ממוקד. שאלה: ${msg}`,
-          response_json_schema: null,
-        });
+        result = await base44.integrations.Core.InvokeLLM({ prompt: `אתה עוזר עסקי חכם. ענה בעברית בקצרה. שאלה: ${msg}`, response_json_schema: null });
       }
-      const text = result?.response || result?.message || result?.content || result?.text || (typeof result === 'string' ? result : 'לא הצלחתי לקבל תשובה. נסה שוב.');
+      const text = result?.response || result?.message || result?.content || result?.text || (typeof result === 'string' ? result : 'לא הצלחתי לקבל תשובה.');
       setAiResponse(text);
     } catch (err) {
-      console.error('AI chat failed:', err);
-      setAiResponse('שגיאה בהתחברות לבינה המלאכותית. נסה שוב.');
+      setAiResponse('שגיאה בהתחברות. נסה שוב.');
     } finally {
       setIsAiLoading(false);
     }
   };
 
   const handleChipClick = (chip) => {
-    if (chip.path) {
-      navigate(chip.path);
-    } else if (chip.prompt) {
-      setAiInput(chip.prompt);
-      sendAiMessage(chip.prompt);
-    }
+    if (chip.path) navigate(chip.path);
+    else if (chip.prompt) sendAiMessage(chip.prompt);
   };
 
-  const quickChips = [
-    { label: 'בנה קמפיין חדש',     path: '/marketing/create' },
-    { label: 'בצע מחקר שוק',        prompt: 'תעשה לי מחקר שוק קצר על העסק שלי' },
-    { label: 'הצג פעולות לאישור',   path: '/approvals' },
-    { label: 'סכם לי את השבוע',     prompt: 'תסכם לי את השבוע — מה קרה, מה הישגים, מה הצעדים הבאים' },
-  ];
+  const bpName = businessProfile?.name || '';
+  const userName = businessProfile?.contact_name || '';
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl mx-auto">
+    <div className="flex flex-col gap-5 max-w-4xl mx-auto pb-8" dir="rtl">
 
-      {/* ── Hero ──────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-        <div className="flex items-center gap-4 mb-5">
-          <div
-            className="w-14 h-14 rounded-full flex items-center justify-center text-2xl font-bold text-white flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #e8344d 0%, #9c27b0 100%)' }}
-          >
-            {(businessProfile?.name || 'Q')[0].toUpperCase()}
-          </div>
-          <div>
-            <div className="text-xl font-bold text-foreground">
-              {getGreeting()} {businessProfile?.contact_name || businessProfile?.name || ''}, מה תרצה לבצע היום?
-            </div>
-            <div className="text-sm text-foreground-secondary mt-0.5">המערכת מוכנה לעזור לך</div>
-          </div>
+      {/* ── Hero: Kori avatar + greeting + input ──────────────────────────── */}
+      <div className="flex flex-col items-center text-center gap-5 pt-2">
+        <KoriAvatar size="lg" className="shadow-md" />
+
+        <div className="space-y-1">
+          <h1 className="text-[22px] font-bold text-gray-900">
+            {getGreeting()} {userName},
+          </h1>
+          <h1 className="text-[22px] font-bold text-gray-900">
+            מה תרצה לבצע ב-{bpName} היום?
+          </h1>
         </div>
 
-        {/* Free-text input */}
-        <div className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3 border border-gray-200 mb-3">
+        {/* Input row */}
+        <div className="flex items-center bg-white border border-gray-200 rounded-full shadow-sm w-full max-w-2xl overflow-hidden pr-5 pl-1.5 py-1.5">
+          {/* Text input (RTL: starts from right) */}
           <input
             ref={inputRef}
             value={aiInput}
             onChange={e => setAiInput(e.target.value)}
-            placeholder="שאל אותי כל דבר, למשל: מה מצב הלידים השבוע?"
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-foreground-muted"
             onKeyDown={e => e.key === 'Enter' && sendAiMessage()}
+            placeholder="תאר במילים מה תרצה לבצע והמערכת תתחיל בעבודה"
+            className="flex-1 bg-transparent text-[13px] text-gray-700 placeholder:text-gray-400 outline-none min-w-0"
           />
+          {/* Send button — visual left in RTL (end of flex row) */}
           <button
             onClick={() => sendAiMessage()}
             disabled={!aiInput.trim() || isAiLoading}
-            className="text-[#e8344d] hover:text-[#c92b40] transition-colors disabled:opacity-40"
+            className="w-10 h-10 rounded-full bg-[#111] flex items-center justify-center flex-shrink-0 disabled:opacity-40 transition-opacity"
+            style={{ marginRight: '8px' }}
           >
             {isAiLoading
-              ? <span className="w-4 h-4 border-2 border-[#e8344d]/30 border-t-[#e8344d] rounded-full animate-spin block" />
-              : <Send className="w-4 h-4" />
+              ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin block" />
+              : <ChevronLeft className="w-5 h-5 text-white" />
             }
           </button>
         </div>
 
-        {/* AI response card */}
-        {aiResponse && (
-          <div className="bg-[#fce4ec] border border-[#f8bbd0] rounded-xl px-4 py-3 mb-3 relative">
-            <button
-              onClick={() => setAiResponse(null)}
-              className="absolute top-2 left-2 text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-            <div className="flex items-start gap-2">
-              <div
-                className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5"
-                style={{ background: 'linear-gradient(135deg, #9c27b0 0%, #e8344d 100%)' }}
-              >
-                ק
-              </div>
-              <p className="text-[13px] text-gray-800 leading-relaxed whitespace-pre-line pr-4">{aiResponse}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Quick-action chips */}
-        <div className="flex flex-wrap gap-2">
+        {/* Quick chips */}
+        <div className="flex flex-wrap gap-2 justify-center">
           {quickChips.map((chip, i) => (
             <button
               key={i}
               onClick={() => handleChipClick(chip)}
-              className="text-xs font-medium bg-gray-100 hover:bg-gray-200 text-foreground px-3 py-1.5 rounded-full transition-colors border border-gray-200"
+              className="text-[12px] font-medium bg-white border border-gray-200 text-gray-700 px-4 py-1.5 rounded-full hover:bg-gray-50 transition-colors shadow-sm"
             >
               {chip.label}
             </button>
@@ -232,68 +199,98 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── 2×2 Shortcut Grid ─────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3">
-        {shortcuts.map((sc, i) => (
-          <button
-            key={i}
-            onClick={() => sc.path && navigate(sc.path)}
-            className="text-right p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow"
-            style={{ background: sc.bg }}
-          >
-            <div className="font-semibold text-sm text-foreground mb-1">{sc.label}</div>
-            <div className="text-xs text-foreground-secondary">{sc.sub}</div>
+      {/* ── AI Response card ──────────────────────────────────────────────── */}
+      {aiResponse && (
+        <div className="bg-[#fce4ec] border border-[#f8bbd0] rounded-2xl px-5 py-4 relative">
+          <button onClick={() => setAiResponse(null)} className="absolute top-3 left-3 text-gray-400 hover:text-gray-600">
+            <X className="w-4 h-4" />
           </button>
-        ))}
-      </div>
-
-      {/* ── Urgent Card ───────────────────────────────────────────────── */}
-      {(urgentReview || urgentItem) && (
-        <div
-          className="rounded-2xl p-5 flex flex-col gap-3"
-          style={{ background: 'linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%)' }}
-        >
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
             <div className="flex-1">
-              <div className="text-xs font-bold text-[#c62828] mb-1 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#e8344d] inline-block animate-pulse" />
-                דחוף ביותר
-              </div>
-              <div className="font-semibold text-sm text-foreground">
-                {urgentReview
-                  ? 'ביקורת שלילית חדשה בגוגל – לא נענתה'
-                  : (urgentItem?.title || 'תובנה דחופה מהמערכת')}
-              </div>
-              <div className="text-xs text-foreground-secondary mt-1">
-                {urgentReview
-                  ? urgentReview.content?.slice(0, 80) || 'ממתינה לתגובה'
-                  : urgentItem?.summary?.slice(0, 80) || ''}
-              </div>
+              <p className="text-[13px] text-gray-800 leading-relaxed whitespace-pre-line pl-6">{aiResponse}</p>
             </div>
-            <div className="text-xs text-foreground-muted flex-shrink-0">2 ד'</div>
+            <div
+              className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5"
+              style={{ background: 'linear-gradient(135deg, #9c27b0 0%, #e8344d 100%)' }}
+            >
+              ק
+            </div>
           </div>
-          <button
-            onClick={() => navigate(urgentReview ? '/reputation' : '/insights')}
-            className="self-start bg-white/80 hover:bg-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors border border-white/60 shadow-sm"
-          >
-            {urgentReview ? 'קרא ואשר תגובה' : 'צפה בתובנה'}
-          </button>
         </div>
       )}
 
-      {/* ── זרם חי ────────────────────────────────────────────────────── */}
-      {liveItems.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <button onClick={() => navigate('/approvals')} className="text-xs font-semibold text-[#e8344d] flex items-center gap-1">
-              <ChevronLeft className="w-3.5 h-3.5" />
-              כל הפעולות
+      {/* ── 2×2 Shortcuts + Urgent card ──────────────────────────────────── */}
+      <div className="flex gap-4">
+        {/* 2×2 Shortcut grid */}
+        <div className="grid grid-cols-2 gap-3" style={{ flex: '0 0 55%' }}>
+          {shortcuts.map((sc, i) => (
+            <button
+              key={i}
+              onClick={() => navigate(sc.path)}
+              className="text-right p-4 rounded-2xl border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow flex flex-col gap-2"
+            >
+              <sc.Icon className="w-5 h-5 text-[#e8344d]" />
+              <div>
+                <div className="font-semibold text-[13px] text-gray-900">{sc.label}</div>
+                <div className="text-[11px] text-gray-400 mt-0.5 leading-snug">{sc.sub}</div>
+              </div>
             </button>
-            <h3 className="text-sm font-bold text-foreground">
-              זרם חי {pendingActions.length > 0 && <span className="text-[#e8344d]">· {pendingActions.length} ממתינות</span>}
+          ))}
+        </div>
+
+        {/* Urgent card */}
+        {(urgentReview || urgentItem) && !urgentDismissed ? (
+          <div className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-2">
+              <button onClick={() => setUrgentDismissed(true)} className="text-gray-300 hover:text-gray-500 flex-shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+              <div className="flex-1 text-right space-y-1.5">
+                <div className="text-[10px] text-gray-400">אתמול</div>
+                <div className="font-bold text-[13px] text-gray-900 leading-snug">
+                  {urgentReview ? 'ביקורת שלילית חדשה בגוגל – לא נענתה' : (urgentItem?.title || 'תובנה דחופה מהמערכת')}
+                </div>
+                <div className="text-[12px] text-gray-500 leading-relaxed">
+                  {urgentReview
+                    ? (urgentReview.content?.slice(0, 120) || 'תגובה מהירה מעלה את הציון הכולל ומגבירה את שביעות רצון הלקוחות.')
+                    : (urgentItem?.summary?.slice(0, 120) || '')}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-between mt-auto">
+              <div className="flex items-center gap-1 text-gray-400 text-[11px]">
+                <Clock className="w-3.5 h-3.5" />
+                <span>2 דק'</span>
+              </div>
+              <button
+                onClick={() => navigate(urgentReview ? '/reputation' : '/insights')}
+                className="bg-[#e8344d] text-white text-[12px] font-semibold px-4 py-2 rounded-full hover:bg-[#c92b40] transition-colors"
+              >
+                {urgentReview ? 'קרא ואשר תגובה' : 'צפה בתובנה'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* Placeholder when no urgent item */
+          <div className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center justify-center">
+            <p className="text-[13px] text-gray-300">אין פריטים דחופים</p>
+          </div>
+        )}
+      </div>
+
+      {/* ── זרם חי ───────────────────────────────────────────────────────── */}
+      {liveItems.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+          <div className="flex items-baseline justify-between mb-1">
+            <button onClick={() => navigate('/approvals')} className="text-[12px] font-semibold text-[#e8344d] flex items-center gap-0.5">
+              כל הפעולות <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <h3 className="text-[15px] font-bold text-gray-900">
+              זרם חי {pendingActions.length > 0 && <span className="text-[#e8344d]">· {pendingActions.length}</span>}
             </h3>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
+          <p className="text-[11px] text-gray-400 text-right mb-4">פעולות שהמערכת ביצעה וממתינות לאישור שלך</p>
+          <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'thin' }}>
             {liveItems.map((item, i) => (
               <LiveStreamCard key={i} {...item} />
             ))}
@@ -301,51 +298,53 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── בזמן שישנת ────────────────────────────────────────────────── */}
+      {/* ── בזמן שישנת ───────────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={() => navigate('/insights')} className="text-xs font-semibold text-[#e8344d] flex items-center gap-1">
-            <ChevronLeft className="w-3.5 h-3.5" />
-            כל התובנות
+        <div className="flex items-start justify-between mb-4">
+          <button onClick={() => navigate('/insights')} className="text-[12px] font-semibold text-[#e8344d] flex items-center gap-0.5 mt-1">
+            כל התובנות <ChevronLeft className="w-3.5 h-3.5" />
           </button>
-          <h3 className="text-sm font-bold text-foreground">בזמן שישנת</h3>
+          <div className="text-right">
+            <h3 className="text-[15px] font-bold text-gray-900">בזמן שישנת</h3>
+            <p className="text-[11px] text-gray-400 mt-0.5">הינה כל מה שהמערכת עשתה עבורך בימה האחרונה</p>
+          </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'לידים חדשים',   value: newLeadsToday.length },
-            { label: 'נטישות',          value: 0 },
-            { label: 'פעולות בוצעו',   value: actionsCompleted.length },
-            { label: 'שעות שנחסכו',    value: Math.round(actionsCompleted.length * 0.5) },
+            { label: 'לידים חדשים שנמצאו', value: newLeadsToday.length },
+            { label: 'נטישות',              value: 0 },
+            { label: 'פעולות בוצעו',        value: actionsCompleted.length },
+            { label: 'שעות שנחסכו',          value: (actionsCompleted.length * 0.5).toFixed(1) },
           ].map((kpi, i) => (
             <div key={i} className="flex items-center gap-3">
-              <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                <span className="text-green-600 text-xs">✓</span>
+              <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                <span className="text-green-500 text-xs font-bold">✓</span>
               </div>
-              <div>
-                <div className="text-lg font-bold text-foreground">{kpi.value}</div>
-                <div className="text-xs text-foreground-secondary">{kpi.label}</div>
+              <div className="text-right">
+                <div className="text-xl font-bold text-gray-900">{kpi.value}</div>
+                <div className="text-[11px] text-gray-400 leading-snug">{kpi.label}</div>
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* ── Upgrade Banner ────────────────────────────────────────────── */}
-      <div
-        className="rounded-2xl p-5 flex items-center justify-between gap-4"
-        style={{ background: 'linear-gradient(135deg, #fce4ec 0%, #e1bee7 100%)' }}
-      >
-        <div>
-          <div className="font-semibold text-sm text-foreground">המערכת יכולה לזהות יותר עבורך</div>
-          <div className="text-xs text-foreground-secondary mt-0.5">שדרג לפתיחת כל יכולות הבינה המלאכותית</div>
-        </div>
+      {/* ── Upgrade banner ────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-[#fce4ec] p-5 flex items-center justify-between gap-4">
         <button
           onClick={() => navigate('/subscription')}
-          className="flex-shrink-0 bg-[#e8344d] text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-[#c92b40] transition-colors shadow-sm"
+          className="flex-shrink-0 bg-[#e8344d] text-white text-[13px] font-semibold px-5 py-2.5 rounded-full hover:bg-[#c92b40] transition-colors shadow-sm"
         >
           גלה הזדמנויות
         </button>
+        <div className="text-right">
+          <div className="font-semibold text-[13px] text-gray-900">המערכת יכולה לזהות יותר עבורך</div>
+          <div className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">
+            כלל שתחבר יותר מקורות מידע, המערכת תזהה יותר הזדמנויות ותספק המלצות מדויקות יותר לפעולה.
+          </div>
+        </div>
       </div>
+
     </div>
   );
 }
