@@ -23,6 +23,16 @@ export interface LLMOptions {
     business_goal?: string | null;
     price_tier?: string | null;
   };
+  /**
+   * Pass a separate system prompt. When combined with usePromptCache, the system
+   * prompt is sent with Anthropic cache_control so it's cached for 5 min (80% token savings).
+   */
+  systemPrompt?: string;
+  /**
+   * Enable Anthropic prompt caching on the system prompt block (requires systemPrompt).
+   * Only applies to Claude models. Cuts input token cost ~80% for repeat callers.
+   */
+  usePromptCache?: boolean;
 }
 
 const MODEL_MAP: Record<string, string> = {
@@ -50,7 +60,7 @@ const MAX_TOKENS_DEFAULT: Record<string, number> = {
  * Caches responses for 4 hours to avoid duplicate AI calls across pipeline runs.
  */
 export async function invokeLLM(options: { prompt: string } & LLMOptions): Promise<any> {
-  const { prompt, response_json_schema, model, maxTokens: maxTokensOverride, skipCache, profile } = options;
+  const { prompt, response_json_schema, model, maxTokens: maxTokensOverride, skipCache, profile, systemPrompt, usePromptCache } = options;
 
   const modelKey = model || 'haiku'; // default to Haiku (cheapest)
   const modelId = MODEL_MAP[modelKey] || model || 'claude-haiku-4-5-20251001';
@@ -69,12 +79,12 @@ export async function invokeLLM(options: { prompt: string } & LLMOptions): Promi
       return cached;
     }
 
-    const result = await _invokeLLMRaw(finalPrompt, modelId, maxTokens, response_json_schema);
+    const result = await _invokeLLMRaw(finalPrompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache);
     cacheSet(cacheKey, result, TTL.LLM_RESPONSE);
     return result;
   }
 
-  return _invokeLLMRaw(finalPrompt, modelId, maxTokens, response_json_schema);
+  return _invokeLLMRaw(finalPrompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache);
 }
 
 async function _invokeLLMRaw(
@@ -82,6 +92,8 @@ async function _invokeLLMRaw(
   modelId: string,
   maxTokens: number,
   response_json_schema: any,
+  systemPrompt?: string,
+  usePromptCache?: boolean,
 ): Promise<any> {
 
   // Gemini models — route directly without trying Anthropic first
@@ -100,7 +112,7 @@ async function _invokeLLMRaw(
   // Try Anthropic first
   if (process.env.ANTHROPIC_API_KEY) {
     try {
-      return await _callAnthropic(prompt, modelId, maxTokens, response_json_schema);
+      return await _callAnthropic(prompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache);
     } catch (err: any) {
       console.warn('[invokeLLM] Anthropic failed, trying Gemini Flash fallback:', err.message);
       // Fallback chain: Claude → Gemini Flash → OpenAI
@@ -157,18 +169,30 @@ async function _callAnthropic(
   modelId: string,
   maxTokens: number,
   response_json_schema: any,
+  callerSystemPrompt?: string,
+  usePromptCache?: boolean,
 ): Promise<any> {
 
-  const systemPrompt = response_json_schema
+  const defaultSystem = response_json_schema
     ? 'You are a JSON-only assistant. Respond with a single valid JSON object only. No preamble, no explanation, no markdown fences. ALL string values must be in Hebrew unless the field explicitly requires English.'
     : 'You are a helpful assistant.';
 
+  const finalSystem = callerSystemPrompt || defaultSystem;
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: prompt }];
+
+  // Use prompt caching when requested — caches the system prompt for 5 min (~80% input token savings)
+  const systemParam: any = (usePromptCache && callerSystemPrompt)
+    ? [{ type: 'text', text: finalSystem, cache_control: { type: 'ephemeral' } }]
+    : finalSystem;
+
+  if (usePromptCache && callerSystemPrompt) {
+    console.log('[LLM] prompt cache enabled for system prompt');
+  }
 
   const response = await anthropic.messages.create({
     model: modelId,
     max_tokens: maxTokens,
-    system: systemPrompt,
+    system: systemParam,
     messages,
   });
 

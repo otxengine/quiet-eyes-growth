@@ -6,11 +6,12 @@ import { loadBusinessContext } from '../../lib/businessContext';
 /**
  * chatWithBusiness — context-aware AI assistant for a specific business.
  *
- * Fetches real data (signals, competitors, reviews, leads) and builds
+ * Fetches real data (signals, competitors, reviews, leads, sector knowledge) and builds
  * a rich system prompt so the assistant actually knows about this business.
  *
  * Body: { businessProfileId, message, history? }
- * Returns: { reply: string }
+ *   history: string (legacy) | Array<{ role: 'user'|'ai', text: string }> (multi-turn)
+ * Returns: { reply: string, pendingAction?: object }
  */
 export async function chatWithBusiness(req: Request, res: Response) {
   const { businessProfileId, message, history = '' } = req.body;
@@ -20,7 +21,7 @@ export async function chatWithBusiness(req: Request, res: Response) {
 
   try {
     // Fetch business data in parallel — rich context for smarter responses
-    const [profile, recentSignals, competitors, recentReviews, recentLeads, pendingAlerts, bizMemory, healthScoreRow] = await Promise.all([
+    const [profile, recentSignals, competitors, recentReviews, recentLeads, pendingAlerts, bizMemory, healthScoreRow, sectorKnowledge] = await Promise.all([
       prisma.businessProfile.findUnique({ where: { id: businessProfileId } }),
       prisma.marketSignal.findMany({
         where: { linked_business: businessProfileId },
@@ -53,6 +54,12 @@ export async function chatWithBusiness(req: Request, res: Response) {
       }),
       prisma.businessMemory.findFirst({ where: { linked_business: businessProfileId } }),
       prisma.healthScore.findFirst({ where: { linked_business: businessProfileId }, orderBy: { created_date: 'desc' } }).catch(() => null),
+      // NEW: cross-business sector patterns
+      prisma.businessProfile.findUnique({ where: { id: businessProfileId }, select: { category: true } })
+        .then(bp => bp?.category
+          ? (prisma as any).sectorKnowledge.findFirst({ where: { sector: bp.category } }).catch(() => null)
+          : null
+        ).catch(() => null),
     ]);
 
     if (!profile) {
@@ -108,6 +115,34 @@ export async function chatWithBusiness(req: Request, res: Response) {
 
     const healthScoreVal = (healthScoreRow as any)?.overall_score || null;
 
+    // Sector knowledge context
+    let sectorKnowledgeLines = '';
+    if (sectorKnowledge) {
+      try {
+        const dna = JSON.parse((sectorKnowledge as any).winner_lead_dna || '{}');
+        const trending = (sectorKnowledge as any).trending_services || '';
+        sectorKnowledgeLines = [
+          trending ? `מגמות נפוצות בסקטור: ${trending}` : '',
+          dna.winning_patterns ? `דפוסי ליד מנצחים: ${dna.winning_patterns}` : '',
+          dna.key_insights ? `תובנות מרכזיות: ${dna.key_insights}` : '',
+        ].filter(Boolean).join('\n');
+      } catch {}
+    }
+
+    // Agent missions context
+    let agentMissionsLines = '';
+    try {
+      const missions = JSON.parse((profile as any).agent_missions || '{}');
+      const wins = missions.quick_wins_he?.slice(0, 3).join('\n') || '';
+      const focus = missions.weekly_focus_he || '';
+      agentMissionsLines = [
+        wins ? `ניצחונות מהירים:\n${wins}` : '',
+        focus ? `מוקד שבועי: ${focus}` : '',
+      ].filter(Boolean).join('\n');
+    } catch {}
+
+    const sectorProfile = (profile as any).sector_profile || '';
+
     const systemContext = `You are OTX — a sharp, data-driven business intelligence advisor for the OTX platform.
 You are talking with **the business owner** — never with their customers.
 ALL responses must be in Hebrew.
@@ -119,6 +154,7 @@ ALL responses must be in Hebrew.
 ${(profile as any).description ? `• תיאור: ${(profile as any).description}` : ''}
 ${healthScoreVal ? `• ציון בריאות עסקית: ${healthScoreVal}/100` : ''}
 ${preferredTone !== 'professional' ? `• סגנון תקשורת מועדף: ${preferredTone}` : ''}
+${sectorProfile ? `• פרופיל סקטור: ${sectorProfile}` : ''}
 
 === תובנות שוק (${weekSignalCount} השבוע, ${highImpactSignals.length} השפעה גבוהה) ===
 ${signalLines}
@@ -132,8 +168,7 @@ ${reviewLines}
 === לידים ===
 ${leadLines}
 
-${alertLines ? `=== התראות פעילות ===\n${alertLines}\n` : ''}
-=== כללי תגובה ===
+${alertLines ? `=== התראות פעילות ===\n${alertLines}\n` : ''}${sectorKnowledgeLines ? `=== תובנות סקטור (למידה חוצת-עסקים) ===\n${sectorKnowledgeLines}\n` : ''}${agentMissionsLines ? `=== משימות הסוכנים ===\n${agentMissionsLines}\n` : ''}=== כללי תגובה ===
 1. פנה לבעל העסק בגוף שני: "העסק שלך", "אתה", "הלקוחות שלך"
 2. השתמש בנתונים הספציפיים לעיל — לא עצות גנריות
 3. תשובות: עד 3 משפטים — קצר וישיר; מפורט רק לשאלות טכניות
@@ -160,21 +195,26 @@ ${alertLines ? `=== התראות פעילות ===\n${alertLines}\n` : ''}
 - המלצה לענות לביקורת → respond_review { suggested_response:"..." }
 - אם אין פעולה ברורה — השמט את pendingAction לגמרי`;
 
+    // Convert history to safe string — supports both legacy string and new array format
+    let safeHistory = '';
+    if (typeof history === 'string') {
+      safeHistory = history.replace(/<[^>]{0,200}>/g, '').slice(0, 2000);
+    } else if (Array.isArray(history)) {
+      safeHistory = (history as Array<{ role: string; text: string }>)
+        .slice(-8) // last 8 messages max
+        .map(m => `${m.role === 'ai' ? 'Assistant' : 'User'}: ${(m.text || '').slice(0, 500)}`)
+        .join('\n');
+    }
 
-    const safeHistory = (typeof history === 'string' ? history : '').replace(/<[^>]{0,200}>/g, '').slice(0, 2000);
-
-    const fullPrompt = `${systemContext}
-
-Conversation history:
-${safeHistory}
-
-User message: ${message.slice(0, 1000)}`;
+    const userTurn = `${safeHistory ? `Conversation history:\n${safeHistory}\n\n` : ''}User message: ${message.slice(0, 1000)}`;
 
     const raw = await invokeLLM({
       model: 'sonnet',
       maxTokens: 500,
       skipCache: true,
-      prompt: fullPrompt,
+      prompt: userTurn,
+      systemPrompt: systemContext,
+      usePromptCache: true,
       response_json_schema: {
         type: 'object',
         properties: {

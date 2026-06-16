@@ -27,11 +27,16 @@ export default function Dashboard() {
   const { businessProfile } = useOutletContext();
   const navigate = useNavigate();
   const bpId = businessProfile?.id;
+
+  // ── Chat thread state ──────────────────────────────────────────────────────
+  const [messages, setMessages] = useState([]);
+  // Each message: { role: 'ai'|'user', text: string, pendingAction?: {...} }
+  const [chatLoading, setChatLoading] = useState(false);
   const [aiInput, setAiInput] = useState('');
-  const [aiResponse, setAiResponse] = useState(null);
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [urgentDismissed, setUrgentDismissed] = useState(false);
+  const threadRef = useRef(null);
   const inputRef = useRef(null);
+
+  const [urgentDismissed, setUrgentDismissed] = useState(false);
 
   const { data: allLeads = [] } = useQuery({
     queryKey: ['allLeads', bpId],
@@ -113,32 +118,79 @@ export default function Dashboard() {
     { label: 'סכם לי את השבוע',   prompt: 'תסכם לי את השבוע — מה קרה, מה הישגים, מה הצעדים הבאים' },
   ];
 
-  // AI chat
+  // ── Chat logic ─────────────────────────────────────────────────────────────
   const sendAiMessage = async (message) => {
     const msg = message || aiInput;
-    if (!msg.trim() || isAiLoading) return;
+    if (!msg.trim() || chatLoading) return;
     setAiInput('');
-    setIsAiLoading(true);
-    setAiResponse(null);
+    setChatLoading(true);
+
+    const userMsg = { role: 'user', text: msg };
+    const nextMessages = [...messages, userMsg];
+    setMessages(nextMessages);
+
+    // Scroll after user message
+    setTimeout(() => threadRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+
     try {
       let result;
+      // Pass last 8 messages as history for multi-turn context
+      const history = nextMessages.slice(-8).map(m => ({ role: m.role, text: m.text }));
       try {
-        result = await base44.functions.invoke('chatWithBusiness', { message: msg, businessProfileId: bpId, history: [] });
+        result = await base44.functions.invoke('chatWithBusiness', {
+          message: msg,
+          businessProfileId: bpId,
+          history,
+        });
       } catch (_) {
-        result = await base44.integrations.Core.InvokeLLM({ prompt: `אתה עוזר עסקי חכם. ענה בעברית בקצרה. שאלה: ${msg}`, response_json_schema: null });
+        result = await base44.integrations.Core.InvokeLLM({
+          prompt: `אתה עוזר עסקי חכם. ענה בעברית בקצרה. שאלה: ${msg}`,
+          response_json_schema: null,
+        });
       }
-      const text = result?.response || result?.message || result?.content || result?.text || (typeof result === 'string' ? result : 'לא הצלחתי לקבל תשובה.');
-      setAiResponse(text);
+
+      const text = result?.reply || result?.response || result?.message || result?.content || result?.text
+        || (typeof result === 'string' ? result : 'לא הצלחתי לקבל תשובה.');
+      const pendingAction = result?.pendingAction || null;
+
+      const aiMsg = { role: 'ai', text, pendingAction };
+      setMessages(prev => [...prev, aiMsg]);
+      setTimeout(() => threadRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
     } catch (err) {
-      setAiResponse('שגיאה בהתחברות. נסה שוב.');
+      setMessages(prev => [...prev, { role: 'ai', text: 'שגיאה בהתחברות. נסה שוב.' }]);
     } finally {
-      setIsAiLoading(false);
+      setChatLoading(false);
     }
   };
 
   const handleChipClick = (chip) => {
     if (chip.path) navigate(chip.path);
     else if (chip.prompt) sendAiMessage(chip.prompt);
+  };
+
+  const handleApproveAction = async (msgIndex, pendingAction) => {
+    try {
+      await base44.entities.AutoAction.create({
+        action_type: pendingAction.type,
+        prefilled_text: pendingAction.payload?.text || pendingAction.label,
+        decision_reason: pendingAction.label,
+        status: 'pending_approval',
+        linked_business: bpId,
+      });
+      // Clear the action card after creation
+      setMessages(prev => prev.map((m, i) =>
+        i === msgIndex ? { ...m, pendingAction: null } : m
+      ));
+      navigate('/approvals');
+    } catch (err) {
+      console.error('[Dashboard] AutoAction.create failed:', err);
+    }
+  };
+
+  const handleRejectAction = (msgIndex) => {
+    setMessages(prev => prev.map((m, i) =>
+      i === msgIndex ? { ...m, pendingAction: null } : m
+    ));
   };
 
   const bpName = businessProfile?.name || '';
@@ -162,7 +214,6 @@ export default function Dashboard() {
 
         {/* Input row */}
         <div className="flex items-center bg-white border border-gray-200 rounded-full shadow-sm w-full max-w-2xl overflow-hidden pr-5 pl-1.5 py-1.5">
-          {/* Text input (RTL: starts from right) */}
           <input
             ref={inputRef}
             value={aiInput}
@@ -171,14 +222,13 @@ export default function Dashboard() {
             placeholder="תאר במילים מה תרצה לבצע והמערכת תתחיל בעבודה"
             className="flex-1 bg-transparent text-[13px] text-gray-700 placeholder:text-gray-400 outline-none min-w-0"
           />
-          {/* Send button — visual left in RTL (end of flex row) */}
           <button
             onClick={() => sendAiMessage()}
-            disabled={!aiInput.trim() || isAiLoading}
+            disabled={!aiInput.trim() || chatLoading}
             className="w-10 h-10 rounded-full bg-[#111] flex items-center justify-center flex-shrink-0 disabled:opacity-40 transition-opacity"
             style={{ marginRight: '8px' }}
           >
-            {isAiLoading
+            {chatLoading
               ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin block" />
               : <ChevronLeft className="w-5 h-5 text-white" />
             }
@@ -199,23 +249,74 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── AI Response card ──────────────────────────────────────────────── */}
-      {aiResponse && (
-        <div className="bg-[#fce4ec] border border-[#f8bbd0] rounded-2xl px-5 py-4 relative">
-          <button onClick={() => setAiResponse(null)} className="absolute top-3 left-3 text-gray-400 hover:text-gray-600">
-            <X className="w-4 h-4" />
-          </button>
-          <div className="flex items-start gap-3">
-            <div className="flex-1">
-              <p className="text-[13px] text-gray-800 leading-relaxed whitespace-pre-line pl-6">{aiResponse}</p>
+      {/* ── Chat thread ────────────────────────────────────────────────────── */}
+      {messages.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {messages.map((msg, i) => (
+            <div key={i}>
+              {msg.role === 'user' ? (
+                /* User bubble — right-aligned */
+                <div className="flex justify-start">
+                  <div className="bg-gray-100 text-gray-800 rounded-2xl px-4 py-2 max-w-[80%] text-[13px] leading-relaxed">
+                    {msg.text}
+                  </div>
+                </div>
+              ) : (
+                /* AI bubble — left-aligned with Kori avatar */
+                <div className="flex gap-3 justify-end">
+                  <div className="flex-1 max-w-[85%]">
+                    <div className="bg-white border border-gray-100 rounded-2xl px-4 py-3 text-[13px] text-gray-800 leading-relaxed whitespace-pre-line shadow-sm">
+                      {msg.text}
+                    </div>
+
+                    {/* Action proposal card */}
+                    {msg.pendingAction && (
+                      <div className="mt-3 border border-[#e8344d] rounded-xl p-3 bg-[#fce4ec]">
+                        <p className="text-[11px] font-semibold text-[#e8344d] mb-1 uppercase tracking-wider">פעולה מוצעת</p>
+                        <p className="text-[13px] text-gray-800 mb-3">{msg.pendingAction.label}</p>
+                        <div className="flex gap-2 justify-start">
+                          <button
+                            onClick={() => handleRejectAction(i)}
+                            className="text-[12px] text-gray-500 px-3 py-1.5 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
+                          >
+                            לא עכשיו
+                          </button>
+                          <button
+                            onClick={() => handleApproveAction(i, msg.pendingAction)}
+                            className="text-[12px] font-semibold bg-[#e8344d] text-white px-4 py-1.5 rounded-full hover:bg-[#c92b40] transition-colors"
+                          >
+                            שלח לאישור →
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <KoriAvatar size="sm" className="flex-shrink-0 mt-1" />
+                </div>
+              )}
             </div>
-            <div
-              className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5"
-              style={{ background: 'linear-gradient(135deg, #9c27b0 0%, #e8344d 100%)' }}
-            >
-              ק
+          ))}
+
+          {/* Loading indicator */}
+          {chatLoading && (
+            <div className="flex gap-3 justify-end">
+              <div className="bg-white border border-gray-100 rounded-2xl px-4 py-3 shadow-sm">
+                <div className="flex gap-1 items-center">
+                  {[0, 1, 2].map(n => (
+                    <span
+                      key={n}
+                      className="w-2 h-2 rounded-full bg-gray-300 animate-pulse"
+                      style={{ animationDelay: `${n * 150}ms` }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <KoriAvatar size="sm" className="flex-shrink-0 mt-1" />
             </div>
-          </div>
+          )}
+
+          {/* Scroll anchor */}
+          <div ref={threadRef} />
         </div>
       )}
 
@@ -271,7 +372,6 @@ export default function Dashboard() {
             </div>
           </div>
         ) : (
-          /* Placeholder when no urgent item */
           <div className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center justify-center">
             <p className="text-[13px] text-gray-300">אין פריטים דחופים</p>
           </div>
