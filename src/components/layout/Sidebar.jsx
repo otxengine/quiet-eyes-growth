@@ -11,38 +11,36 @@ import {
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { cn } from '@/lib/utils';
 
-// Main nav structure — matches Figma design
+// Main nav structure — Cortexi design: 6 flat pages
 const NAV_STRUCTURE = [
-  { type: 'item', path: '/command', label: 'בית' },
-  { type: 'item', path: '/leads',   label: 'לידים', badgeKey: 'hotLeads' },
+  { type: 'item', path: '/',           label: 'בית',           icon: Home },
+  { type: 'item', path: '/leads',      label: 'לידים',         icon: CheckCircle, badgeKey: 'hotLeads' },
+  { type: 'item', path: '/insights',   label: 'תובנות',        icon: Lightbulb,   badgeKey: 'activeInsights' },
+  { type: 'item', path: '/competitors',label: 'מתחרים',        icon: Eye },
+  { type: 'item', path: '/marketing',  label: 'מרכז השיווק',   icon: Megaphone },
+  { type: 'item', path: '/events',     label: 'אירועים',       icon: Calendar },
   {
-    type: 'group', key: 'intel', label: 'תובנות',
+    type: 'group', key: 'more', label: 'עוד',
     items: [
-      { path: '/insights',    label: 'תובנות',      badgeKey: 'activeInsights' },
-      { path: '/competitors', label: 'מתחרים' },
-      { path: '/events',      label: 'אירועים' },
-      { path: '/strategy',    label: 'אסטרטגיה' },
-      { path: '/demand-gap',  label: 'פערי ביקוש' },
-    ],
-  },
-  {
-    type: 'group', key: 'manage', label: 'שיווק וניהול',
-    items: [
-      { path: '/marketing',  label: 'מרכז שיווק' },
-      { path: '/reviews',    label: 'מוניטין',      badgeKey: 'pendingReviews' },
+      { path: '/reviews',    label: 'מוניטין',       badgeKey: 'pendingReviews' },
       { path: '/retention',  label: 'שימור לקוחות' },
       { path: '/tasks',      label: 'משימות' },
       { path: '/reports',    label: 'דוחות' },
+      { path: '/strategy',   label: 'אסטרטגיה' },
+      { path: '/demand-gap', label: 'פערי ביקוש' },
     ],
   },
 ];
 
 // Collapsed mode icons — one per nav entry
 const COLLAPSED_ICONS = {
-  '/command':   Home,
-  '/leads':     CheckCircle,
-  'intel':      Lightbulb,
-  'manage':     Megaphone,
+  '/':            Home,
+  '/leads':       CheckCircle,
+  '/insights':    Lightbulb,
+  '/competitors': Eye,
+  '/marketing':   Megaphone,
+  '/events':      Calendar,
+  'more':         Target,
 };
 
 function getDefaultOpen(key) {
@@ -81,8 +79,7 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, 
   }, [userMenuOpen]);
 
   const [openGroups, setOpenGroups] = useState(() => ({
-    intel:  getDefaultOpen('intel'),
-    manage: getDefaultOpen('manage'),
+    more: getDefaultOpen('more'),
   }));
 
   // Auto-expand group when a child route is active
@@ -197,12 +194,12 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, 
         <ul className={cn('space-y-1', collapsed ? 'px-2' : 'px-5')}>
           {NAV_STRUCTURE.map((node) => {
             if (node.type === 'item') {
-              const isActive = location.pathname === node.path ||
-                (node.path === '/' && location.pathname === '/dashboard');
+              const isActive =
+                (node.path === '/' ? (location.pathname === '/' || location.pathname === '/dashboard') : location.pathname === node.path);
               const badgeCount = node.badgeKey ? (badges[node.badgeKey] || 0) : 0;
 
               if (collapsed) {
-                const Icon = COLLAPSED_ICONS[node.path] || Home;
+                const Icon = node.icon || COLLAPSED_ICONS[node.path] || Home;
                 return (
                   <li key={node.path}>
                     <Link to={node.path} onClick={() => onNavigate?.()}

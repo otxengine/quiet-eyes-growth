@@ -119,7 +119,7 @@ export default function Insights() {
     title: r.title.slice(0, 60),
     description: r.summary?.slice(0, 80),
     ctaLabel: 'טפל עכשיו',
-    onCta: () => navigate(`/insight-detail/${r.id}?kind=${r.kind}`),
+    onCta: () => navigate(`/insights/${r.id}?kind=${r.kind}`),
   }));
 
   const getTypeMeta = (type) => TYPE_META[type] || { label: type, color: 'text-foreground-secondary', bg: 'bg-gray-50' };
@@ -175,7 +175,7 @@ export default function Insights() {
             }
             if (col.key === 'action') return (
               <button
-                onClick={() => navigate(`/insight-detail/${row.id}?kind=${row.kind}`)}
+                onClick={() => navigate(`/insights/${row.id}?kind=${row.kind}`)}
                 className="text-xs font-semibold text-[#e8344d] hover:underline"
               >
                 פעולה &rarr;
