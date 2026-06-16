@@ -133,26 +133,27 @@ export default function Dashboard() {
     setTimeout(() => threadRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
 
     try {
-      let result;
+      let rawResult;
       // Pass last 8 messages as history for multi-turn context
       const history = nextMessages.slice(-8).map(m => ({ role: m.role, text: m.text }));
       try {
-        result = await base44.functions.invoke('chatWithBusiness', {
+        rawResult = await base44.functions.invoke('chatWithBusiness', {
           message: msg,
           businessProfileId: bpId,
           history,
         });
       } catch (_) {
-        result = await base44.integrations.Core.InvokeLLM({
+        rawResult = await base44.integrations.Core.InvokeLLM({
           prompt: `אתה עוזר עסקי חכם. ענה בעברית בקצרה. שאלה: ${msg}`,
           response_json_schema: null,
         });
       }
 
-      // Support all response shapes: chatWithBusiness {reply}, Gemini {message/content}, plain string
+      // base44.functions.invoke may wrap response in { data: {...} }
+      const result = rawResult?.data || rawResult;
       const text = result?.reply || result?.response || result?.message || result?.content || result?.text
         || (typeof result === 'string' ? result : null)
-        || (typeof result === 'object' && result !== null ? Object.values(result).find(v => typeof v === 'string' && v.length > 5) : null)
+        || (typeof rawResult === 'string' ? rawResult : null)
         || 'לא הצלחתי לקבל תשובה.';
       const pendingAction = result?.pendingAction || null;
 
