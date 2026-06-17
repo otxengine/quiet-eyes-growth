@@ -37,6 +37,7 @@ import onboardingRouter from './routes/onboarding';
 import organizationsRouter from './routes/organizations';
 import agencyRouter from './routes/agency';
 import stripeRouter from './routes/stripe';
+import emailApprovalRouter from './routes/emailApproval';
 
 // Wire up all event choreography handlers at startup
 registerAllHandlers();
@@ -147,6 +148,7 @@ app.use('/api/onboarding', onboardingRouter);
 app.use('/api/orgs', organizationsRouter);
 app.use('/api/agency', agencyRouter);
 app.use('/api/stripe', stripeRouter);
+app.use('/api/actions', emailApprovalRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
