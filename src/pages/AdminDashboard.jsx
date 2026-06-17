@@ -25,7 +25,7 @@ function useIsAdmin() {
 
 const TABS = [
   { key: 'overview',   label: 'Overview' },
-  { key: 'pipeline',   label: 'OTX Pipeline' },
+  { key: 'pipeline',   label: 'Cortexi Pipeline' },
   { key: 'roi',        label: 'ROI & רווחיות' },
   { key: 'health',     label: 'בריאות עסקים' },
   { key: 'approvals',  label: 'אישורים' },

@@ -123,8 +123,8 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, 
         {!collapsed && (
           <>
             <div className="flex items-center gap-2">
-              <img src="/logo.jpeg" alt="OTX" className="h-6 w-auto object-contain rounded-sm" />
-              <span className="text-[14px] font-bold" style={{ color: 'hsl(var(--sidebar-accent-foreground))' }}>OTX</span>
+              <img src="/logo.jpeg" alt="Cortexi" className="h-6 w-auto object-contain rounded-sm" />
+              <span className="text-[14px] font-bold" style={{ color: 'hsl(var(--sidebar-accent-foreground))' }}>Cortexi</span>
             </div>
             <button
               onClick={onToggle}
@@ -139,7 +139,7 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, 
         )}
         {collapsed && (
           <button onClick={onToggle} className="mx-auto">
-            <img src="/logo.jpeg" alt="OTX" className="h-7 w-7 object-contain rounded-sm" />
+            <img src="/logo.jpeg" alt="Cortexi" className="h-7 w-7 object-contain rounded-sm" />
           </button>
         )}
       </div>

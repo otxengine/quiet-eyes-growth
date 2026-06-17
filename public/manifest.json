@@ -1,7 +1,7 @@
 {
-  "name": "OTX — Growth Intelligence",
-  "short_name": "OTX",
-  "description": "מודיעין צמיחה בזמן אמת לעסקים ישראליים",
+  "name": "Cortexi — Business Intelligence",
+  "short_name": "Cortexi",
+  "description": "Inspired by the brain. Built for intelligence.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

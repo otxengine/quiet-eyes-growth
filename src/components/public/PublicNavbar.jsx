@@ -20,8 +20,8 @@ export default function PublicNavbar() {
       <div className="max-w-[1200px] mx-auto flex items-center justify-between">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 flex-shrink-0">
-          <img src="/logo.jpeg" alt="OTX" className="h-7 w-auto object-contain" />
-          <span className="text-[14.5px] font-bold text-[#111111]">OTX</span>
+          <img src="/logo.jpeg" alt="Cortexi" className="h-7 w-auto object-contain" />
+          <span className="text-[14.5px] font-bold text-[#111111]">Cortexi</span>
         </Link>
 
         {/* Center nav — desktop */}

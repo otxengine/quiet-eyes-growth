@@ -70,7 +70,7 @@ const pageTitles = {
   '/integrations':  'אינטגרציות',
   '/settings':      'הגדרות',
   '/social':        'רשתות חברתיות',
-  '/otx':           'OTX Dashboard',
+  '/otx':           'Cortexi Dashboard',
   '/org/settings':  'הגדרות ארגון',
   '/agency':        'סוכנות',
   '/chat':          'יועץ AI',
@@ -240,7 +240,7 @@ export default function AppLayout() {
     || (location.pathname.startsWith('/insights/') ? 'תובנה' : null)
     || (location.pathname.startsWith('/tasks/')    ? 'פרטי משימה' : null)
     || (location.pathname.startsWith('/signals/')  ? 'פרטי סיגנל' : null)
-    || 'OTX';
+    || 'Cortexi';
 
   if (loadingProfiles) {
     return (

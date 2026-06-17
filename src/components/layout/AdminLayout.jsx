@@ -29,7 +29,7 @@ export default function AdminLayout() {
   return (
     <div className="min-h-screen bg-background" dir="rtl">
       <header className="h-12 border-b border-border flex items-center justify-between px-6 bg-background">
-        <span className="text-[12px] font-bold text-foreground tracking-tight">OTX Admin</span>
+        <span className="text-[12px] font-bold text-foreground tracking-tight">Cortexi Admin</span>
         <div className="flex items-center gap-4">
           <span className="text-[11px] text-foreground-muted">{user?.email}</span>
           <button
