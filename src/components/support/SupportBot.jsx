@@ -97,13 +97,21 @@ function getFaqFallback(message) {
 }
 
 // ── Main async function ───────────────────────────────────────────────────────
-export async function getBotResponse(message) {
+export async function getBotResponse(message, history = []) {
+  // Build multi-turn prompt from history
+  const historyText = history.slice(-6)
+    .map(m => `${m.role === 'user' ? 'משתמש' : 'סוכן'}: ${m.text}`)
+    .join('\n');
+  const prompt = historyText
+    ? `${SUPPORT_SYSTEM_PROMPT}\n\nהיסטוריית שיחה:\n${historyText}\n\nמשתמש: ${message}`
+    : `${SUPPORT_SYSTEM_PROMPT}\n\nשאלת המשתמש: ${message}`;
+
   // Try AI first
   try {
     const response = await base44.integrations.Core.InvokeLLM({
       model: 'haiku',
       maxTokens: 350,
-      prompt: `${SUPPORT_SYSTEM_PROMPT}\n\nשאלת המשתמש: ${message}`,
+      prompt,
     });
     // Handle multiple response shapes: string, { content }, { text }, { reply }
     const text = typeof response === 'string'

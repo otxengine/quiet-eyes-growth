@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
-import { X, Send, Video, Square, CheckCircle, MessageSquare, User, Loader2 } from 'lucide-react';
+import { X, Send, Video, Square, CheckCircle, MessageSquare, User, Loader2, Camera } from 'lucide-react';
 import { getBotResponse } from './SupportBot';
 
 export default function SupportPanel({ onClose, businessProfile, onTicketCreated }) {
@@ -22,6 +22,10 @@ export default function SupportPanel({ onClose, businessProfile, onTicketCreated
   const chunksRef = useRef([]);
   const messagesEndRef = useRef(null);
 
+  // Screenshot
+  const [screenshotDataUrl, setScreenshotDataUrl] = useState(null);
+  const [screenshotLoading, setScreenshotLoading] = useState(false);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -38,7 +42,7 @@ export default function SupportPanel({ onClose, businessProfile, onTicketCreated
     setTimeout(scrollToBottom, 50);
 
     try {
-      const botResp = await getBotResponse(text);
+      const botResp = await getBotResponse(text, messages);
       setMessages(prev => [...prev, { role: 'bot', text: botResp.text }]);
       if (botResp.suggest_escalate) setEscalated(true);
     } finally {
@@ -72,6 +76,27 @@ export default function SupportPanel({ onClose, businessProfile, onTicketCreated
     mediaRecorderRef.current?.stop();
   };
 
+  const takeScreenshot = async () => {
+    setScreenshotLoading(true);
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const track = stream.getVideoTracks()[0];
+      const imageCapture = new ImageCapture(track);
+      const bitmap = await imageCapture.grabFrame();
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      canvas.getContext('2d').drawImage(bitmap, 0, 0);
+      track.stop();
+      stream.getTracks().forEach(t => t.stop());
+      setScreenshotDataUrl(canvas.toDataURL('image/png'));
+    } catch (err) {
+      console.error('[Support] Screenshot error:', err);
+    } finally {
+      setScreenshotLoading(false);
+    }
+  };
+
   const submitTicket = async (withRecording = false) => {
     setSubmitting(true);
     try {
@@ -80,12 +105,16 @@ export default function SupportPanel({ onClose, businessProfile, onTicketCreated
         .map(m => m.text)
         .join(' | ') || 'פנייה ללא תיאור';
 
+      const hasScreenshot = !!screenshotDataUrl;
+
       // Send email notification to admin + create ticket
       await base44.functions.invoke('submitSupportTicket', {
         description,
         userEmail: businessProfile?.created_by || '',
         businessId: businessProfile?.id || '',
         hasRecording: withRecording && !!recordingBlob,
+        hasScreenshot,
+        transcript: messages,
       });
 
       // Also save entity record for Admin Dashboard tab
@@ -93,6 +122,7 @@ export default function SupportPanel({ onClose, businessProfile, onTicketCreated
         await base44.entities.SupportTicket.create({
           description,
           recording_url: withRecording && recordingBlob ? `recording_${Date.now()}.webm` : '',
+          screenshot_url: hasScreenshot ? `screenshot_${Date.now()}.png` : '',
           status: 'open',
           user_email: businessProfile?.created_by || '',
           business_id: businessProfile?.id || '',
@@ -114,7 +144,8 @@ export default function SupportPanel({ onClose, businessProfile, onTicketCreated
       className="fixed z-50 flex flex-col overflow-hidden"
       style={{
         bottom: 96,
-        right: 24,
+        left: 16,
+        right: 'auto',
         width: 'min(400px, calc(100vw - 32px))',
         height: 'min(520px, calc(100vh - 104px))',
         background: 'rgba(255,255,255,0.97)',
@@ -153,7 +184,7 @@ export default function SupportPanel({ onClose, businessProfile, onTicketCreated
           </div>
         ) : step === 'recording' ? (
           <div className="flex flex-col gap-4 py-4">
-            <p className="text-[13px] text-foreground-secondary text-center">הקלט את הבעיה ואז שלח לנציג</p>
+            <p className="text-[13px] text-foreground-secondary text-center">צרף ראיה ושלח לנציג</p>
             {recording ? (
               <div className="flex flex-col items-center gap-3">
                 <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: '#fee2e2' }}>
@@ -193,17 +224,54 @@ export default function SupportPanel({ onClose, businessProfile, onTicketCreated
                   שלח ללא הקלטה
                 </button>
               </div>
+            ) : screenshotDataUrl ? (
+              <div className="flex flex-col gap-3">
+                <img
+                  src={screenshotDataUrl}
+                  alt="צילום מסך"
+                  className="w-full rounded-xl object-contain"
+                  style={{ maxHeight: 160 }}
+                />
+                <button
+                  onClick={() => submitTicket(false)}
+                  disabled={submitting}
+                  className="w-full py-2.5 rounded-xl text-white text-[13px] font-semibold transition-opacity disabled:opacity-60"
+                  style={{ background: 'linear-gradient(135deg, #E8344D, #FF6B6B)' }}
+                >
+                  שלח עם צילום מסך
+                </button>
+                <button
+                  onClick={() => setScreenshotDataUrl(null)}
+                  className="w-full py-1.5 text-[12px] text-foreground-muted hover:text-foreground transition-colors"
+                >
+                  צלם שוב
+                </button>
+              </div>
             ) : (
               <div className="flex flex-col gap-3">
                 <button
-                  onClick={startRecording}
-                  className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border-2 border-dashed text-[13px] font-medium transition-all"
+                  onClick={takeScreenshot}
+                  disabled={screenshotLoading}
+                  className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border-2 border-dashed text-[13px] font-medium transition-all disabled:opacity-60"
                   style={{ borderColor: 'rgba(232,52,77,0.3)', color: '#E8344D' }}
                   onMouseEnter={e => e.currentTarget.style.background = 'rgba(232,52,77,0.04)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
+                  {screenshotLoading
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <Camera className="w-4 h-4" />
+                  }
+                  צלם מסך
+                </button>
+                <button
+                  onClick={startRecording}
+                  className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border-2 border-dashed text-[13px] font-medium transition-all"
+                  style={{ borderColor: 'rgba(100,100,100,0.2)', color: '#555' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.03)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
                   <Video className="w-4 h-4" />
-                  הקלט את הבעיה
+                  הקלט סרטון
                 </button>
                 <button
                   onClick={() => submitTicket(false)}
@@ -211,7 +279,7 @@ export default function SupportPanel({ onClose, businessProfile, onTicketCreated
                   className="w-full py-2.5 rounded-xl text-white text-[13px] font-semibold transition-opacity disabled:opacity-60"
                   style={{ background: 'linear-gradient(135deg, #E8344D, #FF6B6B)' }}
                 >
-                  שלח ללא הקלטה
+                  שלח ללא קובץ
                 </button>
               </div>
             )}

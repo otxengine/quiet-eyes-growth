@@ -9,6 +9,8 @@ function buildSupportEmail(opts: {
   businessId: string;
   description: string;
   hasRecording: boolean;
+  hasScreenshot: boolean;
+  transcript: Array<{ role: string; text: string }>;
   submittedAt: string;
 }): string {
   const adminUrl = `${FRONTEND_URL}/admin-dashboard`;
@@ -42,8 +44,12 @@ function buildSupportEmail(opts: {
           <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; color: #111; font-size: 13px;">${opts.submittedAt}</td>
         </tr>
         <tr>
-          <td style="padding: 10px 0; color: #888; font-size: 13px;">הקלטת מסך</td>
-          <td style="padding: 10px 0; color: #111; font-size: 13px;">${opts.hasRecording ? '✅ כן — זמינה בדשבורד' : '❌ לא'}</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; color: #888; font-size: 13px;">הקלטת מסך</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; color: #111; font-size: 13px;">${opts.hasRecording ? '✅ כן — זמינה בדשבורד' : '❌ לא'}</td>
+        </tr>
+        <tr>
+          <td style="padding: 10px 0; color: #888; font-size: 13px;">צילום מסך</td>
+          <td style="padding: 10px 0; color: #111; font-size: 13px;">${opts.hasScreenshot ? '✅ כן — צורף לפנייה' : '❌ לא'}</td>
         </tr>
       </table>
 
@@ -52,6 +58,13 @@ function buildSupportEmail(opts: {
         <p style="margin: 0 0 8px; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">תיאור הבעיה</p>
         <p style="margin: 0; color: #333; font-size: 14px; line-height: 1.6;">${opts.description}</p>
       </div>
+
+      ${opts.transcript && opts.transcript.length > 0 ? `
+      <!-- Conversation transcript -->
+      <div style="background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: 16px; margin-bottom: 24px; text-align: right;">
+        <p style="margin: 0 0 12px; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">שיחה עם הבוט</p>
+        ${opts.transcript.map(m => `<p style="margin: 0 0 8px; font-size: 13px; line-height: 1.5;"><strong style="color: ${m.role === 'user' ? '#E8344D' : '#555'};">${m.role === 'user' ? 'משתמש' : 'בוט'}:</strong> <span style="color: #333;">${(m.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span></p>`).join('')}
+      </div>` : ''}
 
       <!-- CTA -->
       <div style="text-align: center;">
@@ -71,7 +84,7 @@ function buildSupportEmail(opts: {
 }
 
 export async function submitSupportTicket(req: Request, res: Response) {
-  const { description, userEmail, businessId, hasRecording } = req.body;
+  const { description, userEmail, businessId, hasRecording, hasScreenshot, transcript } = req.body;
 
   if (!description) {
     return res.status(400).json({ error: 'Missing description' });
@@ -90,7 +103,7 @@ export async function submitSupportTicket(req: Request, res: Response) {
   await sendEmail({
     to: SUPPORT_NOTIFY_EMAIL,
     subject: `🔴 פנייה חדשה לתמיכה — ${userEmail || 'משתמש לא מזוהה'}`,
-    html: buildSupportEmail({ userEmail, businessId, description, hasRecording: !!hasRecording, submittedAt }),
+    html: buildSupportEmail({ userEmail, businessId, description, hasRecording: !!hasRecording, hasScreenshot: !!hasScreenshot, transcript: Array.isArray(transcript) ? transcript : [], submittedAt }),
   });
 
   return res.json({ ok: true });

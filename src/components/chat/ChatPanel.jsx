@@ -343,10 +343,12 @@ ${history}
 
   return (
     <div
-      className="fixed z-50 flex flex-col overflow-hidden"
+      className="fixed z-[65] flex flex-col overflow-hidden"
       style={{
+        position: 'fixed',
         bottom: 88,
         left: 16,
+        right: 'auto',
         width: 'min(440px, calc(100vw - 32px))',
         height: 'min(620px, calc(100vh - 104px))',
         background: 'rgba(255,255,255,0.88)',
