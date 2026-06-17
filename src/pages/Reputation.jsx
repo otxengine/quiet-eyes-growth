@@ -83,8 +83,8 @@ export default function Reputation() {
   };
 
   useEffect(() => {
-    window.__quieteyes_scan = handleCollectReviews;
-    return () => { delete window.__quieteyes_scan; };
+    window.__cortexi_scan = handleCollectReviews;
+    return () => { delete window.__cortexi_scan; };
   }, [bpId]);
 
   useEffect(() => {

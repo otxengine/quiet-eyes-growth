@@ -78,7 +78,7 @@ function StatCard({ label, value, sub, color = '#6366f1' }) {
 function useIsAdmin() {
   try {
     const email = window.__clerk?.user?.primaryEmailAddress?.emailAddress || '';
-    return email === 'contact@otxengine.io' || email.endsWith('@otx.ai') || email.endsWith('@quieteyes.ai');
+    return email === 'contact@otxengine.io' || email === 'admin@cortexi.ai' || email.endsWith('@otx.ai') || email.endsWith('@quieteyes.ai') || email.endsWith('@cortexi.ai');
   } catch { return false; }
 }
 

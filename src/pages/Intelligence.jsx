@@ -79,8 +79,8 @@ export default function Intelligence() {
     : allSignals.filter(s => s.category === activeTab);
 
   useEffect(() => {
-    window.__quieteyes_scan = () => setShowScan(true);
-    return () => { delete window.__quieteyes_scan; };
+    window.__cortexi_scan = () => setShowScan(true);
+    return () => { delete window.__cortexi_scan; };
   }, []);
 
   const statCards = [

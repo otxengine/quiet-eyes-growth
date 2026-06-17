@@ -86,7 +86,7 @@ export default function OrchestratorPanel() {
         className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-secondary/30 transition-colors"
       >
         <Activity className="w-3.5 h-3.5 text-foreground-muted flex-shrink-0" />
-        <span className="text-[11px] font-semibold text-foreground">OTXEngine — מרכז פיקוד</span>
+        <span className="text-[11px] font-semibold text-foreground">Cortexi — מרכז פיקוד</span>
 
         {/* Agent dots summary */}
         <div className="flex items-center gap-1.5 mr-2">

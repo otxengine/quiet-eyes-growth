@@ -204,7 +204,7 @@ export function EventBusPanel({ bpId }) {
         </div>
         <div>
           <h1 className="text-[16px] font-bold text-foreground">Event Bus Dashboard</h1>
-          <p className="text-[11px] text-foreground-muted">ניטור פעילות מערכת OTX — ב-24 שעות האחרונות</p>
+          <p className="text-[11px] text-foreground-muted">ניטור פעילות מערכת Cortexi — ב-24 שעות האחרונות</p>
         </div>
         <button
           onClick={() => triggerBus.mutate()}

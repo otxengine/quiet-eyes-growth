@@ -46,7 +46,7 @@ export default function TopBar({ pageTitle, user, badges = {}, onMenuClick, show
         <div className="flex items-center gap-3 md:gap-4">
           {/* Scan button - available on all pages */}
           <button
-            onClick={() => window.__quieteyes_scan?.()}
+            onClick={() => window.__cortexi_scan?.()}
             className="btn-subtle hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-medium text-foreground-muted border border-border hover:border-border-hover hover:text-foreground transition-all"
           >
             <Radar className="w-3 h-3" />

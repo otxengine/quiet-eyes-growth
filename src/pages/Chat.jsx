@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 
 // --- storage helpers ---
 function storageKey(bpId) {
-  return bpId ? `quieteyes_chat_${bpId}` : 'quieteyes_chat_default';
+  return bpId ? `cortexi_chat_${bpId}` : 'cortexi_chat_default';
 }
 function loadMessages(bpId) {
   try { return JSON.parse(localStorage.getItem(storageKey(bpId)) || '[]'); } catch { return []; }
@@ -101,7 +101,7 @@ export default function Chat() {
         const reply = await base44.integrations.Core.InvokeLLM({
           model: 'sonnet',
           maxTokens: 800,
-          prompt: `אתה יועץ עסקי AI של מערכת QuietEyes.${bpContext}
+          prompt: `אתה יועץ עסקי AI של מערכת Cortexi.${bpContext}
 ענה בעברית, תשובות ישירות ומעשיות.
 היסטוריה:
 ${history}

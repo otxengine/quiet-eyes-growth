@@ -5,14 +5,14 @@ import { useLocation } from 'react-router-dom';
 
 export default function ChatWidget({ businessProfile, urgentCount = 0 }) {
   const [open, setOpen] = useState(() => {
-    try { return sessionStorage.getItem('quieteyes_chat_open') === '1'; } catch { return false; }
+    try { return sessionStorage.getItem('cortexi_chat_open') === '1'; } catch { return false; }
   });
   const [prefilledMessage, setPrefilledMessage] = useState('');
   const location = useLocation();
 
   // Persist open state across page reloads within the session
   useEffect(() => {
-    try { sessionStorage.setItem('quieteyes_chat_open', open ? '1' : '0'); } catch {}
+    try { sessionStorage.setItem('cortexi_chat_open', open ? '1' : '0'); } catch {}
   }, [open]);
 
   // Listen for chat:open events dispatched by LeadCard / ReviewCard
