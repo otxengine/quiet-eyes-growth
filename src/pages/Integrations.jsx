@@ -432,7 +432,7 @@ export default function Integrations() {
     <div className="space-y-6 max-w-2xl">
       <div>
         <h1 className="text-[16px] font-bold text-foreground tracking-tight">אינטגרציות</h1>
-        <p className="text-[12px] text-foreground-muted mt-0.5">חבר את OTX לרשתות החברתיות ול-CRM שלך</p>
+        <p className="text-[12px] text-foreground-muted mt-0.5">חבר את Cortexi לרשתות החברתיות ול-CRM שלך</p>
       </div>
 
       <SyncStats bp={bp} socialAccounts={socialAccounts} />
@@ -440,7 +440,7 @@ export default function Integrations() {
       {/* Social Networks */}
       <div className="space-y-3">
         <h2 className="text-[13px] font-semibold text-foreground">רשתות חברתיות וגוגל</h2>
-        <p className="text-[11px] text-foreground-muted">לחץ "חבר" — יפתח חלון אישור קצר, וזהו. לאחר מכן OTX פועל אוטומטית.</p>
+        <p className="text-[11px] text-foreground-muted">לחץ "חבר" — יפתח חלון אישור קצר, וזהו. לאחר מכן Cortexi פועל אוטומטית.</p>
         <div className="space-y-2">
           {SOCIAL_PLATFORMS.map(platform => (
             <div
@@ -490,7 +490,7 @@ export default function Integrations() {
             הוסף את הקוד הבא לפני תג <code className="bg-secondary px-1 rounded text-[11px]">&lt;/head&gt;</code> באתר שלך כדי לעקוב אחרי מבקרים ואינטגרציות:
           </p>
           <div className="relative">
-            <pre className="text-[10px] bg-secondary rounded-lg p-3 overflow-x-auto text-foreground-muted leading-relaxed" dir="ltr">{`<!-- OTX Tracking -->
+            <pre className="text-[10px] bg-secondary rounded-lg p-3 overflow-x-auto text-foreground-muted leading-relaxed" dir="ltr">{`<!-- Cortexi Tracking -->
 <script>
 (function(w,d,s,b){
   w._otx=w._otx||[];
@@ -503,7 +503,7 @@ export default function Integrations() {
 </script>`}</pre>
             <button
               onClick={() => {
-                const snippet = `<!-- OTX Tracking -->\n<script>\n(function(w,d,s,b){\n  w._otx=w._otx||[];\n  w._otx.push(['init','${bp?.id || 'YOUR_BUSINESS_ID'}']);\n  var e=d.createElement(s);\n  e.async=true;\n  e.src='${SERVER_BASE}/track.js';\n  d.head.appendChild(e);\n})(window,document,'script','${SERVER_BASE}');\n</script>`;
+                const snippet = `<!-- Cortexi Tracking -->\n<script>\n(function(w,d,s,b){\n  w._otx=w._otx||[];\n  w._otx.push(['init','${bp?.id || 'YOUR_BUSINESS_ID'}']);\n  var e=d.createElement(s);\n  e.async=true;\n  e.src='${SERVER_BASE}/track.js';\n  d.head.appendChild(e);\n})(window,document,'script','${SERVER_BASE}');\n</script>`;
                 navigator.clipboard.writeText(snippet).then(() => toast.success('הועתק ללוח ✓'));
               }}
               className="absolute top-2 left-2 text-[10px] px-2 py-1 rounded bg-foreground text-background hover:opacity-90 transition-all"
@@ -512,7 +512,7 @@ export default function Integrations() {
             </button>
           </div>
           <p className="text-[10px] text-foreground-muted mt-2 opacity-70">
-            הסניפט אוסף מבקרים ייחודיים, מקורות תנועה ואינטגרציות עם OTX בצורה אנונימית ומאובטחת.
+            הסניפט אוסף מבקרים ייחודיים, מקורות תנועה ואינטגרציות עם Cortexi בצורה אנונימית ומאובטחת.
           </p>
         </div>
       </div>

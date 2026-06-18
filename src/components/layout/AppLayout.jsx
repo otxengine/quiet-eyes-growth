@@ -8,8 +8,8 @@ import { useScanQuota } from '@/lib/useScanQuota';
 import { PLAN_LABELS } from '@/lib/usePlan';
 import ScanOverlay from '@/components/dashboard/ScanOverlay';
 
-const ADMIN_EMAILS = ['contact@otxengine.io'];
-const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai'];
+const ADMIN_EMAILS = ['contact@otxengine.io', 'admin@cortexi.ai'];
+const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai', '@cortexi.ai'];
 function checkIsAdmin(email) {
   if (!email) return false;
   const e = email.toLowerCase().trim();
@@ -70,7 +70,7 @@ const pageTitles = {
   '/integrations':  'אינטגרציות',
   '/settings':      'הגדרות',
   '/social':        'רשתות חברתיות',
-  '/otx':           'OTX Dashboard',
+  '/otx':           'Cortexi Dashboard',
   '/org/settings':  'הגדרות ארגון',
   '/agency':        'סוכנות',
   '/chat':          'יועץ AI',
@@ -169,9 +169,9 @@ export default function AppLayout() {
     // setTimeout ensures page-specific handlers (from Intelligence/Leads/etc.) run first.
     // Only register generic handler if no page has set its own.
     const t = setTimeout(() => {
-      if (!window.__quieteyes_scan) window.__quieteyes_scan = handler;
+      if (!window.__cortexi_scan) window.__cortexi_scan = handler;
     }, 0);
-    return () => { clearTimeout(t); if (window.__quieteyes_scan === handler) delete window.__quieteyes_scan; };
+    return () => { clearTimeout(t); if (window.__cortexi_scan === handler) delete window.__cortexi_scan; };
   }, [isOnDashboard, scanQuota.isExhausted, scanQuota.plan, scanQuota.quota, location.pathname]);
 
   // Fetch badge counts
@@ -240,7 +240,7 @@ export default function AppLayout() {
     || (location.pathname.startsWith('/insights/') ? 'תובנה' : null)
     || (location.pathname.startsWith('/tasks/')    ? 'פרטי משימה' : null)
     || (location.pathname.startsWith('/signals/')  ? 'פרטי סיגנל' : null)
-    || 'OTX';
+    || 'Cortexi';
 
   if (loadingProfiles) {
     return (

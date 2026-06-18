@@ -26,7 +26,7 @@ const DOT_GRID = `url("data:image/svg+xml,%3Csvg width='28' height='28' viewBox=
 
 // ── localStorage helpers ────────────────────────────────────────────────────────
 function chatKey(bpId) {
-  return bpId ? `quieteyes_command_chat_${bpId}` : 'quieteyes_command_chat_default';
+  return bpId ? `cortexi_command_chat_${bpId}` : 'cortexi_command_chat_default';
 }
 function loadHistory(bpId) {
   try { return JSON.parse(localStorage.getItem(chatKey(bpId)) || '[]'); } catch { return []; }

@@ -82,7 +82,12 @@ app.use('/api/orchestrator', strictLimiter);
 const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .split(',')
   .map(o => o.trim())
-  .concat(['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175']);
+  .concat([
+    'http://localhost:5173', 'http://localhost:5174',
+    'http://localhost:5175',
+    'https://cortexi.ai',
+    'https://www.cortexi.ai',
+  ]);
 
 app.use(cors({
   origin: (origin, cb) => {

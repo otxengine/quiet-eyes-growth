@@ -34,7 +34,7 @@ function AdminKeyGate({ onUnlock }) {
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafafa', fontFamily: 'sans-serif', direction: 'rtl' }}>
       <style>{spinStyle}</style>
       <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 12, padding: '32px 40px', width: 320, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-        <p style={{ fontSize: 16, fontWeight: 700, marginBottom: 4, color: '#111' }}>OTX Admin</p>
+        <p style={{ fontSize: 16, fontWeight: 700, marginBottom: 4, color: '#111' }}>Cortexi Admin</p>
         <p style={{ fontSize: 12, color: '#999', marginBottom: 24 }}>הזן מפתח ניהול להמשך</p>
         <form onSubmit={handleSubmit}>
           <input
@@ -73,7 +73,7 @@ function AdminShell() {
     <BrowserRouter>
       <div className="min-h-screen bg-background" dir="rtl">
         <header style={{ height: 48, borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', background: '#fff' }}>
-          <span style={{ fontSize: 13, fontWeight: 700 }}>OTX Admin</span>
+          <span style={{ fontSize: 13, fontWeight: 700 }}>Cortexi Admin</span>
           <button
             onClick={handleLogout}
             style={{ fontSize: 11, color: '#999', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}

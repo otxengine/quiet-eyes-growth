@@ -5,8 +5,8 @@ import OnboardingForm from '@/components/onboarding/OnboardingForm';
 import OnboardingScanning from '@/components/onboarding/OnboardingScanning';
 import OnboardingInsights from '@/components/onboarding/OnboardingInsights';
 
-const ADMIN_EMAILS = ['contact@otxengine.io'];
-const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai'];
+const ADMIN_EMAILS = ['contact@otxengine.io', 'admin@cortexi.ai'];
+const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai', '@cortexi.ai'];
 
 function isAdminEmail(email) {
   if (!email) return false;

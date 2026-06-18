@@ -383,7 +383,7 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
 
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-[11px] text-blue-700 flex items-start gap-2">
           <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-          תשלום ₪{totalBudget} ישולם ישירות ל-{sc.label} — OTX לא גובה תשלום על תקציב הפרסום
+          תשלום ₪{totalBudget} ישולם ישירות ל-{sc.label} — Cortexi לא גובה תשלום על תקציב הפרסום
         </div>
 
         <div className="flex flex-col gap-2">
@@ -719,7 +719,7 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
           <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
             <Info className="w-3.5 h-3.5 text-blue-500 mt-0.5 flex-shrink-0" />
             <p className="text-[11px] text-blue-700 leading-snug">
-              תקציב זה ישולם ישירות ל-{platConfig.label} — OTX אינה גובה תשלום על הפרסום
+              תקציב זה ישולם ישירות ל-{platConfig.label} — Cortexi אינה גובה תשלום על הפרסום
             </p>
           </div>
         </div>
@@ -972,8 +972,8 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
               <div className="text-right">
                 <p className="text-[12px] font-semibold text-amber-800 mb-0.5">חשוב לדעת</p>
                 <p className="text-[11px] text-amber-700 leading-snug">
-                  סכום ₪{Number(budget) * Number(days)} ישולם ישירות ל-{platConfig.label} כשתפעיל את הקמפיין ב-Ads Manager — לא ל-OTX.
-                  OTX שומרת את פרטי הקמפיין ועוזרת לך ליצור אותו, אך אינה מחייבת אותך בתשלום על הפרסום.
+                  סכום ₪{Number(budget) * Number(days)} ישולם ישירות ל-{platConfig.label} כשתפעיל את הקמפיין ב-Ads Manager — לא ל-Cortexi.
+                  Cortexi שומרת את פרטי הקמפיין ועוזרת לך ליצור אותו, אך אינה מחייבת אותך בתשלום על הפרסום.
                 </p>
               </div>
             </div>
