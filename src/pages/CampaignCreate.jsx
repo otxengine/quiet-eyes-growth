@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {
@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const PLATFORMS = [
-  { id: 'meta',      label: 'Facebook',   icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
+  { id: 'facebook',  label: 'Facebook',   icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
   { id: 'instagram', label: 'Instagram',  icon: '📸', color: '#e1306c', bg: '#fde8f0' },
   { id: 'google',    label: 'Google Ads', icon: '🔍', color: '#4285f4', bg: '#e8f0fe' },
 ];
@@ -26,8 +26,8 @@ const OBJECTIVES = [
 const DURATIONS = [7, 14, 30];
 
 const ADS_MANAGER_URLS = {
-  meta:      'https://business.facebook.com/adsmanager/manage/campaigns',
-  instagram: 'https://business.facebook.com/adsmanager/manage/campaigns',
+  facebook:  'https://adsmanager.facebook.com/adsmanager/manage/campaigns',
+  instagram: 'https://adsmanager.facebook.com/adsmanager/manage/campaigns',
   google:    'https://ads.google.com/aw/campaigns',
 };
 
@@ -81,11 +81,12 @@ function MetricCard({ icon: Icon, label, low, high, unit = '', accent }) {
 
 function InterestChip({ label, platform }) {
   const colors = {
+    facebook:  { bg: '#e7f3ff', color: '#1877f2' },
     meta:      { bg: '#e7f3ff', color: '#1877f2' },
     instagram: { bg: '#fde8f0', color: '#e1306c' },
     google:    { bg: '#e8f0fe', color: '#4285f4' },
   };
-  const c = colors[platform] || colors.meta;
+  const c = colors[platform] || colors.facebook;
   return (
     <span className="text-[10px] font-medium px-2 py-0.5 rounded-full border" style={{ background: c.bg, color: c.color, borderColor: c.color + '33' }}>
       {label}
@@ -131,10 +132,10 @@ export default function CampaignCreate() {
   // Form state
   const [postContent,  setPostContent]  = useState('');
   const [platform,     setPlatform]     = useState(
-    urlPlatform === 'tiktok' ? 'tiktok'
-    : urlPlatform === 'instagram' ? 'meta'
-    : urlPlatform === 'facebook' ? 'meta'
-    : 'meta'
+    urlPlatform === 'tiktok'    ? 'tiktok'
+    : urlPlatform === 'instagram' ? 'instagram'
+    : urlPlatform === 'facebook'  ? 'facebook'
+    : 'facebook'
   );
   const [objective,    setObjective]    = useState('leads');
   const [budget,       setBudget]       = useState(50);
@@ -356,7 +357,7 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
   // ── Success screen after saving ──────────────────────────────────────────────
   if (successScreen) {
     const sc = PLATFORMS.find(p => p.id === successScreen.platform) || PLATFORMS[0];
-    const adsUrl = ADS_MANAGER_URLS[successScreen.platform] || ADS_MANAGER_URLS.meta;
+    const adsUrl = ADS_MANAGER_URLS[successScreen.platform] || ADS_MANAGER_URLS.facebook;
     const totalBudget = Number(budget) * Number(days);
     return (
       <div className="p-6 max-w-xl mx-auto space-y-5 text-right" dir="rtl">
