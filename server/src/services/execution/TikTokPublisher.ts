@@ -15,6 +15,7 @@
 
 import { prisma } from '../../db';
 import { createLogger } from '../../infra/logger';
+import { getValidTikTokToken } from '../../lib/tiktokTokenRefresh';
 
 const logger = createLogger('TikTokPublisher');
 const TIKTOK_API = 'https://open.tiktokapis.com/v2';
@@ -43,9 +44,15 @@ export async function publishTikTok(
     where: { linked_business: businessProfileId, platform: 'tiktok_business', is_connected: true },
   });
 
-  if (!account?.access_token || !account?.page_id /* page_id = open_id */) {
+  if (!account?.page_id /* page_id = open_id */) {
     await markTaskQueued(payload.taskId, 'מוכן לפרסום ב-TikTok — חסר חיבור');
     return { published: false, method: 'queued', error: 'No TikTok credentials' };
+  }
+
+  const accessToken = await getValidTikTokToken(businessProfileId);
+  if (!accessToken) {
+    await markTaskQueued(payload.taskId, 'מוכן לפרסום ב-TikTok — טוקן פג תוקף');
+    return { published: false, method: 'queued', error: 'TikTok token expired and refresh failed' };
   }
 
   if (!payload.videoUrl) {
@@ -58,7 +65,7 @@ export async function publishTikTok(
     const initRes = await fetch(`${TIKTOK_API}/post/publish/video/init/`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${account.access_token}`,
+        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json; charset=UTF-8',
       },
       body: JSON.stringify({

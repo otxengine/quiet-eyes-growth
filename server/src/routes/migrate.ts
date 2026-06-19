@@ -631,6 +631,30 @@ router.post('/', async (req: Request, res: Response) => {
     `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS facebook_page_token        TEXT`,
     `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS facebook_page_id           TEXT`,
 
+    // ── Social Comments Inbox ─────────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS social_comments (
+      id                   TEXT        PRIMARY KEY,
+      created_date         TIMESTAMPTZ NOT NULL DEFAULT now(),
+      linked_business      TEXT,
+      platform             TEXT        NOT NULL,
+      platform_comment_id  TEXT        NOT NULL,
+      platform_post_id     TEXT,
+      post_message         TEXT,
+      author_name          TEXT,
+      author_id            TEXT,
+      comment_text         TEXT        NOT NULL,
+      sentiment            TEXT,
+      created_time         TIMESTAMPTZ,
+      fetched_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+      ai_suggested_reply   TEXT,
+      reply_sent           BOOLEAN     NOT NULL DEFAULT false,
+      reply_text           TEXT,
+      reply_sent_at        TIMESTAMPTZ,
+      is_dismissed         BOOLEAN     NOT NULL DEFAULT false,
+      UNIQUE(platform, platform_comment_id)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_social_comments_biz ON social_comments(linked_business, created_time DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_social_comments_unanswered ON social_comments(linked_business, reply_sent, is_dismissed)`,
     // ── Trend intelligence tables ──────────────────────────────────────────────
 
     // Checkpoint memory: prevents duplicate scanning across server restarts
