@@ -1,6 +1,4 @@
 # ── Environment / secrets (NEVER commit these) ───────────────────────────────
-.env
-.env.local
 .env.*.local
 server/.env
 agents/.env
@@ -44,3 +42,4 @@ pnpm-debug.log*
 
 # ── OS ────────────────────────────────────────────────────────────────────────
 Thumbs.db
+config.bat
