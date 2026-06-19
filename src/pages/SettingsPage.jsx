@@ -249,6 +249,7 @@ import SettingsPushNotifications from '@/components/settings/SettingsPushNotific
 import SettingsChannels from '@/components/settings/SettingsChannels';
 import SettingsDataSources from '@/components/settings/SettingsDataSources.jsx';
 import SettingsAutoRespond from '@/components/settings/SettingsAutoRespond.jsx';
+import SettingsWhatsAppBot from '@/components/settings/SettingsWhatsAppBot';
 
 function ConstraintsSection({ businessProfileId }) {
   const queryClient = useQueryClient();
@@ -571,6 +572,28 @@ export default function SettingsPage() {
           setSaving(false);
           toast.success('הגדרות ערוצים נשמרו ✓');
         }}
+      />
+      <SettingsWhatsAppBot
+        form={form}
+        setForm={setForm}
+        saving={saving}
+        onSave={async () => {
+          setSaving(true);
+          await saveField({
+            bot_enabled: form.bot_enabled,
+            bot_greeting: form.bot_greeting,
+            bot_qualification_questions: form.bot_qualification_questions,
+            bot_good_lead_criteria: form.bot_good_lead_criteria,
+            bot_bad_lead_criteria: form.bot_bad_lead_criteria,
+            bot_services_info: form.bot_services_info,
+            bot_working_hours_start: form.bot_working_hours_start,
+            bot_working_hours_end: form.bot_working_hours_end,
+            bot_off_hours_message: form.bot_off_hours_message,
+          });
+          setSaving(false);
+          toast.success('הגדרות בוט נשמרו ✓');
+        }}
+        businessProfile={businessProfile}
       />
       <SettingsPushNotifications
         form={form}

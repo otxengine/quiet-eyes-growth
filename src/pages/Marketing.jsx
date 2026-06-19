@@ -14,7 +14,7 @@ const PLATFORM_CONFIG = {
   instagram: { label: 'Instagram',  icon: '📸', color: '#e1306c', bg: '#fde8f0' },
   google:    { label: 'Google Ads', icon: '🔍', color: '#4285f4', bg: '#e8f0fe' },
   facebook:  { label: 'Facebook',   icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
-  
+  whatsapp:  { label: 'WhatsApp Ads', icon: '💬', color: '#25d366', bg: '#f0fdf4' },
   tiktok:    { label: 'TikTok',     icon: '🎵', color: '#000',    bg: '#f0f0f0' },
 };
 
@@ -26,13 +26,6 @@ const STATUS_CONFIG = {
   completed:      { label: 'הסתיים',       cls: 'bg-purple-50 text-purple-700', tab: 'completed' },
   paused:         { label: 'בהשהיה',       cls: 'bg-orange-50 text-orange-700', tab: 'paused' },
 };
-
-const TABS = [
-  { key: 'active',    label: 'קמפיינים פעילים' },
-  { key: 'paused',    label: 'בהשהיה' },
-  { key: 'drafts',    label: 'טיוטות' },
-  { key: 'completed', label: 'הסתיימו' },
-];
 
 const COLUMNS = [
   { key: 'title',    label: 'קמפיין' },
@@ -441,20 +434,39 @@ ${formatInstr}
       try {
         const b64 = dataUrl.split(',')[1];
         const mime = file.type || 'image/jpeg';
-        const res = await base44.functions.invoke('analyzeImageForPost', {
-          businessProfileId: businessProfile.id,
-          imageBase64: b64,
-          mimeType: mime,
-          platform,
-        });
-        const data = res?.data || res;
-        if (data?.mediaAssetId) setMediaId(data.mediaAssetId);
-        if (data?.description) setImageDesc(data.description);
-        if (data?.suggested_post) {
-          toast('התוכן עודכן לפי התמונה ✨', { duration: 3000 });
-          setContent(data.suggested_post);
-        }
-      } catch { toast.error('שגיאה בניתוח התמונה'); }
+
+        // Always save MediaAsset immediately so we have an ID for Instagram publishing.
+        // analyzeImageForPost may fail (LLM credits), but the asset must exist first.
+        let assetId = null;
+        try {
+          const asset = await base44.entities.MediaAsset.create({
+            linked_business: businessProfile.id,
+            image_base64:    b64,
+            mime_type:       mime,
+            source:          'uploaded',
+            used_in:         postType,
+          });
+          assetId = asset.id;
+          setMediaId(asset.id);
+        } catch { /* DB save failed — Instagram publish will fall back to error */ }
+
+        // Try AI analysis (may enrich the asset, but failure is non-blocking)
+        try {
+          const res = await base44.functions.invoke('analyzeImageForPost', {
+            businessProfileId: businessProfile.id,
+            imageBase64: b64,
+            mimeType: mime,
+            platform,
+          });
+          const data = res?.data || res;
+          if (data?.mediaAssetId) setMediaId(data.mediaAssetId);
+          if (data?.description) setImageDesc(data.description);
+          if (data?.suggested_post) {
+            toast('התוכן עודכן לפי התמונה ✨', { duration: 3000 });
+            setContent(data.suggested_post);
+          }
+        } catch { /* AI analysis failed — image still works, just no caption suggestion */ }
+      } catch { toast.error('שגיאה בטעינת התמונה'); }
       setAnalyzing(false);
     };
     reader.readAsDataURL(file);
@@ -464,7 +476,8 @@ ${formatInstr}
     if (!content.trim()) { toast.error('יש להזין תוכן'); return; }
     setSaving(true);
     try {
-      await base44.entities.OrganicPost.create({
+      // 1. Save to DB (as draft first, so we have an ID)
+      const post = await base44.entities.OrganicPost.create({
         linked_business: businessProfile.id,
         signal_id:       signalContext?.signalId || null,
         signal_summary:  signalContext?.summary  || null,
@@ -473,14 +486,38 @@ ${formatInstr}
         content,
         media_asset_id:  mediaId || null,
         image_url:       imageUrl || null,
-        status:          publish ? 'published' : 'draft',
-        published_at:    publish ? new Date().toISOString() : null,
+        status:          'draft',
+        published_at:    null,
       });
+
+      if (publish) {
+        // 2. Actually publish to social platform via API
+        const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api');
+        const res = await fetch(`${apiBase}/social/publish-organic`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-dev-user': 'dev-user' },
+          body: JSON.stringify({
+            businessProfileId: businessProfile.id,
+            postId:        post.id,
+            content,
+            imageUrl:      imageUrl || null,
+            mediaAssetId:  mediaId  || null,
+            platform,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'שגיאת פרסום');
+        toast.success('פורסם בהצלחה! 🎉');
+      } else {
+        toast.success('נשמר כטיוטה');
+      }
+
       queryClient.invalidateQueries({ queryKey: ['organicPosts', businessProfile.id] });
-      toast.success(publish ? 'פורסם! 🎉' : 'נשמר כטיוטה');
       onSaved?.();
       onClose();
-    } catch { toast.error('שגיאה בשמירה'); }
+    } catch (err) {
+      toast.error('שגיאה: ' + (err?.message || 'נסה שוב'));
+    }
     setSaving(false);
   };
 
@@ -686,15 +723,15 @@ ${audienceHint ? `${audienceHint}` : ''}
     <div className="fixed inset-0 z-[9999] flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-white rounded-t-2xl w-full max-w-lg shadow-2xl" dir="rtl" style={{ maxHeight: '85vh', overflowY: 'auto' }}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <span className="text-2xl">💬</span>
             <div>
-              <p className="text-[14px] font-bold text-foreground">WhatsApp Blast</p>
-              <p className="text-[11px] text-foreground-muted/70">שלח הודעה שיווקית ללקוחות</p>
+              <p className="text-[14px] font-bold text-gray-800">WhatsApp Blast</p>
+              <p className="text-[11px] text-gray-400">שלח הודעה שיווקית ללקוחות</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-foreground-muted/70 hover:text-foreground-secondary"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
         </div>
 
         <div className="px-5 py-4 space-y-4">
@@ -707,24 +744,24 @@ ${audienceHint ? `${audienceHint}` : ''}
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[12px] font-semibold text-foreground-secondary">הודעה:</p>
+              <p className="text-[12px] font-semibold text-gray-700">הודעה:</p>
               <button onClick={generateMessage} disabled={loading}
-                className="flex items-center gap-1.5 px-2.5 py-1 border border-border text-foreground-muted rounded-lg text-[11px] hover:bg-secondary/50 disabled:opacity-50">
+                className="flex items-center gap-1.5 px-2.5 py-1 border border-gray-200 text-gray-500 rounded-lg text-[11px] hover:bg-gray-50 disabled:opacity-50">
                 <Sparkles className="w-3 h-3" />
                 {loading ? 'יוצר...' : 'צור מחדש'}
               </button>
             </div>
             {loading ? (
-              <div className="flex items-center justify-center py-10 bg-secondary/50 rounded-xl border border-dashed border-border">
-                <Loader2 className="w-5 h-5 animate-spin text-foreground-muted/70 ml-2" />
-                <span className="text-[12px] text-foreground-muted/70">יוצר הודעה...</span>
+              <div className="flex items-center justify-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                <Loader2 className="w-5 h-5 animate-spin text-gray-400 ml-2" />
+                <span className="text-[12px] text-gray-400">יוצר הודעה...</span>
               </div>
             ) : (
               <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={5} dir="rtl"
-                className="w-full px-3 py-2.5 text-[13px] border border-border rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-green-200"
+                className="w-full px-3 py-2.5 text-[13px] border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-green-200"
                 placeholder="הודעת WhatsApp..." />
             )}
-            <p className="text-[10px] text-foreground-muted/70 mt-1">{msg.length} / 4096 תווים</p>
+            <p className="text-[10px] text-gray-400 mt-1">{msg.length} / 4096 תווים</p>
           </div>
 
           <div className="space-y-2.5">
@@ -738,12 +775,12 @@ ${audienceHint ? `${audienceHint}` : ''}
               setCopied(true);
               setTimeout(() => setCopied(false), 2000);
             }}
-              className="w-full flex items-center justify-center gap-2 py-2.5 border border-border text-foreground-secondary rounded-xl text-[13px] hover:bg-secondary/50 transition-all">
+              className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-[13px] hover:bg-gray-50 transition-all">
               {copied ? '✓ הועתק' : '📋 העתק הודעה'}
             </button>
           </div>
 
-          <p className="text-[11px] text-foreground-muted/70 text-center">
+          <p className="text-[11px] text-gray-400 text-center">
             WhatsApp Blast עובד דרך הפתחת WhatsApp Web — העתק את ההודעה ושלח ישירות.
           </p>
         </div>
@@ -916,17 +953,17 @@ export default function Marketing() {
       <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit">
         {TABS.map(tab => (
           <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 ${
-              activeTab === tab.key ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
+              activeTab === tab.id ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
             }`}
           >
             {tab.label}
             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-              activeTab === tab.key ? 'bg-gray-100 text-foreground-secondary' : 'bg-gray-200 text-foreground-muted'
+              activeTab === tab.id ? 'bg-gray-100 text-foreground-secondary' : 'bg-gray-200 text-foreground-muted'
             }`}>
-              {tabCount(tab.key)}
+              {tabCount(tab.id)}
             </span>
           </button>
         ))}

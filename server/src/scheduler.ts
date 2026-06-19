@@ -40,6 +40,7 @@ import { tiktokSectorTrendAgent } from './routes/functions/tiktokSectorTrendAgen
 import { tiktokAudienceAgent } from './routes/functions/tiktokAudienceAgent';
 import { tiktokPostTracker } from './routes/functions/tiktokPostTracker';
 import { findLocalEvents } from './routes/functions/findLocalEvents';
+import { refreshExpiringTikTokTokens } from './lib/tiktokTokenRefresh';
 import { instagramTrendAgent } from './routes/functions/instagramTrendAgent';
 import { facebookGroupTrendAgent } from './routes/functions/facebookGroupTrendAgent';
 import { googleTrendsScanAgent } from './routes/functions/googleTrendsScanAgent';
@@ -289,10 +290,12 @@ export function startScheduler() {
     runAgentForAll('DiffCompetitorSnapshot', diffCompetitorSnapshot);
   });
 
-  // ── Every 30 min: execute semi_auto queued actions ───────────────────────────
+  // ── Every 30 min: execute semi_auto queued actions + refresh expiring tokens ─
   cron.schedule('*/30 * * * *', () => {
     processScheduledAutoActions()
       .catch(err => logger.error('processScheduledAutoActions failed', { error: err.message }));
+    refreshExpiringTikTokTokens()
+      .catch(err => logger.error('refreshExpiringTikTokTokens failed', { error: err.message }));
   });
 
   // ── Every 15 min: keep-alive log ─────────────────────────────────────────────

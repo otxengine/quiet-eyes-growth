@@ -144,7 +144,7 @@ function tokenExpiryStatus(account) {
 
 // ── Social Platform Card ───────────────────────────────────────────────────────
 
-function SocialPlatformCard({ platform, connection, account, onConnect, onDisconnect }) {
+function SocialPlatformCard({ platform, connection, account, bpId, onConnect, onDisconnect }) {
   const [loading, setLoading] = useState(false);
   const isConnected = connection?.connected;
   const expiry      = isConnected ? tokenExpiryStatus(account) : null;
@@ -159,8 +159,10 @@ function SocialPlatformCard({ platform, connection, account, onConnect, onDiscon
         platform={platform}
         connection={connection}
         account={account}
+        bpId={bpId}
         expiry={expiry}
         onDisconnect={handleDisconnect}
+        onConnected={onConnect}
         loading={loading}
       />
     );
@@ -238,52 +240,74 @@ function SocialPlatformCard({ platform, connection, account, onConnect, onDiscon
 
 // ── WhatsApp Embedded Signup Card ──────────────────────────────────────────────
 
-function WhatsAppEmbeddedCard({ platform, connection, account, expiry, onDisconnect, loading }) {
+function WhatsAppEmbeddedCard({ platform, connection, account, bpId, expiry, onDisconnect, onConnected, loading }) {
   const isConnected = connection?.connected;
-  const [waBusy, setWaBusy]   = useState(false);
+  const [waBusy, setWaBusy] = useState(false);
 
   const launchEmbeddedSignup = () => {
-    // Meta Embedded Signup SDK — must be loaded separately via <script> in index.html
     if (!window.FB) {
       toast.error('Meta SDK לא נטען — נסה לרענן את הדף');
       return;
     }
+
+    // Meta sends waba_id / phone_number_id via window message event (not in authResponse)
+    const sessionData = { waba_id: '', phone_number_id: '' };
+    const onMessage = (event) => {
+      if (event.origin !== 'https://www.facebook.com') return;
+      try {
+        const d = JSON.parse(event.data);
+        if (d.type === 'WA_EMBEDDED_SIGNUP') {
+          sessionData.waba_id        = d.data?.waba_id        || '';
+          sessionData.phone_number_id = d.data?.phone_number_id || '';
+        }
+      } catch {}
+    };
+    window.addEventListener('message', onMessage);
+
     setWaBusy(true);
     window.FB.login(
-      async (response) => {
-        if (response.authResponse?.code) {
-          // Post the code to our backend
-          const SERVER_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api').replace(/\/api\/?$/, '');
-          try {
-            const res = await fetch(`${SERVER_BASE}/api/meta/auth/whatsapp/embedded-signup`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                code:             response.authResponse.code,
-                waba_id:          response.authResponse.extra?.waba_id      || '',
-                phone_number_id:  response.authResponse.extra?.phone_number_id || '',
-                businessProfileId: account?.linked_business || '',
-              }),
-            });
-            const data = await res.json();
-            if (data.success) {
-              toast.success('WhatsApp Business חובר בהצלחה ✓');
-            } else {
-              toast.error('שגיאה בחיבור WhatsApp: ' + (data.error || 'נסה שוב'));
+      (response) => {
+        window.removeEventListener('message', onMessage);
+        const token = response.authResponse?.accessToken;
+        if (token) {
+          const SERVER_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/api\/?$/, '');
+          const code = token;
+          (async () => {
+            try {
+              const res = await fetch(`${SERVER_BASE}/api/meta/auth/whatsapp/embedded-signup`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  code,
+                  waba_id:           sessionData.waba_id,
+                  phone_number_id:   sessionData.phone_number_id,
+                  businessProfileId: bpId || account?.linked_business || '',
+                }),
+              });
+              const data = await res.json();
+              if (data.success) {
+                toast.success('WhatsApp Business חובר בהצלחה ✓');
+                if (onConnected) onConnected();
+              } else {
+                const detail = data.detail?.error?.message || data.detail?.error_description || '';
+                toast.error('שגיאה בחיבור WhatsApp: ' + (data.error || 'נסה שוב') + (detail ? ` — ${detail}` : ''));
+              }
+            } catch (e) {
+              toast.error('שגיאת חיבור: ' + e.message);
+            } finally {
+              setWaBusy(false);
             }
-          } catch (e) {
-            toast.error('שגיאת חיבור: ' + e.message);
-          }
+          })();
         } else {
           toast.info('חיבור WhatsApp בוטל');
+          setWaBusy(false);
         }
-        setWaBusy(false);
       },
       {
-        config_id: import.meta.env.VITE_META_CONFIG_ID || '',
-        response_type: 'code',
+        config_id:                      import.meta.env.VITE_META_CONFIG_ID || '',
+        response_type:                  'token',
         override_default_response_type: true,
-        extras: { setup: {}, featureType: 'whatsapp_embedded_signup' },
+        extras: { setup: {}, featureType: 'whatsapp_embedded_signup', sessionInfoVersion: '2' },
       },
     );
   };
@@ -394,7 +418,10 @@ export default function Integrations() {
       const result = await initiateOAuth(platformId, bp?.id);
 
       // WhatsApp uses Embedded Signup — handled by the card itself
-      if (result?.whatsapp_embedded_signup) return;
+      if (result?.whatsapp_embedded_signup) {
+        queryClient.invalidateQueries({ queryKey: ['socialAccounts', bp?.id] });
+        return;
+      }
 
       if (result?.demo || result?.error) {
         // Server not configured — create a demo SocialAccount record
@@ -475,6 +502,26 @@ export default function Integrations() {
               ref={el => { platformRefs.current[platform.id] = el; }}
               className={highlightPlatform === platform.id ? 'ring-2 ring-primary/40 rounded-xl transition-all' : ''}
             >
+              <SocialPlatformCard
+                platform={platform}
+                connection={connections[platform.id]}
+                account={connections[platform.id]?.account}
+                bpId={bp?.id}
+                onConnect={() => connectSocial(platform.id)}
+                onDisconnect={() => disconnectSocial(platform.id)}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Paid Ads */}
+      <div className="space-y-3">
+        <h2 className="text-[13px] font-semibold text-foreground">פרסום בתשלום</h2>
+        <p className="text-[11px] text-foreground-muted">חבר חשבון פרסום — הקמפיינים ייוצרו דרך OTX והחיוב עובר ישירות לחשבון שלך בפלטפורמה.</p>
+        <div className="space-y-2">
+          {ADS_PLATFORMS.map(platform => (
+            <div key={platform.id}>
               <SocialPlatformCard
                 platform={platform}
                 connection={connections[platform.id]}

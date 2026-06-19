@@ -5,6 +5,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { tavilySearch } from '../../lib/tavily';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { getValidTikTokToken } from '../../lib/tiktokTokenRefresh';
 import { hasSearchApiKey, searchTikTokProfileVideos } from '../../lib/searchapi';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
@@ -80,9 +81,12 @@ export async function analyzeTikTokContent(req: Request, res: Response) {
     let dataSource = 'tavily';
 
     // ── 1. TikTok API (own videos — OAuth connected) ─────────────────────────
-    if (tiktokAccount?.access_token && tiktokAccount?.page_id) {
-      videos = await fetchTikTokUserVideos(tiktokAccount.access_token, tiktokAccount.page_id);
-      if (videos.length > 0) dataSource = 'tiktok_api';
+    if (tiktokAccount?.page_id) {
+      const validToken = await getValidTikTokToken(businessProfileId);
+      if (validToken) {
+        videos = await fetchTikTokUserVideos(validToken, tiktokAccount.page_id);
+        if (videos.length > 0) dataSource = 'tiktok_api';
+      }
     }
 
     // ── 2. Apify — scrape by URL entered in onboarding (no OAuth needed) ─────

@@ -16,10 +16,23 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 import { prisma } from '../db';
 
 const router = Router();
+
+// Temporary in-memory store for page picker sessions (TTL 10 min)
+const pagePickerSessions = new Map<string, { businessId: string; platform: string; pages: any[]; expires: number }>();
+function createPickerSession(businessId: string, platform: string, pages: any[]): string {
+  const key = randomBytes(16).toString('hex');
+  pagePickerSessions.set(key, { businessId, platform, pages, expires: Date.now() + 10 * 60 * 1000 });
+  return key;
+}
+function getPickerSession(key: string) {
+  const s = pagePickerSessions.get(key);
+  if (!s || s.expires < Date.now()) { pagePickerSessions.delete(key); return null; }
+  return s;
+}
 
 // ── Env — read lazily so dotenv has time to load ─────────────────────────────
 // FACEBOOK_APP_ID and META_APP_ID are the same Meta app — support both names.
@@ -45,34 +58,48 @@ const env = () => {
 // Table: oauth_state_store (id TEXT PK, business_id TEXT, platform TEXT, expires_at TIMESTAMPTZ)
 // Created at server startup (see index.ts).
 
-async function generateState(platform: string, businessId: string): Promise<string> {
+async function generateState(platform: string, businessId: string, codeVerifier?: string): Promise<string> {
   const state     = randomBytes(16).toString('hex');
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
   try {
     await prisma.$executeRawUnsafe(
-      `INSERT INTO oauth_state_store (id, business_id, platform, expires_at) VALUES ($1,$2,$3,$4::timestamptz)
-       ON CONFLICT (id) DO UPDATE SET expires_at = EXCLUDED.expires_at`,
-      state, businessId, platform, expiresAt,
+      `INSERT INTO oauth_state_store (id, business_id, platform, expires_at, code_verifier)
+       VALUES ($1,$2,$3,$4::timestamptz,$5)
+       ON CONFLICT (id) DO UPDATE SET expires_at = EXCLUDED.expires_at, code_verifier = EXCLUDED.code_verifier`,
+      state, businessId, platform, expiresAt, codeVerifier ?? null,
     );
   } catch {
-    // Table might not exist yet on first run — fall through (state validation will fail gracefully)
+    // Fallback: try without code_verifier column (older schema)
+    try {
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO oauth_state_store (id, business_id, platform, expires_at) VALUES ($1,$2,$3,$4::timestamptz)
+         ON CONFLICT (id) DO UPDATE SET expires_at = EXCLUDED.expires_at`,
+        state, businessId, platform, expiresAt,
+      );
+    } catch {}
   }
   return state;
 }
 
-async function consumeState(state: string): Promise<{ businessId: string; platform: string } | null> {
+async function consumeState(state: string): Promise<{ businessId: string; platform: string; codeVerifier?: string } | null> {
   try {
-    const rows = await prisma.$queryRawUnsafe<Array<{ business_id: string; platform: string; expires_at: string }>>(
-      `DELETE FROM oauth_state_store WHERE id=$1 RETURNING business_id, platform, expires_at`,
+    const rows = await prisma.$queryRawUnsafe<Array<{ business_id: string; platform: string; expires_at: string; code_verifier?: string }>>(
+      `DELETE FROM oauth_state_store WHERE id=$1 RETURNING business_id, platform, expires_at, code_verifier`,
       state,
     );
     const row = rows[0];
     if (!row) return null;
     if (new Date(row.expires_at) < new Date()) return null;
-    return { businessId: row.business_id, platform: row.platform };
+    return { businessId: row.business_id, platform: row.platform, codeVerifier: row.code_verifier ?? undefined };
   } catch {
     return null;
   }
+}
+
+function generatePKCE(): { codeVerifier: string; codeChallenge: string } {
+  const codeVerifier  = randomBytes(32).toString('base64url');
+  const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url');
+  return { codeVerifier, codeChallenge };
 }
 
 function callbackUrl(platform: string): string {
@@ -122,7 +149,9 @@ router.get('/initiate/:platform', async (req: Request, res: Response) => {
     });
   }
 
-  const state = await generateState(String(platform), String(businessId));
+  // TikTok requires PKCE — generate verifier before state so it's stored together
+  const pkce = platform === 'tiktok_business' ? generatePKCE() : null;
+  const state = await generateState(String(platform), String(businessId), pkce?.codeVerifier);
   let authUrl: string;
 
   if (platform === 'facebook_page' || platform === 'instagram_business') {
@@ -130,10 +159,10 @@ router.get('/initiate/:platform', async (req: Request, res: Response) => {
       return res.status(503).json({ error: 'Facebook app not configured', demo: true });
     }
 
-    // instagram_content_publish is required for media publish
+    // instagram_manage_comments is required to read comment usernames + reply to comments
     // pages_manage_posts is required for Facebook feed/photos
     const scope = platform === 'instagram_business'
-      ? 'pages_show_list,pages_read_engagement,instagram_content_publish,instagram_basic'
+      ? 'pages_show_list,pages_read_engagement,instagram_content_publish,instagram_basic,instagram_manage_comments'
       : 'pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_engagement';
 
     authUrl =
@@ -148,14 +177,15 @@ router.get('/initiate/:platform', async (req: Request, res: Response) => {
     if (!env().TIKTOK_CLIENT_KEY) {
       return res.status(503).json({ error: 'TikTok app not configured', demo: true });
     }
-    // TikTok Content Posting API v2 scopes
     authUrl =
       `https://www.tiktok.com/v2/auth/authorize/?` +
       `client_key=${env().TIKTOK_CLIENT_KEY}` +
-      `&scope=${encodeURIComponent('user.info.basic,video.upload,video.publish,video.list')}` +
+      `&scope=${encodeURIComponent('user.info.basic,video.upload,video.list')}` +
       `&response_type=code` +
       `&redirect_uri=${encodeURIComponent(callbackUrl(platform))}` +
-      `&state=${state}`;
+      `&state=${state}` +
+      `&code_challenge=${pkce!.codeChallenge}` +
+      `&code_challenge_method=S256`;
 
   } else if (platform === 'google_business') {
     if (!env().GOOGLE_CLIENT_ID) {
@@ -246,32 +276,55 @@ async function handleFacebookCallback(code: string, platform: string, businessId
 
   if (pages.length === 0) throw new Error('No Facebook Pages found for this account');
 
-  const page      = pages[0];
+  console.log(`[oauth/facebook] found ${pages.length} page(s):`, pages.map((p: any) => `${p.name} (${p.id})`));
+
+  // If multiple pages → store in session and return picker flag
+  if (pages.length > 1) {
+    const sessionKey = createPickerSession(businessId, platform,
+      pages.map((p: any) => ({ id: p.id, name: p.name, access_token: p.access_token })));
+    return { needs_page_selection: true, platform, sessionKey };
+  }
+
+  // Single page — save automatically
+  return await saveFacebookPage(businessId, platform, pages[0]);
+}
+
+async function saveFacebookPage(businessId: string, platform: string, page: any) {
   const pageToken = page.access_token;
   const pageId    = page.id;
   const pageName  = page.name;
 
-  // 4. For Instagram: get linked Instagram Business Account ID and store separately
+  // For Instagram: get linked Instagram Business Account ID and store separately
   if (platform === 'instagram_business') {
     const igRes = await fetch(
       `https://graph.facebook.com/v19.0/${pageId}?fields=instagram_business_account&access_token=${pageToken}`,
     );
     const igData: any = igRes.ok ? await igRes.json() : {};
     const igId = igData?.instagram_business_account?.id ?? null;
-    const resolvedIgId = igId ?? pageId;
+
+    console.log(`[oauth/instagram] page "${pageName}" (${pageId}) → ig_business_account:`, igId ?? 'NOT FOUND');
+
+    if (!igId) {
+      // The Facebook Page doesn't have a linked Instagram Business/Creator account.
+      // Storing the Facebook Page ID would cause silent failures at publish time.
+      throw new Error(
+        `הדף "${pageName}" לא מחובר לחשבון Instagram עסקי. ` +
+        `כדי לחבר: עבור להגדרות דף Facebook → Instagram → "Connect account". ` +
+        `ודא שחשבון ה-Instagram שלך מוגדר כ-Business או Creator.`
+      );
+    }
 
     await upsertSocialAccount(businessId, 'instagram_business', {
       account_name: pageName,
       access_token: pageToken,
-      page_id: resolvedIgId,
+      page_id: igId,
     });
 
-    // Bridge: write tokens to BusinessProfile so InstagramPublisher can read them
     await prisma.businessProfile.updateMany({
       where: { id: businessId },
       data: {
         instagram_access_token: pageToken,
-        instagram_page_id: resolvedIgId,
+        instagram_page_id: igId,
       },
     });
   } else {
@@ -281,7 +334,6 @@ async function handleFacebookCallback(code: string, platform: string, businessId
       page_id: pageId,
     });
 
-    // Bridge: write tokens to BusinessProfile so InstagramPublisher can read them
     await prisma.businessProfile.updateMany({
       where: { id: businessId },
       data: {
@@ -642,12 +694,130 @@ async function handleTikTokCallback(code: string, businessId: string) {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_key:    env().TIKTOK_CLIENT_KEY,
-      client_secret: env().TIKTOK_CLIENT_SECRET,
       code,
+      client_id:     env().GOOGLE_CLIENT_ID,
+      client_secret: env().GOOGLE_CLIENT_SECRET,
+      redirect_uri:  callbackUrl('google_ads'),
       grant_type:    'authorization_code',
-      redirect_uri:  callbackUrl('tiktok_business'),
     }).toString(),
+  });
+  if (!tokenRes.ok) throw new Error('Google Ads token exchange failed');
+  const tokenData: any = await tokenRes.json();
+  const accessToken  = tokenData.access_token  || '';
+  const refreshToken = tokenData.refresh_token || '';
+  const expiresIn    = (tokenData.expires_in as number) || 3600;
+  const expiresAt    = new Date(Date.now() + expiresIn * 1000).toISOString();
+
+  // Get user's Google account name
+  const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const userData: any = userRes.ok ? await userRes.json() : {};
+  const accountName = userData.name || userData.email || 'Google Ads Account';
+
+  // Fetch list of accessible Google Ads customer IDs
+  const developerToken = env().GOOGLE_ADS_DEVELOPER_TOKEN;
+  let customerId = '';
+  try {
+    const customersRes = await fetch('https://googleads.googleapis.com/v18/customers:listAccessibleCustomers', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'developer-token': developerToken,
+      },
+    });
+    if (customersRes.ok) {
+      const customersData: any = await customersRes.json();
+      // resourceNames format: ["customers/1234567890", ...]
+      const resourceNames: string[] = customersData.resourceNames || [];
+      customerId = resourceNames[0]?.replace('customers/', '') || '';
+    } else {
+      const errBody: any = await customersRes.json().catch(() => ({}));
+      console.warn('[google_ads] listAccessibleCustomers failed:', errBody?.error?.message || customersRes.status);
+    }
+  } catch (e: any) {
+    console.warn('[google_ads] listAccessibleCustomers error:', e.message);
+  }
+
+  // Upsert SocialAccount — page_id stores the customer_id
+  const existing = await prisma.socialAccount.findFirst({
+    where: { linked_business: businessId, platform: 'google_ads' },
+  });
+  if (existing) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE social_accounts
+       SET account_name=$1, access_token=$2, page_id=$3, is_connected=true,
+           last_sync=$4, refresh_token=$5, expires_at=$6
+       WHERE id=$7`,
+      accountName, accessToken, customerId, new Date().toISOString(),
+      refreshToken || null, expiresAt, existing.id,
+    );
+  } else {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO social_accounts
+         (id, created_date, linked_business, platform, account_name, access_token, page_id, is_connected, last_sync, refresh_token, expires_at)
+       VALUES (gen_random_uuid()::text, now(), $1, 'google_ads', $2, $3, $4, true, $5, $6, $7)`,
+      businessId, accountName, accessToken, customerId,
+      new Date().toISOString(), refreshToken || null, expiresAt,
+    );
+  }
+
+  const displayName = customerId ? `${accountName} (${customerId})` : accountName;
+  console.log(`[google_ads] Connected: business=${businessId} customer=${customerId || 'unknown'}`);
+  return { page_name: displayName, platform: 'google_ads' };
+}
+
+// ── TikTok Ads callback ───────────────────────────────────────────────────────
+async function handleTikTokAdsCallback(authCode: string, businessId: string) {
+  // Exchange auth_code for access_token
+  const tokenRes = await fetch('https://business-api.tiktok.com/open_api/v1.3/oauth2/access_token/', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({
+      app_id:    env().TIKTOK_ADS_APP_ID,
+      secret:    env().TIKTOK_ADS_APP_SECRET,
+      auth_code: authCode,
+    }),
+  });
+  const tokenData: any = await tokenRes.json();
+  if (tokenData.code !== 0) {
+    throw new Error(`TikTok Ads token exchange failed: ${tokenData.message}`);
+  }
+
+  const accessToken    = tokenData.data.access_token as string;
+  const advertiserIds: string[] = tokenData.data.advertiser_ids || [];
+  const advertiserId   = advertiserIds[0] || '';
+
+  const accountName = `TikTok Ads${advertiserId ? ` (${advertiserId})` : ''}`;
+
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO social_accounts
+       (id, created_date, linked_business, platform, account_name, access_token, page_id, is_connected, last_sync)
+     VALUES (gen_random_uuid()::text, now(), $1, 'tiktok_ads', $2, $3, $4, true, now())
+     ON CONFLICT (linked_business, platform) DO UPDATE
+       SET access_token=EXCLUDED.access_token, page_id=EXCLUDED.page_id,
+           account_name=EXCLUDED.account_name, is_connected=true, last_sync=now()`,
+    businessId, accountName, accessToken, advertiserId,
+  );
+
+  console.log(`[tiktok_ads] Connected: business=${businessId} advertiser=${advertiserId}`);
+  return { platform: 'tiktok_ads', page_name: accountName };
+}
+
+// ── TikTok callback ───────────────────────────────────────────────────────────
+async function handleTikTokCallback(code: string, businessId: string, codeVerifier?: string) {
+  const tokenParams: Record<string, string> = {
+    client_key:    env().TIKTOK_CLIENT_KEY,
+    client_secret: env().TIKTOK_CLIENT_SECRET,
+    code,
+    grant_type:    'authorization_code',
+    redirect_uri:  callbackUrl('tiktok_business'),
+  };
+  if (codeVerifier) tokenParams.code_verifier = codeVerifier;
+
+  const tokenRes = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(tokenParams).toString(),
   });
   if (!tokenRes.ok) throw new Error('TikTok token exchange failed');
   const tokenData: any = await tokenRes.json();
@@ -730,9 +900,44 @@ router.get('/callback/:platform', async (req: Request, res: Response) => {
     } else if (platform === 'tiktok_ads') {
       result = await handleTikTokAdsCallback(code, stateData.businessId);
     } else if (platform === 'tiktok_business') {
-      result = await handleTikTokCallback(code, stateData.businessId);
+      result = await handleTikTokCallback(code, stateData.businessId, stateData.codeVerifier);
     } else {
       return res.redirect(`${env().FRONTEND_URL}/integrations?oauth_error=unknown_platform`);
+    }
+
+    // Multiple pages — show picker (uses plain links, no fetch, no CORS issues)
+    if (result.needs_page_selection) {
+      const session = getPickerSession(result.sessionKey);
+      const pages   = session?.pages ?? [];
+      const serverBase = env().SERVER_BASE_URL;
+
+      const pageButtons = pages.map((_p: any, i: number) =>
+        `<a href="${serverBase}/api/oauth/confirm-page?session=${result.sessionKey}&idx=${i}" class="page-btn">
+          <div class="icon">📘</div>
+          <div><div class="name">${_p.name}</div><div class="pid">ID: ${_p.id}</div></div>
+        </a>`
+      ).join('');
+
+      const pickerHtml = `<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head><meta charset="UTF-8"><title>בחר עמוד</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:sans-serif;padding:24px;background:#f9fafb;min-height:100vh}
+h2{font-size:15px;font-weight:700;color:#111;margin-bottom:4px}
+p{font-size:12px;color:#6b7280;margin-bottom:16px}
+.page-btn{width:100%;display:flex;align-items:center;gap:12px;padding:12px 14px;background:white;border:1px solid #e5e7eb;border-radius:10px;cursor:pointer;margin-bottom:8px;text-align:right;transition:all .15s;text-decoration:none}
+.page-btn:hover{border-color:#1877f2;background:#eff6ff}
+.icon{width:36px;height:36px;border-radius:50%;background:#1877f2;color:white;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.name{font-size:13px;font-weight:600;color:#111}
+.pid{font-size:10px;color:#9ca3af}
+</style></head>
+<body>
+<h2>בחר את הדף שברצונך לחבר</h2>
+<p>נמצאו מספר דפים — בחר את הדף הנכון לעסק זה</p>
+${pageButtons}
+</body></html>`;
+      return res.send(pickerHtml);
     }
 
     const html = `<!DOCTYPE html>

@@ -26,6 +26,7 @@ import learningRouter from './routes/learning';
 import migrateRouter from './routes/migrate';
 import metaAuthRouter from './routes/meta/auth';
 import metaWebhookRouter from './routes/meta/webhook';
+import conversationsRouter from './routes/conversations';
 import orchestratorRouter from './routes/orchestrator';
 import approvalsRouter from './routes/approvals';
 import explainabilityRouter from './routes/explainability';
@@ -34,11 +35,11 @@ import oauthRouter from './routes/oauth';
 import roiRouter from './routes/roi';
 import adminUsersRouter from './routes/adminUsers';
 import onboardingRouter from './routes/onboarding';
+import socialRouter from './routes/social';
+import campaignsRouter from './routes/campaigns';
 import organizationsRouter from './routes/organizations';
 import agencyRouter from './routes/agency';
 import stripeRouter from './routes/stripe';
-import socialRouter from './routes/social';
-import campaignsRouter from './routes/campaigns';
 
 // Wire up all event choreography handlers at startup
 registerAllHandlers();
@@ -115,7 +116,9 @@ app.use('/api/stripe/webhooks', stripeRouter);
 // Must be registered BEFORE express.json() so we get the unmodified Buffer.
 app.use(express.json({
   verify: (req: any, _res, buf) => { req.rawBody = buf; },
+  limit: '20mb',
 }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 // Only mount Clerk middleware when a real secret key is configured
 const clerkKey = process.env.CLERK_SECRET_KEY || '';
@@ -143,6 +146,7 @@ app.use('/api/learning', learningRouter);
 app.use('/api/migrate', migrateRouter);
 app.use('/api/meta/auth', metaAuthRouter);
 app.use('/api/webhooks/meta', metaWebhookRouter);
+app.use('/api/conversations', conversationsRouter);
 app.use('/api/orchestrator', orchestratorRouter);
 app.use('/api/approvals', approvalsRouter);
 app.use('/api/explain', explainabilityRouter);
@@ -151,11 +155,11 @@ app.use('/api/oauth', oauthRouter);
 app.use('/api', roiRouter);
 app.use('/api/admin', adminUsersRouter);
 app.use('/api/onboarding', onboardingRouter);
+app.use('/api/social', socialRouter);
+app.use('/api/campaigns', campaignsRouter);
 app.use('/api/orgs', organizationsRouter);
 app.use('/api/agency', agencyRouter);
 app.use('/api/stripe', stripeRouter);
-app.use('/api/social', socialRouter);
-app.use('/api/campaigns', campaignsRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
@@ -672,12 +676,14 @@ app.listen(PORT, async () => {
 
   // ── OAuth state persistence (survives restarts + multi-instance) ──────────
   await sql(`CREATE TABLE IF NOT EXISTS oauth_state_store (
-    id          TEXT        NOT NULL PRIMARY KEY,
-    business_id TEXT        NOT NULL,
-    platform    TEXT        NOT NULL,
-    expires_at  TIMESTAMPTZ NOT NULL,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id             TEXT        NOT NULL PRIMARY KEY,
+    business_id    TEXT        NOT NULL,
+    platform       TEXT        NOT NULL,
+    expires_at     TIMESTAMPTZ NOT NULL,
+    code_verifier  TEXT,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
+  await sql(`ALTER TABLE oauth_state_store ADD COLUMN IF NOT EXISTS code_verifier TEXT`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_oauth_state_expires ON oauth_state_store(expires_at)`);
   await sql(`DELETE FROM oauth_state_store WHERE expires_at < NOW()`);
 
