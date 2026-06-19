@@ -55,6 +55,33 @@ const SOCIAL_PLATFORMS = [
   },
 ];
 
+const ADS_PLATFORMS = [
+  {
+    id: 'google_ads',
+    name: 'Google Ads',
+    icon: '📢',
+    color: '#4285F4',
+    bg: '#EBF3FF',
+    description: 'צור קמפיינים בגוגל — החיוב עובר ישירות לחשבון הגוגל שלך',
+  },
+  {
+    id: 'meta_ads',
+    name: 'Meta Ads',
+    icon: '📘',
+    color: '#1877F2',
+    bg: '#EBF3FF',
+    description: 'פרסם בפייסבוק, אינסטגרם ו-WhatsApp — החיוב עובר לחשבון Meta שלך',
+  },
+  {
+    id: 'tiktok_ads',
+    name: 'TikTok Ads',
+    icon: '🎵',
+    color: '#010101',
+    bg: '#F0F0F0',
+    description: 'פרסם קמפיינים בטיקטוק — החיוב עובר לחשבון TikTok Ads שלך',
+  },
+];
+
 const CRM_PLATFORMS = [
   {
     id: 'hubspot',
@@ -448,6 +475,25 @@ export default function Integrations() {
               ref={el => { platformRefs.current[platform.id] = el; }}
               className={highlightPlatform === platform.id ? 'ring-2 ring-primary/40 rounded-xl transition-all' : ''}
             >
+              <SocialPlatformCard
+                platform={platform}
+                connection={connections[platform.id]}
+                account={connections[platform.id]?.account}
+                onConnect={() => connectSocial(platform.id)}
+                onDisconnect={() => disconnectSocial(platform.id)}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Paid Ads */}
+      <div className="space-y-3">
+        <h2 className="text-[13px] font-semibold text-foreground">פרסום בתשלום</h2>
+        <p className="text-[11px] text-foreground-muted">חבר חשבון פרסום — הקמפיינים ייוצרו דרך OTX והחיוב עובר ישירות לחשבון שלך בפלטפורמה.</p>
+        <div className="space-y-2">
+          {ADS_PLATFORMS.map(platform => (
+            <div key={platform.id}>
               <SocialPlatformCard
                 platform={platform}
                 connection={connections[platform.id]}
