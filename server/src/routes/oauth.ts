@@ -1,4 +1,4 @@
-/**
+﻿/**
  * OAuth 2.0 router — /api/oauth
  *
  * Endpoints:
@@ -44,10 +44,13 @@ const env = () => {
     FACEBOOK_APP_SECRET:  fbSecret,
     TIKTOK_CLIENT_KEY:    process.env.TIKTOK_CLIENT_KEY    || '',
     TIKTOK_CLIENT_SECRET: process.env.TIKTOK_CLIENT_SECRET || '',
-    GOOGLE_CLIENT_ID:     process.env.GOOGLE_CLIENT_ID     || '',
-    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
-    FRONTEND_URL:         process.env.FRONTEND_URL         || 'http://localhost:5173',
-    SERVER_BASE_URL:      process.env.SERVER_BASE_URL      || 'http://localhost:3007',
+    TIKTOK_ADS_APP_ID:    process.env.TIKTOK_ADS_APP_ID    || '',
+    TIKTOK_ADS_APP_SECRET: process.env.TIKTOK_ADS_APP_SECRET || '',
+    GOOGLE_CLIENT_ID:           process.env.GOOGLE_CLIENT_ID           || '',
+    GOOGLE_CLIENT_SECRET:       process.env.GOOGLE_CLIENT_SECRET       || '',
+    GOOGLE_ADS_DEVELOPER_TOKEN: process.env.GOOGLE_ADS_DEVELOPER_TOKEN || '',
+    FRONTEND_URL:               process.env.FRONTEND_URL               || 'http://localhost:5173',
+    SERVER_BASE_URL:            process.env.SERVER_BASE_URL            || 'http://localhost:3007',
   };
 };
 
@@ -196,6 +199,42 @@ router.get('/initiate/:platform', async (req: Request, res: Response) => {
       `&scope=${encodeURIComponent('https://www.googleapis.com/auth/business.manage email profile')}` +
       `&access_type=offline` +
       `&prompt=consent` +
+      `&state=${state}`;
+
+  } else if (platform === 'google_ads') {
+    if (!env().GOOGLE_CLIENT_ID) {
+      return res.status(503).json({ error: 'Google app not configured', demo: true });
+    }
+    authUrl =
+      `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${env().GOOGLE_CLIENT_ID}` +
+      `&redirect_uri=${encodeURIComponent(callbackUrl(platform))}` +
+      `&response_type=code` +
+      `&scope=${encodeURIComponent('https://www.googleapis.com/auth/adwords email profile')}` +
+      `&access_type=offline` +
+      `&prompt=consent` +
+      `&state=${state}`;
+
+  } else if (platform === 'meta_ads') {
+    if (!env().FACEBOOK_APP_ID) {
+      return res.status(503).json({ error: 'Meta app not configured', demo: true });
+    }
+    authUrl =
+      `https://www.facebook.com/v19.0/dialog/oauth?` +
+      `client_id=${env().FACEBOOK_APP_ID}` +
+      `&redirect_uri=${encodeURIComponent(callbackUrl(platform))}` +
+      `&scope=${encodeURIComponent('ads_management,ads_read,business_management,pages_show_list')}` +
+      `&state=${state}` +
+      `&response_type=code`;
+
+  } else if (platform === 'tiktok_ads') {
+    if (!env().TIKTOK_ADS_APP_ID) {
+      return res.status(503).json({ error: 'TikTok Ads app not configured', demo: true });
+    }
+    authUrl =
+      `https://ads.tiktok.com/marketing_api/auth?` +
+      `app_id=${env().TIKTOK_ADS_APP_ID}` +
+      `&redirect_uri=${encodeURIComponent(callbackUrl(platform))}` +
       `&state=${state}`;
 
   } else {
@@ -463,6 +502,191 @@ async function handleGoogleCallback(code: string, businessId: string) {
   return { page_name: accountName, platform: 'google_business' };
 }
 
+// ── Meta Ads callback ─────────────────────────────────────────────────────────
+async function handleMetaAdsCallback(code: string, businessId: string) {
+  const redirectUri = callbackUrl('meta_ads');
+
+  // 1. Exchange code → short-lived token
+  const tokenRes = await fetch(
+    `https://graph.facebook.com/v19.0/oauth/access_token?` +
+    `client_id=${env().FACEBOOK_APP_ID}&client_secret=${env().FACEBOOK_APP_SECRET}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`,
+  );
+  if (!tokenRes.ok) throw new Error('Meta Ads token exchange failed');
+  const tokenData: any = await tokenRes.json();
+  const shortLivedToken = tokenData.access_token;
+
+  // 2. Extend to long-lived user token (~60 days)
+  const longRes = await fetch(
+    `https://graph.facebook.com/v19.0/oauth/access_token?` +
+    `grant_type=fb_exchange_token&client_id=${env().FACEBOOK_APP_ID}` +
+    `&client_secret=${env().FACEBOOK_APP_SECRET}&fb_exchange_token=${shortLivedToken}`,
+  );
+  const longData: any = longRes.ok ? await longRes.json() : {};
+  const userToken = longData.access_token || shortLivedToken;
+
+  // 3. Fetch ad accounts for this user
+  const adAccountsRes = await fetch(
+    `https://graph.facebook.com/v19.0/me/adaccounts?fields=id,name,account_status,currency&limit=20&access_token=${userToken}`,
+  );
+  if (!adAccountsRes.ok) throw new Error('Failed to fetch Meta Ad Accounts');
+  const adAccountsData: any = await adAccountsRes.json();
+  const adAccounts: any[] = adAccountsData?.data || [];
+
+  if (adAccounts.length === 0) {
+    throw new Error(
+      'לא נמצאו חשבונות פרסום Meta. צור חשבון Ad Account ב-business.facebook.com ונסה שוב.',
+    );
+  }
+
+  // Prefer first active account (account_status === 1), fall back to first in list
+  const activeAccount = adAccounts.find((a: any) => a.account_status === 1) || adAccounts[0];
+  return await saveMetaAdsAccount(businessId, activeAccount, userToken);
+}
+
+async function saveMetaAdsAccount(businessId: string, account: any, userToken: string) {
+  const adAccountId = account.id;
+  const accountName = account.name || 'Meta Ads Account';
+  const currency    = account.currency || 'ILS';
+
+  const existing = await prisma.socialAccount.findFirst({
+    where: { linked_business: businessId, platform: 'meta_ads' },
+  });
+  if (existing) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE social_accounts
+       SET account_name=$1, access_token=$2, page_id=$3, is_connected=true, last_sync=$4
+       WHERE id=$5`,
+      `${accountName} (${currency})`, userToken, adAccountId, new Date().toISOString(), existing.id,
+    );
+  } else {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO social_accounts
+         (id, created_date, linked_business, platform, account_name, access_token, page_id, is_connected, last_sync)
+       VALUES (gen_random_uuid()::text, now(), $1, 'meta_ads', $2, $3, $4, true, $5)`,
+      businessId, `${accountName} (${currency})`, userToken, adAccountId, new Date().toISOString(),
+    );
+  }
+
+  console.log(`[meta_ads] Connected: business=${businessId} ad_account=${adAccountId} currency=${currency}`);
+  return { page_name: `${accountName} (${adAccountId})`, platform: 'meta_ads' };
+}
+
+// ── Google Ads callback ───────────────────────────────────────────────────────
+async function handleGoogleAdsCallback(code: string, businessId: string) {
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id:     env().GOOGLE_CLIENT_ID,
+      client_secret: env().GOOGLE_CLIENT_SECRET,
+      redirect_uri:  callbackUrl('google_ads'),
+      grant_type:    'authorization_code',
+    }).toString(),
+  });
+  if (!tokenRes.ok) throw new Error('Google Ads token exchange failed');
+  const tokenData: any = await tokenRes.json();
+  const accessToken  = tokenData.access_token  || '';
+  const refreshToken = tokenData.refresh_token || '';
+  const expiresIn    = (tokenData.expires_in as number) || 3600;
+  const expiresAt    = new Date(Date.now() + expiresIn * 1000).toISOString();
+
+  // Get user's Google account name
+  const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const userData: any = userRes.ok ? await userRes.json() : {};
+  const accountName = userData.name || userData.email || 'Google Ads Account';
+
+  // Fetch list of accessible Google Ads customer IDs
+  const developerToken = env().GOOGLE_ADS_DEVELOPER_TOKEN;
+  let customerId = '';
+  try {
+    const customersRes = await fetch('https://googleads.googleapis.com/v18/customers:listAccessibleCustomers', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'developer-token': developerToken,
+      },
+    });
+    if (customersRes.ok) {
+      const customersData: any = await customersRes.json();
+      // resourceNames format: ["customers/1234567890", ...]
+      const resourceNames: string[] = customersData.resourceNames || [];
+      customerId = resourceNames[0]?.replace('customers/', '') || '';
+    } else {
+      const errBody: any = await customersRes.json().catch(() => ({}));
+      console.warn('[google_ads] listAccessibleCustomers failed:', errBody?.error?.message || customersRes.status);
+    }
+  } catch (e: any) {
+    console.warn('[google_ads] listAccessibleCustomers error:', e.message);
+  }
+
+  // Upsert SocialAccount — page_id stores the customer_id
+  const existing = await prisma.socialAccount.findFirst({
+    where: { linked_business: businessId, platform: 'google_ads' },
+  });
+  if (existing) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE social_accounts
+       SET account_name=$1, access_token=$2, page_id=$3, is_connected=true,
+           last_sync=$4, refresh_token=$5, expires_at=$6
+       WHERE id=$7`,
+      accountName, accessToken, customerId, new Date().toISOString(),
+      refreshToken || null, expiresAt, existing.id,
+    );
+  } else {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO social_accounts
+         (id, created_date, linked_business, platform, account_name, access_token, page_id, is_connected, last_sync, refresh_token, expires_at)
+       VALUES (gen_random_uuid()::text, now(), $1, 'google_ads', $2, $3, $4, true, $5, $6, $7)`,
+      businessId, accountName, accessToken, customerId,
+      new Date().toISOString(), refreshToken || null, expiresAt,
+    );
+  }
+
+  const displayName = customerId ? `${accountName} (${customerId})` : accountName;
+  console.log(`[google_ads] Connected: business=${businessId} customer=${customerId || 'unknown'}`);
+  return { page_name: displayName, platform: 'google_ads' };
+}
+
+// ── TikTok Ads callback ───────────────────────────────────────────────────────
+async function handleTikTokAdsCallback(authCode: string, businessId: string) {
+  // Exchange auth_code for access_token
+  const tokenRes = await fetch('https://business-api.tiktok.com/open_api/v1.3/oauth2/access_token/', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({
+      app_id:    env().TIKTOK_ADS_APP_ID,
+      secret:    env().TIKTOK_ADS_APP_SECRET,
+      auth_code: authCode,
+    }),
+  });
+  const tokenData: any = await tokenRes.json();
+  if (tokenData.code !== 0) {
+    throw new Error(`TikTok Ads token exchange failed: ${tokenData.message}`);
+  }
+
+  const accessToken    = tokenData.data.access_token as string;
+  const advertiserIds: string[] = tokenData.data.advertiser_ids || [];
+  const advertiserId   = advertiserIds[0] || '';
+
+  const accountName = `TikTok Ads${advertiserId ? ` (${advertiserId})` : ''}`;
+
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO social_accounts
+       (id, created_date, linked_business, platform, account_name, access_token, page_id, is_connected, last_sync)
+     VALUES (gen_random_uuid()::text, now(), $1, 'tiktok_ads', $2, $3, $4, true, now())
+     ON CONFLICT (linked_business, platform) DO UPDATE
+       SET access_token=EXCLUDED.access_token, page_id=EXCLUDED.page_id,
+           account_name=EXCLUDED.account_name, is_connected=true, last_sync=now()`,
+    businessId, accountName, accessToken, advertiserId,
+  );
+
+  console.log(`[tiktok_ads] Connected: business=${businessId} advertiser=${advertiserId}`);
+  return { platform: 'tiktok_ads', page_name: accountName };
+}
+
 // ── TikTok callback ───────────────────────────────────────────────────────────
 async function handleTikTokCallback(code: string, businessId: string, codeVerifier?: string) {
   const tokenParams: Record<string, string> = {
@@ -528,7 +752,10 @@ async function handleTikTokCallback(code: string, businessId: string, codeVerifi
 // ── Callback route ────────────────────────────────────────────────────────────
 router.get('/callback/:platform', async (req: Request, res: Response) => {
   const { platform }             = req.params;
-  const { code, state, error }   = req.query as Record<string, string>;
+  // TikTok Ads uses auth_code instead of code
+  const authCode = (req.query.auth_code || req.query.code) as string;
+  const { state, error } = req.query as Record<string, string>;
+  const code = authCode;
 
   if (error) {
     return res.redirect(`${env().FRONTEND_URL}/integrations?oauth_error=${encodeURIComponent(error)}`);
@@ -550,6 +777,12 @@ router.get('/callback/:platform', async (req: Request, res: Response) => {
       result = await handleWhatsAppCallback(code, stateData.businessId);
     } else if (platform === 'google_business') {
       result = await handleGoogleCallback(code, stateData.businessId);
+    } else if (platform === 'google_ads') {
+      result = await handleGoogleAdsCallback(code, stateData.businessId);
+    } else if (platform === 'meta_ads') {
+      result = await handleMetaAdsCallback(code, stateData.businessId);
+    } else if (platform === 'tiktok_ads') {
+      result = await handleTikTokAdsCallback(code, stateData.businessId);
     } else if (platform === 'tiktok_business') {
       result = await handleTikTokCallback(code, stateData.businessId, stateData.codeVerifier);
     } else {
@@ -685,7 +918,10 @@ router.get('/confirm-page', async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await saveFacebookPage(s.businessId, s.platform, page);
+    // meta_ads uses saveMetaAdsAccount; Facebook/Instagram use saveFacebookPage
+    const result = s.platform === 'meta_ads'
+      ? await saveMetaAdsAccount(s.businessId, page, page.access_token)
+      : await saveFacebookPage(s.businessId, s.platform, page);
     pagePickerSessions.delete(session);
 
     return res.send(`<!DOCTYPE html>

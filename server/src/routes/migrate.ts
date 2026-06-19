@@ -412,6 +412,11 @@ router.post('/', async (req: Request, res: Response) => {
     `CREATE INDEX IF NOT EXISTS idx_approval_biz ON v3_approval_requests(business_id, status)`,
     `CREATE INDEX IF NOT EXISTS idx_approval_decision ON v3_approval_requests(decision_id)`,
 
+    // ── campaigns: store external platform campaign ID ────────────────────────
+    `ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS external_campaign_id TEXT`,
+    `ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS external_ad_group_id TEXT`,
+    `ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS external_budget_id    TEXT`,
+
     // ── otx_opportunities (v3) ────────────────────────────────────────────────
     `CREATE TABLE IF NOT EXISTS otx_opportunities (
       id                    TEXT        PRIMARY KEY,

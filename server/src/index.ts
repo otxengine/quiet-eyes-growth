@@ -22,6 +22,7 @@ import roiRouter from './routes/roi';
 import adminUsersRouter from './routes/adminUsers';
 import onboardingRouter from './routes/onboarding';
 import socialRouter from './routes/social';
+import campaignsRouter from './routes/campaigns';
 
 // Wire up all event choreography handlers at startup
 registerAllHandlers();
@@ -99,6 +100,7 @@ app.use('/api', roiRouter);
 app.use('/api/admin', adminUsersRouter);
 app.use('/api/onboarding', onboardingRouter);
 app.use('/api/social', socialRouter);
+app.use('/api/campaigns', campaignsRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 

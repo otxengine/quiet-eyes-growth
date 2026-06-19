@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -13,9 +13,11 @@ import PlanGate from '@/components/subscription/PlanGate';
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const PLATFORM_CONFIG = {
-  meta:      { label: 'Facebook',    icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
-  instagram: { label: 'Instagram',   icon: '📸', color: '#e1306c', bg: '#fde8f0' },
-  google:    { label: 'Google Ads',  icon: '🔍', color: '#4285f4', bg: '#e8f0fe' },
+  facebook:  { label: 'Facebook',     icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
+  instagram: { label: 'Instagram',    icon: '📸', color: '#e1306c', bg: '#fde8f0' },
+  google:    { label: 'Google Ads',   icon: '🔍', color: '#4285f4', bg: '#e8f0fe' },
+  whatsapp:  { label: 'WhatsApp Ads', icon: '💬', color: '#25d366', bg: '#f0fdf4' },
+  tiktok:    { label: 'TikTok',       icon: '🎵', color: '#010101', bg: '#f0f0f0' },
 };
 
 const ORGANIC_PLATFORMS = [
@@ -49,7 +51,123 @@ function fmtDate(d) {
 
 // ── Paid Campaign Card ────────────────────────────────────────────────────────
 
-function CampaignCard({ campaign, onDelete }) {
+const _apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api').replace(/\/$/, '');
+
+function PublishGoogleAdsButton({ campaign, bpId, onPublished }) {
+  const [loading, setLoading] = useState(false);
+
+  const handlePublish = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${_apiBase}/campaigns/publish-google-ads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId: campaign.id, businessId: bpId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('הקמפיין פורסם בגוגל ✓ — מצב: מושהה (Paused)');
+        onPublished?.();
+      } else {
+        toast.error('שגיאה: ' + (data.error || 'נסה שוב'));
+      }
+    } catch (e) {
+      toast.error('שגיאת חיבור: ' + e.message);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <button
+      onClick={handlePublish}
+      disabled={loading}
+      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-white bg-blue-500 hover:bg-blue-600 transition-all disabled:opacity-50"
+    >
+      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+      פרסם בגוגל
+    </button>
+  );
+}
+
+function PublishMetaAdsButton({ campaign, bpId, onPublished }) {
+  const [loading, setLoading] = useState(false);
+
+  const handlePublish = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${_apiBase}/campaigns/publish-meta-ads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId: campaign.id, businessId: bpId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('הקמפיין פורסם ב-Meta ✓ — מצב: מושהה (Paused)');
+        onPublished?.();
+      } else {
+        toast.error('שגיאה: ' + (data.error || 'נסה שוב'));
+      }
+    } catch (e) {
+      toast.error('שגיאת חיבור: ' + e.message);
+    }
+    setLoading(false);
+  };
+
+  const platformLabel = campaign.platform === 'instagram'
+    ? 'אינסטגרם'
+    : campaign.platform === 'whatsapp'
+    ? 'WhatsApp'
+    : 'פייסבוק';
+
+  return (
+    <button
+      onClick={handlePublish}
+      disabled={loading}
+      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-white bg-blue-600 hover:bg-blue-700 transition-all disabled:opacity-50"
+    >
+      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+      פרסם ב{platformLabel}
+    </button>
+  );
+}
+
+function PublishTikTokAdsButton({ campaign, bpId, onPublished }) {
+  const [loading, setLoading] = useState(false);
+
+  const handlePublish = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${_apiBase}/campaigns/publish-tiktok-ads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId: campaign.id, businessId: bpId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('קמפיין TikTok נוצר ✓ — העלה וידאו ב-Ads Manager כדי להפעיל');
+        onPublished?.();
+      } else {
+        toast.error('שגיאה: ' + (data.error || 'נסה שוב'));
+      }
+    } catch (e) {
+      toast.error('שגיאת חיבור: ' + e.message);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <button
+      onClick={handlePublish}
+      disabled={loading}
+      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-white bg-black hover:bg-gray-800 transition-all disabled:opacity-50"
+    >
+      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+      פרסם ב-TikTok
+    </button>
+  );
+}
+
+function CampaignCard({ campaign, onDelete, bpId, onPublished }) {
   const navigate = useNavigate();
   const plat   = PLATFORM_CONFIG[campaign.platform] || { label: campaign.platform, icon: '📣', color: '#555', bg: '#f5f5f5' };
   const status = STATUS_CONFIG[campaign.status] || STATUS_CONFIG.draft;
@@ -75,15 +193,88 @@ function CampaignCard({ campaign, onDelete }) {
       </div>
       <div className="flex items-center gap-2 px-4 py-2 border-t border-border bg-secondary/30">
         <button onClick={() => navigate(`/marketing/create?campaignId=${campaign.id}`)} className="text-[11px] text-foreground-muted hover:text-foreground transition-colors">✏️ ערוך</button>
-        {campaign.status === 'pending_launch' && (
-          <a
-            href={campaign.platform === 'google' ? 'https://ads.google.com/aw/campaigns' : 'https://business.facebook.com/adsmanager/'}
-            target="_blank" rel="noreferrer"
-            className="flex items-center gap-1 text-[11px] font-medium text-amber-700 hover:text-amber-800 transition-colors"
-          >
-            <ExternalLink className="w-3 h-3" />
-            פתח Ads Manager
-          </a>
+        {campaign.status === 'pending_launch' && campaign.platform === 'google' && (
+          <div className="flex items-center gap-2">
+            <PublishGoogleAdsButton campaign={campaign} bpId={bpId} onPublished={onPublished} />
+            <a
+              href="https://ads.google.com/aw/campaigns"
+              target="_blank" rel="noreferrer"
+              className="flex items-center gap-1 text-[11px] text-amber-700 hover:text-amber-800 transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" />
+              פתח Ads Manager
+            </a>
+          </div>
+        )}
+        {campaign.status === 'pending_launch' && ['facebook', 'instagram', 'whatsapp'].includes(campaign.platform) && (
+          <div className="flex items-center gap-2">
+            <PublishMetaAdsButton campaign={campaign} bpId={bpId} onPublished={onPublished} />
+            <a
+              href="https://adsmanager.facebook.com/adsmanager/manage/campaigns"
+              target="_blank" rel="noreferrer"
+              className="flex items-center gap-1 text-[11px] text-amber-700 hover:text-amber-800 transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" />
+              פתח Ads Manager
+            </a>
+          </div>
+        )}
+        {campaign.status === 'pending_launch' && campaign.platform === 'tiktok' && (
+          <div className="flex items-center gap-2">
+            <PublishTikTokAdsButton campaign={campaign} bpId={bpId} onPublished={onPublished} />
+            <a
+              href="https://ads.tiktok.com/i18n/dashboard"
+              target="_blank" rel="noreferrer"
+              className="flex items-center gap-1 text-[11px] text-amber-700 hover:text-amber-800 transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" />
+              פתח TikTok Ads
+            </a>
+          </div>
+        )}
+        {campaign.status === 'active' && ['facebook', 'instagram', 'whatsapp'].includes(campaign.platform) && (
+          <div className="flex items-center gap-2">
+            {campaign.external_campaign_id && (
+              <a
+                href={`https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${campaign.external_campaign_id}`}
+                target="_blank" rel="noreferrer"
+                className="flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700 transition-colors"
+              >
+                <ExternalLink className="w-3 h-3" />
+                פתח ב-Meta
+              </a>
+            )}
+            <a
+              href="https://adsmanager.facebook.com/adsmanager/manage/campaigns"
+              target="_blank" rel="noreferrer"
+              className="flex items-center gap-1 text-[11px] text-amber-700 hover:text-amber-800 transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" />
+              פתח Ads Manager
+            </a>
+          </div>
+        )}
+        {campaign.status === 'active' && campaign.platform === 'google' && (
+          <div className="flex items-center gap-2">
+            {campaign.external_campaign_id && (
+              <a
+                href={`https://ads.google.com/aw/campaigns?campaignId=${campaign.external_campaign_id}`}
+                target="_blank" rel="noreferrer"
+                className="flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700 transition-colors"
+              >
+                <ExternalLink className="w-3 h-3" />
+                פתח בגוגל
+              </a>
+            )}
+            <a
+              href="https://ads.google.com/aw/campaigns"
+              target="_blank" rel="noreferrer"
+              className="flex items-center gap-1 text-[11px] text-amber-700 hover:text-amber-800 transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" />
+              פתח Ads Manager
+            </a>
+          </div>
         )}
         <button onClick={() => onDelete(campaign.id)} className="text-[11px] text-foreground-muted hover:text-red-500 mr-auto transition-colors">
           <Trash2 className="w-3 h-3" />
@@ -877,6 +1068,14 @@ ${audienceCtx}
       {/* Paid tab */}
       {activeTab === 'paid' && (
         <>
+          <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-4 text-[12px] text-blue-800 leading-relaxed">
+            <span className="mt-0.5 text-base">ℹ️</span>
+            <span>
+              אנחנו <strong>לא שומרים ולא מנהלים</strong> אמצעי תשלום או פרטי כרטיס אשראי מחשבון המודעות שלך.
+              לאחר פרסום הקמפיין, הוא ייווצר בחשבון המודעות שלך במצב <strong>מושהה (Paused)</strong> — ללא חיובים.
+              כדי להפעיל אותו ולהתחיל לפרסם, יש להיכנס לחשבון המודעות, להוסיף אמצעי תשלום ולהפעיל את הקמפיין ידנית.
+            </span>
+          </div>
           <div className="flex gap-1 mb-4 border-b border-border">
             {PAID_TABS.map(t => (
               <button key={t} onClick={() => setPaidFilter(t)}
@@ -904,7 +1103,7 @@ ${audienceCtx}
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredCampaigns.map(c => (
-                <CampaignCard key={c.id} campaign={c} onDelete={(id) => deleteCampaign.mutate(id)} />
+                <CampaignCard key={c.id} campaign={c} onDelete={(id) => deleteCampaign.mutate(id)} bpId={bpId} onPublished={() => queryClient.invalidateQueries({ queryKey: ['campaigns', bpId] })} />
               ))}
             </div>
           )}
