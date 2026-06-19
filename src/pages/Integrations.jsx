@@ -490,7 +490,7 @@ export default function Integrations() {
       {/* Paid Ads */}
       <div className="space-y-3">
         <h2 className="text-[13px] font-semibold text-foreground">פרסום בתשלום</h2>
-        <p className="text-[11px] text-foreground-muted">חבר חשבון פרסום — הקמפיינים ייוצרו דרך OTX והחיוב עובר ישירות לחשבון שלך בפלטפורמה.</p>
+        <p className="text-[11px] text-foreground-muted">חבר חשבון פרסום — הקמפיינים ייוצרו דרך Cortexi והחיוב עובר ישירות לחשבון שלך בפלטפורמה.</p>
         <div className="space-y-2">
           {ADS_PLATFORMS.map(platform => (
             <div key={platform.id}>
