@@ -16,17 +16,17 @@ export default function CompetitorPricingChart({ competitors }) {
 
   if (data.length === 0) {
     return (
-      <div className="bg-white rounded-[10px] border border-[#f0f0f0] p-5">
+      <div className="bg-white rounded-[10px] border border-border/50 p-5">
         <h3 className="text-[13px] font-semibold text-[#222222] mb-4">השוואת מתחרים</h3>
-        <p className="text-[12px] text-[#999999] text-center py-10">אין נתוני מתחרים עדיין</p>
+        <p className="text-[12px] text-foreground-muted text-center py-10">אין נתוני מתחרים עדיין</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-[10px] border border-[#f0f0f0] p-5">
+    <div className="bg-white rounded-[10px] border border-border/50 p-5">
       <h3 className="text-[13px] font-semibold text-[#222222] mb-1">השוואת מתחרים — דירוג וביקורות</h3>
-      <p className="text-[10px] text-[#999999] mb-4">דירוג ממוצע מול כמות ביקורות</p>
+      <p className="text-[10px] text-foreground-muted mb-4">דירוג ממוצע מול כמות ביקורות</p>
       <div className="h-[260px]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>

@@ -3,6 +3,7 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
+import { loadCompetitorAdsIntel, formatCompetitorAdsForPrompt } from '../../lib/competitorAdsIntel';
 import { getSectorContentStrategy } from '../../lib/sectorPrompts';
 import { getAgentMission, getAllMissions } from '../../lib/missionPlanner';
 
@@ -84,11 +85,11 @@ export async function contentCalendarAgent(req: Request, res: Response) {
         where: { linked_business: businessProfileId, category: 'tiktok_audience' },
         orderBy: { detected_at: 'desc' },
       }),
-      // TikTok sector trends
+      // TikTok sector trends + viral content format trends
       prisma.marketSignal.findMany({
-        where: { linked_business: businessProfileId, category: 'tiktok_sector_trend' },
+        where: { linked_business: businessProfileId, category: { in: ['tiktok_sector_trend', 'content_trend'] } },
         orderBy: { detected_at: 'desc' },
-        take: 3,
+        take: 5,
       }),
       // Recent positive reviews for social proof
       prisma.review.findMany({
@@ -146,8 +147,20 @@ export async function contentCalendarAgent(req: Request, res: Response) {
       ? `מגמות שוק השבוע:\n${recentSignals.map(s => `- ${s.summary}`).join('\n')}`
       : '';
 
-    const trendContext = trendSignals.length > 0
-      ? `טרנדים ב-TikTok לסקטור:\n${trendSignals.map(s => `- ${s.summary}`).join('\n')}`
+    const tiktokTrends    = trendSignals.filter(s => s.category === 'tiktok_sector_trend');
+    const contentTrends   = trendSignals.filter(s => s.category === 'content_trend');
+
+    const trendContext = tiktokTrends.length > 0
+      ? `טרנדים ב-TikTok לסקטור:\n${tiktokTrends.map(s => `- ${s.summary}`).join('\n')}`
+      : '';
+
+    // Viral content format trends — HOW to create, not what product
+    const contentTrendContext = contentTrends.length > 0
+      ? `תבניות תוכן ויראליות לסקטור (בצע לפחות אחת מהן השבוע):\n${contentTrends.map(s => {
+          let extra = '';
+          try { const d = JSON.parse(s.source_description || '{}'); extra = d.example_hook ? ` | Hook: "${d.example_hook}"` : ''; } catch {}
+          return `- ${s.summary.replace('🎬 תבנית תוכן ויראלי: ', '')}${extra}`;
+        }).join('\n')}`
       : '';
 
     const competitorContext = competitors.length > 0
@@ -155,6 +168,10 @@ export async function contentCalendarAgent(req: Request, res: Response) {
           `- ${c.name}${c.weaknesses ? ` | חולשה: ${c.weaknesses.substring(0, 60)}` : ''}`
         ).join('\n')}`
       : '';
+
+    // Load competitor paid ad intelligence to inform counter-content strategy
+    const adsIntel = await loadCompetitorAdsIntel(businessProfileId);
+    const adsIntelContext = formatCompetitorAdsForPrompt(adsIntel);
 
     const socialProof = recentReviews.length > 0
       ? `ביקורות חיוביות לשימוש בפוסטים:\n${recentReviews.map(r =>
@@ -214,7 +231,9 @@ ${hashtagGuide ? `\n${hashtagGuide}` : ''}
 ${audienceCtx ? `=== מחקר קהל יעד ===\n${audienceCtx}\n===` : ''}
 ${signalContext ? `\n${signalContext}` : ''}
 ${trendContext ? `\n${trendContext}` : ''}
+${contentTrendContext ? `\n${contentTrendContext}` : ''}
 ${competitorContext ? `\n${competitorContext}` : ''}
+${adsIntelContext ? `\n${adsIntelContext}` : ''}
 ${socialProof ? `\n${socialProof}` : ''}
 ${sectorContext ? `\n${sectorContext}` : ''}
 ${contentStyle ? `\nסגנון תוכן מועדף: ${contentStyle}` : ''}

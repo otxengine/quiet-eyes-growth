@@ -18,7 +18,7 @@ function localScore(stats) {
 }
 
 const KPIS = [
-  { key: 'unreadSignals',  label: 'סיגנלים',  icon: '📊', route: '/signals',     color: 'text-indigo-600', bg: 'bg-indigo-50' },
+  { key: 'unreadSignals',  label: 'סיגנלים',  icon: '📊', route: '/signals',     color: 'text-primary', bg: 'bg-primary/8' },
   { key: 'pendingReviews', label: 'ביקורות',  icon: '⭐', route: '/reviews',     color: 'text-amber-600',  bg: 'bg-amber-50'  },
   { key: 'hotLeads',       label: 'לידים חמים', icon: '🔥', route: '/leads',    color: 'text-orange-600', bg: 'bg-orange-50' },
   { key: 'monthRevenue',   label: 'הכנסה חודשית', icon: '₪', route: '/leads',  color: 'text-green-600',  bg: 'bg-green-50'  },
@@ -71,7 +71,7 @@ export default function DashboardHeader({ businessProfile, stats = {} }) {
             <button
               key={kpi.key}
               onClick={() => navigate(kpi.route)}
-              className={`flex flex-col items-center justify-center w-14 h-14 rounded-xl border border-border ${kpi.bg} hover:shadow-sm transition-all group cursor-pointer`}
+              className={`card-stat flex flex-col items-center justify-center w-14 h-14 group cursor-pointer hover:shadow-md`}
             >
               <span className={`text-[17px] font-bold leading-none ${kpi.color} group-hover:scale-110 transition-transform`}>
                 {fmtKpi(kpi.key, stats[kpi.key])}

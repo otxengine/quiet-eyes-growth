@@ -9,14 +9,14 @@ const alerts = [
 
 export default function SettingsAlerts({ form, onToggle }) {
   return (
-    <div className="bg-white rounded-[10px] border border-[#f0f0f0] p-5 space-y-4">
+    <div className="bg-white rounded-[10px] border border-border/50 p-5 space-y-4">
       <h2 className="text-[14px] font-semibold text-[#222222]">התראות</h2>
       <div className="space-y-3">
         {alerts.map((alert) => (
           <div key={alert.key} className="flex items-center justify-between">
             <div>
               <span className="text-[13px] font-medium text-[#222222] block">{alert.label}</span>
-              <span className="text-[11px] text-[#999999]">{alert.desc}</span>
+              <span className="text-[11px] text-foreground-muted">{alert.desc}</span>
             </div>
             <Switch checked={!!form[alert.key]} onCheckedChange={(val) => onToggle(alert.key, val)} />
           </div>

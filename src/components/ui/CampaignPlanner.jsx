@@ -36,17 +36,17 @@ function fmtIls(n) {
 
 function MetricCard({ icon, label, low, mid, high, format = fmtNum, accent = '#4f46e5' }) {
   return (
-    <div className="bg-white border border-gray-100 rounded-xl p-3 flex flex-col gap-1">
+    <div className="bg-white border border-border/60 rounded-xl p-3 flex flex-col gap-1">
       <div className="flex items-center gap-1.5">
         <span className="text-[13px]">{icon}</span>
-        <span className="text-[10px] text-gray-400 font-medium">{label}</span>
+        <span className="text-[10px] text-foreground-muted/70 font-medium">{label}</span>
       </div>
       <div className="flex items-baseline gap-1 mt-0.5">
-        <span className="text-[11px] text-gray-300">{format(low)}</span>
+        <span className="text-[11px] text-foreground-muted/50">{format(low)}</span>
         <span className="text-[15px] font-bold" style={{ color: accent }}>{format(mid)}</span>
-        <span className="text-[11px] text-gray-300">{format(high)}</span>
+        <span className="text-[11px] text-foreground-muted/50">{format(high)}</span>
       </div>
-      <div className="text-[8px] text-gray-300 leading-none">נמוך · ממוצע · גבוה</div>
+      <div className="text-[8px] text-foreground-muted/50 leading-none">נמוך · ממוצע · גבוה</div>
     </div>
   );
 }
@@ -97,8 +97,8 @@ function KeywordRow({ term, match }) {
   };
   const m = matchColors[match] || matchColors.broad;
   return (
-    <div className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
-      <span className="text-[11px] text-gray-700">{term}</span>
+    <div className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0">
+      <span className="text-[11px] text-foreground-secondary">{term}</span>
       <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-bold"
         style={{ color: m.color, background: m.bg }}>{m.label}</span>
     </div>
@@ -161,7 +161,7 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
 
       {/* ── Platform tabs ── */}
       <div>
-        <p className="text-[10px] text-gray-400 font-semibold mb-2 uppercase tracking-wider">פלטפורמה</p>
+        <p className="text-[10px] text-foreground-muted/70 font-semibold mb-2 uppercase tracking-wider">פלטפורמה</p>
         <div className="grid grid-cols-3 gap-2">
           {PLATFORMS.map(p => (
             <button key={p.id} onClick={() => { setPlatform(p.id); setResult(null); }}
@@ -180,7 +180,7 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
 
       {/* ── Objective ── */}
       <div>
-        <p className="text-[10px] text-gray-400 font-semibold mb-2 uppercase tracking-wider">מטרת הקמפיין</p>
+        <p className="text-[10px] text-foreground-muted/70 font-semibold mb-2 uppercase tracking-wider">מטרת הקמפיין</p>
         <div className="grid grid-cols-2 gap-2">
           {OBJECTIVES.map(o => (
             <button key={o.id} onClick={() => { setObjective(o.id); setResult(null); }}
@@ -192,7 +192,7 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
               <span className="text-[16px] flex-shrink-0">{o.icon}</span>
               <div>
                 <p className="text-[11px] font-bold" style={{ color: objective === o.id ? '#15803d' : '#374151' }}>{o.label}</p>
-                <p className="text-[9px] text-gray-400">{o.desc}</p>
+                <p className="text-[9px] text-foreground-muted/70">{o.desc}</p>
               </div>
             </button>
           ))}
@@ -202,20 +202,20 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
       {/* ── Budget + Duration ── */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <p className="text-[10px] text-gray-400 font-semibold mb-2 uppercase tracking-wider">תקציב יומי</p>
+          <p className="text-[10px] text-foreground-muted/70 font-semibold mb-2 uppercase tracking-wider">תקציב יומי</p>
           <div className="relative">
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-gray-400 font-bold">₪</span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-foreground-muted/70 font-bold">₪</span>
             <input type="number" min={10} max={10000} step={10}
               value={budget}
               onChange={e => { setBudget(Math.max(10, Number(e.target.value))); setResult(null); }}
-              className="w-full border-2 border-gray-200 rounded-xl py-2.5 pr-8 pl-3 text-[14px] font-bold text-gray-800 focus:outline-none focus:border-indigo-400 transition-colors" />
+              className="w-full border-2 border-border rounded-xl py-2.5 pr-8 pl-3 text-[14px] font-bold text-foreground focus:outline-none focus:border-primary/40 transition-colors" />
           </div>
           {/* Budget tier quick-select will be shown after first estimate */}
           {result?.budget_tiers && (
             <div className="flex gap-1 mt-1.5">
               {[['מינימלי', result.budget_tiers.starter], ['צמיחה', result.budget_tiers.growth], ['אגרסיבי', result.budget_tiers.aggressive]].map(([lbl, val]) => (
                 <button key={lbl} onClick={() => { setBudget(val); setResult(null); }}
-                  className="flex-1 text-[9px] py-1 rounded-lg bg-gray-50 border border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 transition-all font-medium">
+                  className="flex-1 text-[9px] py-1 rounded-lg bg-secondary/50 border border-border text-foreground-muted hover:border-primary/30 hover:text-primary transition-all font-medium">
                   ₪{val}<br /><span className="text-[8px]">{lbl}</span>
                 </button>
               ))}
@@ -223,7 +223,7 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
           )}
         </div>
         <div>
-          <p className="text-[10px] text-gray-400 font-semibold mb-2 uppercase tracking-wider">משך הקמפיין</p>
+          <p className="text-[10px] text-foreground-muted/70 font-semibold mb-2 uppercase tracking-wider">משך הקמפיין</p>
           <div className="grid grid-cols-3 gap-1.5">
             {DURATIONS.map(d => (
               <button key={d} onClick={() => { setDays(d); setResult(null); }}
@@ -242,9 +242,9 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
       </div>
 
       {/* Total budget summary */}
-      <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-2.5 border border-gray-100">
-        <span className="text-[11px] text-gray-500">סה"כ תקציב קמפיין</span>
-        <span className="text-[15px] font-black text-gray-800">₪{budget * days}</span>
+      <div className="flex items-center justify-between bg-secondary/50 rounded-xl px-4 py-2.5 border border-border/60">
+        <span className="text-[11px] text-foreground-muted">סה"כ תקציב קמפיין</span>
+        <span className="text-[15px] font-black text-foreground">₪{budget * days}</span>
       </div>
 
       {/* ── Calculate button ── */}
@@ -267,7 +267,7 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
           RESULTS PANEL — only shown after calculate
           ══════════════════════════════════════════════════════════════════════ */}
       {result && m && (
-        <div className="space-y-4 border-t border-gray-100 pt-4">
+        <div className="space-y-4 border-t border-border/60 pt-4">
 
           {/* ── Estimated Daily Results (Facebook-style header card) ── */}
           <div className="rounded-2xl border-2 p-4 space-y-3"
@@ -275,37 +275,37 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
             <div className="flex items-center gap-2 mb-1">
               <span className="text-[16px]">{selectedPlatform?.icon}</span>
               <div>
-                <p className="text-[12px] font-bold text-gray-800">תוצאות יומיות צפויות</p>
-                <p className="text-[10px] text-gray-500">לתקציב יומי ₪{budget} | {days} ימים</p>
+                <p className="text-[12px] font-bold text-foreground">תוצאות יומיות צפויות</p>
+                <p className="text-[10px] text-foreground-muted">לתקציב יומי ₪{budget} | {days} ימים</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="bg-white/80 rounded-xl p-2.5 text-center">
-                <p className="text-[9px] text-gray-400 mb-0.5">חשיפות יומיות</p>
-                <p className="text-[16px] font-black text-gray-800">{fmtNum(m.daily_impressions?.mid)}</p>
-                <p className="text-[9px] text-gray-400">{fmtNum(m.daily_impressions?.low)}–{fmtNum(m.daily_impressions?.high)}</p>
+                <p className="text-[9px] text-foreground-muted/70 mb-0.5">חשיפות יומיות</p>
+                <p className="text-[16px] font-black text-foreground">{fmtNum(m.daily_impressions?.mid)}</p>
+                <p className="text-[9px] text-foreground-muted/70">{fmtNum(m.daily_impressions?.low)}–{fmtNum(m.daily_impressions?.high)}</p>
               </div>
               <div className="bg-white/80 rounded-xl p-2.5 text-center">
-                <p className="text-[9px] text-gray-400 mb-0.5">הגעה יומית</p>
-                <p className="text-[16px] font-black text-gray-800">{fmtNum(m.daily_reach?.mid)}</p>
-                <p className="text-[9px] text-gray-400">{fmtNum(m.daily_reach?.low)}–{fmtNum(m.daily_reach?.high)}</p>
+                <p className="text-[9px] text-foreground-muted/70 mb-0.5">הגעה יומית</p>
+                <p className="text-[16px] font-black text-foreground">{fmtNum(m.daily_reach?.mid)}</p>
+                <p className="text-[9px] text-foreground-muted/70">{fmtNum(m.daily_reach?.low)}–{fmtNum(m.daily_reach?.high)}</p>
               </div>
               <div className="bg-white/80 rounded-xl p-2.5 text-center">
-                <p className="text-[9px] text-gray-400 mb-0.5">קליקים יומיים</p>
+                <p className="text-[9px] text-foreground-muted/70 mb-0.5">קליקים יומיים</p>
                 <p className="text-[16px] font-black" style={{ color: selectedPlatform?.color }}>{fmtNum(m.daily_clicks?.mid)}</p>
-                <p className="text-[9px] text-gray-400">{fmtNum(m.daily_clicks?.low)}–{fmtNum(m.daily_clicks?.high)}</p>
+                <p className="text-[9px] text-foreground-muted/70">{fmtNum(m.daily_clicks?.low)}–{fmtNum(m.daily_clicks?.high)}</p>
               </div>
               <div className="bg-white/80 rounded-xl p-2.5 text-center">
-                <p className="text-[9px] text-gray-400 mb-0.5">{objective === 'leads' ? 'לידים יומיים' : 'המרות יומיות'}</p>
+                <p className="text-[9px] text-foreground-muted/70 mb-0.5">{objective === 'leads' ? 'לידים יומיים' : 'המרות יומיות'}</p>
                 <p className="text-[16px] font-black text-green-600">{fmtNum(m.daily_leads?.mid)}</p>
-                <p className="text-[9px] text-gray-400">{fmtNum(m.daily_leads?.low)}–{fmtNum(m.daily_leads?.high)}</p>
+                <p className="text-[9px] text-foreground-muted/70">{fmtNum(m.daily_leads?.low)}–{fmtNum(m.daily_leads?.high)}</p>
               </div>
             </div>
           </div>
 
           {/* ── Cost metrics ── */}
           <div>
-            <p className="text-[10px] text-gray-400 font-semibold mb-2 uppercase tracking-wider">עלויות</p>
+            <p className="text-[10px] text-foreground-muted/70 font-semibold mb-2 uppercase tracking-wider">עלויות</p>
             <div className="grid grid-cols-3 gap-2">
               <MetricCard icon="📊" label="CTR" low={`${m.ctr_pct?.low}%`} mid={`${m.ctr_pct?.mid}%`} high={`${m.ctr_pct?.high}%`} format={v => v} accent="#4f46e5" />
               <MetricCard icon="🖱" label="עלות לקליק" low={m.cpc_ils?.low} mid={m.cpc_ils?.mid} high={m.cpc_ils?.high} format={fmtIls} accent="#d97706" />
@@ -315,19 +315,19 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
 
           {/* ── Campaign total ── */}
           <div>
-            <p className="text-[10px] text-gray-400 font-semibold mb-2 uppercase tracking-wider">סיכום {days} ימים</p>
+            <p className="text-[10px] text-foreground-muted/70 font-semibold mb-2 uppercase tracking-wider">סיכום {days} ימים</p>
             <div className="grid grid-cols-2 gap-2">
-              <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 flex justify-between items-center">
-                <span className="text-[10px] text-gray-500">חשיפות כוללות</span>
-                <span className="text-[12px] font-bold text-gray-800">{fmtNum(m.total_impressions?.mid)}</span>
+              <div className="bg-secondary/50 border border-border/60 rounded-xl p-3 flex justify-between items-center">
+                <span className="text-[10px] text-foreground-muted">חשיפות כוללות</span>
+                <span className="text-[12px] font-bold text-foreground">{fmtNum(m.total_impressions?.mid)}</span>
               </div>
-              <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 flex justify-between items-center">
-                <span className="text-[10px] text-gray-500">הגעה כוללת</span>
-                <span className="text-[12px] font-bold text-gray-800">{fmtNum(m.total_reach?.mid)}</span>
+              <div className="bg-secondary/50 border border-border/60 rounded-xl p-3 flex justify-between items-center">
+                <span className="text-[10px] text-foreground-muted">הגעה כוללת</span>
+                <span className="text-[12px] font-bold text-foreground">{fmtNum(m.total_reach?.mid)}</span>
               </div>
-              <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 flex justify-between items-center">
-                <span className="text-[10px] text-gray-500">קליקים כוללים</span>
-                <span className="text-[12px] font-bold text-gray-800">{fmtNum(m.total_clicks?.mid)}</span>
+              <div className="bg-secondary/50 border border-border/60 rounded-xl p-3 flex justify-between items-center">
+                <span className="text-[10px] text-foreground-muted">קליקים כוללים</span>
+                <span className="text-[12px] font-bold text-foreground">{fmtNum(m.total_clicks?.mid)}</span>
               </div>
               <div className="bg-green-50 border border-green-100 rounded-xl p-3 flex justify-between items-center">
                 <span className="text-[10px] text-green-600">לידים כוללים</span>
@@ -339,7 +339,7 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
           {/* ── Targeting panel ── */}
           {t && (
             <div>
-              <p className="text-[10px] text-gray-400 font-semibold mb-2 uppercase tracking-wider">
+              <p className="text-[10px] text-foreground-muted/70 font-semibold mb-2 uppercase tracking-wider">
                 {isMeta ? '📘 טרגטינג לפי פורמט Meta Ads' : '🔍 טרגטינג לפי פורמט Google Ads'}
               </p>
 
@@ -351,20 +351,20 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
                   )}
 
                   {/* Demographics */}
-                  <div className="bg-white border border-gray-100 rounded-xl p-3">
-                    <p className="text-[10px] font-semibold text-gray-500 mb-2">👥 דמוגרפיה</p>
-                    <div className="flex flex-wrap gap-2 text-[11px] text-gray-700">
-                      <span className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1">גיל {t.age_min}–{t.age_max}</span>
-                      <span className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1">{t.genders}</span>
-                      <span className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1">📍 {result.city} +{t.geo_radius_km || 20}km</span>
+                  <div className="bg-white border border-border/60 rounded-xl p-3">
+                    <p className="text-[10px] font-semibold text-foreground-muted mb-2">👥 דמוגרפיה</p>
+                    <div className="flex flex-wrap gap-2 text-[11px] text-foreground-secondary">
+                      <span className="bg-secondary/50 border border-border rounded-lg px-2.5 py-1">גיל {t.age_min}–{t.age_max}</span>
+                      <span className="bg-secondary/50 border border-border rounded-lg px-2.5 py-1">{t.genders}</span>
+                      <span className="bg-secondary/50 border border-border rounded-lg px-2.5 py-1">📍 {result.city} +{t.geo_radius_km || 20}km</span>
                     </div>
                   </div>
 
                   {/* Detailed Targeting — Interests */}
                   {t.fb_interests?.length > 0 && (
-                    <div className="bg-white border border-gray-100 rounded-xl p-3">
-                      <p className="text-[10px] font-semibold text-gray-500 mb-2">✅ Detailed Targeting — תחומי עניין</p>
-                      <div className="text-[9px] text-gray-400 mb-2">אנשים שתואמים לאחד מהבאים:</div>
+                    <div className="bg-white border border-border/60 rounded-xl p-3">
+                      <p className="text-[10px] font-semibold text-foreground-muted mb-2">✅ Detailed Targeting — תחומי עניין</p>
+                      <div className="text-[9px] text-foreground-muted/70 mb-2">אנשים שתואמים לאחד מהבאים:</div>
                       <div className="flex flex-wrap gap-1.5">
                         {t.fb_interests.map((item, i) => (
                           <InterestChip key={i} label={item} platform={platform} />
@@ -375,11 +375,11 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
 
                   {/* Behaviors */}
                   {t.fb_behaviors?.length > 0 && (
-                    <div className="bg-white border border-gray-100 rounded-xl p-3">
-                      <p className="text-[10px] font-semibold text-gray-500 mb-2">⚡ Behaviors</p>
+                    <div className="bg-white border border-border/60 rounded-xl p-3">
+                      <p className="text-[10px] font-semibold text-foreground-muted mb-2">⚡ Behaviors</p>
                       <div className="flex flex-wrap gap-1.5">
                         {t.fb_behaviors.map((item, i) => (
-                          <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-gray-50 border border-gray-200 text-gray-600">{item}</span>
+                          <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-secondary/50 border border-border text-foreground-secondary">{item}</span>
                         ))}
                       </div>
                     </div>
@@ -387,18 +387,18 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
 
                   {/* Custom Audiences */}
                   {(t.lookalike_seed || t.custom_audience_tip) && (
-                    <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 space-y-2">
-                      <p className="text-[10px] font-semibold text-indigo-700">🔁 Custom & Lookalike Audiences</p>
+                    <div className="bg-primary/8 border border-primary/15 rounded-xl p-3 space-y-2">
+                      <p className="text-[10px] font-semibold text-primary">🔁 Custom & Lookalike Audiences</p>
                       {t.lookalike_seed && (
                         <div>
-                          <p className="text-[9px] text-indigo-400 mb-0.5">Lookalike seed:</p>
-                          <p className="text-[10px] text-indigo-800">{t.lookalike_seed}</p>
+                          <p className="text-[9px] text-primary/50 mb-0.5">Lookalike seed:</p>
+                          <p className="text-[10px] text-foreground">{t.lookalike_seed}</p>
                         </div>
                       )}
                       {t.custom_audience_tip && (
                         <div>
-                          <p className="text-[9px] text-indigo-400 mb-0.5">Custom Audience:</p>
-                          <p className="text-[10px] text-indigo-800">{t.custom_audience_tip}</p>
+                          <p className="text-[9px] text-primary/50 mb-0.5">Custom Audience:</p>
+                          <p className="text-[10px] text-foreground">{t.custom_audience_tip}</p>
                         </div>
                       )}
                     </div>
@@ -417,8 +417,8 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
                 <div className="space-y-3">
                   {/* Keywords */}
                   {(t.keywords_exact?.length > 0 || t.keywords_broad?.length > 0) && (
-                    <div className="bg-white border border-gray-100 rounded-xl p-3">
-                      <p className="text-[10px] font-semibold text-gray-500 mb-2">🔑 מילות מפתח</p>
+                    <div className="bg-white border border-border/60 rounded-xl p-3">
+                      <p className="text-[10px] font-semibold text-foreground-muted mb-2">🔑 מילות מפתח</p>
                       <div className="divide-y divide-gray-50">
                         {(t.keywords_exact || []).map((kw, i) => <KeywordRow key={`e${i}`} term={kw} match="exact" />)}
                         {(t.keywords_broad || []).map((kw, i) => <KeywordRow key={`b${i}`} term={kw} match="broad" />)}
@@ -429,8 +429,8 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
 
                   {/* In-Market Audiences */}
                   {t.in_market_audiences?.length > 0 && (
-                    <div className="bg-white border border-gray-100 rounded-xl p-3">
-                      <p className="text-[10px] font-semibold text-gray-500 mb-2">🎯 In-Market Audiences</p>
+                    <div className="bg-white border border-border/60 rounded-xl p-3">
+                      <p className="text-[10px] font-semibold text-foreground-muted mb-2">🎯 In-Market Audiences</p>
                       <div className="flex flex-wrap gap-1.5">
                         {t.in_market_audiences.map((a, i) => (
                           <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200 font-medium">{a}</span>
@@ -440,24 +440,24 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
                   )}
 
                   {/* Settings */}
-                  <div className="bg-white border border-gray-100 rounded-xl p-3 space-y-2">
-                    <p className="text-[10px] font-semibold text-gray-500 mb-2">⚙️ הגדרות קמפיין</p>
+                  <div className="bg-white border border-border/60 rounded-xl p-3 space-y-2">
+                    <p className="text-[10px] font-semibold text-foreground-muted mb-2">⚙️ הגדרות קמפיין</p>
                     {t.location_targeting && (
                       <div className="flex justify-between text-[10px]">
-                        <span className="text-gray-400">📍 מיקוד גיאוגרפי</span>
-                        <span className="text-gray-700 font-medium">{t.location_targeting}</span>
+                        <span className="text-foreground-muted/70">📍 מיקוד גיאוגרפי</span>
+                        <span className="text-foreground-secondary font-medium">{t.location_targeting}</span>
                       </div>
                     )}
                     {t.ad_schedule && (
                       <div className="flex justify-between text-[10px]">
-                        <span className="text-gray-400">🕐 לוח שידור</span>
-                        <span className="text-gray-700 font-medium">{t.ad_schedule}</span>
+                        <span className="text-foreground-muted/70">🕐 לוח שידור</span>
+                        <span className="text-foreground-secondary font-medium">{t.ad_schedule}</span>
                       </div>
                     )}
                     {t.bid_strategy && (
                       <div className="flex justify-between text-[10px]">
-                        <span className="text-gray-400">📈 אסטרטגיית בידינג</span>
-                        <span className="text-gray-700 font-medium">{t.bid_strategy}</span>
+                        <span className="text-foreground-muted/70">📈 אסטרטגיית בידינג</span>
+                        <span className="text-foreground-secondary font-medium">{t.bid_strategy}</span>
                       </div>
                     )}
                   </div>
@@ -467,7 +467,7 @@ export default function CampaignPlanner({ businessProfile, onClose }) {
           )}
 
           {/* CPM note */}
-          <p className="text-[9px] text-gray-300 text-center">{result.benchmark_note}</p>
+          <p className="text-[9px] text-foreground-muted/50 text-center">{result.benchmark_note}</p>
         </div>
       )}
     </div>

@@ -15,12 +15,12 @@ import ActionPopup from '@/components/ui/ActionPopup';
 const PLATFORM_BADGE = {
   instagram: { icon: '📸', label: 'Instagram', cls: 'bg-pink-50 text-pink-600 border-pink-100' },
   facebook:  { icon: '👤', label: 'Facebook',  cls: 'bg-blue-50 text-blue-600 border-blue-100' },
-  tiktok:    { icon: '🎵', label: 'TikTok',    cls: 'bg-gray-100 text-gray-700 border-gray-200' },
+  tiktok:    { icon: '🎵', label: 'TikTok',    cls: 'bg-secondary text-foreground-secondary border-border' },
   google:    { icon: '⭐', label: 'Google',    cls: 'bg-red-50 text-red-600 border-red-100' },
   whatsapp:  { icon: '💬', label: 'WhatsApp',  cls: 'bg-green-50 text-green-600 border-green-100' },
   wolt:      { icon: '🛵', label: 'Wolt',      cls: 'bg-sky-50 text-sky-600 border-sky-100' },
   ten_bis:   { icon: '🍽️', label: 'תן ביס',   cls: 'bg-orange-50 text-orange-600 border-orange-100' },
-  website:   { icon: '🌐', label: 'אתר',       cls: 'bg-gray-50 text-gray-600 border-gray-200' },
+  website:   { icon: '🌐', label: 'אתר',       cls: 'bg-secondary/50 text-foreground-secondary border-border' },
 };
 
 const categoryConfig = {
@@ -44,7 +44,7 @@ const impactLabels = {
 const urgencyStyle = {
   'דחוף':  { border: 'border-r-4 border-red-500 bg-red-50',    badge: 'bg-red-100 text-red-700'     },
   'בינוני': { border: 'border-r-4 border-amber-500 bg-amber-50', badge: 'bg-amber-100 text-amber-700'  },
-  'נמוך':  { border: 'border-r-4 border-gray-400 bg-gray-50',  badge: 'bg-gray-100 text-gray-600'   },
+  'נמוך':  { border: 'border-r-4 border-gray-400 bg-secondary/50',  badge: 'bg-secondary text-foreground-secondary'   },
 };
 
 function timeAgo(dateStr) {
@@ -301,7 +301,7 @@ ACTION_TIME: [זמן ביצוע ריאלי]
                   return (
                     <>
                       {m.action_label && m.action_type && (
-                        <span className="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full border border-indigo-100">
+                        <span className="text-[10px] px-2 py-0.5 bg-primary/8 text-primary rounded-full border border-primary/15">
                           {ACTION_ICON[m.action_type] || '⚡'} {m.action_label}
                         </span>
                       )}
@@ -523,11 +523,11 @@ ACTION_TIME: [זמן ביצוע ריאלי]
           {generatingPlan && !parsedInsight && (
             <div className="animate-pulse space-y-2.5 rounded-xl border border-border p-4">
               <div className="flex gap-2">
-                <div className="h-5 w-12 bg-gray-200 rounded-full" />
-                <div className="h-5 w-20 bg-gray-200 rounded-full" />
+                <div className="h-5 w-12 bg-secondary/70 rounded-full" />
+                <div className="h-5 w-20 bg-secondary/70 rounded-full" />
               </div>
-              <div className="h-4 w-3/4 bg-gray-200 rounded" />
-              <div className="h-6 w-2/5 bg-gray-100 rounded-lg" />
+              <div className="h-4 w-3/4 bg-secondary/70 rounded" />
+              <div className="h-6 w-2/5 bg-secondary rounded-lg" />
               <div className="h-10 w-3/5 bg-primary/10 rounded-lg" />
             </div>
           )}

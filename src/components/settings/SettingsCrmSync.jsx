@@ -119,7 +119,7 @@ export default function SettingsCrmSync({ form, setForm, businessProfile, onTogg
     setTesting(false);
   };
 
-  const inputCls = "w-full bg-[#fafafa] border border-[#eeeeee] rounded-lg px-3 py-2 text-[13px] text-foreground placeholder-[#cccccc] focus:outline-none focus:border-[#dddddd]";
+  const inputCls = "w-full bg-secondary/50 border border-border/60 rounded-lg px-3 py-2 text-[13px] text-foreground placeholder-[#cccccc] focus:outline-none focus:border-border";
   const syncEvents = (form.crm_sync_events || 'create,update').split(',').map(s => s.trim());
 
   const toggleEvent = (evt) => {
@@ -139,7 +139,7 @@ export default function SettingsCrmSync({ form, setForm, businessProfile, onTogg
         <ArrowUpDown className="w-5 h-5 text-primary mt-0.5" />
         <div className="flex-1">
           <h3 className="text-[13px] font-bold text-foreground mb-1">סנכרון CRM</h3>
-          <p className="text-[12px] text-foreground-muted leading-relaxed">חבר את OTX ל-CRM שלך כדי שלידים יסתנכרנו אוטומטית. תומך ב-Webhook ישיר או דרך Zapier.</p>
+          <p className="text-[12px] text-foreground-muted leading-relaxed">חבר את Cortexi ל-CRM שלך כדי שלידים יסתנכרנו אוטומטית. תומך ב-Webhook ישיר או דרך Zapier.</p>
         </div>
       </div>
 

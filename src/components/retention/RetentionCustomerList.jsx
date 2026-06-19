@@ -73,8 +73,8 @@ export default function RetentionCustomerList({ businessProfile }) {
   }
 
   return (
-    <div className="bg-white rounded-[10px] border border-[#f0f0f0]">
-      <div className="px-4 py-3 border-b border-[#f5f5f5] flex items-center justify-between">
+    <div className="bg-white rounded-[10px] border border-border/50">
+      <div className="px-4 py-3 border-b border-border/40 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-[#d97706]" />
           <h3 className="text-[13px] font-semibold text-[#222222]">לקוחות בסיכון נטישה</h3>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Check, Loader2 } from 'lucide-react';
+import { Check } from 'lucide-react';
+import KoriAvatar from './KoriAvatar';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3002';
 
@@ -14,7 +15,7 @@ const scanSteps = [
   { fn: 'collectSocialSignals',    text: 'אוסף אותות מרשתות חברתיות...',   narrative: 'מנתח טרנדים רלוונטיים לעסק שלך...' },
   { fn: 'runMarketIntelligence',   text: 'מנתח תובנות שוק...',              narrative: 'מזהה הזדמנויות ספציפיות לתחום שלך...', delay: 8000 },
   { fn: 'detectTrends',            text: 'מזהה מגמות בסקטור שלך...',        narrative: 'מה עולה בתחום שלך עכשיו?' },
-  { fn: 'runCompetitorIdentification', text: 'מזהה מתחרים רלוונטיים...',    narrative: 'מוצא את המתחרים האמיתיים שלך בלבד...' },
+  { fn: 'runCompetitorIdentification', text: 'מזהה מתחרים רלוונטיים...',   narrative: 'מוצא את המתחרים האמיתיים שלך בלבד...' },
   { fn: 'runLeadGeneration',       text: 'מחפש לידים פוטנציאליים...',       narrative: 'מחפש אנשים שמחפשים בדיוק מה שאתה מציע...' },
   { fn: 'enrichLeads',             text: 'מדרג ומעשיר לידים...',            narrative: 'בודק כל ליד לפי קריטריונים של הסקטור שלך...' },
   { fn: 'updateSectorKnowledge',   text: 'בונה ידע על הסקטור שלך...',       narrative: 'לומד מכל העסקים בתחום דומה...' },
@@ -24,10 +25,16 @@ const scanSteps = [
 ];
 
 const fallbackInsights = [
-  { category: 'threat', title: 'תחרות גוברת באזור', recommended_action: 'בדוק את המתחרים החדשים.', confidence: 75 },
-  { category: 'opportunity', title: 'ביקוש גובר לשירותים דיגיטליים', recommended_action: 'שקול להוסיף הזמנה אונליין.', confidence: 80 },
-  { category: 'trend', title: 'עלייה בחיפושים מקומיים', recommended_action: 'וודא שפרופיל Google Business מעודכן.', confidence: 85 }
+  { category: 'threat',      title: 'תחרות גוברת באזור',                  recommended_action: 'בדוק את המתחרים החדשים.',              confidence: 75 },
+  { category: 'opportunity', title: 'ביקוש גובר לשירותים דיגיטליים',      recommended_action: 'שקול להוסיף הזמנה אונליין.',             confidence: 80 },
+  { category: 'trend',       title: 'עלייה בחיפושים מקומיים',             recommended_action: 'וודא שפרופיל Google Business מעודכן.',  confidence: 85 },
 ];
+
+const BG_STYLE = {
+  backgroundColor: '#f5f5f7',
+  backgroundImage: 'radial-gradient(circle, #d1d1d1 1px, transparent 1px)',
+  backgroundSize: '24px 24px',
+};
 
 export default function OnboardingScanning() {
   const location = useLocation();
@@ -55,7 +62,6 @@ export default function OnboardingScanning() {
       for (let i = 0; i < scanSteps.length; i++) {
         const step = scanSteps[i];
 
-        // Skip website step if no website URL
         if (step.requiresWebsite && !bp.website_url) {
           setCompletedSteps(prev => [...prev, i]);
           continue;
@@ -65,14 +71,12 @@ export default function OnboardingScanning() {
         setStatusText(step.text);
         setNarrativeText(step.narrative);
 
-        // Delay before heavy steps
         if (step.delay) {
           await new Promise(r => setTimeout(r, step.delay));
         }
 
         try {
           if (step.fn === 'parseProfile') {
-            // Step 1: parse free-text description into structured sector profile
             const key = sessionStorage.getItem('__user_token') || '';
             await fetch(`${SERVER_URL}/api/onboarding/parse-profile`, {
               method: 'POST',
@@ -86,15 +90,14 @@ export default function OnboardingScanning() {
                 price_tier:        onboardingData.price_tier,
                 customer_sources:  onboardingData.customer_sources,
               }),
-            }).catch(() => {}); // non-fatal
+            }).catch(() => {});
           } else if (step.fn === 'generateMissions') {
-            // Step 2: Claude Sonnet + GPT-4o generate per-agent mission plans
             const key = sessionStorage.getItem('__user_token') || '';
             await fetch(`${SERVER_URL}/api/onboarding/generate-missions`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
               body: JSON.stringify({ businessProfileId: bp.id }),
-            }).catch(() => {}); // non-fatal
+            }).catch(() => {});
           } else if (step.fn === 'learnFromWebsite') {
             await base44.functions.invoke('learnFromWebsite', { businessProfileId: bp.id, websiteUrl: bp.website_url });
           } else {
@@ -106,7 +109,6 @@ export default function OnboardingScanning() {
         setCompletedSteps(prev => [...prev, i]);
       }
 
-      // Get generated signals, alerts, and fresh profile for First Value Screen
       let proactiveAlerts = [];
       let freshProfile = bp;
       try {
@@ -120,7 +122,6 @@ export default function OnboardingScanning() {
         if (profileRes) freshProfile = profileRes;
       } catch (_) {}
 
-      // Fallback if no signals generated
       if (signals.length === 0) {
         const now = new Date().toISOString();
         for (const insight of fallbackInsights) {
@@ -139,45 +140,65 @@ export default function OnboardingScanning() {
     run();
   }, [businessProfile, navigate]);
 
+  const progress = scanSteps.length > 0 ? Math.round((completedSteps.length / scanSteps.length) * 100) : 0;
+
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-4" dir="rtl">
+    <div dir="rtl" className="min-h-screen flex items-center justify-center p-4" style={BG_STYLE}>
       <div className="text-center max-w-sm w-full">
-        {/* Animated scanner */}
-        <div className="relative w-28 h-28 mx-auto mb-6">
-          <div className="absolute inset-0 rounded-full border-4 border-[#111111]/10 scanning-pulse" />
-          <div className="absolute inset-4 rounded-full border-4 border-[#111111]/15 scanning-pulse" style={{ animationDelay: '0.3s' }} />
-          <div className="absolute inset-8 rounded-full border-4 border-[#111111]/20 scanning-pulse" style={{ animationDelay: '0.6s' }} />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-8 h-8 rounded-full bg-[#111111]/10" />
-          </div>
+
+        {/* Kori avatar with pulse rings */}
+        <div className="relative w-28 h-28 mx-auto mb-6 flex items-center justify-center">
+          <div
+            className="absolute inset-0 rounded-full opacity-20 animate-ping"
+            style={{ background: 'linear-gradient(135deg, #9c27b0 0%, #e8344d 60%, #ff9800 100%)' }}
+          />
+          <div
+            className="absolute inset-3 rounded-full opacity-15 animate-ping"
+            style={{ background: 'linear-gradient(135deg, #9c27b0 0%, #e8344d 60%, #ff9800 100%)', animationDelay: '0.4s' }}
+          />
+          <KoriAvatar size="md" className="relative z-10 shadow-lg" />
         </div>
 
-        <h2 className="text-lg font-semibold text-[#222222] mb-1">{statusText}</h2>
+        {/* Status text */}
+        <h2 className="text-[16px] font-bold text-gray-800 mb-1">{statusText}</h2>
         {narrativeText && (
-          <p className="text-[12px] text-[#aaaaaa] mb-6 transition-all duration-300">{narrativeText}</p>
+          <p className="text-[12px] text-gray-500 mb-5 transition-all duration-300">{narrativeText}</p>
         )}
+
+        {/* Progress bar */}
+        <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden mb-6 max-w-[200px] mx-auto">
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{
+              width: `${progress}%`,
+              background: 'linear-gradient(90deg, #9c27b0, #e8344d)',
+            }}
+          />
+        </div>
 
         {/* Step list */}
         <div className="space-y-2.5 text-right max-w-xs mx-auto">
           {scanSteps.map((step, index) => (
             <div
               key={index}
-              className={`flex items-center gap-3 transition-all duration-500 ${
-                index <= currentStep ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
-              }`}
+              className="flex items-center gap-3 transition-all duration-500"
+              style={{
+                opacity: index <= currentStep ? 1 : 0,
+                transform: index <= currentStep ? 'translateY(0)' : 'translateY(8px)',
+              }}
             >
               <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center">
                 {completedSteps.includes(index) ? (
-                  <div className="w-5 h-5 rounded-full bg-[#f0fdf8] flex items-center justify-center">
-                    <Check className="w-3 h-3 text-[#10b981]" />
+                  <div className="w-5 h-5 rounded-full bg-[#fce4ec] flex items-center justify-center">
+                    <Check className="w-3 h-3 text-[#e8344d]" />
                   </div>
                 ) : index === currentStep ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-[#999999]" />
+                  <div className="w-3 h-3 rounded-full animate-pulse" style={{ background: 'linear-gradient(135deg, #9c27b0, #e8344d)' }} />
                 ) : (
-                  <div className="w-2.5 h-2.5 rounded-full bg-[#eeeeee]" />
+                  <div className="w-2 h-2 rounded-full bg-gray-300" />
                 )}
               </div>
-              <span className={`text-[12px] ${completedSteps.includes(index) ? 'text-[#10b981]' : 'text-[#999999]'}`}>
+              <span className={`text-[12px] ${completedSteps.includes(index) ? 'text-[#e8344d]' : 'text-gray-500'}`}>
                 {step.text}
               </span>
             </div>

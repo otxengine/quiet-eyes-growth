@@ -31,7 +31,7 @@ export function isTavilyRateLimited(): boolean {
   return Date.now() < rateLimitUntil;
 }
 
-async function _fetch(query: string, maxResults: number, depth: 'basic' | 'advanced'): Promise<any[]> {
+async function _fetch(query: string, maxResults: number, depth: 'basic' | 'advanced', days = 30): Promise<any[]> {
   if (!TAVILY_API_KEY) return [];
   if (Date.now() < rateLimitUntil) {
     const minsLeft = Math.ceil((rateLimitUntil - Date.now()) / 60000);
@@ -49,6 +49,7 @@ async function _fetch(query: string, maxResults: number, depth: 'basic' | 'advan
         search_depth: depth,
         max_results: maxResults,
         include_answer: false,
+        days,
       }),
     });
 
@@ -72,22 +73,22 @@ async function _fetch(query: string, maxResults: number, depth: 'basic' | 'advan
   }
 }
 
-/** Basic search (cheaper) — with 60-min cache */
-export async function tavilySearch(query: string, maxResults = 5): Promise<any[]> {
-  const key = `basic:${query}:${maxResults}`;
+/** Basic search (cheaper) — with 60-min cache. days=30 limits results to last 30 days. */
+export async function tavilySearch(query: string, maxResults = 5, days = 30): Promise<any[]> {
+  const key = `basic:${query}:${maxResults}:${days}`;
   const cached = _getCached(key);
   if (cached) { console.log(`[Tavily] cache hit: ${query.slice(0, 60)}`); return cached; }
-  const results = await _fetch(query, maxResults, 'basic');
+  const results = await _fetch(query, maxResults, 'basic', days);
   if (results.length) _setCache(key, results);
   return results;
 }
 
-/** Advanced search (deeper, used by trend/viral agents) — with 60-min cache */
-export async function tavilyAdvancedSearch(query: string, maxResults = 5): Promise<any[]> {
-  const key = `adv:${query}:${maxResults}`;
+/** Advanced search (deeper, used by trend/viral agents) — with 60-min cache. days=30 limits results to last 30 days. */
+export async function tavilyAdvancedSearch(query: string, maxResults = 5, days = 30): Promise<any[]> {
+  const key = `adv:${query}:${maxResults}:${days}`;
   const cached = _getCached(key);
   if (cached) { console.log(`[Tavily] cache hit (adv): ${query.slice(0, 60)}`); return cached; }
-  const results = await _fetch(query, maxResults, 'advanced');
+  const results = await _fetch(query, maxResults, 'advanced', days);
   if (results.length) _setCache(key, results);
   return results;
 }

@@ -3,6 +3,7 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
+import { loadCompetitorAdsIntel } from '../../lib/competitorAdsIntel';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 
 /**
@@ -76,6 +77,13 @@ export async function competitorIntelAgent(req: Request, res: Response) {
       ...upcomingEventAlerts.map(a => a.title.replace(/^[⚽📅🎯]\s*/, '')),
     ].filter(Boolean).join(' | ');
 
+    // Load competitor paid ad intelligence for richer prompts
+    const adsIntelMap = new Map<string, { targetAudience: string; strategy: string; gaps: string; spendSignal: string }>();
+    const adsIntelList = await loadCompetitorAdsIntel(businessProfileId);
+    for (const ai of adsIntelList) {
+      adsIntelMap.set(ai.competitorName.toLowerCase(), ai);
+    }
+
     // ── 3. Process each competitor (max 3 to conserve Tavily credits) ─────────
     let insightsCreated = 0;
     const toProcess = competitors.slice(0, 3);
@@ -88,6 +96,14 @@ export async function competitorIntelAgent(req: Request, res: Response) {
         const compWeaknesses = competitor.weaknesses || '';
         const compStrengths = competitor.strengths || '';
         const compNotes = competitor.notes || '';
+        const compAdsIntel = adsIntelMap.get(compName.toLowerCase());
+        const adsIntelBlock = compAdsIntel
+          ? `\nמודעות ממומנות של ${compName}:\n` +
+            `- קהל יעד שלהם: ${compAdsIntel.targetAudience || 'לא ידוע'}\n` +
+            `- אסטרטגיה: ${compAdsIntel.strategy || 'לא ידוע'}\n` +
+            `- עוצמת השקעה: ${compAdsIntel.spendSignal}\n` +
+            `- פערים (מה הם לא מפרסמים): ${compAdsIntel.gaps || 'לא ידוע'}`
+          : '';
 
         // ── 3a. Enrich with Tavily (fresh reviews/mentions) ──────────────────
         let freshReviewsText = '';
@@ -116,6 +132,7 @@ Strengths: ${compStrengths || 'unknown'}
 Notes: ${compNotes || 'none'}
 ${freshReviewsText ? `\nFresh findings from the web (reviews/mentions):\n${freshReviewsText.slice(0, 800)}` : '\nNote: No fresh web data available for this competitor.'}
 ${eventsContext ? `\nUpcoming events expected to cause high demand: ${eventsContext}` : ''}
+${adsIntelBlock ? adsIntelBlock : ''}
 ${!freshReviewsText && !compWeaknesses ? '\nDATA SCARCITY: Only basic rating data available. Set has_specific_insight=false unless you can derive a clear, specific pattern from the stored data.' : ''}
 
 Required analysis:

@@ -109,7 +109,7 @@ export default function CompetitorSwotCard({ competitor, businessName, otxBusine
     return (
       <>
         <button onClick={generate}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium text-[#888888] bg-[#fafafa] border border-[#f0f0f0] hover:bg-[#f5f5f5] hover:border-[#dddddd] transition-all">
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium text-foreground-muted bg-secondary/50 border border-border/50 hover:bg-secondary/60 hover:border-border transition-all">
           <Shield className="w-3 h-3" /> ניתוח מעמיק
         </button>
         {popupSignal && (
@@ -121,12 +121,12 @@ export default function CompetitorSwotCard({ competitor, businessName, otxBusine
 
   return (
     <>
-    <div className="mt-3 rounded-lg border border-[#e8e8e8] bg-[#fafafa] overflow-hidden">
+    <div className="mt-3 rounded-lg border border-[#e8e8e8] bg-secondary/50 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 cursor-pointer border-b border-[#eeeeee]"
+      <div className="flex items-center justify-between px-3 py-2 cursor-pointer border-b border-border/60"
         onClick={() => setOpen(false)}>
         <div className="flex items-center gap-1.5">
-          <Shield className="w-3.5 h-3.5 text-[#666666]" />
+          <Shield className="w-3.5 h-3.5 text-foreground-secondary" />
           <span className="text-[11px] font-semibold text-[#333333]">ניתוח מעמיק — {competitor.name}</span>
           {dataSource === 'otx' && (
             <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200">
@@ -139,7 +139,7 @@ export default function CompetitorSwotCard({ competitor, businessName, otxBusine
             </span>
           )}
         </div>
-        <ChevronUp className="w-3.5 h-3.5 text-[#aaaaaa]" />
+        <ChevronUp className="w-3.5 h-3.5 text-foreground-muted/70" />
       </div>
 
       <div className="px-3 pb-3 pt-2">
@@ -149,14 +149,14 @@ export default function CompetitorSwotCard({ competitor, businessName, otxBusine
             <div className="grid grid-cols-4 gap-2">
               {[0, 1, 2, 3].map(i => (
                 <div key={i} className="space-y-1">
-                  <div className="h-3 w-10 bg-gray-200 rounded" />
-                  <div className="h-3 w-12 bg-gray-100 rounded" />
-                  <div className="h-3 w-10 bg-gray-100 rounded" />
+                  <div className="h-3 w-10 bg-secondary/70 rounded" />
+                  <div className="h-3 w-12 bg-secondary rounded" />
+                  <div className="h-3 w-10 bg-secondary rounded" />
                 </div>
               ))}
             </div>
-            <div className="h-8 w-full bg-gray-200 rounded-lg mt-3" />
-            <div className="h-8 w-full bg-gray-100 rounded-lg" />
+            <div className="h-8 w-full bg-secondary/70 rounded-lg mt-3" />
+            <div className="h-8 w-full bg-secondary rounded-lg" />
           </div>
         )}
 
@@ -164,12 +164,12 @@ export default function CompetitorSwotCard({ competitor, businessName, otxBusine
         {!loading && swot && (
           <div className="space-y-3">
             {/* 4-column SWOT grid */}
-            <div className="grid grid-cols-4 gap-2 border-b border-[#eeeeee] pb-3">
+            <div className="grid grid-cols-4 gap-2 border-b border-border/60 pb-3">
               {SWOT_COLS.map(({ key, label, icon, color }) => (
                 <div key={key}>
                   <p className={`text-[9px] font-bold uppercase tracking-wide mb-1.5 ${color}`}>{label}</p>
                   {(swot[key] || []).map((item, i) => (
-                    <p key={i} className="text-[10px] text-[#444444] leading-tight mb-1">
+                    <p key={i} className="text-[10px] text-foreground-secondary leading-tight mb-1">
                       {icon} {item}
                     </p>
                   ))}
@@ -195,7 +195,7 @@ export default function CompetitorSwotCard({ competitor, businessName, otxBusine
                         onClick={() => handleActionClick(action, inferredKey)}
                         className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-[#e8e8e8] text-[11px] hover:border-primary hover:bg-primary/5 transition-all text-right">
                         <span className="text-[#333333]">{i + 1}. {action.label} ←</span>
-                        <span className="text-[10px] text-[#999999]">⏱ {action.minutes} דקות</span>
+                        <span className="text-[10px] text-foreground-muted">⏱ {action.minutes} דקות</span>
                       </button>
                     );
                   })}
@@ -206,13 +206,13 @@ export default function CompetitorSwotCard({ competitor, businessName, otxBusine
             {/* Full analysis toggle */}
             <button
               onClick={() => setShowFull(!showFull)}
-              className="flex items-center gap-1 text-[10px] text-[#999999] hover:text-[#555555] transition-colors"
+              className="flex items-center gap-1 text-[10px] text-foreground-muted hover:text-foreground-secondary transition-colors"
             >
               {showFull ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
               {showFull ? 'הסתר פרטים' : 'הצג ניתוח מלא'}
             </button>
             {showFull && (
-              <div className="text-[10px] text-[#555555] leading-relaxed space-y-1 border-t border-[#eeeeee] pt-2">
+              <div className="text-[10px] text-foreground-secondary leading-relaxed space-y-1 border-t border-border/60 pt-2">
                 {SWOT_COLS.map(({ key, label }) =>
                   swot[key]?.length > 0 ? (
                     <p key={key}>

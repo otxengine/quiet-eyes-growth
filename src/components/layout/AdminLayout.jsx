@@ -2,8 +2,8 @@ import React from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 
-const ADMIN_EMAILS = ['contact@otxengine.io'];
-const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai'];
+const ADMIN_EMAILS = ['contact@otxengine.io', 'admin@cortexi.ai'];
+const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai', '@cortexi.ai'];
 
 function checkIsAdmin(email) {
   if (!email) return false;
@@ -16,8 +16,8 @@ export default function AdminLayout() {
 
   if (isLoadingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="w-8 h-8 border-4 border-gray-200 border-t-gray-800 rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-secondary/50">
+        <div className="w-8 h-8 border-4 border-border border-t-gray-800 rounded-full animate-spin" />
       </div>
     );
   }
@@ -29,7 +29,7 @@ export default function AdminLayout() {
   return (
     <div className="min-h-screen bg-background" dir="rtl">
       <header className="h-12 border-b border-border flex items-center justify-between px-6 bg-background">
-        <span className="text-[12px] font-bold text-foreground tracking-tight">OTX Admin</span>
+        <span className="text-[12px] font-bold text-foreground tracking-tight">Cortexi Admin</span>
         <div className="flex items-center gap-4">
           <span className="text-[11px] text-foreground-muted">{user?.email}</span>
           <button

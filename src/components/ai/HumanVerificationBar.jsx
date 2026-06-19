@@ -20,7 +20,7 @@ export default function HumanVerificationBar({
       <div className="flex items-center gap-2 px-3 py-2 bg-[#f0fdf8] border border-[#d1fae5] rounded-lg text-[11px]">
         <CheckCircle className="w-3.5 h-3.5 text-[#10b981]" />
         <span className="text-[#10b981] font-medium">אושר</span>
-        {verifiedBy && <span className="text-[#999999]">· {verifiedBy}</span>}
+        {verifiedBy && <span className="text-foreground-muted">· {verifiedBy}</span>}
       </div>
     );
   }

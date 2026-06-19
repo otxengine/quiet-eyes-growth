@@ -3,23 +3,9 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { tavilySearch } from '../../lib/tavily';
 
-const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12h between runs
-
-async function tavilySearch(query: string, maxResults = 5): Promise<any[]> {
-  if (!TAVILY_API_KEY) return [];
-  try {
-    const res = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: TAVILY_API_KEY, query, search_depth: 'basic', max_results: maxResults }),
-    });
-    if (!res.ok) return [];
-    const data: any = await res.json();
-    return data.results || [];
-  } catch { return []; }
-}
 
 /**
  * analyzeCompetitorSocial
@@ -55,10 +41,19 @@ export async function analyzeCompetitorSocial(req: Request, res: Response) {
 
     for (const comp of competitors.slice(0, 5)) { // max 5 to control API usage
       try {
+        // Use known social URLs if discovered, otherwise search by name
+        const c = comp as any;
+        const igQuery  = c.instagram_url
+          ? `site:instagram.com "${comp.name}"` : `"${comp.name}" site:instagram.com`;
+        const fbQuery  = c.facebook_url
+          ? `site:facebook.com "${comp.name}"` : `"${comp.name}" site:facebook.com`;
+
         const socialResults = await Promise.all([
-          tavilySearch(`"${comp.name}" site:instagram.com`, 3),
-          tavilySearch(`"${comp.name}" site:facebook.com`, 3),
+          tavilySearch(igQuery, 3),
+          tavilySearch(fbQuery, 3),
           tavilySearch(`"${comp.name}" ביקורות לקוחות`, 3),
+          // Active promotions, sponsored ads, new products
+          tavilySearch(`"${comp.name}" מבצע OR הנחה OR ממומן OR "שירות חדש" OR "מוצר חדש"`, 4),
         ]);
         const allResults = socialResults.flat();
         if (allResults.length === 0) continue;
@@ -69,30 +64,29 @@ export async function analyzeCompetitorSocial(req: Request, res: Response) {
 
         const analysis = await invokeLLM({
           model: 'sonnet',
-          maxTokens: 600,
-          prompt: `You are a senior competitive intelligence analyst. Analyze the digital presence of "${comp.name}" and identify the vulnerability that my business can exploit.
+          maxTokens: 700,
+          prompt: `You are a senior competitive intelligence analyst. Analyze the digital presence and recent activity of "${comp.name}" to identify vulnerabilities and marketing moves.
 
 My business: "${profile?.name}" | Sector: ${profile?.category} | City: ${profile?.city}
 Competitor: "${comp.name}"
 
-Web findings:
-${textBlob.slice(0, 2500)}
-
-Required analysis:
-- What channel do they focus on and what content do they publish?
-- What is their most prominent weakness based on customer reviews?
-- What specific service or gap exists that my business can fill?
-- How often do they post?
+Web findings (social posts, reviews, promotions, ads):
+${textBlob.slice(0, 2800)}
 
 Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "strongest_channel": "instagram|facebook|google|tiktok|unknown",
   "content_themes": ["specific topic 1", "specific topic 2"],
   "main_weakness": "their clearest weakness — based on review complaints",
-  "our_opportunity": "one specific thing my business can do better — be concrete",
+  "our_opportunity": "one specific actionable opportunity for my business — be concrete",
   "recommended_action": "verb + channel + specific content — up to 10 words",
   "sentiment_from_reviews": "positive|negative|mixed|unknown",
   "post_frequency": "e.g. 3 פוסטים בשבוע or daily or unknown",
+  "has_active_promotion": false,
+  "promotion_description": "current active promotion or discount, or null",
+  "is_running_paid_ads": false,
+  "paid_ads_description": "description of sponsored/paid ad campaign, or null",
+  "new_service_or_product": "new service or product they recently launched, or null",
   "has_clear_opportunity": true
 }`,
           response_json_schema: { type: 'object' },
@@ -110,14 +104,28 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
         if (analysis.main_weakness && (!comp.weaknesses || comp.weaknesses.length < 20)) {
           socialUpdate.weaknesses = analysis.main_weakness;
         }
-        if (analysis.content_themes?.length)  socialUpdate.content_themes         = analysis.content_themes.join(', ');
-        if (analysis.post_frequency)          socialUpdate.social_post_frequency  = analysis.post_frequency;
-
-        // Extract social URLs from search results
-        const igUrl = allResults.find(r => r.url?.includes('instagram.com'))?.url;
-        const fbUrl = allResults.find(r => r.url?.includes('facebook.com'))?.url;
-        if (igUrl) socialUpdate.instagram_handle = igUrl;
-        if (fbUrl) socialUpdate.facebook_url     = fbUrl;
+        if (analysis.content_themes?.length)  socialUpdate.content_themes        = analysis.content_themes.join(', ');
+        if (analysis.post_frequency)          socialUpdate.social_post_frequency = analysis.post_frequency;
+        // Promotions & paid ads tracking
+        if (analysis.has_active_promotion && analysis.promotion_description) {
+          socialUpdate.last_promo_detected    = analysis.promotion_description;
+          socialUpdate.last_promo_detected_at = new Date().toISOString();
+          socialUpdate.current_promotions     = analysis.promotion_description;
+        }
+        if (analysis.new_service_or_product) {
+          socialUpdate.last_product_detected    = analysis.new_service_or_product;
+          socialUpdate.last_product_detected_at = new Date().toISOString();
+        }
+        if (typeof analysis.is_running_paid_ads === 'boolean') {
+          socialUpdate.sponsored_ads_detected   = analysis.is_running_paid_ads;
+          socialUpdate.sponsored_ads_updated_at = new Date().toISOString();
+        }
+        // Extract social URLs from search results (if not already stored)
+        const c2 = comp as any;
+        const igUrl = allResults.find(r => r.url?.includes('instagram.com/'))?.url;
+        const fbUrl = allResults.find(r => r.url?.includes('facebook.com/'))?.url;
+        if (igUrl && !c2.instagram_url) socialUpdate.instagram_url = igUrl;
+        if (fbUrl && !c2.facebook_url)  socialUpdate.facebook_url  = fbUrl;
 
         await prisma.competitor.update({
           where: { id: comp.id },
@@ -152,6 +160,57 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
                   prefilled_text: `ההזדמנות שלנו מול ${comp.name}:\n\n${analysis.our_opportunity}\n\nפעולה מוצעת: ${analysis.recommended_action}`,
                   urgency_hours: 72,
                   impact_reason: analysis.main_weakness ? `${comp.name} חלש ב: ${analysis.main_weakness.slice(0, 60)}` : '',
+                }),
+                is_dismissed: false,
+                is_acted_on:  false,
+                created_at:   new Date().toISOString(),
+              },
+            }).catch(() => {});
+          }
+        }
+
+        // ── Alert for active promotion / paid ads / new product ─────────────
+        const hasConcreteActivity =
+          analysis.has_active_promotion || analysis.is_running_paid_ads || analysis.new_service_or_product;
+        if (hasConcreteActivity) {
+          const sevenDaysAgo2 = new Date(Date.now() - 7 * 86400000).toISOString();
+          const existingSocial = await prisma.proactiveAlert.findFirst({
+            where: {
+              linked_business: businessProfileId,
+              alert_type:      'competitor_social',
+              title:           { contains: comp.name },
+              is_dismissed:    false,
+              created_at:      { gte: sevenDaysAgo2 },
+            },
+            select: { id: true },
+          });
+          if (!existingSocial) {
+            let socialTitle = '';
+            if (analysis.has_active_promotion)   socialTitle = `${comp.name}: מבצע פעיל — ${(analysis.promotion_description || '').slice(0, 50)}`;
+            else if (analysis.is_running_paid_ads) socialTitle = `${comp.name}: מריץ קמפיין ממומן`;
+            else                                   socialTitle = `${comp.name}: השיק ${(analysis.new_service_or_product || '').slice(0, 40)}`;
+
+            const details: string[] = [];
+            if (analysis.promotion_description)   details.push(`🏷️ מבצע: ${analysis.promotion_description}`);
+            if (analysis.paid_ads_description)    details.push(`📣 פרסום ממומן: ${analysis.paid_ads_description}`);
+            if (analysis.new_service_or_product)  details.push(`🆕 חדש: ${analysis.new_service_or_product}`);
+
+            await prisma.proactiveAlert.create({
+              data: {
+                linked_business:  businessProfileId,
+                alert_type:       'competitor_social',
+                title:            socialTitle,
+                description:      details.join('\n') || socialTitle,
+                suggested_action: analysis.our_opportunity || analysis.recommended_action || '',
+                priority:         analysis.has_active_promotion || analysis.is_running_paid_ads ? 'high' : 'medium',
+                source_agent:     JSON.stringify({
+                  action_label:    'ראה הזדמנות',
+                  action_type:     'view',
+                  prefilled_text:  `עדכון תחרותי — ${comp.name}:\n\n${details.join('\n')}\n\n💡 ${analysis.our_opportunity || ''}`,
+                  urgency_hours:   analysis.has_active_promotion ? 24 : 72,
+                  impact_reason:   `${comp.name} — פעילות שיווקית מזוהה`,
+                  has_promotion:   analysis.has_active_promotion,
+                  has_paid_ads:    analysis.is_running_paid_ads,
                 }),
                 is_dismissed: false,
                 is_acted_on:  false,

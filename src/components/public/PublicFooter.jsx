@@ -3,16 +3,16 @@ import { Link } from 'react-router-dom';
 
 export default function PublicFooter() {
   return (
-    <footer className="bg-[#fafafa] border-t border-[#f0f0f0]">
+    <footer className="bg-secondary/50 border-t border-border/50">
       <div className="max-w-[1120px] mx-auto px-5 py-16">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
           {/* Brand */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <img src="/logo.jpeg" alt="OTX" className="h-6 w-auto object-contain" />
-              <span className="text-[15px] font-bold text-[#111]">OTX</span>
+              <img src="/logo.jpeg" alt="Cortexi" className="h-6 w-auto object-contain" />
+              <span className="text-[15px] font-bold text-[#111]">Cortexi</span>
             </div>
-            <p className="text-[13px] text-[#777] leading-relaxed">מודיעין עסקי AI לעסקים קטנים בישראל. דע מה קורה בשוק שלך — לפני כולם.</p>
+            <p className="text-[13px] text-[#777] leading-relaxed">Inspired by the brain. Built for intelligence. מודיעין עסקי AI לעסקים קטנים בישראל.</p>
           </div>
 
           {/* Navigation */}
@@ -45,8 +45,8 @@ export default function PublicFooter() {
           </div>
         </div>
 
-        <div className="border-t border-[#f0f0f0] pt-6 text-center">
-          <p className="text-[12px] text-[#bbb]">© 2026 OTX. כל הזכויות שמורות.</p>
+        <div className="border-t border-border/50 pt-6 text-center">
+          <p className="text-[12px] text-[#bbb]">© 2026 Cortexi. כל הזכויות שמורות.</p>
         </div>
       </div>
     </footer>

@@ -21,10 +21,10 @@ export default function LeadStatusActions({ lead }) {
   if (['completed', 'lost'].includes(lead.status)) return null;
 
   return (
-    <div className="flex flex-wrap gap-2 pt-2 border-t border-[#f0f0f0]">
+    <div className="flex flex-wrap gap-2 pt-2 border-t border-border/50">
       {lead.status !== 'contacted' && (
         <button onClick={(e) => { e.stopPropagation(); updateStatus.mutate({ status: 'contacted' }); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium text-[#aaaaaa] bg-white border border-[#eeeeee] hover:border-[#cccccc] hover:text-[#666666] transition-colors">
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium text-foreground-muted/70 bg-white border border-border/60 hover:border-border-hover hover:text-foreground-secondary transition-colors">
           <Phone className="w-3 h-3" /> נוצר קשר
         </button>
       )}
@@ -33,7 +33,7 @@ export default function LeadStatusActions({ lead }) {
         <CheckCircle className="w-3 h-3" /> טופל בהצלחה ✓
       </button>
       <button onClick={(e) => { e.stopPropagation(); updateStatus.mutate({ status: 'lost' }); }}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium text-[#aaaaaa] bg-white border border-[#eeeeee] hover:border-[#cccccc] hover:text-[#666666] transition-colors">
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium text-foreground-muted/70 bg-white border border-border/60 hover:border-border-hover hover:text-foreground-secondary transition-colors">
         <XCircle className="w-3 h-3" /> לא רלוונטי
       </button>
     </div>

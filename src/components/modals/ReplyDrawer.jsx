@@ -55,14 +55,14 @@ export default function ReplyDrawer({ reviewUrl, reviewText, context, onClose })
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-[#f0f0f0]">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border/50">
           <div className="flex items-center gap-2">
             <MessageSquare className="w-4 h-4 text-blue-500" />
             <h3 className="text-[14px] font-semibold text-foreground">כתוב תגובה נגדית</h3>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full text-[#888888] hover:bg-[#f5f5f5] transition-colors"
+            className="p-1.5 rounded-full text-foreground-muted hover:bg-secondary/60 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -71,8 +71,8 @@ export default function ReplyDrawer({ reviewUrl, reviewText, context, onClose })
         <div className="flex-1 overflow-y-auto">
           {/* Original review / context */}
           {(reviewText || context) && (
-            <div className="mx-5 mt-3 px-3 py-2 rounded-lg bg-[#fafafa] border border-[#eeeeee]">
-              <p className="text-[10px] font-semibold text-[#999999] mb-1 uppercase tracking-wide">
+            <div className="mx-5 mt-3 px-3 py-2 rounded-lg bg-secondary/50 border border-border/60">
+              <p className="text-[10px] font-semibold text-foreground-muted mb-1 uppercase tracking-wide">
                 {reviewText ? 'ביקורת המתחרה' : 'הקשר'}
               </p>
               <p className="text-[11px] text-foreground-muted leading-snug line-clamp-4">
@@ -83,7 +83,7 @@ export default function ReplyDrawer({ reviewUrl, reviewText, context, onClose })
 
           {/* Textarea */}
           <div className="px-5 py-3">
-            <label className="text-[11px] font-semibold text-[#666666] mb-1.5 block">
+            <label className="text-[11px] font-semibold text-foreground-secondary mb-1.5 block">
               התגובה שלך
             </label>
             <textarea
@@ -94,7 +94,7 @@ export default function ReplyDrawer({ reviewUrl, reviewText, context, onClose })
               placeholder="כתוב את התגובה שלך כאן..."
               dir="rtl"
             />
-            <p className="text-[10px] text-[#aaaaaa] mt-1 text-left">{draft.length} תווים</p>
+            <p className="text-[10px] text-foreground-muted/70 mt-1 text-left">{draft.length} תווים</p>
           </div>
         </div>
 
@@ -122,14 +122,14 @@ export default function ReplyDrawer({ reviewUrl, reviewText, context, onClose })
 
           <button
             onClick={handleCopy}
-            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[#e8e8e8] text-[12px] text-foreground-muted hover:bg-[#fafafa] transition-all"
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[#e8e8e8] text-[12px] text-foreground-muted hover:bg-secondary/50 transition-all"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
             העתק טקסט בלבד
           </button>
 
           {/* AI disclaimer */}
-          <p className="text-center text-[10px] text-[#bbbbbb] leading-snug">
+          <p className="text-center text-[10px] text-foreground-muted/70 leading-snug">
             ✨ טיוטה נוצרה על ידי AI · ערוך לפני שליחה
           </p>
         </div>

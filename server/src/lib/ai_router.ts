@@ -172,7 +172,7 @@ const ANTHROPIC_KEY = () => process.env.ANTHROPIC_API_KEY || '';
 const OPENAI_KEY    = () => process.env.OPENAI_API_KEY    || '';
 const GEMINI_KEY    = () => process.env.GEMINI_API_KEY    || '';
 
-const TIMEOUT_MS = 20_000;
+const TIMEOUT_MS = 35_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([

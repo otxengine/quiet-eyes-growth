@@ -493,8 +493,8 @@ export async function collectReviews(req: Request, res: Response) {
       if (allRatings.length > 0) {
         const avgRating = allRatings.reduce((s, r) => s + (r.rating || 0), 0) / allRatings.length;
         await prisma.$executeRawUnsafe(
-          `INSERT INTO rating_history (business_id, avg_rating, review_count, new_reviews, source) VALUES ($1, $2, $3, $4, $5)`,
-          businessProfileId, avgRating.toFixed(2), allRatings.length, newReviews, 'collectReviews'
+          `INSERT INTO rating_history (business_id, avg_rating, review_count, new_reviews, source) VALUES ($1, $2::numeric, $3, $4, $5)`,
+          businessProfileId, parseFloat(avgRating.toFixed(2)), allRatings.length, newReviews, 'collectReviews'
         );
       }
     } catch (_) {}

@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Star, Loader2, RefreshCw, ExternalLink, ShieldCheck, ShieldX, Copy, CheckCheck } from 'lucide-react';
+import { Star, Loader2, RefreshCw, ExternalLink, ShieldCheck, ShieldX, Copy, CheckCheck, Bot } from 'lucide-react';
 
 const PLATFORM_ICON = {
   'Google Maps':  '📍',
@@ -217,12 +217,12 @@ export default function ReviewCard({ review, businessProfile, compact = false })
   };
 
   return (
-    <div className={`bg-white rounded-[10px] border border-[#f0f0f0] border-l-2 ${borderCls} hover:border-[#dddddd] transition-colors`}>
+    <div className={`bg-white rounded-[10px] border border-border/50 border-l-2 ${borderCls} hover:border-border transition-colors`}>
       <div className="p-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-1">
           <StarRating rating={review.rating} />
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] text-[#bbbbbb] bg-[#f8f8f8] px-1.5 py-0.5 rounded">{PLATFORM_ICON[review.platform] || '📋'} {review.platform}</span>
+            <span className="text-[10px] text-foreground-muted/70 bg-secondary/50 px-1.5 py-0.5 rounded">{PLATFORM_ICON[review.platform] || '📋'} {review.platform}</span>
             {review.source_url ? (
               <>
                 <a href={review.source_url} target="_blank" rel="noopener noreferrer"
@@ -234,15 +234,15 @@ export default function ReviewCard({ review, businessProfile, compact = false })
                 </span>
               </>
             ) : (
-              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#aaaaaa] bg-[#f8f8f8] px-2 py-0.5 rounded-md">
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-foreground-muted/70 bg-secondary/50 px-2 py-0.5 rounded-md">
                 <ShieldX className="w-3 h-3" /> הוזן ידנית
               </span>
             )}
-            <span className="text-[11px] text-[#999999]">{review.reviewer_name}</span>
-            <span className="text-[10px] text-[#cccccc]">{timeAgo(review.created_at || review.created_date)}</span>
+            <span className="text-[11px] text-foreground-muted">{review.reviewer_name}</span>
+            <span className="text-[10px] text-foreground-muted/50">{timeAgo(review.created_at || review.created_date)}</span>
           </div>
         </div>
-        <p className={`text-[${compact ? '10' : '12'}px] text-[#666666] leading-relaxed mb-2 ${compact ? 'line-clamp-2' : ''}`}>{review.text}</p>
+        <p className={`text-[${compact ? '10' : '12'}px] text-foreground-secondary leading-relaxed mb-2 ${compact ? 'line-clamp-2' : ''}`}>{review.text}</p>
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`text-[9px] font-medium px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.text}</span>
 
@@ -264,8 +264,18 @@ export default function ReviewCard({ review, businessProfile, compact = false })
                 className="px-3 py-1.5 text-[11px] font-medium bg-[#111111] text-white rounded-md hover:bg-[#333333] transition-colors flex items-center gap-1 disabled:opacity-50">
                 {buttonLabel('professional', 'הצע תגובה מקצועית')}
               </button>
+              <button
+                onClick={() => {
+                  const reviewSnippet = (review.text || '').slice(0, 120);
+                  window.dispatchEvent(new CustomEvent('chat:open', {
+                    detail: { message: `קיבלתי ביקורת שלילית מ${review.reviewer_name || 'לקוח'}: "${reviewSnippet}" — תעזור לי לנסח תגובה מקצועית` }
+                  }));
+                }}
+                className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium text-foreground-muted/70 bg-white border border-border/60 rounded-md hover:border-primary/30 hover:text-primary transition-colors">
+                <Bot className="w-3 h-3" /> שאל AI
+              </button>
               <button onClick={() => setDismissed(true)} disabled={generating}
-                className="px-3 py-1.5 text-[11px] font-medium text-[#aaaaaa] bg-white border border-[#eeeeee] rounded-md hover:border-[#cccccc] hover:text-[#666666] transition-colors">
+                className="px-3 py-1.5 text-[11px] font-medium text-foreground-muted/70 bg-white border border-border/60 rounded-md hover:border-border-hover hover:text-foreground-secondary transition-colors">
                 אחר כך
               </button>
             </>
@@ -274,11 +284,11 @@ export default function ReviewCard({ review, businessProfile, compact = false })
           {isAutoResponded && (
             <>
               <button onClick={() => setShowAutoResponse(!showAutoResponse)}
-                className="px-3 py-1.5 text-[11px] font-medium text-[#aaaaaa] bg-white border border-[#eeeeee] rounded-md hover:border-[#cccccc] hover:text-[#666666] transition-colors">
+                className="px-3 py-1.5 text-[11px] font-medium text-foreground-muted/70 bg-white border border-border/60 rounded-md hover:border-border-hover hover:text-foreground-secondary transition-colors">
                 {showAutoResponse ? 'הסתר' : 'צפה בתגובה'}
               </button>
               <button onClick={() => { setResponseText(review.suggested_response || ''); setExpanded(true); }}
-                className="px-3 py-1.5 text-[11px] font-medium text-[#aaaaaa] bg-white border border-[#eeeeee] rounded-md hover:border-[#cccccc] hover:text-[#666666] transition-colors">
+                className="px-3 py-1.5 text-[11px] font-medium text-foreground-muted/70 bg-white border border-border/60 rounded-md hover:border-border-hover hover:text-foreground-secondary transition-colors">
                 ערוך ואשר
               </button>
             </>
@@ -291,7 +301,7 @@ export default function ReviewCard({ review, businessProfile, compact = false })
                 {buttonLabel('thank', 'הודה ושתף')}
               </button>
               <button onClick={() => generateResponse('referral')} disabled={generating}
-                className="px-3 py-1.5 text-[11px] font-medium text-[#aaaaaa] bg-white border border-[#eeeeee] rounded-md hover:border-[#cccccc] hover:text-[#666666] transition-colors flex items-center gap-1 disabled:opacity-50">
+                className="px-3 py-1.5 text-[11px] font-medium text-foreground-muted/70 bg-white border border-border/60 rounded-md hover:border-border-hover hover:text-foreground-secondary transition-colors flex items-center gap-1 disabled:opacity-50">
                 {buttonLabel('referral', 'בקש המלצה')}
               </button>
             </>
@@ -302,7 +312,7 @@ export default function ReviewCard({ review, businessProfile, compact = false })
         {topics.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-2">
             {topics.map((t, i) => (
-              <span key={i} className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#f5f5f5] text-[#888888] border border-[#eeeeee]">
+              <span key={i} className="text-[9px] px-1.5 py-0.5 rounded-full bg-secondary/60 text-foreground-muted border border-border/60">
                 {t}
               </span>
             ))}
@@ -320,23 +330,23 @@ export default function ReviewCard({ review, businessProfile, compact = false })
       </div>
 
       {isAutoResponded && showAutoResponse && review.suggested_response && (
-        <div className="px-4 pb-3 border-t border-[#f5f5f5] pt-3">
-          <label className="text-[11px] text-[#999999] mb-1.5 block">תגובה אוטומטית:</label>
-          <p className="text-[12px] text-[#444444] bg-[#f0fdf8] border border-[#d1fae5] rounded-lg p-3 leading-relaxed">{review.suggested_response}</p>
+        <div className="px-4 pb-3 border-t border-border/40 pt-3">
+          <label className="text-[11px] text-foreground-muted mb-1.5 block">תגובה אוטומטית:</label>
+          <p className="text-[12px] text-foreground-secondary bg-[#f0fdf8] border border-[#d1fae5] rounded-lg p-3 leading-relaxed">{review.suggested_response}</p>
         </div>
       )}
 
       {expanded && (
-        <div className="px-4 pb-4 border-t border-[#f5f5f5] pt-3">
+        <div className="px-4 pb-4 border-t border-border/40 pt-3">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <label className="text-[11px] text-[#999999]">תגובה מוצעת:</label>
+            <label className="text-[11px] text-foreground-muted">תגובה מוצעת:</label>
             <span className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-[#fffbeb] border border-[#fef3c7] text-[#d97706]">
               ⚡ נוצר ע"י AI — עיין ואשר לפני פרסום
             </span>
           </div>
           <textarea ref={textareaRef} value={responseText} onChange={(e) => setResponseText(e.target.value)}
             rows={3} style={{ minHeight: '80px' }}
-            className="w-full bg-[#fafafa] border border-[#eeeeee] rounded-lg p-3 text-[12px] text-[#333333] resize-none focus:outline-none focus:border-[#dddddd]" />
+            className="w-full bg-secondary/50 border border-border/60 rounded-lg p-3 text-[12px] text-[#333333] resize-none focus:outline-none focus:border-border" />
           <div className="flex flex-wrap gap-2 mt-2 items-center">
             {saved ? (
               <div className="flex items-center gap-2">
@@ -350,21 +360,21 @@ export default function ReviewCard({ review, businessProfile, compact = false })
                 <button onClick={saveResponse} className="px-4 py-2 text-[12px] font-medium bg-[#111111] text-white rounded-md hover:bg-[#333333] transition-colors">
                   שמור והעתק ✓
                 </button>
-                <button onClick={copyToClipboard} className="px-3 py-1.5 text-[12px] font-medium text-[#6366f1] bg-indigo-50 border border-indigo-100 rounded-md hover:bg-indigo-100 transition-colors flex items-center gap-1">
+                <button onClick={copyToClipboard} className="px-3 py-1.5 text-[12px] font-medium text-[#6366f1] bg-primary/8 border border-primary/15 rounded-md hover:bg-primary/10 transition-colors flex items-center gap-1">
                   {copied ? <><CheckCheck className="w-3 h-3" /> הועתק</> : <><Copy className="w-3 h-3" /> העתק</>}
                 </button>
                 {review.source_url && (
                   <a href={review.source_url} target="_blank" rel="noopener noreferrer"
-                    className="px-3 py-1.5 text-[12px] font-medium text-[#aaaaaa] bg-white border border-[#eeeeee] rounded-md hover:border-[#cccccc] hover:text-[#666666] transition-colors flex items-center gap-1">
+                    className="px-3 py-1.5 text-[12px] font-medium text-foreground-muted/70 bg-white border border-border/60 rounded-md hover:border-border-hover hover:text-foreground-secondary transition-colors flex items-center gap-1">
                     <ExternalLink className="w-3 h-3" /> פתח ב-Google
                   </a>
                 )}
-                <button onClick={handleEdit} className="px-3 py-1.5 text-[12px] font-medium text-[#aaaaaa] bg-white border border-[#eeeeee] rounded-md hover:border-[#cccccc] hover:text-[#666666] transition-colors">ערוך</button>
-                <button onClick={handleCancel} className="px-3 py-1.5 text-[12px] font-medium text-[#aaaaaa] bg-white border border-[#eeeeee] rounded-md hover:border-[#cccccc] hover:text-[#666666] transition-colors">בטל</button>
+                <button onClick={handleEdit} className="px-3 py-1.5 text-[12px] font-medium text-foreground-muted/70 bg-white border border-border/60 rounded-md hover:border-border-hover hover:text-foreground-secondary transition-colors">ערוך</button>
+                <button onClick={handleCancel} className="px-3 py-1.5 text-[12px] font-medium text-foreground-muted/70 bg-white border border-border/60 rounded-md hover:border-border-hover hover:text-foreground-secondary transition-colors">בטל</button>
               </>
             )}
           </div>
-          <p className="text-[10px] text-[#bbbbbb] mt-2">
+          <p className="text-[10px] text-foreground-muted/70 mt-2">
             * המערכת שומרת את התגובה — לשליחה בפועל יש להדביק אותה בדף הביזנס שלך ב-Google / Facebook
           </p>
         </div>

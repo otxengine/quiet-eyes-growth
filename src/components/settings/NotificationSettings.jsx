@@ -63,7 +63,7 @@ export default function NotificationSettings({ businessId }) {
             placeholder="+972501234567"
             value={settings.whatsapp_number}
             onChange={e => update('whatsapp_number', e.target.value)}
-            className="w-full px-3 py-2.5 rounded-xl border border-border text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+            className="w-full px-3 py-2.5 rounded-xl border border-border text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
             style={{ direction: 'ltr' }}
           />
           <p className="text-[10px] text-foreground-muted mt-1">פורמט בינלאומי עם +972</p>
@@ -79,7 +79,7 @@ export default function NotificationSettings({ businessId }) {
             placeholder="name@email.com"
             value={settings.email}
             onChange={e => update('email', e.target.value)}
-            className="w-full px-3 py-2.5 rounded-xl border border-border text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+            className="w-full px-3 py-2.5 rounded-xl border border-border text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
             style={{ direction: 'ltr' }}
           />
         </div>
@@ -99,7 +99,7 @@ export default function NotificationSettings({ businessId }) {
               <div
                 onClick={() => update(item.key, !settings[item.key])}
                 className={`relative w-10 h-5 rounded-full transition-colors cursor-pointer ${
-                  settings[item.key] ? 'bg-indigo-600' : 'bg-gray-200'
+                  settings[item.key] ? 'bg-primary' : 'bg-border'
                 }`}
               >
                 <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${

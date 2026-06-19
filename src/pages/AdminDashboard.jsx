@@ -13,23 +13,27 @@ import ApprovalsTab          from '@/components/admin/ApprovalsTab';
 import CustomerManagementTab from '@/components/admin/CustomerManagementTab';
 import AgentLogsTab          from '@/components/admin/AgentLogsTab';
 import AdminActionsTab       from '@/components/admin/AdminActionsTab';
+import SupportTicketsTab    from '@/components/admin/SupportTicketsTab';
+import AgentHealthTab       from '@/components/admin/AgentHealthTab';
 
 function useIsAdmin() {
   try {
     const email = window.__clerk?.user?.primaryEmailAddress?.emailAddress || '';
-    return email === 'contact@otxengine.io' || email.endsWith('@otx.ai') || email.endsWith('@quieteyes.ai');
+    return email === 'contact@otxengine.io' || email === 'admin@cortexi.ai' || email.endsWith('@otx.ai') || email.endsWith('@quieteyes.ai') || email.endsWith('@cortexi.ai');
   } catch { return false; }
 }
 
 const TABS = [
   { key: 'overview',   label: 'Overview' },
-  { key: 'pipeline',   label: 'OTX Pipeline' },
+  { key: 'pipeline',   label: 'Cortexi Pipeline' },
   { key: 'roi',        label: 'ROI & רווחיות' },
   { key: 'health',     label: 'בריאות עסקים' },
   { key: 'approvals',  label: 'אישורים' },
   { key: 'customers',  label: 'ניהול לקוחות' },
   { key: 'logs',       label: 'לוגים' },
   { key: 'actions',    label: 'פעולות' },
+  { key: 'support',   label: 'פניות תמיכה' },
+  { key: 'agents',   label: 'ניטור סוכנים' },
 ];
 
 export default function AdminDashboard({ skipAdminCheck = false }) {
@@ -141,6 +145,8 @@ export default function AdminDashboard({ skipAdminCheck = false }) {
             onLogsRefresh={() => qc.invalidateQueries({ queryKey: ['admin_logs'] })}
           />
         )}
+        {tab === 'support'   && <SupportTicketsTab />}
+        {tab === 'agents'    && <AgentHealthTab allLogs={allLogs} />}
       </div>
     </div>
   );

@@ -439,10 +439,10 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           disabled={i > step}
         >
           <div className={`w-full h-1 rounded-full transition-colors ${
-            i <= step ? 'bg-indigo-600' : 'bg-gray-100'
+            i <= step ? 'bg-primary' : 'bg-secondary'
           }`} />
           <span className={`text-[9px] font-medium transition-colors ${
-            i === step ? 'text-indigo-600' : i < step ? 'text-gray-400' : 'text-gray-200'
+            i === step ? 'text-primary' : i < step ? 'text-foreground-muted/70' : 'text-border'
           }`}>{label}</span>
         </button>
       ))}
@@ -460,14 +460,14 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
     <>
       {/* Multi-brain progress bar */}
       {smartPhase && smartPhase !== 'ready' && (
-        <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-indigo-50 rounded-xl border border-indigo-100">
-          <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500 flex-shrink-0" />
-          <span className="text-[11px] text-indigo-700">{SMART_PHASE_LABELS[smartPhase]}</span>
+        <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-primary/8 rounded-xl border border-primary/15">
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-primary/70 flex-shrink-0" />
+          <span className="text-[11px] text-primary">{SMART_PHASE_LABELS[smartPhase]}</span>
           <div className="flex gap-1 mr-auto">
             {['analyzing','writing','imaging'].map((p, i) => (
               <div key={p} className={`w-1.5 h-1.5 rounded-full transition-colors ${
                 ['analyzing','writing','imaging','ready'].indexOf(smartPhase) >= i
-                  ? 'bg-indigo-500' : 'bg-indigo-200'
+                  ? 'bg-primary' : 'bg-primary/15'
               }`} />
             ))}
           </div>
@@ -476,27 +476,27 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
 
       {/* Smart audience context when ready */}
       {smartPhase === 'ready' && smartAudience && (
-        <div className="flex items-center gap-2 mb-1.5 px-3 py-1.5 bg-indigo-50 rounded-xl border border-indigo-100">
-          <span className="text-[10px] text-indigo-600">👥 {smartAudience.age_range} · {smartAudience.gender} · {smartAudience.preferred_channel}</span>
-          <span className="text-[9px] text-indigo-400 mr-auto">Claude Sonnet</span>
+        <div className="flex items-center gap-2 mb-1.5 px-3 py-1.5 bg-primary/8 rounded-xl border border-primary/15">
+          <span className="text-[10px] text-primary">👥 {smartAudience.age_range} · {smartAudience.gender} · {smartAudience.preferred_channel}</span>
+          <span className="text-[9px] text-primary/50 mr-auto">Claude Sonnet</span>
         </div>
       )}
       {/* Best posting time */}
       {smartPhase === 'ready' && smartAudience?.best_time && (
-        <div className="flex items-center gap-1.5 mb-2 px-3 py-1 text-[10px] text-indigo-500">
+        <div className="flex items-center gap-1.5 mb-2 px-3 py-1 text-[10px] text-primary/70">
           <span>⏰</span>
           <span>זמן אידיאלי לפרסום: {smartAudience.best_time}</span>
         </div>
       )}
 
       {/* Signal context */}
-      <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 mb-3">
-        <p className="text-[11px] font-semibold text-indigo-700 mb-1">התובנה:</p>
-        <p className="text-[12px] text-indigo-900">{signal.summary}</p>
+      <div className="bg-primary/8 border border-primary/15 rounded-xl px-4 py-3 mb-3">
+        <p className="text-[11px] font-semibold text-primary mb-1">התובנה:</p>
+        <p className="text-[12px] text-foreground">{signal.summary}</p>
       </div>
 
       {(!smartPhase || smartPhase === 'ready') && (
-        <p className="text-[11px] font-semibold text-gray-600 mb-1.5">
+        <p className="text-[11px] font-semibold text-foreground-secondary mb-1.5">
           {isSocialType
             ? (smartPhase === 'ready' ? 'טקסט מוכן לפרסום — GPT-4o (ניתן לעריכה):' : 'טקסט מוכן לפרסום (ניתן לעריכה):')
             : 'פרטי הפעולה:'}
@@ -507,7 +507,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
         value={text}
         onChange={e => setText(e.target.value)}
         rows={5}
-        className="w-full text-[12px] text-gray-800 border border-gray-200 rounded-xl px-4 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+        className="w-full text-[12px] text-foreground border border-border rounded-xl px-4 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
         style={{ fontFamily: 'inherit', lineHeight: 1.6 }}
       />
 
@@ -515,14 +515,14 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
       {smartPhase === 'ready' && smartHashtags.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-2">
           {smartHashtags.map((tag, i) => (
-            <span key={i} className="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full border border-indigo-100">{tag}</span>
+            <span key={i} className="text-[10px] px-2 py-0.5 bg-primary/8 text-primary rounded-full border border-primary/15">{tag}</span>
           ))}
         </div>
       )}
 
       {/* CTA */}
       {smartPhase === 'ready' && smartCta && (
-        <p className="text-[10px] text-indigo-500 font-medium mt-1.5">
+        <p className="text-[10px] text-primary/70 font-medium mt-1.5">
           📣 {smartCta}
         </p>
       )}
@@ -545,26 +545,26 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
         <button
           onClick={handleGenerateImage}
           disabled={imageLoading}
-          className="flex flex-col items-center gap-1.5 py-2.5 px-2 border border-gray-200 rounded-xl text-[11px] hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-50"
+          className="flex flex-col items-center gap-1.5 py-2.5 px-2 border border-border rounded-xl text-[11px] hover:bg-secondary/50 hover:border-border-hover transition-all disabled:opacity-50"
         >
           {imageLoading
-            ? <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
-            : <Image className="w-4 h-4 text-gray-500" />}
-          <span className="text-gray-600">{imageLoading ? 'מייצר...' : 'צור תמונה'}</span>
+            ? <Loader2 className="w-4 h-4 animate-spin text-primary/70" />
+            : <Image className="w-4 h-4 text-foreground-muted" />}
+          <span className="text-foreground-secondary">{imageLoading ? 'מייצר...' : 'צור תמונה'}</span>
         </button>
         <button
           onClick={handleLoadAudience}
           disabled={audienceLoading}
-          className="flex flex-col items-center gap-1.5 py-2.5 px-2 border border-gray-200 rounded-xl text-[11px] hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-50"
+          className="flex flex-col items-center gap-1.5 py-2.5 px-2 border border-border rounded-xl text-[11px] hover:bg-secondary/50 hover:border-border-hover transition-all disabled:opacity-50"
         >
           {audienceLoading
-            ? <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
-            : <Users className="w-4 h-4 text-gray-500" />}
-          <span className="text-gray-600">{audienceLoading ? 'טוען...' : 'קהל יעד'}</span>
+            ? <Loader2 className="w-4 h-4 animate-spin text-primary/70" />
+            : <Users className="w-4 h-4 text-foreground-muted" />}
+          <span className="text-foreground-secondary">{audienceLoading ? 'טוען...' : 'קהל יעד'}</span>
         </button>
         <button
           onClick={() => setStep(STEPS.length - 1)}
-          className="flex flex-col items-center gap-1.5 py-2.5 px-2 bg-indigo-600 text-white rounded-xl text-[11px] hover:bg-indigo-700 transition-all"
+          className="flex flex-col items-center gap-1.5 py-2.5 px-2 bg-primary text-white rounded-xl text-[11px] hover:bg-primary/90 transition-all"
         >
           <Send className="w-4 h-4" />
           <span>פרסם</span>
@@ -572,16 +572,16 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
       </div>
 
       {/* Copy + create task */}
-      <div className="space-y-2 pt-2 border-t border-gray-100 mt-3">
+      <div className="space-y-2 pt-2 border-t border-border/60 mt-3">
         {isSocialType && (
           <button onClick={handleCopy}
-            className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-indigo-200 text-indigo-700 rounded-xl text-[13px] font-medium hover:bg-indigo-50 transition-all">
+            className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-primary/20 text-primary rounded-xl text-[13px] font-medium hover:bg-primary/8 transition-all">
             {copied ? <CheckCheck className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
             {copied ? 'הועתק!' : 'העתק טקסט'}
           </button>
         )}
         <button onClick={handleCreateTask} disabled={creating}
-          className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 text-white rounded-xl text-[13px] font-semibold hover:bg-indigo-700 transition-all disabled:opacity-70">
+          className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-xl text-[13px] font-semibold hover:bg-primary/90 transition-all disabled:opacity-70">
           {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
           {creating ? 'יוצר משימה...' : 'צור משימה ועקוב'}
         </button>
@@ -612,7 +612,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
     <>
       <div className="mb-3">
         {/* Platform picker */}
-        <p className="text-[11px] font-semibold text-gray-500 mb-1.5">פלטפורמה ופורמט</p>
+        <p className="text-[11px] font-semibold text-foreground-muted mb-1.5">פלטפורמה ופורמט</p>
         <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1">
           {PLATFORM_OPTIONS.map(opt => (
             <button
@@ -625,8 +625,8 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
               }}
               className={`flex-shrink-0 flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border text-[10px] transition-all ${
                 imagePlatform === opt.key
-                  ? 'bg-indigo-50 border-indigo-400 text-indigo-700 font-semibold'
-                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  ? 'bg-primary/8 border-primary/40 text-primary font-semibold'
+                  : 'border-border text-foreground-secondary hover:bg-secondary/50'
               }`}
             >
               <span>{opt.icon}</span>
@@ -636,13 +636,13 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           ))}
         </div>
 
-        <p className="text-[12px] font-semibold text-gray-700 mb-2">תמונה שיווקית — נוצרה על ידי AI</p>
+        <p className="text-[12px] font-semibold text-foreground-secondary mb-2">תמונה שיווקית — נוצרה על ידי AI</p>
 
         {/* Loading state */}
         {imageLoading && (
-          <div className="flex flex-col items-center justify-center gap-2 py-10 mb-3 bg-gray-50 rounded-xl border border-gray-100">
-            <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
-            <span className="text-[11px] text-gray-500">יוצר תמונה... (עד 30 שניות)</span>
+          <div className="flex flex-col items-center justify-center gap-2 py-10 mb-3 bg-secondary/50 rounded-xl border border-border/60">
+            <Loader2 className="w-6 h-6 animate-spin text-primary/70" />
+            <span className="text-[11px] text-foreground-muted">יוצר תמונה... (עד 30 שניות)</span>
           </div>
         )}
 
@@ -660,7 +660,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
         {!imageLoading && imageUrl && (
           <div className="relative mb-3">
             <div
-              className="w-full rounded-xl border border-gray-100 overflow-hidden bg-gray-50"
+              className="w-full rounded-xl border border-border/60 overflow-hidden bg-secondary/50"
               style={{ aspectRatio: PLATFORM_ASPECT_CSS[imagePlatform] || '1 / 1', maxHeight: 320 }}
             >
               <img
@@ -703,7 +703,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
               <button
                 key={i}
                 onClick={() => setImageUrl(thumb.replace(/w=\d+/, 'w=1024').replace(/h=\d+/, 'h=576'))}
-                className="flex-shrink-0 w-14 h-10 rounded-lg overflow-hidden border-2 border-transparent hover:border-indigo-400 transition-all"
+                className="flex-shrink-0 w-14 h-10 rounded-lg overflow-hidden border-2 border-transparent hover:border-primary/40 transition-all"
                 title="החלף תמונה"
               >
                 <img src={thumb} alt="" className="w-full h-full object-cover" />
@@ -717,11 +717,11 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           <button
             onClick={handleGenerateImage}
             disabled={imageLoading}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-gray-200 rounded-xl text-[12px] hover:bg-gray-50 transition-all disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-border rounded-xl text-[12px] hover:bg-secondary/50 transition-all disabled:opacity-50"
           >
             {imageLoading
-              ? <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" />
-              : <Sparkles className="w-3.5 h-3.5 text-gray-500" />}
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin text-primary/70" />
+              : <Sparkles className="w-3.5 h-3.5 text-foreground-muted" />}
             {imageLoading ? 'יוצר...' : '↻ תמונה חדשה'}
           </button>
 
@@ -732,8 +732,8 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
             }}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] transition-all border ${
               showCustomPrompt
-                ? 'bg-indigo-50 border-indigo-400 text-indigo-700'
-                : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                ? 'bg-primary/8 border-primary/40 text-primary'
+                : 'border-border text-foreground-secondary hover:bg-secondary/50'
             }`}
           >
             ✏️ תאר תמונה
@@ -749,7 +749,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
               onChange={e => setCustomPrompt(e.target.value)}
               placeholder='תאר מה אתה רוצה לראות בתמונה... למשל: "מנת סטייק על גריל עם עשן, תאורת ערב"'
               rows={3}
-              className="w-full text-[12px] text-gray-800 border border-gray-200 rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-gray-50 placeholder-gray-400"
+              className="w-full text-[12px] text-foreground border border-border rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 bg-secondary/50 placeholder-gray-400"
               style={{ direction: 'rtl', fontFamily: 'inherit', lineHeight: 1.5 }}
             />
             <button
@@ -772,11 +772,11 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
         )}
 
         <button onClick={() => setStep(STEPS.length - 1)}
-          className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-[12px] font-medium hover:bg-indigo-700 transition-all">
+          className="w-full py-2.5 bg-primary text-white rounded-xl text-[12px] font-medium hover:bg-primary/90 transition-all">
           המשך לפרסום ←
         </button>
       </div>
-      <p className="text-[10px] text-gray-400 text-center">תמונה AI חינמית — הורד ושמור לפני פרסום</p>
+      <p className="text-[10px] text-foreground-muted/70 text-center">תמונה AI חינמית — הורד ושמור לפני פרסום</p>
     </>
   );
 
@@ -789,7 +789,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
       {/* Header row */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <p className="text-[12px] font-semibold text-gray-700">
+          <p className="text-[12px] font-semibold text-foreground-secondary">
             {audience ? 'קהל יעד לתובנה זו' : '3 קהלי יעד מבוססי נתונים'}
           </p>
           {dataQuality && (
@@ -827,16 +827,16 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           {/* Per-insight audience profile */}
           {audience && (
             <div className="space-y-2.5 mb-3">
-              <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
-                <p className="text-[13px] font-bold text-indigo-800 mb-0.5">{audience.headline}</p>
-                <p className="text-[11px] text-indigo-600">
+              <div className="bg-primary/8 border border-primary/15 rounded-xl px-4 py-3">
+                <p className="text-[13px] font-bold text-foreground mb-0.5">{audience.headline}</p>
+                <p className="text-[11px] text-primary">
                   {audience.age_range} · {audience.gender} · {audience.best_channel} · {audience.best_time}
                 </p>
               </div>
               {audience.why_this_insight_matters && (
-                <div className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
-                  <p className="text-[10px] text-gray-400 mb-1">למה התובנה הזו רלוונטית לקהל</p>
-                  <p className="text-[12px] text-gray-700">{audience.why_this_insight_matters}</p>
+                <div className="bg-secondary/50 rounded-xl px-3 py-2.5 border border-border/60">
+                  <p className="text-[10px] text-foreground-muted/70 mb-1">למה התובנה הזו רלוונטית לקהל</p>
+                  <p className="text-[12px] text-foreground-secondary">{audience.why_this_insight_matters}</p>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-2">
@@ -844,16 +844,16 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
                   { label: 'כאב מרכזי', value: audience.pain_point },
                   { label: 'גודל קהל',  value: audience.estimated_size },
                 ].map(item => (
-                  <div key={item.label} className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-                    <p className="text-[10px] text-gray-400 mb-0.5">{item.label}</p>
-                    <p className="text-[11px] text-gray-700">{item.value}</p>
+                  <div key={item.label} className="bg-secondary/50 rounded-lg px-3 py-2 border border-border/60">
+                    <p className="text-[10px] text-foreground-muted/70 mb-0.5">{item.label}</p>
+                    <p className="text-[11px] text-foreground-secondary">{item.value}</p>
                   </div>
                 ))}
               </div>
               {audience.keywords?.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {audience.keywords.map((kw, j) => (
-                    <span key={j} className="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full border border-indigo-100">
+                    <span key={j} className="text-[10px] px-2 py-0.5 bg-primary/8 text-primary rounded-full border border-primary/15">
                       {kw}
                     </span>
                   ))}
@@ -869,16 +869,16 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           {!audience && segments && segments.length > 0 && (
             <div className="space-y-3 mb-3">
               {segments.map((seg, i) => (
-                <div key={i} className="border border-gray-100 rounded-xl px-4 py-3">
+                <div key={i} className="border border-border/60 rounded-xl px-4 py-3">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-bold text-indigo-700">{seg.segment_name}</span>
-                    <span className="text-[10px] text-gray-400">{seg.age_min}–{seg.age_max} | {seg.genders || seg.age_range}</span>
+                    <span className="text-[11px] font-bold text-primary">{seg.segment_name}</span>
+                    <span className="text-[10px] text-foreground-muted/70">{seg.age_min}–{seg.age_max} | {seg.genders || seg.age_range}</span>
                   </div>
-                  <p className="text-[10px] text-gray-600 mb-2">{seg.description}</p>
+                  <p className="text-[10px] text-foreground-secondary mb-2">{seg.description}</p>
                   {/* Facebook interests */}
                   {seg.facebook_targeting?.interests?.length > 0 && (
                     <div className="mb-1.5">
-                      <p className="text-[9px] text-gray-400 mb-0.5">📘 FB Interests</p>
+                      <p className="text-[9px] text-foreground-muted/70 mb-0.5">📘 FB Interests</p>
                       <div className="flex flex-wrap gap-1">
                         {seg.facebook_targeting.interests.slice(0, 4).map((kw, j) => (
                           <span key={j} className="text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-full border border-blue-100">{kw}</span>
@@ -889,7 +889,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
                   {/* Google keywords */}
                   {seg.google_targeting?.keywords?.length > 0 && (
                     <div className="mb-1.5">
-                      <p className="text-[9px] text-gray-400 mb-0.5">🔍 Google Keywords</p>
+                      <p className="text-[9px] text-foreground-muted/70 mb-0.5">🔍 Google Keywords</p>
                       <div className="flex flex-wrap gap-1">
                         {seg.google_targeting.keywords.slice(0, 3).map((kw, j) => (
                           <span key={j} className="text-[9px] px-1.5 py-0.5 bg-green-50 text-green-700 rounded-full border border-green-100">{kw}</span>
@@ -897,7 +897,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
                       </div>
                     </div>
                   )}
-                  <div className="flex gap-2 text-[9px] text-gray-400 mt-1">
+                  <div className="flex gap-2 text-[9px] text-foreground-muted/70 mt-1">
                     {seg.estimated_audience_range && <span>👥 {seg.estimated_audience_range}</span>}
                     <span>המרה: {Math.round((seg.conversion_probability || 0) * 100)}%</span>
                     {seg.best_posting_time && <span>⏰ {seg.best_posting_time}</span>}
@@ -908,7 +908,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           )}
 
           {!audience && (!segments || segments.length === 0) && (
-            <div className="text-center py-6 text-[12px] text-gray-400">
+            <div className="text-center py-6 text-[12px] text-foreground-muted/70">
               <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
               אין מספיק נתונים לפילוח עדיין
             </div>
@@ -917,7 +917,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
       )}
 
       <button onClick={() => setStep(STEPS.length - 1)}
-        className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-[12px] font-medium hover:bg-indigo-700 transition-all">
+        className="w-full py-2.5 bg-primary text-white rounded-xl text-[12px] font-medium hover:bg-primary/90 transition-all">
         פרסם לקהל הזה ←
       </button>
     </>
@@ -927,7 +927,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
   const stepPublish = (
     <>
       {segments?.[0] && (
-        <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2 mb-3 text-[11px] text-indigo-800">
+        <div className="bg-primary/8 border border-primary/15 rounded-xl px-3 py-2 mb-3 text-[11px] text-foreground">
           👥 קהל מומלץ: {segments[0].segment_name}
           {segments[0].preferred_channels?.[0] && ` — דרך ${segments[0].preferred_channels[0]}`}
         </div>
@@ -935,12 +935,12 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
       {imageUrl && (
         <div className="mb-3">
           <img src={imageUrl} alt="marketing" className="w-full rounded-lg object-cover" style={{ maxHeight: 120 }} />
-          <a href={imageUrl} download className="text-[10px] text-indigo-500 hover:underline mt-1 block text-center">⬇ הורד תמונה</a>
+          <a href={imageUrl} download className="text-[10px] text-primary/70 hover:underline mt-1 block text-center">⬇ הורד תמונה</a>
         </div>
       )}
 
       {/* Preview */}
-      <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 mb-3 text-[12px] text-gray-700 leading-relaxed">
+      <div className="bg-secondary/50 border border-border/60 rounded-xl px-4 py-3 mb-3 text-[12px] text-foreground-secondary leading-relaxed">
         {text}
       </div>
 
@@ -948,7 +948,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
         <div className="flex flex-col items-center gap-2 py-6 text-center">
           <CheckCheck className="w-10 h-10 text-emerald-500" />
           <p className="text-[14px] font-semibold text-emerald-700">הפוסט נשלח לפרסום!</p>
-          <p className="text-[11px] text-gray-400">המערכת תפרסם לפי רמת האוטונומיה שהגדרת</p>
+          <p className="text-[11px] text-foreground-muted/70">המערכת תפרסם לפי רמת האוטונומיה שהגדרת</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -956,7 +956,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           <button
             onClick={() => handlePublishToSocial('both')}
             disabled={publishing}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl text-[13px] font-semibold hover:bg-indigo-700 transition-all disabled:opacity-60"
+            className="w-full flex items-center justify-center gap-2 py-3 bg-primary text-white rounded-xl text-[13px] font-semibold hover:bg-primary/90 transition-all disabled:opacity-60"
           >
             {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             {publishing ? 'שולח לפרסום...' : 'פרסם עכשיו — Facebook + Instagram'}
@@ -966,13 +966,13 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           <div className="flex gap-2">
             <button
               onClick={async () => { await navigator.clipboard.writeText(text).catch(()=>{}); window.open('https://www.instagram.com/', '_blank'); toast.success('הועתק — הדבק באינסטגרם'); }}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-gray-200 rounded-xl text-[11px] text-gray-600 hover:bg-gray-50 transition-all"
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-border rounded-xl text-[11px] text-foreground-secondary hover:bg-secondary/50 transition-all"
             >
               📸 העתק + פתח Instagram
             </button>
             <button
               onClick={async () => { await navigator.clipboard.writeText(text).catch(()=>{}); window.open('https://www.facebook.com/', '_blank'); toast.success('הועתק — הדבק בפייסבוק'); }}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-gray-200 rounded-xl text-[11px] text-gray-600 hover:bg-gray-50 transition-all"
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-border rounded-xl text-[11px] text-foreground-secondary hover:bg-secondary/50 transition-all"
             >
               👤 העתק + פתח Facebook
             </button>
@@ -994,9 +994,9 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
   const stepRespond = (
     <>
       {/* Original review/mention */}
-      <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 mb-3">
-        <p className="text-[10px] font-semibold text-gray-400 mb-1">הביקורת / האזכור:</p>
-        <p className="text-[12px] text-gray-700 leading-relaxed">{signal.summary}</p>
+      <div className="bg-secondary/50 border border-border rounded-xl px-4 py-3 mb-3">
+        <p className="text-[10px] font-semibold text-foreground-muted/70 mb-1">הביקורת / האזכור:</p>
+        <p className="text-[12px] text-foreground-secondary leading-relaxed">{signal.summary}</p>
       </div>
 
       {/* Tone selector */}
@@ -1009,29 +1009,29 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           <button key={t.key}
             onClick={() => handleRegenerateTone(t.key)}
             disabled={toneLoading}
-            className="flex-1 py-1.5 rounded-lg border border-gray-200 text-[11px] text-gray-600 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-all disabled:opacity-50">
+            className="flex-1 py-1.5 rounded-lg border border-border text-[11px] text-foreground-secondary hover:bg-primary/8 hover:border-primary/30 hover:text-primary transition-all disabled:opacity-50">
             {toneLoading ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : t.label}
           </button>
         ))}
       </div>
 
-      <p className="text-[11px] font-semibold text-gray-600 mb-1.5">טקסט תגובה (ניתן לעריכה):</p>
+      <p className="text-[11px] font-semibold text-foreground-secondary mb-1.5">טקסט תגובה (ניתן לעריכה):</p>
       <textarea
         value={text}
         onChange={e => setText(e.target.value)}
         rows={5}
-        className="w-full text-[12px] text-gray-800 border border-gray-200 rounded-xl px-4 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+        className="w-full text-[12px] text-foreground border border-border rounded-xl px-4 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
         style={{ fontFamily: 'inherit', lineHeight: 1.6 }}
       />
 
-      <div className="space-y-2 pt-2 border-t border-gray-100 mt-3">
+      <div className="space-y-2 pt-2 border-t border-border/60 mt-3">
         <button onClick={handleCopy}
-          className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-indigo-200 text-indigo-700 rounded-xl text-[13px] font-medium hover:bg-indigo-50 transition-all">
+          className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-primary/20 text-primary rounded-xl text-[13px] font-medium hover:bg-primary/8 transition-all">
           {copied ? <CheckCheck className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
           {copied ? 'הועתק!' : 'העתק תגובה'}
         </button>
         <button onClick={() => setStep(1)}
-          className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-[13px] font-semibold hover:bg-indigo-700 transition-all">
+          className="w-full py-2.5 bg-primary text-white rounded-xl text-[13px] font-semibold hover:bg-primary/90 transition-all">
           המשך לשיגור ←
         </button>
       </div>
@@ -1041,8 +1041,8 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
   // ── STEP: Respond publish (שיגור תגובה) ──
   const stepRespondPublish = (
     <>
-      <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 mb-4 text-[12px] text-gray-700">
-        <p className="text-[10px] text-gray-400 mb-1">התגובה שתשלח:</p>
+      <div className="bg-secondary/50 border border-border/60 rounded-xl px-4 py-3 mb-4 text-[12px] text-foreground-secondary">
+        <p className="text-[10px] text-foreground-muted/70 mb-1">התגובה שתשלח:</p>
         {text}
       </div>
       <div className="space-y-2">
@@ -1052,14 +1052,14 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           { label: 'Instagram DM', emoji: '📸', action: () => { handleCopy(); window.open('https://www.instagram.com/', '_blank'); toast.success('הועתק — שלח ב-DM'); }},
         ].map(p => (
           <button key={p.label} onClick={p.action}
-            className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/40 transition-all text-[12px] font-medium">
-            <span className="text-gray-400 text-[10px]">לחץ לשיגור</span>
+            className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border hover:border-primary/30 hover:bg-primary/5 transition-all text-[12px] font-medium">
+            <span className="text-foreground-muted/70 text-[10px]">לחץ לשיגור</span>
             <span className="flex items-center gap-2">{p.emoji} {p.label} ←</span>
           </button>
         ))}
       </div>
       <button onClick={handleCreateTask} disabled={creating}
-        className="w-full flex items-center justify-center gap-2 py-2.5 mt-3 border border-gray-200 text-gray-600 rounded-xl text-[12px] hover:bg-gray-50 transition-all disabled:opacity-70">
+        className="w-full flex items-center justify-center gap-2 py-2.5 mt-3 border border-border text-foreground-secondary rounded-xl text-[12px] hover:bg-secondary/50 transition-all disabled:opacity-70">
         {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
         {creating ? 'יוצר...' : 'צור משימה מעקב'}
       </button>
@@ -1069,30 +1069,30 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
   // ── STEP: Call prep (הכנה לשיחה) ──
   const stepCall = (
     <>
-      <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 mb-3">
-        <p className="text-[11px] font-semibold text-indigo-700 mb-1">נושא השיחה:</p>
-        <p className="text-[12px] text-indigo-900">{signal.summary}</p>
+      <div className="bg-primary/8 border border-primary/15 rounded-xl px-4 py-3 mb-3">
+        <p className="text-[11px] font-semibold text-primary mb-1">נושא השיחה:</p>
+        <p className="text-[12px] text-foreground">{signal.summary}</p>
       </div>
 
       {/* Call points */}
       {callPoints.length > 0 && (
         <div className="space-y-2 mb-3">
-          <p className="text-[11px] font-semibold text-gray-600">נקודות לשיחה:</p>
+          <p className="text-[11px] font-semibold text-foreground-secondary">נקודות לשיחה:</p>
           {callPoints.map((pt, i) => (
-            <div key={i} className="flex items-start gap-2 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg">
-              <span className="text-indigo-500 text-[11px] font-bold flex-shrink-0">{i + 1}.</span>
-              <span className="text-[12px] text-gray-700">{pt}</span>
+            <div key={i} className="flex items-start gap-2 px-3 py-2 bg-secondary/50 border border-border/60 rounded-lg">
+              <span className="text-primary/70 text-[11px] font-bold flex-shrink-0">{i + 1}.</span>
+              <span className="text-[12px] text-foreground-secondary">{pt}</span>
             </div>
           ))}
         </div>
       )}
 
       {callPoints.length === 0 && (
-        <div className="text-center py-4 mb-3 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-          <MessageSquare className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-          <p className="text-[11px] text-gray-400 mb-3">לחץ לקבלת נקודות שיחה מותאמות אישית</p>
+        <div className="text-center py-4 mb-3 bg-secondary/50 rounded-xl border border-dashed border-border">
+          <MessageSquare className="w-8 h-8 mx-auto mb-2 text-foreground-muted/50" />
+          <p className="text-[11px] text-foreground-muted/70 mb-3">לחץ לקבלת נקודות שיחה מותאמות אישית</p>
           <button onClick={handleGenerateCallPoints} disabled={callPointsLoading}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-[12px] font-medium hover:bg-indigo-700 transition-all disabled:opacity-70">
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-[12px] font-medium hover:bg-primary/90 transition-all disabled:opacity-70">
             {callPointsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
             {callPointsLoading ? 'מכין...' : '✨ צור נקודות שיחה עם AI'}
           </button>
@@ -1101,13 +1101,13 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
 
       {callPoints.length > 0 && (
         <button onClick={handleGenerateCallPoints} disabled={callPointsLoading}
-          className="w-full py-2 border border-gray-200 text-gray-500 rounded-xl text-[11px] hover:bg-gray-50 transition-all mb-3 disabled:opacity-50">
+          className="w-full py-2 border border-border text-foreground-muted rounded-xl text-[11px] hover:bg-secondary/50 transition-all mb-3 disabled:opacity-50">
           {callPointsLoading ? <Loader2 className="w-3 h-3 animate-spin inline mr-1" /> : '↻'} עדכן נקודות
         </button>
       )}
 
       <button onClick={() => setStep(1)}
-        className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-[13px] font-semibold hover:bg-indigo-700 transition-all">
+        className="w-full py-2.5 bg-primary text-white rounded-xl text-[13px] font-semibold hover:bg-primary/90 transition-all">
         מוכן לשיחה ←
       </button>
     </>
@@ -1117,10 +1117,10 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
   const stepCallAction = (
     <>
       {callPoints.length > 0 && (
-        <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 mb-4">
-          <p className="text-[10px] text-indigo-500 mb-1.5 font-semibold">נקודות לשיחה:</p>
+        <div className="bg-primary/8 border border-primary/15 rounded-xl px-4 py-3 mb-4">
+          <p className="text-[10px] text-primary/70 mb-1.5 font-semibold">נקודות לשיחה:</p>
           {callPoints.map((pt, i) => (
-            <p key={i} className="text-[11px] text-indigo-800 mb-1">• {pt}</p>
+            <p key={i} className="text-[11px] text-foreground mb-1">• {pt}</p>
           ))}
         </div>
       )}
@@ -1133,7 +1133,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           </a>
         )}
         {!meta.phone && (
-          <div className="w-full flex items-center justify-center gap-3 py-4 bg-gray-100 text-gray-500 rounded-2xl text-[13px]">
+          <div className="w-full flex items-center justify-center gap-3 py-4 bg-secondary text-foreground-muted rounded-2xl text-[13px]">
             <Phone className="w-5 h-5" />
             מספר טלפון לא זמין — בדוק בפרטי הליד
           </div>
@@ -1146,7 +1146,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
       </div>
       <button onClick={() => { setCallDone(true); handleCreateTask(); }}
         disabled={creating}
-        className="w-full flex items-center justify-center gap-2 py-2.5 mt-3 border border-gray-200 text-gray-600 rounded-xl text-[12px] hover:bg-gray-50 transition-all disabled:opacity-70">
+        className="w-full flex items-center justify-center gap-2 py-2.5 mt-3 border border-border text-foreground-secondary rounded-xl text-[12px] hover:bg-secondary/50 transition-all disabled:opacity-70">
         {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
         סמן שיחה כבוצעה + צור משימה
       </button>
@@ -1157,11 +1157,11 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
   const stepPlatformSetup = platformSetupConfig ? (
     <>
       {/* Platform header */}
-      <div className="flex items-center gap-3 mb-4 px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+      <div className="flex items-center gap-3 mb-4 px-4 py-3 bg-primary/8 border border-primary/15 rounded-xl">
         <span className="text-3xl">{platformSetupConfig.icon}</span>
         <div>
-          <p className="text-[13px] font-bold text-indigo-800">{platformSetupConfig.platform}</p>
-          <p className="text-[11px] text-indigo-500">{signal.summary}</p>
+          <p className="text-[13px] font-bold text-foreground">{platformSetupConfig.platform}</p>
+          <p className="text-[11px] text-primary/70">{signal.summary}</p>
         </div>
       </div>
 
@@ -1173,7 +1173,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
       )}
 
       {/* Step-by-step checklist */}
-      <p className="text-[11px] font-semibold text-gray-500 mb-2">סדר פעולות:</p>
+      <p className="text-[11px] font-semibold text-foreground-muted mb-2">סדר פעולות:</p>
       <div className="space-y-2 mb-4">
         {platformSetupConfig.steps.map((step, i) => {
           const done = completedSteps.includes(i);
@@ -1186,11 +1186,11 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-[12px] text-right transition-all ${
                 done
                   ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                  : 'bg-white border-gray-200 text-gray-700 hover:border-indigo-300 hover:bg-indigo-50/30'
+                  : 'bg-white border-border text-foreground-secondary hover:border-primary/30 hover:bg-primary/4'
               }`}
             >
               <span className={`w-6 h-6 flex-shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold transition-all ${
-                done ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-400'
+                done ? 'bg-emerald-500 text-white' : 'bg-secondary text-foreground-muted/70'
               }`}>
                 {done ? '✓' : i + 1}
               </span>
@@ -1202,14 +1202,14 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
 
       {/* Progress indicator */}
       {completedSteps.length > 0 && (
-        <div className="mb-3 px-3 py-2 bg-gray-50 rounded-xl">
+        <div className="mb-3 px-3 py-2 bg-secondary/50 rounded-xl">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-gray-500">התקדמות</span>
-            <span className="text-[10px] font-semibold text-indigo-600">{completedSteps.length}/{platformSetupConfig.steps.length}</span>
+            <span className="text-[10px] text-foreground-muted">התקדמות</span>
+            <span className="text-[10px] font-semibold text-primary">{completedSteps.length}/{platformSetupConfig.steps.length}</span>
           </div>
-          <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+          <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
             <div
-              className="h-full bg-indigo-500 rounded-full transition-all"
+              className="h-full bg-primary rounded-full transition-all"
               style={{ width: `${(completedSteps.length / platformSetupConfig.steps.length) * 100}%` }}
             />
           </div>
@@ -1221,7 +1221,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
         href={platformSetupConfig.url}
         target="_blank"
         rel="noopener noreferrer"
-        className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl text-[13px] font-semibold hover:bg-indigo-700 transition-all mb-2"
+        className="w-full flex items-center justify-center gap-2 py-3 bg-primary text-white rounded-xl text-[13px] font-semibold hover:bg-primary/90 transition-all mb-2"
       >
         {platformSetupConfig.icon} פתח {platformSetupConfig.platform}
       </a>
@@ -1230,7 +1230,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
       <button
         onClick={handleCreateTask}
         disabled={creating}
-        className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-[12px] hover:bg-gray-50 transition-all disabled:opacity-70"
+        className="w-full flex items-center justify-center gap-2 py-2.5 border border-border text-foreground-secondary rounded-xl text-[12px] hover:bg-secondary/50 transition-all disabled:opacity-70"
       >
         {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
         {creating ? 'יוצר...' : 'צור משימה מעקב'}
@@ -1251,19 +1251,19 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
         <p className="text-[11px] font-semibold text-orange-700 mb-1">מה השתנה אצל המתחרה:</p>
         <p className="text-[12px] text-orange-900">{signal.summary}</p>
       </div>
-      <p className="text-[11px] font-semibold text-gray-600 mb-2">בחר את תגובת העסק:</p>
+      <p className="text-[11px] font-semibold text-foreground-secondary mb-2">בחר את תגובת העסק:</p>
       <div className="space-y-2 mb-4">
         {COMP_OPTIONS.map(opt => (
           <button key={opt.key} onClick={() => setCompResponseChoice(opt.key)}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-right transition-all ${
               compResponseChoice === opt.key
-                ? 'bg-indigo-50 border-indigo-400'
-                : 'bg-white border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/30'
+                ? 'bg-primary/8 border-primary/40'
+                : 'bg-white border-border hover:border-primary/30 hover:bg-primary/4'
             }`}>
             <span className="text-xl">{opt.emoji}</span>
             <div>
-              <p className="text-[13px] font-semibold text-gray-800">{opt.label}</p>
-              <p className="text-[11px] text-gray-500">{opt.desc}</p>
+              <p className="text-[13px] font-semibold text-foreground">{opt.label}</p>
+              <p className="text-[11px] text-foreground-muted">{opt.desc}</p>
             </div>
           </button>
         ))}
@@ -1295,7 +1295,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           setCreating(false);
         }}
         disabled={creating || !compResponseChoice}
-        className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-[13px] font-semibold hover:bg-indigo-700 transition-all disabled:opacity-50"
+        className="w-full py-2.5 bg-primary text-white rounded-xl text-[13px] font-semibold hover:bg-primary/90 transition-all disabled:opacity-50"
       >
         {creating ? <Loader2 className="w-4 h-4 animate-spin inline mr-1" /> : null}
         בצע פעולה ←
@@ -1306,11 +1306,11 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
   const stepCompetitorResponseDone = (
     <div className="text-center py-6">
       <div className="text-4xl mb-3">✅</div>
-      <p className="text-[14px] font-semibold text-gray-800 mb-2">
+      <p className="text-[14px] font-semibold text-foreground mb-2">
         {compResponseChoice === 'counter_promo' ? 'מועבר לבניית קמפיין נגדי' : 'המשימה נוצרה בהצלחה'}
       </p>
-      <p className="text-[12px] text-gray-500 mb-4">{(signal.summary || '').slice(0, 80)}</p>
-      <button onClick={onClose} className="px-6 py-2 bg-gray-100 text-gray-700 rounded-xl text-[13px] hover:bg-gray-200 transition-all">סגור</button>
+      <p className="text-[12px] text-foreground-muted mb-4">{(signal.summary || '').slice(0, 80)}</p>
+      <button onClick={onClose} className="px-6 py-2 bg-secondary text-foreground-secondary rounded-xl text-[13px] hover:bg-secondary transition-all">סגור</button>
     </div>
   );
 
@@ -1321,25 +1321,25 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
         <p className="text-[11px] font-semibold text-green-700 mb-1">מצב:</p>
         <p className="text-[12px] text-green-900">{signal.summary}</p>
       </div>
-      <p className="text-[11px] font-semibold text-gray-600 mb-2">הודעת WhatsApp מותאמת:</p>
+      <p className="text-[11px] font-semibold text-foreground-secondary mb-2">הודעת WhatsApp מותאמת:</p>
       {retentionMsgLoading ? (
-        <div className="flex items-center justify-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-          <Loader2 className="w-5 h-5 animate-spin text-gray-400 ml-2" />
-          <span className="text-[12px] text-gray-400">יוצר הודעה...</span>
+        <div className="flex items-center justify-center py-8 bg-secondary/50 rounded-xl border border-dashed border-border">
+          <Loader2 className="w-5 h-5 animate-spin text-foreground-muted/70 ml-2" />
+          <span className="text-[12px] text-foreground-muted/70">יוצר הודעה...</span>
         </div>
       ) : (
         <textarea
           value={retentionMsg}
           onChange={e => setRetentionMsg(e.target.value)}
           rows={5}
-          className="w-full px-3 py-2.5 text-[12px] border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-green-200"
+          className="w-full px-3 py-2.5 text-[12px] border border-border rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-green-200"
           placeholder="הודעת WhatsApp..."
           dir="rtl"
         />
       )}
       <div className="flex gap-2 mt-2 mb-3">
         <button onClick={generateRetentionMessage} disabled={retentionMsgLoading}
-          className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg text-[11px] hover:bg-gray-50 transition-all disabled:opacity-50">
+          className="flex items-center gap-1.5 px-3 py-1.5 border border-border text-foreground-muted rounded-lg text-[11px] hover:bg-secondary/50 transition-all disabled:opacity-50">
           <Sparkles className="w-3 h-3" />
           {retentionMsgLoading ? 'יוצר...' : 'צור מחדש'}
         </button>
@@ -1369,7 +1369,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           setTimeout(() => setCopied(false), 2000);
           toast.success('הועתק ✓');
         }}
-          className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-[12px] hover:bg-gray-50 transition-all">
+          className="w-full flex items-center justify-center gap-2 py-2.5 border border-border text-foreground-secondary rounded-xl text-[12px] hover:bg-secondary/50 transition-all">
           {copied ? <CheckCheck className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
           {copied ? 'הועתק ✓' : 'העתק הודעה'}
         </button>
@@ -1389,7 +1389,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           } catch { toast.error('שגיאה ביצירת המשימה'); }
           setCreating(false);
         }} disabled={creating}
-          className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-[12px] hover:bg-gray-50 transition-all disabled:opacity-70">
+          className="w-full flex items-center justify-center gap-2 py-2.5 border border-border text-foreground-secondary rounded-xl text-[12px] hover:bg-secondary/50 transition-all disabled:opacity-70">
           {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
           צור משימת מעקב תגובות
         </button>
@@ -1410,19 +1410,19 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
         <p className="text-[11px] font-semibold text-blue-700 mb-1">המצב הנוכחי:</p>
         <p className="text-[12px] text-blue-900">{signal.summary}</p>
       </div>
-      <p className="text-[11px] font-semibold text-gray-600 mb-2">בחר פעולה:</p>
+      <p className="text-[11px] font-semibold text-foreground-secondary mb-2">בחר פעולה:</p>
       <div className="space-y-2 mb-4">
         {PRICING_OPTIONS.map(opt => (
           <button key={opt.key} onClick={() => setCompResponseChoice(opt.key)}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-right transition-all ${
               compResponseChoice === opt.key
-                ? 'bg-indigo-50 border-indigo-400'
-                : 'bg-white border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/30'
+                ? 'bg-primary/8 border-primary/40'
+                : 'bg-white border-border hover:border-primary/30 hover:bg-primary/4'
             }`}>
             <span className="text-xl">{opt.emoji}</span>
             <div>
-              <p className="text-[13px] font-semibold text-gray-800">{opt.label}</p>
-              <p className="text-[11px] text-gray-500">{opt.desc}</p>
+              <p className="text-[13px] font-semibold text-foreground">{opt.label}</p>
+              <p className="text-[11px] text-foreground-muted">{opt.desc}</p>
             </div>
           </button>
         ))}
@@ -1457,7 +1457,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           setCreating(false);
         }}
         disabled={creating || !compResponseChoice}
-        className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-[13px] font-semibold hover:bg-indigo-700 transition-all disabled:opacity-50"
+        className="w-full py-2.5 bg-primary text-white rounded-xl text-[13px] font-semibold hover:bg-primary/90 transition-all disabled:opacity-50"
       >
         {creating ? <Loader2 className="w-4 h-4 animate-spin inline mr-1" /> : null}
         בצע פעולה ←
@@ -1489,15 +1489,15 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
         style={{ direction: 'rtl', maxHeight: '90vh' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
           <div className="flex items-center gap-2">
             <span className="text-xl">{config.icon}</span>
             <div>
-              <p className="text-[13px] font-semibold text-gray-800">{config.label}</p>
-              <p className="text-[11px] text-gray-400">⏱ {timeMinutes} דקות</p>
+              <p className="text-[13px] font-semibold text-foreground">{config.label}</p>
+              <p className="text-[11px] text-foreground-muted/70">⏱ {timeMinutes} דקות</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+          <button onClick={onClose} className="text-foreground-muted/70 hover:text-foreground-secondary transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1522,7 +1522,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           {done ? (
             <div className="text-center py-4">
               <p className="text-[13px] font-semibold text-green-600">✓ הפעולה בוצעה בהצלחה!</p>
-              <button onClick={onClose} className="mt-2 text-[11px] text-gray-400 underline hover:text-gray-600">סגור</button>
+              <button onClick={onClose} className="mt-2 text-[11px] text-foreground-muted/70 underline hover:text-foreground-secondary">סגור</button>
             </div>
           ) : (
             stepContents[step]

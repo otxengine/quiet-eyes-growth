@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Phone, MessageSquare, CheckCircle, ChevronDown, ChevronUp, MapPin, Briefcase, Wallet, Clock, User, ExternalLink, Loader2 } from 'lucide-react';
+import { Phone, MessageSquare, CheckCircle, ChevronDown, ChevronUp, MapPin, Briefcase, Wallet, Clock, User, ExternalLink, Loader2, Bot } from 'lucide-react';
 import { toast } from 'sonner';
 import LeadEnrichmentBadge from '@/components/leads/LeadEnrichmentBadge';
 import WhatsAppTemplates from '@/components/leads/WhatsAppTemplates';
@@ -16,16 +16,16 @@ import DataFreshnessBadge from '@/components/ai/DataFreshnessBadge';
 function scoreStyle(score) {
   if (score >= 80) return 'bg-[#f0fdf8] text-[#10b981] border border-[#d1fae5]';
   if (score >= 40) return 'bg-[#fffbeb] text-[#d97706] border border-[#fef3c7]';
-  return 'bg-[#f9f9f9] text-[#999999] border border-[#f0f0f0]';
+  return 'bg-[#f9f9f9] text-foreground-muted border border-border/50';
 }
 
 const statusConfig = {
   hot: { text: 'חם 🔥', cls: 'text-[#10b981]' },
   warm: { text: 'פושר', cls: 'text-[#d97706]' },
-  cold: { text: 'קר', cls: 'text-[#999999]' },
+  cold: { text: 'קר', cls: 'text-foreground-muted' },
   contacted: { text: 'נוצר קשר', cls: 'text-[#6366f1]' },
   completed: { text: 'טופל ✓', cls: 'text-[#10b981]' },
-  lost: { text: 'לא רלוונטי', cls: 'text-[#999999]' },
+  lost: { text: 'לא רלוונטי', cls: 'text-foreground-muted' },
 };
 
 function timeAgo(dateStr) {
@@ -119,8 +119,14 @@ export default function LeadCard({ lead, businessProfile, onOpenDetail }) {
   const urgencyMap = { 'today': 'היום', 'this_week': 'השבוע', 'this_month': 'החודש', 'browsing': 'מתעניין', 'היום': 'היום', 'השבוע': 'השבוע', 'החודש': 'החודש', 'מתעניין': 'מתעניין' };
   const urgency = urgencyMap[lead.urgency] || lead.urgency || '—';
 
+  const openChatWithLead = (e) => {
+    e.stopPropagation();
+    const msg = `מה הגישה הטובה ביותר לליד ${lead.name} (${st.text.replace(/\s*[🔥✓]/g, '').trim()}, שירות: ${lead.service_needed || '?'}${lead.budget_range ? `, תקציב: ${lead.budget_range}` : ''})?`;
+    window.dispatchEvent(new CustomEvent('chat:open', { detail: { message: msg } }));
+  };
+
   return (
-    <div className="bg-white rounded-[10px] border border-[#f0f0f0] hover:border-[#dddddd] transition-colors">
+    <div className="bg-white rounded-[10px] border border-border/50 hover:border-border transition-colors">
       <div className="p-3 flex items-center gap-3 cursor-pointer" onClick={() => setExpanded(!expanded)}>
         <div
           className={`w-[26px] h-[26px] rounded-md flex items-center justify-center text-[10px] font-bold flex-shrink-0 cursor-help ${scoreStyle(lead.score)}`}
@@ -128,7 +134,7 @@ export default function LeadCard({ lead, businessProfile, onOpenDetail }) {
         >{lead.score}</div>
         <div className="flex-1 min-w-0">
           <span className="text-[13px] font-medium text-[#222222] block truncate">{lead.name}</span>
-          <span className="text-[11px] text-[#999999] truncate block">{[lead.service_needed, lead.city].filter(Boolean).join(' · ')}</span>
+          <span className="text-[11px] text-foreground-muted truncate block">{[lead.service_needed, lead.city].filter(Boolean).join(' · ')}</span>
         </div>
         <div className="flex items-center gap-2">
           {(lead.freshness_score ?? 100) >= 80 && (
@@ -139,26 +145,26 @@ export default function LeadCard({ lead, businessProfile, onOpenDetail }) {
           )}
           <DataFreshnessBadge dateStr={lead.created_at || lead.created_date} maxAgeHours={168} />
           <span className={`text-[10px] font-medium ${st.cls}`}>{st.text}</span>
-          {expanded ? <ChevronUp className="w-4 h-4 text-[#cccccc]" /> : <ChevronDown className="w-4 h-4 text-[#cccccc]" />}
+          {expanded ? <ChevronUp className="w-4 h-4 text-foreground-muted/50" /> : <ChevronDown className="w-4 h-4 text-foreground-muted/50" />}
         </div>
       </div>
 
       {expanded && (
-        <div className="px-4 pb-4 pt-1 border-t border-[#f5f5f5] space-y-3">
+        <div className="px-4 pb-4 pt-1 border-t border-border/40 space-y-3">
           <div>
             <h4 className="text-[11px] font-semibold text-[#222222] mb-1.5">פרטי קשר</h4>
             <div className="space-y-1">
-              {phone && <div className="flex items-center gap-2 text-[12px]"><Phone className="w-3.5 h-3.5 text-[#cccccc]" /><span className="text-[#444444]">{phone}</span></div>}
-              <div className="flex items-center gap-2 text-[12px]"><User className="w-3.5 h-3.5 text-[#cccccc]" /><span className="text-[#444444]">{lead.source || '—'}</span></div>
-              {lead.city && <div className="flex items-center gap-2 text-[12px]"><MapPin className="w-3.5 h-3.5 text-[#cccccc]" /><span className="text-[#444444]">{lead.city}</span></div>}
+              {phone && <div className="flex items-center gap-2 text-[12px]"><Phone className="w-3.5 h-3.5 text-foreground-muted/50" /><span className="text-foreground-secondary">{phone}</span></div>}
+              <div className="flex items-center gap-2 text-[12px]"><User className="w-3.5 h-3.5 text-foreground-muted/50" /><span className="text-foreground-secondary">{lead.source || '—'}</span></div>
+              {lead.city && <div className="flex items-center gap-2 text-[12px]"><MapPin className="w-3.5 h-3.5 text-foreground-muted/50" /><span className="text-foreground-secondary">{lead.city}</span></div>}
             </div>
           </div>
           <div>
             <h4 className="text-[11px] font-semibold text-[#222222] mb-1.5">פרטי בקשה</h4>
             <div className="space-y-1">
-              {lead.service_needed && <div className="flex items-center gap-2 text-[12px]"><Briefcase className="w-3.5 h-3.5 text-[#cccccc]" /><span className="text-[#444444]">{lead.service_needed}</span></div>}
-              {lead.budget_range && <div className="flex items-center gap-2 text-[12px]"><Wallet className="w-3.5 h-3.5 text-[#cccccc]" /><span className="text-[#444444]">{lead.budget_range}</span></div>}
-              <div className="flex items-center gap-2 text-[12px]"><Clock className="w-3.5 h-3.5 text-[#cccccc]" /><span className="text-[#444444]">דחיפות: {urgency}</span></div>
+              {lead.service_needed && <div className="flex items-center gap-2 text-[12px]"><Briefcase className="w-3.5 h-3.5 text-foreground-muted/50" /><span className="text-foreground-secondary">{lead.service_needed}</span></div>}
+              {lead.budget_range && <div className="flex items-center gap-2 text-[12px]"><Wallet className="w-3.5 h-3.5 text-foreground-muted/50" /><span className="text-foreground-secondary">{lead.budget_range}</span></div>}
+              <div className="flex items-center gap-2 text-[12px]"><Clock className="w-3.5 h-3.5 text-foreground-muted/50" /><span className="text-foreground-secondary">דחיפות: {urgency}</span></div>
             </div>
           </div>
           {lead.questionnaire_answers && (() => {
@@ -170,7 +176,7 @@ export default function LeadCard({ lead, businessProfile, onOpenDetail }) {
             return (
               <div>
                 <h4 className="text-[11px] font-semibold text-[#222222] mb-1.5">תשובות שאלון</h4>
-                <p className="text-[12px] text-[#444444] whitespace-pre-wrap bg-[#fafafa] rounded-lg p-2 border border-[#f0f0f0]">{lead.questionnaire_answers}</p>
+                <p className="text-[12px] text-foreground-secondary whitespace-pre-wrap bg-secondary/50 rounded-lg p-2 border border-border/50">{lead.questionnaire_answers}</p>
               </div>
             );
           })()}
@@ -185,14 +191,14 @@ export default function LeadCard({ lead, businessProfile, onOpenDetail }) {
             </div>
           )}
           {lead.source_url && lead.source_url.startsWith('http') && lead.source_origin === 'llm' && (
-            <div className="bg-[#f9f9f9] border border-[#f0f0f0] rounded-lg p-2">
-              <span className="text-[10px] text-[#aaaaaa]">מקור: {lead.source || 'לא ידוע'}</span>
+            <div className="bg-[#f9f9f9] border border-border/50 rounded-lg p-2">
+              <span className="text-[10px] text-foreground-muted/70">מקור: {lead.source || 'לא ידוע'}</span>
             </div>
           )}
           {lead.intent_source && (
             <div className="bg-[#f0fdf8] border border-[#d1fae5] rounded-lg p-2">
               <span className="text-[10px] font-medium text-[#10b981] block mb-0.5">כוונת קנייה ({lead.intent_strength})</span>
-              <p className="text-[11px] text-[#444444]">{lead.intent_source.split(' | מקור: ')[0]}</p>
+              <p className="text-[11px] text-foreground-secondary">{lead.intent_source.split(' | מקור: ')[0]}</p>
               {!lead.source_url && lead.intent_source.includes('http') && (() => {
                 const urlMatch = lead.intent_source.match(/(https?:\/\/[^\s|]+)/);
                 return urlMatch ? (
@@ -204,7 +210,7 @@ export default function LeadCard({ lead, businessProfile, onOpenDetail }) {
               })()}
             </div>
           )}
-          {lead.contact_info && !phone && <p className="text-[12px] text-[#444444]">{lead.contact_info}</p>}
+          {lead.contact_info && !phone && <p className="text-[12px] text-foreground-secondary">{lead.contact_info}</p>}
           <div className="flex flex-wrap gap-2 pt-1">
             {phone && (
               <a href={`tel:${phone}`} onClick={(e) => { e.stopPropagation(); logLeadContact(); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#111111] text-white hover:bg-[#333333] transition-colors">
@@ -222,7 +228,7 @@ export default function LeadCard({ lead, businessProfile, onOpenDetail }) {
             {phone && lead.status !== 'hot' && lead.status !== 'warm' && (
               <a href={`https://wa.me/${phone.replace(/[^0-9+]/g, '')}?text=${encodeURIComponent(`שלום ${lead.name}, פונה אליך בנוגע ל${lead.service_needed || 'שירות שביקשת'}. אשמח לעזור!`)}`}
                 target="_blank" rel="noopener noreferrer" onClick={(e) => { e.stopPropagation(); logLeadContact(); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-[#aaaaaa] bg-white border border-[#eeeeee] hover:border-[#cccccc] hover:text-[#666666] transition-colors">
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-foreground-muted/70 bg-white border border-border/60 hover:border-border-hover hover:text-foreground-secondary transition-colors">
                 <MessageSquare className="w-3.5 h-3.5" /> WhatsApp ←
               </a>
             )}
@@ -234,7 +240,7 @@ export default function LeadCard({ lead, businessProfile, onOpenDetail }) {
               </button>
             )}
             <button onClick={(e) => { e.stopPropagation(); markHandledMutation.mutate(); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-[#aaaaaa] bg-white border border-[#eeeeee] hover:border-[#cccccc] hover:text-[#666666] transition-colors">
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-foreground-muted/70 bg-white border border-border/60 hover:border-border-hover hover:text-foreground-secondary transition-colors">
               <CheckCircle className="w-3.5 h-3.5" /> סמן כטופל
             </button>
             <button
@@ -244,7 +250,7 @@ export default function LeadCard({ lead, businessProfile, onOpenDetail }) {
                 queryClient.invalidateQueries({ queryKey: ['leadsPage'] });
                 toast('הליד הוסר');
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-[#999999] bg-white border border-[#eeeeee] hover:border-red-200 hover:text-red-400 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-foreground-muted bg-white border border-border/60 hover:border-red-200 hover:text-red-400 transition-colors"
             >
               ✕ לא רלוונטי
             </button>
@@ -254,6 +260,10 @@ export default function LeadCard({ lead, businessProfile, onOpenDetail }) {
                 פתח פרטים מלאים
               </button>
             )}
+            <button onClick={openChatWithLead}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-foreground-muted/70 bg-white border border-border/60 hover:border-primary/30 hover:text-primary transition-colors">
+              <Bot className="w-3.5 h-3.5" /> שאל AI
+            </button>
           </div>
 
           {/* Suggested first message for social leads */}
@@ -292,8 +302,8 @@ export default function LeadCard({ lead, businessProfile, onOpenDetail }) {
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowCloseDeal(false)}>
               <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
                 <h3 className="text-[15px] font-semibold text-[#111111] mb-1">סגירת עסקה</h3>
-                <p className="text-[12px] text-[#888888] mb-4">{lead.name} — {lead.service_needed || 'שירות'}</p>
-                <label className="text-[11px] font-medium text-[#444444] block mb-1.5">סכום העסקה (₪)</label>
+                <p className="text-[12px] text-foreground-muted mb-4">{lead.name} — {lead.service_needed || 'שירות'}</p>
+                <label className="text-[11px] font-medium text-foreground-secondary block mb-1.5">סכום העסקה (₪)</label>
                 <input
                   type="number"
                   value={dealValue}
@@ -309,7 +319,7 @@ export default function LeadCard({ lead, businessProfile, onOpenDetail }) {
                     ✓ שמור עסקה
                   </button>
                   <button onClick={() => setShowCloseDeal(false)}
-                    className="px-4 py-2.5 text-[13px] text-[#888888] border border-[#e0e0e0] rounded-lg hover:border-[#cccccc] transition-colors">
+                    className="px-4 py-2.5 text-[13px] text-foreground-muted border border-[#e0e0e0] rounded-lg hover:border-border-hover transition-colors">
                     ביטול
                   </button>
                 </div>
@@ -322,7 +332,7 @@ export default function LeadCard({ lead, businessProfile, onOpenDetail }) {
 
           {/* WhatsApp Section */}
           {phone && (
-            <div className="border-t border-[#f0f0f0] pt-3 mt-3 space-y-3">
+            <div className="border-t border-border/50 pt-3 mt-3 space-y-3">
               <WhatsAppQuickSend lead={lead} onSent={() => logLeadContact()} />
               <WhatsAppTemplates lead={lead} businessProfile={businessProfile} onSend={() => logLeadContact()} />
             </div>

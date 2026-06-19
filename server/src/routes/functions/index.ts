@@ -41,6 +41,7 @@ import { analyzeSentiment } from './analyzeSentiment';
 import { detectCompetitorChanges } from './detectCompetitorChanges';
 import { getAudienceSegments } from './getAudienceSegments';
 import { analyzeCompetitorSocial } from './analyzeCompetitorSocial';
+import { detectCompetitorAds } from './detectCompetitorAds';
 import { detectEvents } from './detectEvents';
 import { findLocalEvents } from './findLocalEvents';
 import { detectDeliveryChanges } from './detectDeliveryChanges';
@@ -86,6 +87,7 @@ import { tiktokPostTracker } from './tiktokPostTracker';
 import { updateInsightMemory } from './updateInsightMemory';
 import { generateAdvisoryInsights } from './generateAdvisoryInsights';
 import { cleanupInsights } from './cleanupInsights';
+import { weeklyEmailDigest } from './weeklyEmailDigest';
 import { processEventBus } from './processEventBus';
 import { calculateROI } from './calculateROI';
 import { sectorBenchmark } from './sectorBenchmark';
@@ -102,6 +104,17 @@ import {
   runExpansionScout,
   runReputationWarRoom,
 } from './layer7Agents';
+import { instagramTrendAgent } from './instagramTrendAgent';
+import { facebookGroupTrendAgent } from './facebookGroupTrendAgent';
+import { googleTrendsScanAgent } from './googleTrendsScanAgent';
+import { visualTrendAnalyzer } from './visualTrendAnalyzer';
+import { commandChat } from './commandChat';
+import { submitSupportTicket } from './submitSupportTicket';
+import { submitFeedback } from './submitFeedback';
+import { systemHealthMonitor } from './systemHealthMonitor';
+import { intentClassification } from './intentClassification';
+import { otxSyncBridge } from './otxSyncBridge';
+import { competitorDataBootstrap } from './competitorDataBootstrap';
 
 const router = Router();
 
@@ -147,12 +160,15 @@ const FUNCTION_MAP: Record<string, any> = {
   detectCompetitorChanges,
   getAudienceSegments,
   analyzeCompetitorSocial,
+  detectCompetitorAds,
   detectEvents,
   findLocalEvents,
   detectDeliveryChanges,
   analyzeSocialComments,
   generateImage,
   chatWithBusiness,
+  commandChat,
+  submitSupportTicket,
   buildInsightAudience,
   generateWeeklyReport,
   generateMarketAnalysis,
@@ -205,6 +221,11 @@ const FUNCTION_MAP: Record<string, any> = {
   calculateROI,
   sectorBenchmark,
   smartScheduler,
+  // ── Trend intelligence agents (multi-platform, US+IL, visual) ────────────
+  instagramTrendAgent,
+  facebookGroupTrendAgent,
+  googleTrendsScanAgent,
+  visualTrendAnalyzer,
   // Layer 7 advanced agents
   runViralCatalyst,
   runInfluenceIntegrity,
@@ -214,6 +235,12 @@ const FUNCTION_MAP: Record<string, any> = {
   runCampaignAutopilot,
   runExpansionScout,
   runReputationWarRoom,
+  // New agents (Phase: audit & feedback loop)
+  submitFeedback,
+  systemHealthMonitor,
+  intentClassification,
+  otxSyncBridge,
+  competitorDataBootstrap,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,
@@ -229,6 +256,7 @@ const FUNCTION_MAP: Record<string, any> = {
   createCheckoutSession,
   manageSubscription,
   identifyKnowledgeGaps,
+  weeklyEmailDigest,
 };
 
 // POST /api/functions/:name

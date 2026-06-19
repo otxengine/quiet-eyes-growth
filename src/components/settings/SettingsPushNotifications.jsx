@@ -5,17 +5,17 @@ import { Bell, Mail, MessageSquare, Zap, Info } from 'lucide-react';
 const scoreOptions = [60, 70, 80, 90];
 
 export default function SettingsPushNotifications({ form, onToggle, onFieldChange }) {
-  const inputCls = "w-full bg-[#fafafa] border border-[#eeeeee] rounded-lg px-3 py-2 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-[#dddddd]";
+  const inputCls = "w-full bg-secondary/50 border border-border/60 rounded-lg px-3 py-2 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-border";
 
   return (
-    <div className="bg-white rounded-[10px] border border-[#f0f0f0] p-5 space-y-5">
+    <div className="bg-white rounded-[10px] border border-border/50 p-5 space-y-5">
       <div className="flex items-center gap-2">
         <div className="w-8 h-8 rounded-lg bg-[#f0fdf8] flex items-center justify-center">
           <Zap className="w-4 h-4 text-[#10b981]" />
         </div>
         <div>
           <h2 className="text-[14px] font-semibold text-[#222222]">התראות בזמן אמת — לידים חמים</h2>
-          <p className="text-[11px] text-[#999999]">קבל התראה מיידית כשנכנס ליד חם כדי ליצור קשר תוך דקות</p>
+          <p className="text-[11px] text-foreground-muted">קבל התראה מיידית כשנכנס ליד חם כדי ליצור קשר תוך דקות</p>
         </div>
       </div>
 
@@ -31,10 +31,10 @@ export default function SettingsPushNotifications({ form, onToggle, onFieldChang
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <Mail className="w-4 h-4 text-[#999999]" />
+            <Mail className="w-4 h-4 text-foreground-muted" />
             <div>
               <span className="text-[13px] font-medium text-[#222222] block">התראה במייל</span>
-              <span className="text-[11px] text-[#999999]">קבל מייל מיידי עם פרטי הליד ולינק ליצירת קשר</span>
+              <span className="text-[11px] text-foreground-muted">קבל מייל מיידי עם פרטי הליד ולינק ליצירת קשר</span>
             </div>
           </div>
           <Switch
@@ -46,10 +46,10 @@ export default function SettingsPushNotifications({ form, onToggle, onFieldChang
         {/* WhatsApp alerts */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <MessageSquare className="w-4 h-4 text-[#999999]" />
+            <MessageSquare className="w-4 h-4 text-foreground-muted" />
             <div>
               <span className="text-[13px] font-medium text-[#222222] block">התראה בוואטסאפ</span>
-              <span className="text-[11px] text-[#999999]">קבל הודעת וואטסאפ מיידית עם פרטי הליד</span>
+              <span className="text-[11px] text-foreground-muted">קבל הודעת וואטסאפ מיידית עם פרטי הליד</span>
             </div>
           </div>
           <Switch
@@ -61,7 +61,7 @@ export default function SettingsPushNotifications({ form, onToggle, onFieldChang
         {/* WhatsApp number input - shown only when WhatsApp alerts are on */}
         {form.push_whatsapp_alerts && (
           <div className="mr-7">
-            <label className="text-[12px] text-[#999999] mb-1 block">מספר וואטסאפ לקבלת התראות</label>
+            <label className="text-[12px] text-foreground-muted mb-1 block">מספר וואטסאפ לקבלת התראות</label>
             <input
               value={form.push_whatsapp_number || ''}
               onChange={(e) => onFieldChange('push_whatsapp_number', e.target.value)}
@@ -69,14 +69,14 @@ export default function SettingsPushNotifications({ form, onToggle, onFieldChang
               className={inputCls}
               dir="ltr"
             />
-            <p className="text-[10px] text-[#cccccc] mt-1">הזן את המספר שבו תרצה לקבל הודעות וואטסאפ</p>
+            <p className="text-[10px] text-foreground-muted/50 mt-1">הזן את המספר שבו תרצה לקבל הודעות וואטסאפ</p>
           </div>
         )}
       </div>
 
       {/* Minimum score threshold */}
       <div>
-        <label className="text-[12px] text-[#999999] mb-2 block">ניקוד מינימלי להתראה</label>
+        <label className="text-[12px] text-foreground-muted mb-2 block">ניקוד מינימלי להתראה</label>
         <div className="flex gap-2">
           {scoreOptions.map((score) => (
             <button
@@ -85,21 +85,21 @@ export default function SettingsPushNotifications({ form, onToggle, onFieldChang
               className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
                 (form.push_min_score || 80) === score
                   ? 'bg-[#111111] text-white'
-                  : 'text-[#aaaaaa] border border-[#eeeeee] hover:border-[#cccccc]'
+                  : 'text-foreground-muted/70 border border-border/60 hover:border-border-hover'
               }`}
             >
               {score}+
             </button>
           ))}
         </div>
-        <p className="text-[10px] text-[#cccccc] mt-1.5">
+        <p className="text-[10px] text-foreground-muted/50 mt-1.5">
           תקבל התראה רק על לידים עם ניקוד {form.push_min_score || 80} ומעלה (מתוך 100)
         </p>
       </div>
 
       {/* Status indicator */}
       {(form.push_email_alerts || form.push_whatsapp_alerts) && (
-        <div className="flex items-center gap-2 pt-2 border-t border-[#f5f5f5]">
+        <div className="flex items-center gap-2 pt-2 border-t border-border/40">
           <span className="w-2 h-2 rounded-full bg-[#10b981] pulse-glow" />
           <span className="text-[11px] text-[#10b981] font-medium">
             התראות בזמן אמת פעילות — 

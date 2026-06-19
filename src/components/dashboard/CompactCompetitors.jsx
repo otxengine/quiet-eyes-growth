@@ -19,31 +19,31 @@ export default function CompactCompetitors({ competitors = [], business }) {
   const navigate = useNavigate();
 
   return (
-    <div className="bg-white rounded-[10px] border border-[#f0f0f0] flex flex-col">
-      <div className="px-4 py-3 border-b border-[#f5f5f5]">
+    <div className="bg-white rounded-[10px] border border-border/50 flex flex-col">
+      <div className="px-4 py-3 border-b border-border/40">
         <h3 className="text-[13px] font-semibold text-[#222222]">מתחרים מובילים</h3>
       </div>
       <div className="divide-y divide-[#f5f5f5]">
         {business && (
           <div className="px-4 py-2 flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-[#f0f0f0] flex items-center justify-center text-[#111111] text-[8px] font-bold flex-shrink-0">
+            <div className="w-6 h-6 rounded-md bg-secondary flex items-center justify-center text-[#111111] text-[8px] font-bold flex-shrink-0">
               {business.name?.substring(0, 2)}
             </div>
             <span className="text-[11px] font-medium text-[#222222] flex-1 truncate">{business.name}</span>
             <span className="text-[10px] text-[#111111] font-medium">אתה</span>
-            <span className="text-[14px] font-semibold text-[#444444]">4.2</span>
+            <span className="text-[14px] font-semibold text-foreground-secondary">4.2</span>
           </div>
         )}
         {competitors.slice(0, 4).map((comp) => (
           <div
             key={comp.id}
-            className="px-4 py-2 flex items-center gap-2 cursor-pointer hover:bg-[#f5f5f5] transition-colors"
+            className="px-4 py-2 flex items-center gap-2 cursor-pointer hover:bg-secondary/60 transition-colors"
             onClick={() => navigate('/competitors')}
           >
-            <div className="w-6 h-6 rounded-md bg-[#f5f5f5] flex items-center justify-center text-[#999999] text-[8px] font-bold flex-shrink-0">
+            <div className="w-6 h-6 rounded-md bg-secondary/60 flex items-center justify-center text-foreground-muted text-[8px] font-bold flex-shrink-0">
               {comp.name?.substring(0, 2)}
             </div>
-            <span className="text-[11px] text-[#999999] flex-1 truncate">{comp.name}</span>
+            <span className="text-[11px] text-foreground-muted flex-1 truncate">{comp.name}</span>
             <Sparkline trend={comp.trend_direction} />
             <span className={`text-[14px] font-semibold ${comp.rating >= 4.3 ? 'text-[#10b981]' : comp.rating >= 4 ? 'text-[#d97706]' : 'text-[#dc2626]'}`}>
               {comp.rating != null ? Number(comp.rating).toFixed(1) : '—'}
@@ -51,7 +51,7 @@ export default function CompactCompetitors({ competitors = [], business }) {
           </div>
         ))}
         {competitors.length === 0 && !business && (
-          <div className="p-4 text-center text-[11px] text-[#999999]">טרם זוהו מתחרים</div>
+          <div className="p-4 text-center text-[11px] text-foreground-muted">טרם זוהו מתחרים</div>
         )}
       </div>
     </div>

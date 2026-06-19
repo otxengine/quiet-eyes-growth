@@ -9,7 +9,7 @@ import { Clock, AlertCircle } from 'lucide-react';
 export default function DataFreshnessBadge({ dateStr, maxAgeHours = 48, label }) {
   if (!dateStr) {
     return (
-      <span className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-[#f9f9f9] text-[#999999] border border-[#f0f0f0]">
+      <span className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-[#f9f9f9] text-foreground-muted border border-border/50">
         <AlertCircle className="w-3 h-3" /> אין נתונים
       </span>
     );

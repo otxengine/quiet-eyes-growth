@@ -22,7 +22,7 @@ export default function MonthlyGrowthChart({ signals = [], leads = [], reviews =
   }, [signals, leads, reviews]);
 
   return (
-    <div className="bg-white rounded-[10px] border border-[#f0f0f0] p-5">
+    <div className="bg-white rounded-[10px] border border-border/50 p-5">
       <h3 className="text-[14px] font-semibold text-[#222222] mb-4">מגמת צמיחה — 6 חודשים אחרונים</h3>
       <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
@@ -43,9 +43,9 @@ export default function MonthlyGrowthChart({ signals = [], leads = [], reviews =
         </ResponsiveContainer>
       </div>
       <div className="flex justify-center gap-5 mt-3">
-        <span className="flex items-center gap-1.5 text-[8.5px] text-[#cccccc]"><span className="w-2 h-[1px] bg-[#111111] inline-block" /> תובנות</span>
-        <span className="flex items-center gap-1.5 text-[8.5px] text-[#cccccc]"><span className="w-2 h-[1px] bg-[#10b981] inline-block" /> לידים</span>
-        <span className="flex items-center gap-1.5 text-[8.5px] text-[#cccccc]"><span className="w-2 h-[1px] bg-[#d97706] inline-block" /> ביקורות</span>
+        <span className="flex items-center gap-1.5 text-[8.5px] text-foreground-muted/50"><span className="w-2 h-[1px] bg-[#111111] inline-block" /> תובנות</span>
+        <span className="flex items-center gap-1.5 text-[8.5px] text-foreground-muted/50"><span className="w-2 h-[1px] bg-[#10b981] inline-block" /> לידים</span>
+        <span className="flex items-center gap-1.5 text-[8.5px] text-foreground-muted/50"><span className="w-2 h-[1px] bg-[#d97706] inline-block" /> ביקורות</span>
       </div>
     </div>
   );

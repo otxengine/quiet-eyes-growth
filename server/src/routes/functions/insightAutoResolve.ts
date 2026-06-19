@@ -51,7 +51,7 @@ export async function insightAutoResolve(businessProfileId: string): Promise<num
 
       // Auto-dismiss stale alerts
       if (isStale && alert.alert_type !== 'monthly_strategy') {
-        await prisma.proactiveAlert.update({
+        await prisma.proactiveAlert.updateMany({
           where: { id: alert.id },
           data:  { is_dismissed: true },
         });
@@ -61,7 +61,7 @@ export async function insightAutoResolve(businessProfileId: string): Promise<num
 
       // hot_lead → if no hot leads remain, the situation changed
       if (alert.alert_type === 'hot_lead' && !hasHotLeads) {
-        await prisma.proactiveAlert.update({
+        await prisma.proactiveAlert.updateMany({
           where: { id: alert.id },
           data:  { is_acted_on: true },
         });
@@ -71,7 +71,7 @@ export async function insightAutoResolve(businessProfileId: string): Promise<num
 
       // negative_review → if no unanswered negative reviews remain
       if (alert.alert_type === 'negative_review' && !hasNegReviews) {
-        await prisma.proactiveAlert.update({
+        await prisma.proactiveAlert.updateMany({
           where: { id: alert.id },
           data:  { is_acted_on: true },
         });
@@ -87,7 +87,7 @@ export async function insightAutoResolve(businessProfileId: string): Promise<num
           return alertKeywords.some(kw => desc.includes(kw));
         });
         if (hasMatchingAction) {
-          await prisma.proactiveAlert.update({
+          await prisma.proactiveAlert.updateMany({
             where: { id: alert.id },
             data:  { is_acted_on: true },
           });

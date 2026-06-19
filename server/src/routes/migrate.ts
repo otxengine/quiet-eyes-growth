@@ -7,11 +7,12 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
 
 const router = Router();
-const MIGRATION_SECRET = process.env.MIGRATION_SECRET || 'otx-migrate-2026';
+// No default secret — must be explicitly set in env or use admin key
+const MIGRATION_SECRET = process.env.MIGRATION_SECRET;
 
 router.post('/', async (req: Request, res: Response) => {
   const { isAdminKeyRequest } = require('../middleware/auth');
-  const validMigrationSecret = req.headers['x-migration-secret'] === MIGRATION_SECRET;
+  const validMigrationSecret = !!MIGRATION_SECRET && req.headers['x-migration-secret'] === MIGRATION_SECRET;
   const validAdminKey = isAdminKeyRequest(req);
   if (!validMigrationSecret && !validAdminKey) {
     return res.status(403).json({ error: 'Forbidden' });
@@ -654,6 +655,64 @@ router.post('/', async (req: Request, res: Response) => {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_social_comments_biz ON social_comments(linked_business, created_time DESC)`,
     `CREATE INDEX IF NOT EXISTS idx_social_comments_unanswered ON social_comments(linked_business, reply_sent, is_dismissed)`,
+    // ── Trend intelligence tables ──────────────────────────────────────────────
+
+    // Checkpoint memory: prevents duplicate scanning across server restarts
+    `CREATE TABLE IF NOT EXISTS trend_scan_checkpoint (
+      checkpoint_key    TEXT        PRIMARY KEY,
+      last_scan_at      TIMESTAMPTZ,
+      scanned_item_ids  TEXT        DEFAULT '[]',
+      scanned_urls      TEXT        DEFAULT '[]',
+      scan_meta         TEXT        DEFAULT '{}',
+      created_at        TIMESTAMPTZ DEFAULT NOW(),
+      updated_at        TIMESTAMPTZ DEFAULT NOW()
+    )`,
+
+    // Global cross-platform trend store (populated by all trend agents)
+    `CREATE TABLE IF NOT EXISTS platform_trend (
+      id                       TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      platform                 TEXT        NOT NULL,
+      region                   TEXT        NOT NULL DEFAULT 'IL',
+      trend_type               TEXT        NOT NULL,
+      trend_name               TEXT        NOT NULL,
+      applicable_sectors       TEXT        DEFAULT '[]',
+      growth_rate              REAL,
+      volume_estimate          REAL,
+      stage                    TEXT,
+      evidence_urls            TEXT        DEFAULT '[]',
+      visual_analysis          TEXT,
+      is_us_leading_indicator  BOOLEAN     DEFAULT false,
+      us_detected_at           TIMESTAMPTZ,
+      first_detected_at        TIMESTAMPTZ DEFAULT NOW(),
+      last_seen_at             TIMESTAMPTZ DEFAULT NOW(),
+      confidence               REAL        DEFAULT 70,
+      linked_business          TEXT,
+      source_agent             TEXT,
+      created_at               TIMESTAMPTZ DEFAULT NOW()
+    )`,
+
+    // Individual media items analyzed by Gemini Flash Vision
+    `CREATE TABLE IF NOT EXISTS visual_trend_item (
+      id                  TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      platform_trend_id   TEXT        REFERENCES platform_trend(id) ON DELETE CASCADE,
+      url                 TEXT        NOT NULL UNIQUE,
+      thumbnail_url       TEXT,
+      media_type          TEXT,
+      platform            TEXT        NOT NULL,
+      region              TEXT        DEFAULT 'IL',
+      detected_products   TEXT        DEFAULT '[]',
+      detected_services   TEXT        DEFAULT '[]',
+      detected_keywords   TEXT        DEFAULT '[]',
+      aesthetic_tags      TEXT        DEFAULT '[]',
+      engagement_metrics  TEXT,
+      visual_analysis     TEXT,
+      analyzed_at         TIMESTAMPTZ DEFAULT NOW(),
+      linked_business     TEXT
+    )`,
+
+    // market_signals: add visual_trend to supported categories
+    `ALTER TABLE market_signals ADD COLUMN IF NOT EXISTS is_us_leading_indicator BOOLEAN DEFAULT false`,
+    `ALTER TABLE market_signals ADD COLUMN IF NOT EXISTS region TEXT DEFAULT 'IL'`,
   ];
 
   for (const sql of statements) {

@@ -10,12 +10,12 @@ import ActionPopup from '@/components/ui/ActionPopup';
 const PLATFORM_BADGE = {
   instagram: { icon: '📸', label: 'Instagram', cls: 'bg-pink-50 text-pink-600 border-pink-200' },
   facebook:  { icon: '👤', label: 'Facebook',  cls: 'bg-blue-50 text-blue-600 border-blue-200' },
-  tiktok:    { icon: '🎵', label: 'TikTok',    cls: 'bg-gray-100 text-gray-700 border-gray-300' },
+  tiktok:    { icon: '🎵', label: 'TikTok',    cls: 'bg-secondary text-foreground-secondary border-border-hover' },
   google:    { icon: '⭐', label: 'Google',    cls: 'bg-red-50 text-red-600 border-red-200' },
   whatsapp:  { icon: '💬', label: 'WhatsApp',  cls: 'bg-green-50 text-green-700 border-green-200' },
   wolt:      { icon: '🛵', label: 'Wolt',      cls: 'bg-sky-50 text-sky-600 border-sky-200' },
   ten_bis:   { icon: '🍽️', label: 'תן ביס',   cls: 'bg-orange-50 text-orange-600 border-orange-200' },
-  website:   { icon: '🌐', label: 'אתר',       cls: 'bg-gray-50 text-gray-600 border-gray-200' },
+  website:   { icon: '🌐', label: 'אתר',       cls: 'bg-secondary/50 text-foreground-secondary border-border' },
 };
 
 const CATEGORY_LABELS = {
@@ -29,7 +29,7 @@ const CATEGORY_LABELS = {
 const IMPACT_LABELS = {
   high:   { label: 'השפעה גבוהה',   cls: 'bg-red-50 text-red-700 border-red-200' },
   medium: { label: 'השפעה בינונית', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-  low:    { label: 'השפעה נמוכה',   cls: 'bg-gray-50 text-gray-600 border-gray-200' },
+  low:    { label: 'השפעה נמוכה',   cls: 'bg-secondary/50 text-foreground-secondary border-border' },
 };
 
 const ACTION_ICON = { social_post: '📣', respond: '💬', promote: '🎯', call: '📞', task: '✅', post_publish: '📣' };
@@ -166,7 +166,7 @@ export default function SignalDetail() {
   try { meta = JSON.parse(signal.source_description || '{}'); } catch {}
 
   const platInfo = PLATFORM_BADGE[meta.action_platform];
-  const catInfo  = CATEGORY_LABELS[signal.category] || { label: 'כללי', cls: 'bg-gray-50 text-gray-600 border-gray-200' };
+  const catInfo  = CATEGORY_LABELS[signal.category] || { label: 'כללי', cls: 'bg-secondary/50 text-foreground-secondary border-border' };
   const impInfo  = IMPACT_LABELS[signal.impact_level] || IMPACT_LABELS.medium;
 
   const sourceUrls = (signal.source_urls || signal.source_signals || '')
@@ -402,7 +402,7 @@ export default function SignalDetail() {
                     <p className="text-[10px] text-foreground-muted">{task.status === 'completed' ? 'הושלם' : task.status === 'in_progress' ? 'בביצוע' : 'ממתין'}</p>
                   </div>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                    task.priority === 'high' ? 'bg-red-50 text-red-600' : task.priority === 'medium' ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-600'
+                    task.priority === 'high' ? 'bg-red-50 text-red-600' : task.priority === 'medium' ? 'bg-amber-50 text-amber-700' : 'bg-secondary/50 text-foreground-secondary'
                   }`}>
                     {task.priority === 'high' ? 'גבוה' : task.priority === 'medium' ? 'בינוני' : 'נמוך'}
                   </span>

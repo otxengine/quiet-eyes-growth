@@ -19,6 +19,27 @@ export async function logOutcome(req: Request, res: Response) {
         created_by: userId || undefined,
       },
     });
+
+    // Also write FeedbackEvent so runMLLearningCycle can learn from it
+    if (linked_business) {
+      try {
+        await prisma.feedbackEvent.create({
+          data: {
+            linked_business,
+            ai_output_id: linked_action || record.id,
+            agent_name: action_type || 'unknown',
+            output_type: 'OutcomeLog',
+            rating: was_accepted === true ? 'positive' : 'negative',
+            score: was_accepted === true ? 1 : -1,
+            tags: was_accepted === true ? 'accepted' : 'rejected',
+          },
+        });
+      } catch (fbErr: any) {
+        // Non-fatal: log but don't fail the outcome log write
+        console.warn('logOutcome: FeedbackEvent write failed:', fbErr.message);
+      }
+    }
+
     return res.json({ success: true, id: record.id });
   } catch (err: any) {
     console.error('logOutcome error:', err.message);

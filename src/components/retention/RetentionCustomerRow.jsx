@@ -55,7 +55,7 @@ export default function RetentionCustomerRow({ customer, businessProfile }) {
         </div>
         <div className="flex-1 min-w-0">
           <span className="text-[13px] font-medium text-[#222222] block">{customer.name}</span>
-          <span className="text-[12px] text-[#999999] block truncate">{customer.detail}</span>
+          <span className="text-[12px] text-foreground-muted block truncate">{customer.detail}</span>
         </div>
         {sent ? (
           <span className="text-[11px] font-medium text-[#10b981]">ההודעה נשמרה ✓</span>
@@ -72,15 +72,15 @@ export default function RetentionCustomerRow({ customer, businessProfile }) {
           <div className="flex gap-1.5 mb-2">
             {Object.keys(templateFocus).map((label) => (
               <button key={label} onClick={() => generateMessage(label)} disabled={generating}
-                className="px-2 py-1 text-[11px] font-medium text-[#aaaaaa] border border-[#eeeeee] rounded-md hover:border-[#cccccc] hover:text-[#666666] transition-colors">{label}</button>
+                className="px-2 py-1 text-[11px] font-medium text-foreground-muted/70 border border-border/60 rounded-md hover:border-border-hover hover:text-foreground-secondary transition-colors">{label}</button>
             ))}
           </div>
           <label className="text-[12px] text-[#222222] font-medium mb-1.5 block">הודעת שימור מוצעת:</label>
           <textarea value={messageText} onChange={(e) => setMessageText(e.target.value)} rows={4}
-            className="w-full bg-[#fafafa] border border-[#eeeeee] rounded-lg p-3 text-[13px] text-[#444444] resize-none focus:outline-none focus:border-[#dddddd]" />
+            className="w-full bg-secondary/50 border border-border/60 rounded-lg p-3 text-[13px] text-foreground-secondary resize-none focus:outline-none focus:border-border" />
           <div className="flex gap-2 mt-2">
             <button onClick={handleSend} className="px-4 py-2 text-[12px] font-medium bg-[#111111] text-white rounded-md hover:bg-[#333333] transition-colors">שלח ✓</button>
-            <button onClick={() => setExpanded(false)} className="px-3 py-1.5 text-[12px] font-medium text-[#aaaaaa] border border-[#eeeeee] rounded-md hover:border-[#cccccc] transition-colors">בטל</button>
+            <button onClick={() => setExpanded(false)} className="px-3 py-1.5 text-[12px] font-medium text-foreground-muted/70 border border-border/60 rounded-md hover:border-border-hover transition-colors">בטל</button>
           </div>
         </div>
       )}

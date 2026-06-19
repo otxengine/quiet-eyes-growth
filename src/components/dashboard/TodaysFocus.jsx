@@ -47,7 +47,7 @@ function FocusItem({ item, onDone }) {
     critical: { cls: 'bg-red-100 text-red-700', label: 'דחוף מאוד' },
     high:     { cls: 'bg-orange-100 text-orange-700', label: 'גבוה' },
     medium:   { cls: 'bg-yellow-100 text-yellow-700', label: 'בינוני' },
-    low:      { cls: 'bg-gray-100 text-gray-600', label: 'נמוך' },
+    low:      { cls: 'bg-secondary text-foreground-secondary', label: 'נמוך' },
     hot:      { cls: 'bg-red-100 text-red-700', label: 'חם' },
     negative: { cls: 'bg-red-100 text-red-700', label: 'שלילי' },
   };

@@ -6,7 +6,7 @@ const AuthContext = createContext();
 const DEV_USERS = [
   {
     id: 'dev-user',
-    email: 'dev@quieteyes.local',
+    email: 'dev@cortexi.local',
     full_name: 'Dev User',
     first_name: 'Dev',
     last_name: 'User',
@@ -14,7 +14,7 @@ const DEV_USERS = [
   },
   {
     id: 'dev-user-2',
-    email: 'yael@quieteyes.local',
+    email: 'yael@cortexi.local',
     full_name: 'Yael Cohen',
     first_name: 'Yael',
     last_name: 'Cohen',
@@ -22,7 +22,7 @@ const DEV_USERS = [
   },
   {
     id: 'dev-user-3',
-    email: 'moshe@quieteyes.local',
+    email: 'moshe@cortexi.local',
     full_name: 'Moshe Levi',
     first_name: 'Moshe',
     last_name: 'Levi',

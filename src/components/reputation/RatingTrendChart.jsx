@@ -94,7 +94,7 @@ export default function RatingTrendChart({ reviews = [] }) {
           <div className="flex flex-col items-center">
             {trend === 'up'   && <TrendingUp className="w-4 h-4" style={{ color }} />}
             {trend === 'down' && <TrendingDown className="w-4 h-4" style={{ color }} />}
-            {trend === 'stable' && <Minus className="w-4 h-4 text-gray-400" />}
+            {trend === 'stable' && <Minus className="w-4 h-4 text-foreground-muted/70" />}
             <span className="text-[9px]" style={{ color }}>
               {delta > 0 ? '+' : ''}{delta !== 0 ? delta.toFixed(2) : 'יציב'}
             </span>

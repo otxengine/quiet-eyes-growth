@@ -32,13 +32,13 @@ export default function Autocomplete({ value, onChange, placeholder, suggestions
         onFocus={() => setOpen(true)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className="w-full bg-[#fafafa] border border-[#eeeeee] rounded-lg px-3 py-2.5 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-[#dddddd]"
+        className="w-full bg-secondary/50 border border-border/60 rounded-lg px-3 py-2.5 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-border"
       />
       {showDropdown && (
-        <div className="absolute z-50 top-full mt-1 w-full max-h-48 overflow-y-auto rounded-[10px] border border-[#f0f0f0] bg-white">
+        <div className="absolute z-50 top-full mt-1 w-full max-h-48 overflow-y-auto rounded-[10px] border border-border/50 bg-white">
           {filtered.map((item, i) => (
             <button key={item} type="button"
-              className={cn("w-full text-right px-3 py-2 text-sm transition-colors", i === highlightIndex ? "bg-[#f5f5f5] text-[#111111]" : "text-[#444444] hover:bg-[#fafafa]")}
+              className={cn("w-full text-right px-3 py-2 text-sm transition-colors", i === highlightIndex ? "bg-secondary/60 text-[#111111]" : "text-foreground-secondary hover:bg-secondary/50")}
               onMouseDown={() => { onChange(item); setOpen(false); }}>{item}</button>
           ))}
         </div>

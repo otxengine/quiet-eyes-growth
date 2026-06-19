@@ -200,7 +200,7 @@ export default function Retention() {
               <div key={survey.id} className="flex items-center gap-3 p-3 rounded-lg bg-secondary">
                 <div className="flex gap-0.5">
                   {[1, 2, 3, 4, 5].map(n => (
-                    <Star key={n} className={`w-3 h-3 ${n <= (survey.rating || 0) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'}`} />
+                    <Star key={n} className={`w-3 h-3 ${n <= (survey.rating || 0) ? 'text-amber-400 fill-amber-400' : 'text-border'}`} />
                   ))}
                 </div>
                 <div className="flex-1 min-w-0">

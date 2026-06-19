@@ -57,14 +57,14 @@ export default function SettingsLearnBusiness({ businessProfile }) {
   };
 
   return (
-    <div className="bg-white rounded-[10px] border border-[#f0f0f0] p-5 space-y-5">
+    <div className="bg-white rounded-[10px] border border-border/50 p-5 space-y-5">
       <div className="flex items-center gap-2.5">
         <div className="w-9 h-9 rounded-lg bg-[#eef2ff] flex items-center justify-center">
           <BookOpen className="w-5 h-5 text-[#6366f1]" />
         </div>
         <div>
           <h2 className="text-[14px] font-semibold text-[#222222]">למידת עסק אוטומטית</h2>
-          <p className="text-[11px] text-[#999999]">סרוק את האתר שלך כדי שהבוט ילמד על השירותים, המחירים וערכי המותג</p>
+          <p className="text-[11px] text-foreground-muted">סרוק את האתר שלך כדי שהבוט ילמד על השירותים, המחירים וערכי המותג</p>
         </div>
       </div>
 
@@ -75,7 +75,7 @@ export default function SettingsLearnBusiness({ businessProfile }) {
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://www.example.co.il"
           dir="ltr"
-          className="flex-1 bg-[#fafafa] border border-[#eeeeee] rounded-lg px-3 py-2.5 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-[#dddddd]"
+          className="flex-1 bg-secondary/50 border border-border/60 rounded-lg px-3 py-2.5 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-border"
         />
         <button
           onClick={handleScan}
@@ -97,11 +97,11 @@ export default function SettingsLearnBusiness({ businessProfile }) {
 
       {/* Knowledge items */}
       {loading ? (
-        <div className="text-center py-4"><Loader2 className="w-5 h-5 animate-spin text-[#999999] mx-auto" /></div>
+        <div className="text-center py-4"><Loader2 className="w-5 h-5 animate-spin text-foreground-muted mx-auto" /></div>
       ) : knowledge.length > 0 ? (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[12px] font-medium text-[#666666]">
+            <span className="text-[12px] font-medium text-foreground-secondary">
               <CheckCircle className="w-3.5 h-3.5 inline text-[#10b981] ml-1" />
               {knowledge.length} פריטי ידע נלמדו
             </span>
@@ -111,7 +111,7 @@ export default function SettingsLearnBusiness({ businessProfile }) {
             </button>
           </div>
           {knowledge.map((item) => (
-            <div key={item.id} className="bg-[#fafafa] border border-[#f0f0f0] rounded-lg p-3 group">
+            <div key={item.id} className="bg-secondary/50 border border-border/50 rounded-lg p-3 group">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
@@ -119,14 +119,14 @@ export default function SettingsLearnBusiness({ businessProfile }) {
                       {typeLabels[item.knowledge_type] || '📝 כללי'}
                     </span>
                     {item.confidence && (
-                      <span className="text-[10px] text-[#aaaaaa]">{item.confidence}% ביטחון</span>
+                      <span className="text-[10px] text-foreground-muted/70">{item.confidence}% ביטחון</span>
                     )}
                   </div>
                   <h3 className="text-[13px] font-medium text-[#222222]">{item.title}</h3>
-                  <p className="text-[11px] text-[#888888] mt-0.5 line-clamp-2">{item.content}</p>
+                  <p className="text-[11px] text-foreground-muted mt-0.5 line-clamp-2">{item.content}</p>
                 </div>
                 <button onClick={() => handleDelete(item.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-[#cccccc] hover:text-[#dc2626] transition-all">
+                  className="opacity-0 group-hover:opacity-100 p-1 text-foreground-muted/50 hover:text-[#dc2626] transition-all">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -134,7 +134,7 @@ export default function SettingsLearnBusiness({ businessProfile }) {
           ))}
         </div>
       ) : (
-        <div className="text-center py-6 text-[#cccccc]">
+        <div className="text-center py-6 text-foreground-muted/50">
           <Globe className="w-8 h-8 mx-auto mb-2 opacity-40" />
           <p className="text-[12px]">עדיין לא נלמד מידע — הזן כתובת אתר ולחץ "סרוק אתר"</p>
         </div>

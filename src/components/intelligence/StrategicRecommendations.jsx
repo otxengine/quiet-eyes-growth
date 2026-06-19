@@ -5,7 +5,7 @@ import ActionPopup from '@/components/ui/ActionPopup';
 import { useNavigate } from 'react-router-dom';
 
 export const CATEGORY_META = {
-  competitive: { icon: Target,      label: 'תחרותי',   color: 'text-indigo-600', bg: 'bg-indigo-50',  border: 'border-indigo-100' },
+  competitive: { icon: Target,      label: 'תחרותי',   color: 'text-violet-600', bg: 'bg-violet-50',  border: 'border-violet-100' },
   opportunity: { icon: TrendingUp,  label: 'הזדמנות',  color: 'text-green-600',  bg: 'bg-green-50',   border: 'border-green-100'  },
   defensive:   { icon: Shield,      label: 'הגנתי',    color: 'text-amber-600',  bg: 'bg-amber-50',   border: 'border-amber-100'  },
   general:     { icon: Lightbulb,   label: 'כללי',     color: 'text-blue-600',   bg: 'bg-blue-50',    border: 'border-blue-100'   },
@@ -21,11 +21,11 @@ function StrategyCard({ item, businessProfile, index }) {
 
   return (
     <>
-    <div className={`rounded-xl border ${expanded ? meta.border : 'border-[#eeeeee]'} overflow-hidden transition-all`}>
+    <div className={`rounded-xl border ${expanded ? meta.border : 'border-border/60'} overflow-hidden transition-all`}>
       {/* Collapsed header */}
       <button
         onClick={() => setExpanded(v => !v)}
-        className={`w-full flex items-center gap-3 px-4 py-3 text-right transition-colors ${expanded ? meta.bg : 'bg-white hover:bg-[#fafafa]'}`}
+        className={`w-full flex items-center gap-3 px-4 py-3 text-right transition-colors ${expanded ? meta.bg : 'bg-white hover:bg-secondary/50'}`}
       >
         <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${meta.bg} border ${meta.border}`}>
           <Icon className={`w-3.5 h-3.5 ${meta.color}`} />
@@ -33,7 +33,7 @@ function StrategyCard({ item, businessProfile, index }) {
         <div className="flex-1 min-w-0 text-right">
           <p className="text-[12px] font-semibold text-[#222222] truncate">{item.title}</p>
           {!expanded && (
-            <p className="text-[10px] text-[#888888] truncate mt-0.5">{item.summary}</p>
+            <p className="text-[10px] text-foreground-muted truncate mt-0.5">{item.summary}</p>
           )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -41,15 +41,15 @@ function StrategyCard({ item, businessProfile, index }) {
             {meta.label}
           </span>
           {expanded
-            ? <ChevronUp className="w-3.5 h-3.5 text-[#bbbbbb]" />
-            : <ChevronDown className="w-3.5 h-3.5 text-[#bbbbbb]" />}
+            ? <ChevronUp className="w-3.5 h-3.5 text-foreground-muted/70" />
+            : <ChevronDown className="w-3.5 h-3.5 text-foreground-muted/70" />}
         </div>
       </button>
 
       {/* Expanded body */}
       {expanded && (
         <div className={`px-4 pb-4 pt-2 ${meta.bg} border-t ${meta.border}`}>
-          <p className="text-[11px] text-[#444444] leading-relaxed mb-3">{item.detail}</p>
+          <p className="text-[11px] text-foreground-secondary leading-relaxed mb-3">{item.detail}</p>
 
           {item.steps?.length > 0 && (
             <div className="space-y-1.5 mb-3">
@@ -199,7 +199,7 @@ JSON בלבד:
       {loading && (
         <div className="p-4 space-y-2 animate-pulse">
           {[0, 1, 2, 3].map(i => (
-            <div key={i} className="h-12 rounded-xl bg-gray-100" />
+            <div key={i} className="h-12 rounded-xl bg-secondary" />
           ))}
         </div>
       )}

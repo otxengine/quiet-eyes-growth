@@ -9,6 +9,7 @@ import TaskStatsBar from '@/components/tasks/TaskStatsBar';
 import AddTaskModal from '@/components/tasks/AddTaskModal';
 import AiInsightBox from '@/components/ai/AiInsightBox';
 import { ApprovalsPanel } from './Approvals';
+import EmptyState from '@/components/ui/EmptyState';
 
 const filterTabs = [
   { key: 'all', label: 'הכל' },
@@ -111,14 +112,13 @@ export default function Tasks() {
         </>
       )}
 
-      <div className="flex gap-0.5 border-b border-border">
+      <div className="flex gap-1 p-1 bg-secondary/50 rounded-xl w-fit">
         {filterTabs.map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2.5 text-[12px] font-medium transition-all duration-150 relative ${
-              activeTab === tab.key ? 'text-foreground' : 'text-foreground-muted hover:text-foreground-secondary'
+            className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-all ${
+              activeTab === tab.key ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
             }`}>
             {tab.label}
-            {activeTab === tab.key && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-foreground rounded-t" />}
           </button>
         ))}
       </div>
@@ -126,18 +126,13 @@ export default function Tasks() {
       {activeTab === 'approvals' ? (
         <ApprovalsPanel bpId={bpId} />
       ) : sorted.length === 0 ? (
-        <div className="card-base py-20 text-center">
-          <ClipboardList className="w-12 h-12 text-foreground-muted opacity-20 mx-auto mb-3" />
-          <p className="text-[13px] text-foreground-muted mb-4">
-            {activeTab === 'all' ? 'עוד אין משימות — צור משימה חדשה או הפוך התראת AI למשימה' : 'אין משימות בפילטר הנוכחי'}
-          </p>
-          {activeTab === 'all' && (
-            <button onClick={() => setShowAddModal(true)}
-              className="btn-subtle px-5 py-2.5 rounded-lg text-[12px] font-medium bg-foreground text-background hover:opacity-90 transition-all">
-              + משימה ראשונה
-            </button>
-          )}
-        </div>
+        <EmptyState
+          icon={ClipboardList}
+          title={activeTab === 'all' ? 'עוד אין משימות' : 'אין משימות בפילטר הנוכחי'}
+          description={activeTab === 'all' ? 'צור משימה חדשה או הפוך התראת AI למשימה' : undefined}
+          action={activeTab === 'all' ? () => setShowAddModal(true) : undefined}
+          actionLabel="+ משימה ראשונה"
+        />
       ) : (
         <div className="space-y-2">
           {sorted.map(task => <TaskCard key={task.id} task={task} />)}

@@ -20,7 +20,7 @@ export default function SettingsWhatsAppAlerts({ form, onToggle, onFieldChange }
           onChange={(e) => onFieldChange('wa_alert_phone', e.target.value)}
           placeholder="05X-XXXXXXX"
           dir="ltr"
-          className="w-full bg-[#fafafa] border border-[#eeeeee] rounded-lg px-3 py-2 text-[13px] text-foreground placeholder-[#cccccc] focus:outline-none focus:border-[#dddddd]"
+          className="w-full bg-secondary/50 border border-border/60 rounded-lg px-3 py-2 text-[13px] text-foreground placeholder-[#cccccc] focus:outline-none focus:border-border"
         />
       </div>
 

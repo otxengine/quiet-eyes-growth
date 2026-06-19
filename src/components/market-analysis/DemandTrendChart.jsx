@@ -29,11 +29,11 @@ export default function DemandTrendChart({ signals }) {
   const hasData = signals.length > 0;
 
   return (
-    <div className="bg-white rounded-[10px] border border-[#f0f0f0] p-5">
+    <div className="bg-white rounded-[10px] border border-border/50 p-5">
       <h3 className="text-[13px] font-semibold text-[#222222] mb-1">מגמות ביקוש בשוק</h3>
-      <p className="text-[10px] text-[#999999] mb-4">30 ימים אחרונים — מבוסס על סיגנלים שנאספו</p>
+      <p className="text-[10px] text-foreground-muted mb-4">30 ימים אחרונים — מבוסס על סיגנלים שנאספו</p>
       {!hasData ? (
-        <p className="text-[12px] text-[#999999] text-center py-10">אין נתונים עדיין</p>
+        <p className="text-[12px] text-foreground-muted text-center py-10">אין נתונים עדיין</p>
       ) : (
         <div className="h-[260px]">
           <ResponsiveContainer width="100%" height="100%">

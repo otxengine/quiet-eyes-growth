@@ -60,7 +60,7 @@ export default function LeadFirstContactModal({ lead, businessProfile, onClose, 
       <div className="relative bg-white border border-border rounded-[10px] p-5 w-full max-w-md mx-4 z-10">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-bold text-foreground">הודעה ראשונית ל-{lead.name}</h3>
-          <button onClick={onClose} className="text-[#cccccc] hover:text-[#999999]"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="text-foreground-muted/50 hover:text-foreground-muted"><X className="w-4 h-4" /></button>
         </div>
 
         {loading ? (
@@ -71,7 +71,7 @@ export default function LeadFirstContactModal({ lead, businessProfile, onClose, 
         ) : (
           <div className="space-y-3">
             <textarea value={message} onChange={(e) => setMessage(e.target.value)}
-              rows={5} className="w-full bg-[#fafafa] border border-[#eeeeee] rounded-lg p-3 text-[13px] text-[#333333] resize-none focus:outline-none focus:border-[#dddddd]" />
+              rows={5} className="w-full bg-secondary/50 border border-border/60 rounded-lg p-3 text-[13px] text-[#333333] resize-none focus:outline-none focus:border-border" />
             <div className="flex gap-2">
               <button onClick={handleSend} disabled={!phone || !message}
                 className="flex-1 py-2.5 rounded-md text-[12px] font-medium bg-foreground text-background hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2">

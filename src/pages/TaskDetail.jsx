@@ -16,7 +16,7 @@ const PRIORITY_CONFIG = {
   critical: { label: 'קריטי', dot: 'bg-red-500',     badge: 'bg-red-50 text-red-600 border-red-200' },
   high:     { label: 'גבוה',  dot: 'bg-amber-500',   badge: 'bg-amber-50 text-amber-700 border-amber-200' },
   medium:   { label: 'בינוני', dot: 'bg-blue-500',   badge: 'bg-blue-50 text-blue-600 border-blue-200' },
-  low:      { label: 'נמוך',  dot: 'bg-gray-400',    badge: 'bg-gray-50 text-gray-600 border-gray-200' },
+  low:      { label: 'נמוך',  dot: 'bg-gray-400',    badge: 'bg-secondary/50 text-foreground-secondary border-border' },
 };
 
 function parseDescription(description = '') {

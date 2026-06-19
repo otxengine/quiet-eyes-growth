@@ -57,6 +57,12 @@ import SocialComments from '@/pages/SocialComments.jsx';
 import AdminDashboard from '@/pages/AdminDashboard.jsx';
 import AdminLayout from '@/components/layout/AdminLayout';
 import DevUserSwitcher from '@/components/DevUserSwitcher';
+import OrganizationSettings from '@/pages/OrganizationSettings.jsx';
+import AgencyDashboard from '@/pages/AgencyDashboard.jsx';
+import JoinPage from '@/pages/JoinPage.jsx';
+import CommandHome from '@/pages/CommandHome.jsx';
+import ChatPage from '@/pages/Chat.jsx';
+import { OrganizationProvider } from '@/contexts/OrganizationContext';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated, navigateToLogin } = useAuth();
@@ -64,7 +70,7 @@ const AuthenticatedApp = () => {
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-white">
-        <div className="w-8 h-8 border-4 border-[#f0f0f0] border-t-[#111111] rounded-full animate-spin"></div>
+        <div className="w-8 h-8 border-4 border-border/50 border-t-[#111111] rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -99,12 +105,12 @@ const AuthenticatedApp = () => {
     return (
       <Routes>
         <Route path="/sign-in/*" element={
-          <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="min-h-screen flex items-center justify-center bg-secondary/50">
             <SignIn routing="path" path="/sign-in" fallbackRedirectUrl="/" />
           </div>
         } />
         <Route path="/sign-up/*" element={
-          <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="min-h-screen flex items-center justify-center bg-secondary/50">
             <SignUp routing="path" path="/sign-up" fallbackRedirectUrl="/onboarding" />
           </div>
         } />
@@ -119,6 +125,7 @@ const AuthenticatedApp = () => {
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
         </Route>
+        <Route path="/join" element={<JoinPage />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>
     );
@@ -139,6 +146,9 @@ const AuthenticatedApp = () => {
         <Route path="/privacy" element={<PrivacyPage />} />
       </Route>
 
+      {/* Invite join — accessible without app layout */}
+      <Route path="/join" element={<JoinPage />} />
+
       {/* Onboarding flow */}
       <Route path="/onboarding/*" element={<Onboarding />} />
 
@@ -151,6 +161,7 @@ const AuthenticatedApp = () => {
       <Route element={<AppLayout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/command" element={<Navigate to="/" replace />} />
         <Route path="/signals" element={<Navigate to="/insights" replace />} />
         <Route path="/competitors" element={<Competitors />} />
         <Route path="/events" element={<Events />} />
@@ -180,6 +191,10 @@ const AuthenticatedApp = () => {
         <Route path="/demand-gap" element={<DemandGap />} />
         <Route path="/approvals" element={<Approvals />} />
         <Route path="/event-bus" element={<EventBusDashboard />} />
+        <Route path="/org/settings" element={<OrganizationSettings />} />
+        <Route path="/agency" element={<AgencyDashboard />} />
+        <Route path="/chat" element={<ChatPage />} />
+        <Route path="/command" element={<CommandHome />} />
         <Route path="*" element={<PageNotFound />} />
       </Route>
 
@@ -192,12 +207,14 @@ function App() {
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
+        <OrganizationProvider>
         <Router future={ROUTER_FUTURE}>
           <AuthenticatedApp />
         </Router>
         <Toaster />
         <SonnerToaster position="top-center" richColors />
         <DevUserSwitcher />
+        </OrganizationProvider>
       </QueryClientProvider>
     </AuthProvider>
   )

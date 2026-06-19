@@ -1,128 +1,92 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {
+  ChevronLeft, ChevronRight, LogOut,
+  ShieldAlert, Sparkles, Bot, Building2, GitBranch, User,
   LayoutGrid, Eye, Users, Star, CheckCircle, Heart, Settings,
-  ChevronRight, ChevronLeft, ChevronDown, LogOut, FileBarChart,
-  ClipboardList, Database, Bot, Plug, Crown, Sparkles, Calendar, Megaphone, ShieldAlert, Lightbulb, Target, SearchCheck, MessageCircle
+  FileBarChart, ClipboardList, Database, Plug, Crown, Calendar,
+  Megaphone, Lightbulb, Target, SearchCheck, Home, CreditCard
 } from 'lucide-react';
+import { useOrganization } from '@/contexts/OrganizationContext';
 import { cn } from '@/lib/utils';
 
-// 2-level structure: standalone items always visible, groups collapsible
+// Main nav structure — Cortexi design: 6 flat pages
 const NAV_STRUCTURE = [
-  { type: 'item',  path: '/',      label: 'מרכז פיקוד',   icon: LayoutGrid },
+  { type: 'item', path: '/',           label: 'בית',           icon: Home },
+  { type: 'item', path: '/leads',      label: 'לידים',         icon: CheckCircle, badgeKey: 'hotLeads' },
+  { type: 'item', path: '/insights',   label: 'תובנות',        icon: Lightbulb,   badgeKey: 'activeInsights' },
+  { type: 'item', path: '/competitors',label: 'מתחרים',        icon: Eye },
+  { type: 'item', path: '/marketing',  label: 'מרכז השיווק',   icon: Megaphone },
+  { type: 'item', path: '/events',     label: 'אירועים',       icon: Calendar },
   {
-    type: 'group', key: 'intel', label: 'מודיעין', icon: Eye,
+    type: 'group', key: 'more', label: 'עוד',
     items: [
-      { path: '/insights',     label: 'תובנות',    icon: Lightbulb, badgeKey: 'activeInsights' },
-      { path: '/competitors',  label: 'מתחרים',    icon: Users },
-      { path: '/events',       label: 'אירועים',   icon: Calendar },
-      { path: '/strategy',     label: 'אסטרטגיה',  icon: Target },
-      { path: '/demand-gap',   label: 'פערי ביקוש', icon: SearchCheck },
-    ],
-  },
-  { type: 'item',  path: '/leads', label: 'לידים', icon: CheckCircle, badgeKey: 'hotLeads' },
-  {
-    type: 'group', key: 'manage', label: 'שיווק וניהול', icon: Megaphone,
-    items: [
-      { path: '/marketing',  label: 'מרכז שיווק',   icon: Megaphone },
-      { path: '/reviews',          label: 'מוניטין',       icon: Star, badgeKey: 'pendingReviews' },
-      { path: '/social-comments',  label: 'תגובות סושיאל', icon: MessageCircle },
-      { path: '/retention',        label: 'שימור לקוחות',  icon: Heart },
-      { path: '/tasks',      label: 'משימות',       icon: ClipboardList },
-      { path: '/reports',    label: 'דוחות',        icon: FileBarChart },
-    ],
-  },
-  {
-    type: 'group', key: 'system', label: 'הגדרות', icon: Settings,
-    items: [
-      { path: '/settings',     label: 'הגדרות',      icon: Settings },
-      { path: '/data-sources', label: 'מקורות מידע', icon: Database },
-      { path: '/integrations', label: 'אינטגרציות',  icon: Plug },
-      { path: '/subscription', label: 'מנוי',        icon: Crown },
+      { path: '/reviews',    label: 'מוניטין',       badgeKey: 'pendingReviews' },
+      { path: '/retention',  label: 'שימור לקוחות' },
+      { path: '/tasks',      label: 'משימות' },
+      { path: '/reports',    label: 'דוחות' },
+      { path: '/strategy',   label: 'אסטרטגיה' },
+      { path: '/demand-gap', label: 'פערי ביקוש' },
     ],
   },
 ];
+
+// Collapsed mode icons — one per nav entry
+const COLLAPSED_ICONS = {
+  '/':            Home,
+  '/leads':       CheckCircle,
+  '/insights':    Lightbulb,
+  '/competitors': Eye,
+  '/marketing':   Megaphone,
+  '/events':      Calendar,
+  'more':         Target,
+};
 
 function getDefaultOpen(key) {
   try {
     const stored = localStorage.getItem(`sidebar_group_${key}`);
     if (stored !== null) return stored === 'true';
   } catch {}
-  return true; // open by default on first visit
+  return false; // closed by default (matches Figma)
 }
 
 function useIsAdmin() {
   try {
     const email = window.__clerk?.user?.primaryEmailAddress?.emailAddress || '';
-    return email === 'contact@otxengine.io' || email.endsWith('@otx.ai') || email.endsWith('@quieteyes.ai');
+    return email === 'contact@otxengine.io' || email === 'admin@cortexi.ai' || email.endsWith('@otx.ai') || email.endsWith('@quieteyes.ai') || email.endsWith('@cortexi.ai');
   } catch { return false; }
 }
 
-function NavLink({ item, collapsed, isActive, onNavigate, indented = false }) {
-  const Icon = item.icon;
-  return (
-    <Link
-      to={item.path}
-      onClick={() => onNavigate && onNavigate()}
-      title={collapsed ? item.label : undefined}
-      className={cn(
-        'flex items-center gap-2.5 h-8 rounded-md transition-all duration-150 text-[12px] relative',
-        collapsed ? 'justify-center px-0' : indented ? 'px-2.5 pr-5' : 'px-2.5',
-      )}
-      style={{
-        background: isActive ? 'hsl(var(--sidebar-accent-active))' : 'transparent',
-        color: isActive ? 'hsl(var(--sidebar-accent-foreground))' : 'hsl(var(--sidebar-foreground-muted))',
-      }}
-      onMouseEnter={e => {
-        if (!isActive) {
-          e.currentTarget.style.background = 'hsl(var(--sidebar-accent))';
-          e.currentTarget.style.color = 'hsl(var(--sidebar-accent-foreground))';
-        }
-      }}
-      onMouseLeave={e => {
-        if (!isActive) {
-          e.currentTarget.style.background = 'transparent';
-          e.currentTarget.style.color = 'hsl(var(--sidebar-foreground-muted))';
-        }
-      }}
-    >
-      {isActive && !collapsed && (
-        <div className="absolute right-0 top-1 bottom-1 w-[3px] rounded-full" style={{ background: 'hsl(var(--sidebar-primary))' }} />
-      )}
-      <Icon
-        className="w-[14px] h-[14px] flex-shrink-0 transition-colors"
-        style={{ color: isActive ? 'hsl(var(--sidebar-primary))' : 'inherit', opacity: isActive ? 1 : 0.6 }}
-      />
-      {!collapsed && (
-        <>
-          <span className="flex-1 font-medium">{item.label}</span>
-          {item.badgeCount > 0 && (
-            <span className="px-1.5 py-0.5 text-[8px] font-bold rounded-full" style={{ background: 'hsl(var(--sidebar-primary) / 0.25)', color: 'hsl(var(--sidebar-primary))' }}>
-              {item.badgeCount}
-            </span>
-          )}
-        </>
-      )}
-    </Link>
-  );
-}
-
-export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate }) {
+export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, user }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const isAdmin = useIsAdmin();
+  const { isAgency, currentOrg } = useOrganization();
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
+
+  // Close popover on outside click
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const handler = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [userMenuOpen]);
 
   const [openGroups, setOpenGroups] = useState(() => ({
-    intel:  getDefaultOpen('intel'),
-    manage: getDefaultOpen('manage'),
-    system: getDefaultOpen('system'),
+    more: getDefaultOpen('more'),
   }));
 
   // Auto-expand group when a child route is active
   useEffect(() => {
     NAV_STRUCTURE.forEach(node => {
       if (node.type === 'group' && node.items.some(i => i.path === location.pathname)) {
-        setOpenGroups(prev => prev[node.key] ? prev : { ...prev, [node.key]: true });
+        setOpenGroups(prev => ({ ...prev, [node.key]: true }));
       }
     });
   }, [location.pathname]);
@@ -135,129 +99,217 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate }
     });
   };
 
-  const adminLinks = [
-    { path: '/admin-dashboard', label: 'Admin Dashboard',   icon: ShieldAlert },
-    { path: '/learning',        label: 'מרכז למידה (admin)', icon: Sparkles },
-    { path: '/agents',          label: 'סוכנים (admin)',     icon: Bot },
-  ];
+  // Check if any child of a group is active
+  const isGroupActive = (node) =>
+    node.items.some(i => location.pathname === i.path || location.pathname.startsWith(i.path + '/'));
 
   return (
     <aside
-      className={cn('fixed top-0 right-0 h-screen z-40 transition-all duration-300 flex flex-col border-l', collapsed ? 'w-16' : 'w-60')}
-      style={{ background: 'hsl(var(--sidebar-background))', borderColor: 'hsl(var(--sidebar-border))' }}
+      className={cn(
+        'fixed top-0 right-0 h-screen z-40 flex flex-col transition-all duration-300 border-l',
+        collapsed ? 'w-14' : 'w-52'
+      )}
+      style={{
+        background: 'hsl(var(--sidebar-background))',
+        borderColor: 'hsl(var(--sidebar-border))',
+        boxShadow: '-2px 0 20px rgba(0,0,0,0.05)',
+      }}
     >
-      {/* Logo */}
-      <div className="h-14 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: '1px solid hsl(var(--sidebar-border))' }}>
+      {/* Logo / Header */}
+      <div
+        className={cn('h-14 flex items-center shrink-0', collapsed ? 'justify-center px-0' : 'px-5 justify-between')}
+        style={{ borderBottom: '1px solid hsl(var(--sidebar-border))' }}
+      >
         {!collapsed && (
-          <div className="flex items-center gap-2 px-1">
-            <img src="/logo.jpeg" alt="OTX" className="h-6 w-auto object-contain rounded-sm" />
-            <span className="text-[14px] font-bold" style={{ color: 'hsl(var(--sidebar-accent-foreground))' }}>OTX</span>
-          </div>
-        )}
-        {collapsed && <div className="mx-auto"><img src="/logo.jpeg" alt="OTX" className="h-7 w-7 object-contain rounded-sm" /></div>}
-        {!collapsed && (
-          <button onClick={onToggle} className="p-1.5 rounded-md transition-colors" style={{ color: 'hsl(var(--sidebar-foreground-muted))' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'hsl(var(--sidebar-accent))'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
+          <>
+            <div className="flex items-center gap-2">
+              <img src="/logo.jpeg" alt="Cortexi" className="h-6 w-auto object-contain rounded-sm" />
+              <span className="text-[14px] font-bold" style={{ color: 'hsl(var(--sidebar-accent-foreground))' }}>Cortexi</span>
+            </div>
+            <button
+              onClick={onToggle}
+              className="p-1 rounded transition-colors"
+              style={{ color: 'hsl(var(--sidebar-foreground-muted))' }}
+              onMouseEnter={e => e.currentTarget.style.color = 'hsl(var(--sidebar-accent-foreground))'}
+              onMouseLeave={e => e.currentTarget.style.color = 'hsl(var(--sidebar-foreground-muted))'}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </>
         )}
         {collapsed && (
-          <button onClick={onToggle} className="absolute -left-3 top-6 w-6 h-6 rounded-full border flex items-center justify-center transition-colors"
-            style={{ background: 'hsl(var(--sidebar-background))', borderColor: 'hsl(var(--sidebar-border))', color: 'hsl(var(--sidebar-foreground-muted))' }}>
-            <ChevronLeft className="w-3 h-3" />
+          <button onClick={onToggle} className="mx-auto">
+            <img src="/logo.jpeg" alt="Cortexi" className="h-7 w-7 object-contain rounded-sm" />
           </button>
         )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto min-h-0 pt-2 pb-4" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(0,0,0,0.28) transparent' }}>
+      <nav className="flex-1 overflow-y-auto py-5 min-h-0" style={{ scrollbarWidth: 'none' }}>
+
         {/* Admin-only links */}
-        {isAdmin && (
-          <div className="px-2 mb-2">
-            {adminLinks.map(({ path, label, icon: Icon }) => {
+        {isAdmin && !collapsed && (
+          <div className="px-5 mb-4">
+            {[
+              { path: '/admin-dashboard', label: 'Admin', icon: ShieldAlert },
+              { path: '/learning',        label: 'למידה', icon: Sparkles },
+              { path: '/agents',          label: 'סוכנים', icon: Bot },
+            ].map(({ path, label, icon: Icon }) => {
               const isActive = location.pathname === path;
               return (
-                <Link key={path} to={path} onClick={() => onNavigate && onNavigate()}
-                  className={`flex items-center gap-2.5 h-8 rounded-md transition-all duration-150 text-[12px] relative ${collapsed ? 'justify-center px-0' : 'px-2.5'}`}
-                  style={{ background: isActive ? 'hsl(var(--sidebar-accent-active))' : 'transparent', color: isActive ? 'hsl(var(--sidebar-accent-foreground))' : 'hsl(var(--sidebar-foreground-muted))' }}
-                  onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = 'hsl(var(--sidebar-accent))'; e.currentTarget.style.color = 'hsl(var(--sidebar-accent-foreground))'; } }}
-                  onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'hsl(var(--sidebar-foreground-muted))'; } }}
-                >
-                  <Icon className="w-[14px] h-[14px] flex-shrink-0 opacity-60" />
-                  {!collapsed && <span className="flex-1 font-medium text-[11px] opacity-70">{label}</span>}
+                <Link key={path} to={path} onClick={() => onNavigate?.()}
+                  className="flex items-center gap-2 h-7 text-[10px] transition-colors"
+                  style={{ color: isActive ? '#111' : '#aaa' }}>
+                  <Icon className="w-3 h-3 flex-shrink-0" />
+                  <span>{label}</span>
                 </Link>
               );
             })}
-            <div className="mx-2 my-1" style={{ borderTop: '1px solid hsl(var(--sidebar-border) / 0.5)' }} />
+            <div className="mt-3" style={{ borderTop: '1px solid hsl(var(--sidebar-border))' }} />
           </div>
         )}
 
-        <ul className="px-2 space-y-0.5">
-          {NAV_STRUCTURE.map((node, idx) => {
-            if (node.type === 'item') {
-              const isActive = location.pathname === node.path;
-              const badgeCount = node.badgeKey ? (badges[node.badgeKey] || 0) : 0;
-              const showDivider = idx > 0;
+        {/* Org links */}
+        {currentOrg && !collapsed && (
+          <div className="px-5 mb-4">
+            {[
+              ...(isAgency ? [{ path: '/agency',       label: 'סוכנות',     icon: Building2 }] : []),
+              {               path: '/org/settings',  label: 'הגדרות ארגון', icon: GitBranch },
+            ].map(({ path, label, icon: Icon }) => {
+              const isActive = location.pathname === path;
               return (
-                <React.Fragment key={node.path}>
-                  {showDivider && !collapsed && (
-                    <li><div className="my-1" style={{ borderTop: '1px solid hsl(var(--sidebar-border) / 0.4)' }} /></li>
-                  )}
-                  <li>
-                    <NavLink item={{ ...node, badgeCount }} collapsed={collapsed} isActive={isActive} onNavigate={onNavigate} />
+                <Link key={path} to={path} onClick={() => onNavigate?.()}
+                  className="flex items-center gap-2 h-7 text-[11px] transition-colors"
+                  style={{ color: isActive ? '#111' : '#999' }}>
+                  <Icon className="w-3 h-3 flex-shrink-0" />
+                  <span>{label}</span>
+                </Link>
+              );
+            })}
+            <div className="mt-3" style={{ borderTop: '1px solid hsl(var(--sidebar-border))' }} />
+          </div>
+        )}
+
+        {/* Main nav */}
+        <ul className={cn('space-y-1', collapsed ? 'px-2' : 'px-5')}>
+          {NAV_STRUCTURE.map((node) => {
+            if (node.type === 'item') {
+              const isActive =
+                (node.path === '/' ? (location.pathname === '/' || location.pathname === '/dashboard') : location.pathname === node.path);
+              const badgeCount = node.badgeKey ? (badges[node.badgeKey] || 0) : 0;
+
+              if (collapsed) {
+                const Icon = node.icon || COLLAPSED_ICONS[node.path] || Home;
+                return (
+                  <li key={node.path}>
+                    <Link to={node.path} onClick={() => onNavigate?.()}
+                      title={node.label}
+                      className="flex items-center justify-center w-10 h-10 rounded-lg mx-auto transition-colors relative"
+                      style={{ background: isActive ? 'hsl(var(--sidebar-accent-active))' : 'transparent', color: isActive ? 'hsl(var(--sidebar-primary))' : 'hsl(var(--sidebar-foreground-muted))' }}
+                      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'hsl(var(--sidebar-accent))'; }}
+                      onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      <Icon className="w-[15px] h-[15px]" />
+                      {badgeCount > 0 && (
+                        <span className="absolute top-1 right-1 w-2 h-2 rounded-full" style={{ background: 'hsl(var(--sidebar-primary))' }} />
+                      )}
+                    </Link>
                   </li>
-                </React.Fragment>
+                );
+              }
+
+              return (
+                <li key={node.path}>
+                  <Link
+                    to={node.path}
+                    onClick={() => onNavigate?.()}
+                    className="flex items-center justify-between h-9 text-[14px] transition-colors group"
+                    style={{ color: isActive ? '#111111' : '#888888', fontWeight: isActive ? '600' : '400', textDecoration: isActive ? 'underline' : 'none', textUnderlineOffset: '3px' }}
+                    onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = '#333333'; }}
+                    onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = '#888888'; }}
+                  >
+                    <span>{node.label}</span>
+                    {badgeCount > 0 && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'hsl(var(--sidebar-primary) / 0.12)', color: 'hsl(var(--sidebar-primary))' }}>
+                        {badgeCount}
+                      </span>
+                    )}
+                  </Link>
+                </li>
               );
             }
 
             // Group node
             const isOpen = openGroups[node.key];
-            const GroupIcon = node.icon;
-            const childBadge = node.items.reduce((sum, item) => sum + (item.badgeKey ? (badges[item.badgeKey] || 0) : 0), 0);
+            const groupActive = isGroupActive(node);
+            const childBadge = node.items.reduce((s, i) => s + (i.badgeKey ? (badges[i.badgeKey] || 0) : 0), 0);
+
+            if (collapsed) {
+              const Icon = COLLAPSED_ICONS[node.key] || Eye;
+              return (
+                <li key={node.key}>
+                  <button
+                    onClick={() => toggleGroup(node.key)}
+                    title={node.label}
+                    className="flex items-center justify-center w-10 h-10 rounded-lg mx-auto transition-colors relative"
+                    style={{ background: groupActive ? 'hsl(var(--sidebar-accent-active))' : 'transparent', color: groupActive ? 'hsl(var(--sidebar-primary))' : 'hsl(var(--sidebar-foreground-muted))' }}
+                    onMouseEnter={e => { if (!groupActive) e.currentTarget.style.background = 'hsl(var(--sidebar-accent))'; }}
+                    onMouseLeave={e => { if (!groupActive) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <Icon className="w-[15px] h-[15px]" />
+                    {childBadge > 0 && (
+                      <span className="absolute top-1 right-1 w-2 h-2 rounded-full" style={{ background: 'hsl(var(--sidebar-primary))' }} />
+                    )}
+                  </button>
+                </li>
+              );
+            }
 
             return (
               <React.Fragment key={node.key}>
-                {!collapsed && (
-                  <li>
-                    <div className="my-1" style={{ borderTop: '1px solid hsl(var(--sidebar-border) / 0.4)' }} />
-                  </li>
-                )}
+                {/* Group header */}
+                <li>
+                  <button
+                    onClick={() => toggleGroup(node.key)}
+                    className="w-full flex items-center justify-between h-9 text-[14px] transition-colors"
+                    style={{ color: groupActive ? '#111111' : '#888888', fontWeight: groupActive ? '500' : '400' }}
+                    onMouseEnter={e => e.currentTarget.style.color = '#333333'}
+                    onMouseLeave={e => e.currentTarget.style.color = groupActive ? '#111111' : '#888888'}
+                  >
+                    <ChevronLeft
+                      className="w-3.5 h-3.5 flex-shrink-0 transition-transform duration-200"
+                      style={{ transform: isOpen ? 'rotate(-90deg)' : 'rotate(0deg)', color: 'inherit', opacity: 0.5 }}
+                    />
+                    <span className="flex-1 text-right mr-1">{node.label}</span>
+                    {!isOpen && childBadge > 0 && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'hsl(var(--sidebar-primary) / 0.12)', color: 'hsl(var(--sidebar-primary))' }}>
+                        {childBadge}
+                      </span>
+                    )}
+                  </button>
+                </li>
 
-                {/* Group header button */}
-                {!collapsed && (
-                  <li>
-                    <button
-                      onClick={() => toggleGroup(node.key)}
-                      className="w-full flex items-center gap-2.5 h-8 rounded-md px-2.5 text-[12px] font-medium transition-all duration-150 relative"
-                      style={{ color: 'hsl(var(--sidebar-foreground-muted))' }}
-                      onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--sidebar-accent))'; e.currentTarget.style.color = 'hsl(var(--sidebar-accent-foreground))'; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'hsl(var(--sidebar-foreground-muted))'; }}
-                    >
-                      <GroupIcon className="w-[14px] h-[14px] flex-shrink-0 opacity-60" />
-                      <span className="flex-1 text-right">{node.label}</span>
-                      {/* Badge dot on header when collapsed or group is closed */}
-                      {!isOpen && childBadge > 0 && (
-                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: 'hsl(var(--sidebar-primary))' }} />
-                      )}
-                      <ChevronDown className={`w-3 h-3 flex-shrink-0 transition-transform duration-200 ${isOpen ? '' : '-rotate-90'}`} />
-                    </button>
-                  </li>
-                )}
-
-                {/* Group children — always shown in collapsed icon mode */}
-                {(collapsed || isOpen) && node.items.map(item => {
+                {/* Group children */}
+                {isOpen && node.items.map(item => {
                   const isActive = location.pathname === item.path;
                   const badgeCount = item.badgeKey ? (badges[item.badgeKey] || 0) : 0;
                   return (
                     <li key={item.path}>
-                      <NavLink
-                        item={{ ...item, badgeCount }}
-                        collapsed={collapsed}
-                        isActive={isActive}
-                        onNavigate={onNavigate}
-                        indented={!collapsed}
-                      />
+                      <Link
+                        to={item.path}
+                        onClick={() => onNavigate?.()}
+                        className="flex items-center justify-between h-8 text-[13px] transition-colors pr-4"
+                        style={{ color: isActive ? '#111111' : '#aaaaaa', fontWeight: isActive ? '500' : '400', textDecoration: isActive ? 'underline' : 'none', textUnderlineOffset: '3px' }}
+                        onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = '#555555'; }}
+                        onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = '#aaaaaa'; }}
+                      >
+                        <span>{item.label}</span>
+                        {badgeCount > 0 && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'hsl(var(--sidebar-primary) / 0.12)', color: 'hsl(var(--sidebar-primary))' }}>
+                            {badgeCount}
+                          </span>
+                        )}
+                      </Link>
                     </li>
                   );
                 })}
@@ -266,20 +318,118 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate }
           })}
         </ul>
 
-        {/* Logout */}
-        <div className="px-2 mt-3 pt-3" style={{ borderTop: '1px solid hsl(var(--sidebar-border))' }}>
-          <button
-            onClick={() => base44.auth.logout('/')}
-            className={cn('flex items-center gap-2.5 h-8 rounded-md transition-all text-[12px] w-full', collapsed ? 'justify-center px-0' : 'px-2.5')}
-            style={{ color: 'hsl(var(--sidebar-foreground-muted))' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'hsl(0 60% 40% / 0.15)'; e.currentTarget.style.color = 'hsl(0 72% 65%)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'hsl(var(--sidebar-foreground-muted))'; }}
-          >
-            <LogOut className="w-[14px] h-[14px] flex-shrink-0 opacity-60" />
-            {!collapsed && <span className="flex-1 font-medium">התנתק</span>}
-          </button>
-        </div>
+        {/* Settings link — minimal, below main nav */}
+        {!collapsed && (
+          <div className="px-5 mt-4 pt-4" style={{ borderTop: '1px solid hsl(var(--sidebar-border))' }}>
+            <Link to="/settings" onClick={() => onNavigate?.()}
+              className="flex items-center h-8 text-[13px] transition-colors"
+              style={{ color: location.pathname === '/settings' ? '#111' : '#aaaaaa' }}
+              onMouseEnter={e => e.currentTarget.style.color = '#555'}
+              onMouseLeave={e => e.currentTarget.style.color = location.pathname === '/settings' ? '#111' : '#aaaaaa'}
+            >
+              הגדרות
+            </Link>
+          </div>
+        )}
       </nav>
+
+      {/* Footer — אזור אישי */}
+      <div
+        ref={userMenuRef}
+        className={cn('shrink-0 relative py-4', collapsed ? 'flex flex-col items-center px-2' : 'px-5')}
+        style={{ borderTop: '1px solid hsl(var(--sidebar-border))' }}
+      >
+        {/* Popover — opens above the button */}
+        {userMenuOpen && (
+          <div
+            className="absolute left-0 right-0 mx-2 bg-white rounded-2xl shadow-xl border border-border/60 overflow-hidden"
+            style={{
+              bottom: '100%',
+              marginBottom: 8,
+              animation: 'fadeInUp 0.15s ease-out',
+              zIndex: 60,
+            }}
+          >
+            {/* User info */}
+            <div className="px-4 py-3 border-b border-border/50">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-white text-[13px] font-semibold flex-shrink-0"
+                  style={{ background: 'linear-gradient(135deg, #E8344D, #FF6B6B)' }}
+                >
+                  {(user?.full_name || user?.email || 'U')[0].toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  {user?.full_name && (
+                    <p className="text-[13px] font-semibold text-foreground truncate">{user.full_name}</p>
+                  )}
+                  <p className="text-[11px] text-foreground-muted truncate">{user?.email || ''}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Menu items */}
+            <div className="py-1">
+              {[
+                { icon: Settings, label: 'הגדרות', path: '/settings' },
+                { icon: CreditCard, label: 'מנוי', path: '/subscription' },
+                ...(currentOrg ? [{ icon: GitBranch, label: 'הגדרות ארגון', path: '/org/settings' }] : []),
+              ].map(({ icon: Icon, label, path }) => (
+                <button
+                  key={path}
+                  onClick={() => { setUserMenuOpen(false); navigate(path); onNavigate?.(); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] text-foreground-secondary hover:bg-secondary transition-colors text-right"
+                >
+                  <Icon className="w-4 h-4 text-foreground-muted flex-shrink-0" />
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Divider + Logout */}
+            <div className="border-t border-border/50 py-1">
+              <button
+                onClick={() => base44.auth.logout('/')}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] hover:bg-red-50 transition-colors text-right"
+                style={{ color: '#E8344D' }}
+              >
+                <LogOut className="w-4 h-4 flex-shrink-0" />
+                התנתק
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Trigger button */}
+        <button
+          onClick={() => setUserMenuOpen(!userMenuOpen)}
+          className="flex items-center gap-3 w-full transition-opacity hover:opacity-80"
+          title="אזור אישי"
+        >
+          <div
+            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[13px] font-semibold"
+            style={{ background: userMenuOpen ? 'linear-gradient(135deg, #E8344D, #FF6B6B)' : '#f0f0f0' }}
+          >
+            {userMenuOpen ? (
+              <span style={{ color: 'white' }}>
+                {(user?.full_name || user?.email || 'U')[0].toUpperCase()}
+              </span>
+            ) : (
+              <User className="w-4 h-4" style={{ color: '#555' }} />
+            )}
+          </div>
+          {!collapsed && (
+            <span className="text-[13px]" style={{ color: '#888' }}>אזור אישי</span>
+          )}
+        </button>
+      </div>
+
+      <style>{`
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </aside>
   );
 }

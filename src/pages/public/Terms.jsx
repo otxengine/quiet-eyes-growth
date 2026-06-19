@@ -2,7 +2,7 @@ import React from 'react';
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen px-6 py-20">
+    <div className="min-h-screen px-6 py-20 bg-white">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-[32px] font-bold text-foreground mb-2">תנאי שימוש</h1>
         <p className="text-[12px] text-foreground-muted mb-8">עדכון אחרון: ינואר 2025</p>
@@ -11,12 +11,12 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-[17px] font-semibold text-foreground mb-2">1. הסכמה לתנאים</h2>
-            <p>בהרשמה לשירות OTX והשימוש בו, אתה מסכים לתנאי שימוש אלה. אם אינך מסכים, אנא אל תשתמש בשירות.</p>
+            <p>בהרשמה לשירות Cortexi והשימוש בו, אתה מסכים לתנאי שימוש אלה. אם אינך מסכים, אנא אל תשתמש בשירות.</p>
           </section>
 
           <section>
             <h2 className="text-[17px] font-semibold text-foreground mb-2">2. תיאור השירות</h2>
-            <p>OTX מספקת פלטפורמת מודיעין עסקי אוטומטי לעסקים קטנים ובינוניים בישראל. השירות כולל סריקת מקורות ציבוריים, ניתוח מתחרים, ניהול ביקורות, מעקב לידים ותובנות שוק.</p>
+            <p>Cortexi מספקת פלטפורמת מודיעין עסקי אוטומטי לעסקים קטנים ובינוניים בישראל. השירות כולל סריקת מקורות ציבוריים, ניתוח מתחרים, ניהול ביקורות, מעקב לידים ותובנות שוק.</p>
           </section>
 
           <section>
@@ -41,7 +41,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-[17px] font-semibold text-foreground mb-2">5. תוכן ומידע</h2>
-            <p>המידע המוצג בשירות מבוסס על מקורות ציבוריים ועיבוד AI. OTX אינה אחראית לדיוק מלא של המידע ואין לראות בו ייעוץ עסקי, משפטי, או פיננסי.</p>
+            <p>המידע המוצג בשירות מבוסס על מקורות ציבוריים ועיבוד AI. Cortexi אינה אחראית לדיוק מלא של המידע ואין לראות בו ייעוץ עסקי, משפטי, או פיננסי.</p>
           </section>
 
           <section>
@@ -55,12 +55,12 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-[17px] font-semibold text-foreground mb-2">7. קניין רוחני</h2>
-            <p>כל הזכויות בשירות, לרבות תוכנה, עיצוב, ומתודולוגיה, שמורות ל-OTX. המשתמש מקבל רישיון מוגבל, אישי, ובלתי ניתן להעברה לשימוש בשירות.</p>
+            <p>כל הזכויות בשירות, לרבות תוכנה, עיצוב, ומתודולוגיה, שמורות ל-Cortexi. המשתמש מקבל רישיון מוגבל, אישי, ובלתי ניתן להעברה לשימוש בשירות.</p>
           </section>
 
           <section>
             <h2 className="text-[17px] font-semibold text-foreground mb-2">8. הגבלת אחריות</h2>
-            <p>השירות ניתן "כפי שהוא" (AS IS). OTX לא תישא באחריות לנזקים עקיפים, תוצאתיים, או מקריים הנובעים מהשימוש בשירות.</p>
+            <p>השירות ניתן "כפי שהוא" (AS IS). Cortexi לא תישא באחריות לנזקים עקיפים, תוצאתיים, או מקריים הנובעים מהשימוש בשירות.</p>
           </section>
 
           <section>
@@ -75,7 +75,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-[17px] font-semibold text-foreground mb-2">11. יצירת קשר</h2>
-            <p>שאלות: <a href="mailto:legal@quieteyes.co.il" className="text-primary hover:underline">legal@quieteyes.co.il</a></p>
+            <p>שאלות: <a href="mailto:legal@cortexi.ai" className="text-primary hover:underline">legal@cortexi.ai</a></p>
           </section>
         </div>
       </div>

@@ -2,16 +2,16 @@ import React from 'react';
 import { Save, Loader2, Globe, Search, Link2 } from 'lucide-react';
 
 export default function SettingsDataSources({ form, setForm, onSave, saving }) {
-  const inputCls = "w-full bg-[#fafafa] border border-[#eeeeee] rounded-lg px-3 py-2 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-[#dddddd]";
-  const labelCls = "text-[12px] text-[#999999] mb-1 block";
+  const inputCls = "w-full bg-secondary/50 border border-border/60 rounded-lg px-3 py-2 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-border";
+  const labelCls = "text-[12px] text-foreground-muted mb-1 block";
 
   return (
-    <div className="bg-white rounded-[10px] border border-[#f0f0f0] p-5 space-y-4">
+    <div className="bg-white rounded-[10px] border border-border/50 p-5 space-y-4">
       <div className="flex items-center gap-2 mb-1">
         <Search className="w-4 h-4 text-foreground-muted" />
         <h2 className="text-[14px] font-semibold text-[#222222]">מקורות מידע וניטור</h2>
       </div>
-      <p className="text-[11px] text-[#999999] -mt-2">הגדר מילות מפתח, כתובות URL ופרופילי רשתות חברתיות לניטור מתקדם</p>
+      <p className="text-[11px] text-foreground-muted -mt-2">הגדר מילות מפתח, כתובות URL ופרופילי רשתות חברתיות לניטור מתקדם</p>
 
       <div>
         <label className={labelCls}>מילות מפתח למעקב</label>
@@ -21,7 +21,7 @@ export default function SettingsDataSources({ form, setForm, onSave, saving }) {
           placeholder="שיפוצים, עיצוב פנים, קבלן (מופרדות בפסיקים)"
           className={inputCls}
         />
-        <p className="text-[9px] text-[#cccccc] mt-0.5">הסוכנים יחפשו מידע רלוונטי לפי מילות המפתח שלך</p>
+        <p className="text-[9px] text-foreground-muted/50 mt-0.5">הסוכנים יחפשו מידע רלוונטי לפי מילות המפתח שלך</p>
       </div>
 
       <div>
@@ -33,10 +33,10 @@ export default function SettingsDataSources({ form, setForm, onSave, saving }) {
           placeholder={"https://example.com/forum\nhttps://another-site.com/reviews"}
           className={`${inputCls} resize-none`}
         />
-        <p className="text-[9px] text-[#cccccc] mt-0.5">הכנס כתובת URL אחת בכל שורה — הסוכנים יסרקו אותן באופן קבוע</p>
+        <p className="text-[9px] text-foreground-muted/50 mt-0.5">הכנס כתובת URL אחת בכל שורה — הסוכנים יסרקו אותן באופן קבוע</p>
       </div>
 
-      <div className="border-t border-[#f0f0f0] pt-4">
+      <div className="border-t border-border/50 pt-4">
         <div className="flex items-center gap-2 mb-3">
           <Globe className="w-4 h-4 text-foreground-muted" />
           <h3 className="text-[13px] font-semibold text-[#222222]">פרופילי רשתות חברתיות</h3>
@@ -82,7 +82,7 @@ export default function SettingsDataSources({ form, setForm, onSave, saving }) {
         </div>
       </div>
 
-      <div className="border-t border-[#f0f0f0] pt-4">
+      <div className="border-t border-border/50 pt-4">
         <div className="flex items-center gap-2 mb-2">
           <Link2 className="w-4 h-4 text-foreground-muted" />
           <h3 className="text-[13px] font-semibold text-[#222222]">ניטור מתחרים</h3>
@@ -94,9 +94,9 @@ export default function SettingsDataSources({ form, setForm, onSave, saving }) {
             onChange={(e) => setForm({ ...form, monitor_competitors_social: e.target.checked })}
             className="w-4 h-4 rounded border-[#ddd] accent-primary"
           />
-          <span className="text-[12px] text-[#444444]">ניטור פעילות מתחרים ברשתות חברתיות</span>
+          <span className="text-[12px] text-foreground-secondary">ניטור פעילות מתחרים ברשתות חברתיות</span>
         </label>
-        <p className="text-[9px] text-[#cccccc] mt-1 mr-6">הסוכנים יעקבו אחר פרסומים, ביקורות ופעילות חברתית של מתחרים</p>
+        <p className="text-[9px] text-foreground-muted/50 mt-1 mr-6">הסוכנים יעקבו אחר פרסומים, ביקורות ופעילות חברתית של מתחרים</p>
       </div>
 
       <button onClick={onSave} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[12px] font-medium bg-[#111111] text-white hover:bg-[#333333] transition-colors disabled:opacity-50">

@@ -8,8 +8,8 @@ import { useScanQuota } from '@/lib/useScanQuota';
 import { PLAN_LABELS } from '@/lib/usePlan';
 import ScanOverlay from '@/components/dashboard/ScanOverlay';
 
-const ADMIN_EMAILS = ['contact@otxengine.io'];
-const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai'];
+const ADMIN_EMAILS = ['contact@otxengine.io', 'admin@cortexi.ai'];
+const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai', '@cortexi.ai'];
 function checkIsAdmin(email) {
   if (!email) return false;
   const e = email.toLowerCase().trim();
@@ -39,35 +39,41 @@ function usePageVisits(pathname) {
 }
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
-import ChatWidget from '@/components/chat/ChatWidget';
+import SupportWidget from '@/components/support/SupportWidget';
 import { cn } from '@/lib/utils';
 import { registerServiceWorker } from '@/lib/pushNotifications';
+import { useOrganization } from '@/contexts/OrganizationContext';
 
 const pageTitles = {
-  '/': 'מרכז פיקוד',
-  '/dashboard': 'מרכז פיקוד',
-  '/signals': 'העיניים — מודיעין שוק',
-  '/competitors': 'מתחרים',
-  '/events': 'אירועים',
-  '/reviews': 'מוניטין',
-  '/leads': 'לידים',
-  '/retention': 'שימור לקוחות',
-  '/reports': 'דוחות וניתוח',
-  '/tasks': 'משימות',
-  '/marketing': 'מרכז שיווק',
+  '/':              'בית',
+  '/dashboard':     'בית',
+  '/command':       'בית',
+  '/leads':         'לידים',
+  '/insights':      'תובנות',
+  '/competitors':   'מתחרים',
+  '/marketing':     'מרכז השיווק',
   '/marketing/create': 'יצירת קמפיין',
-  '/market-analysis': 'ניתוח שוק',
-  '/data-sources': 'מקורות מידע',
-  '/subscription': 'ניהול מנוי',
-  '/agents': 'סוכנים',
-  '/learning': 'מרכז למידה',
-  '/integrations': 'אינטגרציות',
-  '/settings': 'הגדרות',
-  '/social': 'רשתות חברתיות',
-  '/insights': 'תובנות',
-  '/strategy': 'אסטרטגיה חודשית',
-  '/demand-gap': 'פערי ביקוש',
-  '/otx': 'OTX Dashboard',
+  '/events':        'אירועים',
+  '/reviews':       'מוניטין',
+  '/retention':     'שימור לקוחות',
+  '/tasks':         'משימות',
+  '/reports':       'דוחות',
+  '/strategy':      'אסטרטגיה',
+  '/demand-gap':    'פערי ביקוש',
+  '/signals':       'תובנות',
+  '/approvals':     'לאישור',
+  '/market-analysis':'ניתוח שוק',
+  '/data-sources':  'מקורות מידע',
+  '/subscription':  'מנוי',
+  '/agents':        'סוכנים',
+  '/learning':      'למידה',
+  '/integrations':  'אינטגרציות',
+  '/settings':      'הגדרות',
+  '/social':        'רשתות חברתיות',
+  '/otx':           'Cortexi Dashboard',
+  '/org/settings':  'הגדרות ארגון',
+  '/agency':        'סוכנות',
+  '/chat':          'יועץ AI',
 };
 
 export default function AppLayout() {
@@ -83,6 +89,9 @@ export default function AppLayout() {
   // Use reactive auth context for reliable admin detection
   const { user: authUser, isLoadingAuth } = useAuth();
   const isAdmin = checkIsAdmin(authUser?.email);
+
+  // Organization context: active branch
+  const { currentBranch: orgBranch, isLoading: orgLoading } = useOrganization();
 
   // Get current user
   const { data: user, isLoading: loadingUser, isError: userError } = useQuery({
@@ -100,7 +109,16 @@ export default function AppLayout() {
   });
 
   // Prefer a profile that completed onboarding; fall back to the first one
-  const businessProfile = businessProfiles?.find(p => p.onboarding_completed) || businessProfiles?.[0];
+  const legacyProfile = businessProfiles?.find(p => p.onboarding_completed) || businessProfiles?.[0];
+
+  // When org context has a branch selected, use its ID for queries but merge
+  // with the full legacy profile data so pages still have all fields available.
+  const activeBranchId = orgBranch?.id || legacyProfile?.id;
+  const businessProfile = activeBranchId && legacyProfile
+    ? (activeBranchId === legacyProfile.id
+        ? legacyProfile
+        : { ...legacyProfile, id: activeBranchId, name: orgBranch?.name || legacyProfile.name })
+    : legacyProfile;
 
   const stillLoading = loadingUser || (!!user?.email && loadingProfiles);
 
@@ -134,7 +152,7 @@ export default function AppLayout() {
 
   // Global scan overlay — works on all pages (Dashboard overrides with its own when active)
   const scanQuota = useScanQuota(businessProfile?.id);
-  const isOnDashboard = ['/', '/dashboard'].includes(location.pathname);
+  const isOnDashboard = ['/', '/dashboard', '/command'].includes(location.pathname);
 
   useEffect(() => {
     if (isOnDashboard) return; // Dashboard registers its own handler
@@ -151,9 +169,9 @@ export default function AppLayout() {
     // setTimeout ensures page-specific handlers (from Intelligence/Leads/etc.) run first.
     // Only register generic handler if no page has set its own.
     const t = setTimeout(() => {
-      if (!window.__quieteyes_scan) window.__quieteyes_scan = handler;
+      if (!window.__cortexi_scan) window.__cortexi_scan = handler;
     }, 0);
-    return () => { clearTimeout(t); if (window.__quieteyes_scan === handler) delete window.__quieteyes_scan; };
+    return () => { clearTimeout(t); if (window.__cortexi_scan === handler) delete window.__cortexi_scan; };
   }, [isOnDashboard, scanQuota.isExhausted, scanQuota.plan, scanQuota.quota, location.pathname]);
 
   // Fetch badge counts
@@ -222,7 +240,7 @@ export default function AppLayout() {
     || (location.pathname.startsWith('/insights/') ? 'תובנה' : null)
     || (location.pathname.startsWith('/tasks/')    ? 'פרטי משימה' : null)
     || (location.pathname.startsWith('/signals/')  ? 'פרטי סיגנל' : null)
-    || 'OTX';
+    || 'Cortexi';
 
   if (loadingProfiles) {
     return (
@@ -236,10 +254,11 @@ export default function AppLayout() {
     <div className="min-h-screen bg-background">
       {/* Sidebar - Desktop */}
       <div className="hidden lg:block">
-        <Sidebar 
+        <Sidebar
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
           badges={badges}
+          user={user}
         />
       </div>
 
@@ -251,10 +270,11 @@ export default function AppLayout() {
             onClick={() => setMobileMenuOpen(false)} 
           />
           <div className="relative z-[51]">
-            <Sidebar 
+            <Sidebar
               collapsed={false}
               onToggle={() => setMobileMenuOpen(false)}
               badges={badges}
+              user={user}
               onNavigate={() => setMobileMenuOpen(false)}
             />
           </div>
@@ -277,11 +297,11 @@ export default function AppLayout() {
           onLocationChange={setSelectedLocationId}
         />
         {/* FIX 1: prevent horizontal scroll in main content */}
-        <main className="px-4 md:px-6 py-4 overflow-x-hidden">
+        <main className="px-4 md:px-6 py-4 overflow-x-hidden bg-dot-grid min-h-screen">
           <Outlet context={{ businessProfile, user, badges, selectedLocationId }} />
         </main>
       </div>
-      <ChatWidget businessProfile={businessProfile} />
+      <SupportWidget businessProfile={businessProfile} />
 
       {/* Global Scan Overlay — active on all non-Dashboard pages */}
       {showGlobalScan && businessProfile && (

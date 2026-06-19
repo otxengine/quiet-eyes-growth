@@ -82,7 +82,7 @@ export default function ComposerDrawer({ text = '', platform, context, onClose }
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-[#f0f0f0]">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border/50">
           <div className="flex items-center gap-2">
             {PlatformIcon && <PlatformIcon className={`w-4 h-4 ${meta.color}`} />}
             {!PlatformIcon && platform === 'tiktok' && (
@@ -94,7 +94,7 @@ export default function ComposerDrawer({ text = '', platform, context, onClose }
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full text-[#888888] hover:bg-[#f5f5f5] transition-colors"
+            className="p-1.5 rounded-full text-foreground-muted hover:bg-secondary/60 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -117,7 +117,7 @@ export default function ComposerDrawer({ text = '', platform, context, onClose }
             placeholder="כתוב את הפוסט שלך כאן..."
             dir="rtl"
           />
-          <p className="text-[10px] text-[#aaaaaa] mt-1.5 text-left">
+          <p className="text-[10px] text-foreground-muted/70 mt-1.5 text-left">
             {draft.length} תווים
           </p>
         </div>
@@ -144,14 +144,14 @@ export default function ComposerDrawer({ text = '', platform, context, onClose }
 
           <button
             onClick={handleCopy}
-            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[#e8e8e8] text-[12px] text-foreground-muted hover:bg-[#fafafa] transition-all"
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[#e8e8e8] text-[12px] text-foreground-muted hover:bg-secondary/50 transition-all"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
             העתק טקסט בלבד
           </button>
 
           {/* AI disclaimer */}
-          <p className="text-center text-[10px] text-[#bbbbbb] leading-snug">
+          <p className="text-center text-[10px] text-foreground-muted/70 leading-snug">
             ✨ טקסט נוצר על ידי AI · ערוך לפני פרסום
           </p>
         </div>

@@ -11,7 +11,7 @@ import React from 'react';
 export default function SkeletonCard({ lines = 3, height = null, className = '' }) {
   return (
     <div
-      className={`rounded-xl border border-border bg-secondary animate-pulse ${className}`}
+      className={`rounded-2xl border border-border bg-secondary/70 animate-pulse ${className}`}
       style={height ? { height, minHeight: height } : { padding: '14px 16px' }}
     >
       {!height && Array.from({ length: lines }).map((_, i) => (

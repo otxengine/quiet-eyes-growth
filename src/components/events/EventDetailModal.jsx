@@ -93,7 +93,7 @@ ${countdown ? `זמן עד לאירוע: ${countdown}` : ''}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-5 pt-5 pb-3 border-b border-[#f0f0f0] flex items-start justify-between gap-3">
+        <div className="px-5 pt-5 pb-3 border-b border-border/50 flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <h2 className="text-[15px] font-bold text-foreground leading-snug">{title}</h2>
             {countdown && (
@@ -103,14 +103,14 @@ ${countdown ? `זמן עד לאירוע: ${countdown}` : ''}
               </div>
             )}
           </div>
-          <button onClick={onClose} className="flex-shrink-0 p-1 rounded-lg hover:bg-[#f5f5f5] transition-colors">
-            <X className="w-4 h-4 text-[#aaaaaa]" />
+          <button onClick={onClose} className="flex-shrink-0 p-1 rounded-lg hover:bg-secondary/60 transition-colors">
+            <X className="w-4 h-4 text-foreground-muted/70" />
           </button>
         </div>
 
         <div className="px-5 py-4 space-y-4">
           {/* Description */}
-          <p className="text-[13px] text-[#555555] leading-relaxed">{description}</p>
+          <p className="text-[13px] text-foreground-secondary leading-relaxed">{description}</p>
 
           {/* AI Business Context */}
           <div className="bg-[#faf8ff] border border-[#e8e0ff] rounded-xl p-4">
@@ -139,7 +139,7 @@ ${countdown ? `זמן עד לאירוע: ${countdown}` : ''}
                   </div>
                 )}
                 {aiContext.timing_tip && (
-                  <div className="flex items-center gap-1.5 text-[11px] text-[#888888]">
+                  <div className="flex items-center gap-1.5 text-[11px] text-foreground-muted">
                     <Clock className="w-3 h-3" />
                     <span>{aiContext.timing_tip}</span>
                   </div>
@@ -152,16 +152,16 @@ ${countdown ? `זמן עד לאירוע: ${countdown}` : ''}
 
           {/* Quick action suggestions */}
           <div>
-            <p className="text-[11px] font-medium text-[#888888] mb-2">פעולות מהירות לאירוע זה:</p>
+            <p className="text-[11px] font-medium text-foreground-muted mb-2">פעולות מהירות לאירוע זה:</p>
             <div className="grid grid-cols-2 gap-2">
               {ACTION_SUGGESTIONS.map(a => (
                 <button
                   key={a.type}
                   onClick={() => setActionPopup(true)}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#eeeeee] bg-white hover:border-[#cccccc] hover:bg-[#fafafa] transition-colors text-right"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border/60 bg-white hover:border-border-hover hover:bg-secondary/50 transition-colors text-right"
                 >
                   <span className="text-[13px]">{a.icon}</span>
-                  <span className="text-[10px] text-[#555555] leading-tight">{a.label}</span>
+                  <span className="text-[10px] text-foreground-secondary leading-tight">{a.label}</span>
                 </button>
               ))}
             </div>

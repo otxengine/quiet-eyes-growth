@@ -19,7 +19,7 @@ const POSITION_LABELS = {
   leader:     { label: 'מוביל שוק',   color: 'bg-green-50 text-green-700 border-green-200'  },
   challenger: { label: 'מתחרה עיקרי', color: 'bg-blue-50 text-blue-700 border-blue-200'    },
   niche:      { label: 'נישה',         color: 'bg-purple-50 text-purple-700 border-purple-200' },
-  new:        { label: 'עסק חדש',      color: 'bg-gray-50 text-gray-600 border-gray-200'    },
+  new:        { label: 'עסק חדש',      color: 'bg-secondary/50 text-foreground-secondary border-border'    },
 };
 
 const SIZE_LABELS = { גדול: 'גדול', בינוני: 'בינוני', קטן: 'קטן' };
@@ -88,7 +88,7 @@ export default function MarketAnalysis() {
         <button
           onClick={loadAnalysis}
           disabled={analysisLoading}
-          className="btn-subtle flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition-all disabled:opacity-50"
+          className="btn-subtle flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium text-primary bg-primary/8 border border-primary/20 hover:bg-primary/10 transition-all disabled:opacity-50"
         >
           {analysisLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
           {analysisLoading ? 'מנתח...' : 'נתח שוק'}
@@ -162,9 +162,9 @@ export default function MarketAnalysis() {
 
           {/* Focus + advantage */}
           {analysis.recommended_focus && (
-            <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
-              <p className="text-[10px] font-semibold text-indigo-600 mb-1">🎯 מוקד מומלץ</p>
-              <p className="text-[13px] font-medium text-indigo-900">{analysis.recommended_focus}</p>
+            <div className="bg-primary/8 border border-primary/15 rounded-xl px-4 py-3">
+              <p className="text-[10px] font-semibold text-primary mb-1">🎯 מוקד מומלץ</p>
+              <p className="text-[13px] font-medium text-foreground">{analysis.recommended_focus}</p>
             </div>
           )}
 

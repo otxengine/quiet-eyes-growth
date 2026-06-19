@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Bell, Menu, Eye, Star, CheckCircle, LogOut, Radar, Lightbulb } from 'lucide-react';
 import LocationSwitcher from './LocationSwitcher';
+import BranchSwitcher from './BranchSwitcher';
 
 export default function TopBar({ pageTitle, user, badges = {}, onMenuClick, showMenuButton, businessProfileId, selectedLocationId, onLocationChange }) {
   const userInitial = user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U';
@@ -27,7 +28,7 @@ export default function TopBar({ pageTitle, user, badges = {}, onMenuClick, show
   ];
 
   return (
-    <header className="sticky top-0 z-30 h-14 bg-background/90 backdrop-blur-md border-b border-border/60">
+    <header className="sticky top-0 z-30 h-14 glass border-b border-white/40">
       <div className="h-full px-4 md:px-8 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {showMenuButton && (
@@ -36,6 +37,7 @@ export default function TopBar({ pageTitle, user, badges = {}, onMenuClick, show
             </button>
           )}
           <h1 className="text-[15px] font-semibold text-foreground">{pageTitle}</h1>
+          <BranchSwitcher />
           {businessProfileId && onLocationChange && (
             <LocationSwitcher businessProfileId={businessProfileId} selectedLocationId={selectedLocationId} onLocationChange={onLocationChange} />
           )}
@@ -44,7 +46,7 @@ export default function TopBar({ pageTitle, user, badges = {}, onMenuClick, show
         <div className="flex items-center gap-3 md:gap-4">
           {/* Scan button - available on all pages */}
           <button
-            onClick={() => window.__quieteyes_scan?.()}
+            onClick={() => window.__cortexi_scan?.()}
             className="btn-subtle hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-medium text-foreground-muted border border-border hover:border-border-hover hover:text-foreground transition-all"
           >
             <Radar className="w-3 h-3" />

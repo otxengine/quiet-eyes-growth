@@ -1,38 +1,35 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Calendar, Loader2, Zap, Clock, TrendingUp, X, Copy, CheckCheck, ListPlus, Megaphone, AlertCircle } from 'lucide-react';
+import { Loader2, Zap } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import AiInsightsBar from '@/components/ai/AiInsightsBar';
-import EventDetailModal from '@/components/events/EventDetailModal';
-import DismissMenu from '@/components/ui/DismissMenu';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
+import { Copy, CheckCheck, ListPlus, X, AlertCircle } from 'lucide-react';
+import PageHeader from '@/components/shared/PageHeader';
+import StatCards from '@/components/shared/StatCards';
 
 const EVENT_TABS = [
-  { key: 'all',          label: 'הכל' },
-  { key: 'holiday',      label: 'חגים יהודיים' },
-  { key: 'religion',     label: 'דתות אחרות' },
-  { key: 'sports',       label: 'ספורט' },
-  { key: 'tv_broadcast', label: 'טלוויזיה' },
-  { key: 'seasonal',     label: 'עונתי' },
-  { key: 'commercial',   label: 'מסחרי' },
-  { key: 'local',        label: 'מקומי' },
-  { key: 'weather',      label: 'מזג אוויר' },
+  { key: 'all',       label: 'כל האירועים' },
+  { key: 'holiday',   label: 'חגים ומועדים' },
+  { key: 'commercial',label: 'מסחרי' },
+  { key: 'seasonal',  label: 'עונתי' },
+  { key: 'sports',    label: 'ספורט' },
+  { key: 'culture',   label: 'תרבות' },
+  { key: 'local',     label: 'מקומי' },
 ];
 
 function classifyEvent(title = '', description = '', tags = [], eventType = '') {
-  if (eventType === 'tv_broadcast') return 'tv_broadcast';
-  if (eventType === 'weather_event') return 'weather';
+  if (eventType === 'tv_broadcast') return 'culture';
+  if (eventType === 'weather_event') return 'seasonal';
   const text = `${title} ${description} ${tags.join(' ')}`.toLowerCase();
-  if (['גל חום', 'סערה', 'שיטפון', 'heatwave', 'extreme weather', 'weather_event'].some(k => text.includes(k))) return 'weather';
-  if (['פינאלה', 'ריאליטי', 'x-factor', 'האח הגדול', 'מאסטרשף', 'ערוץ', 'שידור חי', 'tv_broadcast'].some(k => text.includes(k))) return 'tv_broadcast';
-  if (['eid', 'עיד', 'רמדאן', 'ramadan', 'christmas', 'כריסמס', 'חג המולד', 'easter', 'פסחא', 'מולד'].some(k => text.includes(k))) return 'religion';
-  if (['ליגת האלופות', 'גמר', 'כדורגל', 'כדורסל', 'champions', 'europa', 'world cup', 'מונדיאל', 'ספורט', 'יורו', 'נבחרת'].some(k => text.includes(k))) return 'sports';
-  if (['פסח', 'ראש השנה', 'סוכות', 'חנוכה', 'פורים', 'שבועות', 'יום כיפור', 'יום עצמאות', 'לג בעומר', 'holiday', 'jewish', 'yom_kippur'].some(k => text.includes(k))) return 'holiday';
-  if (['קיץ', 'חורף', 'אביב', 'חתונה', 'שיפוץ', 'summer', 'winter', 'spring', 'renovation', 'wedding', 'עונת'].some(k => text.includes(k))) return 'seasonal';
-  if (['בלאק פריידי', 'ולנטיין', 'כושר', 'דיאטה', 'black friday', 'valentine', 'commercial', 'יום האם', 'יום האב', 'ינואר'].some(k => text.includes(k))) return 'commercial';
+  if (['פסח', 'ראש השנה', 'סוכות', 'חנוכה', 'פורים', 'שבועות', 'יום כיפור', 'יום עצמאות', 'לג בעומר', 'holiday'].some(k => text.includes(k))) return 'holiday';
+  if (['eid', 'עיד', 'רמדאן', 'christmas', 'כריסמס', 'חג המולד', 'easter', 'פסחא'].some(k => text.includes(k))) return 'holiday';
+  if (['ליגת האלופות', 'גמר', 'כדורגל', 'כדורסל', 'champions', 'europa', 'world cup', 'מונדיאל', 'ספורט', 'יורו'].some(k => text.includes(k))) return 'sports';
+  if (['בלאק פריידי', 'ולנטיין', 'כושר', 'דיאטה', 'black friday', 'valentine', 'יום האם', 'יום האב', 'ינואר'].some(k => text.includes(k))) return 'commercial';
+  if (['קיץ', 'חורף', 'אביב', 'summer', 'winter', 'spring', 'עונת'].some(k => text.includes(k))) return 'seasonal';
+  if (['מקומי', 'local', 'עיר', 'שכונה'].some(k => text.includes(k))) return 'local';
+  if (['פינאלה', 'ריאליטי', 'ערוץ', 'פסטיבל', 'הופעה', 'מוזיקה', 'תרבות'].some(k => text.includes(k))) return 'culture';
   return 'other';
 }
 
@@ -41,13 +38,13 @@ function getCountdown(input, isDate = false) {
   const hours = isDate
     ? Math.ceil((new Date(input).getTime() - Date.now()) / 3600000)
     : Number(input);
-  // Events happening today (within last 24h or next 24h)
-  if (isDate && hours > -24 && hours <= 24) return { text: 'היום!', urgent: true };
+  if (isDate && hours > -24 && hours <= 24) return { text: 'היום!', urgent: true, weeks: null };
   if (hours <= 0) return null;
   const days = Math.ceil(hours / 24);
-  if (days <= 3) return { text: `${days} ימים`, urgent: true };
-  if (days <= 14) return { text: `${days} ימים`, urgent: false };
-  return { text: `${Math.ceil(days / 7)} שבועות`, urgent: false };
+  if (days <= 3)  return { text: `${days} ימים`, urgent: true, weeks: null };
+  if (days <= 14) return { text: `${days} ימים`, urgent: false, weeks: null };
+  const weeks = Math.ceil(days / 7);
+  return { text: `${weeks} שבועות`, urgent: false, weeks };
 }
 
 function formatEventDate(dateStr) {
@@ -55,10 +52,8 @@ function formatEventDate(dateStr) {
   try {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return null;
-    return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
-  } catch {
-    return null;
-  }
+    return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'long' });
+  } catch { return null; }
 }
 
 function getEventMeta(item) {
@@ -66,26 +61,22 @@ function getEventMeta(item) {
     if (!raw) return {};
     try {
       let p = JSON.parse(raw);
-      if (typeof p === 'string') p = JSON.parse(p); // handle double-encoded JSON
+      if (typeof p === 'string') p = JSON.parse(p);
       return (p && typeof p === 'object') ? p : {};
     } catch { return {}; }
   }
   const a = safeParse(item.source_agent);
   const b = safeParse(item.source_description);
-  // Merge both fields; for alerts prefer source_agent, for signals prefer source_description
   const meta = item._type === 'alert' ? { ...b, ...a } : { ...a, ...b };
-  // Fallback: derive event_date from days_away + created/detected timestamp
   if (!meta.event_date && meta.days_away) {
     const base = new Date(item.created_date || item.detected_at || Date.now()).getTime();
     meta.event_date = new Date(base + Number(meta.days_away) * 86400000).toISOString().slice(0, 10);
   }
-  // Fallback: parse date from description text (YYYY-MM-DD or DD/MM/YYYY)
   if (!meta.event_date) {
     const text = item.description || item.summary || '';
     const iso = text.match(/(\d{4})-(\d{2})-(\d{2})/);
-    if (iso) {
-      meta.event_date = iso[0];
-    } else {
+    if (iso) meta.event_date = iso[0];
+    else {
       const dmy = text.match(/(\d{1,2})[./](\d{1,2})[./](\d{4})/);
       if (dmy) meta.event_date = `${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`;
     }
@@ -93,119 +84,54 @@ function getEventMeta(item) {
   return meta;
 }
 
-// ── Action sheet — פעל עכשיו ───────────────────────────────────────────────────
-function EventActSheet({ item, type, businessProfile, onClose }) {
+// Action sheet modal
+function EventActSheet({ item, businessProfile, onClose }) {
   const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
   const [creatingTask, setCreatingTask] = useState(false);
-
   const meta = getEventMeta(item);
-  const actionType = meta.action_type || 'social_post';
-
-  const title = type === 'alert' ? item.title : (item.agent_name || item.summary);
-  const description = type === 'alert' ? item.description : item.summary;
+  const title = item._type === 'alert' ? item.title : (item.agent_name || item.summary);
+  const description = item._type === 'alert' ? item.description : item.summary;
   const cleanTitle = (title || '').split(' — ')[0].replace(/^[^\u0590-\u05FFa-zA-Z0-9]*/, '').trim();
   const prefilled = meta.prefilled_text || meta.prefilled || `🎉 ${cleanTitle}\n\n${(description || '').slice(0, 120)}\n\n${businessProfile?.name || ''}`;
   const eventDate = meta.event_date ? formatEventDate(meta.event_date) : null;
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(prefilled).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
-
-  const handleCreateTask = async () => {
-    setCreatingTask(true);
-    try {
-      await base44.entities.Task.create({
-        title: `הכן תוכן לרגל: ${cleanTitle.slice(0, 60)}`,
-        description: description || '',
-        status: 'pending',
-        priority: 'medium',
-        source_type: 'alert',
-        linked_business: businessProfile?.id || '',
-      });
-      toast.success('משימה נוצרה ✓');
-      onClose();
-    } catch {
-      toast.error('שגיאה ביצירת המשימה');
-    }
-    setCreatingTask(false);
-  };
-
-  const handlePrimaryAction = () => {
-    if (actionType === 'create_campaign') {
-      const params = new URLSearchParams({ type: 'seasonal', event: cleanTitle, summary: (description || '').slice(0, 120) });
-      navigate(`/marketing/create?${params.toString()}`);
-    } else if (actionType === 'create_offer') {
-      const params = new URLSearchParams({ type: 'offer', event: cleanTitle, summary: (description || '').slice(0, 120) });
-      navigate(`/marketing/create?${params.toString()}`);
-    } else {
-      const params = new URLSearchParams({ create: 'organic', summary: prefilled });
-      navigate(`/marketing?${params.toString()}`);
-    }
-    onClose();
-  };
-
-  const primaryLabel = {
-    create_campaign: '📢 צור קמפיין מראש',
-    create_offer:    '🎁 בנה מבצע מיוחד',
-    social_post:     '📣 פרסם פוסט ממוקד',
-  }[actionType] || '📣 פרסם פוסט ממוקד';
-
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
-      <div
-        className="w-full max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl p-5 space-y-4"
-        onClick={e => e.stopPropagation()}
-        dir="rtl"
-      >
-        {/* Header */}
+      <div className="w-full max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl p-5 space-y-4" onClick={e => e.stopPropagation()} dir="rtl">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-[15px] font-bold text-foreground leading-snug">{cleanTitle}</h3>
-            {eventDate && <p className="text-[11px] text-primary font-medium mt-0.5">📅 {eventDate}</p>}
+            <h3 className="text-[15px] font-bold text-foreground">{cleanTitle}</h3>
+            {eventDate && <p className="text-[11px] text-[#e8344d] font-medium mt-0.5">📅 {eventDate}</p>}
             <p className="text-[11px] text-foreground-muted mt-0.5 line-clamp-2">{description}</p>
           </div>
-          <button onClick={onClose} className="text-foreground-muted hover:text-foreground p-1 -mt-1 -mr-1">
-            <X className="w-4 h-4" />
-          </button>
+          <button onClick={onClose} className="text-foreground-muted hover:text-foreground"><X className="w-4 h-4" /></button>
         </div>
-
-        {/* Action window hint */}
-        {meta.action_window_days && (
-          <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
-            <AlertCircle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-            <p className="text-[11px] text-amber-700">
-              מומלץ להתחיל {meta.action_window_days} ימים לפני האירוע
-            </p>
-          </div>
-        )}
-
-        {/* Post preview */}
-        <div className="bg-secondary rounded-xl p-3 space-y-2">
+        <div className="bg-gray-50 rounded-xl p-3 space-y-2">
           <p className="text-[10px] font-semibold text-foreground-muted">תוכן מותאם לאירוע</p>
           <p className="text-[12px] text-foreground leading-relaxed whitespace-pre-line line-clamp-4">{prefilled}</p>
-          <button onClick={handleCopy} className="flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:opacity-70 transition-all">
+          <button onClick={() => { navigator.clipboard.writeText(prefilled); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+            className="flex items-center gap-1.5 text-[11px] font-semibold text-[#e8344d]">
             {copied ? <CheckCheck className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
             {copied ? 'הועתק!' : 'העתק טקסט'}
           </button>
         </div>
-
-        {/* Actions */}
         <div className="space-y-2">
-          <button
-            onClick={handlePrimaryAction}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-foreground text-background text-[12px] font-semibold hover:opacity-90 transition-all"
-          >
-            {primaryLabel}
+          <button onClick={() => { navigate('/marketing/create'); onClose(); }}
+            className="w-full py-2.5 rounded-xl bg-foreground text-background text-[12px] font-semibold hover:opacity-90">
+            📢 צור קמפיין מראש
           </button>
-          <button
-            onClick={handleCreateTask}
+          <button onClick={async () => {
+            setCreatingTask(true);
+            try {
+              await base44.entities.Task.create({ title: `הכן תוכן לרגל: ${cleanTitle.slice(0, 60)}`, description: description || '', status: 'pending', priority: 'medium', source_type: 'alert', linked_business: businessProfile?.id || '' });
+              toast.success('משימה נוצרה ✓');
+              onClose();
+            } catch { toast.error('שגיאה'); }
+            setCreatingTask(false);
+          }}
             disabled={creatingTask}
-            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-border text-[11px] font-medium text-foreground hover:bg-secondary transition-all disabled:opacity-50"
-          >
+            className="w-full py-2 rounded-xl border border-gray-200 text-[11px] font-medium text-foreground hover:bg-gray-50 flex items-center justify-center gap-1.5 disabled:opacity-50">
             {creatingTask ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ListPlus className="w-3.5 h-3.5" />}
             הוסף כמשימה
           </button>
@@ -216,115 +142,59 @@ function EventActSheet({ item, type, businessProfile, onClose }) {
   );
 }
 
-// ── Event card ─────────────────────────────────────────────────────────────────
-function EventCard({ item, businessProfile, type, onCardClick, onDismissed }) {
-  const [popup, setPopup] = useState(false);
+// Large event card with countdown box on right
+function EventCard({ item, businessProfile }) {
+  const [showSheet, setShowSheet] = useState(false);
   const meta = getEventMeta(item);
-
-  const title       = type === 'alert' ? item.title : (item.agent_name || item.summary?.slice(0, 60));
-  const description = type === 'alert' ? item.description : item.summary;
-
-  let evType = '';
-  try { evType = JSON.parse(item.source_description || '{}').event_type || ''; } catch {}
-  const category = classifyEvent(title, description, item.tags || [], evType);
-
-  const countdown = meta.event_date
-    ? getCountdown(meta.event_date, true)
-    : getCountdown(meta.urgency_hours);
-
+  const title = item._type === 'alert' ? item.title : (item.agent_name || item.summary?.slice(0, 60) || '');
+  const description = item._type === 'alert' ? item.description : item.summary;
+  const cleanTitle = title.replace(/^[^\u0590-\u05FFa-zA-Z0-9]*/, '').split(' — ')[0].trim();
+  const countdown = meta.event_date ? getCountdown(meta.event_date, true) : getCountdown(meta.urgency_hours);
   const eventDate = meta.event_date ? formatEventDate(meta.event_date) : null;
 
-  const categoryIcons = {
-    sports: '⚽', holiday: '✡️', religion: '🕌', seasonal: '🌿',
-    commercial: '🛍️', tv_broadcast: '📺', weather: '🌡️', local: '📍', other: '📅',
-  };
-
-  const actionType  = meta.action_type || 'social_post';
-  const actionBadge = { create_campaign: 'קמפיין', create_offer: 'מבצע', social_post: 'פוסט' }[actionType] || 'פוסט';
-
   return (
-    <div
-      className={`card-base p-4 fade-in-up border-r-4 cursor-pointer ${countdown?.urgent ? 'border-r-red-400 bg-red-50/30' : 'border-r-blue-300'}`}
-      onClick={() => onCardClick && onCardClick(item, type)}
-    >
-      <div className="flex items-start justify-between gap-3">
+    <>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-start gap-4 hover:shadow-md transition-shadow">
+        {/* Content */}
         <div className="flex-1 min-w-0">
-
-          {/* Title */}
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <span className="text-base">{categoryIcons[category] || '📅'}</span>
-            <span className="text-[13px] font-semibold text-foreground leading-snug">{title}</span>
-            {type !== 'static' && onDismissed && businessProfile?.id && (
-              <div onClick={e => e.stopPropagation()}>
-                <DismissMenu
-                  entityType={type === 'alert' ? 'alert' : 'signal'}
-                  entityId={item.id}
-                  title={title}
-                  businessProfileId={businessProfile.id}
-                  onDismissed={() => onDismissed(item)}
-                  buttonLabel="לא רלוונטי"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Date + countdown row */}
-          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-            {eventDate && (
-              <span className="text-[11px] font-semibold text-foreground-secondary">
-                📅 {eventDate}
-              </span>
-            )}
-            {countdown && (
-              <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
-                countdown.urgent
-                  ? 'bg-red-50 text-red-600 border-red-200'
-                  : 'bg-blue-50 text-blue-600 border-blue-200'
-              }`}>
-                <Clock className="w-3 h-3" />
-                בעוד {countdown.text}
-              </span>
-            )}
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-secondary text-foreground-muted border border-border">
-              {actionBadge}
-            </span>
-          </div>
-
-          <p className="text-[12px] text-foreground-secondary leading-relaxed mb-2 line-clamp-2">{description}</p>
-
-          {(meta.artist_or_headliner || meta.venue) && (
-            <div className="flex items-center gap-2 text-[11px] text-foreground-muted mb-1.5">
-              {meta.artist_or_headliner && <span className="font-medium text-foreground-secondary">🎤 {meta.artist_or_headliner}</span>}
-              {meta.venue && <span className="opacity-70">📍 {meta.venue}</span>}
-            </div>
-          )}
-
+          <div className="font-semibold text-sm text-foreground mb-1">{cleanTitle}</div>
+          {eventDate && <div className="text-xs text-[#e8344d] font-medium mb-1">📅 {eventDate}</div>}
+          <div className="text-xs text-foreground-secondary leading-relaxed line-clamp-2">{description}</div>
           {meta.action_label && (
-            <div className="flex items-center gap-1.5 text-[11px] text-foreground-muted">
-              <TrendingUp className="w-3.5 h-3.5 text-primary opacity-60" />
-              <span>{meta.action_label}</span>
-            </div>
+            <div className="text-xs text-foreground-muted mt-2">{meta.action_label}</div>
           )}
         </div>
 
-        <button
-          onClick={e => { e.stopPropagation(); setPopup(true); }}
-          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-medium bg-foreground text-background hover:opacity-90 transition-all"
-        >
-          <Zap className="w-3.5 h-3.5" />
-          פעל עכשיו
-        </button>
+        {/* Countdown box + CTA */}
+        <div className="flex-shrink-0 flex flex-col items-center gap-2">
+          {countdown && (
+            <div className={`rounded-xl px-3 py-2 text-center min-w-[64px] ${
+              countdown.urgent
+                ? 'bg-red-50 border border-red-200'
+                : 'bg-blue-50 border border-blue-200'
+            }`}>
+              <div className={`text-xs font-bold ${countdown.urgent ? 'text-red-600' : 'text-blue-600'}`}>
+                בעוד
+              </div>
+              <div className={`text-base font-bold leading-tight ${countdown.urgent ? 'text-red-600' : 'text-blue-700'}`}>
+                {countdown.text}
+              </div>
+            </div>
+          )}
+          <button
+            onClick={() => setShowSheet(true)}
+            className="flex items-center gap-1 text-xs font-semibold text-white bg-[#e8344d] px-3 py-1.5 rounded-lg hover:bg-[#c92b40] transition-colors"
+          >
+            <Zap className="w-3 h-3" />
+            פעל עכשיו
+          </button>
+        </div>
       </div>
 
-      {popup && (
-        <EventActSheet
-          item={item}
-          type={type}
-          businessProfile={businessProfile}
-          onClose={() => setPopup(false)}
-        />
+      {showSheet && (
+        <EventActSheet item={item} businessProfile={businessProfile} onClose={() => setShowSheet(false)} />
       )}
-    </div>
+    </>
   );
 }
 
@@ -333,50 +203,21 @@ export default function Events() {
   const { businessProfile } = useOutletContext();
   const bpId = businessProfile?.id;
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab]         = useState('all');
-  const [scanning, setScanning]           = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState(null);
-  const [dismissedIds, setDismissedIds]   = useState(new Set());
-  const [autoScanned, setAutoScanned]     = useState(false);
+  const [activeTab, setActiveTab] = useState('all');
+  const [scanning, setScanning]   = useState(false);
+  const [dismissedIds, setDismissedIds] = useState(new Set());
+  const [autoScanned, setAutoScanned]   = useState(false);
 
   const POLL_INTERVAL = 20 * 60 * 1000;
 
-  const { data: eventAlerts = [], isLoading: loadingAlerts } = useQuery({
-    queryKey: ['eventAlerts', bpId],
-    queryFn:  () => base44.entities.ProactiveAlert.filter({ linked_business: bpId, alert_type: 'market_opportunity' }, '-created_date', 50),
-    enabled:  !!bpId,
-    refetchInterval: POLL_INTERVAL,
-    staleTime: 10 * 60 * 1000,
-  });
+  const { data: eventAlerts = [],       isLoading: la } = useQuery({ queryKey: ['eventAlerts',       bpId], queryFn: () => base44.entities.ProactiveAlert.filter({ linked_business: bpId, alert_type: 'market_opportunity', is_dismissed: false }, '-created_date', 50), enabled: !!bpId, refetchInterval: POLL_INTERVAL, staleTime: 10 * 60 * 1000 });
+  const { data: eventSignals = [],      isLoading: ls } = useQuery({ queryKey: ['eventSignals',      bpId], queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'event', is_dismissed: false }, '-detected_at', 50), enabled: !!bpId, refetchInterval: POLL_INTERVAL, staleTime: 10 * 60 * 1000 });
+  const { data: localEventSignals = [], isLoading: ll } = useQuery({ queryKey: ['localEventSignals', bpId], queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'local_event', is_dismissed: false }, '-detected_at', 30), enabled: !!bpId, refetchInterval: POLL_INTERVAL, staleTime: 10 * 60 * 1000 });
+  const { data: weatherSignals = [],    isLoading: lw } = useQuery({ queryKey: ['weatherSignals',    bpId], queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'weather_event', is_dismissed: false }, '-detected_at', 10), enabled: !!bpId, refetchInterval: POLL_INTERVAL, staleTime: 10 * 60 * 1000 });
 
-  const { data: eventSignals = [], isLoading: loadingSignals } = useQuery({
-    queryKey: ['eventSignals', bpId],
-    queryFn:  () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'event' }, '-detected_at', 50),
-    enabled:  !!bpId,
-    refetchInterval: POLL_INTERVAL,
-    staleTime: 10 * 60 * 1000,
-  });
-
-  const { data: localEventSignals = [], isLoading: loadingLocal } = useQuery({
-    queryKey: ['localEventSignals', bpId],
-    queryFn:  () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'local_event' }, '-detected_at', 30),
-    enabled:  !!bpId,
-    refetchInterval: POLL_INTERVAL,
-    staleTime: 10 * 60 * 1000,
-  });
-
-  const { data: weatherSignals = [], isLoading: loadingWeather } = useQuery({
-    queryKey: ['weatherSignals', bpId],
-    queryFn:  () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'weather_event' }, '-detected_at', 10),
-    enabled:  !!bpId,
-    refetchInterval: POLL_INTERVAL,
-    staleTime: 10 * 60 * 1000,
-  });
-
-  const isLoading = loadingAlerts || loadingSignals || loadingLocal || loadingWeather;
+  const isLoading = la || ls || ll || lw;
   const totalEvents = eventAlerts.length + eventSignals.length + localEventSignals.length;
 
-  // Auto-scan on first page load if no events exist
   useEffect(() => {
     if (!bpId || isLoading || autoScanned || totalEvents > 0) return;
     setAutoScanned(true);
@@ -385,21 +226,13 @@ export default function Events() {
       base44.functions.invoke('findLocalEvents', { businessProfileId: bpId }),
     ]).then(() => {
       setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['eventAlerts',      bpId] });
-        queryClient.invalidateQueries({ queryKey: ['eventSignals',     bpId] });
+        queryClient.invalidateQueries({ queryKey: ['eventAlerts',       bpId] });
+        queryClient.invalidateQueries({ queryKey: ['eventSignals',      bpId] });
         queryClient.invalidateQueries({ queryKey: ['localEventSignals', bpId] });
-        queryClient.invalidateQueries({ queryKey: ['weatherSignals',   bpId] });
+        queryClient.invalidateQueries({ queryKey: ['weatherSignals',    bpId] });
       }, 3000);
     });
   }, [bpId, isLoading, autoScanned, totalEvents, queryClient]);
-
-  const handleEventDismissed = (item) => {
-    setDismissedIds(prev => new Set([...prev, item.id]));
-    queryClient.invalidateQueries({ queryKey: ['eventAlerts',      bpId] });
-    queryClient.invalidateQueries({ queryKey: ['eventSignals',     bpId] });
-    queryClient.invalidateQueries({ queryKey: ['localEventSignals', bpId] });
-    queryClient.invalidateQueries({ queryKey: ['weatherSignals',   bpId] });
-  };
 
   function extractEventDate(item) {
     try {
@@ -407,61 +240,36 @@ export default function Events() {
       if (meta.event_date) return new Date(meta.event_date).getTime();
       if (meta.urgency_hours) return Date.now() + Number(meta.urgency_hours) * 3600000;
     } catch {}
-    const text = (item.description || item.summary || '');
-    const iso = text.match(/(\d{4})-(\d{2})-(\d{2})/);
-    if (iso) return new Date(iso[0]).getTime();
-    const dmy = text.match(/(\d{1,2})[./](\d{1,2})[./](\d{4})/);
-    if (dmy) return new Date(parseInt(dmy[3]), parseInt(dmy[2]) - 1, parseInt(dmy[1])).getTime();
     return Date.now() + 365 * 86400000;
   }
 
-  function normalizeEventTitle(item) {
-    const raw = item._type === 'alert'
-      ? (item.title || '')
-      : (item.agent_name || item.summary || '');
-    return raw
-      .replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}⚽📅🛍🌿🎵🎯🏆🕌✡️🎤📍🎉🎊🎶📣💡]\s*/u, '')
-      .split(' — ')[0]
-      .trim()
-      .toLowerCase();
+  function normalizeTitle(item) {
+    const raw = item._type === 'alert' ? (item.title || '') : (item.agent_name || item.summary || '');
+    return raw.replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}]\s*/u, '').split(' — ')[0].trim().toLowerCase();
   }
 
-  // Merge all DB events, filter stale, dedup by name, sort by date
-  const rawDbItems = [
+  const rawItems = [
     ...eventAlerts.map(a => ({ ...a, _type: 'alert' })),
     ...eventSignals.map(s => ({ ...s, _type: 'signal' })),
     ...localEventSignals.map(s => ({ ...s, _type: 'signal', _isLocal: true })),
     ...weatherSignals.map(s => ({ ...s, _type: 'signal', _isLocal: true })),
   ].filter(item => {
-    if (item.is_dismissed) return false;
-    if (dismissedIds.has(item.id)) return false;
-    // Always filter out events whose date has passed (more than 1 day ago)
-    const eventTs = extractEventDate(item);
-    if (eventTs < Date.now() - 86400000) return false;
-    return true;
+    if (item.is_dismissed || dismissedIds.has(item.id)) return false;
+    const ts = extractEventDate(item);
+    return ts > Date.now() - 86400000;
   });
 
-  const seenEventKeys = new Map();
-  rawDbItems.forEach(item => {
-    const key = normalizeEventTitle(item);
+  // Dedup by title
+  const seen = new Map();
+  rawItems.forEach(item => {
+    const key = normalizeTitle(item);
     if (!key) return;
     const ts = new Date(item.created_date || item.detected_at || 0).getTime();
-    const hasDate = !!getEventMeta(item).event_date;
-    const prev = seenEventKeys.get(key);
-    if (!prev) {
-      seenEventKeys.set(key, { item, ts, hasDate });
-    } else if (hasDate && !prev.hasDate) {
-      // Always prefer an item that has a parseable event_date
-      seenEventKeys.set(key, { item, ts, hasDate });
-    } else if (hasDate === prev.hasDate && ts > prev.ts) {
-      // Same quality: keep the more recently created item
-      seenEventKeys.set(key, { item, ts, hasDate });
-    }
+    const prev = seen.get(key);
+    if (!prev || ts > prev.ts) seen.set(key, { item, ts });
   });
 
-  const allItems = Array.from(seenEventKeys.values())
-    .map(v => v.item)
-    .sort((a, b) => extractEventDate(a) - extractEventDate(b));
+  const allItems = Array.from(seen.values()).map(v => v.item).sort((a, b) => extractEventDate(a) - extractEventDate(b));
 
   const categoryMap = useMemo(() => {
     const map = new Map();
@@ -475,150 +283,87 @@ export default function Events() {
     return map;
   }, [allItems]);
 
-  const getCategory = (item) => {
-    const mapped = categoryMap.get(item.id) || 'other';
-    if (item._isLocal) return mapped === 'weather' ? 'weather' : 'local';
-    return mapped;
-  };
+  const getCategory = (item) => categoryMap.get(item.id) || 'other';
 
-  const filtered = activeTab === 'all'
-    ? allItems
-    : allItems.filter(item => getCategory(item) === activeTab);
+  const filteredItems = activeTab === 'all' ? allItems : allItems.filter(item => getCategory(item) === activeTab);
 
-  const countByTab = {
-    holiday:      allItems.filter(i => getCategory(i) === 'holiday').length,
-    religion:     allItems.filter(i => getCategory(i) === 'religion').length,
-    sports:       allItems.filter(i => getCategory(i) === 'sports').length,
-    tv_broadcast: allItems.filter(i => getCategory(i) === 'tv_broadcast').length,
-    seasonal:     allItems.filter(i => getCategory(i) === 'seasonal').length,
-    commercial:   allItems.filter(i => getCategory(i) === 'commercial').length,
-    local:        allItems.filter(i => getCategory(i) === 'local').length,
-    weather:      allItems.filter(i => getCategory(i) === 'weather').length,
-  };
+  const thisWeek = Date.now() + 7 * 86400000;
+  const weekItems = allItems.filter(item => extractEventDate(item) < thisWeek);
+  const urgentItems = allItems.filter(item => {
+    const meta = getEventMeta(item);
+    const cd = meta.event_date ? getCountdown(meta.event_date, true) : null;
+    return cd?.urgent;
+  });
+
+  const statCards = [
+    { count: allItems.length,    label: 'אירועים קרובים',     borderColor: 'blue' },
+    { count: weekItems.length,   label: 'השבוע הקרוב',        borderColor: 'red' },
+    { count: urgentItems.length, label: 'דורשים פעולה',       borderColor: 'yellow' },
+    { count: allItems.filter(i => getCategory(i) === 'commercial').length, label: 'הזדמניות קמפיין', borderColor: 'none' },
+  ];
 
   const handleScan = async () => {
     setScanning(true);
-    toast.info('סורק אירועים קרובים...');
+    toast.info('סורק אירועים...');
     try {
-      const [evRes, localRes] = await Promise.allSettled([
+      await Promise.allSettled([
         base44.functions.invoke('detectEvents',    { businessProfileId: bpId }),
-        base44.functions.invoke('findLocalEvents', { businessProfileId: bpId, force: true }),
+        base44.functions.invoke('findLocalEvents', { businessProfileId: bpId }),
       ]);
-      const evFound    = evRes.status    === 'fulfilled' ? (evRes.value?.data?.signals_created    ?? 0) : 0;
-      const localFound = localRes.status === 'fulfilled' ? (localRes.value?.data?.signals_created ?? 0) : 0;
-      queryClient.invalidateQueries({ queryKey: ['eventAlerts',       bpId] });
-      queryClient.invalidateQueries({ queryKey: ['eventSignals',      bpId] });
-      queryClient.invalidateQueries({ queryKey: ['localEventSignals', bpId] });
-      queryClient.invalidateQueries({ queryKey: ['weatherSignals',    bpId] });
-      const total = evFound + localFound;
-      toast.success(total > 0 ? `נמצאו ${total} אירועים רלוונטיים ✓` : 'הסריקה הושלמה — בדוק שוב בעוד מספר שניות');
-    } catch {
-      toast.error('שגיאה בסריקת אירועים');
-    }
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['eventAlerts',       bpId] });
+        queryClient.invalidateQueries({ queryKey: ['eventSignals',      bpId] });
+        queryClient.invalidateQueries({ queryKey: ['localEventSignals', bpId] });
+        queryClient.invalidateQueries({ queryKey: ['weatherSignals',    bpId] });
+      }, 2000);
+      toast.success('סריקת אירועים הושלמה');
+    } catch { toast.error('שגיאה בסריקת אירועים'); }
     setScanning(false);
   };
 
   return (
     <div className="space-y-5">
-      <AiInsightsBar
-        title="תובנות AI — הזדמנויות עסקיות"
-        prompt="נתח את לוח האירועים הקרובים לעסק: אלו חגים, עונות או אירועים מציגים את ההזדמנות הגדולה ביותר לגידול במכירות, ואיזה פעולה לבצע לפני כל אחד."
+      <PageHeader
+        count={allItems.length}
+        title="אירועים"
+        actionLabel={scanning ? 'סורק...' : 'סרוק אירועים'}
+        actionIcon={scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+        onAction={handleScan}
       />
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-[16px] font-bold text-foreground tracking-tight">אירועים והזדמנויות</h1>
-          <p className="text-[12px] text-foreground-muted mt-0.5">
-            חגים, ספורט, עונות מסחריות — אירועים רלוונטיים לעסק שלך עם תאריכים ופעולות מותאמות
-          </p>
-        </div>
-        <button
-          onClick={handleScan}
-          disabled={scanning}
-          className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium bg-foreground text-background hover:opacity-90 transition-all disabled:opacity-50"
-        >
-          {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
-          {scanning ? 'סורק...' : 'סרוק אירועים ←'}
-        </button>
-      </div>
+      <StatCards cards={statCards} />
 
-      {/* Stat row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'סה"כ אירועים',   value: allItems.length,                                        color: 'text-primary' },
-          { label: 'חגים יהודיים',   value: countByTab.holiday,                                     color: 'text-purple-500' },
-          { label: 'ספורט/טלוויזיה', value: countByTab.sports + countByTab.tv_broadcast,            color: 'text-green-600' },
-          { label: 'מסחרי/עונתי',    value: countByTab.commercial + countByTab.seasonal,             color: 'text-amber-500' },
-        ].map(card => (
-          <div key={card.label} className="card-base p-4 fade-in-up">
-            <p className="text-[10px] font-medium text-foreground-muted mb-1">{card.label}</p>
-            <span className={`text-[24px] font-bold tracking-tight ${card.color}`}>{card.value}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-0.5 border-b border-border overflow-x-auto">
+      {/* Tab bar */}
+      <div className="flex gap-1 p-1 bg-gray-100 rounded-xl overflow-x-auto">
         {EVENT_TABS.map(tab => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2.5 text-[12px] font-medium transition-all duration-150 relative whitespace-nowrap ${
-              activeTab === tab.key ? 'text-foreground' : 'text-foreground-muted hover:text-foreground-secondary'
-            }`}>
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all whitespace-nowrap ${
+              activeTab === tab.key ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
+            }`}
+          >
             {tab.label}
-            {tab.key !== 'all' && countByTab[tab.key] > 0 && (
-              <span className="mr-1 text-[9px] font-bold text-foreground-muted">({countByTab[tab.key]})</span>
-            )}
-            {activeTab === tab.key && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-foreground rounded-t" />}
           </button>
         ))}
       </div>
 
-      {/* Content */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-16 gap-2">
-          <Loader2 className="w-5 h-5 animate-spin text-foreground-muted" />
-          <span className="text-[13px] text-foreground-muted">טוען אירועים...</span>
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-6 h-6 animate-spin text-foreground-muted" />
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="card-base py-20 text-center fade-in-up">
-          <Calendar className="w-12 h-12 text-foreground-muted opacity-20 mx-auto mb-3" />
-          <p className="text-[13px] text-foreground-muted mb-1">
-            {activeTab === 'all'
-              ? 'טרם זוהו אירועים רלוונטיים לעסק שלך'
-              : `אין אירועים בקטגוריית "${EVENT_TABS.find(t => t.key === activeTab)?.label}"`}
-          </p>
-          {activeTab === 'all' && (
-            <button
-              onClick={handleScan}
-              disabled={scanning}
-              className="mt-3 px-4 py-2 rounded-lg text-[12px] font-medium bg-foreground text-background hover:opacity-90 disabled:opacity-50"
-            >
-              {scanning ? 'סורק...' : 'סרוק אירועים עכשיו ←'}
-            </button>
-          )}
+      ) : filteredItems.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-foreground-muted">
+          <div className="text-4xl mb-3">📅</div>
+          <div className="text-sm font-medium">אין אירועים בקטגוריה זו</div>
+          <div className="text-xs mt-1">לחץ "סרוק אירועים" לעדכון</div>
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map(item => (
-            <EventCard
-              key={`${item._type}-${item.id}`}
-              item={item}
-              type={item._type}
-              businessProfile={businessProfile}
-              onCardClick={(ev, t) => setSelectedEvent({ item: ev, type: t })}
-              onDismissed={handleEventDismissed}
-            />
+          {filteredItems.map((item) => (
+            <EventCard key={item.id} item={item} businessProfile={businessProfile} />
           ))}
         </div>
-      )}
-
-      {selectedEvent && (
-        <EventDetailModal
-          item={selectedEvent.item}
-          type={selectedEvent.type}
-          businessProfile={businessProfile}
-          onClose={() => setSelectedEvent(null)}
-        />
       )}
     </div>
   );

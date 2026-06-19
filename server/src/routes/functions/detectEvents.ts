@@ -5,6 +5,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 import { publishEvent } from '../../lib/eventBus';
+import { loadDismissedTitles } from '../../lib/insightDedup';
 
 // ── Sector opportunity entry ───────────────────────────────────────────────────
 // Each event can have multiple sector entries. The first matching entry wins.
@@ -188,9 +189,51 @@ const CALENDAR_EVENTS: CalendarEvent[] = [
     defaultOpportunity: 'גמר ליגת האלופות — ביקוש מוגבר לכל עסק בשעות המשחק',
   },
 
-  // World Cup 2026 generic entries removed — specific matchups are discovered
-  // dynamically via Tavily in Phase 2b (buildSportsSpecificQueries) so that
-  // events show "Israel vs Argentina" rather than "World Cup Group Stage".
+  // World Cup 2026 — generic fallback entries used only if Tavily cannot find
+  // specific team matchups (which would replace them via the hasSpecificMatch check).
+  {
+    name: 'מונדיאל 2026 — שלב הבתים', nameEn: 'FIFA World Cup 2026 Group Stage', date: '2026-06-11',
+    type: 'sports', leadDays: 14,
+    sectors: [
+      { keywords: ['מסעדה', 'אוכל', 'food', 'restaurant', 'בר', 'bar', 'פאב', 'pub', 'קייטרינג'], boost: 'high', opportunity: 'מונדיאל = שיא הצפייה המשותפת — מסך גדול, מבצעי "ארוחת המשחק", הזמנות מוקדמות' },
+      { keywords: ['משלוח', 'delivery', 'wolt', 'שליחות'], boost: 'high', opportunity: 'גל הזמנות ענק בשעות המשחקים — הגדל קיבולת, מבצעי "ארוחת המונדיאל"' },
+      { keywords: ['אלקטרוניקה', 'electronics', 'טלוויזיה', 'tv', 'מסכים', 'screen'], boost: 'high', opportunity: 'מונדיאל = שיא מכירות טלוויזיות וסאונד בר — הרבה לקוחות קונים לפני הפתיחה' },
+      { keywords: ['קמעונאות', 'retail', 'ספורט', 'sports', 'כדורגל', 'football', 'חולצה', 'shirt'], boost: 'high', opportunity: 'חולצות נבחרות, כדורים, מוצרי מאהדים — עונת השיא' },
+      { keywords: ['בידור', 'entertainment', 'אירועים', 'events'], boost: 'high', opportunity: 'אירועי צפייה משותפת — הפק "מסיבת מונדיאל", כרטיסי VIP' },
+    ],
+    defaultOpportunity: 'מונדיאל 2026 — אירוע הספורט הגדול בעולם, הזדמנות שיווקית ענקית',
+  },
+  {
+    name: 'מונדיאל 2026 — גמר', nameEn: 'FIFA World Cup 2026 Final', date: '2026-07-19',
+    type: 'sports', leadDays: 14,
+    sectors: [
+      { keywords: ['מסעדה', 'אוכל', 'food', 'restaurant', 'בר', 'bar', 'פאב', 'pub'], boost: 'high', opportunity: 'גמר המונדיאל — אירוע הצפייה הגדול בשנה, הזמן לסגור הזמנות עכשיו' },
+      { keywords: ['קמעונאות', 'retail', 'ספורט', 'sports', 'כדורגל', 'football'], boost: 'high', opportunity: 'מבצעי "גמר המונדיאל" — 48 שעות להעלאת מכירות' },
+    ],
+    defaultOpportunity: 'גמר המונדיאל 2026 — הרגע הכי נצפה בשנה',
+  },
+
+  {
+    name: 'גמר NBA 2026', nameEn: 'NBA Finals 2026', date: '2026-06-08',
+    type: 'sports', leadDays: 10,
+    sectors: [
+      { keywords: ['מסעדה', 'אוכל', 'food', 'restaurant', 'בר', 'bar', 'פאב', 'pub'], boost: 'high', opportunity: 'גמר NBA — ישראל אוהבת כדורסל! מסך גדול, מבצע "ארוחת הגמר"' },
+      { keywords: ['ספורט', 'sports', 'כדורסל', 'basketball', 'כושר', 'fitness'], boost: 'high', opportunity: 'גמר NBA — קדם מכירה של ציוד כדורסל וביגוד נבחרות' },
+      { keywords: ['קמעונאות', 'retail', 'חנות', 'shop'], boost: 'medium', opportunity: 'מבצעי גמר NBA — לקוחות בנושא הכדורסל בשיא' },
+    ],
+    defaultOpportunity: 'גמר NBA 2026 — הגמר הכי נצפה בכדורסל, הזדמנות לתוכן רלוונטי',
+  },
+
+  {
+    name: 'וימבלדון 2026', nameEn: 'Wimbledon 2026', date: '2026-06-29',
+    type: 'sports', leadDays: 10,
+    sectors: [
+      { keywords: ['מסעדה', 'אוכל', 'food', 'restaurant', 'קפה', 'cafe', 'בר', 'bar'], boost: 'medium', opportunity: 'וימבלדון — קהל אופנתי ואיכותי, הציע "מנת וימבלדון" עם תות ושמנת' },
+      { keywords: ['יופי', 'beauty', 'אופנה', 'fashion', 'מספרה', 'salon', 'ביגוד', 'clothing'], boost: 'high', opportunity: 'סגנון וימבלדון — לבן, אלגנטי, קלאסי; השתמש בנושא לקמפיין אופנה' },
+      { keywords: ['ספורט', 'sports', 'כושר', 'fitness', 'טניס', 'tennis'], boost: 'high', opportunity: 'וימבלדון — שיא העניין בטניס בשנה, הזמן לקדם מחנות ושיעורי טניס' },
+    ],
+    defaultOpportunity: 'וימבלדון 2026 — אחד האירועים הספורטיביים הנחשקים, תוכן בסגנון "קלאסי ואיכותי"',
+  },
 
   {
     name: 'גמר ליגת העל 2025/26', nameEn: 'Israeli Premier League Championship', date: '2026-05-25',
@@ -352,8 +395,10 @@ function buildSportsSpecificQueries(now: Date): string[] {
 // ── Build sector-aware Tavily queries for dynamic event detection ───────────────
 function buildEventTavilyQueries(category: string, city: string): string[] {
   const lower = category.toLowerCase();
-  const month = new Date().toLocaleDateString('he-IL', { month: 'long' });
+  const now2 = new Date();
+  const month = now2.toLocaleDateString('he-IL', { month: 'long' });
   const nextMonth = new Date(Date.now() + 30 * 24 * 3600000).toLocaleDateString('he-IL', { month: 'long' });
+  const year = now2.getFullYear();
 
   const queries: string[] = [
     // Universal: ticket sites + local event search
@@ -396,8 +441,12 @@ function buildEventTavilyQueries(category: string, city: string): string[] {
   // Always include a general cultural/festival search
   queries.push(`פסטיבל תערוכה הופעה ${city} ${nextMonth}`);
 
-  // Deduplicate and limit to 6 queries max (Tavily credit conservation)
-  return [...new Set(queries)].slice(0, 6);
+  // TV shows — premier/finale dates relevant for businesses (watch parties, trending topics)
+  queries.push(`סדרות ישראליות חדשות פרמיירה עונה ${month} ${year} ערוץ 12 13 כאן`);
+  queries.push(`Netflix ישראל סדרה חדשה פרמיירה ${month} ${year}`);
+
+  // Deduplicate and limit to 8 queries max (TV queries added)
+  return [...new Set(queries)].slice(0, 8);
 }
 
 // ── Select action type based on event type + days away ────────────────────────
@@ -427,7 +476,7 @@ export async function detectEvents(req: Request, res: Response) {
     const rejectedPatterns: string[] = (bizCtx as any)?.rejectedPatterns || [];
 
     const now = new Date();
-    const windowEnd = new Date(now.getTime() + 90 * 24 * 3600000);
+    const windowEnd = new Date(now.getTime() + 120 * 24 * 3600000);
 
     // ── Phase 0: Clean up stale and duplicate event alerts ────────────────────
     try {
@@ -550,13 +599,14 @@ STRICT RULES:
 2. For World Cup 2026: search the text for specific group-stage matchups involving Israel or other major teams. Include Israel's matches if found.
 3. Only events with a CONFIRMED date. No date = skip.
 4. Concerts/festivals: include the artist or festival name (not generic "concert").
+5. TV shows: include the show name and whether it's a premiere or finale — e.g., "עונה 3 של 'שידוד מטבחים' — פרמיירה". Only major shows with audience > 300K viewers. Relevant for all businesses as a trending conversation topic.
 
 Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "events": [{
-    "name": "שם ספציפי — לספורט: 'קבוצה א נגד קבוצה ב — שם התחרות'",
+    "name": "שם ספציפי — לספורט: 'קבוצה א נגד קבוצה ב — שם התחרות'; לתוכניות: 'שם הסדרה — עונה X פרמיירה/פינאלה'",
     "date_estimate": "YYYY-MM-DD",
-    "type": "sports|concert|festival|fair|conference|cultural|commercial",
+    "type": "sports|concert|festival|fair|conference|cultural|commercial|tv_premiere",
     "relevance": "high|medium|low",
     "audience_size": "large|medium|small",
     "opportunity": "ההזדמנות הספציפית לעסק זה (${category}) — עד 10 מילים"
@@ -571,22 +621,13 @@ If no events with specific details found — return {"events":[]}.`,
       } catch (_) {}
     }
 
-    // ── Phase 4: Deduplication ────────────────────────────────────────────────
-    const existingAlerts = await prisma.proactiveAlert.findMany({
-      where: { linked_business: businessProfileId, is_dismissed: false, alert_type: 'market_opportunity' },
-      select: { title: true },
-    });
-    const existingTitles = new Set(existingAlerts.map(a => a.title));
-
-    const existingSignals = await prisma.marketSignal.findMany({
-      where: {
-        linked_business: businessProfileId,
-        category: 'event',
-        detected_at: { gte: new Date(Date.now() - 20 * 24 * 3600000).toISOString() },
-      },
-      select: { summary: true },
-    });
-    const existingSignalNames = new Set(existingSignals.map(s => s.summary));
+    // ── Phase 4: Deduplication — includes dismissed records (last 30 days) ───
+    // loadDismissedTitles covers both active AND recently-dismissed records so
+    // agents don't recreate insights the user already dismissed.
+    const dedup = await loadDismissedTitles(businessProfileId, 30);
+    // Keep legacy sets for the addToSet pattern used below
+    const existingTitles = new Set<string>();
+    const existingSignalNames = new Set<string>();
 
     let created = 0;
 
@@ -616,7 +657,8 @@ If no events with specific details found — return {"events":[]}.`,
       // Title uses stable event name (no day counter) so dedup works across multiple runs
       const alertTitle = `${icon} ${event.name}`;
 
-      if (existingTitles.has(alertTitle) || existingSignalNames.has(event.name)) continue;
+      if (existingTitles.has(alertTitle) || existingSignalNames.has(event.name) ||
+          dedup.hasAlert(alertTitle) || dedup.hasSignal(event.name)) continue;
 
       // Skip if the user previously dismissed a similar event
       const eventText = `${event.name} ${sectorCtx.opportunity}`.toLowerCase();
@@ -713,11 +755,11 @@ Write one specific action to take right now to maximise revenue — up to 8 word
 
     // ── Phase 6: Create alerts for Tavily-discovered events ───────────────────
     for (const event of extraEvents.slice(0, 3)) {
-      if (!event.name || existingSignalNames.has(event.name)) continue;
+      if (!event.name || existingSignalNames.has(event.name) || dedup.hasSignal(event.name)) continue;
 
-      const icon = event.type === 'sports' ? '⚽' : event.type === 'concert' ? '🎵' : '🎯';
+      const icon = event.type === 'sports' ? '⚽' : event.type === 'concert' ? '🎵' : event.type === 'tv_premiere' ? '📺' : '🎯';
       const alertTitle = `${icon} ${event.name} — הזדמנות עסקית`;
-      if (existingTitles.has(alertTitle)) continue;
+      if (existingTitles.has(alertTitle) || dedup.hasAlert(alertTitle)) continue;
 
       // Skip if user previously dismissed a similar event
       const extraEventText = `${event.name} ${event.opportunity || ''}`.toLowerCase();
@@ -732,6 +774,7 @@ Write one specific action to take right now to maximise revenue — up to 8 word
 Opportunity: ${event.opportunity || 'local event'}.
 ${event.type === 'sports' ? 'Sports event — target spectators and the atmosphere.' : ''}
 ${event.type === 'concert' ? 'Concert — target the audience arriving in the area.' : ''}
+${event.type === 'tv_premiere' ? 'TV premiere — tie your product/service to the show excitement, watch-party angle.' : ''}
 Structure: Hook + specific value + CTA. Tone: ${toneInstruction}. Write only the post text. ALL text must be in Hebrew.`,
         });
         prefilledText = typeof ctaRes === 'string' ? ctaRes.trim() : '';

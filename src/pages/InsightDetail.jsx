@@ -23,10 +23,10 @@ const TYPE_META = {
   market_opportunity: { label: 'הזדמנות שוק',   color: 'text-green-600',  bg: 'bg-green-50',  border: 'border-green-100',  icon: TrendingUp },
   risk:               { label: 'סיכון',          color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-100',  icon: AlertTriangle },
   retention_risk:     { label: 'סיכון שימור',   color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-100',  icon: AlertTriangle },
-  competitor_move:    { label: 'מהלך מתחרה',    color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', icon: Trophy },
+  competitor_move:    { label: 'מהלך מתחרה',    color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-100', icon: Trophy },
   milestone:          { label: 'אבן דרך',        color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100', icon: Trophy },
   hot_lead:           { label: 'ליד חם',         color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-100',  icon: Zap },
-  competitive:        { label: 'תחרותי',         color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', icon: Target },
+  competitive:        { label: 'תחרותי',         color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-100', icon: Target },
   defensive:          { label: 'הגנתי',          color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-100',  icon: AlertTriangle },
   general:            { label: 'כללי',           color: 'text-blue-600',   bg: 'bg-blue-50',   border: 'border-blue-100',   icon: Lightbulb },
   // Advisory insight types
@@ -34,9 +34,9 @@ const TYPE_META = {
   campaign_opportunity:{ label: 'הזדמנות קמפיין', color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100', icon: Zap },
   new_service:        { label: 'שירות חדש',       color: 'text-green-600',  bg: 'bg-green-50',  border: 'border-green-100',  icon: Sparkles },
   promotion_strategy: { label: 'מבצע',            color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-100', icon: Zap },
-  sector_shift:       { label: 'שינוי סקטור',     color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', icon: TrendingUp },
+  sector_shift:       { label: 'שינוי סקטור',     color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-100', icon: TrendingUp },
   event_opportunity:  { label: 'אירוע',            color: 'text-green-600',  bg: 'bg-green-50',  border: 'border-green-100',  icon: Target },
-  competitive_gap:    { label: 'פער תחרותי',       color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', icon: Trophy },
+  competitive_gap:    { label: 'פער תחרותי',       color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-100', icon: Trophy },
   social_viral:       { label: 'ויראלי',           color: 'text-pink-600',   bg: 'bg-pink-50',   border: 'border-pink-100',   icon: Sparkles },
   future_prediction:  { label: 'תחזית AI',         color: 'text-blue-600',   bg: 'bg-blue-50',   border: 'border-blue-100',   icon: Lightbulb },
 };
@@ -45,7 +45,7 @@ const PRIORITY_BADGE = {
   critical: { label: 'קריטי', color: 'text-red-700',    bg: 'bg-red-100',    dot: 'bg-red-500' },
   high:     { label: 'גבוה',  color: 'text-orange-700', bg: 'bg-orange-100', dot: 'bg-orange-400' },
   medium:   { label: 'בינוני',color: 'text-yellow-700', bg: 'bg-yellow-100', dot: 'bg-yellow-400' },
-  low:      { label: 'נמוך',  color: 'text-gray-600',   bg: 'bg-gray-100',   dot: 'bg-gray-300' },
+  low:      { label: 'נמוך',  color: 'text-foreground-secondary',   bg: 'bg-secondary',   dot: 'bg-gray-300' },
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -191,7 +191,7 @@ function AgentAdvisor({ insight, snapshot, bpId, insightId }) {
     setLoading(true);
     try {
       const res = await base44.integrations.Core.InvokeLLM({
-        model: 'sonnet',
+        model: 'haiku',
         maxTokens: 700,
         response_json_schema: GUIDANCE_SCHEMA,
         prompt: `אתה יועץ עסקי בכיר לעסקים קטנים ישראלים. המשימה: להפוך את התובנה לתוכנית ביצוע ברורה.
@@ -226,7 +226,7 @@ ${insight.impact_reason ? `השפעה: ${insight.impact_reason}` : ''}
     setChatLoading(true);
     try {
       const text = await base44.integrations.Core.InvokeLLM({
-        model: 'sonnet',
+        model: 'haiku',
         maxTokens: 450,
         prompt: `אתה יועץ עסקי AI לעסקים קטנים ישראלים. ענה בעברית, ישיר, מעשי, ספציפי לעסק.
 
@@ -433,7 +433,7 @@ const TREND_SOURCE_META = {
   instagram: { label: 'Instagram',     color: 'text-pink-600',   bg: 'bg-pink-50',    border: 'border-pink-100' },
   facebook:  { label: 'Facebook',      color: 'text-blue-700',   bg: 'bg-blue-50',    border: 'border-blue-100' },
   google:    { label: 'Google Trends', color: 'text-green-700',  bg: 'bg-green-50',   border: 'border-green-100' },
-  general:   { label: 'כללי',          color: 'text-gray-600',   bg: 'bg-gray-100',   border: 'border-gray-200' },
+  general:   { label: 'כללי',          color: 'text-foreground-secondary',   bg: 'bg-secondary',   border: 'border-border' },
 };
 
 function detectSource(title = '', description = '') {
@@ -489,7 +489,7 @@ function TypeContextPanel({ typeKey, title, description, actionMeta }) {
           </div>
         )}
 
-        {prefilled && (
+        {prefilled ? (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-[11px] font-semibold text-foreground-muted flex items-center gap-1">
@@ -508,7 +508,12 @@ function TypeContextPanel({ typeKey, title, description, actionMeta }) {
               <p className="text-[12px] text-purple-900 leading-relaxed whitespace-pre-wrap">{prefilled}</p>
             </div>
           </div>
-        )}
+        ) : description ? (
+          <div className="rounded-xl bg-purple-50 border border-purple-100 px-4 py-3">
+            <p className="text-[10px] font-bold text-purple-700 mb-1">ניתוח הטרנד</p>
+            <p className="text-[12px] text-purple-900 leading-relaxed">{description}</p>
+          </div>
+        ) : null}
 
         {actionMeta?.opportunity_size && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-100">
@@ -627,14 +632,14 @@ function TypeContextPanel({ typeKey, title, description, actionMeta }) {
     return (
       <div className="card-base p-5 space-y-3">
         <h2 className="text-[13px] font-semibold text-foreground flex items-center gap-2">
-          <Trophy className="w-4 h-4 text-indigo-500 opacity-80" />
+          <Trophy className="w-4 h-4 text-violet-500 opacity-80" />
           ניתוח תחרותי
         </h2>
 
         {reasoning && (
-          <div className="rounded-xl bg-indigo-50 border border-indigo-100 px-4 py-3">
-            <p className="text-[10px] font-bold text-indigo-700 mb-1">מה זוהה</p>
-            <p className="text-[12px] text-indigo-800 leading-relaxed">{reasoning}</p>
+          <div className="rounded-xl bg-violet-50 border border-violet-100 px-4 py-3">
+            <p className="text-[10px] font-bold text-violet-700 mb-1">מה זוהה</p>
+            <p className="text-[12px] text-violet-800 leading-relaxed">{reasoning}</p>
           </div>
         )}
 

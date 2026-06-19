@@ -2,7 +2,7 @@ import React from 'react';
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen px-6 py-20">
+    <div className="min-h-screen px-6 py-20 bg-white">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-[32px] font-bold text-foreground mb-2">מדיניות פרטיות</h1>
         <p className="text-[12px] text-foreground-muted mb-8">עדכון אחרון: ינואר 2025</p>
@@ -11,7 +11,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="text-[17px] font-semibold text-foreground mb-2">1. מבוא</h2>
-            <p>OTX ("אנחנו", "השירות") מכבדת את פרטיות המשתמשים שלה. מדיניות זו מסבירה אילו מידע אנו אוספים, כיצד אנו משתמשים בו, ואיזו שליטה יש לך על המידע שלך.</p>
+            <p>Cortexi ("אנחנו", "השירות") מכבדת את פרטיות המשתמשים שלה. מדיניות זו מסבירה אילו מידע אנו אוספים, כיצד אנו משתמשים בו, ואיזו שליטה יש לך על המידע שלך.</p>
           </section>
 
           <section>
@@ -63,7 +63,7 @@ export default function PrivacyPage() {
               <li>למחוק את חשבונך ואת המידע שלך</li>
               <li>להגביל עיבוד מידע אישי</li>
             </ul>
-            <p className="mt-2">לממש זכויות אלו: <a href="mailto:privacy@quieteyes.co.il" className="text-primary hover:underline">privacy@quieteyes.co.il</a></p>
+            <p className="mt-2">לממש זכויות אלו: <a href="mailto:privacy@cortexi.ai" className="text-primary hover:underline">privacy@cortexi.ai</a></p>
           </section>
 
           <section>
@@ -73,7 +73,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="text-[17px] font-semibold text-foreground mb-2">9. יצירת קשר</h2>
-            <p>שאלות על הפרטיות: <a href="mailto:privacy@quieteyes.co.il" className="text-primary hover:underline">privacy@quieteyes.co.il</a></p>
+            <p>שאלות על הפרטיות: <a href="mailto:privacy@cortexi.ai" className="text-primary hover:underline">privacy@cortexi.ai</a></p>
           </section>
         </div>
       </div>

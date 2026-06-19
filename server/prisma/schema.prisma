@@ -228,6 +228,33 @@ model Competitor {
   current_promotions   String?
   opening_hours        String?
   recent_reviews_summary String?
+  is_dismissed         Boolean? @default(false)
+  // ── Social page discovery & monitoring ──────────────────────────────────
+  website_url              String?  // competitor website (populated by identification agent)
+  instagram_url            String?  // discovered from website or Tavily
+  facebook_url             String?  // discovered from website or Tavily
+  tiktok_url               String?  // discovered from website or Tavily
+  social_pages_crawled_at  String?  // last time we crawled the website for social links
+  strongest_channel        String?  // 'instagram'|'facebook'|'tiktok'|'google'|'unknown'
+  social_post_frequency    String?  // e.g. '3 פוסטים בשבוע'
+  content_themes           String?  // comma-separated topics they post about
+  sentiment_from_reviews   String?  // 'positive'|'negative'|'mixed'|'unknown'
+  // ── Live monitoring results ──────────────────────────────────────────────
+  last_promo_detected      String?  // latest promotion text found
+  last_promo_detected_at   String?  // ISO timestamp
+  last_product_detected    String?  // new product/service text
+  last_product_detected_at String?  // ISO timestamp
+  sponsored_ads_detected   Boolean? @default(false)  // are they running paid ads?
+  sponsored_ads_updated_at String?
+  active_ad_platforms      String?  // comma-separated: 'facebook, instagram, tiktok, google'
+  active_ad_count          Int?     @default(0)
+  active_ads_summary       String?  // JSON: [{platform, title, body, cta, start}]
+  // ── Deep Claude analysis of ad campaigns ─────────────────────────────────
+  ad_target_audience       String?  // who they're targeting based on ad copy
+  ad_strategy_summary      String?  // their overall ad strategy (1-2 sentences)
+  ad_spend_signal          String?  // 'low'|'medium'|'high' — based on platform count + ad count
+  ad_gaps                  String?  // what they're NOT advertising = our opportunity
+  ad_intel_updated_at      String?  // when Claude last analyzed their ads
 
   @@map("competitors")
 }
@@ -294,6 +321,19 @@ model Task {
   notes          String?
 
   @@map("tasks")
+}
+
+model SupportTicket {
+  id            String   @id @default(cuid())
+  created_date  DateTime @default(now())
+  created_by    String?
+  user_email    String?
+  business_id   String?
+  description   String
+  status        String?  @default("open")
+  recording_url String?
+
+  @@map("support_tickets")
 }
 
 model AutomationLog {
@@ -394,6 +434,7 @@ model Action {
   execution_plan  String?
   status          String?  @default("proposed")
   created_at      String?
+  is_dismissed    Boolean? @default(false)
 
   @@map("actions")
 }

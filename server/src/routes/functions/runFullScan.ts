@@ -63,6 +63,15 @@ export async function runFullScan(req: Request, res: Response) {
   const profileRows = await prisma.businessProfile.findMany({ where: { id: businessProfileId }, take: 1 });
   const profile = profileRows[0];
 
+  // Load agent_weights to skip consistently low-accuracy agents for this business
+  let agentWeights: Record<string, number> = {};
+  try {
+    const bizMem = await prisma.businessMemory.findFirst({ where: { linked_business: businessProfileId } });
+    if (bizMem?.agent_weights) {
+      agentWeights = JSON.parse(bizMem.agent_weights);
+    }
+  } catch {}
+
   // Auto-bootstrap missing intelligence for accounts that predate the new onboarding flow
   if (profile && (!profile.sector_profile || !(profile as any).agent_missions)) {
     bootstrapBusinessIntelligence(businessProfileId).catch(e =>
@@ -70,23 +79,23 @@ export async function runFullScan(req: Request, res: Response) {
     );
   }
 
-  // Cooldown: prevent burning API budget with multiple full scans within 12 hours
-  const sixHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+  // Cooldown: prevent burning API budget with multiple full scans within 24 hours
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
   try {
     const recentScan = await prisma.automationLog.findFirst({
       where: {
         automation_name: 'runFullScan',
         linked_business: businessProfileId,
-        created_date: { gt: sixHoursAgo },
+        created_date: { gt: oneDayAgo },
       },
       orderBy: { created_date: 'desc' },
     });
     if (recentScan) {
-      const nextScanAt = new Date(recentScan.created_date.getTime() + 6 * 60 * 60 * 1000);
+      const nextScanAt = new Date(recentScan.created_date.getTime() + 24 * 60 * 60 * 1000);
       return res.json({
         success: false,
         cooldown: true,
-        message: `סריקה מלאה כבר בוצעה לאחרונה. הסריקה הבאה אפשרית ב-${nextScanAt.toLocaleTimeString('he-IL')} (cooldown: 12 שעות).`,
+        message: `סריקה מלאה כבר בוצעה לאחרונה. הסריקה הבאה אפשרית ב-${nextScanAt.toLocaleTimeString('he-IL')} (cooldown: 24 שעות).`,
         last_scan: recentScan.created_date,
         next_scan_at: nextScanAt.toISOString(),
       });
@@ -171,7 +180,15 @@ export async function runFullScan(req: Request, res: Response) {
 
   // Run the first 3 critical agents synchronously (fast, needed for UI refresh)
   const immediate: Array<[string, Function]> = pipeline.slice(0, 3);
-  const deferred: Array<[string, Function]> = pipeline.slice(3);
+  // Skip agents with weight < 0.3 — they've been consistently wrong for this business
+  const deferred: Array<[string, Function]> = pipeline.slice(3).filter(([name]) => {
+    const weight = agentWeights[name];
+    if (weight !== undefined && weight < 0.3) {
+      console.log(`[runFullScan] skipping ${name} — agent_weight=${weight.toFixed(2)} < 0.3`);
+      return false;
+    }
+    return true;
+  });
 
   for (const [name, fn] of immediate) {
     try {

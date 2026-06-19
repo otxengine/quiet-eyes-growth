@@ -51,7 +51,7 @@ export default function MLInsightsPanel({ businessProfile }) {
       <div className="card-base p-5">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <Brain className="w-4 h-4 text-indigo-500" />
+            <Brain className="w-4 h-4 text-primary/70" />
             <h3 className="text-[13px] font-semibold text-foreground">תובנות ML</h3>
           </div>
           {lastRunDate && <span className="text-[10px] text-foreground-muted">{lastRunDate}</span>}
@@ -119,7 +119,7 @@ export default function MLInsightsPanel({ businessProfile }) {
             <div className="space-y-2">
               {crossInsights.slice(0, 3).map((ins, i) => (
                 <div key={i} className="flex gap-2 items-start">
-                  <span className="text-[10px] font-bold text-indigo-500 mt-0.5 shrink-0">{ins.confidence || 70}%</span>
+                  <span className="text-[10px] font-bold text-primary/70 mt-0.5 shrink-0">{ins.confidence || 70}%</span>
                   <div>
                     <p className="text-[11px] text-foreground">{ins.insight}</p>
                     {ins.action && <p className="text-[10px] text-foreground-muted mt-0.5">→ {ins.action}</p>}

@@ -17,7 +17,7 @@ export default function CompetitorScoreRow({ business, avgRating, reviewCount, c
 
       {competitors.slice(0, 4).map((comp) => (
         <div key={comp.id} className="flex-1 min-w-[160px] max-w-[220px] card-base p-3.5">
-          <span className="text-[11px] font-medium text-[#444444] block truncate mb-2">{comp.name}</span>
+          <span className="text-[11px] font-medium text-foreground-secondary block truncate mb-2">{comp.name}</span>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               <span className={`text-[22px] font-bold ${comp.rating >= 4.3 ? 'text-[#10b981]' : comp.rating >= 4 ? 'text-[#d97706]' : 'text-[#dc2626]'}`}>
@@ -25,9 +25,9 @@ export default function CompetitorScoreRow({ business, avgRating, reviewCount, c
               </span>
               {comp.trend_direction === 'up' && <TrendingUp className="w-3.5 h-3.5 text-[#10b981]" />}
               {comp.trend_direction === 'down' && <TrendingDown className="w-3.5 h-3.5 text-[#dc2626]" />}
-              {(!comp.trend_direction || comp.trend_direction === 'stable') && <Minus className="w-3.5 h-3.5 text-[#cccccc]" />}
+              {(!comp.trend_direction || comp.trend_direction === 'stable') && <Minus className="w-3.5 h-3.5 text-foreground-muted/50" />}
             </div>
-            <span className="text-[10px] text-[#999999]">{comp.review_count || 0} ביקורות</span>
+            <span className="text-[10px] text-foreground-muted">{comp.review_count || 0} ביקורות</span>
           </div>
         </div>
       ))}

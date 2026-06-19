@@ -103,6 +103,38 @@ export function buildSearchQueries(
     }
   }
 
+  // ── Sector-specific high-value intelligence queries ─────────────────────────
+  const catL = (profile.category || '').toLowerCase();
+
+  // Construction / Real-estate / Renovation: permits, tenders, new projects
+  if (['קבלן', 'שיפוץ', 'בנייה', 'נדל', 'יזמות', 'contractor', 'renovation', 'construction'].some(k => catL.includes(k))) {
+    const yr = new Date().getFullYear();
+    queries.push(`iplan.gov.il OR govmap.gov.il היתר בנייה ${profile.city} ${yr}`);
+    queries.push(`מכרז שיפוץ OR בנייה ${profile.city} עיריה ${yr}`);
+    queries.push(`nadlan.co.il OR yad2.co.il פרויקט חדש ${profile.city}`);
+    queries.push(`construction permit tender ${city} Israel ${yr}`);
+  }
+
+  // Mortgage / Finance: interest rate changes, bank offers
+  if (['משכנתא', 'מימון', 'פיננסי', 'mortgage', 'finance'].some(k => catL.includes(k))) {
+    queries.push(`בנק ישראל ריבית פריים שינוי ${new Date().getFullYear()}`);
+    queries.push(`mortgage interest rate Israel ${new Date().getFullYear()} change`);
+    queries.push(`השוואת משכנתאות בנקים ישראל מסלולים`);
+  }
+
+  // Hotel / Boutique: competitor pricing, local events driving demand
+  if (['מלון', 'צימר', 'hotel', 'boutique', 'נופש'].some(k => catL.includes(k))) {
+    const mo = new Date().toLocaleString('en-US', { month: 'long' });
+    queries.push(`booking.com ${city} hotel prices ${mo}`);
+    queries.push(`פסטיבל OR כנס OR אירוע ${profile.city} ${new Date().getFullYear()} תיירות`);
+  }
+
+  // Clinics / MedSpa: competitor promotions
+  if (['קליניקה', 'אסתטיקה', 'clinic', 'medical', 'aesthetic', 'botox', 'פלסטיקה'].some(k => catL.includes(k))) {
+    queries.push(`מבצע ${profile.category} ${profile.city} 2025 site:facebook.com`);
+    queries.push(`${profile.category} ${profile.city} מחיר השוואה`);
+  }
+
   // Remove duplicates
   return [...new Set(queries)];
 }
