@@ -1,11 +1,11 @@
-﻿import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Loader2, Target, TrendingUp, Users, MousePointerClick, Eye, Zap, Info } from 'lucide-react';
 
 // ── Platform & Objective config ───────────────────────────────────────────────
 
 const PLATFORMS = [
-  { id: 'facebook',  label: 'Facebook',   icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
+  { id: 'meta',      label: 'Facebook',   icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
   { id: 'instagram', label: 'Instagram',  icon: '📸', color: '#e1306c', bg: '#fde8f0' },
   { id: 'google',    label: 'Google Ads', icon: '🔍', color: '#4285f4', bg: '#e8f0fe' },
 ];
@@ -74,12 +74,11 @@ function AudienceMeter({ min, max }) {
 
 function InterestChip({ label, platform }) {
   const colors = {
-    facebook:  { color: '#1877f2', bg: '#e7f3ff' },
     meta:      { color: '#1877f2', bg: '#e7f3ff' },
     instagram: { color: '#e1306c', bg: '#fde8f0' },
     google:    { color: '#4285f4', bg: '#e8f0fe' },
   };
-  const { color, bg } = colors[platform] || colors.facebook;
+  const { color, bg } = colors[platform] || colors.meta;
   return (
     <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium border"
       style={{ color, background: bg, borderColor: `${color}33` }}>
@@ -115,7 +114,7 @@ function KeywordRow({ term, match }) {
  *   onClose          — optional close handler
  */
 export default function CampaignPlanner({ businessProfile, onClose }) {
-  const [platform,  setPlatform]  = useState('facebook');
+  const [platform,  setPlatform]  = useState('meta');
   const [objective, setObjective] = useState('leads');
   const [budget,    setBudget]    = useState(50);
   const [days,      setDays]      = useState(7);
