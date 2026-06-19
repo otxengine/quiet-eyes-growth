@@ -7,7 +7,6 @@ import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
 import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
-import DataTable from '@/components/shared/DataTable';
 
 const PLATFORM_CONFIG = {
   meta:      { label: 'Facebook',   icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
@@ -27,14 +26,6 @@ const STATUS_CONFIG = {
   paused:         { label: 'בהשהיה',       cls: 'bg-orange-50 text-orange-700', tab: 'paused' },
 };
 
-const COLUMNS = [
-  { key: 'title',    label: 'קמפיין' },
-  { key: 'platform', label: 'פלטפורמה' },
-  { key: 'leads',    label: 'לידים' },
-  { key: 'cr',       label: 'יחס המרה' },
-  { key: 'budget',   label: 'תקציב ומשך' },
-  { key: 'status',   label: 'סטאטוס' },
-];
 
 function fmtDate(d) {
   if (!d) return '';
@@ -884,47 +875,132 @@ const PAID_TAB_LABELS = { all: 'הכל', pending_launch: 'ממתין לפרסו�
 export default function Marketing() {
   const { businessProfile } = useOutletContext();
   const navigate = useNavigate();
-  const bpId = businessProfile?.id;
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState('active');
-  const [budgetOpen, setBudgetOpen] = useState(false);
+  const [searchParams] = useSearchParams();
 
-  const { data: campaigns = [], isLoading } = useQuery({
+  const bpId = businessProfile?.id;
+  const [activeTab,       setActiveTab]       = useState('paid');
+  const [paidFilter,      setPaidFilter]      = useState('all');
+  const [showOrgCreate,   setShowOrgCreate]   = useState(false);
+  const [organicCtx,      setOrganicCtx]      = useState(null);
+  const [showWaBlast,     setShowWaBlast]     = useState(false);
+  const [waBlastCtx,      setWaBlastCtx]      = useState(null);
+
+  // Auto-open organic drawer / switch tab if URL says so
+  useEffect(() => {
+    if (searchParams.get('create') === 'organic') {
+      setActiveTab('organic');
+      setOrganicCtx({
+        signalId: searchParams.get('signalId') || '',
+        summary:  searchParams.get('summary')  || '',
+        action:   searchParams.get('action')   || '',
+        type:     searchParams.get('type')     || 'post',
+      });
+      setShowOrgCreate(true);
+    }
+    if (searchParams.get('create') === 'whatsapp') {
+      setWaBlastCtx({
+        signalId: searchParams.get('signalId') || '',
+        summary:  searchParams.get('summary')  || '',
+      });
+      setShowWaBlast(true);
+    }
+    const tab = searchParams.get('tab');
+    if (tab) setActiveTab(tab);
+  }, []); // eslint-disable-line
+
+  // ── Paid campaigns ──
+  const { data: campaigns = [], isLoading: loadingPaid } = useQuery({
     queryKey: ['campaigns', bpId],
-    queryFn: () => base44.entities.Campaign.filter({ linked_business: bpId }, '-created_date', 100),
+    queryFn: () => base44.entities.Campaign.filter({ linked_business: bpId }, '-created_date', 50),
     enabled: !!bpId,
   });
 
-  const { data: allLeads = [] } = useQuery({
-    queryKey: ['allLeads', bpId],
-    queryFn: () => base44.entities.Lead.filter({ linked_business: bpId }, '-score', 100),
-    enabled: !!bpId,
+  const deleteCampaign = useMutation({
+    mutationFn: (id) => base44.entities.Campaign.delete(id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['campaigns', bpId] }); toast.success('נמחק'); },
   });
 
-  const today = new Date().toISOString().slice(0, 10);
-  const todayLeads = allLeads.filter(l => (l.created_at || '').startsWith(today));
-  const hotLeads   = allLeads.filter(l => l.status === 'hot');
-  const sources    = new Set(allLeads.map(l => l.source).filter(Boolean));
-  const totalBudget = campaigns.filter(c => c.status === 'active').reduce((s, c) => s + (c.daily_budget_ils || 0), 0);
+  const filteredCampaigns = paidFilter === 'all' ? campaigns : campaigns.filter(c => c.status === paidFilter);
 
-  const statCards = [
-    { count: todayLeads.length, label: 'לידים מהיום',          borderColor: 'blue' },
-    { count: hotLeads.length,   label: 'לידים חמים',           borderColor: 'red' },
-    { count: sources.size,      label: 'מקורות',               borderColor: 'none' },
-    { count: `₪${totalBudget}`, label: 'תקציב פרסום יומי',     borderColor: 'yellow' },
-  ];
-
-  const tabCount = (tabKey) => campaigns.filter(c => {
-    const sc = STATUS_CONFIG[c.status];
-    return sc?.tab === tabKey;
-  }).length;
-
-  const filteredCampaigns = campaigns.filter(c => {
-    const sc = STATUS_CONFIG[c.status];
-    return sc?.tab === activeTab;
+  // ── Organic posts ──
+  const { data: organicPosts = [], isLoading: loadingOrganic } = useQuery({
+    queryKey: ['organicPosts', bpId],
+    queryFn: () => base44.entities.OrganicPost.filter({ linked_business: bpId }, '-created_date', 50),
+    enabled: !!bpId && (activeTab === 'organic' || activeTab === 'calendar'),
   });
 
-  // Urgent: campaigns with pending_launch status
+  const deleteOrganic = useMutation({
+    mutationFn: (id) => base44.entities.OrganicPost.delete(id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['organicPosts', bpId] }); toast.success('נמחק'); },
+  });
+
+  // ── Audience intelligence ──
+  const [audienceLoading, setAudienceLoading] = useState(false);
+  const [audiencePlan, setAudiencePlan] = useState(null);
+  const [planLoading, setPlanLoading] = useState(false);
+
+  const { data: audienceSignals = [], refetch: refetchAudience } = useQuery({
+    queryKey: ['audienceSignals', bpId],
+    queryFn: () => base44.entities.MarketSignal.filter(
+      { linked_business: bpId, category: 'tiktok_audience' },
+      '-detected_at', 5
+    ),
+    enabled: !!bpId && activeTab === 'audiences',
+  });
+
+  const { data: marketSignals = [] } = useQuery({
+    queryKey: ['marketSignalsForAudience', bpId],
+    queryFn: () => base44.entities.MarketSignal.filter(
+      { linked_business: bpId },
+      '-detected_at', 30
+    ),
+    enabled: !!bpId && activeTab === 'audiences',
+  });
+
+  const latestAudience = audienceSignals[0] ? (() => {
+    try { return JSON.parse(audienceSignals[0].source_description || '{}'); } catch { return null; }
+  })() : null;
+
+  const runAudienceAgent = async () => {
+    setAudienceLoading(true);
+    try {
+      await base44.functions.invoke('tiktokAudienceAgent', { businessProfileId: bpId, force: true });
+      await refetchAudience();
+      toast.success('קהל יעד עודכן ✓');
+    } catch (err) { toast.error(`שגיאה בניתוח קהל יעד: ${err?.message || 'נסה שוב'}`); }
+    setAudienceLoading(false);
+  };
+
+  const generateAudiencePlan = async () => {
+    setPlanLoading(true);
+    try {
+      const signalContext = marketSignals
+        .filter(s => ['tiktok_sector_trend', 'competitor_move', 'local_trend', 'demand_gap'].includes(s.category))
+        .slice(0, 8)
+        .map(s => s.summary)
+        .join('; ');
+      const audienceCtx = latestAudience?.primary_audience
+        ? `קהל ראשי: ${latestAudience.primary_audience.age_range}, ${latestAudience.primary_audience.gender_skew}.`
+        : '';
+      const res = await base44.integrations.Core.InvokeLLM({
+        model: 'sonnet',
+        maxTokens: 700,
+        prompt: `אתה מומחה לפרסום ממוקד עבור עסקים קטנים ישראלים.
+עסק: "${businessProfile?.name}" (${businessProfile?.category}, ${businessProfile?.city}).
+${audienceCtx}
+אותות שוק ומודיעין שנאסף: ${signalContext || 'אין'}.
+בהתבסס על המידע שנאסף, צור תוכנית קהל יעד מפורטת. JSON בלבד:
+{"segments":[{"name":"","description":"","age":"","gender":"","interests":[],"pain_points":[],"best_channels":[],"message_angle":"","budget_priority":"high"}],"top_insight":"","recommended_first_campaign":""}`,
+      });
+      const txt = typeof res === 'string' ? res : (res?.content || '{}');
+      const match = txt.match(/\{[\s\S]*\}/);
+      setAudiencePlan(match ? JSON.parse(match[0]) : null);
+    } catch (err) { toast.error('שגיאה ביצירת תוכנית: ' + (err?.message || '')); }
+    setPlanLoading(false);
+  };
+
+  // ── Stats ──
   const pendingLaunch = campaigns.filter(c => c.status === 'pending_launch');
   const urgentActions = pendingLaunch.slice(0, 2).map(c => ({
     title: `קמפיין ממתין לפרסום: ${c.title}`,
@@ -932,6 +1008,13 @@ export default function Marketing() {
     ctaLabel: 'פרסם עכשיו',
     onCta: () => navigate(`/marketing/create?campaignId=${c.id}`),
   }));
+
+  const statCards = [
+    { count: campaigns.filter(c => c.status === 'active').length, label: 'קמפיינים פעילים', borderColor: 'green' },
+    { count: pendingLaunch.length, label: 'ממתינים לפרסום', borderColor: 'yellow' },
+    { count: organicPosts.length, label: 'פוסטים אורגניים', borderColor: 'blue' },
+    { count: `₪${campaigns.filter(c => c.status === 'active').reduce((s, c) => s + (c.daily_budget_ils || 0), 0)}`, label: 'תקציב יומי', borderColor: 'none' },
+  ];
 
   return (
     <div className="space-y-5">
@@ -959,12 +1042,7 @@ export default function Marketing() {
               activeTab === tab.id ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
             }`}
           >
-            {tab.label}
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-              activeTab === tab.id ? 'bg-gray-100 text-foreground-secondary' : 'bg-gray-200 text-foreground-muted'
-            }`}>
-              {tabCount(tab.id)}
-            </span>
+            {tab.icon} {tab.label}
           </button>
         ))}
       </div>
@@ -1207,80 +1285,6 @@ export default function Marketing() {
             )}
           </div>
         </div>
-      ) : (
-        <DataTable
-          columns={COLUMNS}
-          rows={filteredCampaigns}
-          emptyText="אין קמפיינים בקטגוריה זו"
-          renderCell={(campaign, col) => {
-            if (col.key === 'title') return (
-              <div>
-                <div className="font-semibold text-sm text-foreground">{campaign.title}</div>
-                {campaign.created_date && (
-                  <div className="text-[10px] text-foreground-muted mt-0.5">{fmtDate(campaign.created_date)}</div>
-                )}
-              </div>
-            );
-            if (col.key === 'platform') {
-              const plat = PLATFORM_CONFIG[campaign.platform];
-              if (!plat) return <span className="text-xs text-foreground-secondary">{campaign.platform || '—'}</span>;
-              return (
-                <span
-                  className="text-xs font-medium px-2 py-0.5 rounded-full"
-                  style={{ background: plat.bg, color: plat.color }}
-                >
-                  {plat.icon} {plat.label}
-                </span>
-              );
-            }
-            if (col.key === 'leads') return (
-              <span className="font-semibold text-sm text-foreground">
-                {campaign.leads_count ?? campaign.clicks ?? '—'}
-              </span>
-            );
-            if (col.key === 'cr') {
-              const cr = campaign.conversion_rate ?? campaign.click_through_rate;
-              return (
-                <span className="text-sm text-foreground-secondary">
-                  {cr != null ? `${(cr * 100).toFixed(1)}%` : '—'}
-                </span>
-              );
-            }
-            if (col.key === 'budget') return (
-              <div className="text-xs text-foreground-secondary">
-                {campaign.daily_budget_ils != null && <div>₪{campaign.daily_budget_ils}/יום</div>}
-                {(campaign.start_date || campaign.end_date) && (
-                  <div className="text-[10px] text-foreground-muted">
-                    {fmtDate(campaign.start_date)} — {fmtDate(campaign.end_date)}
-                  </div>
-                )}
-              </div>
-            );
-            if (col.key === 'status') {
-              const sc = STATUS_CONFIG[campaign.status] || STATUS_CONFIG.draft;
-              const isActive = campaign.status === 'active' || campaign.status === 'published';
-              return (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={async () => {
-                      const newStatus = isActive ? 'paused' : 'active';
-                      try {
-                        await base44.entities.Campaign.update(campaign.id, { status: newStatus });
-                        queryClient.invalidateQueries({ queryKey: ['campaigns', bpId] });
-                        toast.success(newStatus === 'active' ? 'קמפיין הופעל' : 'קמפיין הושהה');
-                      } catch { toast.error('שגיאה בעדכון קמפיין'); }
-                    }}
-                    className={`w-9 h-5 rounded-full transition-colors relative ${isActive ? 'bg-green-400' : 'bg-gray-200'}`}
-                  >
-                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${isActive ? 'right-0.5' : 'left-0.5'}`} />
-                  </button>
-                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${sc.cls}`}>{sc.label}</span>
-                </div>
-              );
-            }
-            return null;
-          }}
-        />
       )}
     </div>
   );
