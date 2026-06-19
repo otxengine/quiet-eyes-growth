@@ -83,7 +83,12 @@ app.use('/api/orchestrator', strictLimiter);
 const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .split(',')
   .map(o => o.trim())
-  .concat(['http://localhost:5174', 'http://localhost:5175']);
+  .concat([
+    'http://localhost:5174',
+    'http://localhost:5175',
+    'https://cortexi.ai',
+    'https://www.cortexi.ai',
+  ]);
 
 app.use(cors({
   origin: (origin, cb) => {
@@ -1110,6 +1115,33 @@ app.listen(PORT, async () => {
   await sql(`CREATE INDEX IF NOT EXISTS idx_organic_posts_biz  ON organic_posts(linked_business, status, created_date DESC)`);
 
   console.log('Startup SQL complete');
+
+  // ── Post-startup table existence check ───────────────────────────────────
+  // Verifies all critical tables exist and logs any missing ones.
+  const REQUIRED_TABLES = [
+    'business_profiles', 'leads', 'reviews', 'competitors',
+    'market_signals', 'raw_signals', 'health_scores', 'auto_actions',
+    'sector_knowledge', 'business_memory', 'agent_learning_profiles',
+    'meta_configurations', 'otx_decisions', 'otx_outcome_events',
+    'otx_pipeline_runs', 'otx_recommendations',
+  ];
+  const missingTables: string[] = [];
+  for (const table of REQUIRED_TABLES) {
+    try {
+      const res: any[] = await db.$queryRawUnsafe(
+        `SELECT to_regclass('public.${table}') AS exists`
+      );
+      if (!res[0]?.exists) missingTables.push(table);
+    } catch {
+      missingTables.push(table);
+    }
+  }
+  if (missingTables.length > 0) {
+    console.error('[STARTUP] Missing tables detected:', missingTables.join(', '));
+    console.error('[STARTUP] Run POST /api/migrate to create missing tables.');
+  } else {
+    console.log('[STARTUP] All required tables verified present.');
+  }
 
   if (!process.env.NODE_ENV) {
     console.warn('[WARN] NODE_ENV is not set. Set NODE_ENV=production on Render to enable security hardening and error sanitization.');

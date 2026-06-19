@@ -514,7 +514,7 @@ ${agentsWithStatus.map(a => `- ${a.name} (${a.nameEn}): ${a.automation?.total_ru
       <div>
         <div className="flex items-center gap-2 mb-3">
           <h2 className="text-[13px] font-semibold text-foreground">סוכני Layer 7 — מתקדמים</h2>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-semibold">OTX Engine</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-semibold">Cortexi Engine</span>
           <span className="text-[10px] text-foreground-muted">מופעלים דרך Deno scheduler</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

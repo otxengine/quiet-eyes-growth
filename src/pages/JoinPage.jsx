@@ -50,7 +50,7 @@ export default function JoinPage() {
     <div className="min-h-screen flex items-center justify-center bg-secondary/50 p-4" dir="rtl">
       <div className="bg-white rounded-2xl shadow-md p-10 max-w-md w-full text-center">
         <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center mx-auto mb-5">
-          <span className="text-white text-xl font-bold">OTX</span>
+          <span className="text-white text-xl font-bold">Cortexi</span>
         </div>
 
         {status === 'idle' || status === 'loading' ? (

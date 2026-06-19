@@ -8,8 +8,8 @@ import { useScanQuota } from '@/lib/useScanQuota';
 import { PLAN_LABELS } from '@/lib/usePlan';
 import ScanOverlay from '@/components/dashboard/ScanOverlay';
 
-const ADMIN_EMAILS = ['contact@otxengine.io'];
-const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai'];
+const ADMIN_EMAILS = ['contact@otxengine.io', 'admin@cortexi.ai'];
+const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai', '@cortexi.ai'];
 function checkIsAdmin(email) {
   if (!email) return false;
   const e = email.toLowerCase().trim();
@@ -45,34 +45,35 @@ import { registerServiceWorker } from '@/lib/pushNotifications';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
 const pageTitles = {
-  '/command': 'בית',
-  '/': 'מרכז פיקוד',
-  '/dashboard': 'מרכז פיקוד',
-  '/signals': 'העיניים — מודיעין שוק',
-  '/competitors': 'מתחרים',
-  '/events': 'אירועים',
-  '/reviews': 'מוניטין',
-  '/leads': 'לידים',
-  '/retention': 'שימור לקוחות',
-  '/reports': 'דוחות וניתוח',
-  '/tasks': 'משימות',
-  '/marketing': 'מרכז שיווק',
+  '/':              'בית',
+  '/dashboard':     'בית',
+  '/command':       'בית',
+  '/leads':         'לידים',
+  '/insights':      'תובנות',
+  '/competitors':   'מתחרים',
+  '/marketing':     'מרכז השיווק',
   '/marketing/create': 'יצירת קמפיין',
-  '/market-analysis': 'ניתוח שוק',
-  '/data-sources': 'מקורות מידע',
-  '/subscription': 'ניהול מנוי',
-  '/agents': 'סוכנים',
-  '/learning': 'מרכז למידה',
-  '/integrations': 'אינטגרציות',
-  '/settings': 'הגדרות',
-  '/social': 'רשתות חברתיות',
-  '/insights': 'תובנות',
-  '/strategy': 'אסטרטגיה חודשית',
-  '/demand-gap': 'פערי ביקוש',
-  '/otx': 'OTX Dashboard',
-  '/org/settings': 'הגדרות ארגון',
-  '/agency': 'לוח סוכנות',
-  '/chat': 'יועץ AI',
+  '/events':        'אירועים',
+  '/reviews':       'מוניטין',
+  '/retention':     'שימור לקוחות',
+  '/tasks':         'משימות',
+  '/reports':       'דוחות',
+  '/strategy':      'אסטרטגיה',
+  '/demand-gap':    'פערי ביקוש',
+  '/signals':       'תובנות',
+  '/approvals':     'לאישור',
+  '/market-analysis':'ניתוח שוק',
+  '/data-sources':  'מקורות מידע',
+  '/subscription':  'מנוי',
+  '/agents':        'סוכנים',
+  '/learning':      'למידה',
+  '/integrations':  'אינטגרציות',
+  '/settings':      'הגדרות',
+  '/social':        'רשתות חברתיות',
+  '/otx':           'Cortexi Dashboard',
+  '/org/settings':  'הגדרות ארגון',
+  '/agency':        'סוכנות',
+  '/chat':          'יועץ AI',
 };
 
 export default function AppLayout() {
@@ -151,7 +152,7 @@ export default function AppLayout() {
 
   // Global scan overlay — works on all pages (Dashboard overrides with its own when active)
   const scanQuota = useScanQuota(businessProfile?.id);
-  const isOnDashboard = ['/', '/dashboard'].includes(location.pathname);
+  const isOnDashboard = ['/', '/dashboard', '/command'].includes(location.pathname);
 
   useEffect(() => {
     if (isOnDashboard) return; // Dashboard registers its own handler
@@ -168,9 +169,9 @@ export default function AppLayout() {
     // setTimeout ensures page-specific handlers (from Intelligence/Leads/etc.) run first.
     // Only register generic handler if no page has set its own.
     const t = setTimeout(() => {
-      if (!window.__quieteyes_scan) window.__quieteyes_scan = handler;
+      if (!window.__cortexi_scan) window.__cortexi_scan = handler;
     }, 0);
-    return () => { clearTimeout(t); if (window.__quieteyes_scan === handler) delete window.__quieteyes_scan; };
+    return () => { clearTimeout(t); if (window.__cortexi_scan === handler) delete window.__cortexi_scan; };
   }, [isOnDashboard, scanQuota.isExhausted, scanQuota.plan, scanQuota.quota, location.pathname]);
 
   // Fetch badge counts
@@ -239,7 +240,7 @@ export default function AppLayout() {
     || (location.pathname.startsWith('/insights/') ? 'תובנה' : null)
     || (location.pathname.startsWith('/tasks/')    ? 'פרטי משימה' : null)
     || (location.pathname.startsWith('/signals/')  ? 'פרטי סיגנל' : null)
-    || 'OTX';
+    || 'Cortexi';
 
   if (loadingProfiles) {
     return (

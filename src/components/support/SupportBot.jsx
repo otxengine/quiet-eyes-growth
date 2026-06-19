@@ -60,12 +60,12 @@ const FAQ = [
   // Mobile
   {
     keywords: ['מובייל', 'mobile', 'טלפון', 'אפליקציה', 'app'],
-    answer: 'OTX זמין כאפליקציית PWA — פתח את האתר בנייד ולחץ "הוסף למסך הבית". ממשק הנייד עוצב לניהול מהיר: לידים, ביקורות ותובנות זמינים מיידית.',
+    answer: 'Cortexi זמין כאפליקציית PWA — פתח את האתר בנייד ולחץ "הוסף למסך הבית". ממשק הנייד עוצב לניהול מהיר: לידים, ביקורות ותובנות זמינים מיידית.',
   },
 ];
 
 // ── AI-powered support system prompt ─────────────────────────────────────────
-const SUPPORT_SYSTEM_PROMPT = `אתה סוכן תמיכה טכנית של OTX — פלטפורמת מודיעין עסקי AI לעסקים קטנים ישראלים.
+const SUPPORT_SYSTEM_PROMPT = `אתה סוכן תמיכה טכנית של Cortexi — פלטפורמת מודיעין עסקי AI לעסקים קטנים ישראלים.
 
 המוצר כולל:
 - סריקת מתחרים אוטומטית (24+ סוכנים)
@@ -97,13 +97,21 @@ function getFaqFallback(message) {
 }
 
 // ── Main async function ───────────────────────────────────────────────────────
-export async function getBotResponse(message) {
+export async function getBotResponse(message, history = []) {
+  // Build multi-turn prompt from history
+  const historyText = history.slice(-6)
+    .map(m => `${m.role === 'user' ? 'משתמש' : 'סוכן'}: ${m.text}`)
+    .join('\n');
+  const prompt = historyText
+    ? `${SUPPORT_SYSTEM_PROMPT}\n\nהיסטוריית שיחה:\n${historyText}\n\nמשתמש: ${message}`
+    : `${SUPPORT_SYSTEM_PROMPT}\n\nשאלת המשתמש: ${message}`;
+
   // Try AI first
   try {
     const response = await base44.integrations.Core.InvokeLLM({
       model: 'haiku',
       maxTokens: 350,
-      prompt: `${SUPPORT_SYSTEM_PROMPT}\n\nשאלת המשתמש: ${message}`,
+      prompt,
     });
     // Handle multiple response shapes: string, { content }, { text }, { reply }
     const text = typeof response === 'string'

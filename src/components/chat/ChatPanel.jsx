@@ -7,8 +7,8 @@ import { useNavigate } from 'react-router-dom';
 
 function storageKey(businessProfileId) {
   return businessProfileId
-    ? `quieteyes_chat_${businessProfileId}`
-    : 'quieteyes_chat_default';
+    ? `cortexi_chat_${businessProfileId}`
+    : 'cortexi_chat_default';
 }
 
 function loadMessages(businessProfileId) {
@@ -233,7 +233,7 @@ export default function ChatPanel({ onClose, businessProfile, prefilledMessage, 
         const reply = await base44.integrations.Core.InvokeLLM({
           model: 'sonnet',
           maxTokens: 600,
-          prompt: `אתה יועץ עסקי AI של מערכת QuietEyes — פלטפורמת מודיעין עסקי לעסקים קטנים ישראלים.${bpContext}
+          prompt: `אתה יועץ עסקי AI של מערכת Cortexi — פלטפורמת מודיעין עסקי לעסקים קטנים ישראלים.${bpContext}
 המערכת עוקבת אחר מתחרים, מנתחת ביקורות, מייצרת תובנות שוק ופועלת דרך סוכנים AI ברקע.
 
 כללי תגובה:
@@ -343,10 +343,12 @@ ${history}
 
   return (
     <div
-      className="fixed z-50 flex flex-col overflow-hidden"
+      className="fixed z-[65] flex flex-col overflow-hidden"
       style={{
+        position: 'fixed',
         bottom: 88,
         left: 16,
+        right: 'auto',
         width: 'min(440px, calc(100vw - 32px))',
         height: 'min(620px, calc(100vh - 104px))',
         background: 'rgba(255,255,255,0.88)',

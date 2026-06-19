@@ -1,30 +1,67 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
-import { Globe, Instagram, Check, ChevronLeft } from 'lucide-react';
+import { MapPin, Search } from 'lucide-react';
+import KoriAvatar from './KoriAvatar';
+import { AiBubble, UserBubble } from './ConversationBubble';
+import PillSelector from './PillSelector';
 
-// Step 2: Goal tiles
-const GOAL_OPTIONS = [
-  { value: 'new_customers',    icon: '🎯', label: 'להביא לקוחות חדשים',       sub: 'להגיע ליותר אנשים שמחפשים את מה שאני מציע' },
-  { value: 'retain',           icon: '🔁', label: 'לשמר לקוחות קיימים',       sub: 'לגרום ללקוחות לחזור שוב ושוב' },
-  { value: 'more_per_customer',icon: '📈', label: 'להרוויח יותר מכל לקוח',    sub: 'להגדיל את ערך כל עסקה' },
-  { value: 'reviews',          icon: '⭐', label: 'לשפר דירוגים וביקורות',    sub: 'לבנות מוניטין חזק ואמין יותר' },
+// ── Static data ────────────────────────────────────────────────────────────────
+
+const CITIES = [
+  'תל אביב', 'ירושלים', 'חיפה', 'ראשון לציון', 'פתח תקווה', 'אשדוד', 'נתניה', 'באר שבע',
+  'בני ברק', 'רמת גן', 'הרצליה', 'חולון', 'רחובות', 'אשקלון', 'בת ים', 'הוד השרון',
+  'כפר סבא', 'רעננה', 'מודיעין', 'עפולה', 'עכו', 'נהריה', 'נצרת', 'כרמיאל', 'טבריה',
+  'צפת', 'קריית שמונה', 'אילת', 'אריאל', 'רמלה', 'לוד', 'יבנה', 'קריית גת',
+  'שוהם', 'אלעד', 'גבעתיים', 'רמת השרון', 'כפר יונה', 'קריית אונו', 'גדרה',
+  'זכרון יעקב', 'נס ציונה', 'ראש העין', 'ירוחם', 'דימונה', 'אור יהודה', 'גבעת שמואל',
 ];
 
-// Step 3: Price tiers
+const CATEGORIES = [
+  { value: 'restaurants', label: 'מסעדות ואוכל' },
+  { value: 'health', label: 'בריאות וטיפולים' },
+  { value: 'realestate', label: 'נדל"ן ותיווך' },
+  { value: 'construction', label: 'קבלנות ושיפוצים' },
+  { value: 'ecommerce', label: 'מסחר אונליין' },
+  { value: 'professionals', label: 'בעלי מקצוע' },
+  { value: 'beauty', label: 'יופי וספא' },
+  { value: 'education', label: 'חינוך והדרכה' },
+  { value: 'tech', label: 'טכנולוגיה' },
+  { value: 'fitness', label: 'כושר וספורט' },
+  { value: 'legal', label: 'עריכת דין' },
+  { value: 'finance', label: 'פיננסים' },
+];
+
+const SERVICES = [
+  { value: 'consulting', label: 'ייעוץ' },
+  { value: 'installation', label: 'התקנה' },
+  { value: 'design', label: 'עיצוב' },
+  { value: 'marketing', label: 'שיווק' },
+  { value: 'development', label: 'פיתוח' },
+  { value: 'repair', label: 'תיקונים' },
+  { value: 'training', label: 'הדרכה' },
+  { value: 'delivery', label: 'משלוחים' },
+  { value: 'maintenance', label: 'אחזקה' },
+  { value: 'photography', label: 'צילום' },
+  { value: 'events', label: 'אירועים' },
+  { value: 'therapy', label: 'טיפולים' },
+  { value: 'cleaning', label: 'ניקיון' },
+  { value: 'catering', label: 'קייטרינג' },
+];
+
 const PRICE_OPTIONS = [
-  { value: 'budget',   label: 'מחיר נגיש',   sub: 'ללקוחות שמחפשים עסקה טובה' },
-  { value: 'mid',      label: 'מחיר בינוני',  sub: 'ערך טוב לכסף' },
-  { value: 'premium',  label: 'פרימיום',      sub: 'איכות גבוהה, מחיר בהתאם' },
+  { value: 'budget',     label: 'מחיר נגיש',   sub: 'ללקוחות שמחפשים עסקה טובה' },
+  { value: 'mid',        label: 'מחיר בינוני',  sub: 'ערך טוב לכסף' },
+  { value: 'premium',    label: 'פרימיום',       sub: 'איכות גבוהה, מחיר בהתאם' },
+  { value: 'enterprise', label: 'ארגוני',        sub: 'עסקים ופרויקטים גדולים' },
 ];
 
-// Step 3: Customer source chips
 const SOURCE_OPTIONS = [
   { value: 'google',        label: 'חיפוש Google' },
   { value: 'instagram',     label: 'אינסטגרם' },
   { value: 'facebook',      label: 'פייסבוק' },
-  { value: 'word_of_mouth', label: 'המלצות פה לאוזן' },
+  { value: 'word_of_mouth', label: 'המלצות' },
   { value: 'waze',          label: 'ווייז / מפות' },
   { value: 'tiktok',        label: 'טיקטוק' },
   { value: 'linkedin',      label: 'לינקדאין' },
@@ -33,74 +70,209 @@ const SOURCE_OPTIONS = [
   { value: 'website',       label: 'אתר עצמאי' },
 ];
 
-// Step 4: Channels with intelligence contribution
-const CHANNEL_OPTIONS = [
-  { key: 'website',   label: 'אתר אינטרנט',  icon: '🌐', pct: 15, field: 'website_url',   placeholder: 'https://example.co.il' },
-  { key: 'instagram', label: 'אינסטגרם',      icon: '📸', pct: 25, field: 'instagram_url', placeholder: 'https://instagram.com/...' },
-  { key: 'facebook',  label: 'פייסבוק',       icon: '👥', pct: 20, field: 'facebook_url',  placeholder: 'https://facebook.com/...' },
-  { key: 'tiktok',    label: 'טיקטוק',        icon: '🎵', pct: 15, field: 'tiktok_url',    placeholder: 'https://tiktok.com/@...' },
+const GOAL_OPTIONS = [
+  { value: 'new_customers',     label: 'להביא לקוחות חדשים' },
+  { value: 'retain',            label: 'לשמר לקוחות קיימים' },
+  { value: 'more_per_customer', label: 'להרוויח יותר מכל לקוח' },
+  { value: 'reviews',           label: 'לשפר דירוגים וביקורות' },
 ];
 
-const BASE_INTEL = 45; // base accuracy from name/description/city alone
+const SOCIAL_CHANNELS = [
+  { key: 'website_url',   label: 'אתר',             icon: '🌐', placeholder: 'https://example.co.il' },
+  { key: 'instagram_url', label: 'אינסטגרם',         icon: '📸', placeholder: 'https://instagram.com/...' },
+  { key: 'facebook_url',  label: 'פייסבוק',          icon: '👥', placeholder: 'https://facebook.com/...' },
+  { key: 'tiktok_url',    label: 'טיקטוק',           icon: '🎵', placeholder: 'https://tiktok.com/@...' },
+  { key: 'google_url',    label: 'Google Business',  icon: '📍', placeholder: 'https://g.page/...' },
+];
 
+const SECTIONS = [
+  { id: 'business', label: 'על העסק',          steps: [1, 2, 3] },
+  { id: 'service',  label: 'על השירות/מוצר',   steps: [4, 5, 6] },
+  { id: 'audience', label: 'על קהל היעד',       steps: [7, 8, 9] },
+];
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 5)  return 'לילה טוב';
+  if (h < 12) return 'בוקר טוב';
+  if (h < 17) return 'צהריים טובים';
+  if (h < 21) return 'ערב טוב';
+  return 'לילה טוב';
+}
+
+const BG_STYLE = {
+  backgroundColor: '#f5f5f7',
+  backgroundImage: 'radial-gradient(circle, #d1d1d1 1px, transparent 1px)',
+  backgroundSize: '24px 24px',
+};
+
+// ── Progress Tracker ────────────────────────────────────────────────────────────
+function ProgressTracker({ step }) {
+  return (
+    <div className="flex flex-col gap-6 pt-4">
+      <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">התקדמות</div>
+      {SECTIONS.map((section, idx) => {
+        const minStep = section.steps[0];
+        const maxStep = section.steps[section.steps.length - 1];
+        const completed = step > maxStep;
+        const active = step >= minStep && step <= maxStep;
+        return (
+          <div key={section.id} className="flex items-start gap-3">
+            {/* Line + dot */}
+            <div className="flex flex-col items-center">
+              <div
+                className={`w-2.5 h-2.5 rounded-full flex-shrink-0 transition-colors duration-300 ${
+                  completed || active ? 'bg-[#e8344d]' : 'bg-gray-300'
+                }`}
+              />
+              {idx < SECTIONS.length - 1 && (
+                <div className={`w-0.5 h-10 mt-1 transition-colors duration-300 ${completed ? 'bg-[#e8344d]' : 'bg-gray-200'}`} />
+              )}
+            </div>
+            {/* Label */}
+            <div className={`text-[13px] mt-[-2px] transition-colors duration-300 ${active ? 'font-bold text-gray-900' : completed ? 'font-medium text-gray-500' : 'text-gray-400'}`}>
+              {section.label}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── City autocomplete ────────────────────────────────────────────────────────────
+function CityInput({ value, onChange, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const filtered = CITIES.filter(c => c.includes(value) && c !== value).slice(0, 8);
+  return (
+    <div className="relative">
+      <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-4 py-2.5 focus-within:border-[#e8344d] transition-colors">
+        <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+        <input
+          value={value}
+          onChange={e => { onChange(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder="בחר יישוב"
+          className="flex-1 bg-transparent text-[13px] outline-none text-gray-700"
+        />
+      </div>
+      {open && filtered.length > 0 && (
+        <div className="absolute top-full right-0 left-0 mt-1 bg-white border border-gray-200 rounded-2xl shadow-lg overflow-hidden z-10 max-h-48 overflow-y-auto">
+          {filtered.map(city => (
+            <button
+              key={city}
+              type="button"
+              onMouseDown={() => { onSelect(city); setOpen(false); }}
+              className="w-full text-right px-4 py-2.5 text-[13px] text-gray-700 hover:bg-[#fce4ec] hover:text-[#e8344d] transition-colors"
+            >
+              {city}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────────
 export default function OnboardingForm() {
   const navigate = useNavigate();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(0);
+  const [messages, setMessages] = useState([]);
+  const [textInput, setTextInput] = useState('');
+  const [citySearch, setCitySearch] = useState('');
+  const [tempServices, setTempServices] = useState([]);
+  const [tempSources, setTempSources] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    name: '', description: '', city: '',
-    goal: '', price_tier: '', customer_sources: [],
+    name: '', city: '', category: '',
+    relevant_services: [], description: '', price_tier: '',
+    customer_sources: [], business_goal: '',
     website_url: '', instagram_url: '', facebook_url: '', tiktok_url: '',
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const scrollRef = useRef(null);
+  const inputRef = useRef(null);
 
-  // Compute intelligence meter value
-  const intelPct = Math.min(
-    100,
-    BASE_INTEL +
-    CHANNEL_OPTIONS.reduce((acc, ch) => acc + (formData[ch.field] ? ch.pct : 0), 0)
-  );
+  const getQuestion = (s) => {
+    switch (s) {
+      case 1: return 'בואו נתחיל! מה שם העסק שלך?';
+      case 2: return `מעולה! באיזה עיר נמצא "${formData.name}"?`;
+      case 3: return 'מה סוג העסק שלך?';
+      case 4: return 'מה בדיוק אתה מציע? (בחר הכל שרלוונטי)';
+      case 5: return 'ספר לנו קצת על העסק שלך בחופשיות...';
+      case 6: return 'איפה העסק שלך ממוקם מבחינת מחיר?';
+      case 7: return 'מאיפה רוב הלקוחות שלך מגיעים?';
+      case 8: return 'מה הכי חשוב לך לשפר ב-30 הימים הקרובים?';
+      case 9: return 'רוצה לחבר גם פלטפורמות חברתיות? (אופציונלי)';
+      default: return '';
+    }
+  };
 
-  const inputCls = "w-full bg-secondary/50 border border-border/60 rounded-lg px-3 py-2.5 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-[#bbbbbb] transition-colors";
+  // Add AI question when step advances
+  useEffect(() => {
+    if (step >= 1 && step <= 9) {
+      const q = getQuestion(step);
+      setMessages(prev => [...prev, { type: 'ai', text: q }]);
+      setTimeout(() => inputRef.current?.focus(), 150);
+    }
+  }, [step]);
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages]);
+
+  const advance = (field, value, displayLabel) => {
+    if (field) setFormData(prev => ({ ...prev, [field]: value }));
+    if (displayLabel) setMessages(prev => [...prev, { type: 'user', text: displayLabel }]);
+    setTextInput('');
+    setCitySearch('');
+    setTempServices([]);
+    setTempSources([]);
+    setStep(prev => prev + 1);
+  };
+
+  const skipStep = () => {
+    setTextInput('');
+    setTempServices([]);
+    setTempSources([]);
+    setStep(prev => prev + 1);
+  };
+
+  const toggleService = (val) => {
+    setTempServices(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
+  };
 
   const toggleSource = (val) => {
-    setFormData(prev => ({
-      ...prev,
-      customer_sources: prev.customer_sources.includes(val)
-        ? prev.customer_sources.filter(s => s !== val)
-        : [...prev.customer_sources, val],
-    }));
+    setTempSources(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
   };
 
   const handleSubmit = async () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
-
-    // category will be overwritten by parse-profile with the AI-inferred sector label
-    // Use first ~60 chars of description as a temporary category until then
-    const tempCategory = formData.description.split('\n')[0].substring(0, 60).trim();
-    const profileData = {
-      name:                formData.name,
-      category:            tempCategory,
-      city:                formData.city,
-      description:         formData.description,
-      business_goal:       formData.goal,
-      price_tier:          formData.price_tier,
-      customer_sources:    JSON.stringify(formData.customer_sources),
-      website_url:         formData.website_url  || undefined,
-      instagram_url:       formData.instagram_url || undefined,
-      facebook_url:        formData.facebook_url  || undefined,
-      tiktok_url:          formData.tiktok_url    || undefined,
-      onboarding_completed: false,
-      created_at:          new Date().toISOString(),
-    };
-
+    const tempCat = formData.category || formData.description.split('\n')[0].slice(0, 60).trim();
     try {
-      const profile = await base44.entities.BusinessProfile.create(profileData);
+      const profile = await base44.entities.BusinessProfile.create({
+        name:                formData.name,
+        category:            tempCat,
+        city:                formData.city,
+        description:         formData.description,
+        business_goal:       formData.business_goal,
+        price_tier:          formData.price_tier,
+        customer_sources:    JSON.stringify(formData.customer_sources),
+        relevant_services:   JSON.stringify(formData.relevant_services),
+        website_url:         formData.website_url  || undefined,
+        instagram_url:       formData.instagram_url || undefined,
+        facebook_url:        formData.facebook_url  || undefined,
+        tiktok_url:          formData.tiktok_url    || undefined,
+        onboarding_completed: false,
+        created_at:          new Date().toISOString(),
+      });
       navigate('/onboarding/scanning', {
         state: {
           businessProfile: profile,
           onboardingData: {
-            goal:             formData.goal,
+            goal:             formData.business_goal,
             price_tier:       formData.price_tier,
             customer_sources: formData.customer_sources,
           },
@@ -113,245 +285,270 @@ export default function OnboardingForm() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-4" dir="rtl">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-[10px] p-8 border border-border/50">
-
-          {/* Progress bar */}
-          <div className="mb-8">
-            <div className="flex gap-1.5 mb-3">
-              {[1,2,3,4].map(n => (
-                <div key={n} className={`h-1 flex-1 rounded-full transition-colors duration-300 ${n <= step ? 'bg-[#111111]' : 'bg-[#eeeeee]'}`} />
-              ))}
-            </div>
-            <p className="text-[11px] text-foreground-muted/50">שלב {step} מתוך 4</p>
+  // ── Render current step input ────────────────────────────────────────────────
+  const renderInput = () => {
+    switch (step) {
+      case 1:
+        return (
+          <div className="space-y-3">
+            <input
+              ref={inputRef}
+              value={textInput}
+              onChange={e => setTextInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && textInput.trim() && advance('name', textInput.trim(), textInput.trim())}
+              placeholder="שם העסק שלך"
+              className="w-full bg-white border border-gray-200 rounded-full px-5 py-3 text-[14px] text-gray-700 outline-none focus:border-[#e8344d] transition-colors max-w-sm"
+            />
           </div>
+        );
 
-          {/* ── STEP 1: Identity ─────────────────────────────────────────────── */}
-          {step === 1 && (
-            <div>
-              <h1 className="text-2xl font-bold text-[#111111] mb-1">ספר לנו על העסק שלך</h1>
-              <p className="text-foreground-muted text-sm mb-7">כתוב בחופשיות — ככל שתפרט יותר, הסוכנים שלנו יהיו מדויקים יותר</p>
-              <div className="space-y-5">
-                <div>
-                  <label className="block text-sm font-medium text-[#111111] mb-2">שם העסק</label>
-                  <input
-                    placeholder="לדוגמה: סטודיו לעיצוב UI — מיכל לוי"
-                    value={formData.name}
-                    onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#111111] mb-2">
-                    תאר את העסק שלך
-                    <span className="text-foreground-muted/50 font-normal mr-1">(מה אתה עושה, למי, ומה מייחד אותך)</span>
-                  </label>
-                  <textarea
-                    placeholder={`לדוגמה:\n"אני מעצב UI/UX לסטרטאפים ב-SaaS. עובד בעיקר עם חברות שמחפשות לשפר את מוצר הדיגיטלי שלהן. מתמחה בעיצוב מערכות מורכבות."\n\nאו:\n"בית קפה קטן ואינטימי בתל אביב. אנחנו מתמחים בקפה מיוחד ועוגות ביתיות. הקהל שלנו הוא אנשי הייטק שעובדים מהבית."`}
-                    value={formData.description}
-                    onChange={e => setFormData(p => ({ ...p, description: e.target.value }))}
-                    className={inputCls + " resize-none"}
-                    rows={5}
-                  />
-                  <p className="text-[10px] text-foreground-muted/50 mt-1">מידע זה עוזר לסוכנים להבין בדיוק מה העסק שלך ולמי לא לשלוח תובנות לא רלוונטיות</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#111111] mb-2">עיר</label>
-                  <input
-                    placeholder="לדוגמה: תל אביב"
-                    value={formData.city}
-                    onChange={e => setFormData(p => ({ ...p, city: e.target.value }))}
-                    className={inputCls}
-                  />
-                </div>
-                <button
-                  disabled={!formData.name || !formData.description || !formData.city}
-                  onClick={() => setStep(2)}
-                  className="w-full h-12 text-[13px] font-semibold bg-[#111111] hover:bg-[#333333] text-white rounded-md mt-4 transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
-                >
-                  המשך <ChevronLeft className="w-4 h-4" />
-                </button>
-              </div>
+      case 2:
+        return (
+          <div className="max-w-sm">
+            <CityInput
+              value={citySearch}
+              onChange={setCitySearch}
+              onSelect={city => { setCitySearch(city); advance('city', city, city); }}
+            />
+          </div>
+        );
+
+      case 3:
+        return (
+          <div className="space-y-3 max-w-md">
+            <PillSelector
+              options={CATEGORIES}
+              selected={formData.category}
+              onSelect={val => {
+                const opt = CATEGORIES.find(c => c.value === val);
+                advance('category', val, opt?.label || val);
+              }}
+            />
+            <div className="relative">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                placeholder='אחר — הקלד וגש Enter'
+                className="w-full bg-white border border-gray-200 rounded-full pr-10 pl-4 py-2 text-[13px] outline-none focus:border-[#e8344d] transition-colors"
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const v = e.target.value.trim();
+                    if (v) advance('category', v, v);
+                  }
+                }}
+              />
             </div>
-          )}
+          </div>
+        );
 
-          {/* ── STEP 2: Goal ─────────────────────────────────────────────────── */}
-          {step === 2 && (
-            <div>
-              <h1 className="text-2xl font-bold text-[#111111] mb-1">מה הכי חשוב לך עכשיו?</h1>
-              <p className="text-foreground-muted text-sm mb-7">הסוכנים יתמקדו בהתאם לעדיפות שלך</p>
-              <div className="grid grid-cols-1 gap-3">
-                {GOAL_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => { setFormData(p => ({ ...p, goal: opt.value })); setStep(3); }}
-                    className={`text-right p-4 rounded-xl border-2 transition-all duration-150 ${
-                      formData.goal === opt.value
-                        ? 'border-[#111111] bg-secondary/50'
-                        : 'border-border/60 hover:border-border-hover'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{opt.icon}</span>
-                      <div>
-                        <div className="font-medium text-[#111111] text-[14px]">{opt.label}</div>
-                        <div className="text-[11px] text-foreground-muted mt-0.5">{opt.sub}</div>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-              <button onClick={() => setStep(1)} className="mt-6 text-[12px] text-foreground-muted/50 hover:text-foreground-muted transition-colors">
-                ← חזרה
+      case 4:
+        return (
+          <div className="space-y-3 max-w-md">
+            <PillSelector
+              options={SERVICES}
+              selected={tempServices}
+              onSelect={toggleService}
+              multi
+            />
+          </div>
+        );
+
+      case 5:
+        return (
+          <div className="max-w-sm">
+            <textarea
+              ref={inputRef}
+              value={textInput}
+              onChange={e => setTextInput(e.target.value)}
+              placeholder={'מה אתה עושה, למי, ומה מייחד אותך...\n\nלמשל: "בית קפה קטן בתל אביב, מתמחה בקפה מיוחד ועוגות ביתיות."'}
+              rows={4}
+              className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3 text-[13px] text-gray-700 outline-none focus:border-[#e8344d] transition-colors resize-none"
+            />
+          </div>
+        );
+
+      case 6:
+        return (
+          <div className="grid grid-cols-2 gap-2 max-w-sm">
+            {PRICE_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => advance('price_tier', opt.value, opt.label)}
+                className={`text-right p-3.5 rounded-2xl border transition-all ${
+                  formData.price_tier === opt.value
+                    ? 'border-[#e8344d] bg-[#fce4ec]'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                <div className="font-semibold text-[13px] text-gray-800">{opt.label}</div>
+                <div className="text-[11px] text-gray-500 mt-0.5">{opt.sub}</div>
               </button>
-            </div>
+            ))}
+          </div>
+        );
+
+      case 7:
+        return (
+          <div className="space-y-3 max-w-md">
+            <PillSelector
+              options={SOURCE_OPTIONS}
+              selected={tempSources}
+              onSelect={toggleSource}
+              multi
+            />
+          </div>
+        );
+
+      case 8:
+        return (
+          <div className="max-w-md">
+            <PillSelector
+              options={GOAL_OPTIONS}
+              selected={formData.business_goal}
+              onSelect={val => {
+                const opt = GOAL_OPTIONS.find(g => g.value === val);
+                advance('business_goal', val, opt?.label || val);
+              }}
+            />
+          </div>
+        );
+
+      case 9:
+        return (
+          <div className="space-y-2.5 max-w-sm">
+            {SOCIAL_CHANNELS.map(ch => (
+              <div key={ch.key} className="flex items-center gap-3 bg-white border border-gray-200 rounded-full px-4 py-2.5 focus-within:border-[#e8344d] transition-colors">
+                <span className="text-lg flex-shrink-0">{ch.icon}</span>
+                <input
+                  value={formData[ch.key]}
+                  onChange={e => setFormData(prev => ({ ...prev, [ch.key]: e.target.value }))}
+                  placeholder={ch.placeholder}
+                  className="flex-1 bg-transparent text-[12px] text-gray-700 outline-none"
+                  dir="ltr"
+                />
+              </div>
+            ))}
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // Should the "בואו נתקדם" button be shown and enabled?
+  const canAdvance = () => {
+    if (step === 1) return textInput.trim().length > 0;
+    if (step === 2) return citySearch.trim().length > 0;
+    if (step === 4) return tempServices.length > 0;
+    if (step === 5) return textInput.trim().length > 0;
+    if (step === 7) return tempSources.length > 0;
+    if (step === 9) return true; // optional
+    return false; // auto-advance steps (3, 6, 8)
+  };
+
+  const isAutoAdvanceStep = [3, 6, 8].includes(step);
+
+  const handlePrimaryAction = () => {
+    if (step === 9) {
+      handleSubmit();
+    } else if (step === 1) {
+      if (textInput.trim()) advance('name', textInput.trim(), textInput.trim());
+    } else if (step === 2) {
+      if (citySearch.trim()) advance('city', citySearch.trim(), citySearch.trim());
+    } else if (step === 4) {
+      const labels = SERVICES.filter(s => tempServices.includes(s.value)).map(s => s.label);
+      advance('relevant_services', tempServices, labels.join(', '));
+    } else if (step === 5) {
+      if (textInput.trim()) advance('description', textInput.trim(), textInput.trim().slice(0, 30) + (textInput.trim().length > 30 ? '...' : ''));
+    } else if (step === 7) {
+      const labels = SOURCE_OPTIONS.filter(s => tempSources.includes(s.value)).map(s => s.label);
+      advance('customer_sources', tempSources, labels.join(', '));
+    }
+  };
+
+  // ── WELCOME SCREEN (step 0) ─────────────────────────────────────────────────
+  if (step === 0) {
+    return (
+      <div dir="rtl" className="min-h-screen flex items-center justify-center p-6" style={BG_STYLE}>
+        <div className="text-center space-y-7 max-w-sm w-full">
+          <KoriAvatar size="lg" className="mx-auto shadow-lg" />
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 leading-snug">
+              {getGreeting()},<br />
+              האם כבר יש לך משתמש אצלנו?
+            </h1>
+            <p className="text-sm text-gray-500 mt-2">קורי כאן לעזור לך לצמוח</p>
+          </div>
+          <div className="flex justify-center gap-3">
+            <button
+              onClick={() => navigate('/sign-in')}
+              className="bg-[#e8344d] text-white rounded-full px-8 py-3 font-semibold text-[14px] hover:bg-[#c92b40] transition-colors shadow-sm"
+            >
+              כן, התחבר
+            </button>
+            <button
+              onClick={() => setStep(1)}
+              className="border border-gray-300 bg-white text-gray-700 rounded-full px-7 py-3 font-medium text-[14px] hover:border-gray-400 transition-colors"
+            >
+              לא, נרשם
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── CONVERSATIONAL LAYOUT (steps 1–9) ──────────────────────────────────────
+  return (
+    <div dir="rtl" className="min-h-screen flex" style={BG_STYLE}>
+      {/* Right: Conversation area (flex-1) */}
+      <div className="flex-1 flex flex-col h-screen">
+        {/* Scrollable conversation history */}
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto px-6 pt-8 pb-4 space-y-4"
+          style={{ scrollbarWidth: 'thin' }}
+        >
+          {messages.map((msg, i) =>
+            msg.type === 'ai'
+              ? <AiBubble key={i}>{msg.text}</AiBubble>
+              : <UserBubble key={i}>{msg.text}</UserBubble>
           )}
 
-          {/* ── STEP 3: Price + Sources ───────────────────────────────────────── */}
-          {step === 3 && (
-            <div>
-              <h1 className="text-2xl font-bold text-[#111111] mb-1">כמה עוד פרטים</h1>
-              <p className="text-foreground-muted text-sm mb-7">עוזר לנו לכוון את הניתוח לתחרות ולאסטרטגיה הנכונה לך</p>
-              <div className="space-y-7">
-                {/* Price tier */}
-                <div>
-                  <label className="block text-sm font-medium text-[#111111] mb-3">מיקום מחיר בשוק</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {PRICE_OPTIONS.map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setFormData(p => ({ ...p, price_tier: opt.value }))}
-                        className={`p-3 rounded-xl border-2 transition-all text-center ${
-                          formData.price_tier === opt.value
-                            ? 'border-[#111111] bg-secondary/50'
-                            : 'border-border/60 hover:border-border-hover'
-                        }`}
-                      >
-                        <div className="font-medium text-[#111111] text-[13px]">{opt.label}</div>
-                        <div className="text-[10px] text-foreground-muted mt-0.5">{opt.sub}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Customer sources */}
-                <div>
-                  <label className="block text-sm font-medium text-[#111111] mb-3">
-                    מאיפה מגיעים הלקוחות שלך?
-                    <span className="text-foreground-muted/50 font-normal mr-1">(בחר את כל שרלוונטי)</span>
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {SOURCE_OPTIONS.map(opt => {
-                      const selected = formData.customer_sources.includes(opt.value);
-                      return (
-                        <button
-                          key={opt.value}
-                          onClick={() => toggleSource(opt.value)}
-                          className={`px-3 py-1.5 rounded-full text-[12px] border transition-all ${
-                            selected
-                              ? 'bg-[#111111] text-white border-[#111111]'
-                              : 'border-border/60 text-foreground-secondary hover:border-border-hover'
-                          }`}
-                        >
-                          {selected && <Check className="w-3 h-3 inline ml-1" />}
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3 mt-8">
-                <button onClick={() => setStep(2)} className="text-[12px] text-foreground-muted/50 hover:text-foreground-muted transition-colors">
-                  ← חזרה
-                </button>
-                <button
-                  disabled={!formData.price_tier || formData.customer_sources.length === 0}
-                  onClick={() => setStep(4)}
-                  className="flex-1 h-12 text-[13px] font-semibold bg-[#111111] hover:bg-[#333333] text-white rounded-md transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
-                >
-                  המשך <ChevronLeft className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ── STEP 4: Channels + Intelligence Meter ────────────────────────── */}
-          {step === 4 && (
-            <div>
-              <h1 className="text-2xl font-bold text-[#111111] mb-1">חבר מקורות מידע</h1>
-              <p className="text-foreground-muted text-sm mb-2">אופציונלי — ברגע שהמקורות יחוברו הסוכנים ילמדו יותר טוב על העסק</p>
-
-              {/* Intelligence meter */}
-              <div className="bg-secondary/50 border border-border/60 rounded-xl p-4 mb-6">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[12px] text-foreground-secondary font-medium">דיוק אינטליגנציה</span>
-                  <span className="text-[14px] font-bold text-[#111111]">{intelPct}%</span>
-                </div>
-                <div className="h-2 bg-[#eeeeee] rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${intelPct}%`,
-                      background: intelPct >= 80 ? '#10b981' : intelPct >= 60 ? '#f59e0b' : '#6366f1',
-                    }}
-                  />
-                </div>
-                <p className="text-[10px] text-foreground-muted/50 mt-1.5">
-                  {intelPct < 60
-                    ? 'חבר מקורות כדי שהסוכנים יוכלו לסרוק ולנתח בצורה מדויקת יותר'
-                    : intelPct < 85
-                    ? 'טוב! עוד מקור אחד יגביר משמעותית את הדיוק'
-                    : 'מצוין! הסוכנים יוכלו לנתח את העסק שלך ברמה גבוהה מאוד'}
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                {CHANNEL_OPTIONS.map(ch => (
-                  <div key={ch.key} className={`border rounded-xl p-3 transition-all ${formData[ch.field] ? 'border-[#111111] bg-secondary/50' : 'border-border/60'}`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{ch.icon}</span>
-                        <span className="text-[13px] font-medium text-[#111111]">{ch.label}</span>
-                      </div>
-                      <span className="text-[11px] text-foreground-muted">+{ch.pct}% דיוק</span>
-                    </div>
-                    <input
-                      placeholder={ch.placeholder}
-                      value={formData[ch.field]}
-                      onChange={e => setFormData(p => ({ ...p, [ch.field]: e.target.value }))}
-                      className={inputCls}
-                      dir="ltr"
-                    />
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex gap-3 mt-7">
-                <button onClick={() => setStep(3)} className="text-[12px] text-foreground-muted/50 hover:text-foreground-muted transition-colors">
-                  ← חזרה
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  disabled={isSubmitting}
-                  className="flex-1 h-12 text-[13px] font-semibold bg-[#111111] hover:bg-[#333333] text-white rounded-md transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {isSubmitting ? (
-                    <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> שומר...</>
-                  ) : (
-                    'התחל סריקה'
-                  )}
-                </button>
-              </div>
-              <p className="text-[11px] text-foreground-muted/50 text-center mt-3">
-                ניתן לחבר מקורות נוספים גם לאחר הרישום
-              </p>
+          {/* Current step input area */}
+          {step >= 1 && step <= 9 && (
+            <div className="pt-2" style={{ paddingRight: '52px' }}>
+              {renderInput()}
             </div>
           )}
         </div>
+
+        {/* Bottom CTAs */}
+        {!isAutoAdvanceStep && step >= 1 && step <= 9 && (
+          <div className="border-t border-gray-200/60 bg-white/80 backdrop-blur-sm px-6 py-4 flex items-center justify-between gap-3">
+            <button
+              onClick={skipStep}
+              className="border border-gray-300 text-gray-500 rounded-full px-6 py-2.5 text-[13px] font-medium hover:border-gray-400 transition-colors"
+            >
+              מלאו אחר כך
+            </button>
+            <button
+              onClick={handlePrimaryAction}
+              disabled={!canAdvance() || isSubmitting}
+              className="bg-[#e8344d] text-white rounded-full px-8 py-2.5 text-[14px] font-semibold hover:bg-[#c92b40] transition-colors disabled:opacity-40 flex items-center gap-2 shadow-sm"
+            >
+              {isSubmitting ? (
+                <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> שומר...</>
+              ) : step === 9 ? 'בואו נתקדם' : 'בואו נתקדם'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Left: Progress tracker */}
+      <div className="w-56 border-r border-gray-200/70 bg-white/50 px-5 py-8 flex-shrink-0 hidden md:block">
+        <ProgressTracker step={step} />
       </div>
     </div>
   );

@@ -5,14 +5,14 @@ import { useLocation } from 'react-router-dom';
 
 export default function ChatWidget({ businessProfile, urgentCount = 0 }) {
   const [open, setOpen] = useState(() => {
-    try { return sessionStorage.getItem('quieteyes_chat_open') === '1'; } catch { return false; }
+    try { return sessionStorage.getItem('cortexi_chat_open') === '1'; } catch { return false; }
   });
   const [prefilledMessage, setPrefilledMessage] = useState('');
   const location = useLocation();
 
   // Persist open state across page reloads within the session
   useEffect(() => {
-    try { sessionStorage.setItem('quieteyes_chat_open', open ? '1' : '0'); } catch {}
+    try { sessionStorage.setItem('cortexi_chat_open', open ? '1' : '0'); } catch {}
   }, [open]);
 
   // Listen for chat:open events dispatched by LeadCard / ReviewCard
@@ -38,8 +38,12 @@ export default function ChatWidget({ businessProfile, urgentCount = 0 }) {
       )}
       <button
         onClick={() => setOpen(!open)}
-        className="fixed bottom-4 left-4 md:left-6 z-50 w-14 h-14 rounded-full text-white flex items-center justify-center transition-all duration-200 relative"
+        className="fixed z-[60] w-14 h-14 rounded-full text-white flex items-center justify-center transition-all duration-200 relative"
         style={{
+          position: 'fixed',
+          bottom: '1.5rem',
+          left: '1.5rem',
+          right: 'auto',
           background: 'linear-gradient(135deg, #E8344D, #FF6B6B)',
           boxShadow: '0 4px 20px rgba(232,52,77,0.35), 0 2px 6px rgba(232,52,77,0.2)',
         }}

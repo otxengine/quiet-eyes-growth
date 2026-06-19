@@ -2,48 +2,47 @@
 import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import {
-  Plus, Megaphone, Eye, MousePointerClick, Users, TrendingUp,
-  Loader2, Trash2, ExternalLink, RefreshCw, X, Upload, Sparkles,
-  Image as ImageIcon, Send,
-} from 'lucide-react';
+import { Plus, Loader2, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
-import PlanGate from '@/components/subscription/PlanGate';
-
-// ── Config ────────────────────────────────────────────────────────────────────
+import PageHeader from '@/components/shared/PageHeader';
+import StatCards from '@/components/shared/StatCards';
+import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
+import DataTable from '@/components/shared/DataTable';
 
 const PLATFORM_CONFIG = {
-  facebook:  { label: 'Facebook',     icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
-  instagram: { label: 'Instagram',    icon: '📸', color: '#e1306c', bg: '#fde8f0' },
-  google:    { label: 'Google Ads',   icon: '🔍', color: '#4285f4', bg: '#e8f0fe' },
-  whatsapp:  { label: 'WhatsApp Ads', icon: '💬', color: '#25d366', bg: '#f0fdf4' },
-  tiktok:    { label: 'TikTok',       icon: '🎵', color: '#010101', bg: '#f0f0f0' },
+  meta:      { label: 'Facebook',   icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
+  instagram: { label: 'Instagram',  icon: '📸', color: '#e1306c', bg: '#fde8f0' },
+  google:    { label: 'Google Ads', icon: '🔍', color: '#4285f4', bg: '#e8f0fe' },
+  facebook:  { label: 'Facebook',   icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
+  
+  tiktok:    { label: 'TikTok',     icon: '🎵', color: '#000',    bg: '#f0f0f0' },
 };
-
-const ORGANIC_PLATFORMS = [
-  { id: 'instagram', label: 'Instagram', icon: '📸', color: '#e1306c' },
-  { id: 'facebook',  label: 'Facebook',  icon: '📘', color: '#1877f2' },
-  { id: 'tiktok',    label: 'TikTok',    icon: '🎵', color: '#000' },
-];
 
 const STATUS_CONFIG = {
-  draft:          { label: 'טיוטה',          cls: 'bg-secondary text-foreground-secondary' },
-  pending_launch: { label: 'ממתין לפרסום',   cls: 'bg-amber-50 text-amber-700' },
-  published:      { label: 'פורסם',           cls: 'bg-blue-50 text-blue-700' },
-  active:         { label: 'פעיל',            cls: 'bg-green-50 text-green-700' },
-  completed:      { label: 'הסתיים',          cls: 'bg-purple-50 text-purple-700' },
+  draft:          { label: 'טיוטה',        cls: 'bg-gray-100 text-gray-500',   tab: 'drafts' },
+  pending_launch: { label: 'ממתין לפרסום', cls: 'bg-amber-50 text-amber-700',  tab: 'paused' },
+  published:      { label: 'פורסם',        cls: 'bg-blue-50 text-blue-700',    tab: 'active' },
+  active:         { label: 'פעיל',         cls: 'bg-green-50 text-green-700',  tab: 'active' },
+  completed:      { label: 'הסתיים',       cls: 'bg-purple-50 text-purple-700', tab: 'completed' },
+  paused:         { label: 'בהשהיה',       cls: 'bg-orange-50 text-orange-700', tab: 'paused' },
 };
 
-const ORGANIC_STATUS = {
-  draft:     { label: 'טיוטה',  cls: 'bg-secondary text-foreground-secondary' },
-  published: { label: 'פורסם',  cls: 'bg-green-50 text-green-700' },
-};
+const TABS = [
+  { key: 'active',    label: 'קמפיינים פעילים' },
+  { key: 'paused',    label: 'בהשהיה' },
+  { key: 'drafts',    label: 'טיוטות' },
+  { key: 'completed', label: 'הסתיימו' },
+];
 
-function fmtNum(n) {
-  if (n == null) return '—';
-  if (n >= 1000) return `${(n / 1000).toFixed(0)}K`;
-  return String(Math.round(n));
-}
+const COLUMNS = [
+  { key: 'title',    label: 'קמפיין' },
+  { key: 'platform', label: 'פלטפורמה' },
+  { key: 'leads',    label: 'לידים' },
+  { key: 'cr',       label: 'יחס המרה' },
+  { key: 'budget',   label: 'תקציב ומשך' },
+  { key: 'status',   label: 'סטאטוס' },
+];
+
 function fmtDate(d) {
   if (!d) return '';
   return new Date(d).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' });
@@ -848,179 +847,87 @@ const PAID_TAB_LABELS = { all: 'הכל', pending_launch: 'ממתין לפרסו�
 export default function Marketing() {
   const { businessProfile } = useOutletContext();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [searchParams] = useSearchParams();
-
   const bpId = businessProfile?.id;
-  const [activeTab,       setActiveTab]       = useState('paid');
-  const [paidFilter,      setPaidFilter]      = useState('all');
-  const [showOrgCreate,   setShowOrgCreate]   = useState(false);
-  const [organicCtx,      setOrganicCtx]      = useState(null);
-  const [showWaBlast,     setShowWaBlast]     = useState(false);
-  const [waBlastCtx,      setWaBlastCtx]      = useState(null);
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState('active');
+  const [budgetOpen, setBudgetOpen] = useState(false);
 
-  // Auto-open organic drawer / switch tab if URL says so
-  useEffect(() => {
-    if (searchParams.get('create') === 'organic') {
-      setActiveTab('organic');
-      setOrganicCtx({
-        signalId: searchParams.get('signalId') || '',
-        summary:  searchParams.get('summary')  || '',
-        action:   searchParams.get('action')   || '',
-        type:     searchParams.get('type')     || 'post',
-      });
-      setShowOrgCreate(true);
-    }
-    if (searchParams.get('create') === 'whatsapp') {
-      setWaBlastCtx({
-        signalId: searchParams.get('signalId') || '',
-        summary:  searchParams.get('summary')  || '',
-      });
-      setShowWaBlast(true);
-    }
-    // Handle tab param: /marketing?tab=audiences (etc.)
-    const tab = searchParams.get('tab');
-    if (tab) setActiveTab(tab);
-  }, []); // eslint-disable-line
-
-  // ── Paid campaigns ──
-  const { data: campaigns = [], isLoading: loadingPaid } = useQuery({
+  const { data: campaigns = [], isLoading } = useQuery({
     queryKey: ['campaigns', bpId],
-    queryFn: () => base44.entities.Campaign.filter({ linked_business: bpId }, '-created_date', 50),
+    queryFn: () => base44.entities.Campaign.filter({ linked_business: bpId }, '-created_date', 100),
     enabled: !!bpId,
   });
 
-  const deleteCampaign = useMutation({
-    mutationFn: (id) => base44.entities.Campaign.delete(id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['campaigns', bpId] }); toast.success('נמחק'); },
+  const { data: allLeads = [] } = useQuery({
+    queryKey: ['allLeads', bpId],
+    queryFn: () => base44.entities.Lead.filter({ linked_business: bpId }, '-score', 100),
+    enabled: !!bpId,
   });
 
-  const filteredCampaigns = paidFilter === 'all' ? campaigns : campaigns.filter(c => c.status === paidFilter);
+  const today = new Date().toISOString().slice(0, 10);
+  const todayLeads = allLeads.filter(l => (l.created_at || '').startsWith(today));
+  const hotLeads   = allLeads.filter(l => l.status === 'hot');
+  const sources    = new Set(allLeads.map(l => l.source).filter(Boolean));
+  const totalBudget = campaigns.filter(c => c.status === 'active').reduce((s, c) => s + (c.daily_budget_ils || 0), 0);
 
-  // ── Organic posts ──
-  const { data: organicPosts = [], isLoading: loadingOrganic } = useQuery({
-    queryKey: ['organicPosts', bpId],
-    queryFn: () => base44.entities.OrganicPost.filter({ linked_business: bpId }, '-created_date', 50),
-    enabled: !!bpId && (activeTab === 'organic' || activeTab === 'calendar'),
+  const statCards = [
+    { count: todayLeads.length, label: 'לידים מהיום',          borderColor: 'blue' },
+    { count: hotLeads.length,   label: 'לידים חמים',           borderColor: 'red' },
+    { count: sources.size,      label: 'מקורות',               borderColor: 'none' },
+    { count: `₪${totalBudget}`, label: 'תקציב פרסום יומי',     borderColor: 'yellow' },
+  ];
+
+  const tabCount = (tabKey) => campaigns.filter(c => {
+    const sc = STATUS_CONFIG[c.status];
+    return sc?.tab === tabKey;
+  }).length;
+
+  const filteredCampaigns = campaigns.filter(c => {
+    const sc = STATUS_CONFIG[c.status];
+    return sc?.tab === activeTab;
   });
 
-  const deleteOrganic = useMutation({
-    mutationFn: (id) => base44.entities.OrganicPost.delete(id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['organicPosts', bpId] }); toast.success('נמחק'); },
-  });
-
-  // ── Audience intelligence ──
-  const [audienceLoading, setAudienceLoading] = useState(false);
-  const [audiencePlan, setAudiencePlan] = useState(null);
-  const [planLoading, setPlanLoading] = useState(false);
-
-  const { data: audienceSignals = [], refetch: refetchAudience } = useQuery({
-    queryKey: ['audienceSignals', bpId],
-    queryFn: () => base44.entities.MarketSignal.filter(
-      { linked_business: bpId, category: 'tiktok_audience' },
-      '-detected_at', 5
-    ),
-    enabled: !!bpId && activeTab === 'audiences',
-  });
-
-  const { data: marketSignals = [] } = useQuery({
-    queryKey: ['marketSignalsForAudience', bpId],
-    queryFn: () => base44.entities.MarketSignal.filter(
-      { linked_business: bpId },
-      '-detected_at', 30
-    ),
-    enabled: !!bpId && activeTab === 'audiences',
-  });
-
-  const latestAudience = audienceSignals[0] ? (() => {
-    try { return JSON.parse(audienceSignals[0].source_description || '{}'); } catch { return null; }
-  })() : null;
-
-  const runAudienceAgent = async () => {
-    setAudienceLoading(true);
-    try {
-      await base44.functions.invoke('tiktokAudienceAgent', { businessProfileId: bpId, force: true });
-      await refetchAudience();
-      toast.success('קהל יעד עודכן ✓');
-    } catch (err) { console.error('runAudienceAgent error:', err); toast.error(`שגיאה בניתוח קהל יעד: ${err?.message || 'נסה שוב'}`); }
-    setAudienceLoading(false);
-  };
-
-  const generateAudiencePlan = async () => {
-    setPlanLoading(true);
-    try {
-      const signalContext = marketSignals
-        .filter(s => ['tiktok_sector_trend', 'competitor_move', 'local_trend', 'demand_gap'].includes(s.category))
-        .slice(0, 8)
-        .map(s => s.summary)
-        .join('; ');
-      const audienceCtx = latestAudience?.primary_audience
-        ? `קהל ראשי: ${latestAudience.primary_audience.age_range}, ${latestAudience.primary_audience.gender_skew}. תחומי עניין: ${(latestAudience.primary_audience.interests || []).join(', ')}.`
-        : '';
-      const res = await base44.integrations.Core.InvokeLLM({
-        model: 'sonnet',
-        maxTokens: 700,
-        prompt: `אתה מומחה לפרסום ממוקד עבור עסקים קטנים ישראלים.
-עסק: "${businessProfile?.name}" (${businessProfile?.category}, ${businessProfile?.city}).
-${audienceCtx}
-אותות שוק ומודיעין שנאסף: ${signalContext || 'אין'}.
-
-בהתבסס על המידע שנאסף, צור תוכנית קהל יעד מפורטת. JSON בלבד:
-{
-  "segments": [
-    {
-      "name": "שם הסגמנט",
-      "description": "תיאור קצר",
-      "age": "טווח גיל",
-      "gender": "התפלגות מגדרית",
-      "interests": ["תחום 1","תחום 2","תחום 3"],
-      "pain_points": ["כאב 1","כאב 2"],
-      "best_channels": ["ערוץ 1","ערוץ 2"],
-      "message_angle": "זווית מסר מנצחת",
-      "budget_priority": "high|medium|low"
-    }
-  ],
-  "top_insight": "התובנה החשובה ביותר מהמודיעין שנאסף",
-  "recommended_first_campaign": "תיאור קמפיין ראשון מומלץ"
-}`,
-        response_json_schema: { type: 'object' },
-      });
-      setAudiencePlan(res?.segments ? res : null);
-      if (!res?.segments) toast.error('לא הצלחנו לייצר תוכנית — נסה שוב');
-    } catch (err) { console.error('generateAudiencePlan error:', err); toast.error(`שגיאה: ${err?.message || 'נסה שוב'}`); }
-    setPlanLoading(false);
-  };
+  // Urgent: campaigns with pending_launch status
+  const pendingLaunch = campaigns.filter(c => c.status === 'pending_launch');
+  const urgentActions = pendingLaunch.slice(0, 2).map(c => ({
+    title: `קמפיין ממתין לפרסום: ${c.title}`,
+    description: c.platform ? `פלטפורמה: ${PLATFORM_CONFIG[c.platform]?.label || c.platform}` : '',
+    ctaLabel: 'פרסם עכשיו',
+    onCta: () => navigate(`/marketing/create?campaignId=${c.id}`),
+  }));
 
   return (
-    <PlanGate requires="growth" featureName="מרכז השיווק">
-    <div className="p-4 md:p-6 max-w-5xl mx-auto" dir="rtl">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <Megaphone className="w-5 h-5" /> מרכז שיווק
-          </h1>
-          <p className="text-sm text-foreground-muted mt-0.5">פוסטים, סטוריז וקמפיינים ממומנים</p>
-        </div>
-        {activeTab !== 'calendar' && activeTab !== 'audiences' && (
-          <button
-            onClick={() => activeTab === 'paid' ? navigate('/marketing/create') : setShowOrgCreate(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg text-[13px] font-semibold hover:opacity-90 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            {activeTab === 'paid' ? 'קמפיין חדש' : 'פוסט חדש'}
-          </button>
-        )}
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        count={campaigns.length}
+        title="מרכז השיווק"
+        actionLabel="קמפיין חדש"
+        actionIcon={<Plus className="w-4 h-4" />}
+        onAction={() => navigate('/marketing/create')}
+      />
 
-      {/* Main tabs */}
-      <div className="flex gap-1 mb-5 p-1 bg-secondary rounded-xl w-fit">
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setActiveTab(t.id)}
-            className={`px-4 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${
-              activeTab === t.id ? 'bg-card shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
+      <StatCards cards={statCards} />
+
+      {urgentActions.length > 0 && (
+        <UrgentActionsSection actions={urgentActions} />
+      )}
+
+      {/* Tab bar */}
+      <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit">
+        {TABS.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 ${
+              activeTab === tab.key ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
+            }`}
+          >
+            {tab.label}
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+              activeTab === tab.key ? 'bg-gray-100 text-foreground-secondary' : 'bg-gray-200 text-foreground-muted'
             }`}>
-            {t.icon} {t.label}
+              {tabCount(tab.key)}
+            </span>
           </button>
         ))}
       </div>
@@ -1263,35 +1170,81 @@ ${audienceCtx}
             )}
           </div>
         </div>
-      )}
-
-      {/* Calendar tab */}
-      {activeTab === 'calendar' && (
-        <CalendarView posts={organicPosts} />
-      )}
-
-      {/* Organic create drawer */}
-      {showOrgCreate && (
-        <OrganicCreateDrawer
-          businessProfile={businessProfile}
-          signalContext={organicCtx}
-          audienceData={latestAudience}
-          recentSignals={marketSignals?.slice(0, 6) || []}
-          onClose={() => { setShowOrgCreate(false); setOrganicCtx(null); }}
-          onSaved={() => queryClient.invalidateQueries({ queryKey: ['organicPosts', bpId] })}
-        />
-      )}
-
-      {/* WhatsApp blast drawer */}
-      {showWaBlast && (
-        <WhatsAppBlastDrawer
-          businessProfile={businessProfile}
-          signalContext={waBlastCtx}
-          audienceData={latestAudience}
-          onClose={() => { setShowWaBlast(false); setWaBlastCtx(null); }}
+      ) : (
+        <DataTable
+          columns={COLUMNS}
+          rows={filteredCampaigns}
+          emptyText="אין קמפיינים בקטגוריה זו"
+          renderCell={(campaign, col) => {
+            if (col.key === 'title') return (
+              <div>
+                <div className="font-semibold text-sm text-foreground">{campaign.title}</div>
+                {campaign.created_date && (
+                  <div className="text-[10px] text-foreground-muted mt-0.5">{fmtDate(campaign.created_date)}</div>
+                )}
+              </div>
+            );
+            if (col.key === 'platform') {
+              const plat = PLATFORM_CONFIG[campaign.platform];
+              if (!plat) return <span className="text-xs text-foreground-secondary">{campaign.platform || '—'}</span>;
+              return (
+                <span
+                  className="text-xs font-medium px-2 py-0.5 rounded-full"
+                  style={{ background: plat.bg, color: plat.color }}
+                >
+                  {plat.icon} {plat.label}
+                </span>
+              );
+            }
+            if (col.key === 'leads') return (
+              <span className="font-semibold text-sm text-foreground">
+                {campaign.leads_count ?? campaign.clicks ?? '—'}
+              </span>
+            );
+            if (col.key === 'cr') {
+              const cr = campaign.conversion_rate ?? campaign.click_through_rate;
+              return (
+                <span className="text-sm text-foreground-secondary">
+                  {cr != null ? `${(cr * 100).toFixed(1)}%` : '—'}
+                </span>
+              );
+            }
+            if (col.key === 'budget') return (
+              <div className="text-xs text-foreground-secondary">
+                {campaign.daily_budget_ils != null && <div>₪{campaign.daily_budget_ils}/יום</div>}
+                {(campaign.start_date || campaign.end_date) && (
+                  <div className="text-[10px] text-foreground-muted">
+                    {fmtDate(campaign.start_date)} — {fmtDate(campaign.end_date)}
+                  </div>
+                )}
+              </div>
+            );
+            if (col.key === 'status') {
+              const sc = STATUS_CONFIG[campaign.status] || STATUS_CONFIG.draft;
+              const isActive = campaign.status === 'active' || campaign.status === 'published';
+              return (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={async () => {
+                      const newStatus = isActive ? 'paused' : 'active';
+                      try {
+                        await base44.entities.Campaign.update(campaign.id, { status: newStatus });
+                        queryClient.invalidateQueries({ queryKey: ['campaigns', bpId] });
+                        toast.success(newStatus === 'active' ? 'קמפיין הופעל' : 'קמפיין הושהה');
+                      } catch { toast.error('שגיאה בעדכון קמפיין'); }
+                    }}
+                    className={`w-9 h-5 rounded-full transition-colors relative ${isActive ? 'bg-green-400' : 'bg-gray-200'}`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${isActive ? 'right-0.5' : 'left-0.5'}`} />
+                  </button>
+                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${sc.cls}`}>{sc.label}</span>
+                </div>
+              );
+            }
+            return null;
+          }}
         />
       )}
     </div>
-    </PlanGate>
   );
 }
