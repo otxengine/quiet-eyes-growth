@@ -318,11 +318,11 @@ export default function Reputation() {
 
       <StatCards cards={statCards} />
 
-      {/* Two-column: chart + מבט על */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl border border-border p-4">
+      {/* Two-column: chart (40%) + מבט על (60%) */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="md:col-span-2 bg-white rounded-xl border border-gray-200 p-4">
             <div className="flex items-center justify-between mb-3" dir="rtl">
-              <button className="flex items-center gap-1 text-[11px] text-foreground-muted border border-border rounded-lg px-2.5 py-1.5 hover:bg-secondary transition-colors">
+              <button className="flex items-center gap-1 text-[11px] text-foreground-muted border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-secondary transition-colors">
                 חצי שנתי <ChevronDown className="w-3 h-3" />
               </button>
               <span className="text-[13px] font-semibold text-foreground">דירוג לאורך זמן</span>
@@ -330,24 +330,26 @@ export default function Reputation() {
             <RatingTrendChart reviews={reviews} />
           </div>
 
-          <div className="bg-white rounded-xl border border-border p-4">
+          <div className="md:col-span-3 bg-gradient-to-l from-pink-50 via-purple-50 to-blue-50 border border-gray-200 rounded-2xl p-4">
             <div className="flex items-center justify-between mb-3" dir="rtl">
-              <button className="flex items-center gap-1.5 text-[11px] text-foreground-muted border border-border rounded-lg px-2.5 py-1.5 hover:bg-secondary transition-colors">
-                📋 לכל התובנות וההמלצות
+              <button className="flex items-center gap-1.5 text-[11px] text-foreground-muted border border-gray-200 bg-white/60 rounded-lg px-2.5 py-1.5 hover:bg-white transition-colors">
+                לכל התובנות וההמלצות
               </button>
-              <span className="text-[13px] font-semibold text-foreground">מבט על</span>
+              <span className="text-[14px] font-bold text-foreground">מבט על</span>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {insights.length === 0 ? (
-                <p className="text-[12px] text-foreground-muted text-center py-4">הכל תקין — אין פעולות דחופות</p>
+                <div className="bg-white/70 rounded-xl p-4 text-center">
+                  <p className="text-[12px] text-foreground-muted">הכל תקין — אין פעולות דחופות</p>
+                </div>
               ) : insights.map((ins, i) => (
-                <div key={i} dir="rtl" className={`flex items-center justify-between p-3 rounded-lg border-r-4 bg-gray-50/60 ${ins.border}`}>
-                  <button className="text-[11px] text-foreground-muted border border-border rounded-lg px-2.5 py-1 hover:bg-white transition-colors">
+                <div key={i} dir="rtl" className={`flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 border-r-4 ${ins.border}`}>
+                  <button className="flex-shrink-0 text-[11px] border border-rose-300 text-rose-600 px-3 py-1.5 rounded-full hover:bg-rose-50 transition-colors font-medium">
                     קרא והגב
                   </button>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${ins.dot}`} />
-                    <span className="text-[12px] font-medium text-foreground">{ins.text}</span>
+                    <span className="text-[12px] font-semibold text-foreground truncate">{ins.text}</span>
                   </div>
                 </div>
               ))}
@@ -359,7 +361,7 @@ export default function Reputation() {
       <div>
         {/* Section header: title on RIGHT, filters+search on LEFT (RTL) */}
         <div className="flex items-center justify-between mb-3" dir="rtl">
-          <h2 className="text-[15px] font-bold text-foreground">ביקורות</h2>
+          <h2 className="text-[15px] font-bold text-foreground">ביקורות <span className="text-foreground-muted font-normal">({reviews.length})</span></h2>
           <div className="flex items-center gap-2 flex-wrap">
             {/* Filters first in DOM = appear on RIGHT within the group in RTL */}
             <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
@@ -393,7 +395,7 @@ export default function Reputation() {
         </div>
 
         {reviews.length === 0 ? (
-          <div className="bg-white rounded-xl border border-border p-10 text-center">
+          <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
             <Star className="w-8 h-8 text-foreground-muted opacity-30 mx-auto mb-3" />
             <p className="text-[13px] text-foreground-muted mb-4">לא נמצאו ביקורות עדיין</p>
             <button onClick={() => setShowAddModal(true)} className="inline-flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-full text-[12px] font-semibold hover:opacity-90">
@@ -401,8 +403,8 @@ export default function Reputation() {
             </button>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-border overflow-hidden">
-            <div dir="rtl" className="flex items-center gap-3 px-4 py-2.5 bg-gray-50/60 border-b border-border text-[11px] font-semibold text-foreground-muted">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div dir="rtl" className="flex items-center gap-3 px-4 py-2.5 bg-gray-50/60 border-b border-gray-200 text-[11px] font-semibold text-foreground-muted">
               <span className="w-4" />
               <span className="flex-1">ביקורת</span>
               <span className="w-12 text-center">דירוג</span>
