@@ -2,7 +2,7 @@
 import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Plus, Loader2, ChevronDown } from 'lucide-react';
+import { Plus, Loader2, ChevronDown, Search, MoreVertical, Radio } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
@@ -858,7 +858,66 @@ function CalendarView({ posts }) {
   );
 }
 
+// ── CampaignRow — table row with platform icon + toggle ───────────────────────
+
+function ToggleSwitch({ active, onToggle }) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`relative w-10 h-5.5 rounded-full transition-colors flex-shrink-0 ${active ? 'bg-green-500' : 'bg-gray-300'}`}
+      style={{ height: '22px', width: '40px' }}
+    >
+      <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${active ? 'translate-x-5' : 'translate-x-0.5'}`} />
+    </button>
+  );
+}
+
+function CampaignRow({ campaign, onDelete, bpId, onToggle }) {
+  const navigate = useNavigate();
+  const plat = PLATFORM_CONFIG[campaign.platform] || { label: campaign.platform, icon: '📣', color: '#555' };
+  const isActive = ['active', 'published'].includes(campaign.status);
+  const leads = campaign.conversions || campaign.clicks || 0;
+  const convRate = campaign.clicks > 0 && campaign.conversions
+    ? ((campaign.conversions / campaign.clicks) * 100).toFixed(1) + '%'
+    : '—';
+
+  return (
+    <div dir="rtl" className="flex items-center gap-3 px-4 py-3 border-b border-border/40 last:border-0 hover:bg-gray-50/40 transition-colors">
+      <span className="flex-1 text-[12px] font-medium text-foreground truncate min-w-0">
+        {campaign.title}
+      </span>
+      <span className="text-[20px] w-8 flex-shrink-0 text-center" title={plat.label}>{plat.icon}</span>
+      <span className="text-[12px] font-semibold text-foreground w-12 flex-shrink-0 text-center">{leads}</span>
+      <span className="text-[11px] text-foreground-muted w-16 flex-shrink-0 text-center">{convRate}</span>
+      <div className="w-40 flex-shrink-0 text-right">
+        {campaign.daily_budget_ils != null && (
+          <p className="text-[11px] text-foreground">₪{campaign.daily_budget_ils}, יומי</p>
+        )}
+        {campaign.created_date && (
+          <p className="text-[10px] text-foreground-muted">
+            מתחיל ב-{new Date(campaign.created_date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+          </p>
+        )}
+      </div>
+      <div className="w-12 flex-shrink-0 flex justify-center">
+        <ToggleSwitch active={isActive} onToggle={() => onToggle(campaign)} />
+      </div>
+      <button onClick={() => { if (window.confirm('למחוק קמפיין?')) onDelete(campaign.id); }}
+        className="text-foreground-muted hover:text-foreground flex-shrink-0">
+        <MoreVertical className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
 // ── Main Marketing Page ───────────────────────────────────────────────────────
+
+const STATUS_FILTER_TABS = [
+  { key: 'active',         label: 'קמפיינים פעילים',    match: ['active', 'published'] },
+  { key: 'paused',         label: 'קמפיינים בהשהיה',    match: ['paused', 'pending_launch'] },
+  { key: 'drafts',         label: 'טיוטות',              match: ['draft'] },
+  { key: 'completed',      label: 'הסתיימו',             match: ['completed'] },
+];
 
 const TABS = [
   { id: 'paid',      label: 'ממומן',     icon: '💰' },
@@ -867,8 +926,6 @@ const TABS = [
   { id: 'calendar',  label: 'לוח שנה',   icon: '📅' },
 ];
 
-const PAID_TABS = ['all', 'pending_launch', 'draft', 'published', 'active', 'completed'];
-const PAID_TAB_LABELS = { all: 'הכל', pending_launch: 'ממתין לפרסום', draft: 'טיוטות', published: 'פורסמו', active: 'פעילים', completed: 'הסתיימו' };
 
 export default function Marketing() {
   const { businessProfile } = useOutletContext();
@@ -878,11 +935,12 @@ export default function Marketing() {
 
   const bpId = businessProfile?.id;
   const [activeTab,       setActiveTab]       = useState('paid');
-  const [paidFilter,      setPaidFilter]      = useState('all');
   const [showOrgCreate,   setShowOrgCreate]   = useState(false);
   const [organicCtx,      setOrganicCtx]      = useState(null);
   const [showWaBlast,     setShowWaBlast]     = useState(false);
   const [waBlastCtx,      setWaBlastCtx]      = useState(null);
+  const [statusFilter,    setStatusFilter]    = useState('active');
+  const [campaignSearch,  setCampaignSearch]  = useState('');
 
   // Auto-open organic drawer / switch tab if URL says so
   useEffect(() => {
@@ -919,7 +977,12 @@ export default function Marketing() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['campaigns', bpId] }); toast.success('נמחק'); },
   });
 
-  const filteredCampaigns = paidFilter === 'all' ? campaigns : campaigns.filter(c => c.status === paidFilter);
+  const filteredCampaigns = campaigns.filter(c => {
+    const tab = STATUS_FILTER_TABS.find(t => t.key === statusFilter);
+    const matchesStatus = tab ? tab.match.includes(c.status) : true;
+    const matchesSearch = !campaignSearch || (c.title || '').toLowerCase().includes(campaignSearch.toLowerCase());
+    return matchesStatus && matchesSearch;
+  });
 
   // ── Organic posts ──
   const { data: organicPosts = [], isLoading: loadingOrganic } = useQuery({
@@ -999,6 +1062,11 @@ ${audienceCtx}
   };
 
   // ── Stats ──
+  const totalLeads = campaigns.reduce((s, c) => s + (c.conversions || c.leads_count || 0), 0);
+  const activeLeads = campaigns.filter(c => ['active', 'published'].includes(c.status)).reduce((s, c) => s + (c.conversions || 0), 0);
+  const platformsUsed = [...new Set(campaigns.map(c => c.platform).filter(Boolean))].length;
+  const dailyBudget = campaigns.filter(c => c.status === 'active').reduce((s, c) => s + (c.daily_budget_ils || 0), 0);
+
   const pendingLaunch = campaigns.filter(c => c.status === 'pending_launch');
   const urgentActions = pendingLaunch.slice(0, 2).map(c => ({
     title: `קמפיין ממתין לפרסום: ${c.title}`,
@@ -1008,22 +1076,55 @@ ${audienceCtx}
   }));
 
   const statCards = [
-    { count: campaigns.filter(c => c.status === 'active').length, label: 'קמפיינים פעילים', borderColor: 'green' },
-    { count: pendingLaunch.length, label: 'ממתינים לפרסום', borderColor: 'yellow' },
-    { count: organicPosts.length, label: 'פוסטים אורגניים', borderColor: 'blue' },
-    { count: `₪${campaigns.filter(c => c.status === 'active').reduce((s, c) => s + (c.daily_budget_ils || 0), 0)}`, label: 'תקציב יומי', borderColor: 'none' },
+    { count: totalLeads,          label: 'לידים מהיום',       borderColor: 'blue' },
+    { count: activeLeads,         label: 'לידים חמים',        borderColor: 'red' },
+    { count: platformsUsed,       label: 'מקורות',            borderColor: 'yellow' },
+    { count: `₪${dailyBudget}`,   label: 'תקציב פרסום יומי', borderColor: 'none' },
   ];
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        count={campaigns.length}
-        title="מרכז השיווק"
-        subtitle="ניהול קמפיינים ממומנים, פוסטים אורגניים וניתוח קהל יעד"
-        actionLabel="קמפיין חדש"
-        actionIcon={<Plus className="w-4 h-4" />}
-        onAction={() => navigate('/marketing/create')}
-      />
+      {/* Header row: title + status filter tabs + new campaign button */}
+      <div dir="rtl" className="flex items-center gap-3 mb-6 flex-wrap">
+        {/* Title */}
+        <div className="text-right">
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-bold text-foreground">{campaigns.length}</span>
+            <span className="text-lg font-semibold text-foreground">מרכז השיווק</span>
+          </div>
+          <p className="text-xs text-foreground-muted mt-0.5">ניהול קמפיינים ממומנים, פוסטים אורגניים וניתוח קהל יעד</p>
+        </div>
+
+        {/* Status filter tabs */}
+        <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-xl flex-1 justify-center flex-wrap">
+          {STATUS_FILTER_TABS.map(tab => {
+            const cnt = campaigns.filter(c => tab.match.includes(c.status)).length;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setStatusFilter(tab.key)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1 ${
+                  statusFilter === tab.key ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
+                }`}
+              >
+                {tab.label}
+                {cnt > 0 && (
+                  <span className="bg-gray-200 text-gray-600 text-[10px] px-1.5 py-0.5 rounded-full">{cnt}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* New campaign button */}
+        <button
+          onClick={() => navigate('/marketing/create')}
+          className="flex items-center gap-1.5 bg-foreground text-background px-4 py-2 rounded-full text-sm font-semibold hover:opacity-85 transition-opacity shadow-sm flex-shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          קמפיין חדש
+        </button>
+      </div>
 
       <StatCards cards={statCards} />
 
@@ -1031,7 +1132,7 @@ ${audienceCtx}
         <UrgentActionsSection actions={urgentActions} />
       )}
 
-      {/* Tab bar */}
+      {/* Secondary tab bar */}
       <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit">
         {TABS.map(tab => (
           <button
@@ -1046,49 +1147,74 @@ ${audienceCtx}
         ))}
       </div>
 
-      {/* Paid tab */}
+      {/* Campaigns table */}
       {activeTab === 'paid' && (
-        <>
-          <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-4 text-[12px] text-blue-800 leading-relaxed">
-            <span className="mt-0.5 text-base">ℹ️</span>
-            <span>
-              אנחנו <strong>לא שומרים ולא מנהלים</strong> אמצעי תשלום או פרטי כרטיס אשראי מחשבון המודעות שלך.
-              לאחר פרסום הקמפיין, הוא ייווצר בחשבון המודעות שלך במצב <strong>מושהה (Paused)</strong> — ללא חיובים.
-              כדי להפעיל אותו ולהתחיל לפרסם, יש להיכנס לחשבון המודעות, להוסיף אמצעי תשלום ולהפעיל את הקמפיין ידנית.
-            </span>
-          </div>
-          <div className="flex gap-1 mb-4 border-b border-border">
-            {PAID_TABS.map(t => (
-              <button key={t} onClick={() => setPaidFilter(t)}
-                className={`px-3 py-2 text-[12px] font-medium border-b-2 transition-all ${
-                  paidFilter === t ? 'border-foreground text-foreground' : 'border-transparent text-foreground-muted hover:text-foreground'
-                }`}>
-                {PAID_TAB_LABELS[t]}
-                {t !== 'all' && campaigns.filter(c => c.status === t).length > 0 && (
-                  <span className="mr-1 text-[10px] opacity-60">({campaigns.filter(c => c.status === t).length})</span>
-                )}
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          {/* Section header with search */}
+          <div dir="rtl" className="flex items-center gap-3 px-4 py-3 border-b border-border">
+            <div className="flex items-center gap-2">
+              <Radio className="w-3 h-3 text-green-500" />
+              <span className="text-[13px] font-semibold text-foreground">קמפיינים</span>
+            </div>
+            <div className="flex items-center gap-2 mr-auto">
+              <div className="relative">
+                <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground-muted pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="חיפוש קמפיין..."
+                  value={campaignSearch}
+                  onChange={e => setCampaignSearch(e.target.value)}
+                  className="pr-8 pl-3 py-1.5 text-[12px] border border-border rounded-lg bg-secondary/50 focus:outline-none focus:ring-1 focus:ring-foreground/20 w-40"
+                  dir="rtl"
+                />
+              </div>
+              <button className="flex items-center gap-1 px-3 py-1.5 text-[12px] border border-border rounded-lg bg-secondary/50 text-foreground-muted hover:text-foreground transition-colors">
+                ממומן / אורגני
+                <ChevronDown className="w-3.5 h-3.5" />
               </button>
-            ))}
+            </div>
           </div>
+
+          {/* Table column headers */}
+          <div dir="rtl" className="flex items-center gap-3 px-4 py-2 bg-secondary/30 border-b border-border text-[11px] font-semibold text-foreground-muted">
+            <span className="flex-1">שם קמפיין</span>
+            <span className="w-8 text-center">פלטפורמה</span>
+            <span className="w-12 text-center">לידים</span>
+            <span className="w-16 text-center">המרה</span>
+            <span className="w-40 text-right">תקציב / תאריך</span>
+            <span className="w-12 text-center">פעיל</span>
+            <span className="w-4" />
+          </div>
+
+          {/* Rows */}
           {loadingPaid ? (
-            <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-foreground-muted" /></div>
+            <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-foreground-muted" /></div>
           ) : filteredCampaigns.length === 0 ? (
-            <div className="text-center py-20">
-              <Megaphone className="w-10 h-10 text-foreground-muted opacity-30 mx-auto mb-3" />
-              <p className="text-[13px] text-foreground-muted mb-4">אין קמפיינים עדיין</p>
+            <div className="text-center py-16">
+              <p className="text-[13px] text-foreground-muted mb-4">אין קמפיינים בקטגוריה זו</p>
               <button onClick={() => navigate('/marketing/create')}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg text-[13px] font-semibold hover:opacity-90">
+                className="inline-flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-full text-[12px] font-semibold hover:opacity-90">
                 <Plus className="w-4 h-4" /> צור קמפיין
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
               {filteredCampaigns.map(c => (
-                <CampaignCard key={c.id} campaign={c} onDelete={(id) => deleteCampaign.mutate(id)} bpId={bpId} onPublished={() => queryClient.invalidateQueries({ queryKey: ['campaigns', bpId] })} />
+                <CampaignRow
+                  key={c.id}
+                  campaign={c}
+                  onDelete={(id) => deleteCampaign.mutate(id)}
+                  bpId={bpId}
+                  onToggle={(camp) => {
+                    const newStatus = ['active', 'published'].includes(camp.status) ? 'paused' : 'active';
+                    base44.entities.Campaign.update(camp.id, { status: newStatus })
+                      .then(() => queryClient.invalidateQueries({ queryKey: ['campaigns', bpId] }));
+                  }}
+                />
               ))}
             </div>
           )}
-        </>
+        </div>
       )}
 
       {/* Organic tab */}
