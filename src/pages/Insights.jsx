@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Archive } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
 import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
@@ -42,10 +42,14 @@ const CATEGORY_MAP = {
 
 const COLUMNS = [
   { key: 'title',    label: 'תובנה' },
-  { key: 'value',    label: 'ערך עסקי' },
+  { key: 'value',    label: 'עדיפות' },
   { key: 'category', label: 'קטגוריה' },
   { key: 'action',   label: 'פעולה' },
 ];
+
+const STALE_DAYS = 14;
+const CAT_CAP = 3;
+const IMPACT_ORDER = { critical: 4, high: 3, medium: 2, low: 1 };
 
 function classifyCategory(item) {
   const t = item.type || '';
@@ -58,10 +62,75 @@ function classifyCategory(item) {
   return 'opportunity';
 }
 
+// Normalize title to a fingerprint for dedup comparison
+function fingerprint(title) {
+  return (title || '')
+    .toLowerCase()
+    .replace(/[^\u0590-\u05ff\u200f\u200ea-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 45);
+}
+
+// Keep the highest-impact / most-recent row per unique topic
+function deduplicateRows(rows) {
+  const map = new Map();
+  for (const row of rows) {
+    const key = fingerprint(row.title);
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, { ...row, dupeCount: 1 });
+    } else {
+      const thisScore  = IMPACT_ORDER[row.impact]      ?? 2;
+      const existScore = IMPACT_ORDER[existing.impact] ?? 2;
+      const thisDate   = new Date(row.raw?.detected_at || row.raw?.created_at || 0);
+      const existDate  = new Date(existing.raw?.detected_at || existing.raw?.created_at || 0);
+      const thisWins   = thisScore > existScore || (thisScore === existScore && thisDate > existDate);
+      map.set(key, thisWins
+        ? { ...row, dupeCount: (existing.dupeCount || 1) + 1 }
+        : { ...existing, dupeCount: (existing.dupeCount || 1) + 1 }
+      );
+    }
+  }
+  return Array.from(map.values());
+}
+
+// After dedup, keep at most CAT_CAP rows per category (sorted high→low already)
+function capPerCategory(rows) {
+  const counts = {};
+  return rows.filter(row => {
+    const cat = classifyCategory(row);
+    counts[cat] = (counts[cat] || 0) + 1;
+    return counts[cat] <= CAT_CAP;
+  });
+}
+
+function rowAgeInDays(row) {
+  const d = row.raw?.detected_at || row.raw?.created_at;
+  if (!d) return 0;
+  return Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
+}
+
+// Context-aware CTA label instead of generic "פעולה"
+function getActionLabel(row) {
+  const t = row.type || '';
+  if (t === 'negative_review' || t === 'reputation_risk') return 'הגב לביקורת';
+  if (t === 'hot_lead')                                   return 'פנה ללקוח';
+  const cat = classifyCategory(row);
+  if (cat === 'risk')        return 'טפל עכשיו';
+  if (cat === 'competitor')  return 'נתח מתחרה';
+  if (cat === 'content')     return 'פרסם תוכן';
+  if (cat === 'trend')       return 'נצל טרנד';
+  if (cat === 'lead')        return 'פנה ללקוח';
+  return 'נצל הזדמנות';
+}
+
 export default function Insights() {
   const { businessProfile } = useOutletContext();
   const navigate = useNavigate();
   const bpId = businessProfile?.id;
+  const [showArchived,    setShowArchived]    = useState(false);
+  const [activeCategory,  setActiveCategory]  = useState('all');
 
   const { data: alerts = [], isLoading: loadingAlerts } = useQuery({
     queryKey: ['proactiveAlerts', bpId],
@@ -77,60 +146,81 @@ export default function Insights() {
 
   const isLoading = loadingAlerts || loadingSignals;
 
-  // Merge alerts + signals into unified rows
-  const rows = useMemo(() => {
+  // ── Step 1: merge + sort ──────────────────────────────────────────────────
+  const allRows = useMemo(() => {
     const alertRows = alerts.filter(a => a.status !== 'dismissed').map(a => ({
-      id: a.id,
-      kind: 'alert',
-      type: a.alert_type || 'action_needed',
-      title: a.title || a.message || '',
+      id:      a.id,
+      kind:    'alert',
+      type:    a.alert_type || 'action_needed',
+      title:   a.title || a.message || '',
       summary: a.message || '',
-      impact: a.priority || 'medium',
-      raw: a,
+      impact:  a.priority || 'medium',
+      raw:     a,
     }));
     const signalRows = signals.filter(s => !s.is_dismissed).map(s => ({
-      id: s.id,
-      kind: 'signal',
-      type: s.signal_type || 'opportunity',
-      title: s.title || s.summary || '',
+      id:      s.id,
+      kind:    'signal',
+      type:    s.signal_type || 'opportunity',
+      title:   s.title || s.summary || '',
       summary: s.summary || '',
-      impact: s.impact_level || 'medium',
-      raw: s,
+      impact:  s.impact_level || 'medium',
+      raw:     s,
     }));
-    // Sort: critical/high first
     const all = [...alertRows, ...signalRows];
-    const order = { critical: 0, high: 1, medium: 2, low: 3 };
-    return all.sort((a, b) => (order[a.impact] ?? 2) - (order[b.impact] ?? 2));
+    return all.sort((a, b) => (IMPACT_ORDER[b.impact] ?? 2) - (IMPACT_ORDER[a.impact] ?? 2));
   }, [alerts, signals]);
 
-  const risks       = rows.filter(r => classifyCategory(r) === 'risk');
-  const opps        = rows.filter(r => classifyCategory(r) === 'opportunity');
-  const urgentRows  = rows.filter(r => r.impact === 'critical' || r.impact === 'high');
-  const trendRows   = rows.filter(r => classifyCategory(r) === 'trend');
+  // ── Step 2: deduplicate + cap per category ────────────────────────────────
+  const deduped = useMemo(() => capPerCategory(deduplicateRows(allRows)), [allRows]);
+
+  // ── Step 3: split fresh / stale ───────────────────────────────────────────
+  const freshRows = useMemo(() => deduped.filter(r => rowAgeInDays(r) < STALE_DAYS),  [deduped]);
+  const staleRows = useMemo(() => deduped.filter(r => rowAgeInDays(r) >= STALE_DAYS), [deduped]);
+
+  // ── Step 4: category filter ───────────────────────────────────────────────
+  const baseRows = showArchived ? deduped : freshRows;
+  const visibleRows = useMemo(() =>
+    activeCategory === 'all' ? baseRows : baseRows.filter(r => classifyCategory(r) === activeCategory),
+    [baseRows, activeCategory]
+  );
+
+  // Stats use fresh deduped only (no stale noise)
+  const risks      = freshRows.filter(r => classifyCategory(r) === 'risk');
+  const opps       = freshRows.filter(r => classifyCategory(r) === 'opportunity');
+  const urgentRows = freshRows.filter(r => r.impact === 'critical' || r.impact === 'high');
+  const trendRows  = freshRows.filter(r => classifyCategory(r) === 'trend');
+  const compRows   = freshRows.filter(r => classifyCategory(r) === 'competitor');
 
   const statCards = [
-    { count: risks.length,      label: 'סיכונים',             borderColor: 'red' },
-    { count: urgentRows.length, label: 'דורש פעולה מיידית',   borderColor: 'yellow' },
-    { count: opps.length,       label: 'הזדמניות',            borderColor: 'blue' },
-    { count: trendRows.length,  label: 'מגמות וטרנדים',       borderColor: 'none' },
+    { count: risks.length,      label: 'סיכונים',           borderColor: 'red' },
+    { count: urgentRows.length, label: 'דורש פעולה מיידית', borderColor: 'yellow' },
+    { count: opps.length,       label: 'הזדמנויות',          borderColor: 'blue' },
+    { count: trendRows.length,  label: 'מגמות וטרנדים',      borderColor: 'none' },
   ];
 
-  const urgentActions = urgentRows.slice(0, 2).map(r => ({
-    title: r.title.slice(0, 60),
+  const urgentActions = urgentRows.slice(0, 3).map(r => ({
+    title:       r.title.slice(0, 60),
     description: r.summary?.slice(0, 80),
-    ctaLabel: 'טפל עכשיו',
-    onCta: () => navigate(`/insights/${r.id}?kind=${r.kind}`),
+    ctaLabel:    getActionLabel(r),
+    onCta:       () => navigate(`/insights/${r.id}?kind=${r.kind}`),
   }));
 
-  const getTypeMeta = (type) => TYPE_META[type] || { label: type, color: 'text-foreground-secondary', bg: 'bg-gray-50' };
-  const getValueMeta = (impact) => VALUE_MAP[impact] || VALUE_MAP.medium;
+  const FILTER_TABS = [
+    { key: 'all',        label: 'הכל',       count: freshRows.length },
+    { key: 'risk',       label: 'סיכונים',   count: risks.length },
+    { key: 'opportunity',label: 'הזדמנויות', count: opps.length },
+    { key: 'trend',      label: 'מגמות',     count: trendRows.length },
+    { key: 'competitor', label: 'מתחרים',    count: compRows.length },
+  ].filter(t => t.key === 'all' || t.count > 0);
+
+  const getTypeMeta  = (type)   => TYPE_META[type]   || { label: type, color: 'text-foreground-secondary', bg: 'bg-gray-50' };
+  const getValueMeta = (impact) => VALUE_MAP[impact]  || VALUE_MAP.medium;
+
+  const removedByDedup = allRows.length - deduped.length;
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        count={rows.length}
-        title="תובנות"
-      />
+      <PageHeader count={freshRows.length} title="תובנות" />
 
       <StatCards cards={statCards} />
 
@@ -143,47 +233,118 @@ export default function Insights() {
           <Loader2 className="w-6 h-6 animate-spin text-foreground-muted" />
         </div>
       ) : (
-        <DataTable
-          columns={COLUMNS}
-          rows={rows}
-          emptyText="אין תובנות עדיין — הסוכן יזהה הזדמנויות וסיכונים אוטומטית"
-          renderCell={(row, col) => {
-            if (col.key === 'title') return (
-              <div>
-                <div className="font-medium text-foreground text-sm">{row.title}</div>
-                {row.summary && row.summary !== row.title && (
-                  <div className="text-xs text-foreground-muted mt-0.5 line-clamp-1">{row.summary}</div>
-                )}
-              </div>
-            );
-            if (col.key === 'value') {
-              const vm = getValueMeta(row.impact);
-              return (
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${vm.bg} ${vm.color}`}>
-                  {vm.label}
-                </span>
-              );
-            }
-            if (col.key === 'category') {
-              const cat = classifyCategory(row);
-              const tm = getTypeMeta(row.type);
-              return (
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${tm.bg} ${tm.color}`}>
-                  {CATEGORY_MAP[cat] || tm.label}
-                </span>
-              );
-            }
-            if (col.key === 'action') return (
+        <>
+          {/* Dedup notice */}
+          {removedByDedup > 0 && (
+            <div dir="rtl" className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg text-[11px] text-blue-700">
+              <span>✨</span>
+              <span>
+                סיננו <strong>{removedByDedup}</strong> כפילויות — מציגים <strong>{freshRows.length}</strong> תובנות ייחודיות מתוך {allRows.length}
+              </span>
+            </div>
+          )}
+
+          {/* Filter tabs + archived toggle */}
+          <div dir="rtl" className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
+              {FILTER_TABS.map(tab => (
+                <button key={tab.key} onClick={() => setActiveCategory(tab.key)}
+                  className={`px-3 py-1.5 rounded-md text-[11px] font-medium transition-all ${
+                    activeCategory === tab.key
+                      ? 'bg-white shadow-sm text-foreground'
+                      : 'text-foreground-muted hover:text-foreground'
+                  }`}>
+                  {tab.label}
+                  {tab.count > 0 && <span className="mr-1 opacity-50">{tab.count}</span>}
+                </button>
+              ))}
+            </div>
+            {staleRows.length > 0 && (
               <button
-                onClick={() => navigate(`/insights/${row.id}?kind=${row.kind}`)}
-                className="text-xs font-semibold text-[#e8344d] hover:underline"
+                onClick={() => setShowArchived(s => !s)}
+                className="flex items-center gap-1.5 text-[11px] text-foreground-muted hover:text-foreground transition-colors"
               >
-                פעולה &rarr;
+                <Archive className="w-3.5 h-3.5" />
+                {showArchived ? 'הסתר תובנות ישנות' : `${staleRows.length} תובנות ישנות (מעל ${STALE_DAYS} ימים)`}
               </button>
-            );
-            return null;
-          }}
-        />
+            )}
+          </div>
+
+          <DataTable
+            columns={COLUMNS}
+            rows={visibleRows}
+            emptyText={
+              activeCategory !== 'all'
+                ? `אין תובנות בקטגוריה זו`
+                : 'אין תובנות עדיין — הסוכן יזהה הזדמנויות וסיכונים אוטומטית'
+            }
+            renderCell={(row, col) => {
+              if (col.key === 'title') return (
+                <div dir="rtl">
+                  <div className="font-medium text-foreground text-sm leading-snug">
+                    {row.title}
+                    {row.dupeCount > 1 && (
+                      <span className="mr-1.5 text-[10px] font-normal text-foreground-muted bg-gray-100 px-1.5 py-0.5 rounded-full">
+                        ×{row.dupeCount}
+                      </span>
+                    )}
+                  </div>
+                  {row.summary && row.summary !== row.title && (
+                    <div className="text-xs text-foreground-muted mt-0.5 line-clamp-1">{row.summary}</div>
+                  )}
+                  {rowAgeInDays(row) >= STALE_DAYS && (
+                    <span className="text-[10px] text-amber-600 mt-0.5 block">
+                      {rowAgeInDays(row)} ימים — ישן
+                    </span>
+                  )}
+                </div>
+              );
+
+              if (col.key === 'value') {
+                const vm = getValueMeta(row.impact);
+                return (
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${vm.bg} ${vm.color}`}>
+                    {vm.label}
+                  </span>
+                );
+              }
+
+              if (col.key === 'category') {
+                const cat = classifyCategory(row);
+                const tm  = getTypeMeta(row.type);
+                return (
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${tm.bg} ${tm.color}`}>
+                    {CATEGORY_MAP[cat] || tm.label}
+                  </span>
+                );
+              }
+
+              if (col.key === 'action') return (
+                <button
+                  onClick={() => navigate(`/insights/${row.id}?kind=${row.kind}`)}
+                  className="text-xs font-semibold text-[#e8344d] hover:underline whitespace-nowrap"
+                >
+                  {getActionLabel(row)} &rarr;
+                </button>
+              );
+
+              return null;
+            }}
+          />
+
+          {/* Archived footer message */}
+          {!showArchived && staleRows.length > 0 && (
+            <div dir="rtl" className="text-center">
+              <button
+                onClick={() => setShowArchived(true)}
+                className="text-[11px] text-foreground-muted hover:text-foreground transition-colors flex items-center gap-1 mx-auto"
+              >
+                <Archive className="w-3.5 h-3.5" />
+                הצג {staleRows.length} תובנות ישנות (ארכיון)
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Upgrade Banner */}
