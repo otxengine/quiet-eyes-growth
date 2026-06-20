@@ -6,7 +6,6 @@ import { Star, Plus, Search, Loader2, MessageCircle, BarChart2, Bot, Send, MoreH
 import { toast } from 'sonner';
 import AddReviewModal from '@/components/reputation/AddReviewModal';
 import RequestReviewModal from '@/components/reputation/RequestReviewModal';
-import AiInsightsBar from '@/components/ai/AiInsightsBar';
 import ScheduledReviewRequests from '@/components/reputation/ScheduledReviewRequests';
 import RatingTrendChart from '@/components/reputation/RatingTrendChart';
 import StatCards from '@/components/shared/StatCards';
@@ -215,7 +214,21 @@ export default function Reputation() {
   const avgRating = reviews.length > 0 ? (reviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / reviews.length) : 0;
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
   const thisMonthReviews = reviews.filter(r => (r.created_at || r.created_date) >= monthStart);
+  const prevMonthReviews = reviews.filter(r => {
+    const d = r.created_at || r.created_date || '';
+    return d >= prevMonthStart && d < monthStart;
+  });
+  const prevMonthAvg = prevMonthReviews.length > 0
+    ? prevMonthReviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / prevMonthReviews.length
+    : 0;
+  const thisMonthAvg = thisMonthReviews.length > 0
+    ? thisMonthReviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / thisMonthReviews.length
+    : 0;
+  const ratingDelta = prevMonthAvg > 0 && thisMonthAvg > 0
+    ? (thisMonthAvg - prevMonthAvg).toFixed(1)
+    : null;
   const pendingCount = reviews.filter(r => r.response_status === 'pending').length;
 
   // Sort: pending negative first, then pending positive, then pending neutral, then responded
@@ -250,11 +263,11 @@ export default function Reputation() {
       changeColor: 'text-foreground-muted',
     },
     {
-      count: reviews.length > 0 ? `${responseRate}%` : '—',
-      label: 'שיעור תגובה',
+      count: ratingDelta != null ? (Number(ratingDelta) >= 0 ? `+${ratingDelta}` : ratingDelta) : '—',
+      label: 'שינוי בדירוג',
       borderColor: 'yellow',
-      change: responseRate >= 80 ? `שיפור של ${responseRate - 76}%` : responseRate > 0 ? 'דורש שיפור' : null,
-      changeColor: responseRate >= 80 ? 'text-green-600' : 'text-amber-600',
+      change: ratingDelta != null ? (Number(ratingDelta) >= 0 ? 'שיפור מהחודש הקודם' : 'ירידה מהחודש הקודם') : 'אין נתוני השוואה',
+      changeColor: ratingDelta != null && Number(ratingDelta) >= 0 ? 'text-green-600' : 'text-red-500',
     },
     {
       count: thisMonthReviews.length,
@@ -295,11 +308,6 @@ export default function Reputation() {
 
   return (
     <div className="space-y-5">
-      <AiInsightsBar
-        title="תובנות AI — מוניטין"
-        prompt={`נתח מגמות ביקורות של עסק: מהם הנושאים החוזרים בביקורות שליליות, מה הסנטימנט הכללי, ומה הפעולה הכי יעילה לשיפור הדירוג הממוצע.`}
-      />
-
       <PageHeader
         title="מוניטין/נראות עסקית"
         subtitle="מעקב אחר ביקורות, דירוג העסק והמלצות לשיפור המוניטין"
