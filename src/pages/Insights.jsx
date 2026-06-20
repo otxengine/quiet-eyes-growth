@@ -50,7 +50,43 @@ const COLUMNS = [
 
 const STALE_DAYS = 14;
 const CAT_CAP = 3;
+const RELEVANCE_THRESHOLD = 60;
 const IMPACT_ORDER = { critical: 4, high: 3, medium: 2, low: 1 };
+
+// ── Phase 3: Relevance scoring ──────────────────────────────────────────────
+// Returns 0-100. Signals below RELEVANCE_THRESHOLD are hidden from the feed.
+// Factors: impact alignment (30) + specificity (25) + actionability (25) + freshness (20)
+function computeRelevanceScore(row) {
+  let score = 0;
+
+  // 1. Impact alignment (0-30)
+  const impactScores = { critical: 30, high: 25, medium: 18, low: 10 };
+  score += impactScores[row.impact] ?? 18;
+
+  // 2. Specificity (0-25): concrete data increases confidence
+  const fullText = (row.summary || '') + ' ' + (row.raw?.recommended_action || '');
+  if (row.raw?.recommended_action) score += 13;
+  if (/\d/.test(fullText))         score += 8;
+  if ((row.title || '').length > 20) score += 4;
+
+  // 3. Actionability (0-25): signal type maps to known actionable categories
+  const ACTIONABLE_TYPES = new Set([
+    'negative_review', 'reputation_risk', 'hot_lead', 'action_needed',
+    'campaign_opportunity', 'demand_gap', 'content_opportunity',
+    'retention_risk', 'competitor_move',
+  ]);
+  score += ACTIONABLE_TYPES.has(row.type) ? 25 : 12;
+
+  // 4. Freshness (0-20)
+  const age = rowAgeInDays(row);
+  if (age <= 1)       score += 20;
+  else if (age <= 3)  score += 17;
+  else if (age <= 7)  score += 13;
+  else if (age <= 14) score += 7;
+  // else 0
+
+  return Math.min(100, score);
+}
 
 function classifyCategory(item) {
   const t = item.type || '';
@@ -174,9 +210,14 @@ export default function Insights() {
   // ── Step 2: deduplicate + cap per category ────────────────────────────────
   const deduped = useMemo(() => capPerCategory(deduplicateRows(allRows)), [allRows]);
 
+  // ── Step 2.5: relevance scoring — filter out low-signal noise ─────────────
+  const scored  = useMemo(() => deduped.map(r => ({ ...r, relevance_score: computeRelevanceScore(r) })), [deduped]);
+  const relevant = useMemo(() => scored.filter(r => r.relevance_score >= RELEVANCE_THRESHOLD), [scored]);
+  const removedByRelevance = deduped.length - relevant.length;
+
   // ── Step 3: split fresh / stale ───────────────────────────────────────────
-  const freshRows = useMemo(() => deduped.filter(r => rowAgeInDays(r) < STALE_DAYS),  [deduped]);
-  const staleRows = useMemo(() => deduped.filter(r => rowAgeInDays(r) >= STALE_DAYS), [deduped]);
+  const freshRows = useMemo(() => relevant.filter(r => rowAgeInDays(r) < STALE_DAYS),  [relevant]);
+  const staleRows = useMemo(() => relevant.filter(r => rowAgeInDays(r) >= STALE_DAYS), [relevant]);
 
   // ── Step 4: category filter ───────────────────────────────────────────────
   const baseRows = showArchived ? deduped : freshRows;
@@ -237,12 +278,14 @@ export default function Insights() {
         </div>
       ) : (
         <>
-          {/* Dedup notice */}
-          {removedByDedup > 0 && (
+          {/* Dedup + relevance notice */}
+          {(removedByDedup > 0 || removedByRelevance > 0) && (
             <div dir="rtl" className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg text-[11px] text-blue-700">
               <span>✨</span>
               <span>
-                סיננו <strong>{removedByDedup}</strong> כפילויות — מציגים <strong>{freshRows.length}</strong> תובנות ייחודיות מתוך {allRows.length}
+                מציגים <strong>{freshRows.length}</strong> תובנות רלוונטיות מתוך {allRows.length}
+                {removedByDedup > 0 && <span className="opacity-70"> · סוננו {removedByDedup} כפילויות</span>}
+                {removedByRelevance > 0 && <span className="opacity-70"> · סוננו {removedByRelevance} תובנות נמוכות-ערך</span>}
               </span>
             </div>
           )}
@@ -282,26 +325,35 @@ export default function Insights() {
                 : 'אין תובנות עדיין — הסוכן יזהה הזדמנויות וסיכונים אוטומטית'
             }
             renderCell={(row, col) => {
-              if (col.key === 'title') return (
-                <div dir="rtl">
-                  <div className="font-medium text-foreground text-sm leading-snug">
-                    {row.title}
-                    {row.dupeCount > 1 && (
-                      <span className="mr-1.5 text-[10px] font-normal text-foreground-muted bg-gray-100 px-1.5 py-0.5 rounded-full">
-                        ×{row.dupeCount}
+              if (col.key === 'title') {
+                const score = row.relevance_score ?? 0;
+                const scoreColor = score >= 80 ? 'text-green-600 bg-green-50'
+                  : score >= 60 ? 'text-blue-600 bg-blue-50'
+                  : 'text-gray-400 bg-gray-50';
+                return (
+                  <div dir="rtl">
+                    <div className="font-medium text-foreground text-sm leading-snug flex items-center gap-1.5 flex-wrap">
+                      {row.title}
+                      {row.dupeCount > 1 && (
+                        <span className="text-[10px] font-normal text-foreground-muted bg-gray-100 px-1.5 py-0.5 rounded-full">
+                          ×{row.dupeCount}
+                        </span>
+                      )}
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${scoreColor}`}>
+                        {score}%
+                      </span>
+                    </div>
+                    {row.summary && row.summary !== row.title && (
+                      <div className="text-xs text-foreground-muted mt-0.5 line-clamp-1">{row.summary}</div>
+                    )}
+                    {rowAgeInDays(row) >= STALE_DAYS && (
+                      <span className="text-[10px] text-amber-600 mt-0.5 block">
+                        {rowAgeInDays(row)} ימים — ישן
                       </span>
                     )}
                   </div>
-                  {row.summary && row.summary !== row.title && (
-                    <div className="text-xs text-foreground-muted mt-0.5 line-clamp-1">{row.summary}</div>
-                  )}
-                  {rowAgeInDays(row) >= STALE_DAYS && (
-                    <span className="text-[10px] text-amber-600 mt-0.5 block">
-                      {rowAgeInDays(row)} ימים — ישן
-                    </span>
-                  )}
-                </div>
-              );
+                );
+              }
 
               if (col.key === 'value') {
                 const vm = getValueMeta(row.impact);
