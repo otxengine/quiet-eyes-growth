@@ -178,6 +178,7 @@ function CityInput({ value, onChange, onSelect }) {
 export default function OnboardingForm() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [messages, setMessages] = useState([]);
   const [textInput, setTextInput] = useState('');
   const [citySearch, setCitySearch] = useState('');
@@ -480,6 +481,40 @@ export default function OnboardingForm() {
             </h1>
             <p className="text-sm text-gray-500 mt-2">קורי כאן לעזור לך לצמוח</p>
           </div>
+
+          {/* Terms & Privacy consent — required for registration */}
+          <label className="flex items-start gap-3 text-right cursor-pointer bg-white/70 border border-gray-200 rounded-2xl px-4 py-3">
+            <input
+              type="checkbox"
+              checked={agreedToTerms}
+              onChange={e => setAgreedToTerms(e.target.checked)}
+              className="mt-0.5 flex-shrink-0 w-4 h-4 accent-[#e8344d] cursor-pointer"
+            />
+            <span className="text-[12px] text-gray-600 leading-relaxed">
+              קראתי ואני מסכים/ה ל
+              <a
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="text-[#e8344d] hover:underline font-medium"
+              >
+                תנאי השימוש
+              </a>
+              {' '}ול
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="text-[#e8344d] hover:underline font-medium"
+              >
+                מדיניות הפרטיות
+              </a>
+              {' '}של CORTEXI, כולל אגירת נתונים ואימון מודלים כמתואר בהן
+            </span>
+          </label>
+
           <div className="flex justify-center gap-3">
             <button
               onClick={() => navigate('/sign-in')}
@@ -488,12 +523,20 @@ export default function OnboardingForm() {
               כן, התחבר
             </button>
             <button
-              onClick={() => setStep(1)}
-              className="border border-gray-300 bg-white text-gray-700 rounded-full px-7 py-3 font-medium text-[14px] hover:border-gray-400 transition-colors"
+              onClick={() => agreedToTerms && setStep(1)}
+              disabled={!agreedToTerms}
+              title={!agreedToTerms ? 'יש לאשר את תנאי השימוש ומדיניות הפרטיות' : ''}
+              className="border border-gray-300 bg-white text-gray-700 rounded-full px-7 py-3 font-medium text-[14px] hover:border-gray-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               לא, נרשם
             </button>
           </div>
+
+          {!agreedToTerms && (
+            <p className="text-[11px] text-gray-400">
+              יש לאשר את תנאי השימוש ומדיניות הפרטיות לפני ההרשמה
+            </p>
+          )}
         </div>
       </div>
     );

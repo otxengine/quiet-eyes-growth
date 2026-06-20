@@ -2,79 +2,98 @@ import React from 'react';
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen px-6 py-20 bg-white">
+    <div className="min-h-screen px-6 py-20 bg-white" dir="rtl">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-[32px] font-bold text-foreground mb-2">מדיניות פרטיות</h1>
-        <p className="text-[12px] text-foreground-muted mb-8">עדכון אחרון: ינואר 2025</p>
+        <p className="text-[12px] text-foreground-muted mb-8">עדכון אחרון: יוני 2025</p>
 
-        <div className="prose max-w-none text-[13px] text-foreground-secondary leading-relaxed space-y-6">
+        <div className="prose max-w-none text-[13px] text-foreground-secondary leading-relaxed space-y-8">
+
+          <p className="text-[14px] text-foreground leading-relaxed">
+            אנו ב-<strong>CORTEXI</strong> (להלן: "המערכת", "אנו", או "המפעיל"), המופעלת תחת עוסק מורשה, מכבדים את פרטיותך ומחויבים להגן על המידע המעובד בפלטפורמה.
+          </p>
+          <p className="text-[13px] text-foreground-secondary leading-relaxed">
+            מדיניות פרטיות זו מתארת אילו נתונים אנו אוספים, כיצד אנו עושים בהם שימוש, וכיצד אנו שומרים עליהם במסגרת אספקת שירותי מודיעין עסקי (OSINT) באמצעות סוכני בינה מלאכותית (AI Agents). מדיניות זו חלה על כלל הסוכנים הפועלים במערכת, בין אם קיימים כיום ובין אם יתווספו בעתיד, ללא תלות בתפקידם או מטרתם. בעצם השימוש במערכת והפעלת הסוכנים, הנך מסכים לאיסוף, אגירה ולשימוש במידע בהתאם למדיניות זו.
+          </p>
 
           <section>
-            <h2 className="text-[17px] font-semibold text-foreground mb-2">1. מבוא</h2>
-            <p>Cortexi ("אנחנו", "השירות") מכבדת את פרטיות המשתמשים שלה. מדיניות זו מסבירה אילו מידע אנו אוספים, כיצד אנו משתמשים בו, ואיזו שליטה יש לך על המידע שלך.</p>
+            <h2 className="text-[18px] font-bold text-foreground mb-3">1. סוגי המידע שאנו אוספים</h2>
+            <p className="mb-3">אנו מבחינים בין שני סוגים עיקריים של מידע: מידע לקוחות (המידע שלך כמשתמש במערכת) ומידע צד ג׳ מעובד (המידע שהסוכנים אוספים עבורך מהרשת).</p>
+
+            <h3 className="text-[15px] font-semibold text-foreground mb-2">א. מידע לקוחות (משתמשי CORTEXI):</h3>
+            <p className="mb-2"><strong>מידע שנמסר באופן אקטיבי:</strong> בעת ההרשמה ויצירת החשבון, נאסוף פרטים מזהים כגון שם מלא, כתובת דוא"ל, מספר טלפון, שם העסק ופרטי תשלום חלקיים (הסליקה עצמה מתבצעת על ידי ספק חיצוני מאובטח).</p>
+            <p><strong>מידע טכני ונתוני שימוש (Log Data):</strong> המערכת אוספת באופן אוטומטי נתונים על אופן השימוש שלך בממשק, לרבות שאילתות שהוזנו, כתובת IP, זמני פעולה והגדרות הסוכנים שהפעלת.</p>
+
+            <h3 className="text-[15px] font-semibold text-foreground mb-2 mt-4">ב. מידע צד ג׳ מעובד (OSINT Data — פעילות הסוכנים):</h3>
+            <p>במסגרת השירות, כלל סוכני הבינה המלאכותית במערכת סורקים, אוספים ומנתחים מידע גלוי מרחבי רשת האינטרנט בהתאם להנחיותיך. מידע זה עשוי לכלול נתונים עסקיים, מגמות שוק, פרטי קשר גלויים, וכל תוכן אחר שהסוכנים הונחו לאתר.</p>
           </section>
 
           <section>
-            <h2 className="text-[17px] font-semibold text-foreground mb-2">2. מידע שאנו אוספים</h2>
-            <ul className="list-disc list-inside space-y-1.5">
-              <li><strong>פרטי חשבון:</strong> שם, כתובת אימייל, שם ארגון.</li>
-              <li><strong>פרטי עסק:</strong> שם העסק, קטגוריה, עיר, מילות מפתח.</li>
-              <li><strong>נתוני שימוש:</strong> עמודים שביקרת, פעולות שביצעת, זמני גישה.</li>
-              <li><strong>מידע ציבורי:</strong> נתונים שנאספים ממקורות ציבוריים ברשת עבור הניתוח העסקי שלך.</li>
+            <h2 className="text-[18px] font-bold text-foreground mb-3">2. אגירת מידע והשימוש בו</h2>
+            <p className="mb-3">אנו משתמשים במידע הנאסף (הן מידע הלקוחות והן המידע שעובד על ידי הסוכנים) למטרות הבאות:</p>
+            <ul className="list-disc list-outside space-y-2 pr-5">
+              <li><strong>תפעול שוטף:</strong> יצירת החשבון שלך, ניהולו, מתן תמיכה טכנית ועיבוד תשלומים.</li>
+              <li>
+                <strong>אגירת מידע לשיפור המערכת ואימון מודלים (Machine Learning):</strong> המערכת אוגרת באופן רציף את המידע הנאסף ממקורות גלויים (OSINT), וכן את דפוסי השימוש והשאילתות במערכת. מידע זה נשמר ומשמש אותנו במטרה ללמוד, לשדרג את ביצועי הסוכנים, לאמן את מודלי הבינה המלאכותית שלנו, לשפר את רמת הדיוק של התוצרים, ולפתח כלים ויכולות חדשות עבור CORTEXI.
+              </li>
+              <li><strong>אבטחה ואכיפה:</strong> אכיפת תנאי השימוש שלנו, מניעת הונאות, הגנה על תשתיות המערכת וזיהוי פעילות זדונית.</li>
             </ul>
           </section>
 
           <section>
-            <h2 className="text-[17px] font-semibold text-foreground mb-2">3. שימוש במידע</h2>
-            <p>אנו משתמשים במידע שנאסף כדי:</p>
-            <ul className="list-disc list-inside space-y-1.5 mt-2">
-              <li>לספק ולשפר את השירות שלנו</li>
-              <li>לנתח מידע שוק ולייצר תובנות עסקיות</li>
-              <li>לשלוח עדכונים ודוחות שביקשת</li>
-              <li>לנהל את חשבונך ולאבטח אותו</li>
+            <h2 className="text-[18px] font-bold text-foreground mb-3">3. הסכמה לעיבוד ואחריות משפטית</h2>
+            <ul className="list-disc list-outside space-y-3 pr-5">
+              <li>
+                <strong>רישיון שימוש בנתונים:</strong> בעצם הפעלת הסוכנים והזנת שאילתות למערכת, אתה מעניק ל-CORTEXI רישיון בלתי חוזר, לא בלעדי וללא תמורה, לאגור, לנתח ולעשות שימוש במידע שנאסף ממקורות פתוחים (OSINT) לשם שיפור המערכת כמתואר בסעיף 2.
+              </li>
+              <li>
+                <strong>חלוקת אחריות:</strong> עבור המידע הנאסף מהרשת לבקשתך, אתה (המשתמש) מוגדר כ"בעל מאגר המידע" (Data Controller). המערכת משמשת ככלי לאיסוף ואגירת הנתונים. המפעיל פטור מכל אחריות לגבי מהות המידע שנאסף על ידי הסוכנים, אמיתותו או חוקיות איסופו. האחריות לוודא כי איסוף המידע אינו מפר חוקי פרטיות או תנאי שימוש של אתרי צד שלישי – חלה עליך באופן בלעדי.
+              </li>
             </ul>
           </section>
 
           <section>
-            <h2 className="text-[17px] font-semibold text-foreground mb-2">4. שיתוף מידע</h2>
-            <p>אנו <strong>לא מוכרים</strong> מידע אישי לצדדים שלישיים. אנו עשויים לשתף מידע עם:</p>
-            <ul className="list-disc list-inside space-y-1.5 mt-2">
-              <li>ספקי שירות שמסייעים בתפעול הפלטפורמה (שרתים, ניתוח נתונים)</li>
-              <li>רשויות חוק במקרים הנדרשים על פי דין</li>
+            <h2 className="text-[18px] font-bold text-foreground mb-3">4. שיתוף מידע עם צדדים שלישיים</h2>
+            <p className="mb-3">איננו מוכרים את המידע האישי שלך לגורמים מסחריים לצורך פרסום. אנו עשויים לשתף מידע רק בנסיבות הבאות:</p>
+            <ul className="list-disc list-outside space-y-2 pr-5">
+              <li><strong>ספקי שירות חיצוניים:</strong> פעילות המערכת נסמכת על תשתיות צד שלישי (כגון שירותי ענן ואחסון, ספקי סליקה, וממשקי API של מודלי שפה – LLMs). המידע המועבר לעיבוד בממשקים אלו כפוף למדיניות הפרטיות של אותם ספקים.</li>
+              <li><strong>דרישה חוקית:</strong> אנו נמסור מידע במידה ונידרש לכך על פי חוק, צו בית משפט, או דרישה של רשות מוסמכת.</li>
             </ul>
           </section>
 
           <section>
-            <h2 className="text-[17px] font-semibold text-foreground mb-2">5. אבטחת מידע</h2>
-            <p>אנו נוקטים באמצעי אבטחה מקובלים בתעשייה: הצפנת SSL, גישה מוגבלת לנתונים, ואחסון מאובטח. עם זאת, אין אבטחה מוחלטת ברשת האינטרנט.</p>
+            <h2 className="text-[18px] font-bold text-foreground mb-3">5. קבצי עוגיות (Cookies) וטכנולוגיות מעקב</h2>
+            <p>המערכת משתמשת בקבצי "Cookies" (עוגיות) וטכנולוגיות מעקב דומות כדי לאפשר את תפעולו התקין של האתר, לנטר שאילתות, לנתח נתוני תעבורה ולשפר את המערכת. תוכל לבחור לחסום או למחוק עוגיות אלו דרך הגדרות הדפדפן שלך, אך חסימה זו עלולה לפגוע בתפקוד המערכת.</p>
           </section>
 
           <section>
-            <h2 className="text-[17px] font-semibold text-foreground mb-2">6. Cookies</h2>
-            <p>אנו משתמשים ב-cookies לצורך ניהול הסשן, ניתוח ביצועים ושיפור חוויית המשתמש. ניתן לבטל cookies בהגדרות הדפדפן שלך.</p>
+            <h2 className="text-[18px] font-bold text-foreground mb-3">6. אבטחת מידע</h2>
+            <p>אנו מיישמים אמצעי אבטחה טכנולוגיים סבירים כדי להגן על המידע הנאגר במערכת מפני גישה בלתי מורשית. עם זאת, מכיוון שהמידע נשמר על גבי שרתי ענן המחוברים לאינטרנט, לא ניתן להבטיח חסינות מוחלטת ("הרמטית"). המפעיל פטור מכל אחריות במקרה של דלף מידע או חדירת סייבר למערכת.</p>
           </section>
 
           <section>
-            <h2 className="text-[17px] font-semibold text-foreground mb-2">7. זכויותיך</h2>
-            <p>בהתאם לחוקי הפרטיות הישראליים ו-GDPR (ככל שחל), יש לך זכות:</p>
-            <ul className="list-disc list-inside space-y-1.5 mt-2">
-              <li>לגשת למידע שלך ולקבל עותק שלו</li>
-              <li>לתקן מידע שגוי</li>
-              <li>למחוק את חשבונך ואת המידע שלך</li>
-              <li>להגביל עיבוד מידע אישי</li>
-            </ul>
-            <p className="mt-2">לממש זכויות אלו: <a href="mailto:privacy@cortexi.ai" className="text-primary hover:underline">privacy@cortexi.ai</a></p>
+            <h2 className="text-[18px] font-bold text-foreground mb-3">7. שמירת מידע ומחיקתו</h2>
+            <p>אנו נשמור את מידע הלקוחות שלך כל עוד חשבונך פעיל. מידע שנאסף ממקורות פתוחים (OSINT) על ידי הסוכנים, וכן נתונים סטטיסטיים ונתוני אימון מודלים, עשויים להישמר במערכת ללא הגבלת זמן לצורך המשך פיתוח ושיפור CORTEXI, גם לאחר סגירת חשבונך, תוך השתדלות להתמימם (אנונימיזציה) היכן שניתן. אם ברצונך למחוק את פרטיך האישיים מהמערכת, תוכל לפנות אלינו בכתובת המייל מטה.</p>
           </section>
 
           <section>
-            <h2 className="text-[17px] font-semibold text-foreground mb-2">8. שינויים במדיניות</h2>
-            <p>נוודא שאתה מקבל הודעה על שינויים מהותיים במדיניות זו דרך האימייל או הודעה בשירות.</p>
+            <h2 className="text-[18px] font-bold text-foreground mb-3">8. זכויותיך</h2>
+            <p>בהתאם לדין החל, עומדת לך הזכות לעיין במידע האישי שלך כלקוח (לא בנתוני ה-OSINT), לדרוש את תיקונו או את מחיקתו. למימוש זכויות אלו, יש לפנות אלינו.</p>
           </section>
 
           <section>
-            <h2 className="text-[17px] font-semibold text-foreground mb-2">9. יצירת קשר</h2>
-            <p>שאלות על הפרטיות: <a href="mailto:privacy@cortexi.ai" className="text-primary hover:underline">privacy@cortexi.ai</a></p>
+            <h2 className="text-[18px] font-bold text-foreground mb-3">9. שינויים במדיניות הפרטיות</h2>
+            <p>אנו שומרים לעצמנו את הזכות לעדכן מדיניות פרטיות זו מעת לעת. המשך השימוש במערכת והפעלת הסוכנים לאחר ביצוע שינויים, מהווה את הסכמתך המלאה למדיניות המעודכנת.</p>
           </section>
+
+          <section>
+            <h2 className="text-[18px] font-bold text-foreground mb-3">10. יצירת קשר</h2>
+            <p>
+              לכל שאלה, הבהרה או בקשה הנוגעת למדיניות פרטיות זו, ניתן ליצור עמנו קשר בכתובת דוא"ל:{' '}
+              <a href="mailto:contact@cortexi.ai" className="text-primary hover:underline">contact@cortexi.ai</a>
+            </p>
+          </section>
+
         </div>
       </div>
     </div>
