@@ -12,6 +12,7 @@ import AiInsightsBar from '@/components/ai/AiInsightsBar';
 import ScheduledReviewRequests from '@/components/reputation/ScheduledReviewRequests';
 import RatingTrendChart from '@/components/reputation/RatingTrendChart';
 import EmptyState from '@/components/ui/EmptyState';
+import StatCards from '@/components/shared/StatCards';
 
 export default function Reputation() {
   const { businessProfile } = useOutletContext();
@@ -177,11 +178,26 @@ export default function Reputation() {
   const responseRate = reviews.length > 0 ? Math.round((respondedCount / reviews.length) * 100) : 0;
 
   const statCards = [
-    { label: 'ציון ממוצע', value: avgRating > 0 ? avgRating.toFixed(1) : '—', color: avgRating >= 4.3 ? 'text-emerald-600' : avgRating >= 4 ? 'text-amber-600' : avgRating > 0 ? 'text-red-600' : '' },
-    { label: 'ביקורות החודש', value: thisMonthReviews.length },
-    { label: 'ממתינות לתגובה', value: pendingCount, color: pendingCount > 3 ? 'text-red-600' : pendingCount > 0 ? 'text-amber-600' : 'text-emerald-600' },
-    { label: 'שיעור תגובה', value: reviews.length > 0 ? `${responseRate}%` : '—', color: responseRate >= 80 ? 'text-emerald-600' : responseRate >= 50 ? 'text-amber-600' : reviews.length > 0 ? 'text-red-600' : '' },
-    { label: 'בקשות ביקורת החודש', value: requestsThisMonth },
+    {
+      count: avgRating > 0 ? avgRating.toFixed(1) : '—',
+      label: 'ציון ממוצע',
+      borderColor: avgRating >= 4.3 ? 'green' : avgRating >= 4 ? 'yellow' : avgRating > 0 ? 'red' : 'none',
+      change: avgRating >= 4.3 ? 'מצוין' : avgRating >= 4 ? 'טוב' : avgRating > 0 ? 'זקוק לשיפור' : null,
+      changeColor: avgRating >= 4.3 ? 'text-green-600' : avgRating >= 4 ? 'text-amber-600' : 'text-red-500',
+    },
+    { count: thisMonthReviews.length, label: 'ביקורות החודש', borderColor: 'blue' },
+    {
+      count: pendingCount,
+      label: 'ממתינות לתגובה',
+      borderColor: pendingCount > 3 ? 'red' : pendingCount > 0 ? 'yellow' : 'green',
+      change: pendingCount > 0 ? 'דורש טיפול' : 'הכל טופל',
+      changeColor: pendingCount > 0 ? 'text-red-500' : 'text-green-600',
+    },
+    {
+      count: reviews.length > 0 ? `${responseRate}%` : '—',
+      label: 'שיעור תגובה',
+      borderColor: responseRate >= 80 ? 'green' : responseRate >= 50 ? 'yellow' : reviews.length > 0 ? 'red' : 'none',
+    },
   ];
 
   const [filterSentiment, setFilterSentiment] = useState('all');
@@ -201,7 +217,10 @@ export default function Reputation() {
         prompt={`נתח מגמות ביקורות של עסק: מהם הנושאים החוזרים בביקורות שליליות, מה הסנטימנט הכללי, ומה הפעולה הכי יעילה לשיפור הדירוג הממוצע.`}
       />
       <div className="flex items-center justify-between">
-        <h1 className="text-[16px] font-bold text-foreground tracking-tight">מוניטין</h1>
+        <div>
+          <h1 className="text-[16px] font-bold text-foreground tracking-tight">מוניטין / נראות עסקית</h1>
+          <p className="text-[11px] text-foreground-muted mt-0.5">מעקב אחר ביקורות, דירוג העסק והמלצות לשיפור המוניטין</p>
+        </div>
         <div className="flex items-center gap-2">
           {/* Primary: AI Responses */}
           <button onClick={async () => {
@@ -270,14 +289,7 @@ export default function Reputation() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        {statCards.map((card, i) => (
-          <div key={card.label} className={`card-base p-5 fade-in-up stagger-${i + 1}`}>
-            <p className="text-[11px] font-medium text-foreground-muted mb-1">{card.label}</p>
-            <span className={`text-[28px] font-bold leading-none tracking-tight ${card.color || 'text-foreground'}`}>{card.value}</span>
-          </div>
-        ))}
-      </div>
+      <StatCards cards={statCards} />
 
       {/* Review timing recommendation */}
       {reviewTimingSignal && (

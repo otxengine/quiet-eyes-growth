@@ -2,7 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Heart, Star, ClipboardList, AlertTriangle, Loader2, TrendingDown, Clock, MessageSquare, Copy, CheckCheck } from 'lucide-react';
+import { Heart, Star, ClipboardList, AlertTriangle, Loader2, TrendingDown, Clock, MessageSquare, Copy, CheckCheck, Users } from 'lucide-react';
+import StatCards from '@/components/shared/StatCards';
+import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
 import DismissMenu from '@/components/ui/DismissMenu';
 import { toast } from 'sonner';
 
@@ -116,17 +118,39 @@ export default function Retention() {
         title="תובנות AI — שימור לקוחות"
         prompt={`נתח דפוסי נטישה של לקוחות: אלו לקוחות בסיכון הגבוה ביותר, מה הסיבה הנפוצה לאובדן לקוחות, ומה הפעולה האחת שתשפיע הכי הרבה על שמירת לקוחות.`}
       />
-      <h1 className="text-[16px] font-bold text-foreground tracking-tight">שימור</h1>
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {statCards.map((card, i) => (
-          <div key={card.label} className={`card-base p-5 fade-in-up stagger-${i + 1}`}>
-            <p className="text-[11px] font-medium text-foreground-muted mb-1">{card.label}</p>
-            <span className="text-[28px] font-bold text-foreground leading-none tracking-tight">{card.value}</span>
-            {card.change && <p className={`text-[10px] font-semibold mt-1 ${card.changeColor}`}>{card.change}</p>}
-          </div>
-        ))}
+      <div>
+        <h1 className="text-[16px] font-bold text-foreground tracking-tight">ניהול לקוחות</h1>
+        <p className="text-[11px] text-foreground-muted mt-0.5">מניעת נטישה ושימור לקוחות קיימים</p>
       </div>
+
+      <StatCards cards={statCards.map(c => ({ count: c.value, label: c.label, change: c.change, changeColor: c.changeColor, borderColor: c.label === 'שיעור שימור' ? 'blue' : c.label === 'לקוחות פעילים' ? 'green' : c.label === 'בסיכון / אבודים' ? 'red' : 'none' }))} />
+
+      {/* Urgent actions — top at-risk items */}
+      {(lostLeads.length > 0 || negativeReviews.length > 0 || pendingSurveys.length > 0) && (
+        <UrgentActionsSection
+          actions={[
+            lostLeads.length > 0 && {
+              title: `${lostLeads.length} לקוחות בסיכון נטישה`,
+              description: lostLeads.slice(0, 2).map(l => l.name || 'לקוח').join(', ') + (lostLeads.length > 2 ? ` +${lostLeads.length - 2}` : ''),
+              ctaLabel: 'צור מסר החזרה',
+              onCta: generateWinBack,
+              timeText: lostLeads[0]?.daysSince != null ? `לפני ${lostLeads[0].daysSince} ימים` : null,
+            },
+            negativeReviews.length > 0 && {
+              title: `${negativeReviews.length} ביקורות שליליות לטיפול`,
+              description: 'ביקורות שליליות שטרם קיבלו מענה',
+              ctaLabel: 'עבור למוניטין',
+              onCta: () => window.location.href = '/reputation',
+            },
+            pendingSurveys.length > 0 && {
+              title: `${pendingSurveys.length} סקרים ממתינים`,
+              description: 'סקרי שביעות רצון שטרם הוזנו',
+              ctaLabel: 'הזן תשובות',
+              onCta: () => setSelectedSurvey(pendingSurveys[0]),
+            },
+          ].filter(Boolean)}
+        />
+      )}
 
       {/* Funnel / Lifecycle breakdown */}
       <div className="card-base p-5">

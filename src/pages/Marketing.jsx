@@ -1019,6 +1019,7 @@ ${audienceCtx}
       <PageHeader
         count={campaigns.length}
         title="מרכז השיווק"
+        subtitle="ניהול קמפיינים ממומנים, פוסטים אורגניים וניתוח קהל יעד"
         actionLabel="קמפיין חדש"
         actionIcon={<Plus className="w-4 h-4" />}
         onAction={() => navigate('/marketing/create')}
