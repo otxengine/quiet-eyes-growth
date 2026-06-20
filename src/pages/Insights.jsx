@@ -7,6 +7,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
 import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
 import DataTable from '@/components/shared/DataTable';
+import DailyBriefPanel from '@/components/dashboard/DailyBriefPanel';
 
 const TYPE_META = {
   action_needed:       { label: 'פעולה נדרשת',    color: 'text-red-600',    bg: 'bg-red-50' },
@@ -221,6 +222,8 @@ export default function Insights() {
   return (
     <div className="space-y-5">
       <PageHeader count={freshRows.length} title="תובנות" />
+
+      <DailyBriefPanel businessProfile={businessProfile} />
 
       <StatCards cards={statCards} />
 
