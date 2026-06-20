@@ -1104,12 +1104,14 @@ ${audienceCtx}
                 key={tab.key}
                 onClick={() => setStatusFilter(tab.key)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1 ${
-                  statusFilter === tab.key ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
+                  statusFilter === tab.key
+                    ? 'bg-[#e8344d] text-white shadow-sm'
+                    : 'text-foreground-muted hover:text-foreground'
                 }`}
               >
                 {tab.label}
                 {cnt > 0 && (
-                  <span className="bg-gray-200 text-gray-600 text-[10px] px-1.5 py-0.5 rounded-full">{cnt}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${statusFilter === tab.key ? 'bg-white/30 text-white' : 'bg-gray-200 text-gray-600'}`}>{cnt}</span>
                 )}
               </button>
             );
@@ -1157,32 +1159,37 @@ ${audienceCtx}
               <span className="text-[13px] font-semibold text-foreground">קמפיינים</span>
             </div>
             <div className="flex items-center gap-2 mr-auto">
-              <div className="relative">
-                <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground-muted pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="חיפוש קמפיין..."
-                  value={campaignSearch}
-                  onChange={e => setCampaignSearch(e.target.value)}
-                  className="pr-8 pl-3 py-1.5 text-[12px] border border-border rounded-lg bg-secondary/50 focus:outline-none focus:ring-1 focus:ring-foreground/20 w-40"
-                  dir="rtl"
-                />
-              </div>
+              {/* Dropdowns first so search appears leftmost in RTL */}
               <button className="flex items-center gap-1 px-3 py-1.5 text-[12px] border border-border rounded-lg bg-secondary/50 text-foreground-muted hover:text-foreground transition-colors">
                 ממומן / אורגני
                 <ChevronDown className="w-3.5 h-3.5" />
               </button>
+              <button className="flex items-center gap-1 px-3 py-1.5 text-[12px] border border-border rounded-lg bg-secondary/50 text-foreground-muted hover:text-foreground transition-colors">
+                כל הזמנים
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+              <div className="relative">
+                <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground-muted pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="חיפוש"
+                  value={campaignSearch}
+                  onChange={e => setCampaignSearch(e.target.value)}
+                  className="pr-8 pl-3 py-1.5 text-[12px] border border-border rounded-lg bg-secondary/50 focus:outline-none focus:ring-1 focus:ring-foreground/20 w-32"
+                  dir="rtl"
+                />
+              </div>
             </div>
           </div>
 
           {/* Table column headers */}
           <div dir="rtl" className="flex items-center gap-3 px-4 py-2 bg-secondary/30 border-b border-border text-[11px] font-semibold text-foreground-muted">
-            <span className="flex-1">שם קמפיין</span>
+            <span className="flex-1">קמפיין</span>
             <span className="w-8 text-center">פלטפורמה</span>
             <span className="w-12 text-center">לידים</span>
-            <span className="w-16 text-center">המרה</span>
-            <span className="w-40 text-right">תקציב / תאריך</span>
-            <span className="w-12 text-center">פעיל</span>
+            <span className="w-16 text-center">יחס המרה</span>
+            <span className="w-40 text-right">תקציב ומשך</span>
+            <span className="w-12 text-center">סטאטוס</span>
             <span className="w-4" />
           </div>
 
