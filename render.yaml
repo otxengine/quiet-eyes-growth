@@ -52,6 +52,22 @@ services:
         sync: false
       - key: ADMIN_SECRET
         sync: false
+      - key: CRON_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: FROM_EMAIL
+        sync: false
+      - key: SERPAPI_KEY
+        sync: false
+      - key: SEARCHAPI_API_KEY
+        sync: false
+      - key: EVENTBRITE_API_KEY
+        sync: false
+      - key: GOOGLE_TRANSLATE_API_KEY
+        sync: false
+      - key: FAL_API_KEY
+        sync: false
 
   # ── Frontend (Vite static site) ─────────────────────────────────────────────
   - type: web
@@ -65,6 +81,8 @@ services:
       - key: VITE_CLERK_PUBLISHABLE_KEY
         sync: false
       - key: VITE_API_BASE_URL
+        sync: false
+      - key: VITE_FACEBOOK_APP_ID
         sync: false
     routes:
       - type: rewrite
