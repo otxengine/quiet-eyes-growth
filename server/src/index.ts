@@ -1136,7 +1136,7 @@ app.listen(PORT, async () => {
   for (const table of REQUIRED_TABLES) {
     try {
       const res: any[] = await db.$queryRawUnsafe(
-        `SELECT to_regclass('public.${table}') AS exists`
+        `SELECT to_regclass('public.${table}')::text AS exists`
       );
       if (!res[0]?.exists) missingTables.push(table);
     } catch {
