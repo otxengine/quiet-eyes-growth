@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { Check } from 'lucide-react';
 import KoriAvatar from './KoriAvatar';
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3002';
+const API_BASE = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3007/api';
 
 const scanSteps = [
   { fn: 'parseProfile',            text: 'מנתח את פרופיל העסק שלך...',      narrative: 'מבין את הסקטור שלך לעומק...' },
@@ -77,8 +77,8 @@ export default function OnboardingScanning() {
 
         try {
           if (step.fn === 'parseProfile') {
-            const key = sessionStorage.getItem('__user_token') || '';
-            await fetch(`${SERVER_URL}/api/onboarding/parse-profile`, {
+            const key = window.__clerk_session_token || '';
+            await fetch(`${API_BASE}/onboarding/parse-profile`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
               body: JSON.stringify({
@@ -92,8 +92,8 @@ export default function OnboardingScanning() {
               }),
             }).catch(() => {});
           } else if (step.fn === 'generateMissions') {
-            const key = sessionStorage.getItem('__user_token') || '';
-            await fetch(`${SERVER_URL}/api/onboarding/generate-missions`, {
+            const key = window.__clerk_session_token || '';
+            await fetch(`${API_BASE}/onboarding/generate-missions`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
               body: JSON.stringify({ businessProfileId: bp.id }),

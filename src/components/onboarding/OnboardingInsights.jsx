@@ -15,14 +15,14 @@ const ALERT_CTA = {
   review:     { label: 'הגב לביקורת', path: '/reviews',      bg: '#dc2626' },
   lead:       { label: 'פתח ליד',     path: '/leads',        bg: '#059669' },
   competitor: { label: 'בדוק מתחרה', path: '/competitors',  bg: '#d97706' },
-  trend:      { label: 'ראה מגמה',   path: '/intelligence', bg: '#6366f1' },
+  trend:      { label: 'ראה מגמה',   path: '/signals', bg: '#6366f1' },
 };
 const DEFAULT_ALERT_CTA = { label: 'ראה פרטים', path: '/signals', bg: '#e8344d' };
 
 const SIGNAL_STYLE = {
   threat:      { border: 'border-red-200',     bg: 'bg-red-50',     label: 'ראה מתחרים',  path: '/competitors' },
   opportunity: { border: 'border-emerald-200', bg: 'bg-emerald-50', label: 'גלה הזדמנות', path: '/leads' },
-  trend:       { border: 'border-amber-200',   bg: 'bg-amber-50',   label: 'גלה מגמה',    path: '/intelligence' },
+  trend:       { border: 'border-amber-200',   bg: 'bg-amber-50',   label: 'גלה מגמה',    path: '/signals' },
 };
 const DEFAULT_SIGNAL_STYLE = { border: 'border-gray-200', bg: 'bg-white', label: 'ראה פרטים', path: '/signals' };
 
