@@ -152,7 +152,8 @@ function CityInput({ value, onChange, onSelect }) {
           value={value}
           onChange={e => { onChange(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
-          placeholder="בחר יישוב"
+          onKeyDown={e => { if (e.key === 'Enter' && value.trim()) { setOpen(false); onSelect(value.trim()); } }}
+          placeholder="הקלד עיר או יישוב"
           className="flex-1 bg-transparent text-[13px] outline-none text-gray-700"
         />
       </div>
@@ -184,6 +185,7 @@ export default function OnboardingForm() {
   const [citySearch, setCitySearch] = useState('');
   const [tempServices, setTempServices] = useState([]);
   const [tempSources, setTempSources] = useState([]);
+  const [otherService, setOtherService] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: '', city: '', category: '',
@@ -350,6 +352,22 @@ export default function OnboardingForm() {
               onSelect={toggleService}
               multi
             />
+            <div className="relative">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                value={otherService}
+                onChange={e => setOtherService(e.target.value)}
+                placeholder='אחר — הקלד שירות וגש Enter'
+                className="w-full bg-white border border-gray-200 rounded-full pr-10 pl-4 py-2 text-[13px] outline-none focus:border-[#e8344d] transition-colors"
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const v = e.target.value.trim();
+                    if (v && !tempServices.includes(v)) setTempServices(prev => [...prev, v]);
+                    setOtherService('');
+                  }
+                }}
+              />
+            </div>
           </div>
         );
 
@@ -441,7 +459,7 @@ export default function OnboardingForm() {
   const canAdvance = () => {
     if (step === 1) return textInput.trim().length > 0;
     if (step === 2) return citySearch.trim().length > 0;
-    if (step === 4) return tempServices.length > 0;
+    if (step === 4) return tempServices.length > 0 || otherService.trim().length > 0;
     if (step === 5) return textInput.trim().length > 0;
     if (step === 7) return tempSources.length > 0;
     if (step === 9) return true; // optional
@@ -458,8 +476,13 @@ export default function OnboardingForm() {
     } else if (step === 2) {
       if (citySearch.trim()) advance('city', citySearch.trim(), citySearch.trim());
     } else if (step === 4) {
-      const labels = SERVICES.filter(s => tempServices.includes(s.value)).map(s => s.label);
-      advance('relevant_services', tempServices, labels.join(', '));
+      const allServices = otherService.trim()
+        ? [...tempServices, otherService.trim()]
+        : tempServices;
+      const knownLabels = SERVICES.filter(s => allServices.includes(s.value)).map(s => s.label);
+      const customLabels = allServices.filter(v => !SERVICES.find(s => s.value === v));
+      const labels = [...knownLabels, ...customLabels];
+      advance('relevant_services', allServices, labels.join(', '));
     } else if (step === 5) {
       if (textInput.trim()) advance('description', textInput.trim(), textInput.trim().slice(0, 30) + (textInput.trim().length > 30 ? '...' : ''));
     } else if (step === 7) {
