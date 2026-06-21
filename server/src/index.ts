@@ -163,6 +163,21 @@ app.use('/api/stripe', stripeRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
+// Temporary DB env diagnostic — admin only, remove after fix
+app.get('/api/debug/db-env', (req: any, res: any) => {
+  const key = req.headers['x-admin-key'];
+  if (key !== (process.env.ADMIN_SECRET || '__unset__')) return res.status(403).json({ error: 'Forbidden' });
+  const url = process.env.DATABASE_URL || '';
+  res.json({
+    DATABASE_URL_length: url.length,
+    DATABASE_URL_first30: url.slice(0, 30),
+    DATABASE_URL_last10: url.slice(-10),
+    DATABASE_URL_starts_with_pg: url.startsWith('postgresql://') || url.startsWith('postgres://'),
+    DIRECT_URL_length: (process.env.DIRECT_URL || '').length,
+    NODE_ENV: process.env.NODE_ENV,
+  });
+});
+
 // External cron trigger — POST /api/cron/run?secret=XXX
 // Called by cron-job.org every 14 minutes to keep Render alive + run pipelines
 app.post('/api/cron/run', async (_req, res) => {
