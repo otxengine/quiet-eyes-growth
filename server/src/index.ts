@@ -474,15 +474,8 @@ app.listen(PORT, async () => {
     actual_leads     INT,
     actual_spend_ils NUMERIC
   )`);
-  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS trace_id TEXT`);
-  await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS id TEXT`);
-  await sql(`CREATE UNIQUE INDEX IF NOT EXISTS idx_otx_runs_id ON otx_pipeline_runs(id) WHERE id IS NOT NULL`);
-  await sql(`ALTER TABLE otx_policy_weights ALTER COLUMN id SET DEFAULT md5(random()::text)`);
-  await sql(`ALTER TABLE otx_policy_weights ALTER COLUMN weight DROP NOT NULL`);
-  await sql(`ALTER TABLE otx_policy_weights ALTER COLUMN weight SET DEFAULT 0.5`);
-  await sql(`ALTER TABLE otx_policy_weights ALTER COLUMN success_rate DROP NOT NULL`);
-  await sql(`ALTER TABLE otx_policy_weights ALTER COLUMN success_rate SET DEFAULT 0.5`);
-  await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS summary JSONB`);
+  // Note: ALTER TABLE for otx_recommendations/pipeline_runs/policy_weights/outcome_events/execution_tasks
+  // are intentionally placed AFTER their CREATE TABLE statements below (lines ~767+).
 
   // ── OTX v3 tables (missing from original startup block) ──────────────────
   await sql(`CREATE TABLE IF NOT EXISTS meta_configurations (
@@ -573,26 +566,6 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS fused_insight_id TEXT`);
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS approval_required BOOLEAN DEFAULT false`);
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS policy_version INT DEFAULT 1`);
-  await sql(`ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS outcome_type TEXT DEFAULT 'execution'`);
-  await sql(`ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS outcome_score NUMERIC(4,3)`);
-  await sql(`ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS conversion_flag BOOLEAN DEFAULT false`);
-  await sql(`ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS execution_task_id TEXT`);
-  await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS opportunities_found INT DEFAULT 0`);
-  await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS threats_found INT DEFAULT 0`);
-  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS insight_id TEXT`);
-  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS opportunity_ids JSONB DEFAULT '[]'`);
-  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS signal_ids JSONB DEFAULT '[]'`);
-  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS summary TEXT`);
-  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS why_now TEXT`);
-  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS recommended_steps JSONB DEFAULT '[]'`);
-  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS recommended_timing TEXT`);
-  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS user_visible_payload JSONB DEFAULT '{}'`);
-  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS recommendation_id TEXT`);
-  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS approval_required BOOLEAN DEFAULT false`);
-  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMPTZ`);
-  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS executed_at TIMESTAMPTZ`);
-  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS result_payload JSONB DEFAULT '{}'`);
-
   // ── OTX-003/004: AutoAction new columns ──────────────────────────────────
   await sql(`ALTER TABLE auto_actions ADD COLUMN IF NOT EXISTS confidence_score   DOUBLE PRECISION`);
   await sql(`ALTER TABLE auto_actions ADD COLUMN IF NOT EXISTS predicted_impact   TEXT`);
