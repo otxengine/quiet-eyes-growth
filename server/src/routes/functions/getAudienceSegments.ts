@@ -76,7 +76,7 @@ export async function getAudienceSegments(req: Request, res: Response) {
       // Cross-business sector patterns
       prisma.sectorKnowledge.findFirst({
         where: { sector: { contains: '' } }, // most recent
-        orderBy: { updated_date: 'desc' } as any,
+        orderBy: { last_updated: 'desc' } as any,
       }),
     ]);
 
