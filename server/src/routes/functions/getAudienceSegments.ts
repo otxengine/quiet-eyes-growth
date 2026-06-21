@@ -111,13 +111,13 @@ export async function getAudienceSegments(req: Request, res: Response) {
     const conversionRate     = leads.length > 0 ? Math.round((closedLeads.length / leads.length) * 100) : 0;
 
     const reviewSamples = reviews
-      .slice(0, 12)
-      .map(r => `[${r.sentiment || 'neutral'}/${r.rating || '?'}⭐] "${(r.text || '').slice(0, 90)}"`)
+      .slice(0, 6)
+      .map(r => `[${r.sentiment || 'neutral'}/${r.rating || '?'}⭐] "${(r.text || '').slice(0, 60)}"`)
       .join('\n');
 
     const leadSamples = leads
-      .slice(0, 10)
-      .map(l => `"${(l.service_needed || l.name || '').slice(0, 70)}" (${l.source || '?'}, ${l.status})`)
+      .slice(0, 5)
+      .map(l => `"${(l.service_needed || l.name || '').slice(0, 50)}" (${l.source || '?'}, ${l.status})`)
       .join('\n');
 
     const closedLeadServices = closedLeads
@@ -216,46 +216,36 @@ ${sectorCtx ? `=== תבניות סקטוריאליות ===\n${sectorCtx}` : ''}
 ${signalSamples || 'אין'}
 `.trim();
 
-    // ── Dual-brain: Claude Sonnet + Gemini Flash in parallel ────────────────
+    // ── Claude Haiku — fast audience segmentation ────────────────────────────
     let result: any = null;
     let geminiEnrichment: any = null;
 
     try {
-      const [claudeResult, geminiRaw] = await Promise.all([
-        invokeLLM({
-          model: 'sonnet',
-          maxTokens: 1100,
-          skipCache: true,
-          prompt: `פרסום ממומן ישראל — בנה 2 סגמנטי קהל יעד מדויקים המבוססים על הנתונים האמיתיים שלמטה.
+      result = await invokeLLM({
+        model: 'haiku',
+        maxTokens: 900,
+        skipCache: true,
+        prompt: `פרסום ממומן ישראל — בנה 2 סגמנטי קהל יעד מדויקים המבוססים על הנתונים האמיתיים שלמטה.
 
 ${fullContext}
 
-הנחיה חשובה: קהל היעד חייב לשקף מי מגיב לתוכן הספציפי הזה — השתמש בנתוני ה-TikTok האמיתיים, בביקורות ובלידים שסגרו. אל תמציא קהל גנרי.
+הנחיה: קהל היעד חייב לשקף מי מגיב לתוכן הספציפי הזה. אל תמציא קהל גנרי.
 
 החזר JSON בלבד:
-{"segments":[{"segment_name":"שם","description":"תיאור קצר","age_min":25,"age_max":45,"genders":"נשים וגברים","income_level":"mid","conversion_probability":0.3,"estimated_size":"medium","estimated_audience_range":"10,000-40,000","why_this_segment":"למה הסגמנט הזה — מה בנתונים מצביע עליו","facebook_targeting":{"interests":["עניין 1 ספציפי","עניין 2","עניין 3"],"behaviors":["התנהגות ספציפית"],"custom_audience":"Custom Audience מומלץ","lookalike_source":"מקור Lookalike","exclusions":[]},"google_targeting":{"keywords":["ביטוי 1","ביטוי 2"],"negative_keywords":[],"in_market_audiences":["קטגוריה"],"custom_intent":"כוונה"},"best_channels":["Facebook","Instagram"],"best_posting_time":"ראשון-חמישי 18:00-21:00","ad_creative_tip":"טיפ קריאייטיב ספציפי","pain_point":"כאב ספציפי מהנתונים","purchase_trigger":"טריגר קנייה"}]}`,
-          response_json_schema: { type: 'object' },
-        }),
-        // Gemini Flash — behavioral keyword enrichment (runs in parallel, fast)
-        callGemini(
-          `${fullContext}
-
-Based on the REAL data above (especially TikTok engagement data, reviews and leads), suggest 2 behavioral keyword sets (one per audience segment) and a creative hook for each.
-Return ONLY valid JSON in Hebrew:
-{"segment_enrichments":[{"behavioral_keywords":["מילה1","מילה2","מילה3"],"creative_hook":"הוק קריאייטיב קצר — עד 8 מילים","ad_format":"סוג מודעה מומלץ","tiktok_hook":"פתיחת TikTok שעובדת לסגמנט זה"}]}`,
-          'gemini-flash', 400,
-          { jsonMode: true },
-        ).then(raw => {
-          const clean = raw.replace(/```json?|```/g, '').trim();
-          return JSON.parse(clean);
-        }).catch(() => null),
-      ]);
-
-      result = claudeResult;
-      geminiEnrichment = geminiRaw;
+{"segments":[{"segment_name":"שם","description":"תיאור קצר","age_min":25,"age_max":45,"genders":"נשים וגברים","income_level":"mid","conversion_probability":0.3,"estimated_size":"medium","estimated_audience_range":"10,000-40,000","why_this_segment":"למה הסגמנט הזה","facebook_targeting":{"interests":["עניין 1","עניין 2","עניין 3"],"behaviors":["התנהגות"],"custom_audience":"Custom Audience מומלץ","lookalike_source":"מקור Lookalike","exclusions":[]},"google_targeting":{"keywords":["ביטוי 1","ביטוי 2"],"negative_keywords":[],"in_market_audiences":["קטגוריה"],"custom_intent":"כוונה"},"best_channels":["Facebook","Instagram"],"best_posting_time":"ראשון-חמישי 18:00-21:00","ad_creative_tip":"טיפ קריאייטיב","pain_point":"כאב מהנתונים","purchase_trigger":"טריגר קנייה"}]}`,
+        response_json_schema: { type: 'object' },
+      });
     } catch (llmErr: any) {
       console.warn('[getAudienceSegments] LLM failed:', llmErr.message);
     }
+
+    // Gemini enrichment — fire-and-forget, won't block the response
+    callGemini(
+      `${fullContext}\n\nSuggest 2 behavioral keyword sets and a creative hook per segment.\nReturn ONLY valid JSON in Hebrew:\n{"segment_enrichments":[{"behavioral_keywords":["מילה1","מילה2"],"creative_hook":"הוק קצר","ad_format":"סוג מודעה","tiktok_hook":"פתיחת TikTok"}]}`,
+      'gemini-flash', 300, { jsonMode: true },
+    ).then(raw => {
+      try { geminiEnrichment = JSON.parse(raw.replace(/```json?|```/g, '').trim()); } catch { /* ignore */ }
+    }).catch(() => null);
 
     // ── Merge Gemini enrichment into Claude segments ─────────────────────────
     if (geminiEnrichment?.segment_enrichments?.length && Array.isArray(result?.segments)) {

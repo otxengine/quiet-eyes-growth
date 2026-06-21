@@ -255,7 +255,7 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
     setLoadingAudience(true);
     setAudienceError('');
     try {
-      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 20000));
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 45000));
       const res = await Promise.race([
         base44.functions.invoke('getAudienceSegments', {
           businessProfileId: bpId,
@@ -273,7 +273,7 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
       if (data?.segments?.length) setChosenSeg(data.segments[0]);
     } catch (e) {
       const msg = e?.message === 'timeout'
-        ? 'פג זמן הטעינה (timeout 25s)'
+        ? 'פג זמן הטעינה — נסה שנית'
         : (e?.message || 'שגיאה לא ידועה');
       setAudienceError(msg);
       console.error('[loadAudience] error:', e);
