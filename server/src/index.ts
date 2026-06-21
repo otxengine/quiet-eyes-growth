@@ -1103,6 +1103,134 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS opportunities_found INT DEFAULT 0`);
   await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS threats_found INT DEFAULT 0`);
 
+  // ── Layer 7 OTX tables (businesses + agent-specific storage) ─────────────
+  await sql(`CREATE TABLE IF NOT EXISTS businesses (
+    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    name       TEXT        NOT NULL,
+    sector     TEXT        NOT NULL DEFAULT 'local',
+    geo_city   TEXT        NOT NULL DEFAULT 'תל אביב',
+    price_tier TEXT        NOT NULL DEFAULT 'mid',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(name)
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_businesses_name ON businesses(name)`);
+  await sql(`CREATE TABLE IF NOT EXISTS viral_patterns (
+    id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id      UUID        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    pattern_type     TEXT        NOT NULL DEFAULT 'format',
+    pattern_value    TEXT        NOT NULL,
+    platform         TEXT        NOT NULL DEFAULT 'instagram',
+    virality_score   NUMERIC(3,2) NOT NULL DEFAULT 0.7,
+    peak_hour        INT         NOT NULL DEFAULT 19,
+    script_template  TEXT,
+    source_url       TEXT        NOT NULL,
+    confidence_score NUMERIC(3,2) NOT NULL DEFAULT 0.7,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_viral_patterns_biz ON viral_patterns(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS influence_integrity_scores (
+    id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id      UUID        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    organic_pct      NUMERIC(5,2) NOT NULL DEFAULT 80,
+    bot_pct          NUMERIC(5,2) NOT NULL DEFAULT 10,
+    coordinated_pct  NUMERIC(5,2) NOT NULL DEFAULT 10,
+    verdict          TEXT        NOT NULL DEFAULT 'organic',
+    recommendation   TEXT        NOT NULL DEFAULT '',
+    source_url       TEXT        NOT NULL,
+    confidence_score NUMERIC(3,2) NOT NULL DEFAULT 0.7,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_influence_biz ON influence_integrity_scores(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS visual_osint_signals (
+    id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id           UUID        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    media_url             TEXT        NOT NULL,
+    platform              TEXT        NOT NULL DEFAULT 'google',
+    business_insight      TEXT        NOT NULL DEFAULT '',
+    unmet_demand_detected BOOLEAN     NOT NULL DEFAULT false,
+    sentiment_visual      TEXT        NOT NULL DEFAULT 'neutral',
+    source_url            TEXT        NOT NULL,
+    confidence_score      NUMERIC(3,2) NOT NULL DEFAULT 0.65,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_visual_osint_biz ON visual_osint_signals(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS retention_alerts (
+    id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id           UUID        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    customer_identifier   TEXT        NOT NULL,
+    risk_level            TEXT        NOT NULL DEFAULT 'low',
+    churn_probability     NUMERIC(4,3) NOT NULL DEFAULT 0.1,
+    last_interaction_days INT         NOT NULL DEFAULT 0,
+    recommended_offer     TEXT        NOT NULL DEFAULT '',
+    source_url            TEXT        NOT NULL,
+    confidence_score      NUMERIC(3,2) NOT NULL DEFAULT 0.75,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_retention_biz ON retention_alerts(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS pricing_recommendations (
+    id                         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id                UUID        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    lead_context               TEXT        NOT NULL DEFAULT '',
+    market_supply              TEXT        NOT NULL DEFAULT 'balanced',
+    competitor_avg_price       NUMERIC(10,2),
+    recommended_price_modifier NUMERIC(5,2) NOT NULL DEFAULT 0,
+    recommended_tactic         TEXT        NOT NULL DEFAULT 'standard',
+    tactic_reason              TEXT        NOT NULL DEFAULT '',
+    confidence_pct             INT         NOT NULL DEFAULT 70,
+    valid_until                TIMESTAMPTZ NOT NULL DEFAULT now(),
+    source_url                 TEXT        NOT NULL,
+    confidence_score           NUMERIC(3,2) NOT NULL DEFAULT 0.7,
+    created_at                 TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_pricing_biz ON pricing_recommendations(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS campaign_drafts (
+    id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id      UUID        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    trigger_event    TEXT        NOT NULL DEFAULT '',
+    platform         TEXT        NOT NULL DEFAULT 'instagram',
+    headline         TEXT        NOT NULL DEFAULT '',
+    body_text        TEXT        NOT NULL DEFAULT '',
+    cta_text         TEXT        NOT NULL DEFAULT '',
+    estimated_reach  INT         NOT NULL DEFAULT 300,
+    recommended_time TIMESTAMPTZ,
+    duration_hours   INT         NOT NULL DEFAULT 24,
+    auto_publish     BOOLEAN     NOT NULL DEFAULT false,
+    status           TEXT        NOT NULL DEFAULT 'draft',
+    source_url       TEXT        NOT NULL,
+    confidence_score NUMERIC(3,2) NOT NULL DEFAULT 0.78,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_campaign_drafts_biz ON campaign_drafts(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS expansion_opportunities (
+    id                        UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id               UUID        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    opportunity_title         TEXT        NOT NULL DEFAULT '',
+    unmet_demand_description  TEXT        NOT NULL DEFAULT '',
+    demand_signal_count       INT         NOT NULL DEFAULT 0,
+    geo                       TEXT,
+    estimated_monthly_revenue NUMERIC(12,2),
+    estimated_investment      NUMERIC(12,2),
+    roi_months                INT,
+    source_url                TEXT        NOT NULL,
+    confidence_score          NUMERIC(3,2) NOT NULL DEFAULT 0.7,
+    created_at                TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_expansion_biz ON expansion_opportunities(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS reputation_incidents (
+    id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id          UUID        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    severity             TEXT        NOT NULL DEFAULT 'low',
+    incident_type        TEXT        NOT NULL DEFAULT 'routine_scan',
+    description          TEXT        NOT NULL DEFAULT '',
+    recommended_response TEXT        NOT NULL DEFAULT '',
+    response_deadline    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    resolved             BOOLEAN     NOT NULL DEFAULT false,
+    source_url           TEXT        NOT NULL,
+    confidence_score     NUMERIC(3,2) NOT NULL DEFAULT 0.82,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_reputation_biz ON reputation_incidents(business_id, created_at DESC)`);
+
   // ── Performance indexes on high-traffic columns ───────────────────────────
   // These are the most-queried fields across all entity list calls. Adding
   // indexes here dramatically reduces full-table scan time at scale.
