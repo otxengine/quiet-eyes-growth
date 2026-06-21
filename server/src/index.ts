@@ -164,18 +164,30 @@ app.use('/api/stripe', stripeRouter);
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 // Temporary DB env diagnostic — admin only, remove after fix
-app.get('/api/debug/db-env', (req: any, res: any) => {
+app.get('/api/debug/db-env', async (req: any, res: any) => {
   const key = req.headers['x-admin-key'];
   if (key !== (process.env.ADMIN_SECRET || '__unset__')) return res.status(403).json({ error: 'Forbidden' });
   const url = process.env.DATABASE_URL || '';
-  res.json({
+  const result: any = {
     DATABASE_URL_length: url.length,
     DATABASE_URL_first30: url.slice(0, 30),
     DATABASE_URL_last10: url.slice(-10),
     DATABASE_URL_starts_with_pg: url.startsWith('postgresql://') || url.startsWith('postgres://'),
     DIRECT_URL_length: (process.env.DIRECT_URL || '').length,
     NODE_ENV: process.env.NODE_ENV,
-  });
+    prisma_test: null,
+    prisma_error: null,
+  };
+  try {
+    const { PrismaClient } = require('@prisma/client');
+    const testPrisma = new PrismaClient({ datasources: { db: { url } } });
+    const count = await testPrisma.businessProfile.count();
+    result.prisma_test = `OK - count: ${count}`;
+    await testPrisma.$disconnect();
+  } catch (e: any) {
+    result.prisma_error = e.message?.split('\n').slice(0, 3).join(' | ');
+  }
+  res.json(result);
 });
 
 // External cron trigger — POST /api/cron/run?secret=XXX
