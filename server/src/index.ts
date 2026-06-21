@@ -185,7 +185,7 @@ app.get('/api/debug/db-env', async (req: any, res: any) => {
     result.prisma_test = `OK - count: ${count}`;
     await testPrisma.$disconnect();
   } catch (e: any) {
-    result.prisma_error = e.message?.split('\n').slice(0, 3).join(' | ');
+    result.prisma_error = e.message?.slice(0, 500);
   }
   res.json(result);
 });
