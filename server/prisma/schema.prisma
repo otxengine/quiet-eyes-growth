@@ -563,6 +563,8 @@ model SocialAccount {
   platform        String?
   account_name    String?
   access_token    String?
+  refresh_token   String?
+  expires_at      String?
   page_id         String?
   is_connected    Boolean? @default(false)
   last_sync       String?
