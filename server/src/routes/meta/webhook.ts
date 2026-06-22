@@ -69,12 +69,14 @@ router.get('/', (req: Request, res: Response) => {
 // ── Master POST Handler ───────────────────────────────────────────────────────
 
 router.post('/', (req: Request, res: Response) => {
+  console.log('[Meta webhook] POST received from', req.ip);
+
   // 1. Verify signature using the raw body captured before JSON parsing
   const rawBody   = (req as any).rawBody as Buffer | undefined;
   const signature = req.headers['x-hub-signature-256'] as string ?? '';
 
   if (!rawBody || !verifyMetaSignature(rawBody, signature)) {
-    console.warn('[Meta webhook] Invalid signature — rejecting payload');
+    console.warn('[Meta webhook] Invalid signature — rejecting. sig present:', !!signature, '| rawBody present:', !!rawBody);
     return res.sendStatus(403);
   }
 
