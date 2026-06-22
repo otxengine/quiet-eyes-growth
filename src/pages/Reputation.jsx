@@ -70,6 +70,115 @@ function ReviewRow({ review, businessProfile, onApprove }) {
   );
 }
 
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api').replace(/\/$/, '');
+
+function ReviewReplyPanel({ review, bpId, onClose, onSent }) {
+  const platCfg = PLATFORM_ICONS[review.source] || PLATFORM_ICONS.default;
+  const [replyText, setReplyText] = useState(review.suggested_response || '');
+  const [sending, setSending] = useState(false);
+  const [generating, setGenerating] = useState(false);
+
+  const generateReply = async () => {
+    setGenerating(true);
+    try {
+      await base44.functions.invoke('autoRespondToReviews', { businessProfileId: bpId });
+      const rows = await base44.entities.Review.filter({ id: review.id });
+      const updated = rows?.[0];
+      if (updated?.suggested_response) {
+        setReplyText(updated.suggested_response);
+        toast.success('תגובה AI נוצרה ✓');
+      } else {
+        toast.info('לא נמצאה תגובה — נסה שנית');
+      }
+    } catch {
+      toast.error('שגיאה ביצירת תגובה');
+    }
+    setGenerating(false);
+  };
+
+  const sendReply = async () => {
+    if (!replyText.trim()) { toast.error('יש להזין תגובה'); return; }
+    setSending(true);
+    try {
+      const res = await fetch(`${API_BASE}/social/reviews/${review.id}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessProfileId: bpId, replyText }),
+      });
+      const data = await res.json();
+      if (data.published) {
+        toast.success('התגובה פורסמה ב-Google ✓');
+      } else {
+        toast.success('התגובה נשמרה — תפורסם ב-Google כשהחיבור יאומת');
+      }
+      onSent();
+    } catch (e) {
+      toast.error('שגיאת חיבור: ' + e.message);
+    }
+    setSending(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-white rounded-t-2xl md:rounded-2xl w-full max-w-lg mx-auto z-10 shadow-xl" dir="rtl">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{platCfg.icon}</span>
+            <span className="text-[13px] font-bold text-gray-900">תגובה לביקורת</span>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[11px] font-semibold text-gray-500">{review.reviewer_name || 'לקוח'}</span>
+            <span className="text-amber-400 text-[12px]">{'★'.repeat(review.rating || 0)}{'☆'.repeat(5 - (review.rating || 0))}</span>
+          </div>
+          <p className="text-[12px] text-gray-700 leading-relaxed">{review.text || '(ביקורת ללא טקסט)'}</p>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-[12px] font-semibold text-gray-700">התגובה שלך</label>
+            <button
+              onClick={generateReply}
+              disabled={generating}
+              className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
+            >
+              {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bot className="w-3 h-3" />}
+              {generating ? 'מייצר...' : 'צור עם AI'}
+            </button>
+          </div>
+          <textarea
+            value={replyText}
+            onChange={e => setReplyText(e.target.value)}
+            rows={5}
+            placeholder="כתוב תגובה לביקורת..."
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-[13px] text-gray-800 resize-none focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-200"
+          />
+          <p className="text-[10px] text-gray-400">
+            {review.source === 'google'
+              ? 'התגובה תפורסם ישירות ב-Google Business Profile שלך'
+              : 'התגובה תישמר במערכת'}
+          </p>
+        </div>
+        <div className="flex gap-2 px-5 pb-5">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-[13px] font-medium text-gray-600 hover:bg-gray-50">
+            ביטול
+          </button>
+          <button
+            onClick={sendReply}
+            disabled={sending || !replyText.trim()}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-900 text-white text-[13px] font-semibold hover:bg-gray-700 disabled:opacity-50"
+          >
+            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {sending ? 'שולח...' : 'שלח תגובה'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Reputation() {
   const { businessProfile } = useOutletContext();
   const bpId = businessProfile?.id;
@@ -80,6 +189,7 @@ export default function Reputation() {
   const [analyzingSentiment, setAnalyzingSentiment] = useState(false);
   const [sentimentResult, setSentimentResult] = useState(null);
   const [autoResponding, setAutoResponding] = useState(false);
+  const [selectedReview, setSelectedReview] = useState(null);
   const [sendingRequests, setSendingRequests] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
@@ -419,19 +529,7 @@ export default function Reputation() {
               </div>
             ) : filteredTable.map(review => (
               <ReviewRow key={review.id} review={review} businessProfile={businessProfile}
-                onApprove={() => {
-                  if (!bpId) return;
-                  setAutoResponding(true);
-                  toast.info('מייצר תגובה AI...');
-                  base44.functions.invoke('autoRespondToReviews', { businessProfileId: bpId })
-                    .then(res => {
-                      const { responses_generated = 0 } = res?.data || {};
-                      queryClient.invalidateQueries({ queryKey: ['reviewsPage', bpId] });
-                      toast.success(responses_generated > 0 ? `${responses_generated} תגובות מוכנות לאישור ✓` : 'אין ביקורות שדורשות תגובה');
-                    })
-                    .catch(() => toast.error('שגיאה ביצירת תגובות'))
-                    .finally(() => setAutoResponding(false));
-                }}
+                onApprove={() => setSelectedReview(review)}
               />
             ))}
           </div>
@@ -442,6 +540,17 @@ export default function Reputation() {
 
       {showAddModal && <AddReviewModal bpId={bpId} onClose={() => setShowAddModal(false)} onAdded={() => { queryClient.invalidateQueries({ queryKey: ['reviewsPage'] }); setShowAddModal(false); }} />}
       {showRequestModal && <RequestReviewModal businessProfile={businessProfile} onClose={() => setShowRequestModal(false)} onSent={() => { queryClient.invalidateQueries({ queryKey: ['reviewRequests'] }); setShowRequestModal(false); }} />}
+      {selectedReview && (
+        <ReviewReplyPanel
+          review={selectedReview}
+          bpId={bpId}
+          onClose={() => setSelectedReview(null)}
+          onSent={() => {
+            queryClient.invalidateQueries({ queryKey: ['reviewsPage', bpId] });
+            setSelectedReview(null);
+          }}
+        />
+      )}
     </div>
   );
 }

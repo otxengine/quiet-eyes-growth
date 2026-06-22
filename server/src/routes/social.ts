@@ -595,4 +595,30 @@ router.delete('/comments/:id', async (req: Request, res: Response) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/social/reviews/:id/reply
+// Body: { businessProfileId, replyText }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/reviews/:id/reply', async (req: Request, res: Response) => {
+  const reviewId = req.params.id as string;
+  const { businessProfileId, replyText } = req.body;
+  if (!businessProfileId || !replyText) {
+    return res.status(400).json({ error: 'Missing businessProfileId or replyText' });
+  }
+  try {
+    const review = await prisma.review.findUnique({ where: { id: reviewId } });
+    if (!review) return res.status(404).json({ error: 'Review not found' });
+    const { postReviewReply } = await import('../services/execution/GoogleBusinessClient');
+    const result = await postReviewReply(businessProfileId, {
+      reviewId,
+      replyText,
+      googleReviewId: (review as any).google_review_id || undefined,
+    });
+    return res.json(result);
+  } catch (err: any) {
+    console.error('[social/reviews/reply]', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
