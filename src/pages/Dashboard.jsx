@@ -5,6 +5,7 @@ import { base44 } from '@/api/base44Client';
 import { ChevronLeft, X, ArrowUpRight, Sparkles, Zap, Flame, Clock } from 'lucide-react';
 import LiveStreamCard from '@/components/shared/LiveStreamCard';
 import KoriAvatar from '@/components/onboarding/KoriAvatar';
+import DailyBriefPanel from '@/components/dashboard/DailyBriefPanel';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -272,6 +273,9 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
+
+      {/* ── Daily Brief ────────────────────────────────────────────────────── */}
+      <DailyBriefPanel businessProfile={businessProfile} />
 
       {/* ── Chat thread ────────────────────────────────────────────────────── */}
       {messages.length > 0 && (

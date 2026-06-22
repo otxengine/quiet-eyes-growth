@@ -5,7 +5,7 @@ export default function TermsPage() {
     <div className="min-h-screen px-6 py-20 bg-white">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-[32px] font-bold text-foreground mb-2">תנאי שימוש</h1>
-        <p className="text-[12px] text-foreground-muted mb-8">עדכון אחרון: ינואר 2025</p>
+        <p className="text-[12px] text-foreground-muted mb-8">עדכון אחרון: יוני 2026</p>
 
         <div className="prose max-w-none text-[13px] text-foreground-secondary leading-relaxed space-y-6">
 

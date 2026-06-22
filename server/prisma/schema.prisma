@@ -35,6 +35,9 @@ model BusinessProfile {
   bot_good_lead_criteria     String?
   bot_bad_lead_criteria      String?
   bot_services_info          String?
+  bot_working_hours_start    String?
+  bot_working_hours_end      String?
+  bot_off_hours_message      String?
   channels_whatsapp          String?
   channels_whatsapp_enabled  Boolean? @default(false)
   channels_instagram         String?
@@ -234,6 +237,8 @@ model Competitor {
   social_pages_crawled_at  String?  // last time we crawled the website for social links
   strongest_channel        String?  // 'instagram'|'facebook'|'tiktok'|'google'|'unknown'
   social_post_frequency    String?  // e.g. '3 פוסטים בשבוע'
+  social_followers_est     String?  // estimated follower range e.g. '1k-5k'
+  engagement_level         String?  // 'low'|'medium'|'high'
   content_themes           String?  // comma-separated topics they post about
   sentiment_from_reviews   String?  // 'positive'|'negative'|'mixed'|'unknown'
   // ── Live monitoring results ──────────────────────────────────────────────
@@ -560,6 +565,8 @@ model SocialAccount {
   platform        String?
   account_name    String?
   access_token    String?
+  refresh_token   String?
+  expires_at      String?
   page_id         String?
   is_connected    Boolean? @default(false)
   last_sync       String?
@@ -873,6 +880,7 @@ model BusinessConstraints {
 model MediaAsset {
   id              String   @id @default(cuid())
   created_date    DateTime @default(now())
+  created_by      String?
   linked_business String?
   image_base64    String?  // base64-encoded image data
   mime_type       String?  @default("image/jpeg")
@@ -886,6 +894,7 @@ model MediaAsset {
 model OrganicPost {
   id              String    @id @default(cuid())
   created_date    DateTime  @default(now())
+  created_by      String?
   linked_business String?
   signal_id       String?
   signal_summary  String?
@@ -903,6 +912,7 @@ model OrganicPost {
 model Campaign {
   id               String    @id @default(cuid())
   created_date     DateTime  @default(now())
+  created_by       String?
   linked_business  String?
   signal_id        String?   // source MarketSignal id
   signal_summary   String?   // signal context text
@@ -928,4 +938,28 @@ model Campaign {
   created_by       String?
 
   @@map("campaigns")
+}
+
+model SocialComment {
+  id                  String    @id @default(cuid())
+  created_date        DateTime  @default(now())
+  linked_business     String?
+  platform            String    // 'facebook' | 'instagram'
+  platform_comment_id String    // ID from Graph API — used for dedup
+  platform_post_id    String?   // post/media ID the comment is on
+  post_message        String?   // brief excerpt of the post for context
+  author_name         String?
+  author_id           String?
+  comment_text        String
+  sentiment           String?   // 'positive' | 'negative' | 'neutral'
+  created_time        DateTime? // when the comment was posted on platform
+  fetched_at          DateTime  @default(now())
+  ai_suggested_reply  String?
+  reply_sent          Boolean   @default(false)
+  reply_text          String?
+  reply_sent_at       DateTime?
+  is_dismissed        Boolean   @default(false)
+
+  @@unique([platform, platform_comment_id])
+  @@map("social_comments")
 }

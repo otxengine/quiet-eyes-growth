@@ -46,14 +46,7 @@ async function ensureOtxBusiness(businessProfileId: string) {
   const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
   if (!profile) return null;
 
-  try {
-    const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      `SELECT id FROM businesses WHERE id = $1::uuid LIMIT 1`,
-      businessProfileId,
-    );
-    if (rows[0]) return { otxId: rows[0].id, profile };
-  } catch {}
-
+  // Lookup or create by name (business profile IDs are CUIDs, not UUIDs)
   try {
     const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
       `SELECT id FROM businesses WHERE name = $1 LIMIT 1`,
@@ -66,16 +59,16 @@ async function ensureOtxBusiness(businessProfileId: string) {
   const geoCity = profile.city || 'תל אביב';
   try {
     const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      `INSERT INTO businesses (id, name, sector, geo_city, price_tier)
-       VALUES ($1::uuid, $2, $3, $4, 'mid')
-       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
+      `INSERT INTO businesses (name, sector, geo_city, price_tier)
+       VALUES ($1, $2, $3, 'mid')
+       ON CONFLICT (name) DO UPDATE SET sector = EXCLUDED.sector, geo_city = EXCLUDED.geo_city
        RETURNING id`,
-      businessProfileId, profile.name, sector, geoCity,
+      profile.name, sector, geoCity,
     );
     if (rows[0]) return { otxId: rows[0].id, profile };
   } catch {}
 
-  // Return with Prisma ID — safe fallback when OTX table doesn't exist
+  // Fallback — safe even if OTX table doesn't exist
   return { otxId: businessProfileId, profile };
 }
 

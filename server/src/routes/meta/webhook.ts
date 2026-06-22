@@ -153,6 +153,78 @@ interface IncomingMessage {
   text:          string;
 }
 
+
+// ── Dynamic Prompt Builder ────────────────────────────────────────────────────
+
+function buildDynamicPrompt(bp: {
+  name?: string | null;
+  category?: string | null;
+  city?: string | null;
+  bot_greeting?: string | null;
+  bot_qualification_questions?: string | null;
+  bot_good_lead_criteria?: string | null;
+  bot_bad_lead_criteria?: string | null;
+  bot_services_info?: string | null;
+}): string {
+  const questions = (bp.bot_qualification_questions ?? '')
+    .split('\n')
+    .map(q => q.trim())
+    .filter(Boolean);
+
+  const parts: string[] = [
+    `You are a WhatsApp sales assistant for "${bp.name ?? 'this business'}"${bp.category ? ` (${bp.category})` : ''}${bp.city ? `, based in ${bp.city}` : ''}.`,
+    '',
+    "Your job: have a natural, friendly conversation to understand the customer's needs and qualify them as a lead.",
+    '',
+  ];
+
+  if (bp.bot_greeting) {
+    parts.push(`Opening greeting to use on the very first message: "${bp.bot_greeting}"`);
+    parts.push('');
+  }
+
+  if (questions.length > 0) {
+    parts.push('Ask these qualification questions ONE AT A TIME, naturally woven into the conversation:');
+    questions.forEach((q, i) => parts.push(`  ${i + 1}. ${q}`));
+    parts.push('');
+  }
+
+  if (bp.bot_services_info) {
+    parts.push('Information about our services (use this to answer customer questions):');
+    parts.push(bp.bot_services_info);
+    parts.push('');
+  }
+
+  if (bp.bot_good_lead_criteria) {
+    parts.push('Signs of a great lead (customers who match these are a strong fit):');
+    parts.push(bp.bot_good_lead_criteria);
+    parts.push('');
+  }
+
+  if (bp.bot_bad_lead_criteria) {
+    parts.push('Signs of a poor fit (these customers are unlikely to convert):');
+    parts.push(bp.bot_bad_lead_criteria);
+    parts.push('');
+  }
+
+  parts.push('Rules:');
+  parts.push('- Always respond in the same language the customer uses (Hebrew or English)');
+  parts.push('- Keep messages short and conversational — this is WhatsApp, not email');
+  parts.push('- Ask only ONE question at a time');
+  parts.push('- If the customer asks to speak to a human, or you cannot help, begin your reply ONLY with the exact token [HANDOFF]');
+  parts.push('- When ALL qualification questions have been answered, output this on its own line BEFORE your closing message:');
+  parts.push('  [LEAD_QUALIFIED score=<0-100>|name=<customer name or Unknown>|budget=<budget amount or Unknown>|service=<service needed>]');
+  parts.push('  SCORING RULES (follow strictly):');
+  parts.push('  - 85-100: Budget clearly meets good criteria AND no bad criteria matched. Use this range when the customer is a clear fit.');
+  parts.push('  - 50-84: Budget is in range but customer refused to share some info. Max 5 point deduction per missing piece of info.');
+  parts.push('  - 10-49: Budget is borderline or unclear.');
+  parts.push('  - 0-9: Customer explicitly matches the bad criteria (e.g. stated budget is below the minimum threshold).');
+  parts.push('  Do NOT give warm scores (40-79) just because info is missing. If budget criteria is met, default to 85.');
+  parts.push('  After the token, send a warm closing message e.g. "Thanks! Our team will be in touch shortly."');
+
+  return parts.join('\n');
+}
+
 async function handleIncomingMessage(msg: IncomingMessage): Promise<void> {
   // 4a. Find the MetaConnection for this destination ID
   const connection = await prisma.metaConnection.findFirst({
@@ -175,8 +247,52 @@ async function handleIncomingMessage(msg: IncomingMessage): Promise<void> {
     return;
   }
 
+  // 4b-extra. Load BusinessProfile for bot settings
+  const businessProfile = connection.business_profile_id
+    ? await prisma.businessProfile.findUnique({
+        where: { id: connection.business_profile_id },
+        select: {
+          name: true, category: true, city: true,
+          bot_enabled: true,
+          bot_greeting: true,
+          bot_qualification_questions: true,
+          bot_good_lead_criteria: true,
+          bot_bad_lead_criteria: true,
+          bot_services_info: true,
+          bot_working_hours_start: true,
+          bot_working_hours_end: true,
+          bot_off_hours_message: true,
+        },
+      })
+    : null;
+
+  // Stop if the bot has been disabled by the business owner
+  if (businessProfile && businessProfile.bot_enabled === false) {
+    console.log(`[Meta webhook] Bot disabled for business ${connection.business_profile_id}`);
+    return;
+  }
+
   // 4b. Decrypt access token (throws if tampered)
   const accessToken = decryptToken(connection.encrypted_token);
+
+  // 4c. Working hours check — reply with off-hours message if outside window
+  if (businessProfile?.bot_working_hours_start && businessProfile?.bot_working_hours_end) {
+    const nowHour    = new Date().getHours();
+    const startHour  = parseInt(businessProfile.bot_working_hours_start, 10);
+    const endHour    = parseInt(businessProfile.bot_working_hours_end, 10);
+    const inWindow   = nowHour >= startHour && nowHour < endHour;
+    if (!inWindow && businessProfile.bot_off_hours_message) {
+      await metaApi.sendTextMessage({
+        platform:      msg.platform,
+        recipientId:   msg.senderId,
+        phoneNumberId: connection.phone_number_id ?? undefined,
+        pageId:        connection.page_id ?? undefined,
+        text:          businessProfile.bot_off_hours_message,
+        accessToken,
+      });
+      return;
+    }
+  }
 
   // 5. Upsert conversation record — creates on first message, updates timestamp on subsequent
   const conversation = await prisma.conversation.upsert({
@@ -210,8 +326,11 @@ async function handleIncomingMessage(msg: IncomingMessage): Promise<void> {
     JSON.parse(conversation.context ?? '[]');
   history.push({ role: 'user', content: msg.text });
 
-  // 8. Call AI
-  const aiResult = await runAgent(msg.text, history, agentConfig);
+  // 8. Call AI with dynamic prompt built from BusinessProfile settings
+  const dynamicPrompt = businessProfile
+    ? buildDynamicPrompt(businessProfile)
+    : agentConfig.system_prompt;
+  const aiResult = await runAgent(msg.text, history, { ...agentConfig, system_prompt: dynamicPrompt });
 
   // 9. Send AI reply
   await metaApi.sendTextMessage({
@@ -230,6 +349,17 @@ async function handleIncomingMessage(msg: IncomingMessage): Promise<void> {
   const trimmed = history.slice(-20);
 
   if (aiResult.requiresHuman) {
+    // Create lead record if bot finished qualifying
+    if (aiResult.leadQualified && aiResult.leadData) {
+      await createLeadFromConversation({
+        leadData:   aiResult.leadData,
+        senderId:   msg.senderId,
+        platform:   msg.platform,
+        businessId: connection.business_profile_id,
+        history:    trimmed,
+      });
+    }
+
     // Update conversation status and trigger handover
     await prisma.conversation.update({
       where: { id: conversation.id },
@@ -257,12 +387,62 @@ async function handleIncomingMessage(msg: IncomingMessage): Promise<void> {
   }
 }
 
+// ── Lead Creator ─────────────────────────────────────────────────────────────
+
+async function createLeadFromConversation(opts: {
+  leadData:   LeadData;
+  senderId:   string;
+  platform:   string;
+  businessId: string | null;
+  history:    Array<{ role: string; content: string }>;
+}): Promise<void> {
+  const { leadData, senderId, platform, businessId, history } = opts;
+
+  const chatSummary = history
+    .map(m => (m.role === 'user' ? 'Customer' : 'Bot') + ': ' + m.content)
+    .join('\n');
+
+  const scoreLabel = leadData.score >= 80 ? 'hot' : leadData.score >= 40 ? 'warm' : 'cold';
+
+  await prisma.lead.create({
+    data: {
+      name:                  leadData.name,
+      contact_info:          platform + ': ' + senderId,
+      contact_phone:         platform === 'whatsapp' ? senderId : undefined,
+      source:                'WhatsApp Bot',
+      source_origin:         'bot',
+      score:                 leadData.score,
+      score_reasoning:       'Bot scored ' + leadData.score + '/100 - ' + scoreLabel + '. Budget: ' + leadData.budget + '. Service: ' + leadData.service + '.',
+      service_needed:        leadData.service !== 'Unknown' ? leadData.service : undefined,
+      budget_range:          leadData.budget !== 'Unknown' ? leadData.budget : undefined,
+      status:                scoreLabel,
+      lifecycle_stage:       'new',
+      linked_business:       businessId ?? undefined,
+      platform_sourced:      true,
+      questionnaire_answers: chatSummary,
+      discovered_at:         new Date().toISOString(),
+      freshness_score:       100,
+    },
+  });
+
+  console.log('[Meta webhook] Lead created - ' + leadData.name + ' score=' + leadData.score + ' (' + scoreLabel + ')');
+}
+
 // ── AI Agent Runner ───────────────────────────────────────────────────────────
+
+interface LeadData {
+  score:   number;
+  name:    string;
+  budget:  string;
+  service: string;
+}
 
 interface AIResult {
   responseText:   string;
   requiresHuman:  boolean;
   handoffReason?: string;
+  leadQualified?: boolean;
+  leadData?:      LeadData;
 }
 
 async function runAgent(
@@ -317,10 +497,36 @@ async function runAgent(
     ? responseText.replace(/^\[HANDOFF\]\s*/i, '').trim()
     : responseText.trim();
 
+  // Detect LEAD_QUALIFIED token and extract structured data
+  const leadMatch = cleanResponse.match(/\[LEAD_QUALIFIED([^\]]+)\]/i);
+  if (leadMatch) console.log('[Meta webhook] LEAD_QUALIFIED token:', leadMatch[0]);
+  let leadData: LeadData | undefined;
+  let finalResponse = cleanResponse;
+  if (leadMatch) {
+    const attrs = leadMatch[1];
+    // Parse pipe-delimited key=value pairs: score=75|name=John|budget=1000|service=Web
+    const pairs: Record<string, string> = {};
+    attrs.trim().split('|').forEach(part => {
+      const eq = part.indexOf('=');
+      if (eq !== -1) pairs[part.slice(0, eq).trim().toLowerCase()] = part.slice(eq + 1).trim();
+    });
+    const num = (key: string) => {
+      const v = pairs[key];
+      return v ? parseFloat(v) : 50;
+    };
+    const str = (key: string) => pairs[key] ?? 'Unknown';
+    leadData = { score: num('score'), name: str('name'), budget: str('budget'), service: str('service') };
+    finalResponse = cleanResponse.replace(/\[LEAD_QUALIFIED[^\]]+\]\s*/i, '').trim();
+  }
+
   return {
-    responseText:  cleanResponse,
-    requiresHuman,
-    handoffReason: requiresHuman ? 'LLM requested human handoff' : undefined,
+    responseText:  finalResponse || cleanResponse,
+    requiresHuman: requiresHuman || !!leadData,
+    handoffReason: requiresHuman ? 'LLM requested human handoff'
+                 : leadData      ? 'Lead qualified by bot'
+                 : undefined,
+    leadQualified: !!leadData,
+    leadData,
   };
 }
 

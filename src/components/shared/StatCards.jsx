@@ -1,10 +1,12 @@
 import React from 'react';
 
 /**
- * StatCards — 4-card row with colored left borders
+ * StatCards — 4-card row with colored right borders
  * Props:
- *   cards: Array of { count, label, borderColor? }
+ *   cards: Array of { count, label, borderColor?, change?, changeColor? }
  *   borderColor options: 'blue' | 'red' | 'yellow' | 'green' | 'none'
+ *   change: optional text shown below the number (e.g. "+12% מהחודש שעבר")
+ *   changeColor: optional Tailwind text color class (e.g. 'text-green-600', 'text-red-500')
  */
 const BORDER_COLORS = {
   blue:   'border-r-blue-500',
@@ -26,6 +28,9 @@ export default function StatCards({ cards = [] }) {
           >
             <span className="text-2xl font-bold text-foreground">{card.count ?? '—'}</span>
             <span className="text-xs text-foreground-secondary font-medium leading-tight">{card.label}</span>
+            {card.change && (
+              <span className={`text-[10px] font-semibold mt-0.5 ${card.changeColor || 'text-foreground-muted'}`}>{card.change}</span>
+            )}
           </div>
         );
       })}

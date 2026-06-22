@@ -23,7 +23,7 @@ const NAV_STRUCTURE = [
     type: 'group', key: 'more', label: 'עוד',
     items: [
       { path: '/reviews',    label: 'מוניטין',       badgeKey: 'pendingReviews' },
-      { path: '/retention',  label: 'שימור לקוחות' },
+      { path: '/retention',  label: 'ניהול לקוחות' },
       { path: '/tasks',      label: 'משימות' },
       { path: '/reports',    label: 'דוחות' },
       { path: '/strategy',   label: 'אסטרטגיה' },

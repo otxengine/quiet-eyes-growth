@@ -26,6 +26,7 @@ import learningRouter from './routes/learning';
 import migrateRouter from './routes/migrate';
 import metaAuthRouter from './routes/meta/auth';
 import metaWebhookRouter from './routes/meta/webhook';
+import conversationsRouter from './routes/conversations';
 import orchestratorRouter from './routes/orchestrator';
 import approvalsRouter from './routes/approvals';
 import explainabilityRouter from './routes/explainability';
@@ -34,6 +35,8 @@ import oauthRouter from './routes/oauth';
 import roiRouter from './routes/roi';
 import adminUsersRouter from './routes/adminUsers';
 import onboardingRouter from './routes/onboarding';
+import socialRouter from './routes/social';
+import campaignsRouter from './routes/campaigns';
 import organizationsRouter from './routes/organizations';
 import agencyRouter from './routes/agency';
 import stripeRouter from './routes/stripe';
@@ -114,7 +117,9 @@ app.use('/api/stripe/webhooks', stripeRouter);
 // Must be registered BEFORE express.json() so we get the unmodified Buffer.
 app.use(express.json({
   verify: (req: any, _res, buf) => { req.rawBody = buf; },
+  limit: '20mb',
 }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 // Only mount Clerk middleware when a real secret key is configured
 const clerkKey = process.env.CLERK_SECRET_KEY || '';
@@ -142,6 +147,7 @@ app.use('/api/learning', learningRouter);
 app.use('/api/migrate', migrateRouter);
 app.use('/api/meta/auth', metaAuthRouter);
 app.use('/api/webhooks/meta', metaWebhookRouter);
+app.use('/api/conversations', conversationsRouter);
 app.use('/api/orchestrator', orchestratorRouter);
 app.use('/api/approvals', approvalsRouter);
 app.use('/api/explain', explainabilityRouter);
@@ -150,12 +156,15 @@ app.use('/api/oauth', oauthRouter);
 app.use('/api', roiRouter);
 app.use('/api/admin', adminUsersRouter);
 app.use('/api/onboarding', onboardingRouter);
+app.use('/api/social', socialRouter);
+app.use('/api/campaigns', campaignsRouter);
 app.use('/api/orgs', organizationsRouter);
 app.use('/api/agency', agencyRouter);
 app.use('/api/stripe', stripeRouter);
 app.use('/api/actions', emailApprovalRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
 
 // External cron trigger — POST /api/cron/run?secret=XXX
 // Called by cron-job.org every 14 minutes to keep Render alive + run pipelines
@@ -467,15 +476,8 @@ app.listen(PORT, async () => {
     actual_leads     INT,
     actual_spend_ils NUMERIC
   )`);
-  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS trace_id TEXT`);
-  await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS id TEXT`);
-  await sql(`CREATE UNIQUE INDEX IF NOT EXISTS idx_otx_runs_id ON otx_pipeline_runs(id) WHERE id IS NOT NULL`);
-  await sql(`ALTER TABLE otx_policy_weights ALTER COLUMN id SET DEFAULT md5(random()::text)`);
-  await sql(`ALTER TABLE otx_policy_weights ALTER COLUMN weight DROP NOT NULL`);
-  await sql(`ALTER TABLE otx_policy_weights ALTER COLUMN weight SET DEFAULT 0.5`);
-  await sql(`ALTER TABLE otx_policy_weights ALTER COLUMN success_rate DROP NOT NULL`);
-  await sql(`ALTER TABLE otx_policy_weights ALTER COLUMN success_rate SET DEFAULT 0.5`);
-  await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS summary JSONB`);
+  // Note: ALTER TABLE for otx_recommendations/pipeline_runs/policy_weights/outcome_events/execution_tasks
+  // are intentionally placed AFTER their CREATE TABLE statements below (lines ~767+).
 
   // ── OTX v3 tables (missing from original startup block) ──────────────────
   await sql(`CREATE TABLE IF NOT EXISTS meta_configurations (
@@ -566,26 +568,6 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS fused_insight_id TEXT`);
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS approval_required BOOLEAN DEFAULT false`);
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS policy_version INT DEFAULT 1`);
-  await sql(`ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS outcome_type TEXT DEFAULT 'execution'`);
-  await sql(`ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS outcome_score NUMERIC(4,3)`);
-  await sql(`ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS conversion_flag BOOLEAN DEFAULT false`);
-  await sql(`ALTER TABLE otx_outcome_events ADD COLUMN IF NOT EXISTS execution_task_id TEXT`);
-  await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS opportunities_found INT DEFAULT 0`);
-  await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS threats_found INT DEFAULT 0`);
-  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS insight_id TEXT`);
-  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS opportunity_ids JSONB DEFAULT '[]'`);
-  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS signal_ids JSONB DEFAULT '[]'`);
-  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS summary TEXT`);
-  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS why_now TEXT`);
-  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS recommended_steps JSONB DEFAULT '[]'`);
-  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS recommended_timing TEXT`);
-  await sql(`ALTER TABLE otx_recommendations ADD COLUMN IF NOT EXISTS user_visible_payload JSONB DEFAULT '{}'`);
-  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS recommendation_id TEXT`);
-  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS approval_required BOOLEAN DEFAULT false`);
-  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMPTZ`);
-  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS executed_at TIMESTAMPTZ`);
-  await sql(`ALTER TABLE otx_execution_tasks ADD COLUMN IF NOT EXISTS result_payload JSONB DEFAULT '{}'`);
-
   // ── OTX-003/004: AutoAction new columns ──────────────────────────────────
   await sql(`ALTER TABLE auto_actions ADD COLUMN IF NOT EXISTS confidence_score   DOUBLE PRECISION`);
   await sql(`ALTER TABLE auto_actions ADD COLUMN IF NOT EXISTS predicted_impact   TEXT`);
@@ -670,12 +652,14 @@ app.listen(PORT, async () => {
 
   // ── OAuth state persistence (survives restarts + multi-instance) ──────────
   await sql(`CREATE TABLE IF NOT EXISTS oauth_state_store (
-    id          TEXT        NOT NULL PRIMARY KEY,
-    business_id TEXT        NOT NULL,
-    platform    TEXT        NOT NULL,
-    expires_at  TIMESTAMPTZ NOT NULL,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id             TEXT        NOT NULL PRIMARY KEY,
+    business_id    TEXT        NOT NULL,
+    platform       TEXT        NOT NULL,
+    expires_at     TIMESTAMPTZ NOT NULL,
+    code_verifier  TEXT,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
+  await sql(`ALTER TABLE oauth_state_store ADD COLUMN IF NOT EXISTS code_verifier TEXT`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_oauth_state_expires ON oauth_state_store(expires_at)`);
   await sql(`DELETE FROM oauth_state_store WHERE expires_at < NOW()`);
 
@@ -1094,6 +1078,134 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS opportunities_found INT DEFAULT 0`);
   await sql(`ALTER TABLE otx_pipeline_runs ADD COLUMN IF NOT EXISTS threats_found INT DEFAULT 0`);
 
+  // ── Layer 7 OTX tables (businesses + agent-specific storage) ─────────────
+  await sql(`CREATE TABLE IF NOT EXISTS businesses (
+    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    name       TEXT        NOT NULL,
+    sector     TEXT        NOT NULL DEFAULT 'local',
+    geo_city   TEXT        NOT NULL DEFAULT 'תל אביב',
+    price_tier TEXT        NOT NULL DEFAULT 'mid',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(name)
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_businesses_name ON businesses(name)`);
+  await sql(`CREATE TABLE IF NOT EXISTS viral_patterns (
+    id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id      UUID        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    pattern_type     TEXT        NOT NULL DEFAULT 'format',
+    pattern_value    TEXT        NOT NULL,
+    platform         TEXT        NOT NULL DEFAULT 'instagram',
+    virality_score   NUMERIC(3,2) NOT NULL DEFAULT 0.7,
+    peak_hour        INT         NOT NULL DEFAULT 19,
+    script_template  TEXT,
+    source_url       TEXT        NOT NULL,
+    confidence_score NUMERIC(3,2) NOT NULL DEFAULT 0.7,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_viral_patterns_biz ON viral_patterns(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS influence_integrity_scores (
+    id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id      UUID        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    organic_pct      NUMERIC(5,2) NOT NULL DEFAULT 80,
+    bot_pct          NUMERIC(5,2) NOT NULL DEFAULT 10,
+    coordinated_pct  NUMERIC(5,2) NOT NULL DEFAULT 10,
+    verdict          TEXT        NOT NULL DEFAULT 'organic',
+    recommendation   TEXT        NOT NULL DEFAULT '',
+    source_url       TEXT        NOT NULL,
+    confidence_score NUMERIC(3,2) NOT NULL DEFAULT 0.7,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_influence_biz ON influence_integrity_scores(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS visual_osint_signals (
+    id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id           UUID        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    media_url             TEXT        NOT NULL,
+    platform              TEXT        NOT NULL DEFAULT 'google',
+    business_insight      TEXT        NOT NULL DEFAULT '',
+    unmet_demand_detected BOOLEAN     NOT NULL DEFAULT false,
+    sentiment_visual      TEXT        NOT NULL DEFAULT 'neutral',
+    source_url            TEXT        NOT NULL,
+    confidence_score      NUMERIC(3,2) NOT NULL DEFAULT 0.65,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_visual_osint_biz ON visual_osint_signals(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS retention_alerts (
+    id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id           UUID        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    customer_identifier   TEXT        NOT NULL,
+    risk_level            TEXT        NOT NULL DEFAULT 'low',
+    churn_probability     NUMERIC(4,3) NOT NULL DEFAULT 0.1,
+    last_interaction_days INT         NOT NULL DEFAULT 0,
+    recommended_offer     TEXT        NOT NULL DEFAULT '',
+    source_url            TEXT        NOT NULL,
+    confidence_score      NUMERIC(3,2) NOT NULL DEFAULT 0.75,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_retention_biz ON retention_alerts(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS pricing_recommendations (
+    id                         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id                UUID        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    lead_context               TEXT        NOT NULL DEFAULT '',
+    market_supply              TEXT        NOT NULL DEFAULT 'balanced',
+    competitor_avg_price       NUMERIC(10,2),
+    recommended_price_modifier NUMERIC(5,2) NOT NULL DEFAULT 0,
+    recommended_tactic         TEXT        NOT NULL DEFAULT 'standard',
+    tactic_reason              TEXT        NOT NULL DEFAULT '',
+    confidence_pct             INT         NOT NULL DEFAULT 70,
+    valid_until                TIMESTAMPTZ NOT NULL DEFAULT now(),
+    source_url                 TEXT        NOT NULL,
+    confidence_score           NUMERIC(3,2) NOT NULL DEFAULT 0.7,
+    created_at                 TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_pricing_biz ON pricing_recommendations(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS campaign_drafts (
+    id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id      UUID        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    trigger_event    TEXT        NOT NULL DEFAULT '',
+    platform         TEXT        NOT NULL DEFAULT 'instagram',
+    headline         TEXT        NOT NULL DEFAULT '',
+    body_text        TEXT        NOT NULL DEFAULT '',
+    cta_text         TEXT        NOT NULL DEFAULT '',
+    estimated_reach  INT         NOT NULL DEFAULT 300,
+    recommended_time TIMESTAMPTZ,
+    duration_hours   INT         NOT NULL DEFAULT 24,
+    auto_publish     BOOLEAN     NOT NULL DEFAULT false,
+    status           TEXT        NOT NULL DEFAULT 'draft',
+    source_url       TEXT        NOT NULL,
+    confidence_score NUMERIC(3,2) NOT NULL DEFAULT 0.78,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_campaign_drafts_biz ON campaign_drafts(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS expansion_opportunities (
+    id                        UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id               UUID        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    opportunity_title         TEXT        NOT NULL DEFAULT '',
+    unmet_demand_description  TEXT        NOT NULL DEFAULT '',
+    demand_signal_count       INT         NOT NULL DEFAULT 0,
+    geo                       TEXT,
+    estimated_monthly_revenue NUMERIC(12,2),
+    estimated_investment      NUMERIC(12,2),
+    roi_months                INT,
+    source_url                TEXT        NOT NULL,
+    confidence_score          NUMERIC(3,2) NOT NULL DEFAULT 0.7,
+    created_at                TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_expansion_biz ON expansion_opportunities(business_id, created_at DESC)`);
+  await sql(`CREATE TABLE IF NOT EXISTS reputation_incidents (
+    id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id          UUID        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    severity             TEXT        NOT NULL DEFAULT 'low',
+    incident_type        TEXT        NOT NULL DEFAULT 'routine_scan',
+    description          TEXT        NOT NULL DEFAULT '',
+    recommended_response TEXT        NOT NULL DEFAULT '',
+    response_deadline    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    resolved             BOOLEAN     NOT NULL DEFAULT false,
+    source_url           TEXT        NOT NULL,
+    confidence_score     NUMERIC(3,2) NOT NULL DEFAULT 0.82,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_reputation_biz ON reputation_incidents(business_id, created_at DESC)`);
+
   // ── Performance indexes on high-traffic columns ───────────────────────────
   // These are the most-queried fields across all entity list calls. Adding
   // indexes here dramatically reduces full-table scan time at scale.
@@ -1127,7 +1239,7 @@ app.listen(PORT, async () => {
   for (const table of REQUIRED_TABLES) {
     try {
       const res: any[] = await db.$queryRawUnsafe(
-        `SELECT to_regclass('public.${table}') AS exists`
+        `SELECT to_regclass('public.${table}')::text AS exists`
       );
       if (!res[0]?.exists) missingTables.push(table);
     } catch {

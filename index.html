@@ -54,5 +54,17 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <!-- Meta / Facebook SDK — required for WhatsApp Embedded Signup -->
+    <script>
+      window.fbAsyncInit = function() {
+        FB.init({
+          appId:            '%VITE_FACEBOOK_APP_ID%',
+          autoLogAppEvents: true,
+          xfbml:            true,
+          version:          'v19.0',
+        });
+      };
+    </script>
+    <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
   </body>
 </html>
