@@ -200,9 +200,9 @@ export default function Reputation() {
         title="תובנות AI — מוניטין"
         prompt={`נתח מגמות ביקורות של עסק: מהם הנושאים החוזרים בביקורות שליליות, מה הסנטימנט הכללי, ומה הפעולה הכי יעילה לשיפור הדירוג הממוצע.`}
       />
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-[16px] font-bold text-foreground tracking-tight">מוניטין</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Primary: AI Responses */}
           <button onClick={async () => {
               if (!bpId) return;
@@ -216,21 +216,21 @@ export default function Reputation() {
               } catch { toast.error('שגיאה ביצירת תגובות'); }
               setAutoResponding(false);
             }} disabled={autoResponding}
-            className="btn-subtle flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 transition-all disabled:opacity-50">
+            className="btn-subtle flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-medium text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 transition-all disabled:opacity-50">
             {autoResponding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
-            {autoResponding ? 'מייצר...' : 'תגובות AI'}
+            <span className="hidden sm:inline">{autoResponding ? 'מייצר...' : 'תגובות AI'}</span>
           </button>
           {/* Primary: Collect Reviews */}
           <button onClick={handleCollectReviews} disabled={scanning}
-            className="btn-subtle flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium border border-border text-foreground hover:bg-secondary transition-all disabled:opacity-50">
+            className="btn-subtle flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-medium border border-border text-foreground hover:bg-secondary transition-all disabled:opacity-50">
             {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-            {scanning ? 'סורק...' : 'אסוף ביקורות'}
+            <span className="hidden sm:inline">{scanning ? 'סורק...' : 'אסוף ביקורות'}</span>
           </button>
           {/* Secondary: More menu */}
           <div className="relative" ref={moreMenuRef}>
             <button
               onClick={() => setMoreMenuOpen(v => !v)}
-              className="btn-subtle flex items-center gap-1 px-3 py-2.5 rounded-lg text-[12px] font-medium border border-border text-foreground hover:bg-secondary transition-all"
+              className="btn-subtle flex items-center gap-1 px-3 py-2 rounded-lg text-[12px] font-medium border border-border text-foreground hover:bg-secondary transition-all"
               title="פעולות נוספות"
             >
               <MoreHorizontal className="w-4 h-4" />
@@ -264,8 +264,9 @@ export default function Reputation() {
             )}
           </div>
           {/* Primary: Add Review */}
-          <button onClick={() => setShowAddModal(true)} className="btn-subtle flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium bg-foreground text-background hover:opacity-90 transition-all">
-            <Plus className="w-4 h-4" /> הוסף ביקורת
+          <button onClick={() => setShowAddModal(true)} className="btn-subtle flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-medium bg-foreground text-background hover:opacity-90 transition-all">
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">הוסף ביקורת</span>
           </button>
         </div>
       </div>

@@ -19,6 +19,7 @@ import { publishPost } from './InstagramPublisher';
 import { publishTikTok } from './TikTokPublisher';
 import { sendEmail } from './EmailExecutor';
 import { sendEmail as sendTransactionalEmail, buildApprovalEmail } from '../../lib/email';
+import { sendOwnerWhatsAppNotification } from './WhatsAppOwnerNotifier';
 
 const logger = createLogger('executeOrQueue');
 
@@ -182,9 +183,14 @@ async function createAutoAction(
     },
   });
 
-  // Send approval email when action needs human review
+  // Send approval notifications when action needs human review
   if (status === 'pending_approval') {
     sendApprovalNotificationEmail(record.id, action).catch(() => {});
+    sendOwnerWhatsAppNotification({
+      businessProfileId: action.businessProfileId,
+      actionDescription: action.description,
+      agentName: action.agentName,
+    }).catch(() => {});
   }
 
   return record.id;

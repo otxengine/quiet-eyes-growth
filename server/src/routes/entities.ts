@@ -234,6 +234,11 @@ router.post('/:entity', async (req: Request, res: Response) => {
     const data = { ...req.body };
     if (userId && !data.created_by) data.created_by = userId;
 
+    // AutoAction has no created_by column — remove it before insert
+    const entityName = String(req.params.entity);
+    const NO_CREATED_BY = ['AutoAction'];
+    if (NO_CREATED_BY.includes(entityName)) delete data.created_by;
+
     const record = await model.create({ data });
     res.status(201).json(record);
   } catch (err: any) {

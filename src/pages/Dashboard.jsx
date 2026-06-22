@@ -52,6 +52,7 @@ export default function Dashboard() {
   const inputRef = useRef(null);
 
   const [urgentDismissed, setUrgentDismissed] = useState(false);
+  const [approvingMsgIndex, setApprovingMsgIndex] = useState(null);
 
   const { data: allLeads = [] } = useQuery({
     queryKey: ['allLeads', bpId],
@@ -188,21 +189,25 @@ export default function Dashboard() {
   };
 
   const handleApproveAction = async (msgIndex, pendingAction) => {
+    if (approvingMsgIndex === msgIndex) return;
+    setApprovingMsgIndex(msgIndex);
     try {
       await base44.entities.AutoAction.create({
         action_type: pendingAction.type,
-        prefilled_text: pendingAction.payload?.text || pendingAction.label,
-        decision_reason: pendingAction.label,
+        description: pendingAction.label,
+        payload: JSON.stringify({ prefilled_text: pendingAction.payload?.text || pendingAction.label }),
         status: 'pending_approval',
         linked_business: bpId,
+        agent_name: pendingAction.agent_name || 'Dashboard Agent',
       });
-      // Clear the action card after creation
       setMessages(prev => prev.map((m, i) =>
         i === msgIndex ? { ...m, pendingAction: null } : m
       ));
       navigate('/approvals');
     } catch (err) {
       console.error('[Dashboard] AutoAction.create failed:', err);
+    } finally {
+      setApprovingMsgIndex(null);
     }
   };
 
@@ -320,9 +325,10 @@ export default function Dashboard() {
                           </button>
                           <button
                             onClick={() => handleApproveAction(i, msg.pendingAction)}
-                            className="text-[12px] font-semibold bg-[#e8344d] text-white px-4 py-1.5 rounded-full hover:bg-[#c92b40] transition-colors"
+                            disabled={approvingMsgIndex === i}
+                            className="text-[12px] font-semibold bg-[#e8344d] text-white px-4 py-1.5 rounded-full hover:bg-[#c92b40] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                           >
-                            שלח לאישור →
+                            {approvingMsgIndex === i ? '...' : 'שלח לאישור →'}
                           </button>
                         </div>
                       </div>

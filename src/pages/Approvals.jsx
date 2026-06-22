@@ -151,7 +151,7 @@ function ActionCard({ action, onApprove, onReject, approving, rejecting }) {
 
       {/* Actions */}
       {isPending && (
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex flex-wrap items-center gap-2 pt-1">
           <button
             onClick={() => onApprove(action.id)}
             disabled={approving === action.id || rejecting === action.id}
@@ -194,10 +194,19 @@ export function ApprovalsPanel({ bpId }) {
   const pendingActions = stats?.data?.pending_actions || stats?.pending_actions || [];
   const recentActions  = stats?.data?.recent_actions  || stats?.recent_actions  || [];
 
+  const withTimeout = (promise, ms = 15000) => {
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('timeout')), ms)
+    );
+    return Promise.race([promise, timeout]);
+  };
+
   const handleApprove = async (actionId) => {
     setApproving(actionId);
     try {
-      const res = await base44.functions.invoke('approveAction', { actionId, businessProfileId: bpId });
+      const res = await withTimeout(
+        base44.functions.invoke('approveAction', { actionId, businessProfileId: bpId })
+      );
       if (res?.status === 'completed') {
         toast.success(`בוצע: ${res.result || 'הפעולה הושלמה'}`);
       } else if (res?.status === 'failed') {
@@ -206,18 +215,22 @@ export function ApprovalsPanel({ bpId }) {
         toast.success('פעולה אושרה ✓');
       }
       queryClient.invalidateQueries({ queryKey: ['eventBusStats'] });
+      queryClient.invalidateQueries({ queryKey: ['reviewsPage', bpId] });
+      queryClient.invalidateQueries({ queryKey: ['pendingReviews', bpId] });
     } catch { toast.error('שגיאה באישור'); }
-    setApproving(null);
+    finally { setApproving(null); }
   };
 
   const handleReject = async (actionId) => {
     setRejecting(actionId);
     try {
-      await base44.functions.invoke('rejectAction', { actionId, businessProfileId: bpId });
+      await withTimeout(
+        base44.functions.invoke('rejectAction', { actionId, businessProfileId: bpId })
+      );
       toast.success('פעולה נדחתה');
       queryClient.invalidateQueries({ queryKey: ['eventBusStats'] });
     } catch { toast.error('שגיאה בדחייה'); }
-    setRejecting(null);
+    finally { setRejecting(null); }
   };
 
   const displayActions = tab === 'pending' ? pendingActions : recentActions;

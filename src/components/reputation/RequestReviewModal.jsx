@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { X, Loader2, Copy, Check, Send } from 'lucide-react';
 import { toast } from 'sonner';
@@ -7,9 +7,9 @@ const platforms = ['Google', 'Facebook', 'Instagram'];
 
 function formatPhone(phone) {
   const cleaned = phone.replace(/[\s\-]/g, '');
-  if (cleaned.startsWith('0')) return '972' + cleaned.substring(1);
   if (cleaned.startsWith('+972')) return cleaned.substring(1);
-  if (cleaned.startsWith('972')) return cleaned;
+  if (cleaned.startsWith('0')) return '972' + cleaned.substring(1);
+  if (cleaned.startsWith('+')) return cleaned.substring(1);
   return cleaned;
 }
 
@@ -22,13 +22,18 @@ export default function RequestReviewModal({ businessProfile, onClose, onSent })
 
   const bpName = businessProfile?.name || 'העסק';
   const tone = businessProfile?.tone_preference || 'friendly';
+  const debounceRef = useRef(null);
 
   useEffect(() => {
     if (!form.customer_name) {
       setMessage('');
       return;
     }
-    generateMessage();
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      generateMessage();
+    }, 800);
+    return () => clearTimeout(debounceRef.current);
   }, [form.customer_name, form.platform, tone]);
 
   const generateMessage = async () => {

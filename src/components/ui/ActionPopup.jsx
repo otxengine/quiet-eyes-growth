@@ -533,7 +533,8 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           <span>{imageError}</span>
           <button
             onClick={handleGenerateImage}
-            className="flex-shrink-0 text-[10px] underline hover:no-underline"
+            disabled={imageLoading}
+            className="flex-shrink-0 text-[10px] underline hover:no-underline disabled:opacity-50 disabled:cursor-not-allowed"
           >
             נסה שוב
           </button>
@@ -650,7 +651,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
         {!imageLoading && imageError && (
           <div className="flex items-center justify-between gap-2 px-3 py-2 mb-3 bg-red-50 border border-red-100 rounded-xl text-[11px] text-red-700">
             <span>{imageError}</span>
-            <button onClick={handleGenerateImage} className="flex-shrink-0 text-[10px] underline hover:no-underline">
+            <button onClick={handleGenerateImage} disabled={imageLoading} className="flex-shrink-0 text-[10px] underline hover:no-underline disabled:opacity-50 disabled:cursor-not-allowed">
               נסה שוב
             </button>
           </div>
@@ -682,7 +683,8 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
             {/* Regenerate overlay */}
             <button
               onClick={handleGenerateImage}
-              className="absolute top-2 left-2 text-[10px] px-2 py-1 rounded-md bg-black/55 text-white hover:bg-black/75 transition-all"
+              disabled={imageLoading}
+              className="absolute top-2 left-2 text-[10px] px-2 py-1 rounded-md bg-black/55 text-white hover:bg-black/75 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               ↻ צור מחדש
             </button>
