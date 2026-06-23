@@ -119,10 +119,13 @@ import { competitorDataBootstrap } from './competitorDataBootstrap';
 const router = Router();
 
 async function invokeLLMHandler(req: Request, res: Response) {
-  const { prompt, response_json_schema, model, maxTokens } = req.body;
+  const { prompt, response_json_schema, model, maxTokens, skipCache } = req.body;
   if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
   try {
-    const result = await invokeLLM({ prompt, response_json_schema, model, maxTokens });
+    // User-facing calls always skip cache so Recreate/regenerate returns fresh content.
+    // Callers can explicitly pass skipCache:false to opt back into caching.
+    const useSkipCache = skipCache !== false;
+    const result = await invokeLLM({ prompt, response_json_schema, model, maxTokens, skipCache: useSkipCache });
     return res.json(result);
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
