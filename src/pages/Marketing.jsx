@@ -2,7 +2,7 @@
 import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Plus, Loader2, ChevronDown, Search, MoreVertical, Radio } from 'lucide-react';
+import { Plus, Loader2, ChevronDown, Search, MoreVertical, Radio, Image as ImageIcon, TrendingUp, Sparkles, RefreshCw, X, Trash2, Upload, Send, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
@@ -16,6 +16,18 @@ const PLATFORM_CONFIG = {
   tiktok:    { label: 'TikTok',     icon: '🎵', color: '#000',    bg: '#f0f0f0' },
 };
 
+
+const ORGANIC_PLATFORMS = [
+  { id: 'instagram', label: 'Instagram', icon: '📸', color: '#e1306c' },
+  { id: 'facebook',  label: 'Facebook',  icon: '📘', color: '#1877f2' },
+  { id: 'tiktok',    label: 'TikTok',    icon: '🎵', color: '#010101' },
+];
+
+const ORGANIC_STATUS = {
+  draft:     { label: 'טיוטה',  cls: 'bg-gray-100 text-gray-500' },
+  published: { label: 'פורסם',  cls: 'bg-green-100 text-green-700' },
+  scheduled: { label: 'מתוזמן', cls: 'bg-blue-100 text-blue-700' },
+};
 const STATUS_CONFIG = {
   draft:          { label: 'טיוטה',        cls: 'bg-gray-100 text-gray-500',   tab: 'drafts' },
   pending_launch: { label: 'ממתין לפרסום', cls: 'bg-amber-50 text-amber-700',  tab: 'paused' },
@@ -317,13 +329,17 @@ function OrganicCreateDrawer({ businessProfile, signalContext, audienceData, rec
   const [mediaId,  setMediaId]    = useState(null);
   const [imageDesc, setImageDesc] = useState('');
 
+  const [videoFile,   setVideoFile]   = useState(/** @type {File | null} */ (null));
   const [genContent,  setGenContent]  = useState(false);
   const [genImage,    setGenImage]    = useState(false);
   const [analyzing,   setAnalyzing]   = useState(false);
   const [saving,      setSaving]      = useState(false);
   const [imgPreview,  setImgPreview]  = useState(false);
 
-  const fileRef = useRef(null);
+  const fileRef  = /** @type {React.RefObject<HTMLInputElement>} */ (useRef(null));
+  const videoRef = /** @type {React.RefObject<HTMLInputElement>} */ (useRef(null));
+
+  const isTikTok = platform === 'tiktok';
 
   const platCfg = ORGANIC_PLATFORMS.find(p => p.id === platform) || ORGANIC_PLATFORMS[0];
 
@@ -382,11 +398,13 @@ ${formatInstr}
   // Generate AI image
   const handleGenImage = async () => {
     setGenImage(true);
+    const imgPlatform = platform === 'instagram' ? 'instagram_post' : platform === 'facebook' ? 'facebook' : platform === 'tiktok' ? 'tiktok' : 'instagram_post';
     try {
       const res = await base44.functions.invoke('generateImage', {
         businessProfileId: businessProfile.id,
         post_text: content,
         insight_text: signalContext?.summary || '',
+        platform: imgPlatform,
       });
       const data = res?.data || res;
       if (data?.url) {
@@ -465,7 +483,32 @@ ${formatInstr}
     if (!content.trim()) { toast.error('יש להזין תוכן'); return; }
     setSaving(true);
     try {
-      // 1. Save to DB (as draft first, so we have an ID)
+      // TikTok: save draft + copy caption + open tiktok.com/upload
+      // (TikTok API requires a public mp4 URL which we can't provide from localhost)
+      if (isTikTok && publish) {
+        await base44.entities.OrganicPost.create({
+          linked_business: businessProfile.id,
+          signal_id:       signalContext?.signalId || null,
+          signal_summary:  signalContext?.summary  || null,
+          platform,
+          post_type:       postType,
+          content,
+          media_asset_id:  null,
+          image_url:       null,
+          status:          'draft',
+          published_at:    null,
+        });
+        await navigator.clipboard.writeText(content).catch(() => {});
+        queryClient.invalidateQueries({ queryKey: ['organicPosts', businessProfile.id] });
+        toast.success('הכיתוב הועתק! העלה את הוידאו שלך ב-TikTok ✓');
+        window.open('https://www.tiktok.com/upload', '_blank', 'noopener');
+        onSaved?.();
+        onClose();
+        setSaving(false);
+        return;
+      }
+
+      // 1. Save to DB as draft
       const post = await base44.entities.OrganicPost.create({
         linked_business: businessProfile.id,
         signal_id:       signalContext?.signalId || null,
@@ -480,7 +523,7 @@ ${formatInstr}
       });
 
       if (publish) {
-        // 2. Actually publish to social platform via API
+        // 2. Publish to Facebook / Instagram via API
         const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api');
         const res = await fetch(`${apiBase}/social/publish-organic`, {
           method: 'POST',
@@ -585,46 +628,74 @@ ${formatInstr}
             </div>
           </div>
 
-          {/* Image section */}
+          {/* Media section — video for TikTok, image for others */}
           <div>
-            <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">תמונה</p>
-            {imageUrl ? (
-              <div className="relative">
-                <img
-                  src={imageUrl} alt=""
-                  onClick={() => setImgPreview(true)}
-                  className={`w-full object-cover rounded-xl border border-border cursor-zoom-in ${postType === 'story' ? 'aspect-[9/16] max-h-64' : 'h-40'}`}
-                />
-                {analyzing && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl">
-                    <div className="text-white text-[12px] flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" /> מנתח תמונה...
-                    </div>
+            {isTikTok ? (
+              <>
+                <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">וידאו</p>
+                {videoFile ? (
+                  <div className="relative rounded-xl border border-border overflow-hidden bg-black">
+                    <video
+                      src={URL.createObjectURL(videoFile)}
+                      controls
+                      className="w-full max-h-48 object-contain"
+                    />
+                    <button onClick={() => setVideoFile(null)}
+                      className="absolute top-2 left-2 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-black/80">
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => videoRef.current?.click()}
+                    className="w-full flex items-center justify-center gap-2 py-4 border-2 border-dashed border-border rounded-xl text-[12px] text-foreground-muted hover:bg-secondary transition-colors">
+                    <Upload className="w-4 h-4" /> העלה וידאו (mp4)
+                  </button>
+                )}
+                <input ref={videoRef} type="file" accept="video/mp4,video/*" className="hidden"
+                  onChange={e => setVideoFile(e.target.files?.[0] || null)} />
+                <p className="text-[10px] text-foreground-muted/60 mt-1.5">
+                  לחץ "פרסם" — הכיתוב יועתק ו-TikTok יפתח אוטומטית להעלאה
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">תמונה</p>
+                {imageUrl ? (
+                  <div className="relative">
+                    <img
+                      src={imageUrl} alt=""
+                      onClick={() => setImgPreview(true)}
+                      className={`w-full object-cover rounded-xl border border-border cursor-zoom-in ${postType === 'story' ? 'aspect-[9/16] max-h-64' : 'h-40'}`}
+                    />
+                    {analyzing && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl">
+                        <div className="text-white text-[12px] flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" /> מנתח תמונה...
+                        </div>
+                      </div>
+                    )}
+                    {imageDesc && <p className="text-[10px] text-foreground-muted mt-1">🔍 {imageDesc}</p>}
+                    <button onClick={() => { setImageUrl(''); setMediaId(null); setImageDesc(''); }}
+                      className="absolute top-2 left-2 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-black/80">
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <button onClick={handleGenImage} disabled={genImage}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-border rounded-xl text-[12px] text-foreground-muted hover:bg-secondary transition-colors">
+                      {genImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                      {genImage ? 'יוצר...' : 'תמונה AI'}
+                    </button>
+                    <button onClick={() => fileRef.current?.click()}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-border rounded-xl text-[12px] text-foreground-muted hover:bg-secondary transition-colors">
+                      <Upload className="w-4 h-4" /> העלה תמונה
+                    </button>
+                    <input ref={fileRef} type="file" accept="image/*" className="hidden"
+                      onChange={e => handleUpload(e.target.files?.[0])} />
                   </div>
                 )}
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity pointer-events-none rounded-xl bg-black/10">
-                  <span className="text-white text-[11px] bg-black/50 px-2 py-1 rounded-full">לחץ להגדלה</span>
-                </div>
-                {imageDesc && <p className="text-[10px] text-foreground-muted mt-1">🔍 {imageDesc}</p>}
-                <button onClick={() => { setImageUrl(''); setMediaId(null); setImageDesc(''); }}
-                  className="absolute top-2 left-2 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-black/80">
-                  ✕
-                </button>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                <button onClick={handleGenImage} disabled={genImage}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-border rounded-xl text-[12px] text-foreground-muted hover:bg-secondary transition-colors">
-                  {genImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                  {genImage ? 'יוצר...' : 'תמונה AI'}
-                </button>
-                <button onClick={() => fileRef.current?.click()}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-border rounded-xl text-[12px] text-foreground-muted hover:bg-secondary transition-colors">
-                  <Upload className="w-4 h-4" /> העלה תמונה
-                </button>
-                <input ref={fileRef} type="file" accept="image/*" className="hidden"
-                  onChange={e => handleUpload(e.target.files?.[0])} />
-              </div>
+              </>
             )}
           </div>
 
@@ -1239,10 +1310,19 @@ ${audienceCtx}
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {organicPosts.map(p => (
-                <OrganicCard key={p.id} post={p} onDelete={(id) => deleteOrganic.mutate(id)} />
-              ))}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-[12px] text-foreground-muted">{organicPosts.length} פוסטים</p>
+                <button onClick={() => setShowOrgCreate(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-foreground text-background rounded-lg text-[12px] font-semibold hover:opacity-90 transition-opacity">
+                  <Plus className="w-3.5 h-3.5" /> פוסט חדש
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {organicPosts.map(p => (
+                  <OrganicCard key={p.id} post={p} onDelete={(id) => deleteOrganic.mutate(id)} />
+                ))}
+              </div>
             </div>
           )}
         </>
@@ -1418,6 +1498,27 @@ ${audienceCtx}
           </div>
         </div>
       )}
+
+      {/* Organic post create drawer */}
+      {showOrgCreate && (
+        <OrganicCreateDrawer
+          businessProfile={businessProfile}
+          signalContext={organicCtx}
+          audienceData={latestAudience}
+          recentSignals={marketSignals}
+          onClose={() => { setShowOrgCreate(false); setOrganicCtx(null); }}
+          onSaved={() => {
+            queryClient.invalidateQueries({ queryKey: ['organicPosts', bpId] });
+            setShowOrgCreate(false);
+            setOrganicCtx(null);
+          }}
+        />
+      )}
     </div>
   );
 }
+
+
+
+
+
