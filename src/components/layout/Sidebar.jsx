@@ -106,7 +106,7 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, 
   return (
     <aside
       className={cn(
-        'fixed top-0 right-0 h-screen z-40 flex flex-col transition-all duration-300 border-l',
+        'fixed top-0 right-0 h-screen z-[55] flex flex-col transition-all duration-300 border-l',
         collapsed ? 'w-14' : 'w-52'
       )}
       style={{

@@ -115,6 +115,9 @@ import { systemHealthMonitor } from './systemHealthMonitor';
 import { intentClassification } from './intentClassification';
 import { otxSyncBridge } from './otxSyncBridge';
 import { competitorDataBootstrap } from './competitorDataBootstrap';
+import { prisma } from '../../db';
+import { sendEmail as sendTransactionalEmail, buildApprovalEmail } from '../../lib/email';
+import { sendOwnerWhatsAppNotification } from '../../services/execution/WhatsAppOwnerNotifier';
 
 const router = Router();
 
@@ -258,6 +261,38 @@ const FUNCTION_MAP: Record<string, any> = {
   identifyKnowledgeGaps,
   weeklyEmailDigest,
 };
+
+// POST /api/functions/notify-review-response
+router.post('/notify-review-response', async (req: Request, res: Response) => {
+  const { businessProfileId, reviewerName, rating } = req.body;
+  console.log('[notify-review-response] called with:', { businessProfileId, reviewerName, rating });
+
+  if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+  const description = `תגובה AI נוצרה לביקורת של ${reviewerName || 'לקוח'} (${rating || '?'}⭐)`;
+  const agentName = 'יצירת תגובה ידנית';
+
+  const rows = await prisma.$queryRaw<{ notification_email: string | null }[]>`
+    SELECT notification_email FROM business_profiles WHERE id = ${businessProfileId} LIMIT 1
+  `;
+  const ownerEmail = rows[0]?.notification_email;
+  console.log('[notify-review-response] notification_email from DB:', ownerEmail ?? 'NOT FOUND');
+
+  if (ownerEmail) {
+    const html = buildApprovalEmail({ actionDescription: description, agentName });
+    const sent = await sendTransactionalEmail({ to: ownerEmail, subject: `OTX: תגובה AI חדשה ממתינה לאישורך`, html }).catch((e: any) => {
+      console.error('[notify-review-response] email error:', e.message);
+      return false;
+    });
+    console.log('[notify-review-response] email sent:', sent);
+  } else {
+    console.warn('[notify-review-response] skipping email — no notification_email on profile');
+  }
+
+  sendOwnerWhatsAppNotification({ businessProfileId, actionDescription: description, agentName }).catch(() => {});
+
+  return res.json({ ok: true });
+});
 
 // POST /api/functions/:name
 router.post('/:name', (req, res) => {

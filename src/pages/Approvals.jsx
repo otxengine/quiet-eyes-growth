@@ -238,7 +238,7 @@ export function ApprovalsPanel({ bpId }) {
   return (
     <div className="space-y-5" dir="rtl">
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center">
           <ShieldAlert className="w-5 h-5 text-amber-600" />
         </div>

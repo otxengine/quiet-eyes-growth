@@ -1,3 +1,4 @@
+import path from 'path';
 import dotenv from 'dotenv';
 dotenv.config({ override: true }); // override empty system env vars with .env file values
 
@@ -120,6 +121,7 @@ app.use(express.json({
   limit: '20mb',
 }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+app.use(express.static(path.join(__dirname, '../../public')));
 
 // Only mount Clerk middleware when a real secret key is configured
 const clerkKey = process.env.CLERK_SECRET_KEY || '';
