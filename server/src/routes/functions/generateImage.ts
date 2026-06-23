@@ -10,9 +10,29 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 // Flux.1 via fal.ai
 const FAL_API_KEY = process.env.FAL_API_KEY || '';
 
-// ── Tier 1 (fallback): Google Imagen Ultra via Gemini API ──────────────────
+// ── Tier 1: Gemini native image generation (generateContent + responseModalities) ──
 
-// Platform → aspect ratio mappings (for Imagen Ultra)
+const PLATFORM_COMPOSITION: Record<string, string> = {
+  instagram_post:     'square 1:1 composition, centered subject',
+  instagram_portrait: 'vertical portrait 4:5 composition, tall frame',
+  instagram_story:    'vertical portrait 9:16 composition, full-height subject',
+  tiktok:             'vertical portrait 9:16 composition, full-height subject',
+  facebook:           'wide horizontal landscape 4:3 composition',
+  facebook_landscape: 'wide horizontal landscape 16:9 composition, cinematic',
+  campaign:           'wide horizontal landscape 16:9 composition, banner style',
+};
+
+async function generateWithGeminiNative(englishPrompt: string, platform = 'instagram_post'): Promise<string | null> {
+  if (!GEMINI_API_KEY) return null;
+  const compositionHint = PLATFORM_COMPOSITION[platform] || 'square 1:1 composition, centered subject';
+  const result = await callGemini(`${englishPrompt}, ${compositionHint}`, 'gemini-pro', 8192);
+  if (result?.startsWith('data:image/')) return result;
+  return null;
+}
+
+// ── Tier 2 (fallback): Google Imagen via Gemini API ──────────────────
+
+// Platform → aspect ratio mappings (for Imagen)
 const PLATFORM_ASPECT: Record<string, string> = {
   instagram_post:     '1:1',
   instagram_portrait: '3:4',   // 4:5 not supported by Imagen; 3:4 is closest
@@ -39,8 +59,9 @@ async function generateWithGeminiImagen(englishPrompt: string, platform = 'insta
 
   const aspectRatio = PLATFORM_ASPECT[platform] || '1:1';
 
+  const imagenModel = process.env.GEMINI_IMAGEN_MODEL || 'imagen-4.0-generate-001';
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-ultra-generate-001:predict?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${imagenModel}:predict?key=${GEMINI_API_KEY}`,
     {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -449,14 +470,28 @@ export async function generateImage(req: Request, res: Response) {
     }
   }
 
-  // ── Tier 1: Google Imagen Ultra ──────────────────────────────────────────
+  // ── Tier 1: Gemini native image generation ───────────────────────────────
   if (GEMINI_API_KEY) {
     try {
-      console.log('[generateImage] trying Imagen Ultra...');
+      console.log('[generateImage] trying Gemini native image gen...');
+      const url = await generateWithGeminiNative(finalPrompt, platform);
+      if (url) {
+        console.log('[generateImage] Gemini native success');
+        return res.json({ url, provider: 'gemini_native', is_stock: false, platform });
+      }
+    } catch (err: any) {
+      console.warn('[generateImage] Gemini native failed:', err.message);
+    }
+  }
+
+  // ── Tier 2: Google Imagen ─────────────────────────────────────────────────
+  if (GEMINI_API_KEY) {
+    try {
+      console.log('[generateImage] trying Imagen...');
       const url = await generateWithGeminiImagen(finalPrompt, platform);
       if (url) {
-        console.log('[generateImage] Imagen Ultra success, platform:', platform);
-        return res.json({ url, provider: 'imagen_ultra', is_stock: false, platform });
+        console.log('[generateImage] Imagen success, platform:', platform);
+        return res.json({ url, provider: 'imagen', is_stock: false, platform });
       }
     } catch (err: any) {
       console.warn('[generateImage] Gemini Imagen failed:', err.message);
