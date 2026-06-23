@@ -2,8 +2,6 @@
 PROJECT_PROGRESS.md
 
 # ── Environment / secrets (NEVER commit these) ───────────────────────────────
-.env
-.env.local
 .env.*.local
 server/.env
 agents/.env
@@ -35,7 +33,6 @@ pnpm-debug.log*
 .claude/
 
 # ── Editor ───────────────────────────────────────────────────────────────────
-.vscode/*
 !.vscode/extensions.json
 .idea/
 .DS_Store
@@ -47,3 +44,4 @@ pnpm-debug.log*
 
 # ── OS ────────────────────────────────────────────────────────────────────────
 Thumbs.db
+config.bat
