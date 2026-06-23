@@ -5,8 +5,8 @@
  */
 
 const GEMINI_MODEL_MAP: Record<string, string> = {
-  'gemini-flash': 'gemini-3.5-flash',
-  'gemini-pro':   'gemini-3-pro-image',
+  'gemini-flash': process.env.GEMINI_FLASH_MODEL || 'gemini-3.5-flash',
+  'gemini-pro':   process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image',
 };
 
 /**
