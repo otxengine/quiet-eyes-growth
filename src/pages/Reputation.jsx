@@ -28,9 +28,10 @@ const SENTIMENT_DOT = {
   positive: 'bg-green-500',
 };
 
-function ReviewRow({ review, businessProfile, onApprove }) {
+function ReviewRow({ review, businessProfile, onEdit, onRefresh }) {
   const platCfg = PLATFORM_ICONS[review.source] || PLATFORM_ICONS.default;
   const sentDot = SENTIMENT_DOT[review.sentiment] || 'bg-gray-400';
+  const [generating, setGenerating] = useState(false);
   const relDate = (() => {
     const d = new Date(review.created_at || review.created_date || '');
     if (isNaN(d.getTime())) return '—';
@@ -41,7 +42,44 @@ function ReviewRow({ review, businessProfile, onApprove }) {
     if (diff < 30) return `לפני ${Math.floor(diff / 7)} שבועות`;
     return d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' });
   })();
-  const isPending = review.response_status === 'pending';
+  const isPending = !review.suggested_response;
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      const isNegative = (review.rating || 5) <= 3;
+      const result = await base44.integrations.Core.InvokeLLM({
+        prompt: `אתה מומחה לניהול מוניטין לעסקים קטנים בישראל.
+כתוב תגובה לביקורת הבאה בעברית בלבד — אסור לכתוב אפילו מילה אחת באנגלית.
+
+שם המבקר: ${review.reviewer_name || 'לקוח'}
+דירוג: ${review.rating || '?'}/5
+תוכן הביקורת: "${(review.text || 'ביקורת ללא טקסט').slice(0, 400)}"
+
+חוקים:
+1. פנה למבקר בשמו אם ניתן
+2. אם הביקורת אינה ברורה — כתוב תגובה אדיבה וכללית
+3. ${isNegative ? 'קח אחריות והצע שיחה אישית לפתרון' : 'הבע תודה אמיתית ותחזק ערך שהזכיר המבקר'}
+4. 2-4 משפטים בלבד — אנושי וספציפי
+5. אל תשתמש בביטויים כמו "מצטערים לשמוע" או "נשמח לסייע"
+כתוב את התגובה הסופית בעברית בלבד.`,
+      });
+      const text = typeof result === 'string' ? result.trim() : '';
+      if (text) {
+        await base44.entities.Review.update(review.id, {
+          suggested_response: text,
+          response_status: 'suggested',
+        });
+        toast.success('תגובה AI נוצרה ✓ — לחץ "ערוך תגובה" לשליחה');
+        onRefresh();
+      } else {
+        toast.error('לא התקבלה תגובה — נסה שנית');
+      }
+    } catch {
+      toast.error('שגיאה ביצירת תגובה');
+    }
+    setGenerating(false);
+  };
 
   return (
     <div dir="rtl" className="flex items-center gap-3 px-4 py-3 border-b border-border/40 last:border-0 hover:bg-gray-50/40 transition-colors">
@@ -55,14 +93,23 @@ function ReviewRow({ review, businessProfile, onApprove }) {
       </span>
       <span className="text-[18px] w-8 flex-shrink-0 text-center" title={platCfg.label}>{platCfg.icon}</span>
       <span className="text-[11px] text-foreground-muted w-20 flex-shrink-0">{relDate}</span>
-      <button onClick={() => onApprove(review)}
-        className={`flex-shrink-0 text-[11px] px-3 py-1.5 rounded-full border font-medium transition-colors ${
-          isPending
-            ? 'border-[#e8344d] text-[#e8344d] hover:bg-red-50'
-            : 'border-border text-foreground-muted hover:bg-secondary'
-        }`}>
-        {isPending ? 'אשר/ערוך תגובה' : 'ערוך תגובה'}
-      </button>
+      {isPending ? (
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          className="flex-shrink-0 flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-full border font-medium transition-colors border-[#e8344d] text-[#e8344d] hover:bg-red-50 disabled:opacity-50"
+        >
+          {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+          {generating ? 'מייצר...' : 'צור תגובה AI'}
+        </button>
+      ) : (
+        <button
+          onClick={() => onEdit(review)}
+          className="flex-shrink-0 text-[11px] px-3 py-1.5 rounded-full border font-medium transition-colors border-border text-foreground-muted hover:bg-secondary"
+        >
+          ערוך תגובה
+        </button>
+      )}
       <button className="text-foreground-muted hover:text-foreground flex-shrink-0">
         <MoreVertical className="w-4 h-4" />
       </button>
@@ -76,25 +123,6 @@ function ReviewReplyPanel({ review, bpId, onClose, onSent }) {
   const platCfg = PLATFORM_ICONS[review.source] || PLATFORM_ICONS.default;
   const [replyText, setReplyText] = useState(review.suggested_response || '');
   const [sending, setSending] = useState(false);
-  const [generating, setGenerating] = useState(false);
-
-  const generateReply = async () => {
-    setGenerating(true);
-    try {
-      await base44.functions.invoke('autoRespondToReviews', { businessProfileId: bpId });
-      const rows = await base44.entities.Review.filter({ id: review.id });
-      const updated = rows?.[0];
-      if (updated?.suggested_response) {
-        setReplyText(updated.suggested_response);
-        toast.success('תגובה AI נוצרה ✓');
-      } else {
-        toast.info('לא נמצאה תגובה — נסה שנית');
-      }
-    } catch {
-      toast.error('שגיאה ביצירת תגובה');
-    }
-    setGenerating(false);
-  };
 
   const sendReply = async () => {
     if (!replyText.trim()) { toast.error('יש להזין תגובה'); return; }
@@ -139,14 +167,6 @@ function ReviewReplyPanel({ review, bpId, onClose, onSent }) {
         <div className="px-5 py-4 space-y-3">
           <div className="flex items-center justify-between">
             <label className="text-[12px] font-semibold text-gray-700">התגובה שלך</label>
-            <button
-              onClick={generateReply}
-              disabled={generating}
-              className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
-            >
-              {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bot className="w-3 h-3" />}
-              {generating ? 'מייצר...' : 'צור עם AI'}
-            </button>
           </div>
           <textarea
             value={replyText}
@@ -454,9 +474,9 @@ export default function Reputation() {
                 </div>
               ) : insights.map((ins, i) => (
                 <div key={i} dir="rtl" className={`flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 border-r-4 ${ins.border}`}>
-                  <button className="flex-shrink-0 text-[11px] border border-rose-300 text-rose-600 px-3 py-1.5 rounded-full hover:bg-rose-50 transition-colors font-medium">
+                  {/* <button className="flex-shrink-0 text-[11px] border border-rose-300 text-rose-600 px-3 py-1.5 rounded-full hover:bg-rose-50 transition-colors font-medium">
                     קרא והגב
-                  </button>
+                  </button> */}
                   <div className="flex items-center gap-2 min-w-0">
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${ins.dot}`} />
                     <span className="text-[12px] font-semibold text-foreground truncate">{ins.text}</span>
@@ -529,7 +549,8 @@ export default function Reputation() {
               </div>
             ) : filteredTable.map(review => (
               <ReviewRow key={review.id} review={review} businessProfile={businessProfile}
-                onApprove={() => setSelectedReview(review)}
+                onEdit={(r) => setSelectedReview(r)}
+                onRefresh={() => queryClient.invalidateQueries({ queryKey: ['reviewsPage', bpId] })}
               />
             ))}
           </div>
