@@ -935,7 +935,6 @@ model Campaign {
   actual_clicks    Int?
   actual_leads     Int?
   actual_spend_ils Float?
-  created_by       String?
 
   @@map("campaigns")
 }
