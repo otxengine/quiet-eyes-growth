@@ -18,6 +18,8 @@ import { postReviewReply } from './GoogleBusinessClient';
 import { publishPost } from './InstagramPublisher';
 import { publishTikTok } from './TikTokPublisher';
 import { sendEmail } from './EmailExecutor';
+import { sendEmail as sendTransactionalEmail, buildApprovalEmail } from '../../lib/email';
+import { sendOwnerWhatsAppNotification } from './WhatsAppOwnerNotifier';
 
 const logger = createLogger('executeOrQueue');
 
@@ -180,7 +182,38 @@ async function createAutoAction(
       constraint_notes:   action.constraintNotes ?? null,
     },
   });
+
+  // Send approval notifications when action needs human review
+  if (status === 'pending_approval') {
+    sendApprovalNotificationEmail(record.id, action).catch(() => {});
+    sendOwnerWhatsAppNotification({
+      businessProfileId: action.businessProfileId,
+      actionDescription: action.description,
+      agentName: action.agentName,
+    }).catch(() => {});
+  }
+
   return record.id;
+}
+
+async function sendApprovalNotificationEmail(_actionId: string, action: QueuedAction): Promise<void> {
+  const rows = await prisma.$queryRaw<{ notification_email: string | null }[]>`
+    SELECT notification_email FROM business_profiles WHERE id = ${action.businessProfileId} LIMIT 1
+  `;
+  const profile = rows[0];
+  const ownerEmail = profile?.notification_email;
+  if (!ownerEmail) {
+    logger.info('No owner email found — skipping approval notification', { businessProfileId: action.businessProfileId });
+    return;
+  }
+
+  const html = buildApprovalEmail({
+    actionDescription: action.description,
+    agentName: action.agentName,
+  });
+
+  await sendTransactionalEmail({ to: ownerEmail, subject: `OTX: פעולה חדשה ממתינה לאישורך`, html });
+  logger.info('Approval email sent', { actionId: _actionId, to: ownerEmail });
 }
 
 /**

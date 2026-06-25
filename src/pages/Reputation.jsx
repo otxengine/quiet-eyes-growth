@@ -71,6 +71,17 @@ function ReviewRow({ review, businessProfile, onEdit, onRefresh }) {
           response_status: 'suggested',
         });
         toast.success('תגובה AI נוצרה ✓ — לחץ "ערוך תגובה" לשליחה');
+        console.log('[notify-review-response] firing to:', `${API_BASE}/functions/notify-review-response`, { businessProfileId: review.linked_business });
+        fetch(`${API_BASE}/functions/notify-review-response`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessProfileId: review.linked_business,
+            reviewerName: review.reviewer_name,
+            rating: review.rating,
+          }),
+        }).then(r => console.log('[notify-review-response] response status:', r.status))
+          .catch(e => console.error('[notify-review-response] fetch error:', e.message));
         onRefresh();
       } else {
         toast.error('לא התקבלה תגובה — נסה שנית');
@@ -117,7 +128,7 @@ function ReviewRow({ review, businessProfile, onEdit, onRefresh }) {
   );
 }
 
-const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api').replace(/\/$/, '');
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
 
 function ReviewReplyPanel({ review, bpId, onClose, onSent }) {
   const platCfg = PLATFORM_ICONS[review.source] || PLATFORM_ICONS.default;
@@ -490,7 +501,7 @@ export default function Reputation() {
       {/* Reviews table */}
       <div>
         {/* Section header: title on RIGHT, filters+search on LEFT (RTL) */}
-        <div className="flex items-center justify-between mb-3" dir="rtl">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3" dir="rtl">
           <h2 className="text-[15px] font-bold text-foreground">ביקורות <span className="text-foreground-muted font-normal">({reviews.length})</span></h2>
           <div className="flex items-center gap-2 flex-wrap">
             {/* Filters first in DOM = appear on RIGHT within the group in RTL */}
@@ -519,7 +530,7 @@ export default function Reputation() {
             <div className="relative">
               <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground-muted" />
               <input type="text" placeholder="חיפוש" value={reviewSearch} onChange={e => setReviewSearch(e.target.value)} dir="rtl"
-                className="pr-8 pl-3 py-1.5 text-[12px] border border-border rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-foreground w-28" />
+                className="pr-8 pl-3 py-1.5 text-[12px] border border-border rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-foreground w-24 sm:w-28" />
             </div>
           </div>
         </div>

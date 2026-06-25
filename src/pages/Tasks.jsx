@@ -71,9 +71,9 @@ export default function Tasks() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-[16px] font-bold text-foreground tracking-tight">משימות</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={async () => {
               if (!bpId) return;
@@ -88,13 +88,14 @@ export default function Tasks() {
               setPlanningContent(false);
             }}
             disabled={planningContent}
-            className="btn-subtle flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-all disabled:opacity-50">
+            className="btn-subtle flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-medium text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-all disabled:opacity-50">
             {planningContent ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarDays className="w-4 h-4" />}
-            {planningContent ? 'מתכנן...' : 'תכנן תוכן שבועי'}
+            <span className="hidden sm:inline">{planningContent ? 'מתכנן...' : 'תכנן תוכן שבועי'}</span>
           </button>
           <button onClick={() => setShowAddModal(true)}
-            className="btn-subtle flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium bg-foreground text-background hover:opacity-90 transition-all">
-            <Plus className="w-4 h-4" /> משימה חדשה
+            className="btn-subtle flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-medium bg-foreground text-background hover:opacity-90 transition-all">
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">משימה חדשה</span>
           </button>
         </div>
       </div>

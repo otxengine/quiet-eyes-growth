@@ -6,6 +6,7 @@
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const FROM_EMAIL     = process.env.FROM_EMAIL || 'noreply@otxengine.io';
 const FRONTEND_URL   = process.env.FRONTEND_URL || 'https://quiet-eyes-frontend.onrender.com';
+const BACKEND_URL    = process.env.BACKEND_URL || 'http://localhost:3001';
 
 export interface SendEmailOptions {
   to: string;
@@ -67,9 +68,8 @@ export function buildInviteEmail(opts: {
 <body style="font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px;">
   <div style="max-width: 520px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 32px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
     <div style="text-align: center; margin-bottom: 24px;">
-      <div style="width: 48px; height: 48px; background: #7c3aed; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;">
-        <span style="color: white; font-size: 24px; font-weight: bold;">OTX</span>
-      </div>
+      <img src="${BACKEND_URL}/cortexi-logo.jpeg" alt="Cortexi" style="height: 56px; width: auto; margin-bottom: 6px;" />
+      <p style="margin: 0 0 12px 0; font-size: 12px; color: #888; letter-spacing: 0.3px;">Inspired by the brain. Built for intelligence</p>
       <h1 style="margin: 0; font-size: 22px; color: #111;">הוזמנת ל-${opts.orgName}</h1>
     </div>
 
@@ -88,6 +88,49 @@ export function buildInviteEmail(opts: {
 
     <p style="color: #888; font-size: 12px; text-align: center; margin-top: 24px; border-top: 1px solid #eee; padding-top: 16px;">
       קישור זה תקף ל-7 ימים. אם לא ציפית להזמנה זו, אפשר להתעלם ממייל זה.
+    </p>
+  </div>
+</body>
+</html>`;
+}
+
+export function buildApprovalEmail(opts: {
+  actionDescription: string;
+  agentName: string;
+}): string {
+  const approvalsUrl = `${FRONTEND_URL}/approvals`;
+  return `
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px;">
+  <div style="max-width: 540px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 32px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+    <div style="text-align: center; margin-bottom: 24px;">
+      <img src="${BACKEND_URL}/cortexi-logo.jpeg" alt="Cortexi" style="height: 56px; width: auto; margin-bottom: 6px;" />
+      <p style="margin: 0 0 12px 0; font-size: 12px; color: #888; letter-spacing: 0.3px;">Inspired by the brain. Built for intelligence</p>
+      <h1 style="margin: 0; font-size: 20px; color: #111;">פעולה חדשה ממתינה לאישורך</h1>
+    </div>
+
+    <div style="background: #f8f5ff; border-right: 4px solid #7c3aed; border-radius: 8px; padding: 16px; margin-bottom: 24px; text-align: right;">
+      <p style="margin: 0 0 6px 0; font-size: 12px; color: #7c3aed; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">
+        ${opts.agentName}
+      </p>
+      <p style="margin: 0; font-size: 15px; color: #222; line-height: 1.6;">${opts.actionDescription}</p>
+    </div>
+
+    <p style="color: #555; font-size: 14px; text-align: right; margin-bottom: 28px; line-height: 1.6;">
+      הסוכן הבינותי שלך הכין פעולה שדורשת את אישורך. לחץ על הכפתור להלן כדי לצפות ולאשר או לדחות.
+    </p>
+
+    <div style="text-align: center; margin-bottom: 24px;">
+      <a href="${approvalsUrl}"
+         style="background: #7c3aed; color: white; text-decoration: none; padding: 14px 40px; border-radius: 10px; font-size: 15px; font-weight: bold; display: inline-block;">
+        צפה בפעולה
+      </a>
+    </div>
+
+    <p style="color: #999; font-size: 12px; text-align: center; margin-top: 24px; border-top: 1px solid #eee; padding-top: 16px; line-height: 1.6;">
+      אם לא ציפית להודעה זו, אפשר להתעלם ממייל זה.
     </p>
   </div>
 </body>

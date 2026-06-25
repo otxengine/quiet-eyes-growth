@@ -57,7 +57,7 @@ function AlertCard({ alert, onAction, onDismiss }) {
 
   return (
     <div
-      className="rounded-2xl p-5 flex flex-col gap-3 min-w-[280px] flex-shrink-0 relative"
+      className="rounded-2xl p-5 flex flex-col gap-3 w-full relative"
       style={{ background: '#EDE8F5' }}
       dir="rtl"
     >
@@ -404,32 +404,8 @@ export default function CommandHome() {
       <div className="border-t border-border/70 mx-0" />
 
       {/* ── Bottom section: shortcuts + alert ───────────────────────────────── */}
-      <div className="flex items-end gap-4 px-6 py-8 overflow-x-auto">
-        {/* 4 shortcut cards */}
-        {SHORTCUTS.map(({ key, label, desc, Icon, prompt }) => (
-          <button
-            key={key}
-            onClick={() => {
-              setInput(prompt);
-              inputRef.current?.focus();
-              sendMessage(prompt);
-            }}
-            className="bg-white rounded-2xl p-4 flex flex-col gap-2 text-right min-w-[155px] flex-1 max-w-[200px] hover:shadow-md transition-all border border-transparent hover:border-border/60"
-          >
-            <div className="flex items-center gap-2 justify-end">
-              <span className="text-[13px] font-semibold text-foreground">{label}</span>
-              <div
-                className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
-                style={{ background: '#FEE2E8' }}
-              >
-                <Icon className="w-3.5 h-3.5" style={{ color: '#E8344D' }} />
-              </div>
-            </div>
-            <p className="text-[11px] text-foreground-muted/70 leading-relaxed">{desc}</p>
-          </button>
-        ))}
-
-        {/* Alert card */}
+      <div className="px-4 py-6 space-y-3">
+        {/* Alert card — always full width, always stacked above shortcuts */}
         {topAlert && (
           <AlertCard
             alert={topAlert}
@@ -437,6 +413,32 @@ export default function CommandHome() {
             onDismiss={() => setDismissedAlertId(topAlert.id)}
           />
         )}
+
+        {/* Shortcut cards — 2 columns on all screen sizes */}
+        <div className="grid grid-cols-2 gap-3">
+          {SHORTCUTS.map(({ key, label, desc, Icon, prompt }) => (
+            <button
+              key={key}
+              onClick={() => {
+                setInput(prompt);
+                inputRef.current?.focus();
+                sendMessage(prompt);
+              }}
+              className="bg-white rounded-2xl p-4 flex flex-col gap-2 text-right hover:shadow-md transition-all border border-transparent hover:border-border/60"
+            >
+              <div className="flex items-center gap-2 justify-end">
+                <span className="text-[13px] font-semibold text-foreground">{label}</span>
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+                  style={{ background: '#FEE2E8' }}
+                >
+                  <Icon className="w-3.5 h-3.5" style={{ color: '#E8344D' }} />
+                </div>
+              </div>
+              <p className="text-[11px] text-foreground-muted/70 leading-relaxed">{desc}</p>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

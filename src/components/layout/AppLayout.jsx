@@ -264,12 +264,14 @@ export default function AppLayout() {
 
       {/* Sidebar - Mobile Overlay */}
       {mobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 z-50">
-          <div 
-            className="absolute inset-0 bg-black/50" 
-            onClick={() => setMobileMenuOpen(false)} 
+        <>
+          {/* Backdrop — root stacking context z-52 */}
+          <div
+            className="lg:hidden fixed inset-0 z-[52] bg-black/50"
+            onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="relative z-[51]">
+          {/* Sidebar — root stacking context z-55, above backdrop */}
+          <div className="lg:hidden">
             <Sidebar
               collapsed={false}
               onToggle={() => setMobileMenuOpen(false)}
@@ -278,7 +280,7 @@ export default function AppLayout() {
               onNavigate={() => setMobileMenuOpen(false)}
             />
           </div>
-        </div>
+        </>
       )}
 
       {/* Main Content */}

@@ -68,13 +68,13 @@ function BriefAction({ action, index, navigate }) {
       {/* Right side: time + CTA */}
       <div className="flex items-center gap-2 flex-shrink-0">
         {action.time_minutes && (
-          <span className="text-[9px] text-foreground-muted opacity-60">
+          <span className="text-[9px] text-foreground-muted opacity-60 whitespace-nowrap">
             {action.time_minutes} דק׳
           </span>
         )}
         <button
           onClick={e => { e.stopPropagation(); navigate(link); }}
-          className="text-[11px] font-semibold text-[#e8344d] border border-rose-200 px-3 py-1 rounded-full hover:bg-rose-50 transition-colors opacity-0 group-hover:opacity-100 whitespace-nowrap"
+          className="hidden sm:block text-[11px] font-semibold text-[#e8344d] border border-rose-200 px-3 py-1 rounded-full hover:bg-rose-50 transition-colors opacity-0 group-hover:opacity-100 whitespace-nowrap"
         >
           {action.cta_label || 'פעל'} →
         </button>

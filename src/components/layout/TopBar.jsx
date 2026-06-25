@@ -32,7 +32,7 @@ export default function TopBar({ pageTitle, user, badges = {}, onMenuClick, show
       <div className="h-full px-4 md:px-8 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {showMenuButton && (
-            <button onClick={onMenuClick} className="p-2 rounded-md hover:bg-secondary transition-colors lg:hidden">
+            <button onClick={onMenuClick} className="w-10 h-10 flex items-center justify-center rounded-md hover:bg-secondary transition-colors lg:hidden flex-shrink-0">
               <Menu className="w-5 h-5 text-foreground" />
             </button>
           )}

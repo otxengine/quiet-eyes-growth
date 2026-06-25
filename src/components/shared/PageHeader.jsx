@@ -12,15 +12,17 @@ import React from 'react';
  */
 export default function PageHeader({ count, title, subtitle, actionLabel, onAction, actionIcon }) {
   return (
-    <div className="flex items-start justify-between mb-6">
+    <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
       {/* Action button — top-left */}
       {actionLabel && (
         <button
           onClick={onAction}
-          className="flex items-center gap-1.5 bg-foreground text-background px-4 py-2 rounded-full text-sm font-semibold hover:opacity-85 transition-opacity shadow-sm mt-1"
+          title={actionLabel}
+          aria-label={actionLabel}
+          className="flex items-center gap-1.5 bg-foreground text-background px-3 py-2 sm:px-4 rounded-full text-sm font-semibold hover:opacity-85 transition-opacity shadow-sm mt-1"
         >
           {actionIcon}
-          {actionLabel}
+          <span className="hidden sm:inline">{actionLabel}</span>
         </button>
       )}
       {/* Count + title — right-aligned */}
