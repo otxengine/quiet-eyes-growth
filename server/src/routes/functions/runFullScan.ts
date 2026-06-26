@@ -33,6 +33,7 @@ import { sentimentVelocityMonitor } from './sentimentVelocityMonitor';
 import { bootstrapBusinessIntelligence } from '../../lib/bootstrapIntelligence';
 import { contentPerformanceAgent } from './contentPerformanceAgent';
 import { reviewRequestTimingAgent } from './reviewRequestTimingAgent';
+import { learnFromWebsite } from './stubs';
 
 async function callHandler(fn: Function, businessProfileId: string): Promise<any> {
   return new Promise((resolve) => {
@@ -131,6 +132,20 @@ export async function runFullScan(req: Request, res: Response) {
         res.json({ skipped: true, reason: 'detectEarlyTrends ran within 48h — trends do not change hourly' });
     }
   } catch (_) {}
+
+  // KAN-9 prep: scrape brand voice/context before collectors (skipped when no website_url)
+  if (profile?.website_url) {
+    await new Promise<void>((resolve) => {
+      const fakeReq = { body: { businessProfileId, websiteUrl: profile.website_url } } as Request;
+      const fakeRes: any = { json: () => { resolve(); return fakeRes; }, status: () => fakeRes };
+      Promise.resolve(learnFromWebsite(fakeReq, fakeRes)).catch((e: any) => {
+        console.warn('[runFullScan] learnFromWebsite prep error:', e.message);
+        resolve();
+      });
+    });
+  } else {
+    console.log('[runFullScan] learnFromWebsite skipped — no website_url on profile');
+  }
 
   // Full pipeline — ordered from data collection → analysis → learning → cleanup
   const pipeline: Array<[string, Function]> = [

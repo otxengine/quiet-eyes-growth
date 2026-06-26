@@ -258,7 +258,8 @@ export async function learnFromWebsite(req: Request, res: Response) {
         .replace(/<[^>]+>/g, ' ')
         .replace(/\s+/g, ' ')
         .slice(0, 3000);
-    } catch {
+    } catch (fetchErr: any) {
+      console.error('[learnFromWebsite] fetch failed:', fetchErr?.message ?? 'timeout');
       websiteText = `Business: ${profile.name}, Category: ${profile.category}, City: ${profile.city}`;
     }
 
