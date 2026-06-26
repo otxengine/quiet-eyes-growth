@@ -8,7 +8,7 @@ import { analyzeInstagramComments } from '../routes/functions/analyzeInstagramCo
 jest.mock('../db', () => ({
   prisma: {
     businessProfile: { findMany: jest.fn() },
-    automationLog:   { findFirst: jest.fn(), create: jest.fn() },
+    automationLog:   { findFirst: jest.fn(), create: jest.fn(), count: jest.fn() },
     businessMemory:  { findFirst: jest.fn() },
   },
 }));
@@ -71,6 +71,7 @@ describe('runFullScan', () => {
     jest.clearAllMocks();
     (prisma.businessProfile.findMany as jest.Mock).mockResolvedValue([PROFILE]);
     (prisma.automationLog.findFirst  as jest.Mock).mockResolvedValue(null);
+    (prisma.automationLog.count      as jest.Mock).mockResolvedValue(0);
     (prisma.businessMemory.findFirst as jest.Mock).mockResolvedValue(null);
     (writeAutomationLog              as jest.Mock).mockResolvedValue(undefined);
   });
@@ -100,6 +101,45 @@ describe('runFullScan', () => {
 
     expect(json).toHaveBeenCalledTimes(1);
     expect(json.mock.calls[0][0]).toMatchObject({ success: false, cooldown: true });
+  });
+
+  // AC2 — plan limit: scans_per_month exhausted → blocked
+  it('AC2a: blocks scan when plan limit is exhausted', async () => {
+    const profile = { ...PROFILE, plan_id: 'free_trial' };
+    (prisma.businessProfile.findMany as jest.Mock).mockResolvedValue([profile]);
+    (prisma.automationLog.count      as jest.Mock).mockResolvedValue(1); // limit is 1
+
+    const { res, json } = makeRes();
+    await runFullScan(makeReq(), res);
+
+    expect(json).toHaveBeenCalledTimes(1);
+    expect(json.mock.calls[0][0]).toMatchObject({ success: false, plan_limit: true, plan: 'free_trial', scans_used: 1, scans_allowed: 1 });
+  });
+
+  it('AC2b: allows scan when under plan limit', async () => {
+    const profile = { ...PROFILE, plan_id: 'starter' };
+    (prisma.businessProfile.findMany as jest.Mock).mockResolvedValue([profile]);
+    (prisma.automationLog.count      as jest.Mock).mockResolvedValue(3); // limit is 4
+
+    const { res, json, getSnapshot } = makeRes();
+    await runFullScan(makeReq(), res);
+
+    expect(json).toHaveBeenCalledTimes(1);
+    expect(getSnapshot().success).toBe(true);
+  });
+
+  it('AC2c: pro plan bypasses scan limit entirely', async () => {
+    const profile = { ...PROFILE, plan_id: 'pro' };
+    (prisma.businessProfile.findMany as jest.Mock).mockResolvedValue([profile]);
+    // count should never be called for Infinity plans
+    const countMock = prisma.automationLog.count as jest.Mock;
+
+    const { res, json, getSnapshot } = makeRes();
+    await runFullScan(makeReq(), res);
+
+    expect(json).toHaveBeenCalledTimes(1);
+    expect(getSnapshot().success).toBe(true);
+    expect(countMock).not.toHaveBeenCalled();
   });
 
   // AC3 — deferred failure: logged, does not corrupt the already-sent response

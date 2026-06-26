@@ -35,6 +35,16 @@ import { contentPerformanceAgent } from './contentPerformanceAgent';
 import { reviewRequestTimingAgent } from './reviewRequestTimingAgent';
 import { learnFromWebsite } from './stubs';
 
+// ponytail: inline from src/lib/planConfig.js — update both if plan limits change
+const PLAN_SCAN_LIMITS: Record<string, number> = {
+  free_trial: 1,
+  free:       1,   // schema default maps to free_trial
+  starter:    4,
+  growth:     30,
+  pro:        Infinity,
+  enterprise: Infinity,
+};
+
 async function callHandler(fn: Function, businessProfileId: string): Promise<any> {
   return new Promise((resolve) => {
     const fakeReq = { body: { businessProfileId } } as Request;
@@ -104,6 +114,25 @@ export async function runFullScan(req: Request, res: Response) {
     }
   } catch (_) {
     // automationLog query failure → continue scan (don't block on cooldown check)
+  }
+
+  // Plan scan-limit enforcement (KAN-20 AC2)
+  const plan      = profile?.plan_id ?? 'free_trial';
+  const scanLimit = PLAN_SCAN_LIMITS[plan] ?? PLAN_SCAN_LIMITS.free_trial;
+  if (isFinite(scanLimit)) {
+    try {
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+      const scansThisMonth = await prisma.automationLog.count({
+        where: { automation_name: 'runFullScan', linked_business: businessProfileId, created_date: { gte: startOfMonth } },
+      });
+      if (scansThisMonth >= scanLimit) {
+        return res.json({ success: false, plan_limit: true, plan, scans_used: scansThisMonth, scans_allowed: scanLimit });
+      }
+    } catch (_) {
+      // DB failure → allow scan (don't block on limit check)
+    }
   }
 
   // tiktokSectorTrendAgent uses Apify (real TikTok data) — skip if ran within 12h
