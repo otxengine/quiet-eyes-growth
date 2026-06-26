@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { collectWebSignals } from '../routes/functions/collectWebSignals';
 import { prisma } from '../db';
-import { tavilySearch } from '../lib/tavily';
+import { tavilySearch, isTavilyRateLimited } from '../lib/tavily';
 import { shouldSkipAgent, setLastRun } from '../lib/agentCache';
 import { buildSearchQueries } from '../lib/businessProfile';
 import { buildKeywordQueries, buildUrlQueries } from '../lib/dataSources';
@@ -16,7 +16,7 @@ jest.mock('../db', () => ({
     rawSignal:       { findMany: jest.fn(), create: jest.fn() },
   },
 }));
-jest.mock('../lib/tavily',          () => ({ tavilySearch:      jest.fn() }));
+jest.mock('../lib/tavily',          () => ({ tavilySearch: jest.fn(), isTavilyRateLimited: jest.fn() }));
 jest.mock('../lib/agentCache',      () => ({ shouldSkipAgent:   jest.fn(), setLastRun: jest.fn() }));
 jest.mock('../lib/businessProfile', () => ({ buildSearchQueries: jest.fn(), cityToEn: jest.fn(() => 'Tel Aviv') }));
 jest.mock('../lib/dataSources',     () => ({ buildKeywordQueries: jest.fn(), buildUrlQueries: jest.fn() }));
@@ -27,6 +27,7 @@ const bpFindFirst   = prisma.businessProfile.findFirst as jest.Mock;
 const signalFindMany = prisma.rawSignal.findMany       as jest.Mock;
 const signalCreate  = prisma.rawSignal.create          as jest.Mock;
 const tavily        = tavilySearch        as jest.Mock;
+const rateLimited   = isTavilyRateLimited as jest.Mock;
 const skipAgent     = shouldSkipAgent     as jest.Mock;
 const bsq           = buildSearchQueries  as jest.Mock;
 const bkq           = buildKeywordQueries as jest.Mock;
@@ -60,6 +61,7 @@ beforeEach(() => {
   signalFindMany.mockResolvedValue([]);
   signalCreate.mockResolvedValue({});
   tavily.mockResolvedValue([]);
+  rateLimited.mockReturnValue(false);
   skipAgent.mockReturnValue(false);
   bsq.mockReturnValue(['bsq_query_1', 'bsq_query_2', 'bsq_query_3', 'bsq_query_4']);
   bkq.mockReturnValue([]);
@@ -149,6 +151,102 @@ describe('collectWebSignals — AC#2 query ordering', () => {
     await collectWebSignals(req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+});
+
+describe('collectWebSignals — AC#1 signals written and counted', () => {
+
+  test('new signals are created and count returned', async () => {
+    tavily.mockResolvedValue([
+      { url: 'https://example.com/a', content: 'content a', title: 'title a' },
+      { url: 'https://example.com/b', content: 'content b', title: 'title b' },
+    ]);
+    bsq.mockReturnValue(['query_1']);
+
+    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectWebSignals(req, res);
+
+    expect(signalCreate).toHaveBeenCalledTimes(2);
+    expect(signalCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        url: 'https://example.com/a',
+        signal_type: 'web_search',
+        source_origin: 'tavily',
+        linked_business: 'bp1',
+      }),
+    }));
+    expect(json).toHaveBeenCalledWith({ new_signals: 2 });
+  });
+
+});
+
+describe('collectWebSignals — AC#2 URL deduplication', () => {
+
+  test('URL already in RawSignal is not re-inserted', async () => {
+    signalFindMany.mockResolvedValue([{ url: 'https://example.com/already' }]);
+    tavily.mockResolvedValue([
+      { url: 'https://example.com/already', content: 'dup' },
+      { url: 'https://example.com/new', content: 'new' },
+    ]);
+    bsq.mockReturnValue(['query_1']);
+
+    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectWebSignals(req, res);
+
+    expect(signalCreate).toHaveBeenCalledTimes(1);
+    expect(signalCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ url: 'https://example.com/new' }),
+    }));
+    expect(json).toHaveBeenCalledWith({ new_signals: 1 });
+  });
+
+  test('same URL returned by two different queries is only inserted once', async () => {
+    tavily.mockResolvedValue([{ url: 'https://example.com/same', content: 'x' }]);
+    bsq.mockReturnValue(['q1', 'q2']); // two queries, both return the same URL
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectWebSignals(req, res);
+
+    expect(signalCreate).toHaveBeenCalledTimes(1);
+  });
+
+});
+
+describe('collectWebSignals — AC#4 error handling', () => {
+
+  test('DB error mid-loop: AutomationLog records failed with partial count', async () => {
+    tavily.mockResolvedValue([
+      { url: 'https://example.com/a', content: 'a' },
+      { url: 'https://example.com/b', content: 'b' },
+    ]);
+    bsq.mockReturnValue(['query_1']);
+    signalCreate.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('DB write error'));
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectWebSignals(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(autoLog).toHaveBeenCalledWith(
+      'collectWebSignals', 'bp1', expect.any(String),
+      1, 'failed', 'DB write error',
+    );
+  });
+
+  test('Tavily rate-limited: AutomationLog records failed, setLastRun not called', async () => {
+    rateLimited.mockReturnValue(true);
+    bsq.mockReturnValue(['query_1']);
+
+    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectWebSignals(req, res);
+
+    expect(autoLog).toHaveBeenCalledWith(
+      'collectWebSignals', 'bp1', expect.any(String),
+      0, 'failed', 'Tavily rate-limited — signals may be incomplete',
+    );
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ tavily_rate_limited: true }));
+    const setLastRunMock = require('../lib/agentCache').setLastRun as jest.Mock;
+    expect(setLastRunMock).not.toHaveBeenCalled();
   });
 
 });

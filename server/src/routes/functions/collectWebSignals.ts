@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
-import { tavilySearch } from '../../lib/tavily';          // shared cache (12h TTL)
+import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily'; // shared cache (12h TTL)
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { buildKeywordQueries, buildUrlQueries } from '../../lib/dataSources';
 import { buildSearchQueries, cityToEn } from '../../lib/businessProfile';
@@ -14,12 +14,13 @@ export async function collectWebSignals(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
-  // ── Delta guard: skip if last run was <6h ago ─────────────────────────────
+  // ── Delta guard: skip if last run was <12h ago ────────────────────────────
   if (shouldSkipAgent(businessProfileId, 'collectWebSignals', MIN_INTERVAL_MS)) {
     return res.json({ new_signals: 0, skipped: true, reason: 'ran_recently' });
   }
 
   const startTime = new Date().toISOString();
+  let newSignals = 0;
   try {
     const profile = await prisma.businessProfile.findFirst({ where: { id: businessProfileId } });
     if (!profile) return res.status(404).json({ error: 'No business profile' });
@@ -46,7 +47,6 @@ export async function collectWebSignals(req: Request, res: Response) {
     // ── custom_urls: every configured source domain targeted with Tavily ─────
     for (const q of buildUrlQueries(profile, name)) queries.push(q);
 
-    let newSignals = 0;
     for (const query of queries) {
       // tavilySearch uses basic depth + 4h in-memory cache
       const results = await tavilySearch(query, 4);
@@ -68,12 +68,17 @@ export async function collectWebSignals(req: Request, res: Response) {
       }
     }
 
+    if (isTavilyRateLimited()) {
+      await writeAutomationLog('collectWebSignals', businessProfileId, startTime, newSignals, 'failed', 'Tavily rate-limited — signals may be incomplete');
+      return res.json({ new_signals: newSignals, tavily_rate_limited: true });
+    }
+
     setLastRun(businessProfileId, 'collectWebSignals');
     await writeAutomationLog('collectWebSignals', businessProfileId, startTime, newSignals);
     return res.json({ new_signals: newSignals });
   } catch (err: any) {
     console.error('collectWebSignals error:', err.message);
-    await writeAutomationLog('collectWebSignals', businessProfileId, startTime, 0, 'failed', err.message);
+    await writeAutomationLog('collectWebSignals', businessProfileId, startTime, newSignals, 'failed', err.message);
     return res.status(500).json({ error: err.message });
   }
 }
