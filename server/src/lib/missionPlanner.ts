@@ -274,6 +274,13 @@ export async function generateAgentMissions(businessProfileId: string): Promise<
     return null;
   }
 
+  // AC#1: guarantee priority_queries_en is present before persisting
+  const pqe = strategic?.collectWebSignals?.priority_queries_en;
+  if (!Array.isArray(pqe) || pqe.length === 0) {
+    logger.warn(`generateAgentMissions: priority_queries_en missing in LLM response for ${businessProfileId} — aborting persist`);
+    return null;
+  }
+
   // ── Merge both layers ──────────────────────────────────────────────────────
   const missions = {
     generated_at:        new Date().toISOString(),
