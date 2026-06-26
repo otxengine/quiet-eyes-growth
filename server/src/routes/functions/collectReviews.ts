@@ -281,7 +281,10 @@ export async function collectReviews(req: Request, res: Response) {
     }
 
     // ── Multi-source Tavily scan (facebook, instagram, tripadvisor, etc.) ────
-    const sourcesToScan = requestedSources.filter(s => s !== 'google' && SOURCE_QUERIES[s]);
+    // ponytail: auto-fallback to all sources when tiers 1-3 found nothing; explicit sources still honoured otherwise
+    const sourcesToScan = newReviews === 0
+      ? Object.keys(SOURCE_QUERIES)
+      : requestedSources.filter(s => s !== 'google' && SOURCE_QUERIES[s]);
     let sourcesScanCount = 0;
     for (const source of sourcesToScan) {
       const query = SOURCE_QUERIES[source](name, city);
@@ -348,7 +351,8 @@ export async function collectReviews(req: Request, res: Response) {
       }
     }
 
-    // ── Tavily fallback from raw signals ─────────────────────────────────────
+    // ── Tavily fallback from raw signals (last resort — only when all prior tiers found nothing) ──
+    if (newReviews === 0) {
     const rawSignals = await prisma.rawSignal.findMany({
       where: { linked_business: businessProfileId, source_origin: 'tavily' },
       orderBy: { created_date: 'desc' },
@@ -424,6 +428,7 @@ export async function collectReviews(req: Request, res: Response) {
         } catch { continue; }
       }
     }
+    } // end if (newReviews === 0) — T5 RawSignal fallback
 
     // ── Competitor mention detection in new reviews ──────────────────────────
     if (newReviews > 0) {
