@@ -180,7 +180,7 @@ export async function collectSocialSignals(req: Request, res: Response) {
           .join('\n');
 
         const influencerAnalysis = await invokeLLM({
-          maxTokens: 400,
+          maxTokens: 600,
           prompt: `You are an Israeli digital marketing expert. Identify influencers relevant to the sector.
 Sector: ${category}, Region: ${cityStr}
 
@@ -248,7 +248,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       `"${name}" ${category} ${city} אזכורים`,
     ];
 
-    for (const query of socialQueries) {
+    if (!isTavilyRateLimited()) for (const query of socialQueries) {
       const results = await tavilySearch(query);
       for (const r of results) {
         if (!r.url || existingUrls.has(r.url)) continue;
@@ -289,7 +289,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       phase3Queries.push(`"${compName}" בעיה תקלה מאוכזב`);
     }
 
-    for (const query of phase3Queries) {
+    if (!isTavilyRateLimited()) for (const query of phase3Queries) {
       const results = await tavilySearch(query);
       for (const r of results) {
         if (!r.url || existingUrls.has(r.url)) continue;
@@ -377,12 +377,12 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
             impact_reason:  'ביקורת שלילית ללא תגובה פוגעת בדירוג ובאמון לקוחות פוטנציאליים',
           }),
           source_signals: sig.url || '',
-          confidence: 80,
+          confidence: 0.8,
           is_read: false,
           linked_business: businessProfileId,
           detected_at: new Date().toISOString(),
         },
-      }).catch(() => {});
+      }).catch((e: any) => console.warn('[collectSocialSignals] MarketSignal create failed:', e.message));
       negativeSignalsFound++;
     }
 
