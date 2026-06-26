@@ -557,15 +557,23 @@ export async function collectReviews(req: Request, res: Response) {
         }
       } catch (_) {}
     }
-    // Publish to event bus (OTX-001)
+    // Publish one new_review event per review — exactly once (KAN-18 AC4)
     if (newReviews > 0) {
-      publishEvent({
-        businessId: businessProfileId,
-        eventType:  'new_review',
-        source:     'collectReviews',
-        payload:    { new_reviews: newReviews, google_added: googleAdded },
-        contextAttrs: { impact: googleAdded > 0 ? 'medium' : 'low' },
-      }).catch(() => {});
+      try {
+        const freshReviews = await prisma.review.findMany({
+          where: { linked_business: businessProfileId, created_date: { gte: new Date(startTime) } },
+          select: { id: true },
+        });
+        for (const rev of freshReviews) {
+          publishEvent({
+            businessId: businessProfileId,
+            eventType:  'new_review',
+            source:     'collectReviews',
+            payload:    { review_id: rev.id, google_added: googleAdded },
+            contextAttrs: { impact: googleAdded > 0 ? 'medium' : 'low' },
+          }).catch(() => {});
+        }
+      } catch (_) {}
     }
     return res.json({ new_reviews: newReviews, google_reviews_added: googleAdded, sources_scanned: sourcesToScan.length + (googleAdded > 0 ? 1 : 0) });
   } catch (err: any) {
