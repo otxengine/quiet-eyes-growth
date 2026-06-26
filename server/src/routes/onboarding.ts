@@ -11,6 +11,7 @@ import { prisma } from '../db';
 import { invokeLLM } from '../lib/llm';
 import { generateAgentMissions } from '../lib/missionPlanner';
 import { createLogger } from '../infra/logger';
+import { writeAutomationLog } from '../lib/automationLog';
 
 const logger = createLogger('Onboarding');
 const router = Router();
@@ -18,6 +19,8 @@ const router = Router();
 router.post('/parse-profile', async (req: Request, res: Response) => {
   const { businessProfileId, description, category, city, goal, price_tier, customer_sources } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
+
+  const startTime = new Date().toISOString();
 
   try {
     const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
@@ -31,6 +34,35 @@ router.post('/parse-profile', async (req: Request, res: Response) => {
     const srcText    = typeof customer_sources === 'string'
       ? customer_sources
       : JSON.stringify(customer_sources || []);
+
+    // AC#2: detect and log sparse input before hitting the LLM
+    const sparseFields = (
+      [['description', descText], ['category', catText], ['city', cityText], ['goal', goalText], ['price_tier', priceText]] as [string, string][]
+    ).filter(([, v]) => !v).map(([k]) => k);
+    if (sparseFields.length > 0) {
+      logger.warn(`parse-profile sparse input for ${businessProfileId}: missing fields [${sparseFields.join(', ')}]`);
+    }
+
+    // AC#2: fallback used when LLM throws or returns garbage
+    const FALLBACK_PROFILE: Record<string, any> = {
+      sector_key: 'other',
+      sub_sector: catText || 'general',
+      sector_label_he: catText || 'עסק כללי',
+      business_type: 'B2C',
+      service_model: 'walk_in',
+      target_audience_he: '',
+      relevant_topics: [],
+      irrelevant_topics: [],
+      irrelevant_signal_types: [],
+      competitor_type_he: '',
+      content_themes_he: [],
+      price_context_he: '',
+      lead_urgency: 'medium',
+      content_tone: 'friendly',
+      seasonality_he: '',
+      key_trust_signals_he: [],
+      _fallback: true,
+    };
 
     const prompt = `You are an expert business analyst specializing in Israeli small businesses.
 Analyze the following business details and produce a PRECISE structured profile in JSON.
@@ -63,15 +95,26 @@ Respond ONLY with valid JSON (no markdown, no explanation) matching this exact s
   "key_trust_signals_he": ["<2-3 Hebrew phrases: what builds trust in this specific sector>"]
 }`;
 
-    const parsed = await invokeLLM({
-      prompt,
-      model: 'haiku',
-      maxTokens: 800,
-      skipCache: true,
-      response_json_schema: { type: 'object' },
-    });
+    let sectorProfile: Record<string, any>;
+    let usedFallback = false;
+    let llmError: string | undefined;
 
-    const sectorProfile = typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
+    try {
+      const parsed = await invokeLLM({
+        prompt,
+        model: 'haiku',
+        maxTokens: 800,
+        skipCache: true,
+        response_json_schema: { type: 'object' },
+      });
+      sectorProfile = typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
+    } catch (llmErr: any) {
+      logger.warn(`parse-profile LLM failed for ${businessProfileId}, using fallback: ${llmErr.message}`);
+      sectorProfile = FALLBACK_PROFILE;
+      usedFallback = true;
+      llmError = llmErr.message;
+    }
+
     const sectorProfileStr = JSON.stringify(sectorProfile);
 
     // Build update data — also update category to clean AI-inferred label
@@ -87,11 +130,21 @@ Respond ONLY with valid JSON (no markdown, no explanation) matching this exact s
 
     await prisma.businessProfile.update({ where: { id: businessProfileId }, data: updateData });
 
-    logger.info(`Sector profile parsed for ${businessProfileId}: ${sectorProfile.sub_sector}`);
+    if (usedFallback) {
+      logger.info(`Sector profile fallback persisted for ${businessProfileId}`);
+      // AC#3: log fallback path — status 'success' because a profile WAS persisted
+      await writeAutomationLog('parseProfile', businessProfileId, startTime, 0, 'success', `fallback profile used: ${llmError}`);
+    } else {
+      logger.info(`Sector profile parsed for ${businessProfileId}: ${sectorProfile.sub_sector}`);
+      // AC#3: log happy path
+      await writeAutomationLog('parseProfile', businessProfileId, startTime, 1);
+    }
+
     return res.json({ ok: true, sector_profile: sectorProfile });
   } catch (err: any) {
     logger.warn(`parse-profile failed for ${businessProfileId}: ${err.message}`);
-    // Non-fatal — onboarding can continue without the AI profile
+    // AC#3: log hard failure (e.g. DB unreachable)
+    await writeAutomationLog('parseProfile', businessProfileId, startTime, 0, 'failed', err.message);
     return res.json({ ok: false, error: err.message });
   }
 });
