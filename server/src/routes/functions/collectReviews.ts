@@ -115,57 +115,68 @@ export async function collectReviews(req: Request, res: Response) {
     const gmbLocationPath = gmbAccount?.page_id;
     const gmbToken = gmbAccount?.access_token || (profile as any).google_access_token;
 
-    if (gmbToken && gmbLocationPath && gmbLocationPath.includes('/')) {
-      try {
-        const gmbRes = await fetch(
-          `https://mybusiness.googleapis.com/v4/${gmbLocationPath}/reviews?pageSize=50`,
-          { headers: { Authorization: `Bearer ${gmbToken}` } },
-        );
-        if (gmbRes.ok) {
-          const gmbData: any = await gmbRes.json();
-          // Collect all new reviews first, then batch-extract topics
+    if (gmbToken && gmbLocationPath) {
+      if (!gmbLocationPath.includes('/')) {
+        console.warn(`[collectReviews] GMB page_id "${gmbLocationPath}" is not a valid location path (expected "accounts/X/locations/Y") — skipping GMB`);
+      } else {
+        try {
+          let nextPageToken: string | undefined;
           const gmbPending: Array<{ gr: any; reviewId: string; text: string; textKey: string; rating: number; sentiment: string; reviewerName: string }> = [];
-          for (const gr of (gmbData.reviews || [])) {
-            const reviewId = gr.name;
-            if (existingGoogleIds.has(reviewId)) continue;
-            const text = gr.comment || '';
-            const textKey = text.substring(0, 50);
-            if (existingTexts.has(textKey) || text.length < 5) continue;
-            const rating = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }[gr.starRating as string] ?? 0;
-            const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
-            const reviewerName = gr.reviewer?.displayName || 'לקוח';
-            gmbPending.push({ gr, reviewId, text, textKey, rating, sentiment, reviewerName });
+          do {
+            const pageUrl = `https://mybusiness.googleapis.com/v4/${gmbLocationPath}/reviews?pageSize=50${nextPageToken ? `&pageToken=${nextPageToken}` : ''}`;
+            const gmbRes = await fetch(pageUrl, { headers: { Authorization: `Bearer ${gmbToken}` } });
+            if (!gmbRes.ok) {
+              const errData: any = await gmbRes.json().catch(() => ({}));
+              console.warn(`[collectReviews] GMB API ${gmbRes.status}: ${errData?.error?.message || 'unknown error'} — falling back to Places`);
+              break;
+            }
+            const gmbData: any = await gmbRes.json();
+            nextPageToken = gmbData.nextPageToken;
+            for (const gr of (gmbData.reviews || [])) {
+              const reviewId = gr.name;
+              if (existingGoogleIds.has(reviewId)) continue;
+              const text = gr.comment || '';
+              const textKey = text.substring(0, 50);
+              if (existingTexts.has(textKey) || text.length < 5) continue;
+              const rating = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }[gr.starRating as string] ?? 0;
+              const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
+              const reviewerName = gr.reviewer?.displayName || 'לקוח';
+              gmbPending.push({ gr, reviewId, text, textKey, rating, sentiment, reviewerName });
+            }
+          } while (nextPageToken);
+
+          if (gmbPending.length > 0) {
+            const gmbTopics = await batchExtractTopics(gmbPending.map(p => ({ text: p.text, sentiment: p.sentiment })));
+            for (let i = 0; i < gmbPending.length; i++) {
+              const { gr, reviewId, text, textKey, rating, sentiment, reviewerName } = gmbPending[i];
+              const { topics, topic_sentiment } = gmbTopics[i];
+              await prisma.review.create({
+                data: {
+                  platform: 'Google',
+                  rating,
+                  text: text.substring(0, 500),
+                  reviewer_name: reviewerName,
+                  sentiment,
+                  response_status: gr.reviewReply ? 'published' : 'pending',
+                  source_url: `https://www.google.com/maps/search/?q=${encodeURIComponent(name)}`,
+                  source_origin: 'google_business_api',
+                  google_review_id: reviewId,
+                  is_verified: true,
+                  created_at: gr.createTime || new Date().toISOString(),
+                  linked_business: businessProfileId,
+                  topics,
+                  topic_sentiment,
+                },
+              });
+              existingGoogleIds.add(reviewId);
+              existingTexts.add(textKey);
+              newReviews++;
+              googleAdded++;
+            }
           }
-          const gmbTopics = await batchExtractTopics(gmbPending.map(p => ({ text: p.text, sentiment: p.sentiment })));
-          for (let i = 0; i < gmbPending.length; i++) {
-            const { gr, reviewId, text, textKey, rating, sentiment, reviewerName } = gmbPending[i];
-            const { topics, topic_sentiment } = gmbTopics[i];
-            await prisma.review.create({
-              data: {
-                platform: 'Google',
-                rating,
-                text: text.substring(0, 500),
-                reviewer_name: reviewerName,
-                sentiment,
-                response_status: gr.reviewReply ? 'published' : 'pending',
-                source_url: `https://www.google.com/maps/search/?q=${encodeURIComponent(name)}`,
-                source_origin: 'google_business_api',
-                google_review_id: reviewId,
-                is_verified: true,
-                created_at: gr.createTime || new Date().toISOString(),
-                linked_business: businessProfileId,
-                topics,
-                topic_sentiment,
-              },
-            });
-            existingGoogleIds.add(reviewId);
-            existingTexts.add(textKey);
-            newReviews++;
-            googleAdded++;
-          }
+        } catch (err: any) {
+          console.warn('GMB API reviews fetch failed, falling back to Places:', err.message);
         }
-      } catch (err: any) {
-        console.warn('GMB API reviews fetch failed, falling back to Places:', err.message);
       }
     }
 

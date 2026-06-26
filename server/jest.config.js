@@ -8,5 +8,6 @@ module.exports = {
     '^.+\\.tsx?$': ['ts-jest', { tsconfig: { strict: false } }],
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
+  setupFiles: ['<rootDir>/src/__tests__/testEnv.ts'],
   clearMocks: true,
 };
