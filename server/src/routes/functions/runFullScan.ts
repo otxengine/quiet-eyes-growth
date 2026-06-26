@@ -44,6 +44,7 @@ async function callHandler(fn: Function, businessProfileId: string): Promise<any
       status: (_: number) => fakeRes,
     };
     Promise.resolve(fn(fakeReq, fakeRes)).catch((e: any) => {
+      console.error(`[runFullScan] collector error (${businessProfileId}):`, e.message);
       if (!done) { done = true; resolve({ error: e.message }); }
     });
   });
