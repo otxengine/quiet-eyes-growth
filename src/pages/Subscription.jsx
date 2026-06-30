@@ -88,85 +88,94 @@ const STATUS_LABELS = {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function PlanCard({ plan, isCurrentPlan, branchCount, onSelect, loading }) {
+function PlanCard({ plan, isCurrentPlan, branchCount, onSelect, loading, yearlyMode }) {
   const accentColor = `#${plan.color}`;
-  const totalMonthly = plan.pricePerBranch * branchCount;
+  const monthlyPrice = plan.pricePerBranch;
+  const displayPrice = yearlyMode ? Math.round(monthlyPrice * 0.83) : monthlyPrice;
+  const yearlyTotal  = displayPrice * 12 * branchCount;
+  const monthlyTotal = monthlyPrice * branchCount;
   const showBranchBreakdown = branchCount > 1;
 
   return (
     <div className={cn(
-      'card-base p-5 flex flex-col relative transition-all duration-200',
-      isCurrentPlan ? 'ring-2' : '',
-      plan.highlighted && !isCurrentPlan ? 'border-border-hover shadow-md' : '',
+      'bg-white rounded-2xl border flex flex-col relative transition-all duration-200',
+      isCurrentPlan
+        ? 'border-2 shadow-md'
+        : plan.highlighted
+          ? 'border-2 shadow-lg'
+          : 'border-gray-200 shadow-sm hover:shadow-md',
     )}
-    style={isCurrentPlan ? { borderColor: accentColor, outlineColor: accentColor } : {}}
+    style={(isCurrentPlan || plan.highlighted) ? { borderColor: accentColor } : {}}
     >
+      {/* Highlighted gradient overlay */}
+      {plan.highlighted && !isCurrentPlan && (
+        <div className="absolute inset-0 rounded-2xl pointer-events-none opacity-[0.04]"
+          style={{ background: `linear-gradient(135deg, ${accentColor} 0%, transparent 70%)` }} />
+      )}
+
       {plan.highlighted && (
-        <span className="absolute -top-3 right-4 px-3 py-0.5 rounded-full text-white text-[10px] font-bold" style={{ background: accentColor }}>
+        <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-white text-[11px] font-bold shadow-sm" style={{ background: accentColor }}>
           הכי פופולרי
         </span>
       )}
       {isCurrentPlan && (
-        <span className="absolute -top-3 left-4 px-3 py-0.5 rounded-full text-white text-[10px] font-bold" style={{ background: accentColor }}>
-          התוכנית שלך
+        <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-white text-[11px] font-bold shadow-sm" style={{ background: accentColor }}>
+          המסלול שלי
         </span>
       )}
 
-      <div className="mb-3">
-        <div className="flex items-center gap-2 mb-0.5">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ background: accentColor }} />
-          <h3 className="text-[14px] font-bold text-foreground">{plan.name}</h3>
-        </div>
-        <p className="text-[11px] text-foreground-muted">{plan.subtitle}</p>
-      </div>
-
-      {/* Price */}
-      <div className="mb-3">
-        <div className="flex items-baseline gap-1">
-          <span className="text-[26px] font-bold text-foreground tracking-tight">
-            ₪{plan.pricePerBranch.toLocaleString()}
-          </span>
-          <span className="text-[11px] text-foreground-muted">/סניף/חודש</span>
-        </div>
-        {showBranchBreakdown && (
-          <div className="mt-1 px-2 py-1 bg-secondary rounded-lg">
-            <p className="text-[11px] text-foreground-muted">
-              {branchCount} סניפים × ₪{plan.pricePerBranch.toLocaleString()} =
-              <span className="font-bold text-foreground mr-1">₪{totalMonthly.toLocaleString()}/חודש</span>
-            </p>
+      <div className="p-6 flex-1 flex flex-col">
+        {/* Plan name + price */}
+        <div className="text-right mb-5">
+          <h3 className="text-[22px] font-bold text-gray-900 mb-1">{plan.name}</h3>
+          <div className="flex items-baseline gap-1 justify-end">
+            <span className="text-[28px] font-bold text-gray-900 tracking-tight">₪{displayPrice.toLocaleString()}</span>
+            <span className="text-[12px] text-gray-500">לחודש</span>
           </div>
-        )}
+          {yearlyMode && (
+            <p className="text-[11px] text-gray-400 mt-0.5">₪{yearlyTotal.toLocaleString()} לשנה (לפני מע"מ) | מתחדש מדי שנה</p>
+          )}
+          {!yearlyMode && (
+            <p className="text-[11px] text-gray-400 mt-0.5">
+              {showBranchBreakdown ? `${branchCount} סניפים × ₪${monthlyPrice.toLocaleString()} | ` : ''}מתחדש מדי חודש
+            </p>
+          )}
+        </div>
+
+        {/* CTA button */}
+        <button
+          onClick={() => onSelect(plan.id)}
+          disabled={isCurrentPlan || loading}
+          className={cn(
+            'w-full py-3 rounded-full text-[13px] font-bold transition-all flex items-center justify-center gap-2 mb-5',
+            isCurrentPlan
+              ? 'bg-gray-100 text-gray-400 cursor-default border-2 border-gray-200'
+              : 'text-white shadow-sm hover:opacity-90 active:scale-[0.98]',
+          )}
+          style={!isCurrentPlan ? { background: accentColor } : {}}
+        >
+          {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+          {isCurrentPlan ? 'המסלול שלי' : 'לרכישה'}
+        </button>
+
+        {/* Feature divider */}
+        <p className="text-[12px] font-bold text-gray-700 text-right mb-3">מה זה כולל?</p>
+
+        {/* Features */}
+        <ul className="space-y-2 flex-1">
+          {plan.features.map((f, i) => (
+            <li key={i} className="flex items-center gap-2 text-[12px] justify-end">
+              <span className={f.included ? 'text-gray-700' : 'text-gray-300 line-through'}>{f.label}</span>
+              {f.included
+                ? <Check className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
+                : <div className="w-4 h-4 flex-shrink-0 rounded-full border border-gray-200 flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+                  </div>
+              }
+            </li>
+          ))}
+        </ul>
       </div>
-
-      {/* Features */}
-      <ul className="space-y-1.5 mb-5 flex-1">
-        {plan.features.map((f, i) => (
-          <li key={i} className="flex items-center gap-2 text-[11px]">
-            {f.included
-              ? <Check className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accentColor }} />
-              : <X className="w-3.5 h-3.5 flex-shrink-0 text-foreground-muted opacity-40" />
-            }
-            <span className={f.included ? 'text-foreground-secondary' : 'text-foreground-muted opacity-50'}>
-              {f.label}
-            </span>
-          </li>
-        ))}
-      </ul>
-
-      <button
-        onClick={() => onSelect(plan.id)}
-        disabled={isCurrentPlan || loading}
-        className={cn(
-          'w-full py-2.5 rounded-lg text-[12px] font-semibold transition-all flex items-center justify-center gap-2',
-          isCurrentPlan
-            ? 'bg-secondary text-foreground-muted cursor-default'
-            : 'text-white hover:opacity-90 shadow-sm',
-        )}
-        style={!isCurrentPlan ? { background: accentColor } : {}}
-      >
-        {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-        {isCurrentPlan ? 'התוכנית הנוכחית' : 'בחר תוכנית'}
-      </button>
     </div>
   );
 }
@@ -205,6 +214,7 @@ export default function Subscription() {
   const { currentOrg, allBranches, isLoading: orgLoading } = useOrganization();
   const [checkoutLoading, setCheckoutLoading] = useState(null);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [yearlyMode, setYearlyMode] = useState(false);
 
   const orgId = currentOrg?.id;
   const branchCount = Math.max(1, allBranches.length || currentOrg?.branch_count || 1);
@@ -278,9 +288,25 @@ export default function Subscription() {
   return (
     <div className="space-y-6 max-w-5xl" dir="rtl">
       {/* Header */}
-      <div className="flex items-center gap-2.5">
-        <Crown className="w-5 h-5 text-warning" />
-        <h1 className="text-[16px] font-bold text-foreground tracking-tight">ניהול מנוי</h1>
+      <div className="text-center pt-2 pb-1">
+        <h1 className="text-[26px] font-bold text-gray-900 mb-1">מסלולים שצומחים עם העסק שלך</h1>
+        <p className="text-[14px] text-gray-500 mb-5">בחרו את החבילה הכי משתלמת עבורכם</p>
+        {/* Monthly / Yearly toggle */}
+        <div className="inline-flex items-center bg-gray-100 rounded-full p-1 gap-1">
+          <button
+            onClick={() => setYearlyMode(false)}
+            className={cn('px-5 py-2 rounded-full text-[13px] font-semibold transition-all', !yearlyMode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500')}
+          >
+            תשלום חודשי
+          </button>
+          <button
+            onClick={() => setYearlyMode(true)}
+            className={cn('px-5 py-2 rounded-full text-[13px] font-semibold transition-all', yearlyMode ? 'bg-[#e8344d] text-white shadow-sm' : 'text-gray-500')}
+          >
+            תשלום שנתי
+            {!yearlyMode && <span className="mr-1.5 text-[10px] text-emerald-600 font-bold">חסכו 17%</span>}
+          </button>
+        </div>
       </div>
 
       {/* Past-due warning */}
@@ -370,21 +396,19 @@ export default function Subscription() {
       </div>
 
       {/* Plans Grid */}
-      <div>
-        <h2 className="text-[14px] font-semibold text-foreground mb-3">בחר תוכנית</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {PLANS.map((plan, i) => (
-            <div key={plan.id} className={`fade-in-up stagger-${i + 1}`}>
-              <PlanCard
-                plan={plan}
-                isCurrentPlan={plan.id === currentPlanId && subStatus === 'active'}
-                branchCount={branchCount}
-                onSelect={handlePlanSelect}
-                loading={checkoutLoading === plan.id}
-              />
-            </div>
-          ))}
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 items-start">
+        {PLANS.map((plan, i) => (
+          <div key={plan.id} className={`fade-in-up stagger-${i + 1} ${plan.highlighted ? 'sm:-mt-3' : ''}`}>
+            <PlanCard
+              plan={plan}
+              isCurrentPlan={plan.id === currentPlanId && subStatus === 'active'}
+              branchCount={branchCount}
+              onSelect={handlePlanSelect}
+              loading={checkoutLoading === plan.id}
+              yearlyMode={yearlyMode}
+            />
+          </div>
+        ))}
       </div>
 
       {/* Enterprise */}

@@ -2,8 +2,32 @@ import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Save, Loader2, Zap, MapPin, Plus, X, ShieldAlert } from 'lucide-react';
+import { Save, Loader2, Zap, MapPin, Plus, X, ShieldAlert, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
+
+// ── Accordion section card ────────────────────────────────────────────────────
+function SectionCard({ title, subtitle, children, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="section-card">
+      <div
+        className="flex items-center justify-between px-5 py-4 cursor-pointer select-none"
+        onClick={() => setOpen(v => !v)}
+      >
+        <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+        <div className="text-right">
+          <h2 className="text-[18px] font-bold text-gray-900">{title}</h2>
+          {subtitle && <p className="text-[13px] text-gray-500 mt-0.5">{subtitle}</p>}
+        </div>
+      </div>
+      {open && (
+        <div className="px-5 pb-5 border-t border-gray-100 pt-4">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const RADIUS_OPTIONS = [5, 10, 15, 20, 30, 50];
 
@@ -27,12 +51,8 @@ function SettingsSearchRadius({ businessProfile, onSave }) {
   };
 
   return (
-    <div className="card-base p-5">
-      <div className="flex items-center gap-2 mb-1">
-        <MapPin className="w-4 h-4 text-primary" />
-        <h2 className="text-[14px] font-semibold text-foreground">טווח חיפוש</h2>
-      </div>
-      <p className="text-[11px] text-foreground-muted mb-4">קבע עד כמה רחוק הסוכנים יחפשו לידים, מתחרים וסיגנלים</p>
+    <div className="space-y-4">
+      <p className="text-[12px] text-gray-500">קבע עד כמה רחוק הסוכנים יחפשו לידים, מתחרים וסיגנלים</p>
 
       {/* Radius pills */}
       <div className="mb-4">
@@ -56,10 +76,9 @@ function SettingsSearchRadius({ businessProfile, onSave }) {
         <p className="text-[10px] text-foreground-muted mt-1">הפרד ערים בפסיק</p>
       </div>
 
-      <button onClick={handleSave} disabled={saving}
-        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-[11px] font-medium hover:opacity-90 transition-all disabled:opacity-60">
+      <button onClick={handleSave} disabled={saving} className="btn-pill">
         {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-        {saving ? 'שומר...' : 'שמור הגדרות טווח'}
+        {saving ? 'שומר...' : 'עדכון'}
       </button>
     </div>
   );
@@ -96,18 +115,12 @@ function SettingsBranches({ businessProfile, onSave }) {
   };
 
   return (
-    <div className="card-base p-5">
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-2">
-          <MapPin className="w-4 h-4 text-primary" />
-          <h2 className="text-[14px] font-semibold text-foreground">סניפים</h2>
-        </div>
-        <button onClick={() => setAdding(v => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary border border-border text-[11px] font-medium text-foreground-muted hover:text-foreground transition-colors">
+    <div className="space-y-4">
+      <div className="flex justify-start">
+        <button onClick={() => setAdding(v => !v)} className="btn-pill-ghost text-[12px]">
           <Plus className="w-3.5 h-3.5" /> הוסף סניף
         </button>
       </div>
-      <p className="text-[11px] text-foreground-muted mb-4">הגדר סניפים נוספים — הסוכנים יסרקו גם עבורם</p>
 
       {branches.length > 0 && (
         <div className="space-y-2 mb-3">
@@ -137,17 +150,16 @@ function SettingsBranches({ businessProfile, onSave }) {
             placeholder="עיר"
             className="w-full border border-border rounded-lg px-3 py-2 text-[12px] bg-white focus:outline-none focus:ring-1 focus:ring-primary" />
           <div className="flex gap-2">
-            <button onClick={handleAdd} className="px-3 py-1.5 bg-primary text-white rounded-lg text-[11px] font-medium hover:opacity-90 transition-all">הוסף</button>
-            <button onClick={() => setAdding(false)} className="px-3 py-1.5 bg-secondary border border-border rounded-lg text-[11px] font-medium text-foreground-muted hover:text-foreground transition-colors">בטל</button>
+            <button onClick={handleAdd} className="btn-pill-dark text-[12px] px-4 py-2">הוסף</button>
+            <button onClick={() => setAdding(false)} className="btn-pill-ghost text-[12px]">בטל</button>
           </div>
         </div>
       )}
 
       {branches.length > 0 && (
-        <button onClick={handleSave} disabled={saving}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-[11px] font-medium hover:opacity-90 transition-all disabled:opacity-60">
+        <button onClick={handleSave} disabled={saving} className="btn-pill">
           {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-          {saving ? 'שומר...' : 'שמור סניפים'}
+          {saving ? 'שומר...' : 'עדכון'}
         </button>
       )}
     </div>
@@ -197,12 +209,8 @@ function AutonomySelector({ businessProfile, onSave }) {
   };
 
   return (
-    <div className="card-base p-5">
-      <div className="flex items-center gap-2 mb-1">
-        <Zap className="w-4 h-4 text-primary" />
-        <h2 className="text-[14px] font-semibold text-foreground">רמת אוטונומיה של הסוכנים</h2>
-      </div>
-      <p className="text-[11px] text-foreground-muted mb-4">
+    <div className="space-y-4">
+      <p className="text-[12px] text-gray-500">
         קבע כמה כסף ומאמץ הסוכנים יחסכו לך אוטומטית. לידים תמיד ידניים ללא קשר להגדרה זו.
       </p>
       <div className="flex flex-col gap-2">
@@ -229,13 +237,9 @@ function AutonomySelector({ businessProfile, onSave }) {
         ))}
       </div>
       {selected !== current && (
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="mt-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-[11px] font-medium hover:opacity-90 transition-all disabled:opacity-60"
-        >
+        <button onClick={handleSave} disabled={saving} className="mt-4 btn-pill">
           {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-          {saving ? 'שומר...' : 'שמור רמת אוטונומיה'}
+          {saving ? 'שומר...' : 'עדכון'}
         </button>
       )}
     </div>
@@ -312,13 +316,8 @@ function ConstraintsSection({ businessProfileId }) {
   };
 
   return (
-    <div className="card-base p-5 space-y-5">
-      <div className="flex items-center gap-2">
-        <ShieldAlert className="w-4 h-4 text-orange-500" />
-        <h2 className="text-[14px] font-semibold text-foreground">הגבלות ומדיניות תוכן</h2>
-        <span className="text-[10px] text-foreground-muted">(OTX-004)</span>
-      </div>
-      <p className="text-[11px] text-foreground-muted -mt-3">
+    <div className="space-y-5">
+      <p className="text-[12px] text-gray-500">
         הגבלות שהסוכנים יישמרו עליהן בעת יצירת תוכן ופעולות אוטומטיות
       </p>
 
@@ -424,10 +423,9 @@ function ConstraintsSection({ businessProfileId }) {
         <span className="text-[12px] text-foreground">אפשר אזכור מתחרים בתוכן שנוצר</span>
       </label>
 
-      <button onClick={handleSave} disabled={saving}
-        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-[11px] font-medium hover:opacity-90 disabled:opacity-60 transition-all">
-        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-        שמור הגבלות
+      <button onClick={handleSave} disabled={saving} className="btn-pill">
+        {saving && <Loader2 className="w-3 h-3 animate-spin" />}
+        {saving ? 'שומר...' : 'עדכון'}
       </button>
     </div>
   );
@@ -545,102 +543,95 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-5 max-w-2xl">
-      <h1 className="text-[16px] font-bold text-foreground tracking-tight">הגדרות</h1>
-      <SettingsBusinessDetails form={form} setForm={setForm} onSave={handleSaveAll} saving={saving} />
-      <SettingsTone form={form} onToneChange={(tone) => { setForm({ ...form, tone_preference: tone }); saveField({ tone_preference: tone }); toast.success('הטון עודכן ✓'); }} />
-      <SettingsLeadCriteria form={form} setForm={setForm} onSave={() => saveField({ min_budget: form.min_budget, relevant_services: form.relevant_services, preferred_area: form.preferred_area, lead_intent_signals: form.lead_intent_signals, lead_quality_notes: form.lead_quality_notes })} />
-      <SettingsChannels
-        form={form}
-        setForm={setForm}
-        saving={saving}
-        onSave={async () => {
-          setSaving(true);
-          await saveField({
-            channels_whatsapp: form.channels_whatsapp,
-            channels_whatsapp_enabled: form.channels_whatsapp_enabled,
-            channels_instagram: form.channels_instagram,
-            channels_instagram_enabled: form.channels_instagram_enabled,
-            channels_facebook: form.channels_facebook,
-            channels_facebook_enabled: form.channels_facebook_enabled,
-            channels_tiktok: form.channels_tiktok,
-            channels_tiktok_enabled: form.channels_tiktok_enabled,
-            channels_website: form.channels_website,
-            channels_website_enabled: form.channels_website_enabled,
-            channels_webhook_secret: form.channels_webhook_secret,
-          });
-          setSaving(false);
-          toast.success('הגדרות ערוצים נשמרו ✓');
-        }}
-      />
-      <SettingsWhatsAppBot
-        form={form}
-        setForm={setForm}
-        saving={saving}
-        onSave={async () => {
-          setSaving(true);
-          await saveField({
-            bot_enabled: form.bot_enabled,
-            bot_greeting: form.bot_greeting,
-            bot_qualification_questions: form.bot_qualification_questions,
-            bot_good_lead_criteria: form.bot_good_lead_criteria,
-            bot_bad_lead_criteria: form.bot_bad_lead_criteria,
-            bot_services_info: form.bot_services_info,
-            bot_working_hours_start: form.bot_working_hours_start,
-            bot_working_hours_end: form.bot_working_hours_end,
-            bot_off_hours_message: form.bot_off_hours_message,
-          });
-          setSaving(false);
-          toast.success('הגדרות בוט נשמרו ✓');
-        }}
-        businessProfile={businessProfile}
-      />
-      <SettingsPushNotifications
-        form={form}
-        onToggle={(key, val) => saveField({ [key]: val })}
-        onFieldChange={(key, val) => {
-          setForm(f => ({ ...f, [key]: val }));
-          saveField({ [key]: val });
-        }}
-      />
-      <SettingsDataSources
-        form={form}
-        setForm={setForm}
-        saving={saving}
-        onSave={async () => {
-          setSaving(true);
-          await saveField({
-            custom_keywords: form.custom_keywords,
-            custom_urls: form.custom_urls,
-            facebook_url: form.facebook_url,
-            instagram_url: form.instagram_url,
-            tiktok_url: form.tiktok_url,
-            website_url: form.website_url,
-            monitor_competitors_social: form.monitor_competitors_social,
-          });
-          setSaving(false);
-          toast.success('הגדרות מקורות מידע נשמרו ✓');
-        }}
-      />
-      <SettingsAutoRespond
-        form={form}
-        onToggle={(key, val) => { setForm(f => ({ ...f, [key]: val })); saveField({ [key]: val }); }}
-        onFieldChange={(key, val) => { setForm(f => ({ ...f, [key]: val })); saveField({ [key]: val }); }}
-      />
+    <div className="space-y-4 max-w-2xl" dir="rtl">
+      <div className="text-right pb-1">
+        <h1 className="text-[22px] font-bold text-gray-900">הגדרות</h1>
+      </div>
 
-      {/* Autonomy Level */}
-      <AutonomySelector businessProfile={businessProfile} onSave={saveField} />
+      <SectionCard title="פרטי העסק" subtitle="שם, קטגוריה, כתובת ותיאור">
+        <SettingsBusinessDetails form={form} setForm={setForm} onSave={handleSaveAll} saving={saving} />
+      </SectionCard>
 
-      {/* Search Radius */}
-      <SettingsSearchRadius businessProfile={businessProfile} onSave={saveField} />
+      <SectionCard title="טון ותקשורת" subtitle="איך הסוכנים ידברו עם הלקוחות שלך">
+        <SettingsTone form={form} onToneChange={(tone) => { setForm({ ...form, tone_preference: tone }); saveField({ tone_preference: tone }); toast.success('הטון עודכן ✓'); }} />
+      </SectionCard>
 
-      {/* Branches */}
-      <SettingsBranches businessProfile={businessProfile} onSave={saveField} />
+      <SectionCard title="קריטריוני לידים" subtitle="אילו לידים רלוונטיים לעסק שלך">
+        <SettingsLeadCriteria form={form} setForm={setForm} onSave={() => saveField({ min_budget: form.min_budget, relevant_services: form.relevant_services, preferred_area: form.preferred_area, lead_intent_signals: form.lead_intent_signals, lead_quality_notes: form.lead_quality_notes })} />
+      </SectionCard>
 
-      <SettingsAlerts form={form} onToggle={(key, val) => saveField({ [key]: val })} />
+      <SectionCard title="ערוצי תקשורת" subtitle="WhatsApp, Instagram, Facebook ועוד" defaultOpen={false}>
+        <SettingsChannels
+          form={form} setForm={setForm} saving={saving}
+          onSave={async () => {
+            setSaving(true);
+            await saveField({ channels_whatsapp: form.channels_whatsapp, channels_whatsapp_enabled: form.channels_whatsapp_enabled, channels_instagram: form.channels_instagram, channels_instagram_enabled: form.channels_instagram_enabled, channels_facebook: form.channels_facebook, channels_facebook_enabled: form.channels_facebook_enabled, channels_tiktok: form.channels_tiktok, channels_tiktok_enabled: form.channels_tiktok_enabled, channels_website: form.channels_website, channels_website_enabled: form.channels_website_enabled, channels_webhook_secret: form.channels_webhook_secret });
+            setSaving(false);
+            toast.success('הגדרות ערוצים נשמרו ✓');
+          }}
+        />
+      </SectionCard>
 
-      {/* OTX-004: Constraint-based validation settings */}
-      <ConstraintsSection businessProfileId={businessProfile?.id} />
+      <SectionCard title="בוט WhatsApp" subtitle="הגדר את הבוט לסינון לידים אוטומטי" defaultOpen={false}>
+        <SettingsWhatsAppBot
+          form={form} setForm={setForm} saving={saving}
+          onSave={async () => {
+            setSaving(true);
+            await saveField({ bot_enabled: form.bot_enabled, bot_greeting: form.bot_greeting, bot_qualification_questions: form.bot_qualification_questions, bot_good_lead_criteria: form.bot_good_lead_criteria, bot_bad_lead_criteria: form.bot_bad_lead_criteria, bot_services_info: form.bot_services_info, bot_working_hours_start: form.bot_working_hours_start, bot_working_hours_end: form.bot_working_hours_end, bot_off_hours_message: form.bot_off_hours_message });
+            setSaving(false);
+            toast.success('הגדרות בוט נשמרו ✓');
+          }}
+          businessProfile={businessProfile}
+        />
+      </SectionCard>
+
+      <SectionCard title="הגדרת התראות" subtitle="כאן מגדירים אילו התראות יוצאות על ידי המערכת">
+        <SettingsPushNotifications
+          form={form}
+          onToggle={(key, val) => saveField({ [key]: val })}
+          onFieldChange={(key, val) => { setForm(f => ({ ...f, [key]: val })); saveField({ [key]: val }); }}
+        />
+      </SectionCard>
+
+      <SectionCard title="מקורות מידע" subtitle="מה הסוכנים סורקים ומאיפה" defaultOpen={false}>
+        <SettingsDataSources
+          form={form} setForm={setForm} saving={saving}
+          onSave={async () => {
+            setSaving(true);
+            await saveField({ custom_keywords: form.custom_keywords, custom_urls: form.custom_urls, facebook_url: form.facebook_url, instagram_url: form.instagram_url, tiktok_url: form.tiktok_url, website_url: form.website_url, monitor_competitors_social: form.monitor_competitors_social });
+            setSaving(false);
+            toast.success('הגדרות מקורות מידע נשמרו ✓');
+          }}
+        />
+      </SectionCard>
+
+      <SectionCard title="מענה אוטומטי לביקורות" subtitle="AI יגיב לביקורות לפי הטון שלך" defaultOpen={false}>
+        <SettingsAutoRespond
+          form={form}
+          onToggle={(key, val) => { setForm(f => ({ ...f, [key]: val })); saveField({ [key]: val }); }}
+          onFieldChange={(key, val) => { setForm(f => ({ ...f, [key]: val })); saveField({ [key]: val }); }}
+        />
+      </SectionCard>
+
+      <SectionCard title="רמת אוטונומיה" subtitle="קבע כמה הסוכנים פועלים עצמאית" defaultOpen={false}>
+        <AutonomySelector businessProfile={businessProfile} onSave={saveField} />
+      </SectionCard>
+
+      <SectionCard title="טווח חיפוש גיאוגרפי" subtitle="עד כמה רחוק הסוכנים יחפשו" defaultOpen={false}>
+        <SettingsSearchRadius businessProfile={businessProfile} onSave={saveField} />
+      </SectionCard>
+
+      <SectionCard title="סניפים" subtitle="הגדר סניפים נוספים לסריקה" defaultOpen={false}>
+        <SettingsBranches businessProfile={businessProfile} onSave={saveField} />
+      </SectionCard>
+
+      <SectionCard title="התראות ודוחות" subtitle="מה ומתי לקבל עדכונים" defaultOpen={false}>
+        <SettingsAlerts form={form} onToggle={(key, val) => saveField({ [key]: val })} />
+      </SectionCard>
+
+      <SectionCard title="הגבלות ומדיניות תוכן" subtitle="מה הסוכנים לא יכולים לעשות" defaultOpen={false}>
+        <ConstraintsSection businessProfileId={businessProfile?.id} />
+      </SectionCard>
     </div>
   );
 }
