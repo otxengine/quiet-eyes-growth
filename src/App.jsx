@@ -62,6 +62,7 @@ import AgencyDashboard from '@/pages/AgencyDashboard.jsx';
 import JoinPage from '@/pages/JoinPage.jsx';
 import CommandHome from '@/pages/CommandHome.jsx';
 import ChatPage from '@/pages/Chat.jsx';
+import AccountPage from '@/pages/AccountPage.jsx';
 import { OrganizationProvider } from '@/contexts/OrganizationContext';
 
 const AuthenticatedApp = () => {
@@ -194,6 +195,7 @@ const AuthenticatedApp = () => {
         <Route path="/org/settings" element={<OrganizationSettings />} />
         <Route path="/agency" element={<AgencyDashboard />} />
         <Route path="/chat" element={<ChatPage />} />
+        <Route path="/account" element={<AccountPage />} />
         <Route path="/command" element={<CommandHome />} />
         <Route path="*" element={<PageNotFound />} />
       </Route>

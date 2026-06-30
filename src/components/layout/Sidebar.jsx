@@ -318,19 +318,6 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, 
           })}
         </ul>
 
-        {/* Settings link — minimal, below main nav */}
-        {!collapsed && (
-          <div className="px-5 mt-4 pt-4" style={{ borderTop: '1px solid hsl(var(--sidebar-border))' }}>
-            <Link to="/settings" onClick={() => onNavigate?.()}
-              className="flex items-center h-8 text-[13px] transition-colors"
-              style={{ color: location.pathname === '/settings' ? '#111' : '#aaaaaa' }}
-              onMouseEnter={e => e.currentTarget.style.color = '#555'}
-              onMouseLeave={e => e.currentTarget.style.color = location.pathname === '/settings' ? '#111' : '#aaaaaa'}
-            >
-              הגדרות
-            </Link>
-          </div>
-        )}
       </nav>
 
       {/* Footer — אזור אישי */}
@@ -371,8 +358,7 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, 
             {/* Menu items */}
             <div className="py-1">
               {[
-                { icon: Settings, label: 'הגדרות', path: '/settings' },
-                { icon: CreditCard, label: 'מנוי', path: '/subscription' },
+                { icon: User, label: 'החשבון שלי', path: '/account' },
                 ...(currentOrg ? [{ icon: GitBranch, label: 'הגדרות ארגון', path: '/org/settings' }] : []),
               ].map(({ icon: Icon, label, path }) => (
                 <button
