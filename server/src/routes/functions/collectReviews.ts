@@ -6,6 +6,7 @@ import { tavilySearch } from '../../lib/tavily';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { tryDecryptToken } from '../../lib/crypto';
 import { publishEvent } from '../../lib/eventBus';
+import { normReviewOrigin } from '../../lib/signalGuard';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours — Google Places API quota
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
@@ -92,6 +93,7 @@ export async function collectReviews(req: Request, res: Response) {
   const requestedSources: string[] = req.body.sources || [];
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
   if (!req.body.force && shouldSkipAgent(businessProfileId, 'collectReviews', MIN_INTERVAL_MS)) {
+    await writeAutomationLog('collectReviews', businessProfileId, new Date().toISOString(), 0, 'success', 'ran_recently');
     return res.json({ new_reviews: 0, skipped: true, reason: 'ran_recently' });
   }
 
@@ -170,7 +172,7 @@ export async function collectReviews(req: Request, res: Response) {
                   sentiment,
                   response_status: gr.reviewReply ? 'published' : 'pending',
                   source_url: `https://www.google.com/maps/search/?q=${encodeURIComponent(name)}`,
-                  source_origin: 'google_business_api',
+                  source_origin: normReviewOrigin('google_business_api', 'collectReviews:gmb'),
                   google_review_id: reviewId,
                   is_verified: true,
                   created_at: gr.createTime || new Date().toISOString(),

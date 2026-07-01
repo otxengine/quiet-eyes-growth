@@ -91,6 +91,7 @@ export async function analyzeInstagramComments(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
   if (shouldSkipAgent(businessProfileId, 'analyzeInstagramComments', MIN_INTERVAL_MS)) {
+    await writeAutomationLog('analyzeInstagramComments', businessProfileId, new Date().toISOString(), 0, 'success', 'ran_recently');
     return res.json({ comments_analyzed: 0, skipped: true, reason: 'ran_recently' });
   }
 

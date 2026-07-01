@@ -268,6 +268,7 @@ describe('AC3 — 12h cooldown', () => {
     await analyzeTikTokContent(req, res);
 
     expect(json).toHaveBeenCalledWith({ videos_analyzed: 0, skipped: true, reason: 'ran_recently' });
+    expect(writeAutomationLog as jest.Mock).toHaveBeenCalledWith('analyzeTikTokContent', 'bp1', expect.any(String), 0, 'success', 'ran_recently');
     expect(llm).not.toHaveBeenCalled();
     expect(rawSignalCreate).not.toHaveBeenCalled();
   });

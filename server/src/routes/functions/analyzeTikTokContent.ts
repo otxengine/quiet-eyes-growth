@@ -61,6 +61,7 @@ export async function analyzeTikTokContent(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
   if (shouldSkipAgent(businessProfileId, 'analyzeTikTokContent', MIN_INTERVAL_MS)) {
+    await writeAutomationLog('analyzeTikTokContent', businessProfileId, new Date().toISOString(), 0, 'success', 'ran_recently');
     return res.json({ videos_analyzed: 0, skipped: true, reason: 'ran_recently' });
   }
 

@@ -136,6 +136,7 @@ describe('collectReviews — cooldown', () => {
     const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
     await collectReviews(req, res);
     expect(json).toHaveBeenCalledWith({ new_reviews: 0, skipped: true, reason: 'ran_recently' });
+    expect(autoLog).toHaveBeenCalledWith('collectReviews', 'bp1', expect.any(String), 0, 'success', 'ran_recently');
     expect(reviewCreate).not.toHaveBeenCalled();
   });
 
@@ -149,6 +150,28 @@ describe('collectReviews — cooldown', () => {
 });
 
 // ── AC1: GMB path ──────────────────────────────────────────────────────────────
+
+describe('collectReviews — KAN-23 AC#1 content truncation', () => {
+
+  test('review text longer than 500 chars is truncated to 500 before storage (GMB path)', async () => {
+    const longText = 'מ'.repeat(600);
+    socialFindFirst.mockResolvedValue(GMB_ACCOUNT);
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ reviews: [gmbReview({ comment: longText })], nextPageToken: undefined }),
+    });
+    llm.mockResolvedValue({ results: [{ topics: [], sentiments: {} }] });
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+
+    expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ text: longText.substring(0, 500) }),
+    }));
+    expect(reviewCreate.mock.calls[0][0].data.text).toHaveLength(500);
+  });
+
+});
 
 describe('collectReviews — AC1: GMB connected → reviews fetched and de-duped by google_review_id', () => {
 

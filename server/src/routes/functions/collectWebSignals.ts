@@ -16,6 +16,7 @@ export async function collectWebSignals(req: Request, res: Response) {
 
   // ── Delta guard: skip if last run was <12h ago ────────────────────────────
   if (shouldSkipAgent(businessProfileId, 'collectWebSignals', MIN_INTERVAL_MS)) {
+    await writeAutomationLog('collectWebSignals', businessProfileId, new Date().toISOString(), 0, 'success', 'ran_recently');
     return res.json({ new_signals: 0, skipped: true, reason: 'ran_recently' });
   }
 

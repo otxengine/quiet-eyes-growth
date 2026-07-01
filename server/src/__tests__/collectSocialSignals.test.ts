@@ -92,6 +92,7 @@ describe('collectSocialSignals — AC#3 cooldown', () => {
     const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
     await collectSocialSignals(req, res);
     expect(json).toHaveBeenCalledWith({ new_signals: 0, skipped: true, reason: 'ran_recently' });
+    expect(autoLog).toHaveBeenCalledWith('collectSocialSignals', 'bp1', expect.any(String), 0, 'success', 'ran_recently');
     expect(tavily).not.toHaveBeenCalled();
     expect(signalCreate).not.toHaveBeenCalled();
   });
@@ -141,7 +142,7 @@ describe('collectSocialSignals — AC#1 RawSignal and MarketSignal writes', () =
     expect(signalCreate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         platform: 'facebook',
-        signal_type: 'social_post',
+        signal_type: 'social_mention',
         source_origin: 'apify',
         linked_business: 'bp1',
       }),
@@ -171,6 +172,21 @@ describe('collectSocialSignals — AC#1 RawSignal and MarketSignal writes', () =
         linked_business: 'bp1',
       }),
     }));
+  });
+
+  test('KAN-23 AC1: content longer than 500 chars is truncated before storage (Facebook Apify)', async () => {
+    apifyKey.mockReturnValue(true);
+    bpFindMany.mockResolvedValue([{ ...PROFILE, facebook_url: 'https://facebook.com/testbiz' }]);
+    const longContent = 'א'.repeat(600);
+    apifyRun.mockResolvedValue([{ url: 'https://facebook.com/post/1', text: longContent }]);
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectSocialSignals(req, res);
+
+    expect(signalCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ content: longContent.substring(0, 500) }),
+    }));
+    expect(signalCreate.mock.calls[0][0].data.content).toHaveLength(500);
   });
 
   test('duplicate URL already in DB is not re-inserted', async () => {

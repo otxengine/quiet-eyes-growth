@@ -236,6 +236,7 @@ describe('edge cases', () => {
     await analyzeInstagramComments(req, res);
 
     expect(json).toHaveBeenCalledWith({ comments_analyzed: 0, skipped: true, reason: 'ran_recently' });
+    expect(writeAutomationLog as jest.Mock).toHaveBeenCalledWith('analyzeInstagramComments', 'bp1', expect.any(String), 0, 'success', 'ran_recently');
     expect(llm).not.toHaveBeenCalled();
   });
 

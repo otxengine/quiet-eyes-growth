@@ -9,6 +9,7 @@ import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { tryDecryptToken } from '../../lib/crypto';
 import { parseKeywords, buildUrlQueries } from '../../lib/dataSources';
 import { getSectorProfile, cityToEn } from '../../lib/businessProfile';
+import { normSignalType, normRawOrigin } from '../../lib/signalGuard';
 
 // Dummy res that swallows output — used when firing sub-agents inline
 const GRAPH_BASE = 'https://graph.facebook.com/v19.0';
@@ -18,6 +19,7 @@ export async function collectSocialSignals(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
   if (shouldSkipAgent(businessProfileId, 'collectSocialSignals', MIN_INTERVAL_MS)) {
+    await writeAutomationLog('collectSocialSignals', businessProfileId, new Date().toISOString(), 0, 'success', 'ran_recently');
     return res.json({ new_signals: 0, skipped: true, reason: 'ran_recently' });
   }
 
@@ -55,9 +57,9 @@ export async function collectSocialSignals(req: Request, res: Response) {
             source: `facebook: ${name}`,
             content,
             url,
-            signal_type: 'social_post',
+            signal_type: normSignalType('social_mention', 'collectSocialSignals:facebook'),
             platform: 'facebook',
-            source_origin: 'apify',
+            source_origin: normRawOrigin('apify', 'collectSocialSignals:facebook'),
             detected_at: new Date().toISOString(),
             linked_business: businessProfileId,
           },
@@ -86,9 +88,9 @@ export async function collectSocialSignals(req: Request, res: Response) {
             source: `instagram: ${name}`,
             content,
             url,
-            signal_type: 'social_post',
+            signal_type: normSignalType('social_mention', 'collectSocialSignals:instagram'),
             platform: 'instagram',
-            source_origin: 'apify',
+            source_origin: normRawOrigin('apify', 'collectSocialSignals:instagram'),
             detected_at: new Date().toISOString(),
             linked_business: businessProfileId,
           },
@@ -145,9 +147,9 @@ export async function collectSocialSignals(req: Request, res: Response) {
                 source: `instagram_hashtag_graph: #${hashtag}`,
                 content,
                 url,
-                signal_type: 'social_mention',
+                signal_type: normSignalType('social_mention', 'collectSocialSignals:ig_graph'),
                 platform: 'instagram',
-                source_origin: 'instagram_graph_api',
+                source_origin: normRawOrigin('instagram_graph_api', 'collectSocialSignals:ig_graph'),
                 detected_at: new Date().toISOString(),
                 linked_business: businessProfileId,
               },
@@ -301,7 +303,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
           : urlLower.includes('google') ? 'google_maps'
           : 'web';
         const mentionsBusiness = content.toLowerCase().includes(name.toLowerCase());
-        const signal_type = mentionsBusiness ? 'social_review' : 'social_mention';
+        const signal_type = normSignalType(mentionsBusiness ? 'social_review' : 'social_mention', 'collectSocialSignals:phase3');
         await prisma.rawSignal.create({
           data: {
             source: `tavily_p3: ${query}`,

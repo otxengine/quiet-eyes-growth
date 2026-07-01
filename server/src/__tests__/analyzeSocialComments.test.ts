@@ -77,6 +77,7 @@ describe('AC3 — 12h cooldown', () => {
     const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
     await analyzeSocialComments(req, res);
     expect(json).toHaveBeenCalledWith({ comments_analyzed: 0, skipped: true, reason: 'ran_recently' });
+    expect(writeAutomationLog as jest.Mock).toHaveBeenCalledWith('analyzeSocialComments', 'bp1', expect.any(String), 0, 'success', 'ran_recently');
     expect(mockFetch).not.toHaveBeenCalled();
     expect(llm).not.toHaveBeenCalled();
   });

@@ -54,7 +54,7 @@
     },
     "source_origin": {
       "type": "string",
-      "enum": ["google_places", "tavily", "apify", "manual"],
+      "enum": ["google_places", "google_business_api", "tavily", "apify", "manual"],
       "default": "manual",
       "description": "מקור הביקורת — google_places/tavily/apify = אמיתי, manual = הוזן ידנית"
     },

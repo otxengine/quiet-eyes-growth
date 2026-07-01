@@ -143,6 +143,7 @@ describe('collectWebSignals — AC#2 query ordering', () => {
     await collectWebSignals(req, res);
 
     expect(json).toHaveBeenCalledWith({ new_signals: 0, skipped: true, reason: 'ran_recently' });
+    expect(autoLog).toHaveBeenCalledWith('collectWebSignals', 'bp1', expect.any(String), 0, 'success', 'ran_recently');
     expect(tavily).not.toHaveBeenCalled();
   });
 
@@ -151,6 +152,24 @@ describe('collectWebSignals — AC#2 query ordering', () => {
     await collectWebSignals(req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+});
+
+describe('collectWebSignals — KAN-23 AC#1 content truncation', () => {
+
+  test('content longer than 500 chars is truncated to 500 before storage', async () => {
+    const longContent = 'x'.repeat(600);
+    tavily.mockResolvedValue([{ url: 'https://example.com/long', content: longContent }]);
+    bsq.mockReturnValue(['q1']);
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectWebSignals(req, res);
+
+    expect(signalCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ content: longContent.substring(0, 500) }),
+    }));
+    expect(signalCreate.mock.calls[0][0].data.content).toHaveLength(500);
   });
 
 });
