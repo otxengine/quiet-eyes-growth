@@ -220,19 +220,89 @@ ${signalSamples || 'אין'}
     let result: any = null;
     let geminiEnrichment: any = null;
 
+    const platformLabel = platform || 'facebook';
+    const isPlatformTikTok = platformLabel === 'tiktok';
+
     try {
       result = await invokeLLM({
         model: 'haiku',
-        maxTokens: 900,
+        maxTokens: 1100,
         skipCache: true,
-        prompt: `פרסום ממומן ישראל — בנה 2 סגמנטי קהל יעד מדויקים המבוססים על הנתונים האמיתיים שלמטה.
+        prompt: `You are a paid advertising expert specializing in the Israeli market.
+Build 2 precise audience segments for a paid ${platformLabel} campaign based on the real business data below.
 
 ${fullContext}
 
-הנחיה: קהל היעד חייב לשקף מי מגיב לתוכן הספציפי הזה. אל תמציא קהל גנרי.
+════════════════════════════════════════
+CRITICAL RULES — follow exactly:
 
-החזר JSON בלבד:
-{"segments":[{"segment_name":"שם","description":"תיאור קצר","age_min":25,"age_max":45,"genders":"נשים וגברים","income_level":"mid","conversion_probability":0.3,"estimated_size":"medium","estimated_audience_range":"10,000-40,000","why_this_segment":"למה הסגמנט הזה","facebook_targeting":{"interests":["עניין 1","עניין 2","עניין 3"],"behaviors":["התנהגות"],"custom_audience":"Custom Audience מומלץ","lookalike_source":"מקור Lookalike","exclusions":[]},"google_targeting":{"keywords":["ביטוי 1","ביטוי 2"],"negative_keywords":[],"in_market_audiences":["קטגוריה"],"custom_intent":"כוונה"},"best_channels":["Facebook","Instagram"],"best_posting_time":"ראשון-חמישי 18:00-21:00","ad_creative_tip":"טיפ קריאייטיב","pain_point":"כאב מהנתונים","purchase_trigger":"טריגר קנייה"}]}`,
+META (Facebook/Instagram) — interests[] MUST be real strings from Facebook's interest taxonomy:
+  ✅ Good: "Asian cuisine", "Sushi", "Japanese restaurant", "Food & dining", "Fine dining", "Takeaway food", "Cooking", "Foodie", "Restaurant"
+  ✅ Good: city interests like "Tel Aviv" only when relevant — NOT as a substitute for topic interests
+  ❌ Bad: Hebrew city names as interests, vague descriptions, invented categories
+behaviors[] MUST be real Meta behaviors:
+  ✅ Good: "Engaged shoppers", "Restaurant dining preference", "Facebook dining consumer", "Small business owners"
+  ❌ Bad: invented behaviors not in Meta's taxonomy
+custom_audience: actionable pixel/list audience (e.g. "Website visitors (30 days)", "Video viewers 75% (60 days)")
+lookalike_source: specific source (e.g. "Customer email list", "Website purchasers (180 days)")
+exclusions[]: who to exclude (e.g. "Existing customers (180 days)")
+
+GOOGLE ADS — use proper match type syntax:
+  Broad Modified: +keyword (e.g. "+מסעדה +אסייתית")
+  Phrase Match:   "keyword" (e.g. "סושי זכרון יעקב")
+  Exact Match:    [keyword] (e.g. [מסעדה אסייתית מקומית])
+in_market_audiences[] MUST be from Google's taxonomy:
+  ✅ Good: "Food & Dining/Restaurant Dining", "Food & Dining/Asian Cuisine Restaurants", "Beauty/Spas & Beauty Services"
+  ❌ Bad: Hebrew categories not in Google's taxonomy
+
+TIKTOK targeting:
+interest_categories[] from TikTok's official taxonomy ONLY:
+  ✅ Good: "Food & Beverage", "Restaurants", "Cooking", "Travel & Tourism", "Entertainment", "Fashion & Accessories", "Sports & Outdoor", "Beauty & Personal Care"
+hashtags[]: real popular hashtags in the relevant language (#sushi, #israelifood, #אוכל)
+creative_format: "In-Feed Ad" | "Spark Ads" | "TopView" | "Branded Hashtag Challenge"
+
+AUDIENCE SIZE — estimate for Israeli market realistically:
+  City-level (single city, e.g. Zichron Yaakov): 5,000–25,000
+  Region-level (e.g. Haifa District): 20,000–80,000
+  National Israel: 100,000–500,000
+════════════════════════════════════════
+
+Return ONLY valid JSON (no markdown):
+{"segments":[{
+  "segment_name": "Hebrew name max 6 words",
+  "description": "1–2 sentences in Hebrew describing WHO this person is",
+  "age_min": 25, "age_max": 45,
+  "genders": "נשים וגברים",
+  "income_level": "mid",
+  "conversion_probability": 0.3,
+  "estimated_size": "medium",
+  "estimated_audience_range": "10,000–40,000",
+  "why_this_segment": "Hebrew — why real data points to this segment",
+  "pain_point": "Hebrew — specific pain from the data",
+  "purchase_trigger": "Hebrew — what triggers the purchase",
+  "best_channels": ["Facebook", "Instagram"],
+  "best_posting_time": "ראשון-חמישי 18:00-21:00",
+  "ad_creative_tip": "Hebrew — specific creative tip",
+  "facebook_targeting": {
+    "interests": ["Asian cuisine", "Sushi", "Food & dining"],
+    "behaviors": ["Engaged shoppers", "Restaurant dining preference"],
+    "custom_audience": "Website visitors (30 days)",
+    "lookalike_source": "Customer email list",
+    "exclusions": ["Existing customers (180 days)"]
+  },
+  "google_targeting": {
+    "keywords": ["+מסעדה +אסייתית", '"סושי זכרון יעקב"', "[מסעדה אסייתית מקומית]"],
+    "negative_keywords": ["חינם", "מתכון"],
+    "in_market_audiences": ["Food & Dining/Restaurant Dining"],
+    "custom_intent": "people searching for local restaurants"
+  },
+  "tiktok_targeting": {
+    "interest_categories": ["Food & Beverage", "Restaurants"],
+    "hashtags": ["#sushi", "#israelifood"],
+    "creative_format": "In-Feed Ad",
+    "age_group": "18-34"
+  }
+}]}`,
         response_json_schema: { type: 'object' },
       });
     } catch (llmErr: any) {

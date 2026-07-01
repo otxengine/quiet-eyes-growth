@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import {
   Loader2, RefreshCw, ChevronDown, ChevronUp, Send, ArrowRight,
   Eye, MousePointerClick, Users, TrendingUp, Zap, CheckCircle,
-  Upload, Sparkles, X, Info, ExternalLink, AlertCircle,
+  Upload, Sparkles, X, Info, ExternalLink, AlertCircle, Copy, Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -79,36 +79,230 @@ function MetricCard({ icon: Icon, label, low, high, unit = '', accent }) {
   );
 }
 
-function InterestChip({ label, platform }) {
-  const colors = {
-    facebook:  { bg: '#e7f3ff', color: '#1877f2' },
-    meta:      { bg: '#e7f3ff', color: '#1877f2' },
-    instagram: { bg: '#fde8f0', color: '#e1306c' },
-    google:    { bg: '#e8f0fe', color: '#4285f4' },
-  };
-  const c = colors[platform] || colors.facebook;
+function CopyBtn({ text }) {
+  const [copied, setCopied] = useState(false);
   return (
-    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full border" style={{ background: c.bg, color: c.color, borderColor: c.color + '33' }}>
+    <button
+      onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1800); }}
+      className="p-1 rounded hover:bg-gray-100 transition-colors"
+      title="העתק"
+    >
+      {copied ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3 text-gray-400" />}
+    </button>
+  );
+}
+
+function TargetingChip({ label, color, bg }) {
+  return (
+    <span className="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full border"
+      style={{ background: bg, color, borderColor: color + '33' }}>
       {label}
     </span>
   );
 }
 
-function KeywordRow({ term, match }) {
-  const matchConfig = {
-    exact:   { label: 'מדויק',  bg: '#dcfce7', color: '#166534' },
-    phrase:  { label: 'ביטוי',  bg: '#fef9c3', color: '#854d0e' },
-    broad:   { label: 'רחב',    bg: '#f3f4f6', color: '#374151' },
-    negative:{ label: 'שלילה',  bg: '#fee2e2', color: '#991b1b' },
-  };
-  const mc = matchConfig[match] || matchConfig.broad;
+function TargetingRow({ label, icon, children, onCopy }) {
+  if (!children || (Array.isArray(children) && children.length === 0)) return null;
   return (
-    <div className="flex items-center gap-2 py-1.5 border-b border-border/40 last:border-0">
-      <span className="text-[11px] font-medium text-foreground flex-1">{term}</span>
-      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: mc.bg, color: mc.color }}>
-        {mc.label}
-      </span>
+    <div className="mb-3">
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+          {icon && <span>{icon}</span>}
+          <span>{label}</span>
+        </div>
+        {onCopy && <CopyBtn text={onCopy} />}
+      </div>
+      {children}
     </div>
+  );
+}
+
+function GoogleKw({ term }) {
+  let match = 'broad', label = 'רחב', bg = '#f3f4f6', color = '#374151';
+  if (term.startsWith('[') && term.endsWith(']'))    { match='exact';    label='מדויק'; bg='#dcfce7'; color='#166534'; }
+  else if (term.startsWith('"') && term.endsWith('"')) { match='phrase'; label='ביטוי'; bg='#fef9c3'; color='#854d0e'; }
+  else if (term.startsWith('-'))                       { match='neg';    label='שלילה'; bg='#fee2e2'; color='#991b1b'; }
+  else if (term.includes('+'))                         { match='broad';  label='+רחב';  bg='#f3f4f6'; color='#374151'; }
+  return (
+    <div className="flex items-center gap-2 py-1.5 border-b border-border/30 last:border-0">
+      <span className="text-[11px] font-mono text-foreground flex-1 text-left" dir="ltr">{term}</span>
+      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: bg, color }}>{label}</span>
+    </div>
+  );
+}
+
+// ── AudienceSegmentCard — tabbed per-platform targeting ────────────────────────
+const PLATFORM_TAB_DEFS = [
+  { key: 'meta',   label: 'Meta',   icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
+  { key: 'google', label: 'Google', icon: '🔍', color: '#4285f4', bg: '#e8f0fe' },
+  { key: 'tiktok', label: 'TikTok', icon: '🎵', color: '#010101', bg: '#f0f0f0' },
+];
+
+function AudienceSegmentCard({ seg, isChosen, onChoose, activePlatform }) {
+  // Default tab to the campaign platform
+  const defaultTab =
+    activePlatform === 'google' ? 'google'
+    : activePlatform === 'tiktok' ? 'tiktok'
+    : 'meta';
+  const [tab, setTab] = useState(defaultTab);
+
+  const fb  = seg.facebook_targeting  || {};
+  const goog = seg.google_targeting   || {};
+  const tt   = seg.tiktok_targeting   || {};
+
+  const tabDef = PLATFORM_TAB_DEFS.find(t => t.key === tab) || PLATFORM_TAB_DEFS[0];
+
+  return (
+    <button
+      onClick={onChoose}
+      className="w-full text-right rounded-xl border-2 transition-all overflow-hidden"
+      style={{
+        borderColor: isChosen ? tabDef.color : 'hsl(var(--border))',
+        background: isChosen ? tabDef.bg + '55' : 'white',
+      }}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 pt-3 pb-2">
+        <div className="flex items-center gap-2">
+          {isChosen && <CheckCircle className="w-4 h-4" style={{ color: tabDef.color }} />}
+          <span className="text-[11px] text-foreground-muted">{seg.estimated_audience_range}</span>
+        </div>
+        <span className="text-[13px] font-bold text-foreground">{seg.segment_name}</span>
+      </div>
+      <p className="text-[11px] text-foreground-muted px-4 pb-2 text-right">{seg.description}</p>
+
+      {/* Platform tabs */}
+      <div className="flex border-b border-border/50 px-3">
+        {PLATFORM_TAB_DEFS.map(t => (
+          <button
+            key={t.key}
+            onClick={e => { e.stopPropagation(); setTab(t.key); }}
+            className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-semibold border-b-2 -mb-px transition-colors"
+            style={{
+              borderBottomColor: tab === t.key ? t.color : 'transparent',
+              color: tab === t.key ? t.color : '#888',
+            }}
+          >
+            <span>{t.icon}</span> {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      <div className="px-4 pt-3 pb-4 text-right" onClick={e => e.stopPropagation()}>
+
+        {tab === 'meta' && (
+          <>
+            <TargetingRow label="Interests" icon="🎯" onCopy={(fb.interests || []).join(', ')}>
+              <div className="flex flex-wrap gap-1">
+                {(fb.interests || []).map((v, i) => (
+                  <TargetingChip key={i} label={v} color="#1877f2" bg="#e7f3ff" />
+                ))}
+              </div>
+            </TargetingRow>
+            <TargetingRow label="Behaviors" icon="⚡" onCopy={(fb.behaviors || []).join(', ')}>
+              <div className="flex flex-wrap gap-1">
+                {(fb.behaviors || []).map((v, i) => (
+                  <TargetingChip key={i} label={v} color="#6366f1" bg="#ede9fe" />
+                ))}
+              </div>
+            </TargetingRow>
+            {fb.custom_audience && (
+              <TargetingRow label="Custom Audience" icon="📋">
+                <div className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5">
+                  <CopyBtn text={fb.custom_audience} />
+                  <span className="text-[11px] font-medium text-blue-800">{fb.custom_audience}</span>
+                </div>
+              </TargetingRow>
+            )}
+            {fb.lookalike_source && (
+              <TargetingRow label="Lookalike" icon="🔄">
+                <div className="flex items-center justify-between bg-purple-50 border border-purple-100 rounded-lg px-3 py-1.5">
+                  <CopyBtn text={`Lookalike 2% → ${fb.lookalike_source}`} />
+                  <span className="text-[11px] font-medium text-purple-800">LAL 2% ← {fb.lookalike_source}</span>
+                </div>
+              </TargetingRow>
+            )}
+            {(fb.exclusions || []).length > 0 && (
+              <TargetingRow label="Exclusions" icon="🚫">
+                <div className="flex flex-wrap gap-1">
+                  {fb.exclusions.map((v, i) => (
+                    <TargetingChip key={i} label={`— ${v}`} color="#dc2626" bg="#fef2f2" />
+                  ))}
+                </div>
+              </TargetingRow>
+            )}
+          </>
+        )}
+
+        {tab === 'google' && (
+          <>
+            <TargetingRow label="Keywords" icon="🔑" onCopy={(goog.keywords || []).join('\n')}>
+              <div className="border border-border rounded-lg overflow-hidden">
+                {(goog.keywords || []).map((kw, i) => <GoogleKw key={i} term={kw} />)}
+              </div>
+            </TargetingRow>
+            {(goog.negative_keywords || []).length > 0 && (
+              <TargetingRow label="Negative Keywords" icon="🚫" onCopy={(goog.negative_keywords || []).join(', ')}>
+                <div className="border border-border rounded-lg overflow-hidden">
+                  {goog.negative_keywords.map((kw, i) => <GoogleKw key={i} term={`-${kw}`} />)}
+                </div>
+              </TargetingRow>
+            )}
+            {(goog.in_market_audiences || []).length > 0 && (
+              <TargetingRow label="In-Market Audiences" icon="🛒" onCopy={(goog.in_market_audiences || []).join(', ')}>
+                <div className="flex flex-wrap gap-1">
+                  {goog.in_market_audiences.map((v, i) => (
+                    <TargetingChip key={i} label={v} color="#4285f4" bg="#e8f0fe" />
+                  ))}
+                </div>
+              </TargetingRow>
+            )}
+          </>
+        )}
+
+        {tab === 'tiktok' && (
+          <>
+            <TargetingRow label="Interest Categories" icon="🎵" onCopy={(tt.interest_categories || []).join(', ')}>
+              <div className="flex flex-wrap gap-1">
+                {(tt.interest_categories || []).map((v, i) => (
+                  <TargetingChip key={i} label={v} color="#010101" bg="#f0f0f0" />
+                ))}
+              </div>
+            </TargetingRow>
+            {(tt.hashtags || []).length > 0 && (
+              <TargetingRow label="Hashtag Targeting" icon="#️⃣" onCopy={(tt.hashtags || []).join(' ')}>
+                <div className="flex flex-wrap gap-1">
+                  {tt.hashtags.map((v, i) => (
+                    <TargetingChip key={i} label={v} color="#fe2c55" bg="#fff0f3" />
+                  ))}
+                </div>
+              </TargetingRow>
+            )}
+            {tt.creative_format && (
+              <TargetingRow label="Ad Format" icon="📱">
+                <span className="inline-block text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-gray-100 text-gray-700">
+                  {tt.creative_format}
+                </span>
+              </TargetingRow>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center gap-3 px-4 pb-3 text-[10px] text-foreground-muted border-t border-border/30 pt-2">
+        <span>גיל: {seg.age_min}–{seg.age_max}</span>
+        <span>{seg.genders}</span>
+        <span>המרה: {Math.round((seg.conversion_probability || 0) * 100)}%</span>
+        {seg.best_posting_time && <span className="mr-auto">{seg.best_posting_time}</span>}
+      </div>
+      {seg.ad_creative_tip && (
+        <p className="px-4 pb-3 text-[10px] text-foreground-muted bg-secondary/30 py-1.5">
+          💡 {seg.ad_creative_tip}
+        </p>
+      )}
+    </button>
   );
 }
 
@@ -761,58 +955,15 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
 
           {audienceData?.segments?.length > 0 && (
             <div className="space-y-3">
-              {audienceData.segments.map((seg, i) => {
-                const isChosen = chosenSeg === seg;
-                return (
-                  <button
-                    key={i}
-                    onClick={() => setChosenSeg(seg)}
-                    className="w-full text-right px-4 py-3 rounded-xl border-2 transition-all"
-                    style={{
-                      borderColor: isChosen ? platConfig.color : 'hsl(var(--border))',
-                      background: isChosen ? platConfig.bg : 'transparent',
-                    }}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[12px] font-bold text-foreground">{seg.segment_name}</span>
-                      <div className="flex items-center gap-2">
-                        {isChosen && <CheckCircle className="w-4 h-4" style={{ color: platConfig.color }} />}
-                        <span className="text-[10px] text-foreground-muted">{seg.estimated_audience_range}</span>
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-foreground-muted mb-2">{seg.description}</p>
-
-                    {/* FB interests */}
-                    {platform !== 'google' && seg.facebook_targeting?.interests?.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-1.5">
-                        {seg.facebook_targeting.interests.slice(0, 5).map((interest, j) => (
-                          <InterestChip key={j} label={interest} platform={platform} />
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Google keywords */}
-                    {platform === 'google' && seg.google_targeting?.keywords?.length > 0 && (
-                      <div className="border border-border rounded-lg overflow-hidden">
-                        {seg.google_targeting.keywords.slice(0, 3).map((kw, j) => (
-                          <KeywordRow key={j} term={kw} match="exact" />
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-3 mt-2 text-[10px] text-foreground-muted">
-                      <span>גיל: {seg.age_min}–{seg.age_max}</span>
-                      <span>{seg.genders}</span>
-                      <span>המרה: {Math.round((seg.conversion_probability || 0) * 100)}%</span>
-                    </div>
-                    {seg.ad_creative_tip && (
-                      <p className="mt-1.5 text-[10px] text-foreground-muted bg-secondary/50 rounded-lg px-2 py-1">
-                        💡 {seg.ad_creative_tip}
-                      </p>
-                    )}
-                  </button>
-                );
-              })}
+              {audienceData.segments.map((seg, i) => (
+                <AudienceSegmentCard
+                  key={i}
+                  seg={seg}
+                  isChosen={chosenSeg === seg}
+                  onChoose={() => setChosenSeg(seg)}
+                  activePlatform={platform}
+                />
+              ))}
             </div>
           )}
         </div>
