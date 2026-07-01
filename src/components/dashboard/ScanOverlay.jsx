@@ -134,8 +134,8 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
   const totalTrends   = (results.tiktok_trends || 0) + (results.trends || 0) + (results.early_trends || 0);
   const totalInsights = (results.alerts || 0) + (results.advisory || 0);
   const summary = [
-    results.reviews     ? `${results.reviews} ביקורות`   : null,
     totalSignals > 0    ? `${totalSignals} אותות`         : null,
+    results.reviews     ? `${results.reviews} ביקורות`   : null,
     results.compete     ? `${results.compete} מתחרים`     : null,
     totalLeads > 0      ? `${totalLeads} לידים`           : null,
     totalTrends > 0     ? `${totalTrends} טרנדים`         : null,

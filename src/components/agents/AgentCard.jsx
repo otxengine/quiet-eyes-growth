@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Loader2, Play, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, Play, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 import DataFreshnessBadge from '@/components/ai/DataFreshnessBadge';
 import FeedbackWidget from '@/components/FeedbackWidget';
 import { useAuth } from '@/lib/AuthContext';
@@ -73,10 +73,14 @@ function LiveLogPanel({ isRunning, result }) {
           <p className="text-[10px] text-foreground-muted opacity-60 animate-pulse">▊</p>
         )}
         {!isRunning && result && (
-          <div className={`flex items-start gap-1.5 text-[10px] ${result.ok ? 'text-success' : 'text-[#dc2626]'}`}>
+          <div className={`flex items-start gap-1.5 text-[10px] ${
+            result.ok ? 'text-success' : result.skipped ? 'text-[#d97706]' : 'text-[#dc2626]'
+          }`}>
             {result.ok
               ? <CheckCircle2 className="w-3 h-3 mt-0.5 flex-shrink-0" />
-              : <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />}
+              : result.skipped
+                ? <Clock className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                : <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />}
             <span className="leading-relaxed" dir="rtl">{result.message}</span>
           </div>
         )}
