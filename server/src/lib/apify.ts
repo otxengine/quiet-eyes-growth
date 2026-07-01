@@ -32,12 +32,17 @@ export async function runApifyActor(
   if (!APIFY_API_KEY) return [];
 
   try {
+    const apifyHeaders = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${APIFY_API_KEY}`,
+    };
+
     // ── Start the actor run ─────────────────────────────────────────────────
     const startRes = await fetch(
-      `https://api.apify.com/v2/acts/${actorId}/runs?token=${APIFY_API_KEY}`,
+      `https://api.apify.com/v2/acts/${actorId}/runs`,
       {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: apifyHeaders,
         body:    JSON.stringify(input),
       },
     );
@@ -59,14 +64,15 @@ export async function runApifyActor(
     for (let i = 0; i < maxPolls; i++) {
       await new Promise(r => setTimeout(r, 5000));
 
-      const statusRes  = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_API_KEY}`);
+      const statusRes  = await fetch(`https://api.apify.com/v2/actor-runs/${runId}`, { headers: apifyHeaders });
       const statusData: any = await statusRes.json();
       const status = statusData?.data?.status;
 
       if (status === 'SUCCEEDED') {
         const datasetId = statusData?.data?.defaultDatasetId;
         const itemsRes  = await fetch(
-          `https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_API_KEY}&limit=${itemLimit}`,
+          `https://api.apify.com/v2/datasets/${datasetId}/items?limit=${itemLimit}`,
+          { headers: apifyHeaders },
         );
         const items: any = await itemsRes.json();
         return Array.isArray(items) ? items : [];
