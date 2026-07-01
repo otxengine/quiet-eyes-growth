@@ -182,6 +182,21 @@ describe('AC1 — OAuth facebook_page path', () => {
     expect(res.status).not.toHaveBeenCalledWith(500);
   });
 
+  test('AC3 — Graph API returns 401 → account marked disconnected, oauth_error returned', async () => {
+    saFindFirst.mockResolvedValue(FB_ACCOUNT);
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) });
+
+    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
+    await analyzeSocialComments(req, res);
+
+    expect(prisma.socialAccount.update as jest.Mock).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: FB_ACCOUNT.id },
+      data:  expect.objectContaining({ is_connected: false }),
+    }));
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ oauth_error: true }));
+    expect(llm).not.toHaveBeenCalled();
+  });
+
   test('setLastRun and writeAutomationLog called on success', async () => {
     saFindFirst.mockResolvedValue(FB_ACCOUNT);
     mockFetch

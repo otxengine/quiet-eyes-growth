@@ -18,6 +18,7 @@
 import { Router, Request, Response } from 'express';
 import { randomBytes, createHash } from 'crypto';
 import { prisma } from '../db';
+import { tryEncryptToken } from '../lib/crypto';
 
 const router = Router();
 
@@ -115,17 +116,18 @@ async function upsertSocialAccount(
   const existing = await prisma.socialAccount.findFirst({
     where: { linked_business: businessId, platform },
   });
+  const encData = { ...data, access_token: tryEncryptToken(data.access_token) };
   if (existing) {
     await prisma.socialAccount.update({
       where: { id: existing.id },
-      data: { ...data, is_connected: true, last_sync: new Date().toISOString() },
+      data: { ...encData, is_connected: true, last_sync: new Date().toISOString() },
     });
   } else {
     await prisma.socialAccount.create({
       data: {
         linked_business: businessId,
         platform,
-        ...data,
+        ...encData,
         is_connected: true,
         last_sync: new Date().toISOString(),
       },
@@ -474,13 +476,14 @@ async function handleGoogleCallback(code: string, businessId: string) {
   const existing = await prisma.socialAccount.findFirst({
     where: { linked_business: businessId, platform: 'google_business' },
   });
+  const encAccessToken = tryEncryptToken(accessToken);
   if (existing) {
     await prisma.$executeRawUnsafe(
       `UPDATE social_accounts
        SET account_name=$1, access_token=$2, page_id=$3, is_connected=true,
            last_sync=$4, refresh_token=$5, expires_at=$6
        WHERE id=$7`,
-      accountName, accessToken, locationPath, new Date().toISOString(),
+      accountName, encAccessToken, locationPath, new Date().toISOString(),
       refreshToken || null, expiresAt, existing.id,
     );
   } else {
@@ -488,12 +491,12 @@ async function handleGoogleCallback(code: string, businessId: string) {
       `INSERT INTO social_accounts
          (id, created_date, linked_business, platform, account_name, access_token, page_id, is_connected, last_sync, refresh_token, expires_at)
        VALUES (gen_random_uuid()::text, now(), $1, 'google_business', $2, $3, $4, true, $5, $6, $7)`,
-      businessId, accountName, accessToken, locationPath,
+      businessId, accountName, encAccessToken, locationPath,
       new Date().toISOString(), refreshToken || null, expiresAt,
     );
   }
 
-  // Mirror access token into BusinessProfile
+  // Mirror access token into BusinessProfile (plaintext — separate field)
   await prisma.businessProfile.updateMany({
     where: { id: businessId },
     data:  { google_access_token: accessToken },
@@ -552,19 +555,20 @@ async function saveMetaAdsAccount(businessId: string, account: any, userToken: s
   const existing = await prisma.socialAccount.findFirst({
     where: { linked_business: businessId, platform: 'meta_ads' },
   });
+  const encUserToken = tryEncryptToken(userToken);
   if (existing) {
     await prisma.$executeRawUnsafe(
       `UPDATE social_accounts
        SET account_name=$1, access_token=$2, page_id=$3, is_connected=true, last_sync=$4
        WHERE id=$5`,
-      `${accountName} (${currency})`, userToken, adAccountId, new Date().toISOString(), existing.id,
+      `${accountName} (${currency})`, encUserToken, adAccountId, new Date().toISOString(), existing.id,
     );
   } else {
     await prisma.$executeRawUnsafe(
       `INSERT INTO social_accounts
          (id, created_date, linked_business, platform, account_name, access_token, page_id, is_connected, last_sync)
        VALUES (gen_random_uuid()::text, now(), $1, 'meta_ads', $2, $3, $4, true, $5)`,
-      businessId, `${accountName} (${currency})`, userToken, adAccountId, new Date().toISOString(),
+      businessId, `${accountName} (${currency})`, encUserToken, adAccountId, new Date().toISOString(),
     );
   }
 
@@ -626,13 +630,14 @@ async function handleGoogleAdsCallback(code: string, businessId: string) {
   const existing = await prisma.socialAccount.findFirst({
     where: { linked_business: businessId, platform: 'google_ads' },
   });
+  const encGAdsToken = tryEncryptToken(accessToken);
   if (existing) {
     await prisma.$executeRawUnsafe(
       `UPDATE social_accounts
        SET account_name=$1, access_token=$2, page_id=$3, is_connected=true,
            last_sync=$4, refresh_token=$5, expires_at=$6
        WHERE id=$7`,
-      accountName, accessToken, customerId, new Date().toISOString(),
+      accountName, encGAdsToken, customerId, new Date().toISOString(),
       refreshToken || null, expiresAt, existing.id,
     );
   } else {
@@ -640,7 +645,7 @@ async function handleGoogleAdsCallback(code: string, businessId: string) {
       `INSERT INTO social_accounts
          (id, created_date, linked_business, platform, account_name, access_token, page_id, is_connected, last_sync, refresh_token, expires_at)
        VALUES (gen_random_uuid()::text, now(), $1, 'google_ads', $2, $3, $4, true, $5, $6, $7)`,
-      businessId, accountName, accessToken, customerId,
+      businessId, accountName, encGAdsToken, customerId,
       new Date().toISOString(), refreshToken || null, expiresAt,
     );
   }

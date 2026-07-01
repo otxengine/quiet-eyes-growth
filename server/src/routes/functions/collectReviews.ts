@@ -4,6 +4,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
 import { tavilySearch } from '../../lib/tavily';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { tryDecryptToken } from '../../lib/crypto';
 import { publishEvent } from '../../lib/eventBus';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours — Google Places API quota
@@ -113,7 +114,8 @@ export async function collectReviews(req: Request, res: Response) {
       where: { linked_business: businessProfileId, platform: 'google_business', is_connected: true },
     });
     const gmbLocationPath = gmbAccount?.page_id;
-    const gmbToken = gmbAccount?.access_token || (profile as any).google_access_token;
+    const rawGmbToken = gmbAccount?.access_token;
+    const gmbToken = (rawGmbToken ? tryDecryptToken(rawGmbToken) : null) || (profile as any).google_access_token;
 
     if (gmbToken && gmbLocationPath) {
       if (!gmbLocationPath.includes('/')) {
@@ -127,7 +129,16 @@ export async function collectReviews(req: Request, res: Response) {
             const gmbRes = await fetch(pageUrl, { headers: { Authorization: `Bearer ${gmbToken}` } });
             if (!gmbRes.ok) {
               const errData: any = await gmbRes.json().catch(() => ({}));
-              console.warn(`[collectReviews] GMB API ${gmbRes.status}: ${errData?.error?.message || 'unknown error'} — falling back to Places`);
+              const isAuthErr = gmbRes.status === 401 || gmbRes.status === 403;
+              console.warn(`[collectReviews] GMB API ${gmbRes.status}: ${errData?.error?.message || 'unknown error'}${isAuthErr ? '' : ' — falling back to Places'}`);
+              if (isAuthErr && gmbAccount) {
+                await prisma.socialAccount.update({
+                  where: { id: gmbAccount.id },
+                  data:  { is_connected: false, last_error: `gmb_${gmbRes.status}:${errData?.error?.message || 'auth_failed'}` },
+                }).catch(() => {});
+                await writeAutomationLog('collectReviews', businessProfileId, startTime, 0);
+                return res.json({ new_reviews: 0, oauth_error: true, reason: `gmb_${gmbRes.status}` });
+              }
               break;
             }
             const gmbData: any = await gmbRes.json();

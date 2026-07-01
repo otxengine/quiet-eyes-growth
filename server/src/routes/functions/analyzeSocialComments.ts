@@ -5,6 +5,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { tavilySearch } from '../../lib/tavily';
+import { tryDecryptToken } from '../../lib/crypto';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
@@ -12,6 +13,11 @@ const FACEBOOK_API_BASE = 'https://graph.facebook.com/v19.0';
 
 async function fbGet(path: string, token: string): Promise<any> {
   const res = await fetch(`${FACEBOOK_API_BASE}${path}?access_token=${token}`);
+  if (res.status === 401 || res.status === 403) {
+    const err: any = new Error('oauth_error');
+    err.status = res.status;
+    throw err;
+  }
   if (!res.ok) return null;
   return res.json();
 }
@@ -108,8 +114,9 @@ export async function analyzeSocialComments(req: Request, res: Response) {
 
     // ── Path A: Facebook Graph API (OAuth connected) ──────────────────────────
     if (fbAccount?.access_token && fbAccount?.page_id) {
-      const pageToken = fbAccount.access_token;
+      const pageToken = tryDecryptToken(fbAccount.access_token);
       const pageId    = fbAccount.page_id;
+      try {
 
       const postsData = await fbGet(`/${pageId}/posts?fields=id,message,created_time&limit=10`, pageToken);
       const posts: any[] = postsData?.data || [];
@@ -153,6 +160,17 @@ export async function analyzeSocialComments(req: Request, res: Response) {
         positive_count:    analysis?.positive_count,
         negative_count:    analysis?.negative_count,
       });
+      } catch (e: any) {
+        if (e.message === 'oauth_error') {
+          await prisma.socialAccount.update({
+            where: { id: fbAccount.id },
+            data:  { is_connected: false, last_error: `fb_auth_${e.status}` },
+          }).catch(() => {});
+          await writeAutomationLog('analyzeSocialComments', businessProfileId, startTime, 0);
+          return res.json({ comments_analyzed: 0, signals_created: 0, oauth_error: true, reason: `fb_auth_${e.status}` });
+        }
+        throw e;
+      }
     }
 
     // ── Path B: Apify scraper — uses facebook_url entered during onboarding ───

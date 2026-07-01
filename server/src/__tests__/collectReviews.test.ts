@@ -13,7 +13,7 @@ jest.mock('../db', () => ({
   prisma: {
     businessProfile: { findMany: jest.fn(), update: jest.fn() },
     review:          { findMany: jest.fn(), create: jest.fn(), findFirst: jest.fn() },
-    socialAccount:   { findFirst: jest.fn() },
+    socialAccount:   { findFirst: jest.fn(), update: jest.fn() },
     competitor:      { findMany: jest.fn() },
     marketSignal:    { findFirst: jest.fn(), create: jest.fn() },
     proactiveAlert:  { findFirst: jest.fn(), create: jest.fn() },
@@ -93,6 +93,7 @@ beforeEach(() => {
   reviewCreate.mockResolvedValue({ id: 'r1' });
   reviewFindFirst.mockResolvedValue(null);
   socialFindFirst.mockResolvedValue(null);
+  (prisma.socialAccount.update as jest.Mock).mockResolvedValue({});
   competitorFindMany.mockResolvedValue([]);
   msFindFirst.mockResolvedValue(null);
   msCreate.mockResolvedValue({});
@@ -220,21 +221,23 @@ describe('collectReviews — AC1: GMB connected → reviews fetched and de-duped
     expect(json).toHaveBeenCalledWith(expect.objectContaining({ google_reviews_added: 2 }));
   });
 
-  test('GMB 401 response: logs warning and falls through to Places path', async () => {
+  test('GMB 401 response: marks account disconnected, returns oauth_error, no Places fallback', async () => {
     socialFindFirst.mockResolvedValue(GMB_ACCOUNT);
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 401,
       json: jest.fn().mockResolvedValue({ error: { message: 'Invalid Credentials' } }),
     });
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
     await collectReviews(req, res);
 
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('401'));
+    expect(prisma.socialAccount.update as jest.Mock).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: GMB_ACCOUNT.id },
+      data:  expect.objectContaining({ is_connected: false }),
+    }));
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 0, oauth_error: true, reason: 'gmb_401' }));
     expect(reviewCreate).not.toHaveBeenCalled();
-    warnSpy.mockRestore();
   });
 
   test('malformed page_id without "/" emits warning and skips GMB path', async () => {

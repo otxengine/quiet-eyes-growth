@@ -48,6 +48,20 @@ export function encryptToken(plaintext: string): string {
   return `${iv.toString('hex')}:${tag.toString('hex')}:${encrypted.toString('hex')}`;
 }
 
+// Regex matches the iv:tag:ciphertext format produced by encryptToken (all lowercase hex)
+const ENCRYPTED_RE = /^[0-9a-f]+:[0-9a-f]+:[0-9a-f]+$/;
+
+/** Encrypt if META_ENCRYPTION_KEY is configured; return plaintext otherwise. */
+export function tryEncryptToken(plaintext: string): string {
+  try { return encryptToken(plaintext); } catch { return plaintext; }
+}
+
+/** Decrypt if the stored value looks like an encrypted token; return as-is otherwise. */
+export function tryDecryptToken(stored: string): string {
+  if (!ENCRYPTED_RE.test(stored)) return stored;
+  try { return decryptToken(stored); } catch { return stored; }
+}
+
 /**
  * Decrypt a token produced by encryptToken().
  * Throws if the auth tag doesn't match (tampered data).

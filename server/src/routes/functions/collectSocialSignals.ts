@@ -6,6 +6,7 @@ import { invokeLLM } from '../../lib/llm';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { tryDecryptToken } from '../../lib/crypto';
 import { parseKeywords, buildUrlQueries } from '../../lib/dataSources';
 import { getSectorProfile, cityToEn } from '../../lib/businessProfile';
 
@@ -104,7 +105,7 @@ export async function collectSocialSignals(req: Request, res: Response) {
     });
     if (igAccount?.access_token && igAccount?.page_id) {
       const igUserId = igAccount.page_id;
-      const token    = igAccount.access_token;
+      const token    = tryDecryptToken(igAccount.access_token);
       // Use AI sector profile for precise hashtags when available
       const sp = getSectorProfile(profile);
       const hashtagBase = sp

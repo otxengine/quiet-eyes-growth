@@ -10,6 +10,7 @@
  */
 import { prisma } from '../db';
 import { createLogger } from '../infra/logger';
+import { tryEncryptToken, tryDecryptToken } from './crypto';
 
 const logger = createLogger('TikTokTokenRefresh');
 
@@ -66,12 +67,12 @@ export async function refreshTikTokToken(businessProfileId: string): Promise<str
     if (newRefreshToken) {
       await prisma.$executeRawUnsafe(
         `UPDATE social_accounts SET access_token=$1, expires_at=$2, last_sync=$3, refresh_token=$4 WHERE id=$5`,
-        newToken, expiresAt, new Date().toISOString(), newRefreshToken, account.id,
+        tryEncryptToken(newToken), expiresAt, new Date().toISOString(), newRefreshToken, account.id,
       );
     } else {
       await prisma.$executeRawUnsafe(
         `UPDATE social_accounts SET access_token=$1, expires_at=$2, last_sync=$3 WHERE id=$4`,
-        newToken, expiresAt, new Date().toISOString(), account.id,
+        tryEncryptToken(newToken), expiresAt, new Date().toISOString(), account.id,
       );
     }
 
@@ -102,7 +103,7 @@ export async function getValidTikTokToken(businessProfileId: string): Promise<st
     return refreshed || account.access_token; // fall back to existing token if refresh fails
   }
 
-  return account.access_token;
+  return tryDecryptToken(account.access_token);
 }
 
 /**
