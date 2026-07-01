@@ -46,18 +46,22 @@ const PLAN_SCAN_LIMITS: Record<string, number> = {
 };
 
 async function callHandler(fn: Function, businessProfileId: string): Promise<any> {
-  return new Promise((resolve) => {
-    const fakeReq = { body: { businessProfileId } } as Request;
-    let done = false;
-    const fakeRes: any = {
-      json: (data: any) => { if (!done) { done = true; resolve(data); } return fakeRes; },
-      status: (_: number) => fakeRes,
-    };
-    Promise.resolve(fn(fakeReq, fakeRes)).catch((e: any) => {
-      console.error(`[runFullScan] collector error (${businessProfileId}):`, e.message);
-      if (!done) { done = true; resolve({ error: e.message }); }
-    });
-  });
+  return Promise.race([
+    new Promise((resolve) => {
+      const fakeReq = { body: { businessProfileId } } as Request;
+      let done = false;
+      const fakeRes: any = {
+        json: (data: any) => { if (!done) { done = true; resolve(data); } return fakeRes; },
+        status: (_: number) => fakeRes,
+      };
+      // .then() defers fn() to a microtask so synchronous throws are caught by .catch()
+      Promise.resolve().then(() => fn(fakeReq, fakeRes)).catch((e: any) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (!done) { console.error(`[runFullScan] collector error (${businessProfileId}):`, msg); done = true; resolve({ error: msg }); }
+      });
+    }),
+    new Promise(resolve => { const t = setTimeout(() => resolve({ error: 'timeout' }), 120_000); if (t?.unref) t.unref(); }),
+  ]);
 }
 
 export async function runFullScan(req: Request, res: Response) {
@@ -163,12 +167,12 @@ export async function runFullScan(req: Request, res: Response) {
     }
   } catch (_) {}
 
-  // KAN-9 prep: scrape brand voice/context before collectors (skipped when no website_url)
+  // KAN-9 prep: scrape brand voice/context before collectors — fire-and-forget, does not block response
   if (profile?.website_url) {
-    await new Promise<void>((resolve) => {
+    new Promise<void>((resolve) => {
       const fakeReq = { body: { businessProfileId, websiteUrl: profile.website_url } } as Request;
       const fakeRes: any = { json: () => { resolve(); return fakeRes; }, status: () => fakeRes };
-      Promise.resolve(learnFromWebsite(fakeReq, fakeRes)).catch((e: any) => {
+      Promise.resolve().then(() => learnFromWebsite(fakeReq, fakeRes)).catch((e: any) => {
         console.warn('[runFullScan] learnFromWebsite prep error:', e.message);
         resolve();
       });
@@ -248,6 +252,8 @@ export async function runFullScan(req: Request, res: Response) {
 
   // Run remaining agents in background (fire-and-forget)
   (async () => {
+    // Write cooldown record first so 24h gate holds even if pipeline crashes mid-run
+    await writeAutomationLog('runFullScan', businessProfileId, startTime, pipeline.length);
     for (const [name, fn] of deferred) {
       try {
         results[name] = await callHandler(fn, businessProfileId);
@@ -255,7 +261,6 @@ export async function runFullScan(req: Request, res: Response) {
         results[name] = { error: e.message };
       }
     }
-    await writeAutomationLog('runFullScan', businessProfileId, startTime, pipeline.length);
     console.log(`[runFullScan] background pipeline complete for ${profile?.name}`);
   })().catch(e => console.error('[runFullScan] background error:', e.message));
 }

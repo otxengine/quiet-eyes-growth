@@ -147,7 +147,7 @@ describe('runFullScan', () => {
     const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     // Make the first deferred collector (analyzeInstagramComments) throw asynchronously
-    (analyzeInstagramComments as jest.Mock).mockImplementation(async () => {
+    (analyzeInstagramComments as jest.Mock).mockImplementationOnce(async () => {
       throw new Error('api failure');
     });
 
