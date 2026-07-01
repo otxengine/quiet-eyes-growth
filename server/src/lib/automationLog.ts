@@ -6,7 +6,8 @@ export async function writeAutomationLog(
   startTime: string,
   itemsProcessed: number,
   status: 'success' | 'failed' = 'success',
-  errorMessage?: string
+  errorMessage?: string,
+  costUsd?: number,
 ) {
   try {
     await prisma.automationLog.create({
@@ -18,6 +19,7 @@ export async function writeAutomationLog(
         items_processed: itemsProcessed,
         error_message: errorMessage || null,
         linked_business: businessProfileId,
+        cost_usd: costUsd ?? null,
       },
     });
   } catch (e: any) {

@@ -49,6 +49,7 @@ import { cleanupInsights } from './routes/functions/cleanupInsights';
 import { cleanupAndLearn } from './routes/functions/cleanupAndLearn';
 import { weeklyEmailDigest } from './routes/functions/weeklyEmailDigest';
 import { writeHeartbeat } from './lib/agentMonitor';
+import { checkAndAlertFailureRate } from './lib/collectorMetrics';
 import { generateMorningBriefing } from './routes/functions/generateMorningBriefing';
 import { generateProactiveAlerts } from './routes/functions/generateProactiveAlerts';
 import { generateAdvisoryInsights } from './routes/functions/generateAdvisoryInsights';
@@ -90,7 +91,7 @@ async function getActiveProfiles(): Promise<string[]> {
 }
 
 /** Runs a single growth agent function for all active profiles */
-async function runAgentForAll(label: string, agentFn: Function) {
+export async function runAgentForAll(label: string, agentFn: Function) {
   const ids = await getActiveProfiles();
   if (ids.length === 0) return;
   logger.info(`${label}: running for ${ids.length} profile(s)`);
@@ -301,6 +302,12 @@ export function startScheduler() {
   // ── Every 15 min: keep-alive log ─────────────────────────────────────────────
   cron.schedule('*/15 * * * *', () => {
     logger.info('Scheduler heartbeat');
+  });
+
+  // ── Every hour: collector failure-rate alert check (KAN-26) ──────────────────
+  cron.schedule('0 * * * *', async () => {
+    logger.info('Hourly: collector failure rate check');
+    await checkAndAlertFailureRate().catch(e => logger.warn(`collectorMetrics alert check failed: ${e.message}`));
   });
 
   logger.info('Scheduler started — pipelines will run hourly');

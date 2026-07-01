@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { prisma } from '../../db';
 import { loadBusinessContext } from '../../lib/businessContext';
-import { invokeLLM } from '../../lib/llm';
+import { invokeLLM, startCostTracking, popCost } from '../../lib/llm';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
@@ -24,6 +24,7 @@ export async function collectSocialSignals(req: Request, res: Response) {
   }
 
   const startTime = new Date().toISOString();
+  startCostTracking(businessProfileId);
   try {
     const profiles = await prisma.businessProfile.findMany({ where: { id: businessProfileId } });
     const profile = profiles[0];
@@ -183,6 +184,7 @@ export async function collectSocialSignals(req: Request, res: Response) {
           .join('\n');
 
         const influencerAnalysis = await invokeLLM({
+          costTrackingId: businessProfileId,
           maxTokens: 600,
           prompt: `You are an Israeli digital marketing expert. Identify influencers relevant to the sector.
 Sector: ${category}, Region: ${cityStr}
@@ -390,13 +392,13 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     }
 
     setLastRun(businessProfileId, 'collectSocialSignals');
-    await writeAutomationLog('collectSocialSignals', businessProfileId, startTime, newSignals);
+    await writeAutomationLog('collectSocialSignals', businessProfileId, startTime, newSignals, 'success', undefined, popCost(businessProfileId));
     console.log(`collectSocialSignals done: ${newSignals} new signals, ${negativeSignalsFound} negative → MarketSignal`);
 
     return res.json({ new_signals: newSignals, phase3_signals: phase3Signals, negative_alerts: negativeSignalsFound });
   } catch (err: any) {
     console.error('collectSocialSignals error:', err.message);
-    await writeAutomationLog('collectSocialSignals', businessProfileId, startTime, 0, 'failed', err.message);
+    await writeAutomationLog('collectSocialSignals', businessProfileId, startTime, 0, 'failed', err.message, popCost(businessProfileId));
     return res.status(500).json({ error: err.message });
   }
 }

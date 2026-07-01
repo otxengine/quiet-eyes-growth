@@ -8,6 +8,7 @@ import { prisma } from '../db';
 import { isAdminKeyRequest } from '../middleware/auth';
 import { createLogger } from '../infra/logger';
 import { bulkBootstrapAllBusinesses, bootstrapBusinessIntelligence } from '../lib/bootstrapIntelligence';
+import { getCollectorMetrics, checkAndAlertFailureRate } from '../lib/collectorMetrics';
 
 const logger = createLogger('AdminUsers');
 const router = Router();
@@ -167,6 +168,21 @@ router.delete('/users/:businessId', async (req: Request, res: Response) => {
     results,
     errors,
   });
+});
+
+// GET /api/admin/collector-metrics — observability for KAN-26
+router.get('/collector-metrics', async (req: Request, res: Response) => {
+  if (!isAdminKeyRequest(req)) return res.status(403).json({ error: 'Admin access required' });
+  const windowHours = parseInt(req.query.windowHours as string || '24', 10);
+  const metrics = await getCollectorMetrics(windowHours).catch(e => ({ error: e.message }));
+  res.json(metrics);
+});
+
+// POST /api/admin/collector-metrics/check — manually trigger alert check
+router.post('/collector-metrics/check', async (req: Request, res: Response) => {
+  if (!isAdminKeyRequest(req)) return res.status(403).json({ error: 'Admin access required' });
+  await checkAndAlertFailureRate().catch(e => logger.warn(`alert check failed: ${e.message}`));
+  res.json({ ok: true });
 });
 
 export default router;

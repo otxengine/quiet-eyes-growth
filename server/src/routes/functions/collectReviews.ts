@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
-import { invokeLLM } from '../../lib/llm';
+import { invokeLLM, startCostTracking, popCost } from '../../lib/llm';
 import { tavilySearch } from '../../lib/tavily';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { tryDecryptToken } from '../../lib/crypto';
@@ -38,6 +38,7 @@ async function getPlaceReviews(placeId: string): Promise<any[]> {
 
 async function batchExtractTopics(
   reviews: Array<{ text: string; sentiment: string }>,
+  costTrackingId?: string,
 ): Promise<Array<{ topics: string; topic_sentiment: string }>> {
   const fallback = reviews.map(r => ({ topics: r.sentiment, topic_sentiment: '{}' }));
   if (reviews.length === 0) return fallback;
@@ -54,6 +55,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew. {"results":[{"topic
       response_json_schema: { type: 'object' },
       model: 'haiku',
       maxTokens: 900,
+      costTrackingId,
     });
 
     const results: any[] = result?.results || [];
@@ -98,6 +100,7 @@ export async function collectReviews(req: Request, res: Response) {
   }
 
   const startTime = new Date().toISOString();
+  startCostTracking(businessProfileId);
   try {
     const profiles = await prisma.businessProfile.findMany({ where: { id: businessProfileId } });
     const profile = profiles[0];
@@ -259,6 +262,7 @@ export async function collectReviews(req: Request, res: Response) {
             response_json_schema: { type: 'object' },
             model: 'haiku',
             maxTokens: 1000,
+            costTrackingId: businessProfileId,
           });
           tavilyParsed = batchResult?.results || [];
         } catch { tavilyParsed = []; }
@@ -273,7 +277,7 @@ export async function collectReviews(req: Request, res: Response) {
         const tavilyTopics = await batchExtractTopics(tavilyReviewsPending.map(p => ({
           text: p.parsed.text,
           sentiment: (p.parsed.rating || 0) >= 4 ? 'positive' : (p.parsed.rating || 0) <= 2 ? 'negative' : 'neutral',
-        })));
+        })), businessProfileId);
         for (let i = 0; i < tavilyReviewsPending.length; i++) {
           const { parsed, url } = tavilyReviewsPending[i];
           const { topics, topic_sentiment } = tavilyTopics[i];
@@ -330,6 +334,7 @@ export async function collectReviews(req: Request, res: Response) {
           response_json_schema: { type: 'object' },
           model: 'haiku',
           maxTokens: 900,
+          costTrackingId: businessProfileId,
         });
         parsed = result?.results || [];
       } catch { parsed = []; }
@@ -344,7 +349,7 @@ export async function collectReviews(req: Request, res: Response) {
       const topics = await batchExtractTopics(pending.map(({ p }) => ({
         text: p.text,
         sentiment: (p.rating || 0) >= 4 ? 'positive' : (p.rating || 0) <= 2 ? 'negative' : 'neutral',
-      })));
+      })), businessProfileId);
       for (let i = 0; i < pending.length; i++) {
         const { p, url } = pending[i];
         const { topics: t, topic_sentiment } = topics[i];
@@ -408,6 +413,7 @@ export async function collectReviews(req: Request, res: Response) {
           response_json_schema: { type: 'object' },
           model: 'haiku',
           maxTokens: 1000,
+          costTrackingId: businessProfileId,
         });
         signalsParsed = batchResult?.results || [];
       } catch { signalsParsed = []; }
@@ -423,7 +429,7 @@ export async function collectReviews(req: Request, res: Response) {
       const signalTopics = await batchExtractTopics(signalReviewsPending.map(p => ({
         text: p.parsed.text,
         sentiment: (p.parsed.rating || 0) >= 4 ? 'positive' : (p.parsed.rating || 0) <= 2 ? 'negative' : 'neutral',
-      })));
+      })), businessProfileId);
       for (let i = 0; i < signalReviewsPending.length; i++) {
         const { parsed, url } = signalReviewsPending[i];
         const { topics, topic_sentiment } = signalTopics[i];
@@ -510,7 +516,7 @@ export async function collectReviews(req: Request, res: Response) {
     }
 
     setLastRun(businessProfileId, 'collectReviews');
-    await writeAutomationLog('collectReviews', businessProfileId, startTime, newReviews);
+    await writeAutomationLog('collectReviews', businessProfileId, startTime, newReviews, 'success', undefined, popCost(businessProfileId));
     console.log(`collectReviews done: ${newReviews} new reviews (${googleAdded} from Google, ${sourcesScanCount} from other sources)`);
 
     // ── Snapshot current avg rating → rating_history for trend graph ─────────
@@ -591,7 +597,7 @@ export async function collectReviews(req: Request, res: Response) {
     return res.json({ new_reviews: newReviews, google_reviews_added: googleAdded, sources_scanned: sourcesToScan.length + (googleAdded > 0 ? 1 : 0) });
   } catch (err: any) {
     console.error('collectReviews error:', err.message);
-    await writeAutomationLog('collectReviews', businessProfileId, startTime, 0, 'failed', err.message);
+    await writeAutomationLog('collectReviews', businessProfileId, startTime, 0, 'failed', err.message, popCost(businessProfileId));
     return res.status(500).json({ error: err.message });
   }
 }
