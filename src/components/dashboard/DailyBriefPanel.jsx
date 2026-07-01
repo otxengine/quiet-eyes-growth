@@ -207,7 +207,11 @@ cta_link חייב להיות אחד בדיוק מ: /reviews, /leads, /retention,
       const text = typeof result === 'string' ? result : (result?.content || '{}');
       const match = text.match(/\{[\s\S]*\}/);
       if (!match) throw new Error('no JSON in response');
-      const parsed = JSON.parse(match[0]);
+      // Sanitize: escape bare newlines/tabs inside JSON string values (LLM sometimes emits these)
+      const sanitized = match[0].replace(/"(?:[^"\\]|\\.)*"/g, m =>
+        m.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
+      );
+      const parsed = JSON.parse(sanitized);
       if (!Array.isArray(parsed.actions) || parsed.actions.length === 0) throw new Error('empty actions');
 
       writeCache(bpId, parsed);

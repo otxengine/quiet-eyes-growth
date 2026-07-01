@@ -399,39 +399,49 @@ function SecurityTab() {
     { key: 'confirm', label: 'אימות סיסמה חדשה *' },
   ];
 
+  const hasPassword = user?.passwordEnabled !== false;
+
   return (
     <div className="space-y-4">
       {/* Password */}
       <SectionCard title="עדכון סיסמת כניסה" subtitle="">
-        <div className="grid grid-cols-3 gap-x-8 gap-y-6 mb-5">
-          {PW_FIELDS.map(({ key, label }) => (
-            <div key={key}>
-              <label className="block text-[12px] text-gray-500 mb-2">{label}</label>
-              <div className="relative">
-                <input
-                  type={showPw[key] ? 'text' : 'password'}
-                  value={pwForm[key]}
-                  onChange={e => setPwForm(f => ({ ...f, [key]: e.target.value }))}
-                  placeholder="••••••••"
-                  className="input-underline pl-7"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPw(s => ({ ...s, [key]: !s[key] }))}
-                  className="absolute left-0 bottom-2 text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  {showPw[key] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
+        {!hasPassword ? (
+          <p className="text-[13px] text-gray-500 py-1">
+            החשבון שלך מחובר דרך Google / OAuth — אין סיסמת כניסה ישירה.
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-x-8 gap-y-6 mb-5">
+              {PW_FIELDS.map(({ key, label }) => (
+                <div key={key}>
+                  <label className="block text-[12px] text-gray-500 mb-2">{label}</label>
+                  <div className="relative">
+                    <input
+                      type={showPw[key] ? 'text' : 'password'}
+                      value={pwForm[key]}
+                      onChange={e => setPwForm(f => ({ ...f, [key]: e.target.value }))}
+                      placeholder="••••••••"
+                      className="input-underline pl-7"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPw(s => ({ ...s, [key]: !s[key] }))}
+                      className="absolute left-0 bottom-2 text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      {showPw[key] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <div className="flex justify-start">
-          <button onClick={changePassword} disabled={savingPw} className="btn-pill">
-            {savingPw && <Loader2 className="w-3 h-3 animate-spin" />}
-            עדכון
-          </button>
-        </div>
+            <div className="flex justify-start">
+              <button onClick={changePassword} disabled={savingPw} className="btn-pill">
+                {savingPw && <Loader2 className="w-3 h-3 animate-spin" />}
+                עדכון
+              </button>
+            </div>
+          </>
+        )}
       </SectionCard>
 
       {/* 2FA */}
