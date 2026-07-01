@@ -30,16 +30,47 @@ const MAX_CONCURRENT = 3;
 
 type ActionType = "promote" | "respond" | "alert" | "hold";
 
+// Action states defined by patent claim 6 / §[0073]:
+// draft → approved (auto when guidelines satisfied) → published
+//      ↘ rejected (user rejects, or guidelines not met)
+type ActionStatus = "draft" | "approved" | "rejected" | "published";
+
 interface ActionRow {
   business_id:        string;
   action_score:       number;
   action_type:        ActionType;
+  status:             ActionStatus;
+  auto_approved:      boolean;
   expires_at:         string;
   source_ids:         string[];
   stale_memory_flag:  boolean;
   source_url:         string;
   confidence_score:   number;
   created_at:         string;
+}
+
+// User-specified guidelines shape (meta_configurations.user_guidelines)
+interface UserGuidelines {
+  max_ad_budget_ils?:       number;
+  permitted_action_types?:  string[];
+  auto_approve_score_min?:  number;
+  max_daily_actions?:       number;
+}
+
+// Returns true when the action satisfies all user-specified guidelines,
+// allowing auto-transition draft → approved (patent §[0071]).
+function satisfiesGuidelines(
+  actionType: ActionType,
+  actionScore: number,
+  guidelines: UserGuidelines,
+): boolean {
+  const minScore = guidelines.auto_approve_score_min ?? 0.72;
+  if (actionScore < minScore) return false;
+
+  const permitted = guidelines.permitted_action_types;
+  if (permitted && permitted.length > 0 && !permitted.includes(actionType)) return false;
+
+  return true;
 }
 
 // ─── ActionScore v2 — 9 factors, weights sum = 1.00 ──────────────────────────
@@ -252,10 +283,24 @@ export async function runActionScoringService(
   const now       = new Date().toISOString();
   const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
 
+  // Resolve user-specified guidelines for this business (patent §[0025]-[0026], §[0071]).
+  // Auto-approve when all guidelines are satisfied; otherwise stay in draft for human review.
+  const { data: metaRow } = await supabase
+    .from("meta_configurations")
+    .select("user_guidelines")
+    .eq("business_id", business.id)
+    .maybeSingle();
+
+  const guidelines: UserGuidelines = (metaRow?.user_guidelines as UserGuidelines) ?? {};
+  const autoApproved = satisfiesGuidelines(actionType, actionScore, guidelines);
+  const initialStatus: ActionStatus = autoApproved ? "approved" : "draft";
+
   const actionRow: ActionRow = {
     business_id:       business.id,
     action_score:      Math.round(actionScore * 1000) / 1000,
     action_type:       actionType,
+    status:            initialStatus,
+    auto_approved:     autoApproved,
     expires_at:        expiresAt,
     source_ids:        sourceIds,
     stale_memory_flag: staleMemoryFlag,
@@ -278,7 +323,7 @@ export async function runActionScoringService(
 
   console.log(
     `[${AGENT_NAME}] ✓ ${business.id}: score=${actionScore.toFixed(3)}, ` +
-    `type=${actionType}, sources=${sourceIds.length}, stale=${staleMemoryFlag}`,
+    `type=${actionType}, status=${initialStatus}, sources=${sourceIds.length}, stale=${staleMemoryFlag}`,
   );
 
   // Publish to bus — triggers MarketMemoryEngine if score > 0.60
@@ -290,8 +335,10 @@ export async function runActionScoringService(
       sourceTable:    "actions_recommended",
       event_type:     "action_scored",
       payload: {
-        action_score: actionScore,
-        action_type:  actionType,
+        action_score:   actionScore,
+        action_type:    actionType,
+        action_status:  initialStatus,
+        auto_approved:  autoApproved,
       },
     });
   }

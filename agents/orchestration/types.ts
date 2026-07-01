@@ -94,6 +94,18 @@ export interface BusinessProfile {
   computed_at:      string;
 }
 
+// User-specified guidelines (patent §[0025]-[0026], §[0071]):
+// Stored in meta_configurations.user_guidelines JSONB column (v7 migration).
+// Used by ActionScoringService and CampaignAutoPilot to auto-approve or block actions.
+export interface UserGuidelines {
+  max_ad_budget_ils?:       number;          // spending limit per campaign
+  permitted_action_types?:  string[];        // e.g. ["promote","respond"]
+  permitted_platforms?:     string[];        // e.g. ["instagram","facebook"]
+  auto_approve_score_min?:  number;          // min action_score for auto-approval (default 0.72)
+  permitted_publish_hours?: { start: number; end: number }; // e.g. {start:8, end:22}
+  max_daily_actions?:       number;          // cap on auto-approved actions per day
+}
+
 export interface MetaConfiguration {
   business_id:              string;
   primary_kpi:              string;
@@ -103,6 +115,7 @@ export interface MetaConfiguration {
   intent_threshold:         number;
   trend_thresholds:         Record<string, number>;
   version:                  number;
+  user_guidelines:          UserGuidelines;
 }
 
 export interface ClassifiedSignal {

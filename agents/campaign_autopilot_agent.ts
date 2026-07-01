@@ -2,7 +2,9 @@
 // Trigger: bus events 'trend_spike', 'viral_pattern_detected', 'local_event_detected', 'churn_risk_detected' (high)
 // Output: campaign_drafts → publishes 'campaign_draft_ready' to bus
 // Mission: Generate platform-specific campaign drafts triggered by real events.
-// Invariant: auto_publish is ALWAYS FALSE in MVP. Human must approve before publish.
+// Auto-publish: set to TRUE only when the campaign satisfies all user-specified guidelines
+// (patent §[0071]): permitted_platforms, estimated_reach within budget, permitted publish hours.
+// If any guideline is not satisfied the draft stays status='draft', auto_publish=false.
 
 import { supabase } from "./lib/supabase.ts";
 import { pingHeartbeat } from "./lib/heartbeat.ts";
@@ -14,6 +16,62 @@ import type { EnrichedContext } from "./orchestration/types.ts";
 const AGENT_NAME = "CampaignAutoPilot";
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
+
+// User-specified guidelines stored in meta_configurations.user_guidelines
+interface CampaignGuidelines {
+  permitted_platforms?:     string[];
+  max_ad_budget_ils?:       number;
+  permitted_publish_hours?: { start: number; end: number };
+  max_daily_actions?:       number;
+}
+
+// Estimated cost per 1000 reach impressions (ILS) per platform — conservative floor.
+const COST_PER_1K_ILS: Record<string, number> = {
+  instagram: 12,
+  facebook:  10,
+  tiktok:    8,
+  whatsapp:  3,
+};
+
+// Returns { ok: true } if the campaign satisfies all user-specified guidelines.
+// Returns { ok: false, reason } if any guideline blocks auto-publish (patent §[0071]).
+function checkCampaignGuidelines(
+  campaign: CampaignBrief,
+  guidelines: CampaignGuidelines,
+): { ok: boolean; reason?: string } {
+  // 1. Permitted platforms
+  const permitted = guidelines.permitted_platforms;
+  if (permitted && permitted.length > 0 && !permitted.includes(campaign.platform)) {
+    return { ok: false, reason: `platform '${campaign.platform}' not in permitted_platforms` };
+  }
+
+  // 2. Budget constraint — estimated cost must not exceed max_ad_budget_ils
+  const maxBudget = guidelines.max_ad_budget_ils;
+  if (maxBudget != null && campaign.estimated_reach > 0) {
+    const costPer1k = COST_PER_1K_ILS[campaign.platform] ?? 12;
+    const estimatedCost = (campaign.estimated_reach / 1000) * costPer1k;
+    if (estimatedCost > maxBudget) {
+      return {
+        ok: false,
+        reason: `estimated cost ~${Math.round(estimatedCost)} ILS exceeds budget ${maxBudget} ILS`,
+      };
+    }
+  }
+
+  // 3. Permitted publish hours
+  const hours = guidelines.permitted_publish_hours;
+  if (hours) {
+    const publishHour = new Date(campaign.best_publish_datetime).getHours();
+    if (publishHour < hours.start || publishHour >= hours.end) {
+      return {
+        ok: false,
+        reason: `publish hour ${publishHour} outside permitted window ${hours.start}–${hours.end}`,
+      };
+    }
+  }
+
+  return { ok: true };
+}
 
 interface CampaignBrief {
   platform:              "instagram" | "facebook" | "tiktok" | "whatsapp";
@@ -96,6 +154,25 @@ export async function runCampaignAutoPilot(
     return;
   }
 
+  // Read user-specified guidelines (patent §[0025]-[0026], §[0071]).
+  // Auto-publish only when ALL guidelines are satisfied.
+  const { data: metaRow } = await supabase
+    .from("meta_configurations")
+    .select("user_guidelines")
+    .eq("business_id", context.business.id)
+    .maybeSingle();
+
+  const guidelines: CampaignGuidelines = (metaRow?.user_guidelines as CampaignGuidelines) ?? {};
+  const guidelineCheck = checkCampaignGuidelines(campaign, guidelines);
+  const autoPublish    = guidelineCheck.ok;
+  const status         = autoPublish ? "approved" : "draft";
+
+  if (!autoPublish) {
+    console.log(
+      `[${AGENT_NAME}] Guidelines not satisfied — staying draft. Reason: ${guidelineCheck.reason}`,
+    );
+  }
+
   const { data: row, error } = await supabase
     .from("campaign_drafts")
     .insert({
@@ -113,8 +190,8 @@ export async function runCampaignAutoPilot(
       recommended_time: campaign.best_publish_datetime,
       duration_hours:   campaign.duration_hours,
       estimated_reach:  campaign.estimated_reach,
-      auto_publish:     false, // INVARIANT: always false in MVP
-      status:           "draft",
+      auto_publish:     autoPublish,
+      status,
       confidence_score: 0.82,
     })
     .select("id")
@@ -136,12 +213,15 @@ export async function runCampaignAutoPilot(
       platform:        campaign.platform,
       estimated_reach: campaign.estimated_reach,
       trigger:         triggerEventType,
+      auto_publish:    autoPublish,
+      status,
     },
   });
 
   await pingHeartbeat(AGENT_NAME, "OK");
   console.log(
-    `[${AGENT_NAME}] Done — ${campaign.platform} draft for ${context.business.name} (reach: ~${campaign.estimated_reach})`,
+    `[${AGENT_NAME}] Done — ${campaign.platform} draft for ${context.business.name}` +
+    ` (reach: ~${campaign.estimated_reach}, status: ${status})`,
   );
 }
 

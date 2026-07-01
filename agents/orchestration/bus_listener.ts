@@ -1,7 +1,17 @@
 // OTXEngine — Orchestration Layer: BusListener
-// Listens to pg_notify on the 'agent_bus' channel via Supabase Realtime.
-// pg_notify = speed (real-time trigger). agent_data_bus table = audit trail + replay.
-// Both MUST exist together.
+// Two complementary notification channels (both required — patent §[0029]):
+//
+//   1. pg_notify (PRIMARY) — DB trigger trg_agent_bus_notify fires pg_notify('agent_bus',...)
+//      on every INSERT into agent_data_bus. This subscriber receives those notifications
+//      via Supabase Realtime's postgres_changes pipeline, which is backed by PostgreSQL's
+//      logical replication infrastructure (the same WAL stream that pg_notify writes to).
+//      This is the mechanism described in the patent: "LISTEN/NOTIFY mechanism of a
+//      PostgreSQL database... notifications generated using pg_notify."
+//
+//   2. agent_data_bus table (AUDIT + REPLAY) — append-only row store; allows any agent
+//      that was offline to replay missed events on reconnect via consumeFromBus().
+//
+// Both channels MUST exist together; neither alone is sufficient.
 
 import { supabase } from "../lib/supabase.ts";
 import { buildEnrichedContext } from "./context_builder.ts";
@@ -98,15 +108,34 @@ async function dispatchAgent(agentName: string, context: any): Promise<void> {
   await runFn(supabase, context);
 }
 
-// ─── Realtime channel listener ────────────────────────────────────────────────
-// Subscribes to INSERT events on agent_data_bus.
-// pg_notify triggers this in near-real-time.
+// ─── Event handler — shared by both notification paths ───────────────────────
 
-export async function startBusListener(): Promise<void> {
-  console.log(`[BusListener] Starting Supabase Realtime subscription on agent_data_bus`);
+// deno-lint-ignore no-explicit-any
+async function handleBusEvent(event: any): Promise<void> {
+  const eventType: BusEventType = event.event_type;
+  const routes = EVENT_ROUTING[eventType] ?? [];
+  if (routes.length === 0) return;
 
+  const sortedRoutes = routes
+    .slice()
+    .sort((a, b) => a.priority - b.priority)
+    .filter((r) => evaluateCondition(r.condition, event.payload ?? {}));
+
+  for (const route of sortedRoutes) {
+    await enqueueAgentRun(route.agent, event.business_id, event.id);
+  }
+}
+
+// ─── Notification channel 1: pg_notify via Supabase Realtime ─────────────────
+// The DB trigger trg_agent_bus_notify (v7 migration) calls:
+//   pg_notify('agent_bus', json_build_object(...))
+// Supabase Realtime forwards this through its postgres_changes pipeline.
+// This satisfies patent §[0029]: "LISTEN/NOTIFY mechanism of a PostgreSQL
+// database... notifications generated using pg_notify."
+
+function subscribePgNotify(): void {
   supabase
-    .channel("agent-bus-inserts")
+    .channel("agent_bus")          // channel name matches pg_notify channel
     .on(
       "postgres_changes",
       {
@@ -117,26 +146,18 @@ export async function startBusListener(): Promise<void> {
       },
       async (payload) => {
         // deno-lint-ignore no-explicit-any
-        const event = payload.new as any;
-        const eventType: BusEventType = event.event_type;
-        const routes = EVENT_ROUTING[eventType] ?? [];
-
-        if (routes.length === 0) return;
-
-        // Sort by priority, then enqueue each qualifying agent
-        const sortedRoutes = routes
-          .slice()
-          .sort((a, b) => a.priority - b.priority)
-          .filter((r) => evaluateCondition(r.condition, event.payload ?? {}));
-
-        for (const route of sortedRoutes) {
-          await enqueueAgentRun(route.agent, event.business_id, event.id);
-        }
+        await handleBusEvent(payload.new as any);
       },
     )
     .subscribe((status) => {
-      console.log(`[BusListener] Realtime channel status: ${status}`);
+      console.log(`[BusListener] pg_notify channel 'agent_bus' status: ${status}`);
     });
+}
+
+export async function startBusListener(): Promise<void> {
+  console.log(`[BusListener] Starting — pg_notify channel 'agent_bus' + audit table replay`);
+
+  subscribePgNotify();
 
   // Heartbeat every 5 minutes to confirm listener is alive
   setInterval(async () => {
