@@ -12,7 +12,7 @@ import { hasSearchApiKey, searchTikTokProfileVideos } from '../lib/searchapi';
 jest.mock('../db', () => ({
   prisma: {
     businessProfile: { findFirst: jest.fn() },
-    socialAccount:   { findFirst: jest.fn() },
+    socialAccount:   { findFirst: jest.fn(), update: jest.fn() },
     rawSignal:       { create: jest.fn() },
     marketSignal:    { create: jest.fn() },
   },
@@ -30,6 +30,7 @@ global.fetch = mockFetch as any;
 
 const bpFindFirst       = prisma.businessProfile.findFirst as jest.Mock;
 const saFindFirst       = prisma.socialAccount.findFirst   as jest.Mock;
+const saUpdate          = prisma.socialAccount.update      as jest.Mock;
 const rawSignalCreate   = prisma.rawSignal.create          as jest.Mock;
 const marketSignalCreate = prisma.marketSignal.create      as jest.Mock;
 const llm               = invokeLLM                        as jest.Mock;
@@ -69,6 +70,7 @@ beforeEach(() => {
   saFindFirst.mockResolvedValue(null);
   rawSignalCreate.mockResolvedValue({});
   marketSignalCreate.mockResolvedValue({});
+  saUpdate.mockResolvedValue({});
   llm.mockResolvedValue(LLM_RESULT);
   (writeAutomationLog as jest.Mock).mockResolvedValue(undefined);
   apifyKey.mockReturnValue(false);
@@ -214,6 +216,44 @@ describe('AC2 — source fallback chain', () => {
 
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('analyzeTikTokContent'));
     warnSpy.mockRestore();
+  });
+
+});
+
+// ── AC3 KAN-21 — expired/revoked TikTok token surfaced, not a silent zero ─────
+
+describe('AC3 KAN-21 — expired/revoked TikTok token', () => {
+
+  test('401 from TikTok API → is_connected: false + oauth_error returned, Apify not called', async () => {
+    saFindFirst.mockResolvedValue({ id: 'sa1', access_token: 'tok', page_id: 'open123', account_name: 'biz' });
+    tikTokToken.mockResolvedValue('valid-token');
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) });
+
+    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
+    await analyzeTikTokContent(req, res);
+
+    expect(saUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'sa1' },
+      data:  expect.objectContaining({ is_connected: false, last_error: 'tiktok_auth_401' }),
+    }));
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ oauth_error: true, reason: 'tiktok_auth_401' }));
+    expect(apifyActor).not.toHaveBeenCalled();
+    expect(rawSignalCreate).not.toHaveBeenCalled();
+  });
+
+  test('403 from TikTok API → is_connected: false + oauth_error returned', async () => {
+    saFindFirst.mockResolvedValue({ id: 'sa1', access_token: 'tok', page_id: 'open123', account_name: 'biz' });
+    tikTokToken.mockResolvedValue('valid-token');
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 403, json: async () => ({}) });
+
+    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
+    await analyzeTikTokContent(req, res);
+
+    expect(saUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'sa1' },
+      data:  expect.objectContaining({ is_connected: false, last_error: 'tiktok_auth_403' }),
+    }));
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ oauth_error: true, reason: 'tiktok_auth_403' }));
   });
 
 });

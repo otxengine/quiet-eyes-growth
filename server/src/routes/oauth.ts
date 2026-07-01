@@ -108,7 +108,7 @@ function callbackUrl(platform: string): string {
 }
 
 // Upsert a SocialAccount record (no unique index on linked_business+platform, so findFirst+update/create)
-async function upsertSocialAccount(
+export async function upsertSocialAccount(
   businessId: string,
   platform: string,
   data: { account_name: string; access_token: string; page_id?: string },

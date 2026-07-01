@@ -191,6 +191,41 @@ describe('AC2 — no-op path', () => {
 
 });
 
+// ── AC3 KAN-21 — expired/revoked token surfaced, not a silent zero ────────────
+
+describe('AC3 KAN-21 — expired/revoked IG token', () => {
+
+  test('401 response → is_connected: false + last_error set + oauth_error returned', async () => {
+    saFindFirst.mockResolvedValue({ id: 'sa1', access_token: 'tok', page_id: 'uid1' });
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) });
+
+    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
+    await analyzeInstagramComments(req, res);
+
+    expect(prisma.socialAccount.update as jest.Mock).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'sa1' },
+      data:  expect.objectContaining({ is_connected: false, last_error: 'ig_auth_401' }),
+    }));
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ oauth_error: true, reason: 'ig_auth_401' }));
+    expect(alertCreate).not.toHaveBeenCalled();
+  });
+
+  test('403 response → is_connected: false + oauth_error returned', async () => {
+    saFindFirst.mockResolvedValue({ id: 'sa1', access_token: 'tok', page_id: 'uid1' });
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 403, json: async () => ({}) });
+
+    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
+    await analyzeInstagramComments(req, res);
+
+    expect(prisma.socialAccount.update as jest.Mock).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'sa1' },
+      data:  expect.objectContaining({ is_connected: false, last_error: 'ig_auth_403' }),
+    }));
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ oauth_error: true, reason: 'ig_auth_403' }));
+  });
+
+});
+
 // ── Edge cases ────────────────────────────────────────────────────────────────
 
 describe('edge cases', () => {

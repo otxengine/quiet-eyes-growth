@@ -33,10 +33,18 @@ async function fetchTikTokUserVideos(accessToken: string, openId: string): Promi
         max_count: 10,
       }),
     });
+    if (res.status === 401 || res.status === 403) {
+      const err: any = new Error('oauth_error');
+      err.status = res.status;
+      throw err;
+    }
     if (!res.ok) return [];
     const data: any = await res.json();
     return data?.data?.videos || [];
-  } catch { return []; }
+  } catch (e: any) {
+    if (e.message === 'oauth_error') throw e;
+    return [];
+  }
 }
 
 async function apifyTikTokProfile(username: string): Promise<any[]> {
@@ -84,9 +92,21 @@ export async function analyzeTikTokContent(req: Request, res: Response) {
     if (tiktokAccount?.page_id) {
       const validToken = await getValidTikTokToken(businessProfileId);
       if (validToken) {
-        videos = await fetchTikTokUserVideos(validToken, tiktokAccount.page_id);
-        if (videos.length > 0) dataSource = 'tiktok_api';
-        else console.warn('[analyzeTikTokContent] TikTok API returned 0 videos');
+        try {
+          videos = await fetchTikTokUserVideos(validToken, tiktokAccount.page_id);
+          if (videos.length > 0) dataSource = 'tiktok_api';
+          else console.warn('[analyzeTikTokContent] TikTok API returned 0 videos');
+        } catch (e: any) {
+          if (e.message === 'oauth_error') {
+            await prisma.socialAccount.update({
+              where: { id: tiktokAccount.id },
+              data:  { is_connected: false, last_error: `tiktok_auth_${e.status}` },
+            }).catch(() => {});
+            await writeAutomationLog('analyzeTikTokContent', businessProfileId, startTime, 0);
+            return res.json({ videos_analyzed: 0, oauth_error: true, reason: `tiktok_auth_${e.status}` });
+          }
+          throw e;
+        }
       }
     }
 

@@ -112,6 +112,14 @@ export async function analyzeInstagramComments(req: Request, res: Response) {
       const mediaRes = await fetch(
         `${GRAPH_BASE}/${igUserId}/media?fields=id,timestamp,like_count,comments_count,caption&limit=10&access_token=${token}`,
       );
+      if (mediaRes.status === 401 || mediaRes.status === 403) {
+        await prisma.socialAccount.update({
+          where: { id: igAccount.id },
+          data:  { is_connected: false, last_error: `ig_auth_${mediaRes.status}` },
+        }).catch(() => {});
+        await writeAutomationLog('analyzeInstagramComments', businessProfileId, startTime, 0);
+        return res.json({ comments_analyzed: 0, oauth_error: true, reason: `ig_auth_${mediaRes.status}` });
+      }
       if (!mediaRes.ok) {
         await writeAutomationLog('analyzeInstagramComments', businessProfileId, startTime, 0);
         return res.json({ comments_analyzed: 0, note: 'Could not fetch Instagram media' });
