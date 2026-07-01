@@ -2,9 +2,22 @@
 // Merges signals from all agents into ONE FusedInsight per business.
 // Max 3 contributing signals — no information overload.
 // Invariant: source_agents[] always lists the contributing agent names.
+//
+// Patent claim 1 steps 8–9:
+//   step 8 — detectCorrelations(): identifies temporal, geographic, semantic correlations
+//   step 9 — buildFusedInsight():  generates composite signal representation via fusion
+// Patent claim 1 step 6 + Gap 3:
+//   writeSignalObjects(): writes normalized signal objects to signal_objects table
 
 import { callAnthropicAPI, parseAIJson } from "../lib/anthropic.ts";
-import type { EnrichedContext, FusedInsight, InsightSignal } from "./types.ts";
+import type {
+  SupabaseClient,
+  EnrichedContext,
+  FusedInsight,
+  InsightSignal,
+  SignalCorrelation,
+  SignalObject,
+} from "./types.ts";
 
 // ─── Weight functions per signal type ────────────────────────────────────────
 
@@ -91,6 +104,118 @@ function collectSignals(context: EnrichedContext): InsightSignal[] {
   return signals.sort((a, b) => b.weight - a.weight);
 }
 
+// ─── detectCorrelations — patent claim 1 step 8, Claim 4 ─────────────────────
+// Identifies temporal, geographic, and semantic correlations among signal objects.
+// Claim 4: "at least one of: temporal correlations, geographic correlations,
+//           and semantic correlations."
+
+export function detectCorrelations(signals: InsightSignal[]): SignalCorrelation[] {
+  const correlations: SignalCorrelation[] = [];
+
+  const SEMANTIC_PAIRS: Record<string, string[]> = {
+    buyer_intent:  ["trend_spike", "local_event", "competitor"],
+    trend_spike:   ["buyer_intent", "cross_sector", "viral_pattern"],
+    local_event:   ["buyer_intent", "demand_gap"],
+    competitor:    ["buyer_intent", "persona", "pricing"],
+    cross_sector:  ["trend_spike", "demand_gap"],
+    demand_gap:    ["local_event", "cross_sector"],
+    persona:       ["competitor", "buyer_intent"],
+  };
+
+  for (let i = 0; i < signals.length; i++) {
+    for (let j = i + 1; j < signals.length; j++) {
+      const a = signals[i];
+      const b = signals[j];
+
+      // Temporal correlation: both signals detected within 6 hours of each other
+      const aTs = a.data.processed_at ?? a.data.detected_at_utc ?? a.data.computed_at;
+      const bTs = b.data.processed_at ?? b.data.detected_at_utc ?? b.data.computed_at;
+      if (aTs && bTs) {
+        const diffHours = Math.abs(
+          new Date(aTs as string).getTime() - new Date(bTs as string).getTime(),
+        ) / 3_600_000;
+        if (diffHours < 6) {
+          correlations.push({
+            type:         "temporal",
+            strength:     Math.max(0, 1 - diffHours / 6),
+            signal_types: [a.type, b.type],
+            description:  `${a.type} and ${b.type} co-occurred within ${diffHours.toFixed(1)}h`,
+          });
+        }
+      }
+
+      // Geographic correlation: signals share same geo_city
+      const aGeo = a.data.geo_city ?? a.data.geo;
+      const bGeo = b.data.geo_city ?? b.data.geo;
+      if (aGeo && bGeo && aGeo === bGeo) {
+        correlations.push({
+          type:         "geographic",
+          strength:     1.0,
+          signal_types: [a.type, b.type],
+          description:  `Both signals from ${aGeo}`,
+        });
+      }
+
+      // Semantic correlation: signal types belong to known related pairs
+      const relatedTypes = SEMANTIC_PAIRS[a.type] ?? [];
+      if (relatedTypes.includes(b.type)) {
+        const strength = Math.min(a.weight, b.weight);
+        correlations.push({
+          type:         "semantic",
+          strength,
+          signal_types: [a.type, b.type],
+          description:  `${a.type} semantically reinforces ${b.type}`,
+        });
+      }
+    }
+  }
+
+  return correlations;
+}
+
+// ─── writeSignalObjects — patent claim 1 step 6, Gap 3 ───────────────────────
+// Persists normalized signal objects to signal_objects table (common data schema).
+
+async function writeSignalObjects(
+  supabase: SupabaseClient,
+  signals: InsightSignal[],
+  businessId: string,
+): Promise<void> {
+  if (signals.length === 0) return;
+
+  const AGENT_MAP: Record<string, string> = {
+    buyer_intent:  "IntentClassification",
+    trend_spike:   "SectorTrendRadar",
+    local_event:   "HyperLocalContextAgent",
+    competitor:    "CompetitorSnapshot",
+    cross_sector:  "CrossSectorBridgeAgent",
+    demand_gap:    "WeatherDemandPredictor",
+    persona:       "SyntheticPersonaSimulator",
+  };
+
+  const rows: Omit<SignalObject, "id" | "created_at">[] = signals.map((s) => ({
+    business_id:      businessId,
+    signal_type:      s.type,
+    source_agent:     AGENT_MAP[s.type] ?? "Unknown",
+    source_record_id: String(s.data.id ?? ""),
+    source_table:     String(s.data.source_table ?? ""),
+    weight:           s.weight,
+    payload:          s.data,
+    contextual_attrs: {
+      confidence_score: s.data.confidence_score ?? null,
+      intent_score:     s.data.intent_score     ?? null,
+      geo_match_score:  s.data.geo_match_score  ?? null,
+      z_score:          s.data.z_score          ?? null,
+      source_url:       s.data.source_url       ?? null,
+    },
+  }));
+
+  const { error } = await supabase.from("signal_objects").insert(rows);
+  if (error) {
+    console.warn(`[InsightFusion] signal_objects write failed:`, error.message);
+  }
+}
+
 // ─── Agent attribution ────────────────────────────────────────────────────────
 
 function attributeAgents(signals: InsightSignal[]): string[] {
@@ -121,24 +246,40 @@ function computeUrgency(signals: InsightSignal[]): "high" | "medium" | "low" {
 
 // ─── buildFusedInsight — MAIN EXPORT ─────────────────────────────────────────
 // Invariant: max 3 contributing signals in output.
+// Patent claim 1 steps 8–9: detects correlations, then fuses into composite representation.
+// Optional supabase param: when provided, writes signal objects to signal_objects table (Gap 3).
 
 export async function buildFusedInsight(
   context: EnrichedContext,
+  supabase?: SupabaseClient,
 ): Promise<FusedInsight> {
   const allSignals = collectSignals(context);
   const top3 = allSignals.slice(0, 3); // INVARIANT: max 3
+
+  // Patent claim 1 step 8: identify correlations among signal objects
+  const correlations = detectCorrelations(allSignals);
+  const topCorrelation = correlations.sort((a, b) => b.strength - a.strength)[0];
+
+  // Patent claim 1 step 6 / Gap 3: write normalized signal objects to DB
+  if (supabase && top3.length > 0) {
+    writeSignalObjects(supabase, top3, context.business.id).catch(() => {/* non-critical */});
+  }
 
   const urgency = computeUrgency(top3);
   const sourceAgents = attributeAgents(top3);
   const { business, personas, demandForecast } = context;
 
-  // Build concise signal summary for the AI
+  // Build concise signal summary including detected correlations
   const signalSummary = top3
     .map((s, i) => {
       const preview = JSON.stringify(s.data).slice(0, 250);
       return `${i + 1}. [${s.type} | weight=${s.weight.toFixed(2)}] ${preview}`;
     })
     .join("\n");
+
+  const correlationNote = topCorrelation
+    ? `קורלציה עיקרית: ${topCorrelation.type} בין ${topCorrelation.signal_types.join(" + ")} (חוזק: ${topCorrelation.strength.toFixed(2)})`
+    : "";
 
   const forecastDelta = demandForecast[0]?.demand_delta_pct ?? 0;
   const topPersona = personas[0]?.persona_name ?? "לא ידוע";
@@ -149,7 +290,7 @@ export async function buildFusedInsight(
 
 3 האיתותות הכי חשובות כעת:
 ${signalSummary}
-
+${correlationNote ? `\n${correlationNote}\n` : ""}
 תחזית ביקוש 24 שעות: ${forecastDelta > 0 ? "+" : ""}${forecastDelta}%
 פרסונה מובילה: ${topPersona}
 

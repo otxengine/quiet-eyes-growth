@@ -141,6 +141,52 @@ export const EVENT_ROUTING: Record<BusEventType, AgentRoute[]> = {
   ],
 };
 
+// ─── Routing Rule Store loader (patent FIGURE 2 element 235, Gap 2) ──────────
+// Loads routing rules from DB routing_rules table at runtime.
+// 5-minute in-memory cache — avoids a DB round-trip per publish.
+// Falls back to hardcoded EVENT_ROUTING if DB is unavailable.
+
+let _cachedRules: Record<BusEventType, AgentRoute[]> | null = null;
+let _cacheTs = 0;
+const RULES_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+async function getActiveRoutes(
+  supabase: SupabaseClient,
+  eventType: BusEventType,
+): Promise<AgentRoute[]> {
+  const now = Date.now();
+
+  if (!_cachedRules || now - _cacheTs > RULES_CACHE_TTL_MS) {
+    try {
+      const { data, error } = await supabase
+        .from("routing_rules")
+        .select("event_type, agent, priority, condition")
+        .eq("enabled", true)
+        .order("priority");
+
+      if (!error && data && data.length > 0) {
+        const map: Partial<Record<BusEventType, AgentRoute[]>> = {};
+        for (const row of data) {
+          const et = row.event_type as BusEventType;
+          if (!map[et]) map[et] = [];
+          map[et]!.push({ agent: row.agent, priority: row.priority, condition: row.condition });
+        }
+        // Merge DB rules over hardcoded (DB wins for known types, hardcoded fills gaps)
+        _cachedRules = { ...EVENT_ROUTING } as Record<BusEventType, AgentRoute[]>;
+        for (const et of Object.keys(map) as BusEventType[]) {
+          _cachedRules[et] = map[et]!;
+        }
+        _cacheTs = now;
+        console.log(`[BusPublisher] Routing rules loaded from DB (${data.length} rules)`);
+      }
+    } catch (e) {
+      console.warn(`[BusPublisher] DB routing rules unavailable — using hardcoded fallback:`, e);
+    }
+  }
+
+  return (_cachedRules ?? EVENT_ROUTING)[eventType] ?? [];
+}
+
 // ─── Condition evaluator ──────────────────────────────────────────────────────
 // Evaluates simple expressions against the event payload.
 // Supported: "always", "field > number", "field < number", "field = value",
@@ -240,7 +286,8 @@ export async function publishToBus(
   supabase: SupabaseClient,
   event: BusEvent,
 ): Promise<void> {
-  const routes = EVENT_ROUTING[event.event_type] ?? [];
+  // Load routing rules from DB (patent FIGURE 2 element 235) with hardcoded fallback
+  const routes = await getActiveRoutes(supabase, event.event_type);
 
   const targets = routes
     .filter((r) => evaluateCondition(r.condition, event.payload))

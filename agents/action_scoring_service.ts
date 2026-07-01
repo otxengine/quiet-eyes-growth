@@ -10,6 +10,7 @@ import { pingHeartbeat } from "./lib/heartbeat.ts";
 import { publishToBus } from "./orchestration/bus_publisher.ts";
 import { buildEnrichedContext } from "./orchestration/context_builder.ts";
 import { consumeFromBus } from "./orchestration/bus_consumer.ts";
+import { buildFusedInsight } from "./orchestration/insight_fusion.ts";
 import type {
   EnrichedContext,
   GlobalMemoryAggregate,
@@ -73,40 +74,70 @@ function satisfiesGuidelines(
   return true;
 }
 
-// ─── ActionScore v2 — 9 factors, weights sum = 1.00 ──────────────────────────
-// Verified: 0.30+0.20+0.15+0.08+0.08+0.08+0.05+0.04+0.02 = 1.00
+// ─── ActionScore v2 — 10 factors, weights sum = 1.00 ─────────────────────────
+// Verified: 0.25+0.19+0.14+0.08+0.08+0.08+0.05+0.04+0.02+0.07 = 1.00
+// Factor 10 (fusedUrgencyBoost) closes patent claim 1 Gap 1:
+//   scoring function is now applied TO the composite signal representation (FusedInsight),
+//   not just to raw EnrichedContext signals.
 
 interface ScoringInputsV2 {
-  businessFit:            number; // 0.30
-  sectorSuccessRate:      number; // 0.20
-  geoPerformance:         number; // 0.15
+  businessFit:            number; // 0.25
+  sectorSuccessRate:      number; // 0.19
+  geoPerformance:         number; // 0.14
   priceTierPerf:          number; // 0.08
   recencyFactor:          number; // 0.08
   localEventBoost:        number; // 0.08 — from HyperLocalContextAgent
   personaConversionBoost: number; // 0.05 — from SyntheticPersonaSimulator
   crossSectorBoost:       number; // 0.04 — from CrossSectorBridgeAgent
   demandGapAdjustment:    number; // 0.02 — demand gap penalizes score
+  fusedUrgencyBoost:      number; // 0.07 — from InsightFusionEngine composite output (patent claim 1 step 9)
 }
 
 function computeActionScoreV2(inputs: ScoringInputsV2): number {
   const score =
-    0.30 * inputs.businessFit +
-    0.20 * inputs.sectorSuccessRate +
-    0.15 * inputs.geoPerformance +
+    0.25 * inputs.businessFit +
+    0.19 * inputs.sectorSuccessRate +
+    0.14 * inputs.geoPerformance +
     0.08 * inputs.priceTierPerf +
     0.08 * inputs.recencyFactor +
     0.08 * inputs.localEventBoost +
     0.05 * inputs.personaConversionBoost +
     0.04 * inputs.crossSectorBoost +
-    0.02 * inputs.demandGapAdjustment;
+    0.02 * inputs.demandGapAdjustment +
+    0.07 * inputs.fusedUrgencyBoost;
 
   // Unit assertion — weights must sum to exactly 1.00
-  const WEIGHT_SUM = 0.30 + 0.20 + 0.15 + 0.08 + 0.08 + 0.08 + 0.05 + 0.04 + 0.02;
+  const WEIGHT_SUM = 0.25 + 0.19 + 0.14 + 0.08 + 0.08 + 0.08 + 0.05 + 0.04 + 0.02 + 0.07;
   if (Math.abs(WEIGHT_SUM - 1.00) > 1e-9) {
     throw new Error(`ActionScore weights do not sum to 1.00 (got ${WEIGHT_SUM})`);
   }
 
   return Math.min(1, Math.max(0, score));
+}
+
+// ─── Score all candidate action types (patent claim 1 — "plurality of candidate actions") ─
+// Each type receives a signal-context modifier on the base score.
+// Satisfies patent claim 1: "determining a score for each of a plurality of candidate actions."
+
+function scoreAllCandidates(
+  baseScore: number,
+  context: EnrichedContext,
+): Array<{ type: ActionType; score: number }> {
+  const hasSignals    = context.activeSignals.length > 0;
+  const hasTrends     = context.activeTrends.length > 0;
+  const hasCompetitor = context.competitorChanges.length > 0;
+  const hasEvent      = context.upcomingEvents.length > 0;
+
+  const modifiers: Array<{ type: ActionType; modifier: number }> = [
+    { type: "promote", modifier: (hasTrends || hasEvent) ? 1.05 : 0.90 },
+    { type: "respond", modifier: hasSignals              ? 1.05 : 0.85 },
+    { type: "alert",   modifier: hasCompetitor           ? 1.10 : 0.80 },
+    { type: "hold",    modifier: 0.70 },  // always de-prioritized
+  ];
+
+  return modifiers
+    .map(c => ({ type: c.type, score: Math.min(1, Math.max(0, baseScore * c.modifier)) }))
+    .sort((a, b) => b.score - a.score);
 }
 
 // ─── Factor helpers ───────────────────────────────────────────────────────────
@@ -213,22 +244,40 @@ export async function runActionScoringService(
     personaConversionBoost: 0.5,
     crossSectorBoost:       0.5,
     demandGapAdjustment:    1.0,
+    fusedUrgencyBoost:      0.5,
   };
 
-  let inputs = NEUTRAL;
+  // ── Step 1: Build composite signal representation (patent claim 1 steps 8-9) ──
+  // FusedInsight is the "composite signal representation" — its urgency feeds
+  // the 10th scoring factor (fusedUrgencyBoost), closing the gap between
+  // the fusion pipeline and the scoring function.
+  let fusedUrgencyBoost = 0.5; // neutral prior
+  try {
+    const fused = await buildFusedInsight(context, supabase);
+    fusedUrgencyBoost =
+      fused.urgency === "high"   ? 1.0 :
+      fused.urgency === "medium" ? 0.6 : 0.2;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(`[${AGENT_NAME}] FusedInsight failed — using neutral urgency prior:`, msg);
+  }
+
+  // ── Step 2: Compute 10-factor scoring inputs ──────────────────────────────────
+  let inputs = { ...NEUTRAL, fusedUrgencyBoost };
   let staleMemoryFlag = true;
 
   try {
-    const actionType = determineActionType(
+    // Use heuristic type for memory weight lookup (best-match prior type)
+    const heuristicType = determineActionType(
       activeSignals.length > 0,
       activeTrends.length > 0,
       competitorChanges.length > 0,
       upcomingEvents.length > 0,
     );
 
-    const sectorMem = getMemoryWeight(memoryWeights, "sector",     business.sector,               actionType);
-    const geoMem    = getMemoryWeight(memoryWeights, "geo",        business.geo_city,             actionType);
-    const tierMem   = getMemoryWeight(memoryWeights, "price_tier", business.price_tier ?? "mid",  actionType);
+    const sectorMem = getMemoryWeight(memoryWeights, "sector",     business.sector,               heuristicType);
+    const geoMem    = getMemoryWeight(memoryWeights, "geo",        business.geo_city,             heuristicType);
+    const tierMem   = getMemoryWeight(memoryWeights, "price_tier", business.price_tier ?? "mid",  heuristicType);
 
     const latestChange = (competitorChanges as CompetitorChange[])[0]?.detected_at_utc
       ?? activeSignals[0]?.processed_at;
@@ -243,22 +292,22 @@ export async function runActionScoringService(
       personaConversionBoost: getPersonaConversionBoost(personas),
       crossSectorBoost:       getCrossSectorBoost(crossSectorSignals, business.sector),
       demandGapAdjustment:    computeDemandGapAdjustment(demandForecast),
+      fusedUrgencyBoost,
     };
 
     staleMemoryFlag = sectorMem.stale || geoMem.stale || tierMem.stale;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`[${AGENT_NAME}] Factor computation failed for ${business.id}, using neutral priors:`, msg);
-    inputs = NEUTRAL;
+    inputs = { ...NEUTRAL, fusedUrgencyBoost };
   }
 
-  const actionScore = computeActionScoreV2(inputs);
-  const actionType  = determineActionType(
-    activeSignals.length > 0,
-    activeTrends.length > 0,
-    competitorChanges.length > 0,
-    upcomingEvents.length > 0,
-  );
+  // ── Step 3: Score all candidate action types (patent claim 1 — "plurality of candidate actions") ─
+  const baseScore  = computeActionScoreV2(inputs);
+  const candidates = scoreAllCandidates(baseScore, context);
+  const best       = candidates[0];
+  const actionType = best.type;
+  const actionScore = best.score;
 
   if (actionScore < ACTION_THRESHOLD) {
     console.log(

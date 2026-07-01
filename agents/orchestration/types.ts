@@ -231,8 +231,39 @@ export interface EnrichedContext {
   busEventId:           string;
 }
 
+// ─── SignalObject — common data schema (patent claim 1 step 6, §[0041]-[0043]) ──
+// All signal types from all agents are normalized into this schema before fusion.
+// Written to signal_objects table by InsightFusionEngine.
+
+export interface SignalObject {
+  id?:              string;
+  business_id:      string;
+  signal_type:      string;  // buyer_intent | trend_spike | local_event | competitor | cross_sector | demand_gap | persona
+  source_agent:     string;
+  source_record_id?: string;
+  source_table?:    string;
+  weight:           number;
+  payload:          Record<string, unknown>;
+  contextual_attrs: Record<string, unknown>;
+  fused_insight_id?: string;
+  created_at?:      string;
+}
+
+// ─── SignalCorrelation — output of correlation detection (patent claim 1 step 8) ─
+// Identifies temporal, geographic, and semantic correlations among signal objects.
+// Referenced by Claim 4: "at least one of temporal, geographic, and semantic correlations."
+
+export interface SignalCorrelation {
+  type:         "temporal" | "geographic" | "semantic";
+  strength:     number;         // 0–1
+  signal_types: [string, string];
+  description?: string;
+}
+
 // ─── FusedInsight — output of InsightFusionEngine ────────────────────────────
 
+// InsightSignal is the in-memory representation of a SignalObject (patent claim 1 step 6).
+// Alias kept for backward compatibility with existing callers.
 export interface InsightSignal {
   type:   string;
   weight: number;
