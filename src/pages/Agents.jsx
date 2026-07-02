@@ -189,8 +189,8 @@ export default function Agents() {
     queryKey: ['agentCounts', bpId],
     queryFn: async () => {
       const [rawSignals, socialSignals, signals, competitors, leads, sector, predictions, alerts] = await Promise.all([
-        base44.entities.RawSignal.filter({ linked_business: bpId, signal_type: 'web_search' }, '-detected_at', 1),
-        base44.entities.RawSignal.filter({ linked_business: bpId }, '-detected_at', 5),
+        base44.entities.RawSignal.filter({ linked_business: bpId, signal_type: 'web_search' }, '-detected_at', 500),
+        base44.entities.RawSignal.filter({ linked_business: bpId }, '-detected_at', 500),
         base44.entities.MarketSignal.filter({ linked_business: bpId }, '-detected_at', 1),
         base44.entities.Competitor.filter({ linked_business: bpId }),
         base44.entities.Lead.filter({ linked_business: bpId }, '-created_date', 1),
@@ -288,10 +288,10 @@ export default function Agents() {
       const data = await res.json().catch(() => ({}));
 
       if (res.status === 429) {
-        // Rate limited
+        // cooldown skip — not an error, just too soon
         const msg = data.error || 'המתן לפני הפעלה מחדש';
-        setAgentResults(prev => ({ ...prev, [agent.nameEn]: { ok: false, message: msg } }));
-        toast.error(msg);
+        setAgentResults(prev => ({ ...prev, [agent.nameEn]: { ok: null, skipped: true, message: msg } }));
+        toast(msg);
       } else if (!res.ok) {
         const msg = data.error || `שגיאה ${res.status}`;
         setAgentResults(prev => ({ ...prev, [agent.nameEn]: { ok: false, message: msg } }));
