@@ -1,3 +1,6 @@
+previews:
+  generation: automatic
+
 services:
   # ── Backend (Express + Prisma) ──────────────────────────────────────────────
   - type: web
@@ -12,8 +15,10 @@ services:
         value: production
       - key: DATABASE_URL
         sync: false
+        previewValue: "postgresql://postgres.slsqucucdqtsijnxbtuf:Cortexi2026!@aws-0-eu-west-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
       - key: DIRECT_URL
         sync: false
+        previewValue: "postgresql://postgres.slsqucucdqtsijnxbtuf:Cortexi2026!@aws-0-eu-west-1.pooler.supabase.com:5432/postgres"
       - key: CLERK_SECRET_KEY
         sync: false
       - key: CLERK_PUBLISHABLE_KEY

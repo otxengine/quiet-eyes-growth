@@ -1,3 +1,4 @@
+import React, { Suspense } from 'react';
 import { Toaster } from "@/components/ui/toaster"
 import { Toaster as SonnerToaster } from 'sonner'
 import { QueryClientProvider } from '@tanstack/react-query'
@@ -40,7 +41,7 @@ import Subscription from '@/pages/Subscription.jsx';
 import Integrations from '@/pages/Integrations.jsx';
 import DataSources from '@/pages/DataSources.jsx';
 import SocialConnections from '@/pages/SocialConnections.jsx';
-import OTXDashboard from '@/pages/OTXDashboard';
+const OTXDashboard = React.lazy(() => import('@/pages/OTXDashboard'));
 import LearningCenter from '@/pages/LearningCenter.jsx';
 import Marketing from '@/pages/Marketing.jsx';
 import CampaignCreate from '@/pages/CampaignCreate.jsx';
@@ -178,7 +179,7 @@ const AuthenticatedApp = () => {
         <Route path="/social" element={<SocialConnections />} />
         <Route path="/settings" element={<SettingsPage />} />
         {/* OTXEngine growth intelligence dashboard */}
-        <Route path="/otx" element={<OTXDashboard />} />
+        <Route path="/otx" element={<Suspense fallback={null}><OTXDashboard /></Suspense>} />
         <Route path="/learning" element={<LearningCenter />} />
         <Route path="/marketing" element={<Marketing />} />
         <Route path="/marketing/create" element={<CampaignCreate />} />
