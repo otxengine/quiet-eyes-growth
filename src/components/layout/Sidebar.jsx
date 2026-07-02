@@ -28,6 +28,7 @@ const NAV_STRUCTURE = [
       { path: '/reports',    label: 'דוחות' },
       { path: '/strategy',   label: 'אסטרטגיה' },
       { path: '/demand-gap', label: 'פערי ביקוש' },
+      { path: '/intelligence', label: 'מודיעין שוק' },
     ],
   },
 ];
