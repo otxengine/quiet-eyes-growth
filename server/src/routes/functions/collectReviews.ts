@@ -101,6 +101,8 @@ export async function collectReviews(req: Request, res: Response) {
 
   const startTime = new Date().toISOString();
   startCostTracking(businessProfileId);
+  let tavilyFailed: string | undefined;
+  const onTavilyError = (msg: string) => { tavilyFailed = msg; };
   try {
     const profiles = await prisma.businessProfile.findMany({ where: { id: businessProfileId } });
     const profile = profiles[0];
@@ -249,7 +251,7 @@ export async function collectReviews(req: Request, res: Response) {
 
     // ── Tavily direct search — when no Google API key available ──────────────
     if (googleAdded === 0) {
-      const tavilyResults = await tavilySearch(`"${name}" ביקורות ${city}`, 8);
+      const tavilyResults = await tavilySearch(`"${name}" ביקורות ${city}`, 8, 30, onTavilyError);
       // Batch-classify all Tavily results in one Haiku call
       const tavilyContents = tavilyResults
         .map(r => ({ content: r.content || r.snippet || '', url: r.url || '' }))
@@ -321,7 +323,7 @@ export async function collectReviews(req: Request, res: Response) {
     for (const source of sourcesToScan) {
       const query = SOURCE_QUERIES[source](name, city);
       const platformLabel = SOURCE_PLATFORM_LABELS[source] || source;
-      const tavilyHits = await tavilySearch(query, 6);
+      const tavilyHits = await tavilySearch(query, 6, 30, onTavilyError);
       const newHits = tavilyHits.filter(r => {
         const content = r.content || r.snippet || '';
         return content.length >= 20 && !existingTexts.has(content.substring(0, 50));
@@ -520,7 +522,7 @@ export async function collectReviews(req: Request, res: Response) {
     }
 
     setLastRun(businessProfileId, 'collectReviews');
-    await writeAutomationLog('collectReviews', businessProfileId, startTime, newReviews, 'success', undefined, popCost(businessProfileId));
+    await writeAutomationLog('collectReviews', businessProfileId, startTime, newReviews, tavilyFailed ? 'failed' : 'success', tavilyFailed, popCost(businessProfileId));
     console.log(`collectReviews done: ${newReviews} new reviews (${googleAdded} from Google, ${sourcesScanCount} from other sources)`);
 
     // ── Snapshot current avg rating → rating_history for trend graph ─────────

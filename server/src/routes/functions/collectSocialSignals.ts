@@ -39,6 +39,8 @@ export async function collectSocialSignals(req: Request, res: Response) {
 
     let newSignals = 0;
     let apifyError: string | undefined;
+    let tavilyFailed: string | undefined;
+    const onTavilyError = (msg: string) => { tavilyFailed = msg; };
 
     // ── Facebook via Apify ──────────────────────────────────────────────────────
     if (hasApifyKey() && facebook_url) {
@@ -176,7 +178,7 @@ export async function collectSocialSignals(req: Request, res: Response) {
 
       const influencerResults = await tavilySearch(
         `influencers ${catStr} Israel instagram tiktok micro-influencer`,
-        6,
+        6, 30, onTavilyError,
       );
 
       if (influencerResults.length > 0) {
@@ -225,7 +227,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       const urlQueries = buildUrlQueries(profile, name); // e.g. '"name" instagram'
       for (const q of [...urlQueries, ...keywords.slice(0, 8).map(kw => `"${kw}" site:facebook.com OR site:instagram.com OR site:tiktok.com`)]) {
         if (isTavilyRateLimited()) break;
-        const results = await tavilySearch(q, 4);
+        const results = await tavilySearch(q, 4, 30, onTavilyError);
         for (const r of results) {
           if (!r.url || existingUrls.has(r.url)) continue;
           const isSocial = ['facebook.com', 'instagram.com', 'tiktok.com'].some(d => r.url.includes(d));
@@ -255,7 +257,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     ];
 
     if (!isTavilyRateLimited()) for (const query of socialQueries) {
-      const results = await tavilySearch(query);
+      const results = await tavilySearch(query, 5, 30, onTavilyError);
       for (const r of results) {
         if (!r.url || existingUrls.has(r.url)) continue;
         const isSocial = ['facebook.com', 'instagram.com', 'tiktok.com', 'twitter.com'].some(d => r.url.includes(d));
@@ -296,7 +298,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     }
 
     if (!isTavilyRateLimited()) for (const query of phase3Queries) {
-      const results = await tavilySearch(query);
+      const results = await tavilySearch(query, 5, 30, onTavilyError);
       for (const r of results) {
         if (!r.url || existingUrls.has(r.url)) continue;
         const content = (r.content || r.title || '').substring(0, 500);
@@ -393,7 +395,8 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     }
 
     setLastRun(businessProfileId, 'collectSocialSignals');
-    await writeAutomationLog('collectSocialSignals', businessProfileId, startTime, newSignals, apifyError ? 'failed' : 'success', apifyError, popCost(businessProfileId));
+    const collectorError = apifyError || tavilyFailed;
+    await writeAutomationLog('collectSocialSignals', businessProfileId, startTime, newSignals, collectorError ? 'failed' : 'success', collectorError, popCost(businessProfileId));
     console.log(`collectSocialSignals done: ${newSignals} new signals, ${negativeSignalsFound} negative → MarketSignal`);
 
     return res.json({ new_signals: newSignals, phase3_signals: phase3Signals, negative_alerts: negativeSignalsFound });

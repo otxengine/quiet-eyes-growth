@@ -48,9 +48,12 @@ export async function collectWebSignals(req: Request, res: Response) {
     // ── custom_urls: every configured source domain targeted with Tavily ─────
     for (const q of buildUrlQueries(profile, name)) queries.push(q);
 
+    let tavilyFailed: string | undefined;
+    const onTavilyError = (msg: string) => { tavilyFailed = msg; };
+
     for (const query of queries) {
       // tavilySearch uses basic depth + 4h in-memory cache
-      const results = await tavilySearch(query, 4);
+      const results = await tavilySearch(query, 4, 30, onTavilyError);
       for (const r of results) {
         if (!r.url || existingUrls.has(r.url)) continue;
         await prisma.rawSignal.create({
@@ -75,7 +78,7 @@ export async function collectWebSignals(req: Request, res: Response) {
     }
 
     setLastRun(businessProfileId, 'collectWebSignals');
-    await writeAutomationLog('collectWebSignals', businessProfileId, startTime, newSignals);
+    await writeAutomationLog('collectWebSignals', businessProfileId, startTime, newSignals, tavilyFailed ? 'failed' : 'success', tavilyFailed);
     return res.json({ new_signals: newSignals });
   } catch (err: any) {
     console.error('collectWebSignals error:', err.message);
