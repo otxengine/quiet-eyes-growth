@@ -145,7 +145,7 @@ export async function collectReviews(req: Request, res: Response) {
                   where: { id: gmbAccount.id },
                   data:  { is_connected: false, last_error: `gmb_${gmbRes.status}:${errData?.error?.message || 'auth_failed'}` },
                 }).catch(() => {});
-                await writeAutomationLog('collectReviews', businessProfileId, startTime, 0);
+                await writeAutomationLog('collectReviews', businessProfileId, startTime, 0, 'failed', `gmb_${gmbRes.status}:${errData?.error?.message || 'auth_failed'}`);
                 return res.json({ new_reviews: 0, oauth_error: true, reason: `gmb_${gmbRes.status}`, gmb_path: 'failed' });
               }
               break;

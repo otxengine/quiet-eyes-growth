@@ -90,7 +90,8 @@ export async function getValidGoogleToken(businessProfileId: string): Promise<st
   // If no expiry stored or expires in less than 5 min → refresh
   if (!expiresAt || expiresAt < fiveMinFromNow) {
     const refreshed = await refreshGoogleToken(businessProfileId);
-    return refreshed || account.access_token; // fall back to existing token if refresh fails
+    if (!refreshed) logger.warn(`Google token expired and refresh failed for ${businessProfileId} — using existing token`);
+    return refreshed || account.access_token;
   }
 
   return tryDecryptToken(account.access_token);

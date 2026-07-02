@@ -26,7 +26,7 @@ jest.mock('../lib/apify',           () => ({ runApifyActor: jest.fn(), hasApifyK
 jest.mock('../lib/agentCache',      () => ({ shouldSkipAgent: jest.fn(), setLastRun: jest.fn() }));
 jest.mock('../lib/dataSources',     () => ({ parseKeywords: jest.fn(), buildUrlQueries: jest.fn() }));
 jest.mock('../lib/businessProfile', () => ({ getSectorProfile: jest.fn(), cityToEn: jest.fn(() => 'Tel Aviv') }));
-jest.mock('../lib/llm',             () => ({ invokeLLM: jest.fn() }));
+jest.mock('../lib/llm',             () => ({ invokeLLM: jest.fn(), startCostTracking: jest.fn(), popCost: jest.fn().mockReturnValue(0) }));
 jest.mock('../lib/automationLog',   () => ({ writeAutomationLog: jest.fn() }));
 jest.mock('../lib/businessContext', () => ({ loadBusinessContext: jest.fn() }));
 
@@ -172,6 +172,24 @@ describe('collectSocialSignals — AC#1 RawSignal and MarketSignal writes', () =
         linked_business: 'bp1',
       }),
     }));
+  });
+
+  test('KAN-37 AC1-B: Apify actor error triggers onError → AutomationLog status failed', async () => {
+    apifyKey.mockReturnValue(true);
+    bpFindMany.mockResolvedValue([{ ...PROFILE, facebook_url: 'https://facebook.com/testbiz' }]);
+    apifyRun.mockImplementation((_1: any, _2: any, _3: any, _4: any, onError?: (msg: string) => void) => {
+      onError?.('[Apify] apify~facebook-posts-scraper start failed: HTTP 500');
+      return Promise.resolve([]);
+    });
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectSocialSignals(req, res);
+
+    expect(autoLog).toHaveBeenCalledWith(
+      'collectSocialSignals', 'bp1', expect.any(String), 0, 'failed',
+      expect.stringContaining('[Apify]'),
+      expect.any(Number),
+    );
   });
 
   test('KAN-23 AC1: content longer than 500 chars is truncated before storage (Facebook Apify)', async () => {

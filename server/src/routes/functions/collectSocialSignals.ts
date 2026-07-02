@@ -38,6 +38,7 @@ export async function collectSocialSignals(req: Request, res: Response) {
     const existingUrls = new Set(existingSignals.map(s => s.url).filter(Boolean));
 
     let newSignals = 0;
+    let apifyError: string | undefined;
 
     // ── Facebook via Apify ──────────────────────────────────────────────────────
     if (hasApifyKey() && facebook_url) {
@@ -45,7 +46,7 @@ export async function collectSocialSignals(req: Request, res: Response) {
         startUrls: [{ url: facebook_url }],
         maxPosts: 10,
         maxPostComments: 0,
-      });
+      }, 90_000, 50, (msg) => { apifyError = msg; });
 
       for (const post of posts) {
         const url = post.url || post.postUrl || facebook_url;
@@ -76,7 +77,7 @@ export async function collectSocialSignals(req: Request, res: Response) {
         directUrls: [instagram_url],
         resultsType: 'posts',
         resultsLimit: 10,
-      });
+      }, 90_000, 50, (msg) => { apifyError = msg; });
 
       for (const post of posts) {
         const url = post.url || (post.shortCode ? `https://www.instagram.com/p/${post.shortCode}/` : null);
@@ -392,7 +393,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     }
 
     setLastRun(businessProfileId, 'collectSocialSignals');
-    await writeAutomationLog('collectSocialSignals', businessProfileId, startTime, newSignals, 'success', undefined, popCost(businessProfileId));
+    await writeAutomationLog('collectSocialSignals', businessProfileId, startTime, newSignals, apifyError ? 'failed' : 'success', apifyError, popCost(businessProfileId));
     console.log(`collectSocialSignals done: ${newSignals} new signals, ${negativeSignalsFound} negative → MarketSignal`);
 
     return res.json({ new_signals: newSignals, phase3_signals: phase3Signals, negative_alerts: negativeSignalsFound });

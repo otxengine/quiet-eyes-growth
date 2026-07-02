@@ -284,6 +284,22 @@ describe('collectReviews — AC1: GMB connected → reviews fetched and de-duped
     expect(reviewCreate).not.toHaveBeenCalled();
   });
 
+  test('GMB 401: AutomationLog called with status failed and gmb_401 in message', async () => {
+    socialFindFirst.mockResolvedValue(GMB_ACCOUNT);
+    mockFetch.mockResolvedValueOnce({
+      ok: false, status: 401,
+      json: jest.fn().mockResolvedValue({ error: { message: 'Invalid Credentials' } }),
+    });
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+
+    expect(autoLog).toHaveBeenCalledWith(
+      'collectReviews', 'bp1', expect.any(String), 0, 'failed',
+      expect.stringContaining('gmb_401'),
+    );
+  });
+
   test('malformed page_id without "/" emits warning and skips GMB path', async () => {
     socialFindFirst.mockResolvedValue({ ...GMB_ACCOUNT, page_id: 'flat-id-no-slash' });
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
