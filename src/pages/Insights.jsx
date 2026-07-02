@@ -12,6 +12,7 @@ import DailyBriefPanel from '@/components/dashboard/DailyBriefPanel';
 const TYPE_META = {
   action_needed:       { label: 'פעולה נדרשת',    color: 'text-red-600',    bg: 'bg-red-50' },
   negative_review:     { label: 'ביקורת שלילית',  color: 'text-red-600',    bg: 'bg-red-50' },
+  negative_comment:    { label: 'תגובה שלילית',   color: 'text-red-600',    bg: 'bg-red-50' },
   opportunity:         { label: 'הזדמנות',         color: 'text-green-600',  bg: 'bg-green-50' },
   market_opportunity:  { label: 'הזדמנות שוק',    color: 'text-green-600',  bg: 'bg-green-50' },
   risk:                { label: 'סיכון',           color: 'text-amber-600',  bg: 'bg-amber-50' },
@@ -185,7 +186,7 @@ export default function Insights() {
 
   // ── Step 1: merge + sort ──────────────────────────────────────────────────
   const allRows = useMemo(() => {
-    const alertRows = alerts.filter(a => a.status !== 'dismissed').map(a => ({
+    const alertRows = alerts.filter(a => !a.is_dismissed).map(a => ({
       id:      a.id,
       kind:    'alert',
       type:    a.alert_type || 'action_needed',
