@@ -428,6 +428,20 @@ export default function Reputation() {
 
       <StatCards cards={statCards} />
 
+      {visibleAlerts.length > 0 && (
+        <div className="space-y-2">
+          {visibleAlerts.map(alert => (
+            <div key={alert.id} dir="rtl" className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+              <span className="flex-1 text-[13px] text-red-700 font-medium">{alert.message || alert.title || 'ביקורת שלילית חדשה'}</span>
+              <button onClick={() => dismissAlert(alert.id)} className="text-red-400 hover:text-red-600 flex-shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Two-column: chart (40%) + מבט על (60%) */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="md:col-span-2 bg-white rounded-xl border border-gray-200 p-4">
@@ -471,7 +485,17 @@ export default function Reputation() {
       <div>
         {/* Section header: title on RIGHT, filters+search on LEFT (RTL) */}
         <div className="flex items-center justify-between mb-3" dir="rtl">
-          <h2 className="text-[15px] font-bold text-foreground">ביקורות <span className="text-foreground-muted font-normal">({reviews.length})</span></h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-[15px] font-bold text-foreground">ביקורות <span className="text-foreground-muted font-normal">({reviews.length})</span></h2>
+            <button
+              onClick={handleCollectReviews}
+              disabled={scanning}
+              className="flex items-center gap-1.5 text-[11px] border border-border rounded-lg px-2.5 py-1.5 hover:bg-secondary transition-colors text-foreground-muted disabled:opacity-50"
+            >
+              {scanning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+              {scanning ? 'סורק...' : 'סרוק ביקורות'}
+            </button>
+          </div>
           <div className="flex items-center gap-2 flex-wrap">
             {/* Filters first in DOM = appear on RIGHT within the group in RTL */}
             <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
