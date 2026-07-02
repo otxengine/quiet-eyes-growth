@@ -507,7 +507,7 @@ export default function Reputation() {
         {reviews.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
             <Star className="w-8 h-8 text-foreground-muted opacity-30 mx-auto mb-3" />
-            <p className="text-[13px] text-foreground-muted mb-4">לא נמצאו ביקורות עדיין</p>
+            <p className="text-[13px] text-foreground-muted mb-4">לא נמצאו ביקורות</p>
             <button onClick={() => setShowAddModal(true)} className="inline-flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-full text-[12px] font-semibold hover:opacity-90">
               <Plus className="w-4 h-4" /> הוסף ביקורת ראשונה
             </button>
