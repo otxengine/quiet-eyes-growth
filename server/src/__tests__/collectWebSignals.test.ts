@@ -232,6 +232,62 @@ describe('collectWebSignals — AC#2 URL deduplication', () => {
 
 });
 
+describe('collectWebSignals — KAN-33 custom_urls scan path', () => {
+
+  test('custom_urls queries are passed to tavilySearch', async () => {
+    buq.mockReturnValue(['site:rest.co.il "Test Biz"', '"Test Biz" instagram']);
+    bsq.mockReturnValue([]);
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectWebSignals(req, res);
+
+    const queries = capturedQueries();
+    expect(queries).toContain('site:rest.co.il "Test Biz"');
+    expect(queries).toContain('"Test Biz" instagram');
+  });
+
+  test('custom_urls queries appear after mission/bsq queries', async () => {
+    bsq.mockReturnValue(['bsq_q1']);
+    buq.mockReturnValue(['url_q1']);
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectWebSignals(req, res);
+
+    const queries = capturedQueries();
+    expect(queries.indexOf('bsq_q1')).toBeLessThan(queries.indexOf('url_q1'));
+  });
+
+  test('signals from custom_urls queries are stored with correct metadata', async () => {
+    bsq.mockReturnValue([]);
+    buq.mockReturnValue(['site:example.com "Test Biz"']);
+    tavily.mockResolvedValue([{ url: 'https://example.com/review', content: 'great place' }]);
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectWebSignals(req, res);
+
+    expect(signalCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        url: 'https://example.com/review',
+        signal_type: 'web_search',
+        source_origin: 'tavily',
+        linked_business: 'bp1',
+      }),
+    }));
+  });
+
+  test('when custom_urls is empty: buildUrlQueries returns [] and no extra queries run', async () => {
+    bsq.mockReturnValue(['bsq_q1']);
+    buq.mockReturnValue([]);
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectWebSignals(req, res);
+
+    const queries = capturedQueries();
+    expect(queries).toEqual(['bsq_q1']);
+  });
+
+});
+
 describe('collectWebSignals — AC#4 error handling', () => {
 
   test('DB error mid-loop: AutomationLog records failed with partial count', async () => {
