@@ -109,6 +109,7 @@ export async function collectReviews(req: Request, res: Response) {
     const { name, city } = profile;
     let newReviews = 0;
     let googleAdded = 0;
+    let gmbPathResult: 'success' | 'failed' | 'not_connected' = 'not_connected';
 
     const existingReviews = await prisma.review.findMany({ where: { linked_business: businessProfileId } });
     const existingGoogleIds = new Set(existingReviews.map(r => r.google_review_id).filter(Boolean));
@@ -124,8 +125,10 @@ export async function collectReviews(req: Request, res: Response) {
 
     if (gmbToken && gmbLocationPath) {
       if (!gmbLocationPath.includes('/')) {
+        gmbPathResult = 'failed';
         console.warn(`[collectReviews] GMB page_id "${gmbLocationPath}" is not a valid location path (expected "accounts/X/locations/Y") — skipping GMB`);
       } else {
+        gmbPathResult = 'success'; // account is connected; only reverts on auth error
         try {
           let nextPageToken: string | undefined;
           const gmbPending: Array<{ gr: any; reviewId: string; text: string; textKey: string; rating: number; sentiment: string; reviewerName: string }> = [];
@@ -137,12 +140,13 @@ export async function collectReviews(req: Request, res: Response) {
               const isAuthErr = gmbRes.status === 401 || gmbRes.status === 403;
               console.warn(`[collectReviews] GMB API ${gmbRes.status}: ${errData?.error?.message || 'unknown error'}${isAuthErr ? '' : ' — falling back to Places'}`);
               if (isAuthErr && gmbAccount) {
+                gmbPathResult = 'failed';
                 await prisma.socialAccount.update({
                   where: { id: gmbAccount.id },
                   data:  { is_connected: false, last_error: `gmb_${gmbRes.status}:${errData?.error?.message || 'auth_failed'}` },
                 }).catch(() => {});
                 await writeAutomationLog('collectReviews', businessProfileId, startTime, 0);
-                return res.json({ new_reviews: 0, oauth_error: true, reason: `gmb_${gmbRes.status}` });
+                return res.json({ new_reviews: 0, oauth_error: true, reason: `gmb_${gmbRes.status}`, gmb_path: 'failed' });
               }
               break;
             }
@@ -594,7 +598,7 @@ export async function collectReviews(req: Request, res: Response) {
         }
       } catch (_) {}
     }
-    return res.json({ new_reviews: newReviews, google_reviews_added: googleAdded, sources_scanned: sourcesToScan.length + (googleAdded > 0 ? 1 : 0) });
+    return res.json({ new_reviews: newReviews, google_reviews_added: googleAdded, sources_scanned: sourcesToScan.length + (googleAdded > 0 ? 1 : 0), gmb_path: gmbPathResult });
   } catch (err: any) {
     console.error('collectReviews error:', err.message);
     await writeAutomationLog('collectReviews', businessProfileId, startTime, 0, 'failed', err.message, popCost(businessProfileId));

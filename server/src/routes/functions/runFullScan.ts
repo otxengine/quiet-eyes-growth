@@ -31,6 +31,7 @@ import { marketMemoryEngine } from './marketMemoryEngine';
 import { microMomentDetector } from './microMomentDetector';
 import { sentimentVelocityMonitor } from './sentimentVelocityMonitor';
 import { bootstrapBusinessIntelligence } from '../../lib/bootstrapIntelligence';
+import { evaluateCollectionStatus } from '../../lib/collectionStatus';
 import { contentPerformanceAgent } from './contentPerformanceAgent';
 import { reviewRequestTimingAgent } from './reviewRequestTimingAgent';
 import { learnFromWebsite } from './stubs';
@@ -261,6 +262,21 @@ export async function runFullScan(req: Request, res: Response) {
         results[name] = { error: e.message };
       }
     }
-    console.log(`[runFullScan] background pipeline complete for ${profile?.name}`);
+    // KAN-34: evaluate §2.1 success definition after all collectors complete
+    const rawSignals =
+      (results['collectWebSignals']?.new_signals  ?? 0) +
+      (results['collectSocialSignals']?.new_signals ?? 0);
+    const collStatus = evaluateCollectionStatus({
+      rawSignals,
+      reviews:  results['collectReviews']?.new_reviews ?? 0,
+      gmbPath:  results['collectReviews']?.gmb_path    ?? 'not_connected',
+    });
+    await writeAutomationLog(
+      'runFullScan:collectionStatus', businessProfileId, startTime,
+      rawSignals + (results['collectReviews']?.new_reviews ?? 0),
+      'success',
+      `collection_status:${collStatus}`,
+    );
+    console.log(`[runFullScan] background pipeline complete for ${profile?.name} — ${collStatus}`);
   })().catch(e => console.error('[runFullScan] background error:', e.message));
 }

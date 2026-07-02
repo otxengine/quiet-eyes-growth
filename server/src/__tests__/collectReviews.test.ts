@@ -173,6 +173,27 @@ describe('collectReviews — KAN-23 AC#1 content truncation', () => {
 
 });
 
+describe('collectReviews — KAN-34 AC2: GMB connected + Tavily returns nothing = success', () => {
+  test('gmb_path is success and AutomationLog status success even when 0 new reviews', async () => {
+    socialFindFirst.mockResolvedValue(GMB_ACCOUNT);
+    // GMB API returns no reviews (all previously de-duped)
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ reviews: [], nextPageToken: undefined }),
+    });
+    tavily.mockResolvedValue([]); // Tavily also returns nothing
+
+    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ gmb_path: 'success' }));
+    expect(json).not.toHaveBeenCalledWith(expect.objectContaining({ oauth_error: true }));
+    expect(autoLog).toHaveBeenCalledWith(
+      'collectReviews', 'bp1', expect.any(String), 0, 'success', undefined, expect.any(Number),
+    );
+  });
+});
+
 describe('collectReviews — AC1: GMB connected → reviews fetched and de-duped by google_review_id', () => {
 
   test('GMB reviews are fetched and written with correct fields', async () => {
@@ -491,6 +512,38 @@ describe('collectReviews — KAN-18 AC3: ProactiveAlert negative_review created'
     await collectReviews(req, res);
 
     expect(alertCreate).not.toHaveBeenCalled();
+  });
+
+  test('negative review: ProactiveAlert, rating_history INSERT, and new_review event all produced', async () => {
+    socialFindFirst.mockResolvedValue(GMB_ACCOUNT);
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        reviews: [gmbReview({ starRating: 'ONE', comment: 'גרוע מאוד' })],
+        nextPageToken: undefined,
+      }),
+    });
+    llm.mockResolvedValue({ results: [{ topics: ['שירות'], sentiments: { שירות: 'negative' } }] });
+    reviewFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ rating: 1 }])
+      .mockResolvedValueOnce([{ id: 'r1', sentiment: 'negative', rating: 1, reviewer_name: 'ישראל ישראלי', text: 'גרוע מאוד' }])
+      .mockResolvedValueOnce([{ id: 'r1' }]);
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+
+    expect(alertCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ alert_type: 'negative_review', linked_business: 'bp1' }),
+    }));
+    expect(execRaw).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO rating_history'),
+      'bp1', expect.any(Number), expect.any(Number), expect.any(Number), 'collectReviews',
+    );
+    expect(publishEvent as jest.Mock).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'new_review',
+      payload: expect.objectContaining({ review_id: 'r1' }),
+    }));
   });
 });
 

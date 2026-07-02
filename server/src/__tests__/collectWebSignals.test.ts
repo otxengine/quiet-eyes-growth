@@ -196,6 +196,8 @@ describe('collectWebSignals — AC#1 signals written and counted', () => {
       }),
     }));
     expect(json).toHaveBeenCalledWith({ new_signals: 2 });
+    // AC1(KAN-34): collectors must log success with items_processed > 0
+    expect(autoLog).toHaveBeenCalledWith('collectWebSignals', 'bp1', expect.any(String), 2);
   });
 
 });

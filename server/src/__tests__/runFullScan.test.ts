@@ -3,6 +3,9 @@ import { runFullScan } from '../routes/functions/runFullScan';
 import { prisma } from '../db';
 import { writeAutomationLog } from '../lib/automationLog';
 import { analyzeInstagramComments } from '../routes/functions/analyzeInstagramComments';
+import { collectWebSignals } from '../routes/functions/collectWebSignals';
+import { collectSocialSignals } from '../routes/functions/collectSocialSignals';
+import { collectReviews } from '../routes/functions/collectReviews';
 
 // ── DB & infrastructure ───────────────────────────────────────────────────────
 jest.mock('../db', () => ({
@@ -167,5 +170,58 @@ describe('runFullScan', () => {
     );
 
     errSpy.mockRestore();
+  });
+});
+
+// ── KAN-34: §2.1 collection status written to AutomationLog after background pipeline ──
+describe('runFullScan — KAN-34 collection status (§2.1)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (prisma.businessProfile.findMany as jest.Mock).mockResolvedValue([PROFILE]);
+    (prisma.automationLog.findFirst  as jest.Mock).mockResolvedValue(null);
+    (prisma.automationLog.count      as jest.Mock).mockResolvedValue(0);
+    (prisma.businessMemory.findFirst as jest.Mock).mockResolvedValue(null);
+    (writeAutomationLog              as jest.Mock).mockResolvedValue(undefined);
+  });
+
+  it('AC1: web signals collected → collection_status:succeeded written to AutomationLog', async () => {
+    (collectWebSignals    as jest.Mock).mockImplementationOnce((_r: any, res: any) => res.json({ new_signals: 3 }));
+    (collectSocialSignals as jest.Mock).mockImplementationOnce((_r: any, res: any) => res.json({ new_signals: 1 }));
+
+    const { res } = makeRes();
+    await runFullScan(makeReq(), res);
+    await new Promise(r => setTimeout(r, 50)); // drain background IIFE
+
+    expect(writeAutomationLog).toHaveBeenCalledWith(
+      'runFullScan:collectionStatus', 'bp1', expect.any(String),
+      4, 'success', 'collection_status:succeeded',
+    );
+  });
+
+  it('AC2: GMB connected + Tavily returns nothing → collection_status:succeeded', async () => {
+    (collectWebSignals as jest.Mock).mockImplementationOnce((_r: any, res: any) => res.json({ new_signals: 0 }));
+    (collectReviews   as jest.Mock).mockImplementationOnce((_r: any, res: any) =>
+      res.json({ new_reviews: 0, google_reviews_added: 0, gmb_path: 'success' }));
+
+    const { res } = makeRes();
+    await runFullScan(makeReq(), res);
+    await new Promise(r => setTimeout(r, 50));
+
+    expect(writeAutomationLog).toHaveBeenCalledWith(
+      'runFullScan:collectionStatus', 'bp1', expect.any(String),
+      0, 'success', 'collection_status:succeeded',
+    );
+  });
+
+  it('AC3: all collectors return 0 → collection_status:not_yet_done, not false success', async () => {
+    // Default mocks all return { ok: true } → new_signals / new_reviews undefined → 0
+    const { res } = makeRes();
+    await runFullScan(makeReq(), res);
+    await new Promise(r => setTimeout(r, 50));
+
+    expect(writeAutomationLog).toHaveBeenCalledWith(
+      'runFullScan:collectionStatus', 'bp1', expect.any(String),
+      0, 'success', 'collection_status:not_yet_done',
+    );
   });
 });
