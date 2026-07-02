@@ -524,11 +524,13 @@ describe('collectReviews — KAN-18 AC3: ProactiveAlert negative_review created'
       }),
     });
     llm.mockResolvedValue({ results: [{ topics: ['שירות'], sentiments: { שירות: 'negative' } }] });
-    reviewFindMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ rating: 1 }])
-      .mockResolvedValueOnce([{ id: 'r1', sentiment: 'negative', rating: 1, reviewer_name: 'ישראל ישראלי', text: 'גרוע מאוד' }])
-      .mockResolvedValueOnce([{ id: 'r1' }]);
+    reviewFindMany.mockImplementation((opts: any) => {
+      if (opts?.select?.rating)          return Promise.resolve([{ rating: 1 }]);
+      if (opts?.select?.id)              return Promise.resolve([{ id: 'r1' }]);
+      if (opts?.where?.sentiment === 'negative')
+        return Promise.resolve([{ id: 'r1', sentiment: 'negative', rating: 1, reviewer_name: 'ישראל ישראלי', text: 'גרוע מאוד' }]);
+      return Promise.resolve([]);
+    });
 
     const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
     await collectReviews(req, res);
