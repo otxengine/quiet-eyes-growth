@@ -230,7 +230,16 @@ function App() {
       <QueryClientProvider client={queryClientInstance}>
         <OrganizationProvider>
         <Router future={ROUTER_FUTURE}>
-          <AuthenticatedApp />
+          <Routes>
+            {/* Landing page renders immediately — no auth gate */}
+            <Route path="/" element={<LandingMain />} />
+            <Route path="/restaurants" element={<LandingRestaurants />} />
+            <Route path="/fitness" element={<LandingFitness />} />
+            <Route path="/beauty" element={<LandingBeauty />} />
+            <Route path="/join" element={<JoinPage />} />
+            {/* Everything else goes through auth */}
+            <Route path="/*" element={<AuthenticatedApp />} />
+          </Routes>
         </Router>
         <Toaster />
         <SonnerToaster position="top-center" richColors />
