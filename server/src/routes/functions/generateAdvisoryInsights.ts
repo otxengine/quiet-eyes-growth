@@ -240,7 +240,7 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
         .filter(r => r.topics)
         .flatMap(r => (r.topics as string).split(','))
         .reduce((acc: Record<string, number>, t) => { acc[t] = (acc[t] || 0) + 1; return acc; }, {});
-      const topComplaint = Object.entries(recurrThemes).sort((a,b) => b[1]-a[1])[0];
+      const topComplaint = Object.entries(recurrThemes).sort((a,b) => (b[1] as number)-(a[1] as number))[0];
       if (topComplaint) reputationLines.push(`  נושא תלונה מרכזי: "${topComplaint[0]}" (${topComplaint[1]} ביקורות)`);
     }
 

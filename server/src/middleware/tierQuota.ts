@@ -88,7 +88,7 @@ async function getPlanId(userId: string): Promise<string> {
   }
   try {
     const profile = await prisma.businessProfile.findFirst({
-      where: { owner_id: userId },
+      where: { created_by: userId },
       select: { plan_id: true },
     });
     const planId = profile?.plan_id ?? DEFAULT_TIER;

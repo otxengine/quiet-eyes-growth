@@ -79,7 +79,7 @@ export async function generateMarketAnalysis(req: Request, res: Response) {
     const topServices = leads
       .filter(l => l.service_needed)
       .reduce((acc: Record<string, number>, l) => { acc[l.service_needed!] = (acc[l.service_needed!] || 0) + 1; return acc; }, {});
-    const topServicesList = Object.entries(topServices).sort(([,a],[,b]) => b-a).slice(0, 3).map(([s]) => s);
+    const topServicesList = Object.entries(topServices).sort(([,a],[,b]) => (b as number)-(a as number)).slice(0, 3).map(([s]) => s);
 
     const result = await invokeLLM({
       model: 'sonnet',

@@ -147,7 +147,7 @@ export async function detectTrends(req: Request, res: Response) {
       .map(r => `[${r.url}]\n${(r.content || r.title || '').substring(0, 300)}`)
       .join('\n---\n');
     const signalContext = relevantSignals.slice(0, 20)
-      .map(s => `[${s.signal_type}] ${(s.content || '').substring(0, 200)}`)
+      .map(s => `[${(s as any).signal_type}] ${(s.content || '').substring(0, 200)}`)
       .join('\n---\n');
 
     const combinedContext = `=== WEB RESULTS ===\n${webContext}${trendsBlock}\n\n=== DB SIGNALS ===\n${signalContext}`;

@@ -112,7 +112,7 @@ export async function generateWeeklyReport(req: Request, res: Response) {
       .filter(l => (l.created_date || '') >= weekAgo && l.service_needed)
       .map(l => l.service_needed)
       .reduce((acc: Record<string, number>, s) => { acc[s!] = (acc[s!] || 0) + 1; return acc; }, {});
-    const topService = Object.entries(topLeadServices).sort(([,a],[,b]) => b-a)[0]?.[0] || '';
+    const topService = Object.entries(topLeadServices).sort(([,a],[,b]) => (b as number)-(a as number))[0]?.[0] || '';
 
     const competitorNames = competitors.map(c => `${c.name}(${c.rating ?? '?'}⭐)`).join(', ');
 
