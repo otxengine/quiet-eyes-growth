@@ -962,3 +962,15 @@ model SocialComment {
   @@unique([platform, platform_comment_id])
   @@map("social_comments")
 }
+
+model ApiQuotaUsage {
+  id          String   @id @default(dbgenerated("gen_random_uuid()"))
+  business_id String
+  date_bucket String   // 'YYYY-MM-DD' UTC
+  scan_count  Int      @default(0)
+  updated_at  DateTime @default(now()) @updatedAt
+
+  @@unique([business_id, date_bucket])
+  @@index([business_id, date_bucket])
+  @@map("api_quota_usage")
+}
