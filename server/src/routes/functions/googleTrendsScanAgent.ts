@@ -31,6 +31,7 @@ import {
   hasSearchApiKey, searchTrendingNow, searchYouTubeTrends, searchGoogleNews,
 } from '../../lib/searchapi';
 import { loadDismissedTitles } from '../../lib/insightDedup';
+import { sendOwnerWhatsAppNotification } from '../../services/execution/WhatsAppOwnerNotifier';
 
 const SERP_API_KEY  = process.env.SERP_API_KEY  || '';
 const MIN_INTERVAL  = 20 * 60 * 60 * 1000; // 20h — slightly less than 24h to handle schedule jitter
@@ -318,6 +319,13 @@ Return ONLY valid JSON:
         is_acted_on:  false,
         created_at:   new Date().toISOString(),
       },
+    }).catch(() => {});
+
+    // Notify owner via WhatsApp — trend gaps are high-value opportunities
+    sendOwnerWhatsAppNotification({
+      businessProfileId,
+      actionDescription: `📈 טרנד עולה בסקטור שלך שחסר בשירותים שלך: ${gap.trend_name}`,
+      agentName: 'סריקת טרנדים Google',
     }).catch(() => {});
 
     // Also save as MarketSignal for agent consumption

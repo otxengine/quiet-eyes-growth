@@ -19,6 +19,7 @@ import { tavilyAdvancedSearch, isTavilyRateLimited } from '../../lib/tavily';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun, cacheGet, cacheSet, TTL } from '../../lib/agentCache';
 import { loadCheckpoint, saveCheckpoint, filterNewIds } from '../../lib/trendMemory';
+import { sendOwnerWhatsAppNotification } from '../../services/execution/WhatsAppOwnerNotifier';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
@@ -279,6 +280,16 @@ Return ONLY valid JSON:
       if (id) trendCp.scannedIds.add(id);
     });
     await saveCheckpoint(trendCp, { signals_created: created, scanned_at: new Date().toISOString() });
+
+    // Send WhatsApp for the first exploding viral signal (if any)
+    const explodingSignal = validSignals.find(s => s.velocity === 'exploding');
+    if (explodingSignal && created > 0) {
+      sendOwnerWhatsAppNotification({
+        businessProfileId,
+        actionDescription: `🔥 תוכן ויראלי מתפוצץ ב-${explodingSignal.platform}: ${explodingSignal.title} — חלון ${explodingSignal.window_hours} שעות`,
+        agentName: 'זיהוי סיגנלים ויראליים',
+      }).catch(() => {});
+    }
 
     setLastRun(businessProfileId, 'detectViralSignals');
     await writeAutomationLog('detectViralSignals', businessProfileId, startTime, created);

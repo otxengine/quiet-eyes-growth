@@ -34,6 +34,7 @@ import { shouldSkipAgent, setLastRun, cacheGet, cacheSet, TTL } from '../../lib/
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
 import { loadCheckpoint, saveCheckpoint, filterNewIds } from '../../lib/trendMemory';
+import { sendOwnerWhatsAppNotification } from '../../services/execution/WhatsAppOwnerNotifier';
 
 const MIN_INTERVAL_MS = 8 * 60 * 60 * 1000; // 8 שעות
 
@@ -683,6 +684,13 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
             created_at: new Date().toISOString(),
           },
         });
+
+        // Notify owner via WhatsApp — TikTok exploding trends are time-sensitive
+        sendOwnerWhatsAppNotification({
+          businessProfileId,
+          actionDescription: `🔥 טרנד TikTok מתפוצץ בסקטור שלך: ${explodingTrend.pattern_name} — חלון של ${explodingTrend.opportunity_window_hours} שעות`,
+          agentName: 'TikTok טרנד סקטור',
+        }).catch(() => {});
       }
     }
 

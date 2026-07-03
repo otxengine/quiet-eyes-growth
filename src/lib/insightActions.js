@@ -284,6 +284,59 @@ const INSIGHT_ACTION_MAP = {
     'view_analytics',
     'draft_post',
   ],
+  // Multi-platform trend signal categories
+  google_trend: [
+    'draft_post',
+    'create_campaign',
+    'create_task',
+    'view_signals',
+  ],
+  instagram_trend: [
+    'draft_post',
+    'create_campaign_with_audience',
+    'create_task',
+    'view_signals',
+  ],
+  facebook_trend: [
+    'draft_post',
+    'create_campaign',
+    'create_task',
+    'view_signals',
+  ],
+  tiktok_sector_trend: [
+    'draft_post',
+    'view_tiktok_audience',
+    'create_campaign_with_audience',
+    'create_task',
+  ],
+  viral_signal: [
+    'draft_post',
+    'create_campaign_with_audience',
+    'view_tiktok_audience',
+    'create_task',
+  ],
+  visual_trend: [
+    'draft_post',
+    'create_task',
+    'view_signals',
+  ],
+  trend_gap: [
+    'create_campaign',
+    'draft_post',
+    'create_task',
+    'view_signals',
+  ],
+  content_trend: [
+    'draft_post',
+    'view_tiktok_audience',
+    'create_task',
+  ],
+  early_trend: [
+    'draft_post',
+    'create_campaign',
+    'create_task',
+    'view_signals',
+  ],
   // Action entity categories
   competitive: [
     'view_competitors',

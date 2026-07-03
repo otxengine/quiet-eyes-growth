@@ -3,6 +3,7 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { getSectorContext } from '../../lib/sectorPrompts';
+import { sendOwnerWhatsAppNotification } from '../../services/execution/WhatsAppOwnerNotifier';
 
 /**
  * microMomentDetector — identifies upcoming high-propensity purchase moments.
@@ -115,6 +116,15 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
           created_at: new Date().toISOString(),
         },
       });
+      // Notify owner via WhatsApp for high-urgency micro-moments (arriving within 7 days)
+      if (moment.urgency === 'high' && (moment.days_until || 30) <= 7) {
+        sendOwnerWhatsAppNotification({
+          businessProfileId,
+          actionDescription: `⏰ מיקרו-מומנט קרוב: ${moment.title} — בעוד ${moment.days_until || '?'} ימים. ביקוש צפוי גבוה פי ${moment.demand_multiplier || 1.5}`,
+          agentName: 'זיהוי מיקרו-מומנטים',
+        }).catch(() => {});
+      }
+
       existingTitles.add(moment.title);
       created++;
     }

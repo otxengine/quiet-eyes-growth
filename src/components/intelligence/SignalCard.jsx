@@ -33,6 +33,15 @@ const categoryConfig = {
   tiktok_audience:       { borderClass: 'signal-border-trend',          label: 'TikTok קהל' },
   tiktok_post_performance: { borderClass: 'signal-border-mention',      label: 'TikTok ביצועים' },
   event:                 { borderClass: 'signal-border-trend',          label: 'אירוע' },
+  // Multi-platform trend categories
+  google_trend:    { borderClass: 'signal-border-trend',          label: '📈 Google טרנד' },
+  instagram_trend: { borderClass: 'signal-border-trend',          label: '📸 Instagram טרנד' },
+  facebook_trend:  { borderClass: 'signal-border-trend',          label: '👤 Facebook טרנד' },
+  viral_signal:    { borderClass: 'signal-border-opportunity',    label: '🔥 ויראלי' },
+  visual_trend:    { borderClass: 'signal-border-trend',          label: '🖼️ טרנד ויזואלי' },
+  trend_gap:       { borderClass: 'signal-border-opportunity',    label: '💡 פער בשוק' },
+  content_trend:   { borderClass: 'signal-border-trend',          label: '🎬 טרנד תוכן' },
+  early_trend:     { borderClass: 'signal-border-opportunity',    label: '⚡ טרנד מוקדם' },
 };
 
 const impactLabels = {
