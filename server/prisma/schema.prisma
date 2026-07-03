@@ -815,7 +815,7 @@ model RoutingRule {
   created_at    DateTime @default(now())
   event_type    String   // event_type pattern (exact match or '*' wildcard)
   conditions    String?  // JSON: [{field, op, value}] — AND-combined
-  target_agents String   // JSON array of agent function names to activate
+  target_agents String   @default("[]") // JSON array of agent function names to activate
   priority      Int      @default(0) // higher = evaluated first
   is_active     Boolean  @default(true)
   description   String?  // human-readable rule description
