@@ -1,5 +1,6 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { invokeLLM } from '../../lib/llm';
+import { requireScanQuota, requireCampaignsEnabled } from '../../middleware/tierQuota';
 import { generateMorningBriefing } from './generateMorningBriefing';
 import { generateLeadFirstContact } from './generateLeadFirstContact';
 import { generateBattlecard } from './generateBattlecard';
@@ -297,11 +298,39 @@ router.post('/notify-review-response', async (req: Request, res: Response) => {
   return res.json({ ok: true });
 });
 
+// Functions that consume a scan quota slot (external API calls)
+const SCAN_QUOTA_FUNCTIONS = new Set([
+  'collectWebSignals', 'runMarketIntelligence', 'runLeadGeneration',
+  'collectReviews', 'collectSocialSignals', 'runFullScan',
+  'detectTrends', 'detectEarlyTrends', 'detectEvents',
+  'runCompetitorIdentification', 'detectCompetitorChanges',
+  'detectCompetitorPricing', 'detectCompetitorAds',
+  'batchSnapshotCompetitors', 'snapshotCompetitor',
+  'scanServicesAndPrices', 'googleTrendsScanAgent',
+  'instagramTrendAgent', 'tiktokSectorTrendAgent',
+  'facebookGroupTrendAgent', 'findSocialLeads',
+  'findLocalEvents', 'googleRankMonitor',
+]);
+
+// Functions that require a campaigns-enabled tier (Premium+)
+const CAMPAIGNS_FUNCTIONS = new Set([
+  'publishPost', 'schedulePostPublisher',
+]);
+
 // POST /api/functions/:name
-router.post('/:name', (req, res) => {
-  const handler = FUNCTION_MAP[req.params.name];
+router.post('/:name', (req: Request, res: Response, next: NextFunction) => {
+  const name = req.params.name;
+  const handler = FUNCTION_MAP[name];
   if (!handler) {
-    return res.status(404).json({ error: `Unknown function: ${req.params.name}` });
+    return res.status(404).json({ error: `Unknown function: ${name}` });
+  }
+
+  // Apply quota middleware conditionally based on function name
+  if (CAMPAIGNS_FUNCTIONS.has(name)) {
+    return requireCampaignsEnabled()(req, res, () => handler(req, res));
+  }
+  if (SCAN_QUOTA_FUNCTIONS.has(name)) {
+    return requireScanQuota()(req, res, () => handler(req, res));
   }
   return handler(req, res);
 });

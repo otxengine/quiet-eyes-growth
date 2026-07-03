@@ -192,6 +192,7 @@ export default function OnboardingForm() {
     relevant_services: [], description: '', price_tier: '',
     customer_sources: [], business_goal: '',
     website_url: '', instagram_url: '', facebook_url: '', tiktok_url: '',
+    wa_phone: '',
   });
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
@@ -207,13 +208,14 @@ export default function OnboardingForm() {
       case 7: return 'מאיפה רוב הלקוחות שלך מגיעים?';
       case 8: return 'מה הכי חשוב לך לשפר ב-30 הימים הקרובים?';
       case 9: return 'רוצה לחבר גם פלטפורמות חברתיות? (אופציונלי)';
+      case 10: return '📱 שלב אחרון! מה מספר הנייד שלך ל-WhatsApp? כך נשלח לך התראות ותובנות ישירות לנייד.';
       default: return '';
     }
   };
 
   // Add AI question when step advances
   useEffect(() => {
-    if (step >= 1 && step <= 9) {
+    if (step >= 1 && step <= 10) {
       const q = getQuestion(step);
       setMessages(prev => [...prev, { type: 'ai', text: q }]);
       setTimeout(() => inputRef.current?.focus(), 150);
@@ -268,6 +270,8 @@ export default function OnboardingForm() {
         instagram_url:       formData.instagram_url || undefined,
         facebook_url:        formData.facebook_url  || undefined,
         tiktok_url:          formData.tiktok_url    || undefined,
+        wa_alert_phone:      formData.wa_phone      || undefined,
+        phone:               formData.wa_phone      || undefined,
         onboarding_completed: false,
         created_at:          new Date().toISOString(),
       });
@@ -450,6 +454,28 @@ export default function OnboardingForm() {
           </div>
         );
 
+      case 10:
+        return (
+          <div className="space-y-3 max-w-sm">
+            <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-full px-4 py-3 focus-within:border-[#e8344d] transition-colors">
+              <span className="text-lg flex-shrink-0">📱</span>
+              <input
+                ref={inputRef}
+                type="tel"
+                value={formData.wa_phone}
+                onChange={e => setFormData(prev => ({ ...prev, wa_phone: e.target.value }))}
+                onKeyDown={e => e.key === 'Enter' && formData.wa_phone.trim() && handleSubmit()}
+                placeholder="05X-XXXXXXX"
+                className="flex-1 bg-transparent text-[14px] text-gray-700 outline-none"
+                dir="ltr"
+              />
+            </div>
+            <p className="text-[11px] text-gray-500 text-right px-2">
+              ✓ ההתראות יגיעו ל-WhatsApp שלך ישירות — תוכל לאשר פעולות בקליק אחד
+            </p>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -462,15 +488,19 @@ export default function OnboardingForm() {
     if (step === 4) return tempServices.length > 0 || otherService.trim().length > 0;
     if (step === 5) return textInput.trim().length > 0;
     if (step === 7) return tempSources.length > 0;
-    if (step === 9) return true; // optional
+    if (step === 9) return true; // optional (social URLs)
+    if (step === 10) return true; // phone optional — can skip
     return false; // auto-advance steps (3, 6, 8)
   };
 
   const isAutoAdvanceStep = [3, 6, 8].includes(step);
 
   const handlePrimaryAction = () => {
-    if (step === 9) {
+    if (step === 10) {
       handleSubmit();
+    } else if (step === 9) {
+      // Social URLs step — advance to phone step
+      setStep(prev => prev + 1);
     } else if (step === 1) {
       if (textInput.trim()) advance('name', textInput.trim(), textInput.trim());
     } else if (step === 2) {
@@ -591,13 +621,13 @@ export default function OnboardingForm() {
         </div>
 
         {/* Bottom CTAs */}
-        {!isAutoAdvanceStep && step >= 1 && step <= 9 && (
+        {!isAutoAdvanceStep && step >= 1 && step <= 10 && (
           <div className="border-t border-gray-200/60 bg-white/80 backdrop-blur-sm px-6 py-4 flex items-center justify-between gap-3">
             <button
-              onClick={skipStep}
+              onClick={step === 10 ? handleSubmit : skipStep}
               className="border border-gray-300 text-gray-500 rounded-full px-6 py-2.5 text-[13px] font-medium hover:border-gray-400 transition-colors"
             >
-              מלאו אחר כך
+              {step === 10 ? 'דלג' : 'מלאו אחר כך'}
             </button>
             <button
               onClick={handlePrimaryAction}
@@ -606,7 +636,7 @@ export default function OnboardingForm() {
             >
               {isSubmitting ? (
                 <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> שומר...</>
-              ) : step === 9 ? 'בואו נתקדם' : 'בואו נתקדם'}
+              ) : step === 10 ? '🚀 קדימה לסריקה!' : 'בואו נתקדם'}
             </button>
           </div>
         )}

@@ -19,6 +19,10 @@ import AboutPage from '@/pages/public/About.jsx';
 import ContactPage from '@/pages/public/Contact.jsx';
 import TermsPage from '@/pages/public/Terms.jsx';
 import PrivacyPage from '@/pages/public/Privacy.jsx';
+// Segment landing pages (no layout wrapper — fully self-contained)
+import LandingRestaurants from '@/pages/public/LandingRestaurants.jsx';
+import LandingFitness from '@/pages/public/LandingFitness.jsx';
+import LandingBeauty from '@/pages/public/LandingBeauty.jsx';
 
 // App layout
 import AppLayout from '@/components/layout/AppLayout';
@@ -95,6 +99,10 @@ const AuthenticatedApp = () => {
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
           </Route>
+          {/* Segment landing pages — standalone, no layout wrapper */}
+          <Route path="/restaurants" element={<LandingRestaurants />} />
+          <Route path="/fitness" element={<LandingFitness />} />
+          <Route path="/beauty" element={<LandingBeauty />} />
           <Route path="*" element={<PageNotFound />} />
         </Routes>
       );
@@ -115,6 +123,10 @@ const AuthenticatedApp = () => {
             <SignUp routing="path" path="/sign-up" fallbackRedirectUrl="/onboarding" />
           </div>
         } />
+        {/* Segment landing pages — standalone, no layout wrapper */}
+        <Route path="/restaurants" element={<LandingRestaurants />} />
+        <Route path="/fitness" element={<LandingFitness />} />
+        <Route path="/beauty" element={<LandingBeauty />} />
         <Route element={<PublicLayout />}>
           <Route path="/" element={<PublicHome />} />
           <Route path="/home" element={<PublicHome />} />
@@ -135,6 +147,11 @@ const AuthenticatedApp = () => {
   // Authenticated — show app
   return (
     <Routes>
+      {/* Segment landing pages — standalone, no layout wrapper */}
+      <Route path="/restaurants" element={<LandingRestaurants />} />
+      <Route path="/fitness" element={<LandingFitness />} />
+      <Route path="/beauty" element={<LandingBeauty />} />
+
       {/* Public pages still accessible when logged in */}
       <Route element={<PublicLayout />}>
         <Route path="/home" element={<PublicHome />} />
