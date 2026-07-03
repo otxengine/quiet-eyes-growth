@@ -23,6 +23,7 @@ import PrivacyPage from '@/pages/public/Privacy.jsx';
 import LandingRestaurants from '@/pages/public/LandingRestaurants.jsx';
 import LandingFitness from '@/pages/public/LandingFitness.jsx';
 import LandingBeauty from '@/pages/public/LandingBeauty.jsx';
+import LandingMain from '@/pages/public/LandingMain.jsx';
 
 // App layout
 import AppLayout from '@/components/layout/AppLayout';
@@ -88,8 +89,8 @@ const AuthenticatedApp = () => {
     if (authError.type === 'auth_required') {
       return (
         <Routes>
+          <Route path="/" element={<LandingMain />} />
           <Route element={<PublicLayout />}>
-            <Route path="/" element={<PublicHome />} />
             <Route path="/home" element={<PublicHome />} />
             <Route path="/how-it-works" element={<HowItWorks />} />
             <Route path="/features" element={<Features />} />
@@ -123,12 +124,13 @@ const AuthenticatedApp = () => {
             <SignUp routing="path" path="/sign-up" fallbackRedirectUrl="/onboarding" />
           </div>
         } />
+        {/* Main landing — standalone dark-mode */}
+        <Route path="/" element={<LandingMain />} />
         {/* Segment landing pages — standalone, no layout wrapper */}
         <Route path="/restaurants" element={<LandingRestaurants />} />
         <Route path="/fitness" element={<LandingFitness />} />
         <Route path="/beauty" element={<LandingBeauty />} />
         <Route element={<PublicLayout />}>
-          <Route path="/" element={<PublicHome />} />
           <Route path="/home" element={<PublicHome />} />
           <Route path="/how-it-works" element={<HowItWorks />} />
           <Route path="/features" element={<Features />} />
