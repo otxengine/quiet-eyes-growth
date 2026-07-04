@@ -1,24 +1,34 @@
-import { useState, useEffect, useRef } from 'react';
+/**
+ * Cortexi — Premium Marketing Landing Page
+ * Design: Glassmorphism · Bento Grid · Heebo · Micro-animations
+ * Palette: #F4F4F9 bg · #E8344D red · #7C3AED purple · #1A1F36 dark
+ */
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 /* ─── Design tokens ──────────────────────────────────────── */
-const C = {
-  bg:        '#F4F4F9',
-  white:     '#FFFFFF',
-  border:    '#E2E2EE',
-  borderHov: '#C8C8DC',
-  primary:   '#E8344D',
-  primaryD:  '#C9253B',
-  purple:    '#7C3AED',
-  orange:    '#F97316',
-  dark:      '#1A1F36',
-  mid:       '#4A5568',
-  light:     '#8E8EA8',
-  green:     '#059669',
+const T = {
+  bg:       '#F0F0F7',
+  glass:    'rgba(255,255,255,0.62)',
+  glassDk:  'rgba(255,255,255,0.45)',
+  glassB:   'rgba(255,255,255,0.85)',
+  white:    '#FFFFFF',
+  border:   'rgba(255,255,255,0.75)',
+  borderSm: 'rgba(200,200,220,0.5)',
+  red:      '#E8344D',
+  redD:     '#C9253B',
+  redG:     'linear-gradient(135deg,#E8344D,#C9253B)',
+  purple:   '#7C3AED',
+  purpleL:  '#A78BFA',
+  orange:   '#F97316',
+  dark:     '#1A1F36',
+  mid:      '#4A5568',
+  light:    '#8E8EA8',
+  green:    '#059669',
 };
 
 /* ─── Hooks ──────────────────────────────────────────────── */
-function useInView(threshold = 0.15) {
+function useInView(threshold = 0.12) {
   const ref = useRef(null);
   const [v, setV] = useState(false);
   useEffect(() => {
@@ -34,371 +44,401 @@ function useCounter(target, duration = 2000, active = false) {
   useEffect(() => {
     if (!active) return;
     const t0 = performance.now();
-    const tick = (now) => {
+    const raf = (now) => {
       const p = Math.min((now - t0) / duration, 1);
       setVal(Math.floor((1 - Math.pow(1 - p, 3)) * target));
-      if (p < 1) requestAnimationFrame(tick);
+      if (p < 1) requestAnimationFrame(raf);
     };
-    requestAnimationFrame(tick);
+    requestAnimationFrame(raf);
   }, [target, duration, active]);
   return val;
 }
 
-/* ─── SVG Icons ──────────────────────────────────────────── */
-const Icons = {
-  TrendUp: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" />
+/* ─── Custom SVG Line Icons ──────────────────────────────── */
+const Icon = {
+  // Market intelligence radar
+  Radar: ({ size = 22, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="2"/><circle cx="12" cy="12" r="5.5" strokeDasharray="2 3"/><circle cx="12" cy="12" r="9"/>
+      <line x1="12" y1="3" x2="12" y2="1"/><line x1="12" y1="21" x2="12" y2="23"/>
+      <line x1="3" y1="12" x2="1" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
     </svg>
   ),
-  Radar: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/>
+  // Trend line up
+  TrendUp: ({ size = 22, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
     </svg>
   ),
-  Target: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  // Shield check
+  Shield: ({ size = 22, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/>
+    </svg>
+  ),
+  // Target / leads
+  Target: ({ size = 22, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
     </svg>
   ),
-  Star: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  // Phone / mobile approval
+  Mobile: ({ size = 22, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" strokeWidth="2.5"/>
+    </svg>
+  ),
+  // Star review
+  Star: ({ size = 22, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
     </svg>
   ),
-  Zap: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  // Zap / speed
+  Zap: ({ size = 22, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
     </svg>
   ),
-  Bell: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+  // Chart bar
+  BarChart: ({ size = 22, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
     </svg>
   ),
-  ArrowLeft: () => (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  // Arrow left (RTL primary)
+  ArrowLeft: ({ size = 16 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
     </svg>
   ),
-  Check: () => (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+  Check: ({ size = 13 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="20 6 9 17 4 12"/>
     </svg>
   ),
-  ChevronDown: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  ChevDown: ({ size = 18 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="6 9 12 15 18 9"/>
     </svg>
   ),
-  Users: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+  Menu: () => (
+    <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+    </svg>
+  ),
+  X: () => (
+    <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
     </svg>
   ),
 };
 
-/* ─── Stat counter ───────────────────────────────────────── */
-function Stat({ n, suffix, prefix = '', label, sub, active }) {
-  const val = useCounter(n, 1800, active);
+/* ─── Animated stat ──────────────────────────────────────── */
+function StatNum({ n, suffix = '', label, sub, active }) {
+  const val = useCounter(n, 2000, active);
   return (
-    <div style={{ textAlign: 'center', padding: '0 16px' }}>
-      <div style={{ fontSize: 48, fontWeight: 900, color: C.dark, letterSpacing: '-0.04em', lineHeight: 1, fontFamily: 'Heebo, sans-serif' }}>
-        {prefix}{val.toLocaleString()}{suffix}
+    <div style={{ textAlign: 'center' }}>
+      <div style={{ fontSize: 46, fontWeight: 900, color: T.dark, letterSpacing: '-0.04em', lineHeight: 1, fontFamily: 'Heebo,sans-serif' }}>
+        {val.toLocaleString()}{suffix}
       </div>
-      <div style={{ fontSize: 15, fontWeight: 700, color: C.dark, marginTop: 8 }}>{label}</div>
-      {sub && <div style={{ fontSize: 13, color: C.light, marginTop: 3 }}>{sub}</div>}
+      <div style={{ fontSize: 15, fontWeight: 700, color: T.dark, marginTop: 8 }}>{label}</div>
+      {sub && <div style={{ fontSize: 12, color: T.light, marginTop: 3, fontWeight: 500 }}>{sub}</div>}
     </div>
   );
 }
 
-/* ─── Testimonials data ──────────────────────────────────── */
+/* ─── Icon badge ─────────────────────────────────────────── */
+function IconBadge({ icon, color, bg }) {
+  return (
+    <div style={{
+      width: 42, height: 42, borderRadius: 12,
+      background: bg || `${color}18`,
+      border: `1.5px solid ${color}30`,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      flexShrink: 0,
+      boxShadow: `0 2px 8px ${color}20`,
+    }}>
+      {icon}
+    </div>
+  );
+}
+
+/* ─── Testimonials ───────────────────────────────────────── */
 const TESTI = [
-  {
-    quote: 'שבוע אחד עם Cortexi. גיליתי שהמתחרה מסביב לפינה פתח "ארוחת בוקר" ב-65 שקלים — בדיוק בשעות שלי. הגבתי למחרת עם מבצע. שמרתי על 40 לקוחות.',
-    name: 'יוסי כהן',
-    role: 'בעלים, מסעדת הגרנד — ת"א',
-    initial: 'י',
-    color: '#E8344D',
-  },
-  {
-    quote: 'המערכת זיהתה 3 חברות שעמדו לבטל מנוי — 3 שבועות לפני שזה קרה. שלחתי הצעה בפרטי. שניים חזרו. זה שווה 11,400 ₪ בשנה.',
-    name: 'מיכל לוי',
-    role: 'בעלים, סטודיו Fit+ — רמת גן',
-    initial: 'מ',
-    color: '#7C3AED',
-  },
-  {
-    quote: 'ראיתי טרנד "ombre nails" ב-TikTok US. Cortexi אמרה שיגיע לישראל בעוד 18 יום. פרסמתי פוסט ראשון בישראל. 47 תורים בשלושה ימים.',
-    name: 'אבי שמאי',
-    role: 'בעלים, סלון Style — חיפה',
-    initial: 'א',
-    color: '#F97316',
-  },
+  { q: 'שבוע אחד עם Cortexi. המתחרה מסביב לפינה פתח "ארוחת בוקר" ב-65 ₪ בדיוק בשעות שלי. הגבתי למחרת. שמרתי על 40 לקוחות קבועים.', name: 'יוסי כהן', role: 'בעלים, מסעדת הגרנד — ת"א', init: 'י', color: T.red },
+  { q: 'המערכת זיהתה 3 חברות שעמדו לבטל מנוי — 3 שבועות לפני שזה קרה. שלחתי הצעה אישית. שניים חזרו. שווה 11,400 ₪ בשנה.', name: 'מיכל לוי', role: 'בעלים, סטודיו Fit+ — רמת גן', init: 'מ', color: T.purple },
+  { q: 'Cortexi אמרה שטרנד "ombre nails" יגיע לישראל בעוד 18 יום. פרסמתי ראשון. 47 תורים בשלושה ימים.', name: 'אבי שמאי', role: 'בעלים, סלון Style — חיפה', init: 'א', color: T.orange },
 ];
 
-/* ─── Main ───────────────────────────────────────────────── */
+/* ─── Main component ─────────────────────────────────────── */
 export default function LandingMain() {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [hovCard, setHovCard] = useState(null);
 
-  const [statsRef, statsV]   = useInView(0.3);
-  const [probRef, probV]     = useInView(0.1);
-  const [featRef, featV]     = useInView(0.05);
-  const [tesiRef, tesiV]     = useInView(0.1);
-  const [howRef, howV]       = useInView(0.15);
-  const [pricRef, pricV]     = useInView(0.1);
+  const [heroRef, heroV]   = useInView(0.1);
+  const [statsRef, statsV] = useInView(0.3);
+  const [probRef, probV]   = useInView(0.1);
+  const [bentRef, bentV]   = useInView(0.04);
+  const [tesiRef, tesiV]   = useInView(0.1);
+  const [howRef, howV]     = useInView(0.15);
+  const [pricRef, pricV]   = useInView(0.1);
 
   useEffect(() => {
-    const fn = () => setScrolled(window.scrollY > 50);
+    const fn = () => setScrolled(window.scrollY > 48);
     window.addEventListener('scroll', fn, { passive: true });
     return () => window.removeEventListener('scroll', fn);
   }, []);
 
-  const goSignUp = () => navigate('/sign-up');
-  const goSignIn = () => navigate('/sign-in');
+  const go = useCallback((p) => navigate(p), [navigate]);
 
   return (
-    <div dir="rtl" style={{ background: C.bg, minHeight: '100vh', color: C.dark, fontFamily: 'Heebo, Inter, sans-serif', overflowX: 'hidden' }}>
+    <div dir="rtl" style={{ background: T.bg, minHeight: '100vh', color: T.dark, fontFamily: 'Heebo, system-ui, sans-serif', overflowX: 'hidden' }}>
 
-      {/* ── Fonts + Keyframes ──────────────────────────────── */}
+      {/* ── Global styles ─────────────────────────────────── */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap');
+        *, *::before, *::after { box-sizing: border-box; }
 
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        /* Background mesh */
+        body { background: #F0F0F7; }
 
-        @keyframes fadeUp   { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
+        /* Keyframes */
+        @keyframes fadeUp   { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes fadeIn   { from{opacity:0} to{opacity:1} }
+        @keyframes floatA   { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(40px,-30px) scale(1.04)} }
+        @keyframes floatB   { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(-30px,35px) scale(1.02)} }
+        @keyframes floatC   { 0%,100%{transform:translate(0,0)} 50%{transform:translate(20px,-20px)} }
         @keyframes marquee  { from{transform:translateX(0)} to{transform:translateX(-50%)} }
-        @keyframes blink    { 0%,100%{opacity:1} 50%{opacity:0.25} }
-        @keyframes shimmer  {
-          0%{background-position:-400% center}
-          100%{background-position:400% center}
-        }
-        @keyframes floatA {
-          0%,100%{transform:translate(0,0)}
-          50%{transform:translate(30px,-20px)}
-        }
-        @keyframes floatB {
-          0%,100%{transform:translate(0,0)}
-          50%{transform:translate(-20px,30px)}
-        }
-
-        .hero-h1 { animation: fadeUp .65s ease both; }
-        .hero-p  { animation: fadeUp .65s .12s ease both; }
-        .hero-cta{ animation: fadeUp .65s .22s ease both; }
-        .hero-ui { animation: fadeUp .85s .4s ease both; }
+        @keyframes shimmer  { 0%{background-position:-400% center} 100%{background-position:400% center} }
+        @keyframes blink    { 0%,100%{opacity:1} 50%{opacity:0.2} }
+        @keyframes pulseRed { 0%,100%{box-shadow:0 4px 20px rgba(232,52,77,0.35)} 50%{box-shadow:0 4px 32px rgba(232,52,77,0.6)} }
+        @keyframes slideIn  { from{opacity:0;transform:translateX(12px)} to{opacity:1;transform:translateX(0)} }
 
         .grad-text {
-          background: linear-gradient(110deg, #E8344D 0%, #C026D3 45%, #7C3AED 100%);
+          background: linear-gradient(110deg, #E8344D 0%, #C026D3 50%, #7C3AED 100%);
           background-size: 300% auto;
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
+          -webkit-background-clip: text; -webkit-text-fill-color: transparent;
           background-clip: text;
           animation: shimmer 5s linear infinite;
         }
 
-        .marquee-wrap { overflow: hidden; }
-        .marquee-inner { display:flex; gap:12px; width:max-content; animation: marquee 28s linear infinite; }
-        .marquee-inner:hover { animation-play-state: paused; }
+        .hero-in   { animation: fadeUp .7s ease both; }
+        .hero-in-2 { animation: fadeUp .7s .15s ease both; }
+        .hero-in-3 { animation: fadeUp .7s .28s ease both; }
+        .hero-ui   { animation: fadeUp .9s .45s ease both; }
 
-        .card-lift { transition: transform .22s ease, box-shadow .22s ease; }
-        .card-lift:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.1) !important; }
+        .marquee-wrap { overflow:hidden; }
+        .marquee-inner{ display:flex; gap:12px; width:max-content; animation:marquee 30s linear infinite; }
+        .marquee-inner:hover { animation-play-state:paused; }
 
-        .btn-primary {
+        /* Glass card */
+        .glass {
+          background: rgba(255,255,255,0.60);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1.5px solid rgba(255,255,255,0.80);
+          box-shadow: 0 4px 24px rgba(26,31,54,0.07), 0 1px 4px rgba(26,31,54,0.04);
+        }
+
+        /* Hover lift */
+        .lift {
+          transition: transform .22s ease, box-shadow .22s ease;
+          cursor: default;
+        }
+        .lift:hover {
+          transform: translateY(-5px);
+          box-shadow: 0 16px 48px rgba(26,31,54,0.11), 0 4px 12px rgba(26,31,54,0.07) !important;
+        }
+
+        /* Primary button */
+        .btn-red {
           display:inline-flex; align-items:center; gap:10px;
-          background: linear-gradient(135deg, #E8344D, #C9253B);
+          background: linear-gradient(135deg,#E8344D,#C9253B);
           color:#fff; border:none; border-radius:12px;
           font-family:Heebo,sans-serif; font-weight:800; font-size:16px;
-          padding:14px 28px; cursor:pointer;
+          padding:15px 30px; cursor:pointer;
           box-shadow: 0 4px 20px rgba(232,52,77,0.35);
           transition: transform .15s ease, box-shadow .15s ease;
+          animation: pulseRed 3s ease-in-out infinite;
         }
-        .btn-primary:hover { transform:translateY(-2px); box-shadow:0 8px 30px rgba(232,52,77,0.45); }
+        .btn-red:hover { transform:translateY(-2px); box-shadow:0 8px 32px rgba(232,52,77,0.5); animation:none; }
 
+        /* Ghost button */
         .btn-ghost {
           display:inline-flex; align-items:center; gap:8px;
-          background:#fff; color:${C.dark}; border:1.5px solid ${C.border};
+          background: rgba(255,255,255,0.7);
+          backdrop-filter: blur(12px);
+          color:${T.dark}; border:1.5px solid rgba(200,200,220,0.6);
           border-radius:12px; font-family:Heebo,sans-serif; font-weight:700; font-size:15px;
-          padding:14px 24px; cursor:pointer;
-          transition: border-color .15s ease, background .15s ease;
+          padding:15px 24px; cursor:pointer;
+          transition: background .15s ease, border-color .15s ease;
         }
-        .btn-ghost:hover { border-color:${C.borderHov}; background:#FAFAFA; }
+        .btn-ghost:hover { background:rgba(255,255,255,0.9); border-color:rgba(180,180,210,0.8); }
 
         .dot-blink { animation: blink 2s ease-in-out infinite; }
 
         ::-webkit-scrollbar { width:5px; }
-        ::-webkit-scrollbar-track { background:${C.bg}; }
-        ::-webkit-scrollbar-thumb { background:#C8C8DC; border-radius:3px; }
+        ::-webkit-scrollbar-track { background:${T.bg}; }
+        ::-webkit-scrollbar-thumb { background:rgba(124,58,237,0.2); border-radius:3px; }
 
-        @media (max-width:768px) { .hide-mobile { display:none !important; } }
-        @media (min-width:769px) { .show-mobile { display:none !important; } }
+        @media(max-width:768px){ .hide-mob{display:none!important;} }
+        @media(min-width:769px){ .show-mob{display:none!important;} }
+
+        /* Bento responsive */
+        @media(max-width:900px) {
+          .bento-grid { grid-template-columns:1fr!important; }
+          .bento-grid > * { grid-column:1!important; grid-row:auto!important; }
+        }
+        @media(max-width:640px) {
+          .stats-grid { grid-template-columns:1fr 1fr!important; }
+          .pricing-grid { grid-template-columns:1fr!important; }
+        }
       `}</style>
 
-      {/* ═══════════════════════ NAV ════════════════════════ */}
-      <header style={{
-        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-        background: scrolled ? 'rgba(244,244,249,0.9)' : C.bg,
-        backdropFilter: scrolled ? 'blur(20px)' : 'none',
-        borderBottom: `1px solid ${scrolled ? C.border : 'transparent'}`,
-        transition: 'all .3s ease',
-      }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', height: 66, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      {/* ── Ambient background orbs ────────────────────────── */}
+      <div aria-hidden style={{ position:'fixed', inset:0, pointerEvents:'none', zIndex:0, overflow:'hidden' }}>
+        <div style={{ position:'absolute', top:'-10%', right:'-5%', width:700, height:700, borderRadius:'50%', background:'radial-gradient(circle, rgba(232,52,77,0.07) 0%, transparent 65%)', filter:'blur(60px)', animation:'floatA 22s ease-in-out infinite' }} />
+        <div style={{ position:'absolute', bottom:'-5%', left:'-8%', width:600, height:600, borderRadius:'50%', background:'radial-gradient(circle, rgba(124,58,237,0.07) 0%, transparent 65%)', filter:'blur(60px)', animation:'floatB 28s ease-in-out infinite' }} />
+        <div style={{ position:'absolute', top:'45%', left:'38%', width:400, height:400, borderRadius:'50%', background:'radial-gradient(circle, rgba(249,115,22,0.04) 0%, transparent 65%)', filter:'blur(50px)', animation:'floatC 18s ease-in-out infinite' }} />
+      </div>
 
+      {/* ═══════════════ NAV ══════════════════════════════════ */}
+      <header style={{
+        position:'fixed', top:0, left:0, right:0, zIndex:200,
+        background: scrolled ? 'rgba(240,240,247,0.85)' : 'transparent',
+        backdropFilter: scrolled ? 'blur(24px)' : 'none',
+        borderBottom: scrolled ? '1px solid rgba(200,200,220,0.4)' : 'none',
+        transition:'all .3s ease',
+      }}>
+        <div style={{ maxWidth:1200, margin:'0 auto', padding:'0 28px', height:68, display:'flex', alignItems:'center', justifyContent:'space-between', position:'relative', zIndex:1 }}>
           {/* Logo */}
-          <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 0, padding: 0 }}>
-            <img src="/logo.jpeg" alt="Cortexi" style={{ height: 42, width: 'auto', display: 'block', borderRadius: 6 }} />
+          <button onClick={() => window.scrollTo({ top:0, behavior:'smooth' })} style={{ background:'none', border:'none', cursor:'pointer', padding:0, display:'flex', alignItems:'center' }}>
+            <img src="/logo.jpeg" alt="Cortexi" style={{ height:44, width:'auto', borderRadius:8, display:'block' }} />
           </button>
 
-          {/* Desktop links */}
-          <nav className="hide-mobile" style={{ display: 'flex', gap: 32 }}>
-            {[['#features', 'יכולות'], ['#how', 'איך זה עובד'], ['#pricing', 'מחירים'], ['#faq', 'שאלות']].map(([href, label]) => (
-              <a key={href} href={href} style={{ fontSize: 15, fontWeight: 600, color: C.mid, textDecoration: 'none', transition: 'color .15s' }}
-                onMouseEnter={e => e.target.style.color = C.dark}
-                onMouseLeave={e => e.target.style.color = C.mid}>
-                {label}
-              </a>
+          {/* Desktop nav */}
+          <nav className="hide-mob" style={{ display:'flex', gap:36 }}>
+            {[['#features','יכולות'],['#how','איך זה עובד'],['#pricing','מחירים'],['#faq','שאלות']].map(([href,label]) => (
+              <a key={href} href={href} style={{ fontSize:15, fontWeight:600, color:T.mid, textDecoration:'none', transition:'color .15s' }}
+                onMouseEnter={e=>e.target.style.color=T.dark} onMouseLeave={e=>e.target.style.color=T.mid}>{label}</a>
             ))}
           </nav>
 
-          {/* CTA */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button onClick={goSignIn} className="hide-mobile"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, fontWeight: 600, color: C.mid, padding: '8px 12px', fontFamily: 'Heebo, sans-serif', transition: 'color .15s' }}
-              onMouseEnter={e => e.target.style.color = C.dark}
-              onMouseLeave={e => e.target.style.color = C.mid}>
+          {/* CTA pair */}
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <button onClick={() => go('/sign-in')} className="hide-mob"
+              style={{ background:'none', border:'none', cursor:'pointer', fontSize:15, fontWeight:600, color:T.mid, padding:'8px 12px', fontFamily:'Heebo,sans-serif', transition:'color .15s' }}
+              onMouseEnter={e=>e.target.style.color=T.dark} onMouseLeave={e=>e.target.style.color=T.mid}>
               התחברות
             </button>
-            <button onClick={goSignUp} className="btn-primary" style={{ padding: '9px 22px', fontSize: 15, borderRadius: 10 }}>
+            <button onClick={() => go('/sign-up')} className="btn-red" style={{ padding:'10px 22px', fontSize:14.5, borderRadius:10, animation:'none', boxShadow:'0 4px 16px rgba(232,52,77,0.35)' }}>
               התחל חינם
             </button>
-            <button onClick={() => setMenuOpen(o => !o)} className="show-mobile"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mid, padding: 8 }}>
-              <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                {menuOpen
-                  ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                  : <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16"/>}
-              </svg>
+            <button className="show-mob" onClick={() => setMenu(o=>!o)} style={{ background:'none', border:'none', cursor:'pointer', color:T.mid, padding:8 }}>
+              {menu ? <Icon.X /> : <Icon.Menu />}
             </button>
           </div>
         </div>
 
         {/* Mobile menu */}
-        {menuOpen && (
-          <div style={{ background: C.white, borderTop: `1px solid ${C.border}`, padding: '12px 24px 20px' }}>
-            {[['#features', 'יכולות'], ['#how', 'איך זה עובד'], ['#pricing', 'מחירים'], ['#faq', 'שאלות']].map(([href, label]) => (
-              <a key={href} href={href} onClick={() => setMenuOpen(false)}
-                style={{ display: 'block', padding: '11px 0', fontSize: 16, fontWeight: 600, color: C.dark, textDecoration: 'none', borderBottom: `1px solid ${C.border}` }}>
-                {label}
-              </a>
+        {menu && (
+          <div className="glass" style={{ borderTop:'1px solid rgba(200,200,220,0.4)', padding:'12px 28px 20px', animation:'slideIn .2s ease' }}>
+            {[['#features','יכולות'],['#how','איך זה עובד'],['#pricing','מחירים'],['#faq','שאלות']].map(([href,label]) => (
+              <a key={href} href={href} onClick={() => setMenu(false)}
+                style={{ display:'block', padding:'12px 0', fontSize:16, fontWeight:600, color:T.dark, textDecoration:'none', borderBottom:'1px solid rgba(200,200,220,0.3)' }}>{label}</a>
             ))}
-            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-              <button onClick={goSignIn} className="btn-ghost" style={{ flex: 1, justifyContent: 'center', padding: '12px 0' }}>התחברות</button>
-              <button onClick={goSignUp} className="btn-primary" style={{ flex: 1, justifyContent: 'center', padding: '12px 0' }}>התחל חינם</button>
+            <div style={{ display:'flex', gap:10, marginTop:16 }}>
+              <button onClick={() => go('/sign-in')} className="btn-ghost" style={{ flex:1, justifyContent:'center', padding:'12px 0' }}>התחברות</button>
+              <button onClick={() => go('/sign-up')} className="btn-red" style={{ flex:1, justifyContent:'center', padding:'12px 0', animation:'none' }}>התחל חינם</button>
             </div>
           </div>
         )}
       </header>
 
-      {/* ═══════════════════════ HERO ═══════════════════════ */}
-      <section style={{ paddingTop: 110, paddingBottom: 80, paddingLeft: 24, paddingRight: 24, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
-        {/* Soft gradient blobs */}
-        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: -80, right: '15%', width: 500, height: 500, borderRadius: '50%', background: 'radial-gradient(circle, rgba(232,52,77,0.08), transparent 70%)', filter: 'blur(50px)', animation: 'floatA 18s ease-in-out infinite' }} />
-          <div style={{ position: 'absolute', top: 0, left: '10%', width: 420, height: 420, borderRadius: '50%', background: 'radial-gradient(circle, rgba(124,58,237,0.07), transparent 70%)', filter: 'blur(50px)', animation: 'floatB 22s ease-in-out infinite' }} />
-        </div>
+      {/* ═══════════════ HERO ═════════════════════════════════ */}
+      <section ref={heroRef} style={{ position:'relative', zIndex:1, minHeight:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'120px 28px 80px', textAlign:'center' }}>
 
-        <div style={{ position: 'relative', zIndex: 2, maxWidth: 820, margin: '0 auto' }}>
-          {/* Badge */}
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '6px 16px', borderRadius: 100, background: C.white, border: `1.5px solid ${C.border}`, marginBottom: 28, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-            <span className="dot-blink" style={{ width: 7, height: 7, borderRadius: '50%', background: C.primary, display: 'inline-block', flexShrink: 0 }} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: C.mid }}>מערכת ה-AI Growth הראשונה בעברית לעסקים קטנים</span>
+        <div style={{ maxWidth:860, width:'100%' }}>
+          {/* Live badge */}
+          <div className="hero-in glass" style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'7px 18px', borderRadius:100, marginBottom:32 }}>
+            <span className="dot-blink" style={{ width:7, height:7, borderRadius:'50%', background:T.red, display:'inline-block', flexShrink:0 }} />
+            <span style={{ fontSize:13, fontWeight:700, color:T.mid }}>מערכת ה-AI Growth הראשונה בעברית לעסקים קטנים</span>
           </div>
 
           {/* H1 */}
-          <h1 className="hero-h1" style={{ fontSize: 'clamp(2.8rem, 7vw, 5.4rem)', fontWeight: 900, lineHeight: 1.08, letterSpacing: '-0.03em', marginBottom: 24, color: C.dark }}>
+          <h1 className="hero-in-2" style={{ fontSize:'clamp(3rem,7.5vw,5.8rem)', fontWeight:900, lineHeight:1.05, letterSpacing:'-0.035em', marginBottom:26, color:T.dark }}>
             50 סוכני AI סורקים<br />
             את <span className="grad-text">השוק שלך</span><br />
             כל הלילה
           </h1>
 
-          {/* Sub */}
-          <p className="hero-p" style={{ fontSize: 'clamp(1rem, 2vw, 1.2rem)', color: C.mid, lineHeight: 1.7, maxWidth: 600, margin: '0 auto 36px', fontWeight: 400 }}>
-            בוקר אחד תתעורר עם לידים חמים, מתחרה שינה מחיר, וטרנד TikTok שאף אחד בישראל עוד לא זיהה. הכל ממתין לאישור שלך — ישירות לנייד.
+          {/* Subheadline */}
+          <p className="hero-in-3" style={{ fontSize:'clamp(1rem,2.2vw,1.22rem)', color:T.mid, lineHeight:1.72, maxWidth:580, margin:'0 auto 38px', fontWeight:400 }}>
+            בוקר אחד תתעורר עם לידים חמים, מתחרה שינה מחיר, וטרנד TikTok שאף אחד בישראל עוד לא זיהה — הכל ממתין לאישורך ישירות בנייד.
           </p>
 
           {/* CTAs */}
-          <div className="hero-cta" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
-            <button onClick={goSignUp} className="btn-primary" style={{ fontSize: 16 }}>
-              התחל ניסיון חינמי — 7 ימים
-              <Icons.ArrowLeft />
+          <div className="hero-in-3" style={{ display:'flex', gap:12, justifyContent:'center', flexWrap:'wrap', marginBottom:14 }}>
+            <button onClick={() => go('/sign-up')} className="btn-red" style={{ fontSize:16 }}>
+              התחל ניסיון חינמי — 7 ימים <Icon.ArrowLeft />
             </button>
-            <button onClick={goSignIn} className="btn-ghost">
+            <button onClick={() => go('/sign-in')} className="btn-ghost">
               כבר רשום? התחבר
             </button>
           </div>
-          <p style={{ fontSize: 13, color: C.light, marginBottom: 56, fontWeight: 500 }}>
-            ללא כרטיס אשראי · ביטול בכל עת
-          </p>
+          <p className="hero-in-3" style={{ fontSize:13, color:T.light, marginBottom:60, fontWeight:500 }}>ללא כרטיס אשראי · ביטול בכל עת</p>
 
-          {/* Product UI mockup */}
-          <div className="hero-ui" style={{
-            borderRadius: 20,
-            overflow: 'hidden',
-            border: `1px solid ${C.border}`,
-            boxShadow: '0 32px 80px rgba(26,31,54,0.12), 0 8px 20px rgba(26,31,54,0.06)',
-            background: C.white,
-            textAlign: 'right',
-          }}>
-            {/* Window bar */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 18px', background: '#F9F9FC', borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#FC625D' }} />
-              <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#FDBC40' }} />
-              <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#35CD4B' }} />
-              <div style={{ flex: 1, textAlign: 'center' }}>
-                <span style={{ fontSize: 12, color: C.light, background: '#EFEFF5', padding: '3px 14px', borderRadius: 6, fontWeight: 500 }}>app.cortexi.ai/dashboard</span>
+          {/* Dashboard preview — glass card */}
+          <div className="hero-ui glass lift" style={{ borderRadius:22, overflow:'hidden', boxShadow:'0 40px 80px rgba(26,31,54,0.14), 0 8px 24px rgba(26,31,54,0.07)', textAlign:'right' }}>
+            {/* Window chrome */}
+            <div style={{ display:'flex', alignItems:'center', gap:8, padding:'12px 18px', background:'rgba(255,255,255,0.5)', borderBottom:'1px solid rgba(200,200,220,0.3)' }}>
+              <div style={{ width:11, height:11, borderRadius:'50%', background:'#FC625D' }} />
+              <div style={{ width:11, height:11, borderRadius:'50%', background:'#FDBC40' }} />
+              <div style={{ width:11, height:11, borderRadius:'50%', background:'#35CD4B' }} />
+              <div style={{ flex:1, textAlign:'center' }}>
+                <span style={{ fontSize:12, color:T.light, background:'rgba(200,200,220,0.35)', padding:'3px 14px', borderRadius:6, fontWeight:500 }}>app.cortexi.ai/dashboard</span>
               </div>
             </div>
 
-            {/* Dashboard */}
-            <div style={{ padding: 24, background: C.bg }}>
-              {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-                <div style={{ fontSize: 17, fontWeight: 800, color: C.dark }}>לוח בקרה — מגה ספורט</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, padding: '5px 12px', borderRadius: 8, background: 'rgba(232,52,77,0.1)', color: C.primary, border: `1px solid rgba(232,52,77,0.2)` }}>3 פעולות לאישור</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, background: C.white, color: C.mid, border: `1px solid ${C.border}` }}>עודכן לפני 4 דק'</span>
+            {/* Dashboard body */}
+            <div style={{ padding:24, background:'rgba(244,244,249,0.6)', backdropFilter:'blur(8px)' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+                <div style={{ fontSize:17, fontWeight:800, color:T.dark }}>לוח בקרה — מגה ספורט</div>
+                <div style={{ display:'flex', gap:8 }}>
+                  <span style={{ fontSize:12, fontWeight:700, padding:'5px 12px', borderRadius:8, background:'rgba(232,52,77,0.1)', color:T.red, border:'1px solid rgba(232,52,77,0.2)' }}>3 פעולות לאישור</span>
                 </div>
               </div>
 
-              {/* Stats row */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
+              {/* KPI row */}
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:14 }}>
                 {[
-                  { v: '12', l: 'ביקורות חדשות', d: '+3 מאתמול', c: C.primary },
-                  { v: '8',  l: 'לידים חמים',    d: '↑62% שבועי', c: C.purple },
-                  { v: '4',  l: 'טרנדים זוהו',   d: '3 שבועות מראש', c: C.green },
-                  { v: '94%',l: 'ציון מוניטין',  d: '+2% השבוע',  c: C.orange },
+                  { v:'12', l:'ביקורות חדשות', d:'+3 מאתמול', c:T.red },
+                  { v:'8',  l:'לידים חמים',    d:'↑62% שבועי', c:T.purple },
+                  { v:'4',  l:'טרנדים זוהו',   d:'~21 יום מראש', c:T.green },
+                  { v:'94%',l:'ציון מוניטין',  d:'+2% השבוע',   c:T.orange },
                 ].map(s => (
-                  <div key={s.l} style={{ padding: '14px 16px', borderRadius: 12, background: C.white, border: `1px solid ${C.border}`, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                    <div style={{ fontSize: 22, fontWeight: 900, color: C.dark, letterSpacing: '-0.5px' }}>{s.v}</div>
-                    <div style={{ fontSize: 11, color: C.light, marginTop: 2, fontWeight: 500 }}>{s.l}</div>
-                    <div style={{ fontSize: 11, color: s.c, marginTop: 4, fontWeight: 700 }}>{s.d}</div>
+                  <div key={s.l} className="glass" style={{ padding:'12px 14px', borderRadius:12 }}>
+                    <div style={{ fontSize:21, fontWeight:900, color:T.dark, letterSpacing:'-0.04em' }}>{s.v}</div>
+                    <div style={{ fontSize:11, color:T.light, marginTop:2, fontWeight:500 }}>{s.l}</div>
+                    <div style={{ fontSize:11, color:s.c, marginTop:4, fontWeight:700 }}>{s.d}</div>
                   </div>
                 ))}
               </div>
 
               {/* Signal feed */}
-              <div style={{ fontSize: 11, color: C.light, fontWeight: 700, marginBottom: 8, letterSpacing: '0.07em', textTransform: 'uppercase' }}>תובנות אחרונות</div>
+              <div style={{ fontSize:10, color:T.light, fontWeight:700, marginBottom:7, letterSpacing:'0.08em', textTransform:'uppercase' }}>תובנות אחרונות</div>
               {[
-                { dot: C.primary, badge: 'ויראלי', badgeC: C.primary, text: 'TikTok: "before/after fitness" — velocity ×4.7. חלון פעולה: 48 שעות. פוסט מנוסח ממתין לאישורך.' },
-                { dot: C.green,   badge: 'טרנד מוקדם', badgeC: C.green,   text: 'Google Trends US: "pilates reformer home" +340% — יגיע לישראל בעוד ~21 יום.' },
-                { dot: C.purple,  badge: 'מתחרים',     badgeC: C.purple,  text: 'FitZone פתח "אימון בוקר 06:30" — חסר בלוח זמנים שלך. הצעת פתרון מוכנה.' },
-              ].map((s, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 14px', borderRadius: 10, background: C.white, border: `1px solid ${C.border}`, marginBottom: 7, boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
-                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: s.dot, marginTop: 5, flexShrink: 0 }} />
-                  <div style={{ flex: 1, fontSize: 12.5, color: C.mid, lineHeight: 1.5 }}>{s.text}</div>
-                  <span style={{ padding: '3px 9px', borderRadius: 20, background: `${s.badgeC}14`, color: s.badgeC, fontSize: 11, fontWeight: 700, border: `1px solid ${s.badgeC}28`, flexShrink: 0 }}>{s.badge}</span>
+                { dot:T.red,    badge:'ויראלי',     t:'TikTok: "before/after fitness" — velocity ×4.7. חלון פעולה: 48 שעות.' },
+                { dot:T.green,  badge:'טרנד מוקדם', t:'Google Trends US: "pilates reformer" +340% — יגיע לישראל בעוד ~21 יום.' },
+                { dot:T.purple, badge:'מתחרים',     t:'FitZone פתח "אימון 06:30" — חסר בלוח שלך. הצעת פתרון מוכנה.' },
+              ].map((s,i) => (
+                <div key={i} className="glass" style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 13px', borderRadius:10, marginBottom:6 }}>
+                  <div style={{ width:6, height:6, borderRadius:'50%', background:s.dot, flexShrink:0 }} />
+                  <div style={{ flex:1, fontSize:12.5, color:T.mid, lineHeight:1.45 }}>{s.t}</div>
+                  <span style={{ padding:'2px 9px', borderRadius:20, background:`${s.dot}15`, color:s.dot, fontSize:11, fontWeight:700, border:`1px solid ${s.dot}28`, flexShrink:0 }}>{s.badge}</span>
                 </div>
               ))}
             </div>
@@ -406,226 +446,199 @@ export default function LandingMain() {
         </div>
       </section>
 
-      {/* ═══════════════════════ PLATFORM STRIP ════════════ */}
-      <div style={{ padding: '18px 0', background: C.white, borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.light, textAlign: 'center', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 14 }}>
-          סורק ומחובר לפלטפורמות שלך
-        </div>
+      {/* ═══════════════ PLATFORMS STRIP ═════════════════════ */}
+      <div style={{ position:'relative', zIndex:1, padding:'18px 0', background:'rgba(255,255,255,0.5)', backdropFilter:'blur(12px)', borderTop:'1px solid rgba(200,200,220,0.35)', borderBottom:'1px solid rgba(200,200,220,0.35)' }}>
+        <div style={{ fontSize:11, fontWeight:700, color:T.light, textAlign:'center', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:13 }}>סורק ומחובר לפלטפורמות שלך</div>
         <div className="marquee-wrap">
           <div className="marquee-inner">
-            {['Google Business', 'Instagram', 'TikTok', 'Facebook Groups', 'WhatsApp', 'Wolt', 'תן ביס', 'Google Trends', 'Google Ads', 'SerpAPI', 'Tavily AI', 'Gemini Vision',
-              'Google Business', 'Instagram', 'TikTok', 'Facebook Groups', 'WhatsApp', 'Wolt', 'תן ביס', 'Google Trends', 'Google Ads', 'SerpAPI', 'Tavily AI', 'Gemini Vision'
-            ].map((n, i) => (
-              <div key={i} style={{ padding: '7px 18px', borderRadius: 100, background: '#F0F0F8', border: `1px solid ${C.border}`, fontSize: 13, color: C.mid, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                {n}
-              </div>
+            {['Google Business','Instagram','TikTok','Facebook Groups','WhatsApp','Wolt','תן ביס','Google Trends','SerpAPI','Tavily AI','Gemini Vision','Google Ads',
+              'Google Business','Instagram','TikTok','Facebook Groups','WhatsApp','Wolt','תן ביס','Google Trends','SerpAPI','Tavily AI','Gemini Vision','Google Ads'
+            ].map((n,i) => (
+              <div key={i} className="glass" style={{ padding:'6px 16px', borderRadius:100, fontSize:13, color:T.mid, fontWeight:600, whiteSpace:'nowrap', flexShrink:0 }}>{n}</div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* ═══════════════════════ STATS ══════════════════════ */}
-      <section ref={statsRef} style={{ padding: '72px 24px', background: C.white, borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ maxWidth: 1000, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 0 }}>
+      {/* ═══════════════ STATS ════════════════════════════════ */}
+      <section ref={statsRef} style={{ position:'relative', zIndex:1, padding:'72px 28px' }}>
+        <div className="stats-grid" style={{ maxWidth:1000, margin:'0 auto', display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:0 }}>
           {[
-            { n: 50,    suffix: '+',      label: 'סוכני AI פעילים',        sub: 'עובדים בזמן שאתה ישן' },
-            { n: 21,    suffix: ' יום',   label: 'זיהוי טרנדים מראש',     sub: 'לפני שמגיע לפיק בישראל' },
-            { n: 10000, suffix: '+',      label: 'סריקות שוק יומיות',     sub: 'Google, TikTok, Instagram' },
-            { n: 95,    suffix: '%',      label: 'דיוק זיהוי מתחרים',     sub: 'שינויי מחיר, שירות, סושיאל' },
-          ].map((s, i) => (
-            <div key={i} style={{ borderLeft: i > 0 ? `1px solid ${C.border}` : 'none', padding: '0 24px' }}>
-              <Stat {...s} active={statsV} />
+            { n:50,    suf:'+',    label:'סוכני AI פעילים',     sub:'עובדים 24/7' },
+            { n:21,    suf:' יום', label:'זיהוי טרנדים מראש',  sub:'לפני הפיק בישראל' },
+            { n:10000, suf:'+',    label:'סריקות שוק יומיות',  sub:'Google · TikTok · Instagram' },
+            { n:95,    suf:'%',    label:'דיוק זיהוי מתחרים',  sub:'שינוי מחיר · שירות · סושיאל' },
+          ].map((s,i) => (
+            <div key={i} style={{ borderLeft:i>0?'1px solid rgba(200,200,220,0.4)':'none', padding:'0 28px' }}>
+              <StatNum n={s.n} suffix={s.suf} label={s.label} sub={s.sub} active={statsV} />
             </div>
           ))}
         </div>
       </section>
 
-      {/* ═══════════════════════ PROBLEM ════════════════════ */}
-      <section ref={probRef} style={{ padding: '88px 24px', background: C.bg }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: 52, opacity: probV ? 1 : 0, transform: probV ? 'none' : 'translateY(18px)', transition: 'all .7s ease' }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: C.primary, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 14 }}>למה עסקים מפסידים כסף בכל יום</div>
-            <h2 style={{ fontSize: 'clamp(1.9rem, 4vw, 3rem)', fontWeight: 900, letterSpacing: '-0.025em', color: C.dark, lineHeight: 1.15 }}>
-              המתחרים שלך לא ישנים.<br />
-              <span style={{ color: C.mid, fontWeight: 700 }}>ה-AI שלנו גם לא.</span>
+      {/* ═══════════════ PROBLEM SECTION ══════════════════════ */}
+      <section ref={probRef} style={{ position:'relative', zIndex:1, padding:'24px 28px 88px' }}>
+        <div style={{ maxWidth:1160, margin:'0 auto' }}>
+          <div style={{ textAlign:'center', marginBottom:48, opacity:probV?1:0, transform:probV?'none':'translateY(18px)', transition:'all .7s ease' }}>
+            <div style={{ fontSize:12, fontWeight:800, color:T.red, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:14 }}>למה עסקים מפסידים כסף כל יום</div>
+            <h2 style={{ fontSize:'clamp(2rem,4.5vw,3.1rem)', fontWeight:900, letterSpacing:'-0.03em', color:T.dark, lineHeight:1.12 }}>
+              המתחרים שלך לא ישנים.<br/>
+              <span style={{ color:T.mid, fontWeight:700 }}>ה-AI שלנו גם לא.</span>
             </h2>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))', gap:16 }}>
             {[
-              {
-                icon: '😰',
-                title: 'המתחרה פתח שירות חדש. ידעת?',
-                body: 'בלי כלי מעקב — אתה מגלה שבועות אחרי, כשהלקוחות כבר שם. Cortexi שולחת לך התראה עוד באותו לילה.',
-                color: C.primary,
-                delay: 0,
-              },
-              {
-                icon: '📉',
-                title: 'לקוח עומד לעזוב. הוא לא אמר לך.',
-                body: '67% מהלקוחות שעוזבים לא מסבירים למה. Cortexi מזהה דפוסי נטישה 3 שבועות לפני — ומציעה מה לעשות.',
-                color: C.purple,
-                delay: 120,
-              },
-              {
-                icon: '🎯',
-                title: 'טרנד TikTok עולה עכשיו. אתה שם?',
-                body: 'מה שמפוצץ ב-TikTok US היום מגיע לישראל בעוד 2-3 שבועות. Cortexi מחשבת את הזמן ומכינה לך תוכן.',
-                color: C.orange,
-                delay: 240,
-              },
-            ].map((p, i) => (
-              <div key={i} className="card-lift"
-                style={{
-                  padding: '28px', borderRadius: 18, background: C.white, border: `1px solid ${C.border}`,
-                  boxShadow: '0 2px 12px rgba(0,0,0,0.05)',
-                  opacity: probV ? 1 : 0, transform: probV ? 'none' : 'translateY(24px)',
-                  transition: `all .65s ease ${p.delay}ms`,
-                }}>
-                <div style={{ fontSize: 32, marginBottom: 16 }}>{p.icon}</div>
-                <h3 style={{ fontSize: 18, fontWeight: 800, color: C.dark, marginBottom: 10, lineHeight: 1.3 }}>{p.title}</h3>
-                <p style={{ fontSize: 14.5, color: C.mid, lineHeight: 1.7, fontWeight: 400 }}>{p.body}</p>
-                <div style={{ marginTop: 18, width: 36, height: 3, borderRadius: 2, background: `linear-gradient(90deg, ${p.color}, transparent)` }} />
+              { emoji:'😰', title:'המתחרה פתח שירות חדש. ידעת?', body:'בלי כלי מעקב אתה מגלה שבועות אחרי, כשהלקוחות כבר שם. Cortexi שולחת התראה עוד באותו לילה — עם הצעת תגובה מוכנה.', accent:T.red, delay:0 },
+              { emoji:'📉', title:'לקוח עומד לעזוב. הוא לא אמר לך.', body:'67% מהלקוחות שעוזבים לא מסבירים למה. Cortexi מזהה דפוסי נטישה 3 שבועות מראש ומציעה מה לעשות — לפני שזה קורה.', accent:T.purple, delay:120 },
+              { emoji:'🎯', title:'טרנד TikTok עולה. אתה עוד לא שם.', body:'מה שמפוצץ ב-TikTok US מגיע לישראל בעוד 2-3 שבועות. Cortexi מחשבת את הזמן ומכינה לך פוסט — כדי שתהיה ראשון.', accent:T.orange, delay:240 },
+            ].map((p,i) => (
+              <div key={i} className="glass lift" style={{
+                padding:'28px', borderRadius:20,
+                boxShadow:'0 4px 24px rgba(26,31,54,0.07)',
+                opacity:probV?1:0, transform:probV?'none':'translateY(24px)',
+                transition:`all .7s ease ${p.delay}ms`,
+              }}>
+                <div style={{ fontSize:34, marginBottom:18 }}>{p.emoji}</div>
+                <h3 style={{ fontSize:18.5, fontWeight:800, color:T.dark, marginBottom:10, lineHeight:1.3 }}>{p.title}</h3>
+                <p style={{ fontSize:14.5, color:T.mid, lineHeight:1.72, fontWeight:400 }}>{p.body}</p>
+                <div style={{ marginTop:20, width:40, height:3, borderRadius:2, background:`linear-gradient(90deg,${p.accent},transparent)` }} />
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ═══════════════════════ FEATURES ═══════════════════ */}
-      <section id="features" ref={featRef} style={{ padding: '88px 24px', background: C.white, borderTop: `1px solid ${C.border}` }}>
-        <div style={{ maxWidth: 1160, margin: '0 auto' }}>
-          {/* Header */}
-          <div style={{ marginBottom: 52, opacity: featV ? 1 : 0, transform: featV ? 'none' : 'translateY(18px)', transition: 'all .7s ease' }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: C.purple, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 14 }}>יכולות הליבה</div>
-            <h2 style={{ fontSize: 'clamp(1.9rem, 4vw, 3rem)', fontWeight: 900, letterSpacing: '-0.025em', color: C.dark, maxWidth: 560, lineHeight: 1.15 }}>
-              כלים שעובדים בשבילך<br />
-              <span style={{ color: C.mid, fontWeight: 700 }}>24 שעות, 7 ימים בשבוע</span>
+      {/* ═══════════════ BENTO FEATURES ═══════════════════════ */}
+      <section id="features" ref={bentRef} style={{ position:'relative', zIndex:1, padding:'24px 28px 100px' }}>
+        <div style={{ maxWidth:1200, margin:'0 auto' }}>
+          {/* Section header */}
+          <div style={{ marginBottom:52, opacity:bentV?1:0, transform:bentV?'none':'translateY(18px)', transition:'all .7s ease' }}>
+            <div style={{ fontSize:12, fontWeight:800, color:T.purple, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:14 }}>יכולות הליבה</div>
+            <h2 style={{ fontSize:'clamp(2rem,4.5vw,3.1rem)', fontWeight:900, letterSpacing:'-0.03em', color:T.dark, maxWidth:500, lineHeight:1.12 }}>
+              כלים שעובדים בשבילך<br/>
+              <span style={{ color:T.mid, fontWeight:700 }}>24 שעות, 7 ימים בשבוע</span>
             </h2>
           </div>
 
           {/* Bento grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 14 }}>
+          <div className="bento-grid" style={{ display:'grid', gridTemplateColumns:'repeat(12,1fr)', gridTemplateRows:'auto', gap:14 }}>
 
-            {/* Large — Trends */}
-            <FeatCard
-              gridCol="1 / 8" visible={featV} delay={0}
-              accent={C.primary} icon={<Icons.TrendUp />}
-              label="זיהוי טרנדים"
-              title="'pilates reformer' יגיע לישראל בעוד 21 יום. את כבר יודעת?"
-              body="מנוע z-score סורק Google Trends US כאינדיקטור מוביל. מה שמפוצץ שם היום — מגיע אלינו בפיגור של 2-6 שבועות. אנחנו מחשבים בדיוק מתי ומכינים לך תוכן."
-              tags={['Google Trends IL+US', 'TikTok Viral', 'Instagram Hashtags', 'Facebook Groups']}
-              visual={
-                <div style={{ marginTop: 20, borderRadius: 12, background: '#F8F8FC', border: `1px solid ${C.border}`, padding: '14px 16px' }}>
-                  <div style={{ fontSize: 11, color: C.light, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 10 }}>
-                    velocity: "pilates reformer home" → ישראל ~21 יום
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 48 }}>
-                    {[14,18,16,20,24,22,26,30,37,44,52,61,72,82,92].map((h, i) => (
-                      <div key={i} style={{ flex: 1, height: `${h}%`, borderRadius: 3, background: i >= 10 ? `rgba(232,52,77,${0.3 + i * 0.07})` : '#E2E2EE', transition: 'height .5s ease' }} />
+            {/* ── LARGE: Market Intelligence (col 1-7) ── */}
+            <BentoCard id="b1" col="1/8" vis={bentV} delay={0} accent={T.red}
+              badge={<><IconBadge icon={<Icon.TrendUp size={18} color={T.red}/>} color={T.red}/><span style={{fontSize:11,fontWeight:800,color:T.red,letterSpacing:'0.08em',textTransform:'uppercase'}}>זיהוי טרנדים</span></>}
+              title="'pilates reformer' יגיע לישראל בעוד 21 יום. כבר יודעת?"
+              body="מנוע z-score סורק Google Trends US כאינדיקטור מוביל — 2-6 שבועות לפני הפיק בישראל. אנחנו מחשבים מתי ומכינים לך תוכן מוכן."
+              tags={['Google Trends IL+US','TikTok Viral','Instagram Hashtags','Facebook Groups']}
+              extra={
+                <div style={{ marginTop:20, borderRadius:14, background:'rgba(244,244,249,0.6)', border:'1px solid rgba(200,200,220,0.4)', padding:'14px 16px', backdropFilter:'blur(8px)' }}>
+                  <div style={{ fontSize:10.5, color:T.light, fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:10 }}>velocity "pilates reformer" → ישראל ~21 יום</div>
+                  <div style={{ display:'flex', alignItems:'flex-end', gap:5, height:50 }}>
+                    {[12,16,14,18,22,20,24,28,35,42,52,62,74,84,94].map((h,i) => (
+                      <div key={i} style={{ flex:1, height:`${h}%`, borderRadius:3, background:i>=10?`rgba(232,52,77,${0.28+i*0.07})`:'rgba(200,200,220,0.6)', transition:'height .6s ease' }} />
                     ))}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-                    <span style={{ fontSize: 10, color: C.light, fontWeight: 500 }}>30 ימים אחורה</span>
-                    <span style={{ fontSize: 10, color: C.primary, fontWeight: 700 }}>velocity ×4.7 ↑</span>
+                  <div style={{ display:'flex', justifyContent:'space-between', marginTop:8 }}>
+                    <span style={{ fontSize:10, color:T.light, fontWeight:500 }}>30 ימים אחורה</span>
+                    <span style={{ fontSize:10, color:T.red, fontWeight:800 }}>velocity ×4.7 ↑</span>
                   </div>
                 </div>
               }
             />
 
-            {/* Medium — Competitors */}
-            <FeatCard
-              gridCol="8 / 13" visible={featV} delay={100}
-              accent={C.purple} icon={<Icons.Radar />}
-              label="מעקב מתחרים"
+            {/* ── MEDIUM: Competitor Radar (col 8-13) ── */}
+            <BentoCard id="b2" col="8/13" vis={bentV} delay={100} accent={T.purple}
+              badge={<><IconBadge icon={<Icon.Radar size={18} color={T.purple}/>} color={T.purple}/><span style={{fontSize:11,fontWeight:800,color:T.purple,letterSpacing:'0.08em',textTransform:'uppercase'}}>מעקב מתחרים</span></>}
               title="כל שינוי אצל המתחרה — לפני שהלקוחות שלהם הופכים ללקוחות שלך"
-              body="Snapshot diff יומי: שינוי מחיר, שירות חדש, פוסט, ביקורת. התראה אוטומטית עם הצעת תגובה."
-              tags={['Snapshot diff', 'Price changes', 'Google Maps', 'Social monitor']}
+              body="Snapshot diff יומי: שינוי מחיר, שירות חדש, פוסט, ביקורת. התראה עם הצעת תגובה מוכנה."
+              tags={['Snapshot diff','Price changes','Google Maps','Social monitor']}
             />
 
-            {/* Medium — WhatsApp */}
-            <FeatCard
-              gridCol="1 / 6" visible={featV} delay={200}
-              accent="#25D366" icon={<Icons.Bell />}
-              label="התראות WhatsApp"
-              title="אישור בקליק — ישירות מהנייד שלך"
-              body="כל פעולה שהמערכת מייצרת ממתינה לאישורך ב-WhatsApp. לחץ אחד — זה יוצא. לא לחצת — לא קרה כלום."
-              tags={['WhatsApp alerts', 'One-click approve', 'Semi-auto', 'Full-auto']}
+            {/* ── MEDIUM: Lead Scoring (col 1-5) ── */}
+            <BentoCard id="b3" col="1/6" vis={bentV} delay={200} accent={T.green}
+              badge={<><IconBadge icon={<Icon.Target size={18} color={T.green}/>} color={T.green}/><span style={{fontSize:11,fontWeight:800,color:T.green,letterSpacing:'0.08em',textTransform:'uppercase'}}>לידים חמים</span></>}
+              title="8 לידים ממתינים — זה אחד עומד לקנות עכשיו"
+              body="כל ליד מקבל ציון intent ב-0-100: סנטימנט, מילות מפתח רכישה, מיקום, היסטוריה. הכי חמים עולים ראשונים."
+              tags={['AI scoring 0-100','Intent signals','Auto-nurture','CRM sync']}
             />
 
-            {/* Large — Lead scoring */}
-            <FeatCard
-              gridCol="6 / 13" visible={featV} delay={300}
-              accent={C.green} icon={<Icons.Target />}
-              label="לידים חמים"
-              title="8 לידים חמים ממתינים — זה אחד שעומד לקנות עכשיו"
-              body="כל ליד מקבל ציון intent ב-0-100: סנטימנט, מילות מפתח רכישה, מיקום, היסטוריה. הלידים הכי חמים עולים ראשונים עם תגובה מוכנה."
-              tags={['AI scoring 0-100', 'Intent signals', 'Auto-nurture', 'CRM sync']}
+            {/* ── LARGE: Mobile Approval (col 6-13) ── */}
+            <BentoCard id="b4" col="6/13" vis={bentV} delay={300} accent="#25D366"
+              badge={<><IconBadge icon={<Icon.Mobile size={18} color="#25D366"/>} color="#25D366"/><span style={{fontSize:11,fontWeight:800,color:'#20B85A',letterSpacing:'0.08em',textTransform:'uppercase'}}>אישור WhatsApp</span></>}
+              title="כל פעולה ממתינה לאישורך — לחץ אחד בנייד"
+              body="שום פוסט, תגובה, או הצעה לא יוצאת ללא אישורך. מצב semi-auto שומר אותך בשליטה מלאה."
+              tags={['WhatsApp alerts','One-click approve','Semi-auto','Full-auto']}
+              extra={
+                <div style={{ marginTop:18, borderRadius:14, overflow:'hidden', border:'1px solid rgba(200,200,220,0.4)', maxWidth:300, boxShadow:'0 4px 16px rgba(26,31,54,0.08)' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:'rgba(31,44,52,0.9)', backdropFilter:'blur(8px)' }}>
+                    <div style={{ width:32, height:32, borderRadius:'50%', background:'linear-gradient(135deg,#E8344D,#7C3AED)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:900, color:'#fff' }}>C</div>
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:700, color:'#fff' }}>Cortexi</div>
+                      <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>online · Agent active</div>
+                    </div>
+                  </div>
+                  <div style={{ padding:'12px 14px', background:'rgba(11,20,26,0.85)', backdropFilter:'blur(8px)', display:'flex', flexDirection:'column', gap:8 }}>
+                    <div style={{ background:'rgba(31,44,52,0.9)', borderRadius:10, padding:'9px 12px', fontSize:12, color:'rgba(255,255,255,0.8)', lineHeight:1.5, maxWidth:'90%', alignSelf:'flex-end' }}>
+                      🔥 OTX: טרנד "before/after" — velocity ×4. פוסט מנוסח מוכן. חלון 48 שעות.<br/>
+                      <span style={{ color:'#25D366' }}>app.cortexi.ai/approvals</span>
+                    </div>
+                    <div style={{ background:'rgba(0,92,75,0.9)', borderRadius:10, padding:'9px 12px', fontSize:12, color:'rgba(255,255,255,0.85)', maxWidth:'55%', alignSelf:'flex-start' }}>
+                      אישרתי ✓
+                    </div>
+                  </div>
+                </div>
+              }
             />
 
-            {/* Small — Reputation */}
-            <FeatCard
-              gridCol="1 / 5" visible={featV} delay={400}
-              accent="#F59E0B" icon={<Icons.Star />}
-              label="מוניטין"
+            {/* ── SMALL x3 bottom row ── */}
+            <BentoCard id="b5" col="1/5" vis={bentV} delay={400} accent="#F59E0B"
+              badge={<><IconBadge icon={<Icon.Star size={18} color="#F59E0B"/>} color="#F59E0B"/><span style={{fontSize:11,fontWeight:800,color:'#D97706',letterSpacing:'0.08em',textTransform:'uppercase'}}>מוניטין</span></>}
               title="ביקורת שלילית? תגובה AI בסגנון שלך תוך 60 שניות"
-              body="Google, Wolt, תן ביס — תגובות אוטומטיות שמחכות לאישורך."
-              tags={['Google Reviews', 'Wolt', 'Auto-draft']}
+              body="Google, Wolt, תן ביס — אוטומטי, ממתין לאישורך."
+              tags={['Google Reviews','Wolt','Auto-draft']}
             />
-
-            {/* Small — Analytics */}
-            <FeatCard
-              gridCol="5 / 9" visible={featV} delay={500}
-              accent="#0EA5E9" icon={<Icons.Zap />}
-              label="ניתוח ויזואלי AI"
+            <BentoCard id="b6" col="5/9" vis={bentV} delay={500} accent={T.red}
+              badge={<><IconBadge icon={<Icon.Zap size={18} color={T.red}/>} color={T.red}/><span style={{fontSize:11,fontWeight:800,color:T.red,letterSpacing:'0.08em',textTransform:'uppercase'}}>AI ויזואלי</span></>}
               title="Gemini Vision מנתח thumbnails לפני שמדברים עליהם"
               body="מזהה מוצרים, אסתטיקה, פורמטים שעולים — שבועות לפני הפיק."
-              tags={['Gemini Flash', 'Visual trends', 'Product detection']}
+              tags={['Gemini Flash','Visual trends','Product detection']}
             />
-
-            {/* Small — Reports */}
-            <FeatCard
-              gridCol="9 / 13" visible={featV} delay={600}
-              accent={C.purple} icon={<Icons.Users />}
-              label="דוח שבועי"
-              title="ציון ביצועים שבועי עם תחזית לשבוע הבא"
-              body="דוח מנוהל AI עם המלצה אחת חדה שמניעה פעולה — ישירות לנייד."
-              tags={['Weekly report', 'Forecasting', 'Score 1-10']}
+            <BentoCard id="b7" col="9/13" vis={bentV} delay={600} accent={T.purple}
+              badge={<><IconBadge icon={<Icon.BarChart size={18} color={T.purple}/>} color={T.purple}/><span style={{fontSize:11,fontWeight:800,color:T.purple,letterSpacing:'0.08em',textTransform:'uppercase'}}>דוח שבועי</span></>}
+              title="ציון ביצועים שבועי + תחזית לשבוע הבא"
+              body="דוח AI עם המלצה אחת חדה שמניעה פעולה — ישירות לנייד."
+              tags={['Weekly report','Forecasting','Score 1-10']}
             />
           </div>
         </div>
       </section>
 
-      {/* ═══════════════════════ SOCIAL PROOF ══════════════ */}
-      <section ref={tesiRef} style={{ padding: '88px 24px', background: C.bg }}>
-        <div style={{ maxWidth: 1160, margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: 48, opacity: tesiV ? 1 : 0, transform: tesiV ? 'none' : 'translateY(18px)', transition: 'all .7s ease' }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: C.primary, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 14 }}>תוצאות אמיתיות</div>
-            <h2 style={{ fontSize: 'clamp(1.9rem, 4vw, 3rem)', fontWeight: 900, letterSpacing: '-0.025em', color: C.dark }}>
+      {/* ═══════════════ TESTIMONIALS ═════════════════════════ */}
+      <section ref={tesiRef} style={{ position:'relative', zIndex:1, padding:'24px 28px 88px' }}>
+        <div style={{ maxWidth:1160, margin:'0 auto' }}>
+          <div style={{ textAlign:'center', marginBottom:48, opacity:tesiV?1:0, transform:tesiV?'none':'translateY(18px)', transition:'all .7s ease' }}>
+            <div style={{ fontSize:12, fontWeight:800, color:T.red, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:14 }}>תוצאות אמיתיות</div>
+            <h2 style={{ fontSize:'clamp(1.9rem,4vw,2.9rem)', fontWeight:900, letterSpacing:'-0.03em', color:T.dark }}>
               בעלי עסקים שמדברים במספרים
             </h2>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 18 }}>
-            {TESTI.map((t, i) => (
-              <div key={i} className="card-lift"
-                style={{
-                  padding: '28px', borderRadius: 18, background: C.white, border: `1px solid ${C.border}`,
-                  boxShadow: '0 2px 12px rgba(0,0,0,0.05)',
-                  opacity: tesiV ? 1 : 0, transform: tesiV ? 'none' : 'translateY(22px)',
-                  transition: `all .65s ease ${i * 130}ms`,
-                }}>
-                {/* Stars */}
-                <div style={{ display: 'flex', gap: 3, marginBottom: 16 }}>
-                  {[1,2,3,4,5].map(s => <svg key={s} width="16" height="16" viewBox="0 0 24 24" fill={C.primary} stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>)}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))', gap:16 }}>
+            {TESTI.map((t,i) => (
+              <div key={i} className="glass lift" style={{
+                padding:'28px', borderRadius:20,
+                boxShadow:'0 4px 24px rgba(26,31,54,0.07)',
+                opacity:tesiV?1:0, transform:tesiV?'none':'translateY(22px)',
+                transition:`all .65s ease ${i*130}ms`,
+              }}>
+                <div style={{ display:'flex', gap:3, marginBottom:16 }}>
+                  {[1,2,3,4,5].map(s=><svg key={s} width="15" height="15" viewBox="0 0 24 24" fill={T.red} stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>)}
                 </div>
-                <p style={{ fontSize: 15, color: C.mid, lineHeight: 1.7, fontWeight: 400, marginBottom: 22 }}>"{t.quote}"</p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: `linear-gradient(135deg, ${t.color}33, ${t.color}66)`, border: `2px solid ${t.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 900, color: t.color, flexShrink: 0 }}>
-                    {t.initial}
-                  </div>
+                <p style={{ fontSize:15, color:T.mid, lineHeight:1.72, fontWeight:400, marginBottom:22 }}>"{t.q}"</p>
+                <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                  <div style={{ width:44, height:44, borderRadius:'50%', background:`linear-gradient(135deg,${t.color}28,${t.color}50)`, border:`1.5px solid ${t.color}35`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, fontWeight:900, color:t.color, flexShrink:0 }}>{t.init}</div>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: C.dark }}>{t.name}</div>
-                    <div style={{ fontSize: 12, color: C.light, fontWeight: 500 }}>{t.role}</div>
+                    <div style={{ fontSize:14, fontWeight:800, color:T.dark }}>{t.name}</div>
+                    <div style={{ fontSize:12, color:T.light, fontWeight:500 }}>{t.role}</div>
                   </div>
                 </div>
               </div>
@@ -634,196 +647,176 @@ export default function LandingMain() {
         </div>
       </section>
 
-      {/* ═══════════════════════ HOW IT WORKS ══════════════ */}
-      <section id="how" ref={howRef} style={{ padding: '88px 24px', background: C.white, borderTop: `1px solid ${C.border}` }}>
-        <div style={{ maxWidth: 860, margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: 56, opacity: howV ? 1 : 0, transform: howV ? 'none' : 'translateY(18px)', transition: 'all .7s ease' }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: C.orange, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 14 }}>תהליך פשוט</div>
-            <h2 style={{ fontSize: 'clamp(1.9rem, 4vw, 3rem)', fontWeight: 900, letterSpacing: '-0.025em', color: C.dark }}>
+      {/* ═══════════════ HOW IT WORKS ═════════════════════════ */}
+      <section id="how" ref={howRef} style={{ position:'relative', zIndex:1, padding:'24px 28px 88px' }}>
+        <div style={{ maxWidth:860, margin:'0 auto' }}>
+          <div style={{ textAlign:'center', marginBottom:56, opacity:howV?1:0, transform:howV?'none':'translateY(18px)', transition:'all .7s ease' }}>
+            <div style={{ fontSize:12, fontWeight:800, color:T.orange, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:14 }}>תהליך פשוט</div>
+            <h2 style={{ fontSize:'clamp(1.9rem,4vw,2.9rem)', fontWeight:900, letterSpacing:'-0.03em', color:T.dark }}>
               מ-0 לתובנה הראשונה — 5 דקות
             </h2>
           </div>
 
           {[
-            { n: '01', color: C.primary,  title: 'ספר לנו על העסק שלך',     body: 'שם, קטגוריה, עיר, מתחרים עיקריים. שיחה בעברית עם Kori — 10 שאלות, 5 דקות. לא צריך ידע טכני.' },
-            { n: '02', color: C.purple,   title: '50+ סוכנים נכנסים לפעולה', body: 'בלילה הראשון — Google Trends, TikTok, Instagram, Facebook Groups, Google Maps, Wolt. הכל נסרק אוטומטית.' },
-            { n: '03', color: C.green,    title: 'תובנות ופעולות — לנייד שלך', body: 'כל בוקר ב-07:00: ברמת שבוע, לידים חמים, טרנדים, מתחרים שינו, פעולות מוכנות לאישורך ב-WhatsApp.' },
-          ].map((s, i) => (
-            <div key={i} style={{
-              display: 'flex', gap: 24, padding: '28px 0',
-              borderBottom: i < 2 ? `1px solid ${C.border}` : 'none',
-              opacity: howV ? 1 : 0, transform: howV ? 'none' : 'translateX(20px)',
-              transition: `all .65s ease ${i * 150}ms`,
+            { n:'01', color:T.red,    title:'ספר לנו על העסק שלך',      body:'שם, קטגוריה, עיר, מתחרים עיקריים. שיחה בעברית עם Kori — 10 שאלות, 5 דקות. לא צריך ידע טכני.', delay:0 },
+            { n:'02', color:T.purple, title:'50+ סוכנים נכנסים לפעולה', body:'בלילה הראשון — Google Trends, TikTok, Instagram, Facebook Groups, Google Maps, Wolt. הכל נסרק אוטומטית בלי שתעשה כלום.', delay:150 },
+            { n:'03', color:T.green,  title:'תובנות ופעולות — לנייד שלך', body:'כל בוקר ב-07:00: ברמת שבוע, לידים חמים, טרנדים, מתחרים שינו — ופעולות מוכנות לאישורך ב-WhatsApp.', delay:300 },
+          ].map((s,i) => (
+            <div key={i} className="glass" style={{
+              display:'flex', gap:22, padding:'26px', borderRadius:18, marginBottom:12,
+              boxShadow:'0 2px 16px rgba(26,31,54,0.06)',
+              opacity:howV?1:0, transform:howV?'none':'translateX(16px)',
+              transition:`all .65s ease ${s.delay}ms`,
             }}>
-              <div style={{ width: 56, height: 56, borderRadius: 16, background: `${s.color}12`, border: `1.5px solid ${s.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 15, color: s.color, flexShrink: 0, fontFamily: 'Heebo, sans-serif' }}>
+              <div style={{ width:52, height:52, borderRadius:14, background:`${s.color}14`, border:`1.5px solid ${s.color}30`, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900, fontSize:15, color:s.color, flexShrink:0, boxShadow:`0 2px 8px ${s.color}20` }}>
                 {s.n}
               </div>
               <div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: C.dark, marginBottom: 8, letterSpacing: '-0.02em' }}>{s.title}</div>
-                <div style={{ fontSize: 15, color: C.mid, lineHeight: 1.7, fontWeight: 400 }}>{s.body}</div>
+                <div style={{ fontSize:19, fontWeight:800, color:T.dark, marginBottom:8, letterSpacing:'-0.02em' }}>{s.title}</div>
+                <div style={{ fontSize:15, color:T.mid, lineHeight:1.7, fontWeight:400 }}>{s.body}</div>
               </div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* ═══════════════════════ PRICING ═══════════════════ */}
-      <section id="pricing" ref={pricRef} style={{ padding: '88px 24px', background: C.bg }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: 52, opacity: pricV ? 1 : 0, transform: pricV ? 'none' : 'translateY(18px)', transition: 'all .7s ease' }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: C.purple, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 14 }}>תמחור פשוט</div>
-            <h2 style={{ fontSize: 'clamp(1.9rem, 4vw, 3rem)', fontWeight: 900, letterSpacing: '-0.025em', color: C.dark, marginBottom: 10 }}>
-              ללא הפתעות. ללא מחויבות.
-            </h2>
-            <p style={{ fontSize: 16, color: C.mid, fontWeight: 400 }}>התחל חינם, שדרג רק כשאתה מרגיש ערך ממשי.</p>
+      {/* ═══════════════ PRICING ══════════════════════════════ */}
+      <section id="pricing" ref={pricRef} style={{ position:'relative', zIndex:1, padding:'24px 28px 100px' }}>
+        <div style={{ maxWidth:1100, margin:'0 auto' }}>
+          <div style={{ textAlign:'center', marginBottom:52, opacity:pricV?1:0, transform:pricV?'none':'translateY(18px)', transition:'all .7s ease' }}>
+            <div style={{ fontSize:12, fontWeight:800, color:T.purple, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:14 }}>תמחור פשוט</div>
+            <h2 style={{ fontSize:'clamp(1.9rem,4vw,2.9rem)', fontWeight:900, letterSpacing:'-0.03em', color:T.dark, marginBottom:10 }}>ללא הפתעות. ללא מחויבות.</h2>
+            <p style={{ fontSize:16, color:T.mid, fontWeight:400 }}>התחל חינם, שדרג רק כשאתה מרגיש ערך ממשי.</p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: 16 }}>
+          <div className="pricing-grid" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16 }}>
             {[
-              {
-                plan: 'ניסיון חינמי', price: '₪0', period: '7 ימים',
-                features: ['7 ימים ללא תשלום', '10 סריקות שוק יומיות', '3 סוכנים פעילים', 'לידים + ביקורות', 'ללא כרטיס אשראי'],
-                cta: 'התחל חינם', highlight: false,
-              },
-              {
-                plan: 'Basic', price: '₪300', period: 'לחודש',
-                features: ['50 סריקות יומיות', '8 סוכנים פעילים', 'מעקב מתחרים מלא', 'זיהוי טרנדים', 'ניהול ביקורות', 'התראות WhatsApp'],
-                cta: 'בחר Basic', highlight: true, badge: 'הכי פופולרי',
-              },
-              {
-                plan: 'Premium', price: '₪600', period: 'לחודש',
-                features: ['200 סריקות יומיות', '50+ סוכנים פעילים', 'קמפיינים אוטומטיים', 'TikTok + Instagram AI', 'ניתוח ויזואלי Gemini', 'דוח שבועי + תחזיות'],
-                cta: 'בחר Premium', highlight: false,
-              },
-            ].map((p, i) => (
+              { plan:'ניסיון חינמי', price:'₪0',   period:'7 ימים',    features:['7 ימים ללא תשלום','10 סריקות יומיות','3 סוכנים פעילים','לידים + ביקורות','ללא כרטיס אשראי'], cta:'התחל חינם',   dark:false, badge:null },
+              { plan:'Basic',        price:'₪300', period:'לחודש',    features:['50 סריקות יומיות','8 סוכנים פעילים','מעקב מתחרים מלא','זיהוי טרנדים','ניהול ביקורות','התראות WhatsApp'], cta:'בחר Basic', dark:true,  badge:'הכי פופולרי' },
+              { plan:'Premium',      price:'₪600', period:'לחודש',    features:['200 סריקות יומיות','50+ סוכנים','קמפיינים אוטומטיים','TikTok + Instagram AI','Gemini Vision','דוח שבועי + תחזיות'], cta:'בחר Premium', dark:false, badge:null },
+            ].map((p,i) => (
               <div key={i}
                 style={{
-                  position: 'relative', borderRadius: 20,
-                  background: p.highlight ? C.dark : C.white,
-                  border: p.highlight ? 'none' : `1.5px solid ${C.border}`,
-                  boxShadow: p.highlight ? '0 16px 48px rgba(26,31,54,0.18)' : '0 2px 12px rgba(0,0,0,0.04)',
-                  padding: '28px 24px',
-                  opacity: pricV ? 1 : 0, transform: pricV ? 'none' : 'translateY(24px)',
-                  transition: `all .65s ease ${i * 120}ms`,
-                  display: 'flex', flexDirection: 'column',
+                  position:'relative', borderRadius:22,
+                  background: p.dark ? T.dark : T.glass,
+                  backdropFilter: p.dark ? 'none' : 'blur(20px)',
+                  border: p.dark ? 'none' : '1.5px solid rgba(255,255,255,0.8)',
+                  boxShadow: p.dark ? '0 20px 60px rgba(26,31,54,0.22)' : '0 4px 24px rgba(26,31,54,0.07)',
+                  padding:'28px 24px', display:'flex', flexDirection:'column',
+                  opacity:pricV?1:0, transform:pricV?'none':'translateY(24px)',
+                  transition:`all .65s ease ${i*120}ms`,
                 }}>
                 {p.badge && (
-                  <div style={{ position: 'absolute', top: -14, left: '50%', transform: 'translateX(-50%)', background: `linear-gradient(135deg, ${C.primary}, ${C.purple})`, color: '#fff', fontSize: 12, fontWeight: 800, padding: '4px 16px', borderRadius: 100, whiteSpace: 'nowrap' }}>
-                    {p.badge}
-                  </div>
+                  <div style={{ position:'absolute', top:-14, left:'50%', transform:'translateX(-50%)', background:`linear-gradient(135deg,${T.red},${T.purple})`, color:'#fff', fontSize:12, fontWeight:800, padding:'5px 16px', borderRadius:100, whiteSpace:'nowrap' }}>{p.badge}</div>
                 )}
-                <div style={{ marginBottom: 24 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: p.highlight ? 'rgba(255,255,255,0.5)' : C.light, marginBottom: 8 }}>{p.plan}</div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                    <span style={{ fontSize: 40, fontWeight: 900, color: p.highlight ? '#fff' : C.dark, letterSpacing: '-0.04em' }}>{p.price}</span>
-                    <span style={{ fontSize: 14, color: p.highlight ? 'rgba(255,255,255,0.45)' : C.light, fontWeight: 500 }}>{p.period}</span>
+                <div style={{ marginBottom:24 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:p.dark?'rgba(255,255,255,0.45)':T.light, marginBottom:8 }}>{p.plan}</div>
+                  <div style={{ display:'flex', alignItems:'baseline', gap:6 }}>
+                    <span style={{ fontSize:42, fontWeight:900, color:p.dark?'#fff':T.dark, letterSpacing:'-0.04em' }}>{p.price}</span>
+                    <span style={{ fontSize:14, color:p.dark?'rgba(255,255,255,0.4)':T.light, fontWeight:500 }}>{p.period}</span>
                   </div>
                 </div>
-                <ul style={{ flex: 1, listStyle: 'none', marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <ul style={{ flex:1, listStyle:'none', marginBottom:24, display:'flex', flexDirection:'column', gap:10 }}>
                   {p.features.map(f => (
-                    <li key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 14, color: p.highlight ? 'rgba(255,255,255,0.75)' : C.mid, fontWeight: 400 }}>
-                      <span style={{ width: 20, height: 20, borderRadius: '50%', background: p.highlight ? 'rgba(255,255,255,0.1)' : `${C.primary}14`, border: `1px solid ${p.highlight ? 'rgba(255,255,255,0.2)' : `${C.primary}25`}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: p.highlight ? '#fff' : C.primary, marginTop: 1 }}>
-                        <Icons.Check />
+                    <li key={f} style={{ display:'flex', alignItems:'flex-start', gap:10, fontSize:14, color:p.dark?'rgba(255,255,255,0.72)':T.mid, fontWeight:400 }}>
+                      <span style={{ width:20, height:20, borderRadius:'50%', background:p.dark?'rgba(255,255,255,0.1)':`${T.red}14`, border:`1px solid ${p.dark?'rgba(255,255,255,0.18)':`${T.red}28`}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, color:p.dark?'#fff':T.red, marginTop:1 }}>
+                        <Icon.Check size={11} />
                       </span>
                       {f}
                     </li>
                   ))}
                 </ul>
-                <button onClick={goSignUp}
+                <button onClick={() => go('/sign-up')}
                   style={{
-                    width: '100%', padding: '13px 0', borderRadius: 12, border: 'none', cursor: 'pointer',
-                    background: p.highlight ? `linear-gradient(135deg, ${C.primary}, ${C.primaryD})` : C.bg,
-                    color: p.highlight ? '#fff' : C.dark,
-                    fontWeight: 800, fontSize: 14.5, fontFamily: 'Heebo, sans-serif',
-                    boxShadow: p.highlight ? `0 6px 24px rgba(232,52,77,0.35)` : 'none',
-                    border: p.highlight ? 'none' : `1.5px solid ${C.border}`,
-                    transition: 'opacity .15s',
+                    width:'100%', padding:'13px 0', borderRadius:12, border:'none', cursor:'pointer',
+                    background: p.dark ? `linear-gradient(135deg,${T.red},${T.redD})` : 'rgba(255,255,255,0.7)',
+                    backdropFilter: p.dark ? 'none' : 'blur(8px)',
+                    color: p.dark ? '#fff' : T.dark,
+                    fontWeight:800, fontSize:14.5, fontFamily:'Heebo,sans-serif',
+                    boxShadow: p.dark ? `0 6px 24px rgba(232,52,77,0.4)` : 'none',
+                    border: p.dark ? 'none' : '1.5px solid rgba(200,200,220,0.5)',
+                    transition:'opacity .15s',
                   }}
-                  onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
-                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
+                  onMouseEnter={e=>e.currentTarget.style.opacity='0.85'}
+                  onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
                   {p.cta}
                 </button>
               </div>
             ))}
           </div>
-          <p style={{ textAlign: 'center', fontSize: 13, color: C.light, marginTop: 22, fontWeight: 500 }}>
-            Enterprise?{' '}
-            <a href="mailto:hello@cortexi.ai" style={{ color: C.mid, textDecoration: 'underline' }}>צרו קשר לתמחור מותאם אישית</a>
+          <p style={{ textAlign:'center', fontSize:13, color:T.light, marginTop:22, fontWeight:500 }}>
+            Enterprise? <a href="mailto:hello@cortexi.ai" style={{ color:T.mid, textDecoration:'underline' }}>צרו קשר לתמחור מותאם</a>
           </p>
         </div>
       </section>
 
-      {/* ═══════════════════════ FAQ ════════════════════════ */}
-      <section id="faq" style={{ padding: '88px 24px', background: C.white, borderTop: `1px solid ${C.border}` }}>
-        <div style={{ maxWidth: 720, margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: 48 }}>
-            <h2 style={{ fontSize: 'clamp(1.9rem, 4vw, 2.8rem)', fontWeight: 900, letterSpacing: '-0.025em', color: C.dark }}>שאלות נפוצות</h2>
+      {/* ═══════════════ FAQ ══════════════════════════════════ */}
+      <section id="faq" style={{ position:'relative', zIndex:1, padding:'24px 28px 88px' }}>
+        <div style={{ maxWidth:720, margin:'0 auto' }}>
+          <div style={{ textAlign:'center', marginBottom:46 }}>
+            <h2 style={{ fontSize:'clamp(1.9rem,4vw,2.7rem)', fontWeight:900, letterSpacing:'-0.03em', color:T.dark }}>שאלות נפוצות</h2>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {[
-              { q: 'האם צריך ידע טכני כדי להתחיל?', a: 'בכלל לא. הOnboarding הוא שיחה בעברית עם Kori — 10 שאלות, 5 דקות. לא צריך להכיר APIs, analytics, או כלים דיגיטליים. אם יש לך טלפון — זה מספיק.' },
-              { q: 'אילו פלטפורמות מחוברות?', a: 'Google Business, Instagram, TikTok, Facebook Groups, Wolt, תן ביס, WhatsApp. ניטור פסיבי עובד אפילו בלי חיבור OAuth — לא נדרש שתתחבר לכל חשבון.' },
-              { q: 'האם המערכת פועלת לחלוטין אוטומטית?', a: 'כן, 24/7. אבל כל פעולה שיוצאת החוצה (תגובה לביקורת, פרסום, הצעה ללקוח) מחכה לאישורך אם בחרת במצב semi-auto. שום דבר לא יוצא בלי שאתה יודע.' },
-              { q: 'מה קורה אחרי 7 ימי הניסיון?', a: 'תקבל הודעה 2 ימים לפני שהניסיון מסתיים. לא חייב לשדרג — הנתונים שלך נשמרים 30 יום גם אחרי סיום ניסיון, ללא כרטיס אשראי.' },
-              { q: 'האם Cortexi מתאים לסקטור שלי?', a: 'כן — מסעדות, פיטנס, יופי, רפואה, נדל"ן, חנויות. המנוע מתכוונן אוטומטית לסקטור שלך עם benchmark ספציפי ומונחי עסק רלוונטיים.' },
-            ].map((item, i) => <FAQItem key={i} q={item.q} a={item.a} />)}
+              { q:'האם צריך ידע טכני?', a:'בכלל לא. הOnboarding הוא שיחה בעברית עם Kori — 10 שאלות, 5 דקות. לא צריך להכיר APIs, analytics, או כלים דיגיטליים.' },
+              { q:'אילו פלטפורמות מחוברות?', a:'Google Business, Instagram, TikTok, Facebook Groups, Wolt, תן ביס, WhatsApp. ניטור פסיבי עובד אפילו ללא חיבור OAuth.' },
+              { q:'האם המערכת פועלת אוטומטית לחלוטין?', a:'כן, 24/7. אבל כל פעולה שיוצאת החוצה ממתינה לאישורך אם בחרת מצב semi-auto. שום דבר לא יוצא בלי שאתה יודע.' },
+              { q:'מה קורה אחרי 7 ימי הניסיון?', a:'תקבל הודעה 2 ימים לפני הסיום. הנתונים שלך נשמרים 30 יום גם אחרי הניסיון — ללא כרטיס אשראי.' },
+              { q:'האם מתאים לסקטור שלי?', a:'כן — מסעדות, פיטנס, יופי, רפואה, נדל"ן, חנויות. המנוע מתכוונן אוטומטית לסקטור שלך עם benchmark ספציפי.' },
+            ].map((item,i) => <FAQItem key={i} q={item.q} a={item.a} />)}
           </div>
         </div>
       </section>
 
-      {/* ═══════════════════════ FINAL CTA ══════════════════ */}
-      <section style={{ padding: '0 24px 100px', background: C.white }}>
-        <div style={{ maxWidth: 900, margin: '0 auto' }}>
-          <div style={{ borderRadius: 28, padding: '72px 48px', textAlign: 'center', background: C.dark, position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: -60, right: -60, width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(232,52,77,0.2), transparent 70%)', pointerEvents: 'none' }} />
-            <div style={{ position: 'absolute', bottom: -60, left: -60, width: 280, height: 280, borderRadius: '50%', background: 'radial-gradient(circle, rgba(124,58,237,0.18), transparent 70%)', pointerEvents: 'none' }} />
-            <div style={{ position: 'relative' }}>
-              <h2 style={{ fontSize: 'clamp(2rem, 5vw, 3.6rem)', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: 20 }}>
-                תוך 7 ימים תדע מה<br />
+      {/* ═══════════════ FINAL CTA ════════════════════════════ */}
+      <section style={{ position:'relative', zIndex:1, padding:'0 28px 100px' }}>
+        <div style={{ maxWidth:900, margin:'0 auto' }}>
+          <div style={{ borderRadius:28, padding:'72px 48px', textAlign:'center', background:T.dark, position:'relative', overflow:'hidden' }}>
+            <div style={{ position:'absolute', top:-80, right:-80, width:360, height:360, borderRadius:'50%', background:`radial-gradient(circle,rgba(232,52,77,0.22),transparent 65%)`, pointerEvents:'none' }} />
+            <div style={{ position:'absolute', bottom:-80, left:-80, width:300, height:300, borderRadius:'50%', background:`radial-gradient(circle,rgba(124,58,237,0.2),transparent 65%)`, pointerEvents:'none' }} />
+            <div style={{ position:'relative' }}>
+              <h2 style={{ fontSize:'clamp(2.1rem,5.5vw,3.8rem)', fontWeight:900, color:'#fff', letterSpacing:'-0.035em', lineHeight:1.08, marginBottom:20 }}>
+                תוך 7 ימים תדע מה<br/>
                 <span className="grad-text">המתחרים שלך לא יודעים</span>
               </h2>
-              <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.55)', marginBottom: 36, maxWidth: 480, margin: '0 auto 36px', lineHeight: 1.6, fontWeight: 400 }}>
+              <p style={{ fontSize:17, color:'rgba(255,255,255,0.52)', marginBottom:36, maxWidth:480, margin:'0 auto 36px', lineHeight:1.65, fontWeight:400 }}>
                 7 ימי ניסיון חינמי. ללא כרטיס אשראי. ביטול בכל עת.
               </p>
-              <button onClick={goSignUp} className="btn-primary" style={{ fontSize: 17, padding: '16px 40px', borderRadius: 16 }}>
-                התחל ניסיון חינמי — 7 ימים
-                <Icons.ArrowLeft />
+              <button onClick={() => go('/sign-up')} className="btn-red" style={{ fontSize:17, padding:'17px 44px', borderRadius:16 }}>
+                התחל ניסיון חינמי — 7 ימים <Icon.ArrowLeft size={18} />
               </button>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ═══════════════════════ FOOTER ══════════════════════ */}
-      <footer style={{ borderTop: `1px solid ${C.border}`, padding: '48px 24px 40px', background: C.bg }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 40, justifyContent: 'space-between', marginBottom: 40 }}>
+      {/* ═══════════════ FOOTER ═══════════════════════════════ */}
+      <footer style={{ position:'relative', zIndex:1, borderTop:'1px solid rgba(200,200,220,0.4)', padding:'48px 28px 40px', background:'rgba(255,255,255,0.4)', backdropFilter:'blur(12px)' }}>
+        <div style={{ maxWidth:1200, margin:'0 auto' }}>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:40, justifyContent:'space-between', marginBottom:40 }}>
             <div>
-              <img src="/logo.jpeg" alt="Cortexi" style={{ height: 40, marginBottom: 12, borderRadius: 6 }} />
-              <p style={{ fontSize: 13, color: C.light, maxWidth: 220, lineHeight: 1.7, fontWeight: 400 }}>AI Growth OS לעסקים קטנים-בינוניים בישראל.</p>
+              <img src="/logo.jpeg" alt="Cortexi" style={{ height:42, marginBottom:14, borderRadius:8 }} />
+              <p style={{ fontSize:13, color:T.light, maxWidth:220, lineHeight:1.7, fontWeight:400 }}>AI Growth OS לעסקים קטנים-בינוניים בישראל.</p>
             </div>
-            <div style={{ display: 'flex', gap: 56, flexWrap: 'wrap' }}>
+            <div style={{ display:'flex', gap:52, flexWrap:'wrap' }}>
               {[
-                { title: 'מוצר', links: [['#features','יכולות'],['#how','איך זה עובד'],['#pricing','מחירים']] },
-                { title: 'לפי עסק', links: [['/restaurants','מסעדות'],['/fitness','פיטנס'],['/beauty','יופי']] },
-                { title: 'משפטי', links: [['/terms','תנאי שימוש'],['/privacy','פרטיות']] },
+                { title:'מוצר',    links:[['#features','יכולות'],['#how','איך זה עובד'],['#pricing','מחירים']] },
+                { title:'לפי עסק', links:[['/restaurants','מסעדות'],['/fitness','פיטנס'],['/beauty','יופי']] },
+                { title:'משפטי',   links:[['/terms','תנאי שימוש'],['/privacy','פרטיות']] },
               ].map(col => (
-                <div key={col.title} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: C.dark, marginBottom: 4 }}>{col.title}</span>
-                  {col.links.map(([href, label]) => (
-                    <a key={href} href={href} style={{ fontSize: 13, color: C.light, textDecoration: 'none', fontWeight: 500, transition: 'color .15s' }}
-                      onMouseEnter={e => e.target.style.color = C.dark}
-                      onMouseLeave={e => e.target.style.color = C.light}>
-                      {label}
-                    </a>
+                <div key={col.title} style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  <span style={{ fontSize:13, fontWeight:800, color:T.dark, marginBottom:4 }}>{col.title}</span>
+                  {col.links.map(([href,label]) => (
+                    <a key={href} href={href} style={{ fontSize:13, color:T.light, textDecoration:'none', fontWeight:500, transition:'color .15s' }}
+                      onMouseEnter={e=>e.target.style.color=T.dark} onMouseLeave={e=>e.target.style.color=T.light}>{label}</a>
                   ))}
                 </div>
               ))}
             </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, paddingTop: 24, borderTop: `1px solid ${C.border}` }}>
-            <span style={{ fontSize: 12, color: C.light, fontWeight: 500 }}>© 2026 Cortexi. כל הזכויות שמורות.</span>
-            <span style={{ fontSize: 12, color: C.light, fontWeight: 500 }}>עוצב ופותח בישראל 🇮🇱</span>
+          <div style={{ display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:10, paddingTop:24, borderTop:'1px solid rgba(200,200,220,0.4)' }}>
+            <span style={{ fontSize:12, color:T.light, fontWeight:500 }}>© 2026 Cortexi. כל הזכויות שמורות.</span>
+            <span style={{ fontSize:12, color:T.light, fontWeight:500 }}>עוצב ופותח בישראל 🇮🇱</span>
           </div>
         </div>
       </footer>
@@ -831,40 +824,54 @@ export default function LandingMain() {
   );
 }
 
-/* ─── Feature card (bento) ───────────────────────────────── */
-function FeatCard({ gridCol, visible, delay = 0, accent, icon, label, title, body, tags, visual }) {
+/* ─── Bento Card ─────────────────────────────────────────── */
+function BentoCard({ col, vis, delay = 0, accent, badge, title, body, tags, extra }) {
+  const [hov, setHov] = useState(false);
   return (
-    <div className="card-lift"
+    <div
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
       style={{
-        gridColumn: gridCol, borderRadius: 18,
-        padding: '28px', background: '#FFFFFF',
-        border: `1.5px solid ${C.border}`,
-        boxShadow: '0 2px 12px rgba(26,31,54,0.05)',
-        opacity: visible ? 1 : 0, transform: visible ? 'none' : 'translateY(26px)',
-        transition: `opacity .65s ease ${delay}ms, transform .65s ease ${delay}ms`,
-        position: 'relative', overflow: 'hidden',
-      }}>
-      {/* Accent line top */}
-      <div style={{ position: 'absolute', top: 0, right: 0, left: 0, height: 3, background: `linear-gradient(90deg, ${accent}, transparent)`, borderRadius: '18px 18px 0 0' }} />
+        gridColumn: col,
+        borderRadius: 20,
+        padding: '26px',
+        background: hov ? 'rgba(255,255,255,0.72)' : 'rgba(255,255,255,0.60)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        border: '1.5px solid rgba(255,255,255,0.82)',
+        boxShadow: hov
+          ? `0 16px 48px rgba(26,31,54,0.11), 0 4px 12px rgba(26,31,54,0.07), 0 0 0 1px ${accent}18`
+          : '0 4px 24px rgba(26,31,54,0.07), 0 1px 4px rgba(26,31,54,0.04)',
+        opacity: vis ? 1 : 0,
+        transform: vis ? (hov ? 'translateY(-5px)' : 'none') : 'translateY(26px)',
+        transition: `opacity .65s ease ${delay}ms, transform .22s ease, box-shadow .22s ease, background .18s ease`,
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Accent top line */}
+      <div style={{ position: 'absolute', top: 0, right: 0, left: 0, height: 3, background: `linear-gradient(90deg, ${accent}, transparent 70%)`, borderRadius: '20px 20px 0 0' }} />
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: `${accent}14`, border: `1px solid ${accent}28`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: accent }}>
-          {icon}
-        </div>
-        <span style={{ fontSize: 11, fontWeight: 800, color: accent, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{label}</span>
-      </div>
+      {/* Badge row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>{badge}</div>
 
-      <h3 style={{ fontSize: 17, fontWeight: 800, color: C.dark, marginBottom: 10, lineHeight: 1.3, letterSpacing: '-0.01em' }}>{title}</h3>
-      <p style={{ fontSize: 14, color: C.mid, lineHeight: 1.65, fontWeight: 400, marginBottom: tags?.length ? 14 : 0 }}>{body}</p>
+      {/* Title */}
+      <h3 style={{ fontSize: 17.5, fontWeight: 800, color: T.dark, marginBottom: 10, lineHeight: 1.3, letterSpacing: '-0.015em' }}>{title}</h3>
 
+      {/* Body */}
+      <p style={{ fontSize: 14, color: T.mid, lineHeight: 1.7, fontWeight: 400, marginBottom: tags?.length ? 14 : 0 }}>{body}</p>
+
+      {/* Tags */}
       {tags && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {tags.map(t => (
-            <span key={t} style={{ fontSize: 11.5, padding: '4px 10px', borderRadius: 100, background: `${accent}0C`, border: `1px solid ${accent}20`, color: C.mid, fontWeight: 600 }}>{t}</span>
+            <span key={t} style={{ fontSize: 11.5, padding: '4px 10px', borderRadius: 100, background: `${accent}0E`, border: `1px solid ${accent}22`, color: T.mid, fontWeight: 600 }}>{t}</span>
           ))}
         </div>
       )}
-      {visual}
+
+      {/* Extra content */}
+      {extra}
     </div>
   );
 }
@@ -873,20 +880,16 @@ function FeatCard({ gridCol, visible, delay = 0, accent, icon, label, title, bod
 function FAQItem({ q, a }) {
   const [open, setOpen] = useState(false);
   return (
-    <div onClick={() => setOpen(o => !o)}
-      style={{
-        borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
-        background: C.bg, border: `1.5px solid ${open ? C.primary : C.border}`,
-        transition: 'border-color .2s',
-      }}>
+    <div onClick={() => setOpen(o => !o)} className="glass"
+      style={{ borderRadius: 14, overflow: 'hidden', cursor: 'pointer', border: `1.5px solid ${open ? 'rgba(232,52,77,0.35)' : 'rgba(255,255,255,0.8)'}`, transition: 'border-color .2s, box-shadow .2s', boxShadow: open ? '0 4px 20px rgba(232,52,77,0.1)' : '0 2px 8px rgba(26,31,54,0.05)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '17px 20px' }}>
-        <span style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>{q}</span>
-        <span style={{ color: C.light, transition: 'transform .2s', transform: open ? 'rotate(180deg)' : 'none', display: 'flex', flexShrink: 0, marginRight: 10 }}>
-          <Icons.ChevronDown />
+        <span style={{ fontSize: 15, fontWeight: 700, color: T.dark }}>{q}</span>
+        <span style={{ color: T.light, transition: 'transform .25s', transform: open ? 'rotate(180deg)' : 'none', display: 'flex', flexShrink: 0, marginRight: 10 }}>
+          <Icon.ChevDown />
         </span>
       </div>
       {open && (
-        <div style={{ padding: '0 20px 17px', fontSize: 14, color: C.mid, lineHeight: 1.75, fontWeight: 400 }}>{a}</div>
+        <div style={{ padding: '0 20px 17px', fontSize: 14, color: T.mid, lineHeight: 1.75, fontWeight: 400, animation: 'fadeIn .2s ease' }}>{a}</div>
       )}
     </div>
   );
