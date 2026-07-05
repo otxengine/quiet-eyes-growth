@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
-import { invokeLLM } from '../../lib/llm';
+import { invokeLLM, startCostTracking, popCost } from '../../lib/llm';
 import { tavilySearch } from '../../lib/tavily';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { tryDecryptToken } from '../../lib/crypto';
 import { publishEvent } from '../../lib/eventBus';
+import { normReviewOrigin } from '../../lib/signalGuard';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours — Google Places API quota
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
@@ -36,6 +38,7 @@ async function getPlaceReviews(placeId: string): Promise<any[]> {
 
 async function batchExtractTopics(
   reviews: Array<{ text: string; sentiment: string }>,
+  costTrackingId?: string,
 ): Promise<Array<{ topics: string; topic_sentiment: string }>> {
   const fallback = reviews.map(r => ({ topics: r.sentiment, topic_sentiment: '{}' }));
   if (reviews.length === 0) return fallback;
@@ -52,6 +55,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew. {"results":[{"topic
       response_json_schema: { type: 'object' },
       model: 'haiku',
       maxTokens: 900,
+      costTrackingId,
     });
 
     const results: any[] = result?.results || [];
@@ -91,10 +95,14 @@ export async function collectReviews(req: Request, res: Response) {
   const requestedSources: string[] = req.body.sources || [];
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
   if (!req.body.force && shouldSkipAgent(businessProfileId, 'collectReviews', MIN_INTERVAL_MS)) {
+    await writeAutomationLog('collectReviews', businessProfileId, new Date().toISOString(), 0, 'success', 'ran_recently');
     return res.json({ new_reviews: 0, skipped: true, reason: 'ran_recently' });
   }
 
   const startTime = new Date().toISOString();
+  startCostTracking(businessProfileId);
+  let tavilyFailed: string | undefined;
+  const onTavilyError = (msg: string) => { tavilyFailed = msg; };
   try {
     const profiles = await prisma.businessProfile.findMany({ where: { id: businessProfileId } });
     const profile = profiles[0];
@@ -103,6 +111,7 @@ export async function collectReviews(req: Request, res: Response) {
     const { name, city } = profile;
     let newReviews = 0;
     let googleAdded = 0;
+    let gmbPathResult: 'success' | 'failed' | 'not_connected' = 'not_connected';
 
     const existingReviews = await prisma.review.findMany({ where: { linked_business: businessProfileId } });
     const existingGoogleIds = new Set(existingReviews.map(r => r.google_review_id).filter(Boolean));
@@ -113,59 +122,83 @@ export async function collectReviews(req: Request, res: Response) {
       where: { linked_business: businessProfileId, platform: 'google_business', is_connected: true },
     });
     const gmbLocationPath = gmbAccount?.page_id;
-    const gmbToken = gmbAccount?.access_token || (profile as any).google_access_token;
+    const rawGmbToken = gmbAccount?.access_token;
+    const gmbToken = (rawGmbToken ? tryDecryptToken(rawGmbToken) : null) || (profile as any).google_access_token;
 
-    if (gmbToken && gmbLocationPath && gmbLocationPath.includes('/')) {
-      try {
-        const gmbRes = await fetch(
-          `https://mybusiness.googleapis.com/v4/${gmbLocationPath}/reviews?pageSize=50`,
-          { headers: { Authorization: `Bearer ${gmbToken}` } },
-        );
-        if (gmbRes.ok) {
-          const gmbData: any = await gmbRes.json();
-          // Collect all new reviews first, then batch-extract topics
+    if (gmbToken && gmbLocationPath) {
+      if (!gmbLocationPath.includes('/')) {
+        gmbPathResult = 'failed';
+        console.warn(`[collectReviews] GMB page_id "${gmbLocationPath}" is not a valid location path (expected "accounts/X/locations/Y") — skipping GMB`);
+      } else {
+        gmbPathResult = 'success'; // account is connected; only reverts on auth error
+        try {
+          let nextPageToken: string | undefined;
           const gmbPending: Array<{ gr: any; reviewId: string; text: string; textKey: string; rating: number; sentiment: string; reviewerName: string }> = [];
-          for (const gr of (gmbData.reviews || [])) {
-            const reviewId = gr.name;
-            if (existingGoogleIds.has(reviewId)) continue;
-            const text = gr.comment || '';
-            const textKey = text.substring(0, 50);
-            if (existingTexts.has(textKey) || text.length < 5) continue;
-            const rating = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }[gr.starRating as string] ?? 0;
-            const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
-            const reviewerName = gr.reviewer?.displayName || 'לקוח';
-            gmbPending.push({ gr, reviewId, text, textKey, rating, sentiment, reviewerName });
+          do {
+            const pageUrl = `https://mybusiness.googleapis.com/v4/${gmbLocationPath}/reviews?pageSize=50${nextPageToken ? `&pageToken=${nextPageToken}` : ''}`;
+            const gmbRes = await fetch(pageUrl, { headers: { Authorization: `Bearer ${gmbToken}` } });
+            if (!gmbRes.ok) {
+              const errData: any = await gmbRes.json().catch(() => ({}));
+              const isAuthErr = gmbRes.status === 401 || gmbRes.status === 403;
+              console.warn(`[collectReviews] GMB API ${gmbRes.status}: ${errData?.error?.message || 'unknown error'}${isAuthErr ? '' : ' — falling back to Places'}`);
+              if (isAuthErr && gmbAccount) {
+                gmbPathResult = 'failed';
+                await prisma.socialAccount.update({
+                  where: { id: gmbAccount.id },
+                  data:  { is_connected: false, last_error: `gmb_${gmbRes.status}:${errData?.error?.message || 'auth_failed'}` },
+                }).catch(() => {});
+                await writeAutomationLog('collectReviews', businessProfileId, startTime, 0, 'failed', `gmb_${gmbRes.status}:${errData?.error?.message || 'auth_failed'}`);
+                return res.json({ new_reviews: 0, oauth_error: true, reason: `gmb_${gmbRes.status}`, gmb_path: 'failed' });
+              }
+              break;
+            }
+            const gmbData: any = await gmbRes.json();
+            nextPageToken = gmbData.nextPageToken;
+            for (const gr of (gmbData.reviews || [])) {
+              const reviewId = gr.name;
+              if (existingGoogleIds.has(reviewId)) continue;
+              const text = gr.comment || '';
+              const textKey = text.substring(0, 50);
+              if (existingTexts.has(textKey) || text.length < 5) continue;
+              const rating = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }[gr.starRating as string] ?? 0;
+              const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
+              const reviewerName = gr.reviewer?.displayName || 'לקוח';
+              gmbPending.push({ gr, reviewId, text, textKey, rating, sentiment, reviewerName });
+            }
+          } while (nextPageToken);
+
+          if (gmbPending.length > 0) {
+            const gmbTopics = await batchExtractTopics(gmbPending.map(p => ({ text: p.text, sentiment: p.sentiment })));
+            for (let i = 0; i < gmbPending.length; i++) {
+              const { gr, reviewId, text, textKey, rating, sentiment, reviewerName } = gmbPending[i];
+              const { topics, topic_sentiment } = gmbTopics[i];
+              await prisma.review.create({
+                data: {
+                  platform: 'Google',
+                  rating,
+                  text: text.substring(0, 500),
+                  reviewer_name: reviewerName,
+                  sentiment,
+                  response_status: gr.reviewReply ? 'published' : 'pending',
+                  source_url: `https://www.google.com/maps/search/?q=${encodeURIComponent(name)}`,
+                  source_origin: normReviewOrigin('google_business_api', 'collectReviews:gmb'),
+                  google_review_id: reviewId,
+                  is_verified: true,
+                  created_at: gr.createTime || new Date().toISOString(),
+                  linked_business: businessProfileId,
+                  topics,
+                  topic_sentiment,
+                },
+              });
+              existingGoogleIds.add(reviewId);
+              existingTexts.add(textKey);
+              newReviews++;
+              googleAdded++;
+            }
           }
-          const gmbTopics = await batchExtractTopics(gmbPending.map(p => ({ text: p.text, sentiment: p.sentiment })));
-          for (let i = 0; i < gmbPending.length; i++) {
-            const { gr, reviewId, text, textKey, rating, sentiment, reviewerName } = gmbPending[i];
-            const { topics, topic_sentiment } = gmbTopics[i];
-            await prisma.review.create({
-              data: {
-                platform: 'Google',
-                rating,
-                text: text.substring(0, 500),
-                reviewer_name: reviewerName,
-                sentiment,
-                response_status: gr.reviewReply ? 'published' : 'pending',
-                source_url: `https://www.google.com/maps/search/?q=${encodeURIComponent(name)}`,
-                source_origin: 'google_business_api',
-                google_review_id: reviewId,
-                is_verified: true,
-                created_at: gr.createTime || new Date().toISOString(),
-                linked_business: businessProfileId,
-                topics,
-                topic_sentiment,
-              },
-            });
-            existingGoogleIds.add(reviewId);
-            existingTexts.add(textKey);
-            newReviews++;
-            googleAdded++;
-          }
+        } catch (err: any) {
+          console.warn('GMB API reviews fetch failed, falling back to Places:', err.message);
         }
-      } catch (err: any) {
-        console.warn('GMB API reviews fetch failed, falling back to Places:', err.message);
       }
     }
 
@@ -218,7 +251,7 @@ export async function collectReviews(req: Request, res: Response) {
 
     // ── Tavily direct search — when no Google API key available ──────────────
     if (googleAdded === 0) {
-      const tavilyResults = await tavilySearch(`"${name}" ביקורות ${city}`, 8);
+      const tavilyResults = await tavilySearch(`"${name}" ביקורות ${city}`, 8, 30, onTavilyError);
       // Batch-classify all Tavily results in one Haiku call
       const tavilyContents = tavilyResults
         .map(r => ({ content: r.content || r.snippet || '', url: r.url || '' }))
@@ -235,6 +268,7 @@ export async function collectReviews(req: Request, res: Response) {
             response_json_schema: { type: 'object' },
             model: 'haiku',
             maxTokens: 1000,
+            costTrackingId: businessProfileId,
           });
           tavilyParsed = batchResult?.results || [];
         } catch { tavilyParsed = []; }
@@ -249,7 +283,7 @@ export async function collectReviews(req: Request, res: Response) {
         const tavilyTopics = await batchExtractTopics(tavilyReviewsPending.map(p => ({
           text: p.parsed.text,
           sentiment: (p.parsed.rating || 0) >= 4 ? 'positive' : (p.parsed.rating || 0) <= 2 ? 'negative' : 'neutral',
-        })));
+        })), businessProfileId);
         for (let i = 0; i < tavilyReviewsPending.length; i++) {
           const { parsed, url } = tavilyReviewsPending[i];
           const { topics, topic_sentiment } = tavilyTopics[i];
@@ -281,12 +315,15 @@ export async function collectReviews(req: Request, res: Response) {
     }
 
     // ── Multi-source Tavily scan (facebook, instagram, tripadvisor, etc.) ────
-    const sourcesToScan = requestedSources.filter(s => s !== 'google' && SOURCE_QUERIES[s]);
+    // ponytail: auto-fallback to all sources when tiers 1-3 found nothing; explicit sources still honoured otherwise
+    const sourcesToScan = newReviews === 0
+      ? Object.keys(SOURCE_QUERIES)
+      : requestedSources.filter(s => s !== 'google' && SOURCE_QUERIES[s]);
     let sourcesScanCount = 0;
     for (const source of sourcesToScan) {
       const query = SOURCE_QUERIES[source](name, city);
       const platformLabel = SOURCE_PLATFORM_LABELS[source] || source;
-      const tavilyHits = await tavilySearch(query, 6);
+      const tavilyHits = await tavilySearch(query, 6, 30, onTavilyError);
       const newHits = tavilyHits.filter(r => {
         const content = r.content || r.snippet || '';
         return content.length >= 20 && !existingTexts.has(content.substring(0, 50));
@@ -303,6 +340,7 @@ export async function collectReviews(req: Request, res: Response) {
           response_json_schema: { type: 'object' },
           model: 'haiku',
           maxTokens: 900,
+          costTrackingId: businessProfileId,
         });
         parsed = result?.results || [];
       } catch { parsed = []; }
@@ -317,7 +355,7 @@ export async function collectReviews(req: Request, res: Response) {
       const topics = await batchExtractTopics(pending.map(({ p }) => ({
         text: p.text,
         sentiment: (p.rating || 0) >= 4 ? 'positive' : (p.rating || 0) <= 2 ? 'negative' : 'neutral',
-      })));
+      })), businessProfileId);
       for (let i = 0; i < pending.length; i++) {
         const { p, url } = pending[i];
         const { topics: t, topic_sentiment } = topics[i];
@@ -348,7 +386,8 @@ export async function collectReviews(req: Request, res: Response) {
       }
     }
 
-    // ── Tavily fallback from raw signals ─────────────────────────────────────
+    // ── Tavily fallback from raw signals (last resort — only when all prior tiers found nothing) ──
+    if (newReviews === 0) {
     const rawSignals = await prisma.rawSignal.findMany({
       where: { linked_business: businessProfileId, source_origin: 'tavily' },
       orderBy: { created_date: 'desc' },
@@ -380,6 +419,7 @@ export async function collectReviews(req: Request, res: Response) {
           response_json_schema: { type: 'object' },
           model: 'haiku',
           maxTokens: 1000,
+          costTrackingId: businessProfileId,
         });
         signalsParsed = batchResult?.results || [];
       } catch { signalsParsed = []; }
@@ -395,7 +435,7 @@ export async function collectReviews(req: Request, res: Response) {
       const signalTopics = await batchExtractTopics(signalReviewsPending.map(p => ({
         text: p.parsed.text,
         sentiment: (p.parsed.rating || 0) >= 4 ? 'positive' : (p.parsed.rating || 0) <= 2 ? 'negative' : 'neutral',
-      })));
+      })), businessProfileId);
       for (let i = 0; i < signalReviewsPending.length; i++) {
         const { parsed, url } = signalReviewsPending[i];
         const { topics, topic_sentiment } = signalTopics[i];
@@ -424,6 +464,7 @@ export async function collectReviews(req: Request, res: Response) {
         } catch { continue; }
       }
     }
+    } // end if (newReviews === 0) — T5 RawSignal fallback
 
     // ── Competitor mention detection in new reviews ──────────────────────────
     if (newReviews > 0) {
@@ -481,7 +522,7 @@ export async function collectReviews(req: Request, res: Response) {
     }
 
     setLastRun(businessProfileId, 'collectReviews');
-    await writeAutomationLog('collectReviews', businessProfileId, startTime, newReviews);
+    await writeAutomationLog('collectReviews', businessProfileId, startTime, newReviews, tavilyFailed ? 'failed' : 'success', tavilyFailed, popCost(businessProfileId));
     console.log(`collectReviews done: ${newReviews} new reviews (${googleAdded} from Google, ${sourcesScanCount} from other sources)`);
 
     // ── Snapshot current avg rating → rating_history for trend graph ─────────
@@ -541,20 +582,28 @@ export async function collectReviews(req: Request, res: Response) {
         }
       } catch (_) {}
     }
-    // Publish to event bus (OTX-001)
+    // Publish one new_review event per review — exactly once (KAN-18 AC4)
     if (newReviews > 0) {
-      publishEvent({
-        businessId: businessProfileId,
-        eventType:  'new_review',
-        source:     'collectReviews',
-        payload:    { new_reviews: newReviews, google_added: googleAdded },
-        contextAttrs: { impact: googleAdded > 0 ? 'medium' : 'low' },
-      }).catch(() => {});
+      try {
+        const freshReviews = await prisma.review.findMany({
+          where: { linked_business: businessProfileId, created_date: { gte: new Date(startTime) } },
+          select: { id: true },
+        });
+        for (const rev of freshReviews) {
+          publishEvent({
+            businessId: businessProfileId,
+            eventType:  'new_review',
+            source:     'collectReviews',
+            payload:    { review_id: rev.id, google_added: googleAdded },
+            contextAttrs: { impact: googleAdded > 0 ? 'medium' : 'low' },
+          }).catch(() => {});
+        }
+      } catch (_) {}
     }
-    return res.json({ new_reviews: newReviews, google_reviews_added: googleAdded, sources_scanned: sourcesToScan.length + (googleAdded > 0 ? 1 : 0) });
+    return res.json({ new_reviews: newReviews, google_reviews_added: googleAdded, sources_scanned: sourcesToScan.length + (googleAdded > 0 ? 1 : 0), gmb_path: gmbPathResult });
   } catch (err: any) {
     console.error('collectReviews error:', err.message);
-    await writeAutomationLog('collectReviews', businessProfileId, startTime, 0, 'failed', err.message);
+    await writeAutomationLog('collectReviews', businessProfileId, startTime, 0, 'failed', err.message, popCost(businessProfileId));
     return res.status(500).json({ error: err.message });
   }
 }

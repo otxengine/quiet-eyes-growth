@@ -224,9 +224,10 @@ export default function AppLayout() {
     unreadSignals: (unreadSignals || []).filter(
       s => new Date(s.detected_at || s.created_date || 0).getTime() > signalsLastSeen
     ).length,
-    pendingReviews: (pendingReviews || []).filter(
-      r => new Date(r.created_at || r.created_date || 0).getTime() > reviewsLastSeen
-    ).length,
+    pendingReviews: (pendingReviews || []).filter(r => {
+      const ts = r.created_at || r.created_date;
+      return !ts || new Date(ts).getTime() > reviewsLastSeen;
+    }).length,
     hotLeads: (hotLeads || []).filter(
       l => new Date(l.created_at || l.created_date || 0).getTime() > leadsLastSeen
     ).length,

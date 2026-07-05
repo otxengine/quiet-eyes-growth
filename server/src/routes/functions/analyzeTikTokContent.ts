@@ -33,10 +33,18 @@ async function fetchTikTokUserVideos(accessToken: string, openId: string): Promi
         max_count: 10,
       }),
     });
+    if (res.status === 401 || res.status === 403) {
+      const err: any = new Error('oauth_error');
+      err.status = res.status;
+      throw err;
+    }
     if (!res.ok) return [];
     const data: any = await res.json();
     return data?.data?.videos || [];
-  } catch { return []; }
+  } catch (e: any) {
+    if (e.message === 'oauth_error') throw e;
+    return [];
+  }
 }
 
 async function apifyTikTokProfile(username: string): Promise<any[]> {
@@ -53,6 +61,7 @@ export async function analyzeTikTokContent(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
   if (shouldSkipAgent(businessProfileId, 'analyzeTikTokContent', MIN_INTERVAL_MS)) {
+    await writeAutomationLog('analyzeTikTokContent', businessProfileId, new Date().toISOString(), 0, 'success', 'ran_recently');
     return res.json({ videos_analyzed: 0, skipped: true, reason: 'ran_recently' });
   }
 
@@ -84,8 +93,21 @@ export async function analyzeTikTokContent(req: Request, res: Response) {
     if (tiktokAccount?.page_id) {
       const validToken = await getValidTikTokToken(businessProfileId);
       if (validToken) {
-        videos = await fetchTikTokUserVideos(validToken, tiktokAccount.page_id);
-        if (videos.length > 0) dataSource = 'tiktok_api';
+        try {
+          videos = await fetchTikTokUserVideos(validToken, tiktokAccount.page_id);
+          if (videos.length > 0) dataSource = 'tiktok_api';
+          else console.warn('[analyzeTikTokContent] TikTok API returned 0 videos');
+        } catch (e: any) {
+          if (e.message === 'oauth_error') {
+            await prisma.socialAccount.update({
+              where: { id: tiktokAccount.id },
+              data:  { is_connected: false, last_error: `tiktok_auth_${e.status}` },
+            }).catch(() => {});
+            await writeAutomationLog('analyzeTikTokContent', businessProfileId, startTime, 0);
+            return res.json({ videos_analyzed: 0, oauth_error: true, reason: `tiktok_auth_${e.status}` });
+          }
+          throw e;
+        }
       }
     }
 
@@ -93,12 +115,14 @@ export async function analyzeTikTokContent(req: Request, res: Response) {
     if (videos.length === 0 && tiktokUsernameFromUrl) {
       const apifyVideos = await apifyTikTokProfile(tiktokUsernameFromUrl);
       if (apifyVideos.length > 0) { videos = apifyVideos; dataSource = 'apify_url'; }
+      else { console.warn('[analyzeTikTokContent] Apify (tiktok_url) returned 0 videos'); }
     }
 
     // ── 3. Apify fallback — scrape by OAuth account name ─────────────────────
     if (videos.length === 0 && tiktokAccount?.account_name) {
       const apifyVideos = await apifyTikTokProfile(tiktokAccount.account_name);
       if (apifyVideos.length > 0) { videos = apifyVideos; dataSource = 'apify'; }
+      else { console.warn('[analyzeTikTokContent] Apify (account_name) returned 0 videos'); }
     }
 
     // ── 3b. SearchAPI TikTok — when Apify unavailable (HTTP 403) ─────────────
@@ -116,6 +140,24 @@ export async function analyzeTikTokContent(req: Request, res: Response) {
         dataSource = 'searchapi';
         console.log(`[analyzeTikTokContent] SearchAPI fallback: ${videos.length} videos found`);
       }
+    }
+
+    // ── Write RawSignal per video collected ──────────────────────────────────
+    let rawCreated = 0;
+    for (const v of videos.slice(0, 6)) {
+      await prisma.rawSignal.create({
+        data: {
+          linked_business: businessProfileId,
+          source:          dataSource,
+          content:         v.title || v.text || '',
+          url:             v.share_url || v.webVideoUrl || null,
+          platform:        'tiktok',
+          signal_type:     'video',
+          detected_at:     new Date().toISOString(),
+          source_origin:   dataSource,
+        },
+      });
+      rawCreated++;
     }
 
     // ── 3. Sector TikTok trends via Tavily (always runs) ────────────────────
@@ -208,7 +250,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     setLastRun(businessProfileId, 'analyzeTikTokContent');
     await writeAutomationLog('analyzeTikTokContent', businessProfileId, startTime, created);
     console.log(`analyzeTikTokContent done: ${created} signals | source: ${dataSource} | videos: ${videos.length}`);
-    return res.json({ items_created: created, data_source: dataSource, videos_analyzed: videos.length });
+    return res.json({ items_created: created + rawCreated, raw_signals_created: rawCreated, market_signals_created: created, data_source: dataSource, videos_analyzed: videos.length });
 
   } catch (err: any) {
     console.error('[analyzeTikTokContent]', err.message);

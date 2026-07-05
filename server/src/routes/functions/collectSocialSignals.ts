@@ -2,12 +2,14 @@ import { Request, Response } from 'express';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { prisma } from '../../db';
 import { loadBusinessContext } from '../../lib/businessContext';
-import { invokeLLM } from '../../lib/llm';
+import { invokeLLM, startCostTracking, popCost } from '../../lib/llm';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { tryDecryptToken } from '../../lib/crypto';
 import { parseKeywords, buildUrlQueries } from '../../lib/dataSources';
 import { getSectorProfile, cityToEn } from '../../lib/businessProfile';
+import { normSignalType, normRawOrigin } from '../../lib/signalGuard';
 
 // Dummy res that swallows output — used when firing sub-agents inline
 const GRAPH_BASE = 'https://graph.facebook.com/v19.0';
@@ -17,10 +19,12 @@ export async function collectSocialSignals(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
   if (shouldSkipAgent(businessProfileId, 'collectSocialSignals', MIN_INTERVAL_MS)) {
+    await writeAutomationLog('collectSocialSignals', businessProfileId, new Date().toISOString(), 0, 'success', 'ran_recently');
     return res.json({ new_signals: 0, skipped: true, reason: 'ran_recently' });
   }
 
   const startTime = new Date().toISOString();
+  startCostTracking(businessProfileId);
   try {
     const profiles = await prisma.businessProfile.findMany({ where: { id: businessProfileId } });
     const profile = profiles[0];
@@ -34,6 +38,9 @@ export async function collectSocialSignals(req: Request, res: Response) {
     const existingUrls = new Set(existingSignals.map(s => s.url).filter(Boolean));
 
     let newSignals = 0;
+    let apifyError: string | undefined;
+    let tavilyFailed: string | undefined;
+    const onTavilyError = (msg: string) => { tavilyFailed = msg; };
 
     // ── Facebook via Apify ──────────────────────────────────────────────────────
     if (hasApifyKey() && facebook_url) {
@@ -41,7 +48,7 @@ export async function collectSocialSignals(req: Request, res: Response) {
         startUrls: [{ url: facebook_url }],
         maxPosts: 10,
         maxPostComments: 0,
-      });
+      }, 90_000, 50, (msg) => { apifyError = msg; });
 
       for (const post of posts) {
         const url = post.url || post.postUrl || facebook_url;
@@ -54,9 +61,9 @@ export async function collectSocialSignals(req: Request, res: Response) {
             source: `facebook: ${name}`,
             content,
             url,
-            signal_type: 'social_post',
+            signal_type: normSignalType('social_mention', 'collectSocialSignals:facebook'),
             platform: 'facebook',
-            source_origin: 'apify',
+            source_origin: normRawOrigin('apify', 'collectSocialSignals:facebook'),
             detected_at: new Date().toISOString(),
             linked_business: businessProfileId,
           },
@@ -72,7 +79,7 @@ export async function collectSocialSignals(req: Request, res: Response) {
         directUrls: [instagram_url],
         resultsType: 'posts',
         resultsLimit: 10,
-      });
+      }, 90_000, 50, (msg) => { apifyError = msg; });
 
       for (const post of posts) {
         const url = post.url || (post.shortCode ? `https://www.instagram.com/p/${post.shortCode}/` : null);
@@ -85,9 +92,9 @@ export async function collectSocialSignals(req: Request, res: Response) {
             source: `instagram: ${name}`,
             content,
             url,
-            signal_type: 'social_post',
+            signal_type: normSignalType('social_mention', 'collectSocialSignals:instagram'),
             platform: 'instagram',
-            source_origin: 'apify',
+            source_origin: normRawOrigin('apify', 'collectSocialSignals:instagram'),
             detected_at: new Date().toISOString(),
             linked_business: businessProfileId,
           },
@@ -104,7 +111,7 @@ export async function collectSocialSignals(req: Request, res: Response) {
     });
     if (igAccount?.access_token && igAccount?.page_id) {
       const igUserId = igAccount.page_id;
-      const token    = igAccount.access_token;
+      const token    = tryDecryptToken(igAccount.access_token);
       // Use AI sector profile for precise hashtags when available
       const sp = getSectorProfile(profile);
       const hashtagBase = sp
@@ -144,9 +151,9 @@ export async function collectSocialSignals(req: Request, res: Response) {
                 source: `instagram_hashtag_graph: #${hashtag}`,
                 content,
                 url,
-                signal_type: 'social_mention',
+                signal_type: normSignalType('social_mention', 'collectSocialSignals:ig_graph'),
                 platform: 'instagram',
-                source_origin: 'instagram_graph_api',
+                source_origin: normRawOrigin('instagram_graph_api', 'collectSocialSignals:ig_graph'),
                 detected_at: new Date().toISOString(),
                 linked_business: businessProfileId,
               },
@@ -171,7 +178,7 @@ export async function collectSocialSignals(req: Request, res: Response) {
 
       const influencerResults = await tavilySearch(
         `influencers ${catStr} Israel instagram tiktok micro-influencer`,
-        6,
+        6, 30, onTavilyError,
       );
 
       if (influencerResults.length > 0) {
@@ -180,7 +187,8 @@ export async function collectSocialSignals(req: Request, res: Response) {
           .join('\n');
 
         const influencerAnalysis = await invokeLLM({
-          maxTokens: 400,
+          costTrackingId: businessProfileId,
+          maxTokens: 600,
           prompt: `You are an Israeli digital marketing expert. Identify influencers relevant to the sector.
 Sector: ${category}, Region: ${cityStr}
 
@@ -219,7 +227,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       const urlQueries = buildUrlQueries(profile, name); // e.g. '"name" instagram'
       for (const q of [...urlQueries, ...keywords.slice(0, 8).map(kw => `"${kw}" site:facebook.com OR site:instagram.com OR site:tiktok.com`)]) {
         if (isTavilyRateLimited()) break;
-        const results = await tavilySearch(q, 4);
+        const results = await tavilySearch(q, 4, 30, onTavilyError);
         for (const r of results) {
           if (!r.url || existingUrls.has(r.url)) continue;
           const isSocial = ['facebook.com', 'instagram.com', 'tiktok.com'].some(d => r.url.includes(d));
@@ -248,8 +256,8 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       `"${name}" ${category} ${city} אזכורים`,
     ];
 
-    for (const query of socialQueries) {
-      const results = await tavilySearch(query);
+    if (!isTavilyRateLimited()) for (const query of socialQueries) {
+      const results = await tavilySearch(query, 5, 30, onTavilyError);
       for (const r of results) {
         if (!r.url || existingUrls.has(r.url)) continue;
         const isSocial = ['facebook.com', 'instagram.com', 'tiktok.com', 'twitter.com'].some(d => r.url.includes(d));
@@ -289,8 +297,8 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       phase3Queries.push(`"${compName}" בעיה תקלה מאוכזב`);
     }
 
-    for (const query of phase3Queries) {
-      const results = await tavilySearch(query);
+    if (!isTavilyRateLimited()) for (const query of phase3Queries) {
+      const results = await tavilySearch(query, 5, 30, onTavilyError);
       for (const r of results) {
         if (!r.url || existingUrls.has(r.url)) continue;
         const content = (r.content || r.title || '').substring(0, 500);
@@ -300,7 +308,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
           : urlLower.includes('google') ? 'google_maps'
           : 'web';
         const mentionsBusiness = content.toLowerCase().includes(name.toLowerCase());
-        const signal_type = mentionsBusiness ? 'social_review' : 'social_mention';
+        const signal_type = normSignalType(mentionsBusiness ? 'social_review' : 'social_mention', 'collectSocialSignals:phase3');
         await prisma.rawSignal.create({
           data: {
             source: `tavily_p3: ${query}`,
@@ -377,23 +385,24 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
             impact_reason:  'ביקורת שלילית ללא תגובה פוגעת בדירוג ובאמון לקוחות פוטנציאליים',
           }),
           source_signals: sig.url || '',
-          confidence: 80,
+          confidence: 0.8,
           is_read: false,
           linked_business: businessProfileId,
           detected_at: new Date().toISOString(),
         },
-      }).catch(() => {});
+      }).catch((e: any) => console.warn('[collectSocialSignals] MarketSignal create failed:', e.message));
       negativeSignalsFound++;
     }
 
     setLastRun(businessProfileId, 'collectSocialSignals');
-    await writeAutomationLog('collectSocialSignals', businessProfileId, startTime, newSignals);
+    const collectorError = apifyError || tavilyFailed;
+    await writeAutomationLog('collectSocialSignals', businessProfileId, startTime, newSignals, collectorError ? 'failed' : 'success', collectorError, popCost(businessProfileId));
     console.log(`collectSocialSignals done: ${newSignals} new signals, ${negativeSignalsFound} negative → MarketSignal`);
 
     return res.json({ new_signals: newSignals, phase3_signals: phase3Signals, negative_alerts: negativeSignalsFound });
   } catch (err: any) {
     console.error('collectSocialSignals error:', err.message);
-    await writeAutomationLog('collectSocialSignals', businessProfileId, startTime, 0, 'failed', err.message);
+    await writeAutomationLog('collectSocialSignals', businessProfileId, startTime, 0, 'failed', err.message, popCost(businessProfileId));
     return res.status(500).json({ error: err.message });
   }
 }

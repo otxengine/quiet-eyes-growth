@@ -497,6 +497,7 @@ async function loadCompetitorConfigs(
 // ─── Main runner ──────────────────────────────────────────────────────────────
 
 async function run(): Promise<void> {
+  const runStart = Date.now();
   console.log(`[${AGENT_NAME}] Starting run at ${new Date().toISOString()}`);
 
   const { data: businesses, error: bizErr } = await supabase
@@ -619,15 +620,17 @@ async function run(): Promise<void> {
             change_types:    [...new Set(allChanges.map((c) => c.change_type))],
             platforms:       [...new Set(allChanges.map((c) => c.social_platform).filter(Boolean))],
           },
-        }).catch(() => {/* non-critical */});
+        }).catch((e: unknown) => console.warn(`[${AGENT_NAME}] Bus publish failed for ${comp.name}:`, e));
       }
     }
   }
 
+  const elapsed = Date.now() - runStart;
   const now = new Date().toISOString();
+  const status = elapsed > 900_000 || errorCount > 0 ? "DELAYED" : "OK";
   await pingHeartbeat(
     AGENT_NAME,
-    errorCount > 0 ? "DELAYED" : "OK",
+    status,
     now,
     errorCount > 0 ? `${errorCount} insert errors` : undefined,
   );

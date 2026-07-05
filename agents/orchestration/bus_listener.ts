@@ -22,6 +22,10 @@ import { pingHeartbeat } from "../lib/heartbeat.ts";
 const LISTENER_NAME = "AgentOrchestrator";
 const MAX_CONCURRENT_RUNS = 3;
 
+// AC2: cooldown guard for EventImpactEngine (avoid re-entrancy on burst inserts)
+let lastEventImpactRunAt = 0;
+const EVENT_IMPACT_COOLDOWN_MS = 5 * 60_000;
+
 // ─── Agent run queue ──────────────────────────────────────────────────────────
 // Prevents >3 concurrent agent invocations system-wide.
 
@@ -158,6 +162,30 @@ export async function startBusListener(): Promise<void> {
   console.log(`[BusListener] Starting — pg_notify channel 'agent_bus' + audit table replay`);
 
   subscribePgNotify();
+
+  // AC2: direct pg_notify on events_raw → EventImpactEngine (with 5-min cooldown)
+  supabase
+    .channel("events-raw-inserts")
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "events_raw" },
+      async () => {
+        const now = Date.now();
+        if (now - lastEventImpactRunAt < EVENT_IMPACT_COOLDOWN_MS) return;
+        lastEventImpactRunAt = now;
+        try {
+          const { runEventImpactEngine } = await import("../event_impact_engine.ts");
+          await runEventImpactEngine(supabase, undefined);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error("[BusListener] EventImpactEngine failed:", msg);
+          await pingHeartbeat(LISTENER_NAME, "ERROR", undefined, `EventImpactEngine failed: ${msg}`);
+        }
+      },
+    )
+    .subscribe((status) => {
+      console.log(`[BusListener] events_raw channel status: ${status}`);
+    });
 
   // Heartbeat every 5 minutes to confirm listener is alive
   setInterval(async () => {

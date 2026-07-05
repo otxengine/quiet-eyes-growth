@@ -31,21 +31,38 @@ import { marketMemoryEngine } from './marketMemoryEngine';
 import { microMomentDetector } from './microMomentDetector';
 import { sentimentVelocityMonitor } from './sentimentVelocityMonitor';
 import { bootstrapBusinessIntelligence } from '../../lib/bootstrapIntelligence';
+import { evaluateCollectionStatus } from '../../lib/collectionStatus';
 import { contentPerformanceAgent } from './contentPerformanceAgent';
 import { reviewRequestTimingAgent } from './reviewRequestTimingAgent';
+import { learnFromWebsite } from './stubs';
+
+// ponytail: inline from src/lib/planConfig.js — update both if plan limits change
+const PLAN_SCAN_LIMITS: Record<string, number> = {
+  free_trial: 1,
+  free:       1,   // schema default maps to free_trial
+  starter:    4,
+  growth:     30,
+  pro:        Infinity,
+  enterprise: Infinity,
+};
 
 async function callHandler(fn: Function, businessProfileId: string): Promise<any> {
-  return new Promise((resolve) => {
-    const fakeReq = { body: { businessProfileId } } as Request;
-    let done = false;
-    const fakeRes: any = {
-      json: (data: any) => { if (!done) { done = true; resolve(data); } return fakeRes; },
-      status: (_: number) => fakeRes,
-    };
-    Promise.resolve(fn(fakeReq, fakeRes)).catch((e: any) => {
-      if (!done) { done = true; resolve({ error: e.message }); }
-    });
-  });
+  return Promise.race([
+    new Promise((resolve) => {
+      const fakeReq = { body: { businessProfileId } } as Request;
+      let done = false;
+      const fakeRes: any = {
+        json: (data: any) => { if (!done) { done = true; resolve(data); } return fakeRes; },
+        status: (_: number) => fakeRes,
+      };
+      // .then() defers fn() to a microtask so synchronous throws are caught by .catch()
+      Promise.resolve().then(() => fn(fakeReq, fakeRes)).catch((e: any) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (!done) { console.error(`[runFullScan] collector error (${businessProfileId}):`, msg); done = true; resolve({ error: msg }); }
+      });
+    }),
+    new Promise(resolve => { const t = setTimeout(() => resolve({ error: 'timeout' }), 120_000); if (t?.unref) t.unref(); }),
+  ]);
 }
 
 export async function runFullScan(req: Request, res: Response) {
@@ -104,6 +121,25 @@ export async function runFullScan(req: Request, res: Response) {
     // automationLog query failure → continue scan (don't block on cooldown check)
   }
 
+  // Plan scan-limit enforcement (KAN-20 AC2)
+  const plan      = profile?.plan_id ?? 'free_trial';
+  const scanLimit = PLAN_SCAN_LIMITS[plan] ?? PLAN_SCAN_LIMITS.free_trial;
+  if (isFinite(scanLimit)) {
+    try {
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+      const scansThisMonth = await prisma.automationLog.count({
+        where: { automation_name: 'runFullScan', linked_business: businessProfileId, created_date: { gte: startOfMonth } },
+      });
+      if (scansThisMonth >= scanLimit) {
+        return res.json({ success: false, plan_limit: true, plan, scans_used: scansThisMonth, scans_allowed: scanLimit });
+      }
+    } catch (_) {
+      // DB failure → allow scan (don't block on limit check)
+    }
+  }
+
   // tiktokSectorTrendAgent uses Apify (real TikTok data) — skip if ran within 12h
   let tiktokSectorHandler: Function = tiktokSectorTrendAgent;
   try {
@@ -131,6 +167,20 @@ export async function runFullScan(req: Request, res: Response) {
         res.json({ skipped: true, reason: 'detectEarlyTrends ran within 48h — trends do not change hourly' });
     }
   } catch (_) {}
+
+  // KAN-9 prep: scrape brand voice/context before collectors — fire-and-forget, does not block response
+  if (profile?.website_url) {
+    new Promise<void>((resolve) => {
+      const fakeReq = { body: { businessProfileId, websiteUrl: profile.website_url } } as Request;
+      const fakeRes: any = { json: () => { resolve(); return fakeRes; }, status: () => fakeRes };
+      Promise.resolve().then(() => learnFromWebsite(fakeReq, fakeRes)).catch((e: any) => {
+        console.warn('[runFullScan] learnFromWebsite prep error:', e.message);
+        resolve();
+      });
+    });
+  } else {
+    console.log('[runFullScan] learnFromWebsite skipped — no website_url on profile');
+  }
 
   // Full pipeline — ordered from data collection → analysis → learning → cleanup
   const pipeline: Array<[string, Function]> = [
@@ -203,6 +253,8 @@ export async function runFullScan(req: Request, res: Response) {
 
   // Run remaining agents in background (fire-and-forget)
   (async () => {
+    // Write cooldown record first so 24h gate holds even if pipeline crashes mid-run
+    await writeAutomationLog('runFullScan', businessProfileId, startTime, pipeline.length);
     for (const [name, fn] of deferred) {
       try {
         results[name] = await callHandler(fn, businessProfileId);
@@ -210,7 +262,21 @@ export async function runFullScan(req: Request, res: Response) {
         results[name] = { error: e.message };
       }
     }
-    await writeAutomationLog('runFullScan', businessProfileId, startTime, pipeline.length);
-    console.log(`[runFullScan] background pipeline complete for ${profile?.name}`);
+    // KAN-34: evaluate §2.1 success definition after all collectors complete
+    const rawSignals =
+      (results['collectWebSignals']?.new_signals  ?? 0) +
+      (results['collectSocialSignals']?.new_signals ?? 0);
+    const collStatus = evaluateCollectionStatus({
+      rawSignals,
+      reviews:  results['collectReviews']?.new_reviews ?? 0,
+      gmbPath:  results['collectReviews']?.gmb_path    ?? 'not_connected',
+    });
+    await writeAutomationLog(
+      'runFullScan:collectionStatus', businessProfileId, startTime,
+      rawSignals + (results['collectReviews']?.new_reviews ?? 0),
+      'success',
+      `collection_status:${collStatus}`,
+    );
+    console.log(`[runFullScan] background pipeline complete for ${profile?.name} — ${collStatus}`);
   })().catch(e => console.error('[runFullScan] background error:', e.message));
 }

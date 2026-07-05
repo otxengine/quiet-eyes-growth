@@ -22,12 +22,14 @@ const NAV_STRUCTURE = [
   {
     type: 'group', key: 'more', label: 'עוד',
     items: [
-      { path: '/reviews',    label: 'מוניטין',       badgeKey: 'pendingReviews' },
-      { path: '/retention',  label: 'ניהול לקוחות' },
+      { path: '/reviews',         label: 'מוניטין',        badgeKey: 'pendingReviews' },
+      { path: '/social-comments', label: 'תגובות סושיאל' },
+      { path: '/retention',       label: 'ניהול לקוחות' },
       { path: '/tasks',      label: 'משימות' },
       { path: '/reports',    label: 'דוחות' },
       { path: '/strategy',   label: 'אסטרטגיה' },
       { path: '/demand-gap', label: 'פערי ביקוש' },
+      { path: '/intelligence', label: 'מודיעין שוק' },
     ],
   },
 ];

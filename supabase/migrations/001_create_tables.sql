@@ -18,7 +18,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS otx_business_profiles (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  business_id      UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  business_id      UUID NOT NULL UNIQUE REFERENCES businesses(id) ON DELETE CASCADE,
   sector           TEXT,
   geo              TEXT,
   price_tier       TEXT,

@@ -101,14 +101,23 @@ function assignConfidence(sourceType: "api" | "scraped" | "inferred" | "review")
 }
 
 // ─── Deduplication ────────────────────────────────────────────────────────────
-
-function hourBucket(isoString: string): string {
-  const d = new Date(isoString);
-  return `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}-${d.getUTCHours()}`;
-}
+// DB enforces cross-run dedup via text_hash generated column (migration 007).
+// In-run Set prevents sending duplicate rows in the same batch.
 
 function dedupKey(signal: RawSignal): string {
-  return `${signal.source_url}|${signal.geo}|${hourBucket(signal.detected_at_utc)}`;
+  return `${signal.business_id}|${signal.source_url}|${signal.raw_text}`;
+}
+
+// ─── Retry helper ─────────────────────────────────────────────────────────────
+
+async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  try { return await fn(); }
+  catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(`[${AGENT_NAME}] ${label}: retrying after: ${msg}`);
+    await new Promise(r => setTimeout(r, 2_000));
+    return fn();
+  }
 }
 
 // ─── Source 1: SerpAPI (Google Search) ───────────────────────────────────────
@@ -283,6 +292,7 @@ async function fetchFromGooglePlacesReviews(
 // ─── Main runner ──────────────────────────────────────────────────────────────
 
 async function run(): Promise<void> {
+  const runStart = Date.now();
   console.log(`[${AGENT_NAME}] Starting run at ${new Date().toISOString()}`);
 
   const { data: businesses, error: bizErr } = await supabase
@@ -306,33 +316,33 @@ async function run(): Promise<void> {
 
     // Source 1: SerpAPI
     if (serpKey) {
-      await fetchFromSerpApi(biz, serpKey)
+      await withRetry(`SerpAPI[${biz.id}]`, () => fetchFromSerpApi(biz, serpKey))
         .then((r) => collected.push(...r))
         .catch((e) => console.error(`[${AGENT_NAME}] SerpAPI failed for ${biz.id}:`, e.message));
     }
 
     // Source 2: Reddit
-    await fetchFromReddit(biz)
+    await withRetry(`Reddit[${biz.id}]`, () => fetchFromReddit(biz))
       .then((r) => collected.push(...r))
       .catch((e) => console.error(`[${AGENT_NAME}] Reddit failed for ${biz.id}:`, e.message));
 
     // Source 3: Google Trends
     if (serpKey) {
-      await fetchFromGoogleTrends(biz, serpKey)
+      await withRetry(`Trends[${biz.id}]`, () => fetchFromGoogleTrends(biz, serpKey))
         .then((r) => collected.push(...r))
         .catch((e) => console.error(`[${AGENT_NAME}] Trends failed for ${biz.id}:`, e.message));
     }
 
-    // Source 4: Tavily news articles (NEW)
+    // Source 4: Tavily news articles
     if (tavilyKey) {
-      await fetchFromTavily(biz, tavilyKey)
+      await withRetry(`Tavily[${biz.id}]`, () => fetchFromTavily(biz, tavilyKey))
         .then((r) => collected.push(...r))
         .catch((e) => console.error(`[${AGENT_NAME}] Tavily failed for ${biz.id}:`, e.message));
     }
 
-    // Source 5: Google Places reviews for own business (NEW)
+    // Source 5: Google Places reviews
     if (placesKey) {
-      await fetchFromGooglePlacesReviews(biz, placesKey)
+      await withRetry(`Places[${biz.id}]`, () => fetchFromGooglePlacesReviews(biz, placesKey))
         .then((r) => collected.push(...r))
         .catch((e) => console.error(`[${AGENT_NAME}] Places reviews failed for ${biz.id}:`, e.message));
     }
@@ -353,9 +363,10 @@ async function run(): Promise<void> {
 
     if (unique.length === 0) continue;
 
-    const { error: insertErr, count } = await supabase
-      .from("signals_raw")
-      .insert(unique, { count: "exact" });
+    // ON CONFLICT(text_hash) DO NOTHING — text_hash is a DB-generated column (migration 007)
+    // deno-lint-ignore no-explicit-any
+    const { error: insertErr, count } = await (supabase.from("signals_raw") as any)
+      .upsert(unique, { onConflict: "text_hash", ignoreDuplicates: true, count: "exact" });
 
     if (insertErr) {
       console.error(`[${AGENT_NAME}] Insert failed for ${biz.id}:`, insertErr.message);
@@ -367,9 +378,11 @@ async function run(): Promise<void> {
     console.log(`[${AGENT_NAME}] ${biz.id}: inserted ${count} signals (SerpAPI+Reddit+Trends+Tavily+Places)`);
   }
 
+  const elapsed = Date.now() - runStart;
   const now = new Date().toISOString();
-  await pingHeartbeat(AGENT_NAME, "OK", now);
-  console.log(`[${AGENT_NAME}] Done. Total inserted: ${totalInserted}. Ping: ${now}`);
+  const status: "OK" | "DELAYED" = elapsed > 120_000 ? "DELAYED" : "OK";
+  await pingHeartbeat(AGENT_NAME, status, now);
+  console.log(`[${AGENT_NAME}] Done. inserted=${totalInserted} elapsed=${Math.round(elapsed / 1000)}s status=${status}`);
 }
 
 // deno-lint-ignore no-explicit-any

@@ -80,7 +80,7 @@ async function fetchIsraeliHolidays(): Promise<EventRaw[]> {
   const items = data.items ?? [];
 
   return items
-    .filter((item) => item.category !== "parashat")
+    .filter((item) => item.category !== "parashat" && hasSectorOverlap(item.title, item.category))
     .map((item): EventRaw => ({
       event_name: item.title,
       event_date: item.date.split("T")[0],
@@ -261,6 +261,7 @@ function buildSeasonalCalendar(): EventRaw[] {
 // ─── Main runner ──────────────────────────────────────────────────────────────
 
 async function run(): Promise<void> {
+  const runStart = Date.now();
   console.log(`[${AGENT_NAME}] Starting run at ${new Date().toISOString()}`);
 
   const collected: EventRaw[] = [];
@@ -311,9 +312,11 @@ async function run(): Promise<void> {
     return;
   }
 
+  const elapsed = Date.now() - runStart;
+  const status: "OK" | "DELAYED" = elapsed > 300_000 ? "DELAYED" : "OK";
   const now = new Date().toISOString();
-  await pingHeartbeat(AGENT_NAME, "OK", now);
-  console.log(`[${AGENT_NAME}] Done. Upserted ${collected.length} events. Ping: ${now}`);
+  await pingHeartbeat(AGENT_NAME, status, now);
+  console.log(`[${AGENT_NAME}] Done. Upserted ${collected.length} events. elapsed=${Math.round(elapsed / 1000)}s status=${status}`);
 }
 
 if (import.meta.main) {

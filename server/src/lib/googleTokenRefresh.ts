@@ -7,6 +7,7 @@
  */
 import { prisma } from '../db';
 import { createLogger } from '../infra/logger';
+import { tryEncryptToken, tryDecryptToken } from './crypto';
 
 const logger = createLogger('GoogleTokenRefresh');
 
@@ -56,7 +57,7 @@ export async function refreshGoogleToken(businessProfileId: string): Promise<str
     // Update SocialAccount
     await prisma.$executeRawUnsafe(
       `UPDATE social_accounts SET access_token=$1, expires_at=$2, last_sync=$3 WHERE id=$4`,
-      newToken, expiresAt, new Date().toISOString(), account.id,
+      tryEncryptToken(newToken), expiresAt, new Date().toISOString(), account.id,
     );
 
     // Mirror to BusinessProfile
@@ -89,10 +90,11 @@ export async function getValidGoogleToken(businessProfileId: string): Promise<st
   // If no expiry stored or expires in less than 5 min → refresh
   if (!expiresAt || expiresAt < fiveMinFromNow) {
     const refreshed = await refreshGoogleToken(businessProfileId);
-    return refreshed || account.access_token; // fall back to existing token if refresh fails
+    if (!refreshed) logger.warn(`Google token expired and refresh failed for ${businessProfileId} — using existing token`);
+    return refreshed || account.access_token;
   }
 
-  return account.access_token;
+  return tryDecryptToken(account.access_token);
 }
 
 /**

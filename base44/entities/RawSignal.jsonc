@@ -59,7 +59,7 @@
     },
     "source_origin": {
       "type": "string",
-      "enum": ["tavily", "apify", "google_places", "llm", "manual", "webhook"],
+      "enum": ["tavily", "apify", "google_places", "instagram_graph_api", "llm", "manual", "webhook"],
       "default": "tavily",
       "description": "מקור ה-URL — tavily/apify/google_places = אמיתי, llm = ממוצא"
     },

@@ -49,6 +49,7 @@ import { cleanupInsights } from './routes/functions/cleanupInsights';
 import { cleanupAndLearn } from './routes/functions/cleanupAndLearn';
 import { weeklyEmailDigest } from './routes/functions/weeklyEmailDigest';
 import { writeHeartbeat } from './lib/agentMonitor';
+import { checkAndAlertFailureRate } from './lib/collectorMetrics';
 import { generateMorningBriefing } from './routes/functions/generateMorningBriefing';
 import { generateProactiveAlerts } from './routes/functions/generateProactiveAlerts';
 import { generateAdvisoryInsights } from './routes/functions/generateAdvisoryInsights';
@@ -70,6 +71,10 @@ import { demandGapEngine } from './routes/functions/demandGapEngine';
 import { microMomentDetector } from './routes/functions/microMomentDetector';
 import { sectorBenchmark } from './routes/functions/sectorBenchmark';
 import { intentClassification } from './routes/functions/intentClassification';
+import { collectOTXSignals } from './routes/functions/collectOTXSignals';
+import { collectOTXCompetitorChanges } from './routes/functions/collectOTXCompetitorChanges';
+import { runOTXSyncBridge } from './routes/functions/runOTXSyncBridge';
+import { runOTXIntentClassification } from './routes/functions/runOTXIntentClassification';
 
 const logger = createLogger('Scheduler');
 
@@ -90,7 +95,7 @@ async function getActiveProfiles(): Promise<string[]> {
 }
 
 /** Runs a single growth agent function for all active profiles */
-async function runAgentForAll(label: string, agentFn: Function) {
+export async function runAgentForAll(label: string, agentFn: Function) {
   const ids = await getActiveProfiles();
   if (ids.length === 0) return;
   logger.info(`${label}: running for ${ids.length} profile(s)`);
@@ -290,8 +295,37 @@ export function startScheduler() {
     runAgentForAll('DiffCompetitorSnapshot', diffCompetitorSnapshot);
   });
 
-  // ── Every 30 min: execute semi_auto queued actions + refresh expiring tokens ─
+  // ── Every 6 hours: OTX competitor snapshot diff (KAN-45) ─────────────────────
+  // Kill switch: set OTX_COMPETITOR_SNAPSHOT_DISABLED=true in Render env to disable without redeploy.
+  if (process.env.OTX_COMPETITOR_SNAPSHOT_DISABLED !== 'true') {
+    cron.schedule('0 */6 * * *', () => {
+      collectOTXCompetitorChanges()
+        .catch(err => logger.error('collectOTXCompetitorChanges failed', { error: err.message }));
+    });
+  }
+
+  // ── Every 10 min: OTX sync bridge — OTX tables → QE Prisma entities (KAN-46) ─
+  // Kill switch: set OTX_SYNC_BRIDGE_DISABLED=true in Render env to disable without redeploy.
+  if (process.env.OTX_SYNC_BRIDGE_DISABLED !== 'true') {
+    cron.schedule('*/10 * * * *', () => {
+      runOTXSyncBridge()
+        .catch(err => logger.error('runOTXSyncBridge failed', { error: err.message }));
+    });
+  }
+
+  // ── Every 5 min: OTX IntentClassification polling fallback (KAN-47 AC1) ──────
+  // Kill switch: set OTX_INTENT_CLASSIFICATION_DISABLED=true in Render env to disable.
+  if (process.env.OTX_INTENT_CLASSIFICATION_DISABLED !== 'true') {
+    cron.schedule('*/5 * * * *', () => {
+      runOTXIntentClassification()
+        .catch(err => logger.error('runOTXIntentClassification failed', { error: err.message }));
+    });
+  }
+
+  // ── Every 30 min: OTX signal collection + semi_auto actions + token refresh ──
   cron.schedule('*/30 * * * *', () => {
+    collectOTXSignals()
+      .catch(err => logger.error('collectOTXSignals failed', { error: err.message }));
     processScheduledAutoActions()
       .catch(err => logger.error('processScheduledAutoActions failed', { error: err.message }));
     refreshExpiringTikTokTokens()
@@ -301,6 +335,12 @@ export function startScheduler() {
   // ── Every 15 min: keep-alive log ─────────────────────────────────────────────
   cron.schedule('*/15 * * * *', () => {
     logger.info('Scheduler heartbeat');
+  });
+
+  // ── Every hour: collector failure-rate alert check (KAN-26) ──────────────────
+  cron.schedule('0 * * * *', async () => {
+    logger.info('Hourly: collector failure rate check');
+    await checkAndAlertFailureRate().catch(e => logger.warn(`collectorMetrics alert check failed: ${e.message}`));
   });
 
   logger.info('Scheduler started — pipelines will run hourly');

@@ -63,13 +63,17 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     }).catch(() => {});
   }
 
-  if (negativeComments.length > 0) {
+  if (negativeComments.length > 0 || negativeCount >= 3) {
     await prisma.proactiveAlert.create({
       data: {
         linked_business: businessProfileId,
         alert_type: 'negative_comment',
-        title: `${negativeComments.length} תגובות שליליות דחופות ב-Instagram`,
-        description: negativeComments.slice(0, 2).join(' | '),
+        title: negativeComments.length > 0
+          ? `${negativeComments.length} תגובות שליליות דחופות ב-Instagram`
+          : `${negativeCount} תגובות שליליות ב-Instagram`,
+        description: negativeComments.length > 0
+          ? negativeComments.slice(0, 2).join(' | ')
+          : `נמצאו ${negativeCount} תגובות שליליות`,
         suggested_action: 'היכנס לאינסטגרם וענה לתגובות — תגובה תוך שעה מגדילה אמון',
         priority: 'high',
         source_agent: 'analyzeInstagramComments',
@@ -87,6 +91,7 @@ export async function analyzeInstagramComments(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
   if (shouldSkipAgent(businessProfileId, 'analyzeInstagramComments', MIN_INTERVAL_MS)) {
+    await writeAutomationLog('analyzeInstagramComments', businessProfileId, new Date().toISOString(), 0, 'success', 'ran_recently');
     return res.json({ comments_analyzed: 0, skipped: true, reason: 'ran_recently' });
   }
 
@@ -108,6 +113,14 @@ export async function analyzeInstagramComments(req: Request, res: Response) {
       const mediaRes = await fetch(
         `${GRAPH_BASE}/${igUserId}/media?fields=id,timestamp,like_count,comments_count,caption&limit=10&access_token=${token}`,
       );
+      if (mediaRes.status === 401 || mediaRes.status === 403) {
+        await prisma.socialAccount.update({
+          where: { id: igAccount.id },
+          data:  { is_connected: false, last_error: `ig_auth_${mediaRes.status}` },
+        }).catch(() => {});
+        await writeAutomationLog('analyzeInstagramComments', businessProfileId, startTime, 0);
+        return res.json({ comments_analyzed: 0, oauth_error: true, reason: `ig_auth_${mediaRes.status}` });
+      }
       if (!mediaRes.ok) {
         await writeAutomationLog('analyzeInstagramComments', businessProfileId, startTime, 0);
         return res.json({ comments_analyzed: 0, note: 'Could not fetch Instagram media' });
@@ -173,7 +186,7 @@ export async function analyzeInstagramComments(req: Request, res: Response) {
     }
 
     // ── Path C: SearchAPI + Tavily — when Apify unavailable ──────────────────
-    if (hasSearchApiKey() || true) { // Tavily always available
+    if (instagramUrl) {
       const username = instagramUrl
         ? (instagramUrl.match(/instagram\.com\/@?([\w.]+)/)?.[1] || '')
         : '';
@@ -201,6 +214,7 @@ export async function analyzeInstagramComments(req: Request, res: Response) {
     }
 
     // ── No data source available ──────────────────────────────────────────────
+    console.log(`[analyzeInstagramComments] no-op: no IG connection or URL for ${businessProfileId}`);
     await writeAutomationLog('analyzeInstagramComments', businessProfileId, startTime, 0);
     return res.json({ comments_analyzed: 0, note: 'Instagram not connected and no URL provided' });
 

@@ -5,6 +5,27 @@ import { callGemini } from './gemini';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' });
 
+// ── LLM cost tracking (per-business accumulator, keyed by businessId) ─────────
+const _costAccumulator = new Map<string, number>();
+// Pricing per 1M tokens (input / output)
+const _PRICE: Record<string, [number, number]> = {
+  'claude-haiku-4-5-20251001': [0.80,  4.00],
+  'claude-sonnet-4-6':         [3.00, 15.00],
+  'claude-opus-4-6':           [15.00, 75.00],
+};
+export function startCostTracking(id: string) { _costAccumulator.set(id, 0); }
+export function popCost(id: string): number {
+  const c = _costAccumulator.get(id) ?? 0;
+  _costAccumulator.delete(id);
+  return c;
+}
+function _addCost(id: string | undefined, modelId: string, inputTokens: number, outputTokens: number) {
+  if (!id) return;
+  const [pIn, pOut] = _PRICE[modelId] ?? [1.00, 5.00];
+  const usd = (inputTokens / 1e6) * pIn + (outputTokens / 1e6) * pOut;
+  _costAccumulator.set(id, (_costAccumulator.get(id) ?? 0) + usd);
+}
+
 export interface LLMOptions {
   response_json_schema?: any;
   model?: string;    // 'haiku' | 'sonnet' | 'opus' or full model ID
@@ -33,6 +54,7 @@ export interface LLMOptions {
    * Only applies to Claude models. Cuts input token cost ~80% for repeat callers.
    */
   usePromptCache?: boolean;
+  costTrackingId?: string;
 }
 
 const MODEL_MAP: Record<string, string> = {
@@ -60,7 +82,7 @@ const MAX_TOKENS_DEFAULT: Record<string, number> = {
  * Caches responses for 4 hours to avoid duplicate AI calls across pipeline runs.
  */
 export async function invokeLLM(options: { prompt: string } & LLMOptions): Promise<any> {
-  const { prompt, response_json_schema, model, maxTokens: maxTokensOverride, skipCache, profile, systemPrompt, usePromptCache } = options;
+  const { prompt, response_json_schema, model, maxTokens: maxTokensOverride, skipCache, profile, systemPrompt, usePromptCache, costTrackingId } = options;
 
   const modelKey = model || 'haiku'; // default to Haiku (cheapest)
   const modelId = MODEL_MAP[modelKey] || model || 'claude-haiku-4-5-20251001';
@@ -79,12 +101,12 @@ export async function invokeLLM(options: { prompt: string } & LLMOptions): Promi
       return cached;
     }
 
-    const result = await _invokeLLMRaw(finalPrompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache);
+    const result = await _invokeLLMRaw(finalPrompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache, costTrackingId);
     cacheSet(cacheKey, result, TTL.LLM_RESPONSE);
     return result;
   }
 
-  return _invokeLLMRaw(finalPrompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache);
+  return _invokeLLMRaw(finalPrompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache, costTrackingId);
 }
 
 async function _invokeLLMRaw(
@@ -94,6 +116,7 @@ async function _invokeLLMRaw(
   response_json_schema: any,
   systemPrompt?: string,
   usePromptCache?: boolean,
+  costTrackingId?: string,
 ): Promise<any> {
 
   // Gemini models — route directly without trying Anthropic first
@@ -112,7 +135,7 @@ async function _invokeLLMRaw(
   // Try Anthropic first
   if (process.env.ANTHROPIC_API_KEY) {
     try {
-      return await _callAnthropic(prompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache);
+      return await _callAnthropic(prompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache, costTrackingId);
     } catch (err: any) {
       const isTokenExhausted = err.status === 429 || /credit|quota|rate.limit|overloaded/i.test(err.message || '');
       if (isTokenExhausted) {
@@ -178,6 +201,7 @@ async function _callAnthropic(
   response_json_schema: any,
   callerSystemPrompt?: string,
   usePromptCache?: boolean,
+  costTrackingId?: string,
 ): Promise<any> {
 
   const defaultSystem = response_json_schema
@@ -204,6 +228,7 @@ async function _callAnthropic(
   });
 
   const rawText = ((response.content || [])[0] as any)?.text || '';
+  if (response.usage) _addCost(costTrackingId, modelId, response.usage.input_tokens, response.usage.output_tokens);
 
   if (response.stop_reason === 'max_tokens') {
     console.warn('[LLM] stop_reason=max_tokens — response truncated. model:', modelId, 'maxTokens:', maxTokens);

@@ -86,20 +86,28 @@ Rules:
 - keywords: exactly 10 Hebrew search terms customers use to find this type of business in ${profile.city} (short phrases only)
 - competitors: exactly 3 realistic competitor business names in ${profile.city} or nearby cities`;
 
-    const llmResult = await invokeLLM({
-      model: 'sonnet',
-      maxTokens: 600,
-      skipCache: true,
-      prompt: llmPrompt,
-      response_json_schema: { type: 'object' },
-    }) as { keywords?: string[]; competitors?: Array<{ name: string; category?: string; address?: string }> } | null;
+    let keywords: string[] = [];
+    let competitors: Array<{ name: string; category?: string; address?: string; notes?: string }> = [];
 
-    const unwrapped = (llmResult as any)?.osint_configuration || (llmResult as any)?.configuration || llmResult;
-    if (!unwrapped) return res.status(500).json({ error: 'LLM returned invalid JSON' });
+    try {
+      const llmResult = await invokeLLM({
+        model: 'sonnet',
+        maxTokens: 600,
+        skipCache: true,
+        prompt: llmPrompt,
+        response_json_schema: { type: 'object' },
+      }) as { keywords?: string[]; competitors?: Array<{ name: string; category?: string; address?: string }> } | null;
 
-    const keywords: string[] = Array.isArray(unwrapped.keywords) ? unwrapped.keywords : [];
-    const competitors: Array<{ name: string; category?: string; address?: string; notes?: string }> =
-      Array.isArray(unwrapped.competitors) ? unwrapped.competitors : [];
+      const unwrapped = (llmResult as any)?.osint_configuration || (llmResult as any)?.configuration || llmResult;
+      if (!unwrapped) {
+        console.warn('[autoConfigOsint] LLM returned null/invalid JSON — safe defaults: empty keywords, curated URLs will still persist');
+      } else {
+        keywords = Array.isArray(unwrapped.keywords) ? unwrapped.keywords : [];
+        competitors = Array.isArray(unwrapped.competitors) ? unwrapped.competitors : [];
+      }
+    } catch (llmErr: any) {
+      console.warn('[autoConfigOsint] LLM call failed — safe defaults: empty keywords, curated URLs will still persist. Reason:', llmErr.message);
+    }
 
     // ── Step 2: Tavily → discover real URLs for this business sector ─────────
     const discoveredUrls: string[] = [];
@@ -250,7 +258,8 @@ export async function learnFromWebsite(req: Request, res: Response) {
         .replace(/<[^>]+>/g, ' ')
         .replace(/\s+/g, ' ')
         .slice(0, 3000);
-    } catch {
+    } catch (fetchErr: any) {
+      console.error('[learnFromWebsite] fetch failed:', fetchErr?.message ?? 'timeout');
       websiteText = `Business: ${profile.name}, Category: ${profile.category}, City: ${profile.city}`;
     }
 
