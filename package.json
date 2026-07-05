@@ -10,7 +10,8 @@
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "scan-bundle": "bash scripts/scan-bundle-keys.sh"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.0.0",
