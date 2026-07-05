@@ -60,54 +60,49 @@ function profilesForSector(profiles: QEProfile[], otxSector: string): QEProfile[
 }
 
 // ── Cleanup contaminated records ──────────────────────────────────────────────
-// Deletes all OTX-sourced leads/raw_signals/market_signals that were fanned out
-// to profiles from a non-matching sector (pre-fix contamination).
+// Deletes OTX-sourced leads/raw_signals/market_signals fanned out to profiles
+// from a non-matching sector (AC4: covers all three QE target tables).
 
 async function cleanContaminatedData(profiles: QEProfile[], bizSectors: Map<string, string>): Promise<void> {
-  // For each profile, find OTX records whose source OTX business sector doesn't match
-  // Strategy: delete ALL otx-sourced records, then re-create with correct filtering.
-  // Only delete records where the profile sector is non-local (local = catches all).
   const nonLocalProfiles = profiles.filter(p => p.sector !== "local");
   if (nonLocalProfiles.length === 0) return;
 
-  // Build a set of OTX business IDs per sector so we can identify cross-sector keys.
-  // Actually simpler: for each non-local profile, fetch & check each record's originating OTX biz.
-  // Since we store the signalId in the dedup key (not the bizId), we re-query OTX tables.
+  const [{ data: signals }, { data: rawSigs }, { data: compChanges }, { data: sectorTrends }] = await Promise.all([
+    supabase.from("classified_signals").select("id, business_id"),
+    supabase.from("signals_raw").select("signal_id, business_id"),
+    supabase.from("competitor_changes").select("id, business_id"),
+    supabase.from("sector_trends").select("id, sector"),
+  ]);
 
-  // Get all classified_signals with their business_id
-  const { data: signals } = await supabase
-    .from("classified_signals")
-    .select("id, business_id");
   const signalSector = new Map<string, string>();
   for (const s of (signals ?? []) as { id: string; business_id: string }[]) {
     const sector = bizSectors.get(s.business_id);
     if (sector) signalSector.set(s.id, sector);
   }
-
-  // Get all signals_raw with their business_id
-  const { data: rawSigs } = await supabase
-    .from("signals_raw")
-    .select("signal_id, business_id");
   const rawSector = new Map<string, string>();
   for (const s of (rawSigs ?? []) as { signal_id: string; business_id: string }[]) {
     const sector = bizSectors.get(s.business_id);
     if (sector) rawSector.set(s.signal_id, sector);
   }
+  const compSector = new Map<string, string>();
+  for (const c of (compChanges ?? []) as { id: string; business_id: string }[]) {
+    const sector = bizSectors.get(c.business_id);
+    if (sector) compSector.set(c.id, sector);
+  }
+  const trendSector = new Map<string, string>();
+  for (const t of (sectorTrends ?? []) as { id: string; sector: string }[]) {
+    trendSector.set(t.id, t.sector);
+  }
 
   for (const profile of nonLocalProfiles) {
     // --- Clean leads ---
     const { data: leads } = await supabase
-      .from("leads")
-      .select("id, source_description")
-      .eq("linked_business", profile.id)
-      .eq("source_origin", "otx_engine")
+      .from("leads").select("id, source_description")
+      .eq("linked_business", profile.id).eq("source_origin", "otx_engine")
       .like("source_description", "otx_sig:%");
-
     const badLeadIds: string[] = [];
     for (const l of (leads ?? []) as { id: string; source_description: string }[]) {
-      // key format: otx_sig:{signalId}:{bpId}
-      const signalId = l.source_description.split(":")[1];
-      const srcSector = signalSector.get(signalId);
+      const srcSector = signalSector.get(l.source_description.split(":")[1]);
       if (srcSector && srcSector !== profile.sector) badLeadIds.push(l.id);
     }
     if (badLeadIds.length > 0) {
@@ -117,22 +112,38 @@ async function cleanContaminatedData(profiles: QEProfile[], bizSectors: Map<stri
 
     // --- Clean raw_signals ---
     const { data: rawSignals } = await supabase
-      .from("raw_signals")
-      .select("id, checksum_hash")
-      .eq("linked_business", profile.id)
-      .eq("source_origin", "otx_engine")
+      .from("raw_signals").select("id, checksum_hash")
+      .eq("linked_business", profile.id).eq("source_origin", "otx_engine")
       .like("checksum_hash", "otx:%");
-
     const badRawIds: string[] = [];
     for (const r of (rawSignals ?? []) as { id: string; checksum_hash: string }[]) {
-      // key format: otx:{signalId}:{bpId}
-      const signalId = r.checksum_hash.split(":")[1];
-      const srcSector = rawSector.get(signalId);
+      const srcSector = rawSector.get(r.checksum_hash.split(":")[1]);
       if (srcSector && srcSector !== profile.sector) badRawIds.push(r.id);
     }
     if (badRawIds.length > 0) {
       await supabase.from("raw_signals").delete().in("id", badRawIds);
       console.log(`[Cleanup] Removed ${badRawIds.length} contaminated raw_signals from profile ${profile.id}`);
+    }
+
+    // --- Clean market_signals (trends + comp_changes; event_opps fan to all so never contaminated) ---
+    const { data: mktSignals } = await supabase
+      .from("market_signals").select("id, source_description")
+      .eq("linked_business", profile.id)
+      .or("source_description.like.otx_trend:%,source_description.like.otx_comp:%");
+    const badMktIds: string[] = [];
+    for (const m of (mktSignals ?? []) as { id: string; source_description: string }[]) {
+      const desc = m.source_description;
+      if (desc.startsWith("otx_trend:")) {
+        const srcSector = trendSector.get(desc.split(":")[1]);
+        if (srcSector && srcSector !== profile.sector) badMktIds.push(m.id);
+      } else if (desc.startsWith("otx_comp:")) {
+        const srcSector = compSector.get(desc.split(":")[1]);
+        if (srcSector && srcSector !== profile.sector) badMktIds.push(m.id);
+      }
+    }
+    if (badMktIds.length > 0) {
+      await supabase.from("market_signals").delete().in("id", badMktIds);
+      console.log(`[Cleanup] Removed ${badMktIds.length} contaminated market_signals from profile ${profile.id}`);
     }
   }
 }
@@ -202,8 +213,8 @@ async function syncLeads(profiles: QEProfile[], bizSectors: Map<string, string>)
 // Dedup: checksum_hash = "otx:{signalId}:{bpId}"
 // Only fans out to QE profiles whose sector matches the OTX source business.
 
-async function syncRawSignals(profiles: QEProfile[], bizSectors: Map<string, string>): Promise<number> {
-  if (profiles.length === 0) return 0;
+async function syncRawSignals(profiles: QEProfile[], bizSectors: Map<string, string>): Promise<{ count: number; lagMs: number | null }> {
+  if (profiles.length === 0) return { count: 0, lagMs: null };
 
   const { data: existing } = await supabase
     .from("raw_signals")
@@ -221,7 +232,11 @@ async function syncRawSignals(profiles: QEProfile[], bizSectors: Map<string, str
     .limit(50);
 
   if (error) throw error;
-  if (!data?.length) return 0;
+  if (!data?.length) return { count: 0, lagMs: null };
+
+  // AC5: lag from oldest fetched signals_raw row to now
+  const oldestTs = Math.min(...(data as { detected_at_utc: string }[]).map(r => Date.parse(r.detected_at_utc)));
+  const lagMs = Number.isFinite(oldestTs) ? Date.now() - oldestTs : null;
 
   const typeMap: Record<string, string> = {
     social: "social_mention", forum: "social_mention", trend: "social_trend",
@@ -249,10 +264,10 @@ async function syncRawSignals(profiles: QEProfile[], bizSectors: Map<string, str
     }
   }
 
-  if (rawSignals.length === 0) return 0;
+  if (rawSignals.length === 0) return { count: 0, lagMs };
   const { error: ie } = await supabase.from("raw_signals").insert(rawSignals);
   if (ie) throw ie;
-  return rawSignals.length;
+  return { count: rawSignals.length, lagMs };
 }
 
 // ── 3. sector_trends → market_signals ────────────────────────────────────────
@@ -552,10 +567,11 @@ async function run(): Promise<void> {
 
   const results: Record<string, number> = {};
   const errors: string[] = [];
+  let rawSignalLagMs: number | null = null;
 
   const tasks: [string, () => Promise<number>][] = [
     ["leads",        () => syncLeads(profiles, bizSectors)],
-    ["raw_signals",  () => syncRawSignals(profiles, bizSectors)],
+    ["raw_signals",  async () => { const r = await syncRawSignals(profiles, bizSectors); rawSignalLagMs = r.lagMs; return r.count; }],
     ["trends",       () => syncSectorTrends(profiles)],
     ["comp_changes", () => syncCompetitorChanges(profiles, bizSectors)],
     ["event_opps",   () => syncEventOpportunities(profiles)],
@@ -570,6 +586,11 @@ async function run(): Promise<void> {
         errors.push(`${name}: ${e.message}`);
         console.error(`[${AGENT_NAME}] ${name} failed:`, e.message);
       });
+  }
+
+  // AC5: log end-to-end lag from signals_raw insert to visible RawSignal
+  if (rawSignalLagMs !== null) {
+    console.log(`[${AGENT_NAME}] signals_raw→RawSignal lag=${Math.round(rawSignalLagMs / 1000)}s (limit=600s)`);
   }
 
   const totalSynced = Object.values(results).reduce((a, b) => a + b, 0);

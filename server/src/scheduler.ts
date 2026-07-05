@@ -73,6 +73,7 @@ import { sectorBenchmark } from './routes/functions/sectorBenchmark';
 import { intentClassification } from './routes/functions/intentClassification';
 import { collectOTXSignals } from './routes/functions/collectOTXSignals';
 import { collectOTXCompetitorChanges } from './routes/functions/collectOTXCompetitorChanges';
+import { runOTXSyncBridge } from './routes/functions/runOTXSyncBridge';
 
 const logger = createLogger('Scheduler');
 
@@ -299,6 +300,15 @@ export function startScheduler() {
     cron.schedule('0 */6 * * *', () => {
       collectOTXCompetitorChanges()
         .catch(err => logger.error('collectOTXCompetitorChanges failed', { error: err.message }));
+    });
+  }
+
+  // ── Every 10 min: OTX sync bridge — OTX tables → QE Prisma entities (KAN-46) ─
+  // Kill switch: set OTX_SYNC_BRIDGE_DISABLED=true in Render env to disable without redeploy.
+  if (process.env.OTX_SYNC_BRIDGE_DISABLED !== 'true') {
+    cron.schedule('*/10 * * * *', () => {
+      runOTXSyncBridge()
+        .catch(err => logger.error('runOTXSyncBridge failed', { error: err.message }));
     });
   }
 
