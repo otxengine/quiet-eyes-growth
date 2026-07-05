@@ -9,9 +9,11 @@ CREATE TABLE IF NOT EXISTS events_raw (
   geo              TEXT,
   source_url       TEXT          NOT NULL,
   detected_at_utc  TIMESTAMPTZ   NOT NULL DEFAULT now(),
-  confidence_score NUMERIC(3,2)  NOT NULL CHECK (confidence_score BETWEEN 0 AND 1),
-  UNIQUE (event_name, event_date, COALESCE(geo, ''))
+  confidence_score NUMERIC(3,2)  NOT NULL CHECK (confidence_score BETWEEN 0 AND 1)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_events_raw_dedup
+  ON events_raw (event_name, event_date, COALESCE(geo, ''));
 
 CREATE INDEX IF NOT EXISTS idx_events_raw_date
   ON events_raw (event_date);
