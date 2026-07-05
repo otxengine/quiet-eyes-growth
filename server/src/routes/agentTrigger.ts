@@ -36,6 +36,7 @@ import {
   runReputationWarRoom,
 } from './functions/layer7Agents';
 import { collectOTXCompetitorChanges } from './functions/collectOTXCompetitorChanges';
+import { runOTXSyncBridge } from './functions/runOTXSyncBridge';
 
 // Rate limit: 10 minutes per business+agent pair (in-memory)
 const lastRun: Map<string, number> = new Map();
@@ -124,6 +125,21 @@ const AGENT_HANDLERS: Record<string, (req: Request, res: Response) => any> = {
 };
 
 const router = Router();
+
+// POST /api/agents/trigger/otx-sync-bridge
+// Global OTX sync — no businessProfileId needed, fans out to all QE profiles.
+router.post('/otx-sync-bridge', async (_req: Request, res: Response) => {
+  const key = 'global:runOTXSyncBridge';
+  const now = Date.now();
+  if ((now - (lastRun.get(key) ?? 0)) < COOLDOWN_MS) {
+    return res.status(429).json({ error: 'Rate limited — wait 10 minutes between manual triggers' });
+  }
+  lastRun.set(key, now);
+  runOTXSyncBridge().catch(err =>
+    console.error('[agentTrigger] runOTXSyncBridge failed:', err.message)
+  );
+  return res.json({ ok: true, message: 'OTXSyncBridge started — check /api/agents/status for heartbeat' });
+});
 
 // POST /api/agents/trigger/otx-competitor-snapshot
 // Global OTX agent — no businessProfileId needed, runs across all businesses.
