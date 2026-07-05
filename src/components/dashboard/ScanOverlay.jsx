@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Check, Loader2, X, Zap } from 'lucide-react';
 
@@ -33,9 +33,13 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
   const totalSteps = customSteps ? customSteps.length : SCAN_LABELS.length;
 
   const [labelIdx, setLabelIdx]   = useState(0);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [completed, setCompleted] = useState({});
-  const [results, setResults]     = useState({});
+  const [, setCurrentStep] = useState(0);
+  const [, setCompleted] = useState({});
+  const [results, setResults]     = useState({
+    reviews: 0, collect: 0, social: 0, compete: 0, leads: 0,
+    tiktok_trends: 0, trends: 0, early_trends: 0, viral: 0,
+    alerts: 0, advisory: 0, predictions: 0,
+  });
   const [done, setDone]           = useState(false);
   const cancelledRef = useRef(false);
 
@@ -53,7 +57,7 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
     if (customSteps) {
       // ── Individual-step mode (backward compat for custom step lists) ──────
       const run = async () => {
-        const finalResults = {};
+        const finalResults = { reviews: 0, collect: 0, social: 0, compete: 0, leads: 0, tiktok_trends: 0, trends: 0, early_trends: 0, viral: 0, alerts: 0, advisory: 0, predictions: 0 };
         for (let i = 0; i < customSteps.length; i++) {
           if (cancelledRef.current) return;
           setCurrentStep(i);

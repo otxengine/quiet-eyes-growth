@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Request } from 'express';
 import { collectReviews } from '../routes/functions/collectReviews';
 import { prisma } from '../db';
 import { shouldSkipAgent, setLastRun } from '../lib/agentCache';

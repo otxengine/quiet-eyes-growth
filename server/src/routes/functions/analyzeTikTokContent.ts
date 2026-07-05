@@ -6,7 +6,7 @@ import { tavilySearch } from '../../lib/tavily';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { getValidTikTokToken } from '../../lib/tiktokTokenRefresh';
-import { hasSearchApiKey, searchTikTokProfileVideos } from '../../lib/searchapi';
+import { hasSearchApiKey, searchTikTokProfileVideos, type TikTokVideo } from '../../lib/searchapi';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 const GRAPH_BASE = 'https://open-api.tiktok.com';
@@ -130,7 +130,7 @@ export async function analyzeTikTokContent(req: Request, res: Response) {
       const tkVideos = await searchTikTokProfileVideos(tiktokUsernameFromUrl).catch(() => []);
       if (tkVideos.length > 0) {
         // Normalize to expected shape
-        videos = tkVideos.map(v => ({
+        videos = tkVideos.map((v: TikTokVideo) => ({
           title:         v.title,
           view_count:    v.views,
           like_count:    v.likes,

@@ -45,7 +45,6 @@ const OTXDashboard = React.lazy(() => import('@/pages/OTXDashboard'));
 import LearningCenter from '@/pages/LearningCenter.jsx';
 import Marketing from '@/pages/Marketing.jsx';
 import CampaignCreate from '@/pages/CampaignCreate.jsx';
-import SignalDetail from '@/pages/SignalDetail.jsx';
 import TaskDetail from '@/pages/TaskDetail.jsx';
 import Insights from '@/pages/Insights.jsx';
 import InsightDetail from '@/pages/InsightDetail.jsx';
@@ -66,7 +65,7 @@ import ChatPage from '@/pages/Chat.jsx';
 import { OrganizationProvider } from '@/contexts/OrganizationContext';
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated, navigateToLogin } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated } = useAuth();
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (

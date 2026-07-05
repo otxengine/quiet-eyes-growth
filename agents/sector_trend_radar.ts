@@ -5,6 +5,7 @@
 
 import { supabase } from "./lib/supabase.ts";
 import { pingHeartbeat } from "./lib/heartbeat.ts";
+import { publishToBus } from "./orchestration/bus_publisher.ts";
 
 const AGENT_NAME = "SectorTrendRadar";
 const Z_THRESHOLD = parseFloat(Deno.env.get("Z_THRESHOLD") ?? "2.0");
@@ -237,7 +238,36 @@ async function run(): Promise<void> {
     return;
   }
 
-  const spikes = rows.filter((r) => r.spike_detected).length;
+  // Publish trend_spike to bus for each spiking sector × affected business
+  const spikeRows = rows.filter((r) => r.spike_detected);
+  if (spikeRows.length > 0) {
+    const { data: businesses } = await supabase
+      .from("businesses")
+      .select("id, sector, geo_city");
+    const bizList = (businesses ?? []) as Array<{ id: string; sector: string; geo_city: string }>;
+    await Promise.all(
+      spikeRows.flatMap((spike) =>
+        bizList
+          .filter((b) => b.sector === spike.sector && (spike.geo === null || b.geo_city === spike.geo))
+          .map((b) => publishToBus(supabase, {
+            business_id:    b.id,
+            sourceAgent:    AGENT_NAME,
+            sourceRecordId: crypto.randomUUID(),
+            sourceTable:    "sector_trends",
+            event_type:     "trend_spike",
+            payload: {
+              sector:           spike.sector,
+              geo:              spike.geo,
+              z_score:          spike.z_score,
+              confidence_score: spike.confidence_score,
+              source_url:       spike.source_url,
+            },
+          }))
+      ),
+    );
+  }
+
+  const spikes = spikeRows.length;
   await pingHeartbeat(AGENT_NAME, "OK", now);
   console.log(`[${AGENT_NAME}] Done. Wrote ${rows.length} trend rows (${spikes} spikes). Ping: ${now}`);
 }

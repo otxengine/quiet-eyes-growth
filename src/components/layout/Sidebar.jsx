@@ -4,9 +4,8 @@ import { base44 } from '@/api/base44Client';
 import {
   ChevronLeft, ChevronRight, LogOut,
   ShieldAlert, Sparkles, Bot, Building2, GitBranch, User,
-  LayoutGrid, Eye, Users, Star, CheckCircle, Heart, Settings,
-  FileBarChart, ClipboardList, Database, Plug, Crown, Calendar,
-  Megaphone, Lightbulb, Target, SearchCheck, Home, CreditCard
+  Eye, CheckCircle, Settings,
+  Calendar, Megaphone, Lightbulb, Target, Home, CreditCard
 } from 'lucide-react';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { cn } from '@/lib/utils';

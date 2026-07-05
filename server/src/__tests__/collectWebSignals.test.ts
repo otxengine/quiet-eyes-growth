@@ -1,8 +1,8 @@
-import { Request, Response } from 'express';
+import { Request } from 'express';
 import { collectWebSignals } from '../routes/functions/collectWebSignals';
 import { prisma } from '../db';
 import { tavilySearch, isTavilyRateLimited } from '../lib/tavily';
-import { shouldSkipAgent, setLastRun } from '../lib/agentCache';
+import { shouldSkipAgent } from '../lib/agentCache';
 import { buildSearchQueries } from '../lib/businessProfile';
 import { buildKeywordQueries, buildUrlQueries } from '../lib/dataSources';
 import { getAgentMission } from '../lib/missionPlanner';

@@ -74,14 +74,14 @@ Return ONLY valid JSON. ALL string values must be in Hebrew. {"results":[{"topic
 
 const SOURCE_QUERIES: Record<string, (name: string, city: string) => string> = {
   facebook:    (n, c) => `"${n}" ביקורות OR reviews site:facebook.com ${c}`,
-  instagram:   (n, c) => `"${n}" comments OR תגובות site:instagram.com`,
-  tripadvisor: (n, c) => `"${n}" site:tripadvisor.com OR site:tripadvisor.co.il`,
+  instagram:   (n, _c) => `"${n}" comments OR תגובות site:instagram.com`,
+  tripadvisor: (n, _c) => `"${n}" site:tripadvisor.com OR site:tripadvisor.co.il`,
   waze:        (n, c) => `"${n}" site:waze.com ${c}`,
-  tiktok:      (n, c) => `"${n}" site:tiktok.com`,
-  wolt:        (n, c) => `"${n}" ביקורות site:wolt.com`,
+  tiktok:      (n, _c) => `"${n}" site:tiktok.com`,
+  wolt:        (n, _c) => `"${n}" ביקורות site:wolt.com`,
   '10bis':     (n, c) => `"${n}" ביקורות site:10bis.co.il OR "${n}" ${c} 10bis`,
-  easy:        (n, c) => `"${n}" ביקורות OR חוות דעת site:easy.co.il`,
-  booking:     (n, c) => `"${n}" reviews site:booking.com OR site:booking.co.il`,
+  easy:        (n, _c) => `"${n}" ביקורות OR חוות דעת site:easy.co.il`,
+  booking:     (n, _c) => `"${n}" reviews site:booking.com OR site:booking.co.il`,
   forums:      (n, c) => `"${n}" חוות דעת OR ביקורות OR המלצה site:tapuz.co.il OR site:zap.co.il OR "${n}" פורום ${c}`,
 };
 const SOURCE_PLATFORM_LABELS: Record<string, string> = {

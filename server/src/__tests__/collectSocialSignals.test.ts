@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Request } from 'express';
 import { collectSocialSignals } from '../routes/functions/collectSocialSignals';
 import { prisma } from '../db';
 import { tavilySearch, isTavilyRateLimited } from '../lib/tavily';

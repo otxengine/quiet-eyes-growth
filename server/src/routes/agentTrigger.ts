@@ -37,6 +37,7 @@ import {
 } from './functions/layer7Agents';
 import { collectOTXCompetitorChanges } from './functions/collectOTXCompetitorChanges';
 import { runOTXSyncBridge } from './functions/runOTXSyncBridge';
+import { runSectorTrendRadar } from './functions/runSectorTrendRadar';
 
 // Rate limit: 10 minutes per business+agent pair (in-memory)
 const lastRun: Map<string, number> = new Map();
@@ -139,6 +140,21 @@ router.post('/otx-sync-bridge', async (_req: Request, res: Response) => {
     console.error('[agentTrigger] runOTXSyncBridge failed:', err.message)
   );
   return res.json({ ok: true, message: 'OTXSyncBridge started — check /api/agents/status for heartbeat' });
+});
+
+// POST /api/agents/trigger/otx-sector-trend-radar
+// Global OTX agent — reads signals_raw, writes sector_trends + agent_data_bus.
+router.post('/otx-sector-trend-radar', async (_req: Request, res: Response) => {
+  const key = 'global:runSectorTrendRadar';
+  const now = Date.now();
+  if ((now - (lastRun.get(key) ?? 0)) < COOLDOWN_MS) {
+    return res.status(429).json({ error: 'Rate limited — wait 10 minutes between manual triggers' });
+  }
+  lastRun.set(key, now);
+  runSectorTrendRadar().catch(err =>
+    console.error('[agentTrigger] runSectorTrendRadar failed:', err.message)
+  );
+  return res.json({ ok: true, message: 'SectorTrendRadar started — check /api/agents/status for heartbeat' });
 });
 
 // POST /api/agents/trigger/otx-competitor-snapshot

@@ -74,6 +74,7 @@ import { intentClassification } from './routes/functions/intentClassification';
 import { collectOTXSignals } from './routes/functions/collectOTXSignals';
 import { collectOTXCompetitorChanges } from './routes/functions/collectOTXCompetitorChanges';
 import { runOTXSyncBridge } from './routes/functions/runOTXSyncBridge';
+import { runSectorTrendRadar } from './routes/functions/runSectorTrendRadar';
 import { runOTXIntentClassification } from './routes/functions/runOTXIntentClassification';
 
 const logger = createLogger('Scheduler');
@@ -301,6 +302,15 @@ export function startScheduler() {
     cron.schedule('0 */6 * * *', () => {
       collectOTXCompetitorChanges()
         .catch(err => logger.error('collectOTXCompetitorChanges failed', { error: err.message }));
+    });
+  }
+
+  // ── Every hour: OTX sector trend radar — z-score spike detection (KAN-48) ─────
+  // Kill switch: set OTX_SECTOR_TREND_DISABLED=true in Render env to disable without redeploy.
+  if (process.env.OTX_SECTOR_TREND_DISABLED !== 'true') {
+    cron.schedule('0 * * * *', () => {
+      runSectorTrendRadar()
+        .catch(err => logger.error('runSectorTrendRadar failed', { error: err.message }));
     });
   }
 

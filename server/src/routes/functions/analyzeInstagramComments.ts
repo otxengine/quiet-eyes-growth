@@ -5,7 +5,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { tavilySearch } from '../../lib/tavily';
-import { hasSearchApiKey, searchInstagramPosts } from '../../lib/searchapi';
+import { hasSearchApiKey, searchInstagramPosts, type InstagramPost } from '../../lib/searchapi';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
@@ -196,7 +196,7 @@ export async function analyzeInstagramComments(req: Request, res: Response) {
       // SearchAPI: get recent post captions
       if (hasSearchApiKey() && username) {
         const posts = await searchInstagramPosts(username).catch(() => []);
-        texts.push(...posts.map(p => p.caption).filter(Boolean));
+        texts.push(...posts.map((p: InstagramPost) => p.caption).filter(Boolean));
       }
 
       // Tavily: web mentions and reviews about this business on Instagram
