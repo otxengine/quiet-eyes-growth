@@ -227,6 +227,11 @@ async function run(): Promise<void> {
   console.log(`[${AGENT_NAME}] Done. Inserted ${insertedTotal} event opportunities. Ping: ${now}`);
 }
 
+// deno-lint-ignore no-explicit-any
+export async function runEventImpactEngine(_supabase?: unknown, _context?: any): Promise<void> {
+  await run();
+}
+
 if (import.meta.main) {
   await run();
 }

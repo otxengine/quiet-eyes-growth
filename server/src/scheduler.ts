@@ -74,6 +74,7 @@ import { intentClassification } from './routes/functions/intentClassification';
 import { collectOTXSignals } from './routes/functions/collectOTXSignals';
 import { collectOTXCompetitorChanges } from './routes/functions/collectOTXCompetitorChanges';
 import { runOTXSyncBridge } from './routes/functions/runOTXSyncBridge';
+import { runOTXIntentClassification } from './routes/functions/runOTXIntentClassification';
 
 const logger = createLogger('Scheduler');
 
@@ -309,6 +310,15 @@ export function startScheduler() {
     cron.schedule('*/10 * * * *', () => {
       runOTXSyncBridge()
         .catch(err => logger.error('runOTXSyncBridge failed', { error: err.message }));
+    });
+  }
+
+  // ── Every 5 min: OTX IntentClassification polling fallback (KAN-47 AC1) ──────
+  // Kill switch: set OTX_INTENT_CLASSIFICATION_DISABLED=true in Render env to disable.
+  if (process.env.OTX_INTENT_CLASSIFICATION_DISABLED !== 'true') {
+    cron.schedule('*/5 * * * *', () => {
+      runOTXIntentClassification()
+        .catch(err => logger.error('runOTXIntentClassification failed', { error: err.message }));
     });
   }
 
