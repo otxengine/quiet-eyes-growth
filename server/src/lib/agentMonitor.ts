@@ -77,8 +77,8 @@ export async function getAgentStatusSummary(): Promise<{
   const agents = await getAgentHealth();
   return {
     total:  agents.length,
-    ok:     agents.filter(a => a.status === 'ok' && !a.is_stale).length,
-    failed: agents.filter(a => a.status === 'failed').length,
+    ok:     agents.filter(a => a.status.toLowerCase() === 'ok' && !a.is_stale).length,
+    failed: agents.filter(a => ['failed', 'error', 'delayed'].includes(a.status.toLowerCase())).length,
     stale:  agents.filter(a => a.is_stale).length,
     agents,
   };

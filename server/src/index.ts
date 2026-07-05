@@ -164,7 +164,7 @@ app.use('/api/stripe', stripeRouter);
 
 app.get('/api/health', async (_req, res) => {
   const summary = await getAgentStatusSummary();
-  res.json({ ok: summary.failed === 0 && summary.stale === 0, ...summary });
+  res.json({ ok: summary.failed === 0 && summary.stale === 0, total: summary.total, failed: summary.failed, stale: summary.stale, agents: summary.agents });
 });
 
 
