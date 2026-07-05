@@ -35,6 +35,7 @@ import {
   runExpansionScout,
   runReputationWarRoom,
 } from './functions/layer7Agents';
+import { collectOTXCompetitorChanges } from './functions/collectOTXCompetitorChanges';
 
 // Rate limit: 10 minutes per business+agent pair (in-memory)
 const lastRun: Map<string, number> = new Map();
@@ -123,6 +124,22 @@ const AGENT_HANDLERS: Record<string, (req: Request, res: Response) => any> = {
 };
 
 const router = Router();
+
+// POST /api/agents/trigger/otx-competitor-snapshot
+// Global OTX agent — no businessProfileId needed, runs across all businesses.
+router.post('/otx-competitor-snapshot', async (_req: Request, res: Response) => {
+  const key = 'global:collectOTXCompetitorChanges';
+  const now = Date.now();
+  if ((now - (lastRun.get(key) ?? 0)) < COOLDOWN_MS) {
+    return res.status(429).json({ error: 'Rate limited — wait 10 minutes between manual triggers' });
+  }
+  lastRun.set(key, now);
+  // Fire-and-forget; respond immediately so the HTTP request doesn't time out
+  collectOTXCompetitorChanges().catch(err =>
+    console.error('[agentTrigger] collectOTXCompetitorChanges failed:', err.message)
+  );
+  return res.json({ ok: true, message: 'CompetitorSnapshot started — check /api/agents/status for heartbeat' });
+});
 
 // POST /api/agents/trigger
 // Body: { agentName: string, businessProfileId: string }
