@@ -5,8 +5,7 @@ const router = Router();
 
 // GET /api/agents/status — Returns latest heartbeat per OTX agent + bus stats
 router.get('/', async (_req, res) => {
-  try {
-    const [heartbeats, busStats, recentEvents] = await Promise.all([
+  const [heartbeats, busStats, recentEvents] = await Promise.allSettled([
       prisma.$queryRaw<Array<{
         agent_name: string;
         last_ping_utc: string;
@@ -31,10 +30,10 @@ router.get('/', async (_req, res) => {
         last_event_at: string | null;
       }>>`
         SELECT
-          COUNT(*)::int                                             AS total,
-          COUNT(*) FILTER (WHERE status = 'pending')::int          AS pending,
-          COUNT(*) FILTER (WHERE status = 'processed')::int        AS processed,
-          MAX(created_at)                                           AS last_event_at
+          COUNT(*)::int                                        AS total,
+          COUNT(*) FILTER (WHERE NOT processed)::int          AS pending,
+          COUNT(*) FILTER (WHERE processed)::int              AS processed,
+          MAX(created_at)                                      AS last_event_at
         FROM agent_data_bus
         WHERE created_at > NOW() - INTERVAL '1 hour'
       `,
@@ -44,21 +43,16 @@ router.get('/', async (_req, res) => {
         ORDER BY created_at DESC
         LIMIT 10
       `,
-    ]);
+  ]);
 
-    res.json({
-      heartbeats,
-      busStats: (busStats as any[])[0] ?? { total: 0, pending: 0, processed: 0, last_event_at: null },
-      recentEvents,
-    });
-  } catch (_err) {
-    // Tables may not exist yet — return empty payload instead of 500
-    res.json({
-      heartbeats: [],
-      busStats: { total: 0, pending: 0, processed: 0, last_event_at: null },
-      recentEvents: [],
-    });
-  }
+  const hb = heartbeats.status === 'fulfilled' ? heartbeats.value : [];
+  const bs = busStats.status === 'fulfilled' ? busStats.value[0] : null;
+  const re = recentEvents.status === 'fulfilled' ? recentEvents.value : [];
+  res.json({
+    heartbeats: hb,
+    busStats: bs ?? { total: 0, pending: 0, processed: 0, last_event_at: null },
+    recentEvents: re,
+  });
 });
 
 export default router;
