@@ -9,13 +9,13 @@ export async function pingHeartbeat(
   lastIngestionUtc?: string,
   errorMessage?: string,
 ): Promise<void> {
-  const { error } = await supabase.from("agent_heartbeat").insert({
+  const { error } = await supabase.from("agent_heartbeat").upsert({
     agent_name: agentName,
     last_ping_utc: new Date().toISOString(),
     last_ingestion_utc: lastIngestionUtc ?? null,
     status,
     error_message: errorMessage ?? null,
-  });
+  }, { onConflict: "agent_name" });
   if (error) {
     console.error(`[heartbeat] Failed to ping for ${agentName}:`, error.message);
   }

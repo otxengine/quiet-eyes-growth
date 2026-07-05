@@ -46,6 +46,7 @@ registerAllHandlers();
 
 import { startScheduler } from './scheduler';
 import { refreshExpiringGoogleTokens } from './lib/googleTokenRefresh';
+import { getAgentStatusSummary } from './lib/agentMonitor';
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -161,7 +162,10 @@ app.use('/api/orgs', organizationsRouter);
 app.use('/api/agency', agencyRouter);
 app.use('/api/stripe', stripeRouter);
 
-app.get('/api/health', (_req, res) => res.json({ ok: true }));
+app.get('/api/health', async (_req, res) => {
+  const summary = await getAgentStatusSummary();
+  res.json({ ok: summary.failed === 0 && summary.stale === 0, ...summary });
+});
 
 
 // External cron trigger — POST /api/cron/run?secret=XXX

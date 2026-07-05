@@ -588,18 +588,38 @@ async function run(): Promise<void> {
       });
   }
 
-  // AC5: log end-to-end lag from signals_raw insert to visible RawSignal
+  // AC3b + AC5: flag lag > 60s as DELAYED
+  const lagExceeded = rawSignalLagMs !== null && rawSignalLagMs > 60_000;
   if (rawSignalLagMs !== null) {
-    console.log(`[${AGENT_NAME}] signals_raw→RawSignal lag=${Math.round(rawSignalLagMs / 1000)}s (limit=600s)`);
+    console.log(`[${AGENT_NAME}] signals_raw→RawSignal lag=${Math.round(rawSignalLagMs / 1000)}s (limit=60s)${lagExceeded ? " ⚠ EXCEEDED" : ""}`);
   }
+
+  // AC5: duplicate-vs-Express rate — OTX-sourced leads vs total
+  const [otxLeadsRes, totalLeadsRes] = await Promise.all([
+    supabase.from("leads").select("id", { count: "exact", head: true }).eq("source_origin", "otx_engine"),
+    supabase.from("leads").select("id", { count: "exact", head: true }),
+  ]);
+  const otxCount = otxLeadsRes.count ?? 0;
+  const totalCount = totalLeadsRes.count ?? 0;
+  const dupRate = totalCount > 0 ? `${((otxCount / totalCount) * 100).toFixed(1)}%` : "n/a";
+  console.log(`[${AGENT_NAME}] leads: ${otxCount} OTX / ${totalCount} total (${dupRate} otx-vs-express rate)`);
 
   const totalSynced = Object.values(results).reduce((a, b) => a + b, 0);
   const now = new Date().toISOString();
-  await pingHeartbeat(AGENT_NAME, errors.length > 0 ? "DELAYED" : "OK", now,
-    errors.length > 0 ? errors.join(" | ") : undefined);
+  const hasError = errors.length > 0 || lagExceeded;
+  const errorMsg = [
+    ...errors,
+    ...(lagExceeded ? [`lag ${Math.round(rawSignalLagMs! / 1000)}s > 60s`] : []),
+  ].join(" | ") || undefined;
+  await pingHeartbeat(AGENT_NAME, hasError ? "DELAYED" : "OK", now, errorMsg);
 
   console.log(`[${AGENT_NAME}] Done. ${totalSynced} records synced:`, results,
     errors.length ? `\nErrors: ${errors.join(", ")}` : "");
+}
+
+// deno-lint-ignore no-explicit-any
+export async function runOtxSyncBridge(_supabase?: unknown, _context?: any): Promise<void> {
+  await run();
 }
 
 if (import.meta.main) {

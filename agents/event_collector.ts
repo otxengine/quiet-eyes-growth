@@ -319,6 +319,11 @@ async function run(): Promise<void> {
   console.log(`[${AGENT_NAME}] Done. Upserted ${collected.length} events. elapsed=${Math.round(elapsed / 1000)}s status=${status}`);
 }
 
+// deno-lint-ignore no-explicit-any
+export async function runEventCollector(_supabase?: unknown, _context?: any): Promise<void> {
+  await run();
+}
+
 if (import.meta.main) {
   await run();
 }

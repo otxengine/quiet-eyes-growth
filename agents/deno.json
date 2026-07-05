@@ -6,6 +6,7 @@
     "noUnusedLocals": true
   },
   "tasks": {
+    "main":                    "deno run --allow-env --allow-net --allow-read main.ts",
     "signal-collector":        "deno run --allow-env --allow-net signal_collector.ts",
     "event-collector":         "deno run --allow-env --allow-net event_collector.ts",
     "competitor-snapshot":     "deno run --allow-env --allow-net competitor_snapshot.ts",

@@ -6,7 +6,21 @@ import { supabase } from "./lib/supabase.ts";
 import { pingHeartbeat } from "./lib/heartbeat.ts";
 
 const AGENT_NAME = "SystemHealthMonitor";
-const DELAY_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+
+// ponytail: hardcoded from config/schedules.ts cadences + ~20% buffer; update if schedules change
+const AGENT_DELAY_THRESHOLDS_MS: Record<string, number> = {
+  SignalCollector:      36 * 60 * 1000,
+  EventCollector:       72 * 60 * 1000,
+  SectorTrendRadar:     72 * 60 * 1000,
+  CompetitorSnapshot:   7 * 60 * 60 * 1000,
+  ProfileIntelligence:  26 * 60 * 60 * 1000,
+  MarketMemoryEngine:   26 * 60 * 60 * 1000,
+  OTXSyncBridge:        15 * 60 * 1000,
+  IntentClassification: 12 * 60 * 1000,
+  EventImpactEngine:    26 * 60 * 60 * 1000,
+  ActionScoringService: 60 * 60 * 1000,
+};
+const DEFAULT_DELAY_MS = 15 * 60 * 1000;
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
@@ -96,7 +110,8 @@ async function checkAgentHealth(): Promise<HealthResponse> {
     const msSinceLastPing = now.getTime() - lastPing;
 
     let status: AgentHealthStatus["status"] = row.status;
-    if (msSinceLastPing > DELAY_THRESHOLD_MS && status === "OK") {
+    const threshold = AGENT_DELAY_THRESHOLDS_MS[name] ?? DEFAULT_DELAY_MS;
+    if (msSinceLastPing > threshold && status === "OK") {
       status = "DELAYED";
     }
 
@@ -126,11 +141,26 @@ async function checkAgentHealth(): Promise<HealthResponse> {
 async function serveHealth(port: number): Promise<void> {
   const healthData = await checkAgentHealth();
 
-  // Log any degraded agents
-  for (const agent of healthData.agents) {
-    if (agent.status !== "OK") {
-      console.warn(`[${AGENT_NAME}] ${agent.name}: ${agent.status} — ${agent.error_message ?? "no error"}`);
-    }
+  const degraded = healthData.agents.filter((a) => a.status !== "OK");
+  for (const agent of degraded) {
+    console.warn(`[${AGENT_NAME}] ${agent.name}: ${agent.status} — ${agent.error_message ?? "no error"}`);
+  }
+
+  // Durable alert: write to automation_logs so degraded agents are queryable
+  if (degraded.length > 0) {
+    const now = new Date().toISOString();
+    await supabase.from("automation_logs").insert(
+      degraded.map((a) => ({
+        id: crypto.randomUUID(),
+        automation_name: `SystemHealthMonitor:${a.name}`,
+        linked_business: "platform",
+        start_time: now,
+        end_time: now,
+        status: a.status === "DOWN" ? "error" : "warning",
+        items_processed: 0,
+        error_message: `${a.name} is ${a.status}${a.error_message ? ": " + a.error_message : ""}`,
+      })),
+    );
   }
 
   await pingHeartbeat(
@@ -169,10 +199,25 @@ async function run(): Promise<void> {
     const health = await checkAgentHealth();
     console.log(`[${AGENT_NAME}] Overall: ${health.overall} (${health.checked_at})`);
 
-    for (const agent of health.agents) {
-      if (agent.status !== "OK") {
-        console.warn(`  ⚠ ${agent.name}: ${agent.status}`);
-      }
+    const degradedAgents = health.agents.filter((a) => a.status !== "OK");
+    for (const agent of degradedAgents) {
+      console.warn(`  ⚠ ${agent.name}: ${agent.status}`);
+    }
+
+    if (degradedAgents.length > 0) {
+      const ts = new Date().toISOString();
+      await supabase.from("automation_logs").insert(
+        degradedAgents.map((a) => ({
+          id: crypto.randomUUID(),
+          automation_name: `SystemHealthMonitor:${a.name}`,
+          linked_business: "platform",
+          start_time: ts,
+          end_time: ts,
+          status: a.status === "DOWN" ? "error" : "warning",
+          items_processed: 0,
+          error_message: `${a.name} is ${a.status}${a.error_message ? ": " + a.error_message : ""}`,
+        })),
+      );
     }
 
     await pingHeartbeat(
@@ -181,6 +226,10 @@ async function run(): Promise<void> {
       new Date().toISOString(),
     );
   }, 5 * 60 * 1000);
+}
+
+export async function runSystemHealthMonitor(): Promise<void> {
+  await run();
 }
 
 if (import.meta.main) {

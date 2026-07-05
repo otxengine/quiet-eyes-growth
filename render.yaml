@@ -73,6 +73,35 @@ services:
       - key: FAL_API_KEY
         sync: false
 
+  # ── Deno Agents (cron-scheduled via Deno.cron, driven by config/schedules.ts)
+  - type: worker
+    name: quiet-eyes-deno-agents
+    runtime: node
+    rootDir: .
+    buildCommand: curl -fsSL https://deno.land/install.sh | sh
+    startCommand: $HOME/.deno/bin/deno run --allow-env --allow-net --allow-read agents/main.ts
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SERPAPI_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: APIFY_API_KEY
+        sync: false
+      - key: GOOGLE_PLACES_API_KEY
+        sync: false
+      - key: HEALTH_PORT
+        value: "8080"
+      - key: Z_THRESHOLD
+        value: "2.0"
+      - key: INTENT_THRESHOLD
+        value: "0.65"
+      - key: ACTION_THRESHOLD
+        value: "0.60"
+
   # ── Frontend (Vite static site) ─────────────────────────────────────────────
   - type: web
     name: quiet-eyes-frontend

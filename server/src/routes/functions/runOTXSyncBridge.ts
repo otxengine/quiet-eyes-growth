@@ -18,7 +18,7 @@ const CATEGORY_TO_SECTOR: Record<string, string> = {
   'מספרה': 'beauty', 'מכון יופי': 'beauty', 'אופטיקה': 'beauty',
 };
 
-function categoryToSector(cat: string): string { return CATEGORY_TO_SECTOR[cat] ?? 'local'; }
+export function categoryToSector(cat: string): string { return CATEGORY_TO_SECTOR[cat] ?? 'local'; }
 
 function profilesForSector(profiles: QEProfile[], otxSector: string): QEProfile[] {
   return profiles.filter(p => p.sector === otxSector || p.sector === 'local');
@@ -39,7 +39,7 @@ async function fetchOTXBusinessSectors(s: Supa): Promise<Map<string, string>> {
 }
 
 // AC4: cleans leads, raw_signals, AND market_signals (trends + comp_changes)
-async function cleanContaminatedData(s: Supa, profiles: QEProfile[], bizSectors: Map<string, string>): Promise<void> {
+export async function cleanContaminatedData(s: Supa, profiles: QEProfile[], bizSectors: Map<string, string>): Promise<void> {
   const nonLocal = profiles.filter(p => p.sector !== 'local');
   if (nonLocal.length === 0) return;
 
