@@ -72,6 +72,7 @@ import { microMomentDetector } from './routes/functions/microMomentDetector';
 import { sectorBenchmark } from './routes/functions/sectorBenchmark';
 import { intentClassification } from './routes/functions/intentClassification';
 import { collectOTXSignals } from './routes/functions/collectOTXSignals';
+import { collectOTXCompetitorChanges } from './routes/functions/collectOTXCompetitorChanges';
 
 const logger = createLogger('Scheduler');
 
@@ -291,6 +292,15 @@ export function startScheduler() {
   cron.schedule('0 4 * * *', () => {
     runAgentForAll('DiffCompetitorSnapshot', diffCompetitorSnapshot);
   });
+
+  // ── Every 6 hours: OTX competitor snapshot diff (KAN-45) ─────────────────────
+  // Kill switch: set OTX_COMPETITOR_SNAPSHOT_DISABLED=true in Render env to disable without redeploy.
+  if (process.env.OTX_COMPETITOR_SNAPSHOT_DISABLED !== 'true') {
+    cron.schedule('0 */6 * * *', () => {
+      collectOTXCompetitorChanges()
+        .catch(err => logger.error('collectOTXCompetitorChanges failed', { error: err.message }));
+    });
+  }
 
   // ── Every 30 min: OTX signal collection + semi_auto actions + token refresh ──
   cron.schedule('*/30 * * * *', () => {
