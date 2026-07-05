@@ -71,6 +71,7 @@ import { demandGapEngine } from './routes/functions/demandGapEngine';
 import { microMomentDetector } from './routes/functions/microMomentDetector';
 import { sectorBenchmark } from './routes/functions/sectorBenchmark';
 import { intentClassification } from './routes/functions/intentClassification';
+import { collectOTXSignals } from './routes/functions/collectOTXSignals';
 
 const logger = createLogger('Scheduler');
 
@@ -291,8 +292,10 @@ export function startScheduler() {
     runAgentForAll('DiffCompetitorSnapshot', diffCompetitorSnapshot);
   });
 
-  // ── Every 30 min: execute semi_auto queued actions + refresh expiring tokens ─
+  // ── Every 30 min: OTX signal collection + semi_auto actions + token refresh ──
   cron.schedule('*/30 * * * *', () => {
+    collectOTXSignals()
+      .catch(err => logger.error('collectOTXSignals failed', { error: err.message }));
     processScheduledAutoActions()
       .catch(err => logger.error('processScheduledAutoActions failed', { error: err.message }));
     refreshExpiringTikTokTokens()

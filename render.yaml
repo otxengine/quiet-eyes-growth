@@ -60,6 +60,10 @@ services:
         sync: false
       - key: SERPAPI_KEY
         sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
       - key: SEARCHAPI_API_KEY
         sync: false
       - key: EVENTBRITE_API_KEY
