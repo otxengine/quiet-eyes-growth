@@ -80,7 +80,7 @@ export const COST_PER_IMAGE = 0.04;  // DALL-E 3
 export const AGENT_COSTS = {
   collectWebSignals:           0.10,
   collectSocialSignals:        0.05,
-  runMarketIntelligence:       0.06,
+  runIntelligenceEngines:      0.06,
   runCompetitorIdentification: 0.05,
   competitorIntelAgent:        0.08,
   detectCompetitorChanges:     0.03,
@@ -106,8 +106,10 @@ export const AGENT_COSTS = {
   runFullScan:                 0.40,
 };
 
+// ponytail: alias covers AutomationLog rows written before KAN-54 rename
+const LEGACY_AGENT_NAMES = { runMarketIntelligence: 'runIntelligenceEngines' };
 export function agentCost(name) {
-  return AGENT_COSTS[name] ?? 0.02;
+  return AGENT_COSTS[name] ?? AGENT_COSTS[LEGACY_AGENT_NAMES[name]] ?? 0.02;
 }
 
 export function getLimits(plan) {

@@ -120,7 +120,7 @@ ${spBlock}
     "event_opportunity_template_he": "<תבנית להזדמנות עסקית מאירוע>"
   },
 
-  "runMarketIntelligence": {
+  "runIntelligenceEngines": {
     "market_context_he": "<הקשר שוק עדכני לסקטור זה בישראל — 2 משפטים>",
     "watch_signals_he": ["<4 אותות שוק שכדאי לנטר>"],
     "ignore_signals_he": ["<3 אותות לדלג עליהם>"]
@@ -354,6 +354,9 @@ export async function refreshMissionsIfStale(businessProfileId: string): Promise
  * Read a specific agent's mission section from the stored plan.
  * Returns null if not set yet (agents fall back to their own defaults).
  */
+// ponytail: covers agent_missions blobs written before KAN-54/56 rename
+const LEGACY_MISSION_KEYS: Record<string, string> = { runIntelligenceEngines: 'runMarketIntelligence' };
+
 export function getAgentMission<T = any>(
   profile: { agent_missions?: string | null },
   agentName: string,
@@ -361,7 +364,7 @@ export function getAgentMission<T = any>(
   if (!profile.agent_missions) return null;
   try {
     const missions = JSON.parse(profile.agent_missions);
-    return (missions[agentName] as T) || null;
+    return (missions[agentName] as T) || (missions[LEGACY_MISSION_KEYS[agentName]] as T) || null;
   } catch {
     return null;
   }

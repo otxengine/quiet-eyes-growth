@@ -1,4 +1,4 @@
-import { generateAgentMissions } from '../lib/missionPlanner';
+import { generateAgentMissions, getAgentMission } from '../lib/missionPlanner';
 import { prisma } from '../db';
 import { invokeLLM } from '../lib/llm';
 import { createLogger } from '../infra/logger';
@@ -155,6 +155,29 @@ describe('generateAgentMissions', () => {
 
     expect(result).toBeNull();
     expect(llm).not.toHaveBeenCalled();
+  });
+
+});
+
+describe('getAgentMission — backward-compat (KAN-56)', () => {
+
+  test('resolves canonical key from new missions blob', () => {
+    const profile = {
+      agent_missions: JSON.stringify({ runIntelligenceEngines: { market_context_he: 'new' } }),
+    };
+    expect(getAgentMission(profile, 'runIntelligenceEngines')).toEqual({ market_context_he: 'new' });
+  });
+
+  test('falls back to legacy key for old agent_missions blobs', () => {
+    const profile = {
+      agent_missions: JSON.stringify({ runMarketIntelligence: { market_context_he: 'old' } }),
+    };
+    expect(getAgentMission(profile, 'runIntelligenceEngines')).toEqual({ market_context_he: 'old' });
+  });
+
+  test('returns null when neither key is present', () => {
+    const profile = { agent_missions: JSON.stringify({ collectWebSignals: {} }) };
+    expect(getAgentMission(profile, 'runIntelligenceEngines')).toBeNull();
   });
 
 });

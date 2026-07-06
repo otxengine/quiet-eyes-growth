@@ -58,7 +58,7 @@ export async function detectTrends(req: Request, res: Response) {
       watch_signals_he?: string[];
       ignore_signals_he?: string[];
       market_context_he?: string;
-    }>(profile, 'runMarketIntelligence');
+    }>(profile, 'runIntelligenceEngines');
     const sp = getSectorProfile(profile);
 
     // Build search queries: mission watch_signals first, then sector-specific, then fallback

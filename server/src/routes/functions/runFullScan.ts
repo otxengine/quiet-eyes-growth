@@ -4,7 +4,8 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { collectWebSignals } from './collectWebSignals';
 import { collectSocialSignals } from './collectSocialSignals';
 import { collectReviews } from './collectReviews';
-import { runMarketIntelligence } from './synthesizeMarketInsights';
+import { synthesizeMarketInsights } from './synthesizeMarketInsights';
+import { runIntelligenceEngines } from './runIntelligenceEngines';
 import { runCompetitorIdentification } from './runCompetitorIdentification';
 import { runLeadGeneration } from './runLeadGeneration';
 import { findSocialLeads } from './findSocialLeads';
@@ -194,7 +195,8 @@ export async function runFullScan(req: Request, res: Response) {
     ['analyzeTikTokContent',        analyzeTikTokContent],
     ['collectReviews',              collectReviews],
     // ── Analysis ────────────────────────────────────────────────
-    ['runMarketIntelligence',       runMarketIntelligence],
+    ['synthesizeMarketInsights',    synthesizeMarketInsights],
+    ['runIntelligenceEngines',      runIntelligenceEngines],
     ['runCompetitorIdentification', runCompetitorIdentification],
     ['runLeadGeneration',           runLeadGeneration],
     ['findSocialLeads',             findSocialLeads],

@@ -611,7 +611,7 @@ app.listen(PORT, async () => {
     ('rule-new-review',     'new_review',       '["autoRespondToReviews","generateProactiveAlerts"]', 10, TRUE, 'New review → response + alert'),
     ('rule-hot-lead',       'hot_lead',         '["sendLeadNotification","generateProactiveAlerts"]',  10, TRUE, 'Hot lead → notify'),
     ('rule-competitor',     'competitor_change', '["runCompetitorIdentification","generateProactiveAlerts"]', 8, TRUE, 'Competitor change → re-analyse'),
-    ('rule-market-signal',  'market_signal',    '["runMarketIntelligence","generateProactiveAlerts"]',  7, TRUE, 'Market signal → intelligence'),
+    ('rule-market-signal',  'market_signal',    '["synthesizeMarketInsights","generateProactiveAlerts"]',  7, TRUE, 'Market signal → intelligence'),
     ('rule-local-event',    'local_event',      '["findLocalEvents","generateProactiveAlerts"]',        6, TRUE, 'Local event → opportunities'),
     ('rule-retention-risk', 'retention_risk',   '["generateProactiveAlerts","reviewRequestAutomation"]', 9, TRUE, 'Retention risk → alert + review request')
     ON CONFLICT (id) DO NOTHING`);

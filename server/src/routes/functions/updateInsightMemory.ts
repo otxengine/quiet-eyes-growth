@@ -103,7 +103,7 @@ export async function updateInsightMemory(req: Request, res: Response) {
       }
 
       // Track entity-type dismissals for targeted agent suppression
-      const agentName = entityType === 'signal' ? 'runMarketIntelligence'
+      const agentName = entityType === 'signal' ? 'runIntelligenceEngines'
         : entityType === 'competitor' ? 'runCompetitorIdentification'
         : entityType === 'event' ? 'detectEvents'
         : 'generateProactiveAlerts';

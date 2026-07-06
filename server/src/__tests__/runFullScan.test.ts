@@ -27,7 +27,8 @@ jest.mock('../routes/functions/analyzeInstagramComments',    () => ({ analyzeIns
 jest.mock('../routes/functions/analyzeSocialComments',       () => ({ analyzeSocialComments:      jest.fn((_r: any, res: any) => res.json({ ok: true })) }));
 jest.mock('../routes/functions/analyzeTikTokContent',        () => ({ analyzeTikTokContent:       jest.fn((_r: any, res: any) => res.json({ ok: true })) }));
 jest.mock('../routes/functions/collectReviews',              () => ({ collectReviews:             jest.fn((_r: any, res: any) => res.json({ ok: true })) }));
-jest.mock('../routes/functions/runMarketIntelligence',       () => ({ runMarketIntelligence:      jest.fn((_r: any, res: any) => res.json({ ok: true })) }));
+jest.mock('../routes/functions/synthesizeMarketInsights',    () => ({ synthesizeMarketInsights:   jest.fn((_r: any, res: any) => res.json({ ok: true })), runMarketIntelligence: jest.fn((_r: any, res: any) => res.json({ ok: true })) }));
+jest.mock('../routes/functions/runIntelligenceEngines',      () => ({ runIntelligenceEngines:     jest.fn((_r: any, res: any) => res.json({ ok: true })) }));
 jest.mock('../routes/functions/runCompetitorIdentification', () => ({ runCompetitorIdentification: jest.fn((_r: any, res: any) => res.json({ ok: true })) }));
 jest.mock('../routes/functions/runLeadGeneration',           () => ({ runLeadGeneration:          jest.fn((_r: any, res: any) => res.json({ ok: true })) }));
 jest.mock('../routes/functions/findSocialLeads',             () => ({ findSocialLeads:            jest.fn((_r: any, res: any) => res.json({ ok: true })) }));

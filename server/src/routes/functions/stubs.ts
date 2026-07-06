@@ -322,7 +322,7 @@ export async function runFullScan(req: Request, res: Response) {
 
   // Run sequentially: signals → reviews → intelligence → competitors → leads → health
   const steps = [
-    'collectWebSignals', 'collectReviews', 'runMarketIntelligence',
+    'collectWebSignals', 'collectReviews', 'synthesizeMarketInsights', 'runIntelligenceEngines',
     'runCompetitorIdentification', 'runLeadGeneration', 'calculateHealthScore',
   ];
   const results: Record<string, any> = {};
