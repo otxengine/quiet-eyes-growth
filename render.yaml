@@ -78,8 +78,8 @@ services:
     name: quiet-eyes-deno-agents
     runtime: node
     rootDir: .
-    buildCommand: curl -fsSL https://deno.land/install.sh | sh
-    startCommand: $HOME/.deno/bin/deno run --allow-env --allow-net --allow-read agents/main.ts
+    buildCommand: curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/tmp/deno sh
+    startCommand: /tmp/deno/bin/deno run --allow-env --allow-net --allow-read agents/main.ts
     envVars:
       - key: SUPABASE_URL
         sync: false
