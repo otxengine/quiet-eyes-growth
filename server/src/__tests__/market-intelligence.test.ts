@@ -42,7 +42,7 @@ jest.mock('../services/intelligence/engines/TimingArbitrageEngine');
 jest.mock('../services/intelligence/engines/TrustSignalAggregator');
 jest.mock('../services/intelligence/engines/InvisibleChurnPredictor');
 
-import { runMarketIntelligence, getTopInsightsByCategory, getUrgentInsights, extractActionTypes } from '../services/intelligence/MarketIntelligenceService';
+import { runIntelligenceEngines, runMarketIntelligence, getTopInsightsByCategory, getUrgentInsights, extractActionTypes } from '../services/intelligence/MarketIntelligenceService';
 import { detectSupplyDemandMismatches } from '../services/intelligence/engines/SupplyDemandMismatchDetector';
 import { detectWhiteSpaces }            from '../services/intelligence/engines/WhiteSpaceRadar';
 import { detectGhostDemand }            from '../services/intelligence/engines/GhostDemandCartographer';
@@ -546,5 +546,13 @@ describe('extractActionTypes', () => {
     const ins = [makeInsight({ id: 'a', dedup_key: 'ka', recommended_action_types: ['outreach', 'outreach', 'content'] })];
     const result = extractActionTypes(ins);
     expect(result.filter(t => t === 'outreach')).toHaveLength(1);
+  });
+});
+
+// ─── Deprecated alias ─────────────────────────────────────────────────────────
+
+describe('runMarketIntelligence (deprecated alias)', () => {
+  test('delegates to runIntelligenceEngines — identical reference', () => {
+    expect(runMarketIntelligence).toBe(runIntelligenceEngines);
   });
 });

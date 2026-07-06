@@ -62,7 +62,7 @@ function insightPriority(i: Insight): number {
 
 // ─── Main service ──────────────────────────────────────────────────────────────
 
-export async function runMarketIntelligence(
+export async function runIntelligenceEngines(
   ctx:     EnrichedContext,
   traceId: string,
 ): Promise<MarketIntelligenceResult> {
@@ -214,6 +214,9 @@ export async function runMarketIntelligence(
     duration_ms,
   };
 }
+
+/** @deprecated Use runIntelligenceEngines instead */
+export const runMarketIntelligence = runIntelligenceEngines;
 
 // ─── Defaults for failed engines ───────────────────────────────────────────────
 
