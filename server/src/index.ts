@@ -77,6 +77,7 @@ const strictLimiter = rateLimit({
 
 app.use('/api', generalLimiter);
 app.use('/api/functions/run-full-scan', strictLimiter);
+app.use('/api/functions/runFullScan', strictLimiter);
 app.use('/api/functions/generate-post', strictLimiter);
 app.use('/api/functions/generate-image', strictLimiter);
 app.use('/api/functions/generate-advisory-insights', strictLimiter);
