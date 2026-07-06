@@ -27,6 +27,7 @@ jest.mock('../lib/businessProfile', () => ({
 import { synthesizeMarketInsights, runMarketIntelligence } from '../routes/functions/synthesizeMarketInsights';
 import { prisma } from '../db';
 import { invokeLLM } from '../lib/llm';
+import { publishEvent } from '../lib/eventBus';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -52,6 +53,7 @@ beforeEach(() => {
   (prisma.marketSignal.findMany    as jest.Mock).mockResolvedValue([]);
   (prisma.marketSignal.create      as jest.Mock).mockResolvedValue({});
   (invokeLLM                       as jest.Mock).mockResolvedValue({ insights: [] });
+  (publishEvent                    as jest.Mock).mockResolvedValue(undefined);
 });
 
 // ─── AC1 — direct invocation ──────────────────────────────────────────────────
@@ -120,5 +122,66 @@ describe('synthesizeMarketInsights — AC3 writes to MarketSignal', () => {
 describe('runMarketIntelligence (route alias) — AC2', () => {
   test('is identical reference to synthesizeMarketInsights', () => {
     expect(runMarketIntelligence).toBe(synthesizeMarketInsights);
+  });
+});
+
+// ─── AC4 — cold-start response shape ─────────────────────────────────────────
+
+describe('synthesizeMarketInsights — AC4 cold-start response shape', () => {
+  test('cold-start response includes cold_start: true and duplicates_skipped: 0', async () => {
+    (invokeLLM as jest.Mock).mockResolvedValue({
+      insights: [{ summary: 'Cold insight', impact_level: 'medium', category: 'opportunity', recommended_action: 'פרסם', confidence: 70 }],
+    });
+    const res = makeRes();
+    await synthesizeMarketInsights(makeReq(), res);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      cold_start: true,
+      signals_processed: 0,
+      duplicates_skipped: 0,
+    }));
+  });
+});
+
+// ─── AC5 — publishEvent on both paths ────────────────────────────────────────
+
+describe('synthesizeMarketInsights — AC5 publishEvent', () => {
+  test('publishes market_signal event on cold-start path when insights created', async () => {
+    (invokeLLM as jest.Mock).mockResolvedValue({
+      insights: [{ summary: 'Cold signal event', impact_level: 'high', category: 'opportunity', recommended_action: 'פרסם', confidence: 75 }],
+    });
+    await synthesizeMarketInsights(makeReq(), makeRes());
+    expect(publishEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'market_signal' }));
+  });
+
+  test('publishes market_signal event on normal path when insights created', async () => {
+    const recentSignal = { id: 's1', content: 'trend', category: 'trend', detected_at: new Date().toISOString(), created_date: new Date().toISOString() };
+    (prisma.rawSignal.findMany as jest.Mock).mockResolvedValue([recentSignal]);
+    (invokeLLM as jest.Mock).mockResolvedValue({
+      insights: [{ summary: 'Normal signal event', impact_level: 'high', category: 'opportunity', recommended_action: 'שלח', confidence: 75 }],
+    });
+    await synthesizeMarketInsights(makeReq(), makeRes());
+    expect(publishEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'market_signal' }));
+  });
+
+  test('does NOT publish event when no insights created', async () => {
+    // invokeLLM returns empty insights — nothing created
+    await synthesizeMarketInsights(makeReq(), makeRes());
+    expect(publishEvent).not.toHaveBeenCalled();
+  });
+});
+
+// ─── AC2 (signal filtering) — tier-2 fallback ────────────────────────────────
+
+describe('synthesizeMarketInsights — AC2 tier fallback', () => {
+  test('uses tier-2 (7d) signals when no signals within 48h', async () => {
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 3600000).toISOString();
+    const oldSignal = { id: 's_old', content: 'trend data', category: 'trend', detected_at: fiveDaysAgo, created_date: fiveDaysAgo };
+    (prisma.rawSignal.findMany as jest.Mock).mockResolvedValue([oldSignal]);
+    (invokeLLM as jest.Mock).mockResolvedValue({ insights: [] });
+    const res = makeRes();
+    await synthesizeMarketInsights(makeReq(), res);
+    // Tier-2 fires: signal is used, so NOT cold-start path
+    expect(res.json).toHaveBeenCalledWith(expect.not.objectContaining({ cold_start: true }));
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ signals_processed: 1 }));
   });
 });

@@ -65,7 +65,7 @@ Return ONLY valid JSON:
 {"insights":[{
   "summary": "תובנה ספציפית לסקטור + עיר — עם מספר או שם",
   "impact_level": "high|medium|low",
-  "category": "opportunity|trend|threat|competitor_move|demand_gap",
+  "category": "opportunity|trend|threat|competitor_move|mention|demand_gap",
   "recommended_action": "פועל ציווי + ערוץ + תוכן ספציפי",
   "action_label": "3-4 מילים עם פועל",
   "action_type": "social_post|promote|task|call",
@@ -117,7 +117,18 @@ Return ONLY valid JSON:
       }
 
       await writeAutomationLogDual('synthesizeMarketInsights', 'runMarketIntelligence', businessProfileId, startTime, coldCreated);
-      return res.json({ signals_processed: 0, insights_generated: coldCreated, cold_start: true });
+
+      if (coldCreated > 0) {
+        publishEvent({
+          businessId: businessProfileId,
+          eventType: 'market_signal',
+          source: 'synthesizeMarketInsights',
+          payload: { insights_generated: coldCreated, signals_analyzed: 0 },
+          contextAttrs: { category: profile.category, city: profile.city, impact: 'medium', cold_start: true },
+        }).catch(() => {});
+      }
+
+      return res.json({ signals_processed: 0, insights_generated: coldCreated, duplicates_skipped: 0, cold_start: true });
     }
 
     const contextBlock = signals.map(s =>
@@ -153,7 +164,7 @@ Return ONLY valid JSON:
 {"insights":[{
   "summary": "כותרת ספציפית עם מספר/שם/מיקום",
   "impact_level": "high|medium|low",
-  "category": "threat|opportunity|trend|competitor_move|mention",
+  "category": "threat|opportunity|trend|competitor_move|mention|demand_gap",
   "recommended_action": "פעולה ספציפית בעברית",
   "action_label": "פועל + עצם קצר",
   "action_type": "social_post|respond|promote|call|task",
