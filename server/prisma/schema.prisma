@@ -257,6 +257,8 @@ model Competitor {
   ad_spend_signal          String?  // 'low'|'medium'|'high' — based on platform count + ad count
   ad_gaps                  String?  // what they're NOT advertising = our opportunity
   ad_intel_updated_at      String?  // when Claude last analyzed their ads
+  not_relevant             Boolean? @default(false)
+  not_relevant_reason      String?
 
   @@map("competitors")
 }

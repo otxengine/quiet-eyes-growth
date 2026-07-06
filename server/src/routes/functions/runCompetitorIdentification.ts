@@ -105,6 +105,10 @@ export async function runCompetitorIdentification(req: Request, res: Response) {
     const userExtraCities: string[] = ((profile as any).additional_cities || '')
       .split(',').map((c: string) => c.trim()).filter(Boolean);
 
+    if (!SERPAPI_KEY)   console.warn('runCompetitorIdentification: SERPAPI_KEY missing — SerpAPI search skipped');
+    if (!TAVILY_API_KEY) console.warn('runCompetitorIdentification: TAVILY_API_KEY missing — Tavily search skipped');
+    if (!GOOGLE_API_KEY) console.warn('runCompetitorIdentification: GOOGLE_PLACES_API_KEY missing — Google Places + geocoding skipped');
+
     const sp = getSectorProfile(profile);
     const profileCtx = buildAgentPromptContext(profile);
     const competitorMission = getAgentMission<{ search_terms_he?: string[]; competitor_profile_he?: string }>(profile, 'runCompetitorIdentification');
