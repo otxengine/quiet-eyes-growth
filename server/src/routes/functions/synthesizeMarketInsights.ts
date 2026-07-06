@@ -7,7 +7,7 @@ import { getSectorContext as getAccumulatedSectorCtx } from '../../lib/sectorCon
 import { buildAgentPromptContext, isSignalRelevant } from '../../lib/businessProfile';
 import { publishEvent } from '../../lib/eventBus';
 
-export async function runMarketIntelligence(req: Request, res: Response) {
+export async function synthesizeMarketInsights(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
@@ -116,7 +116,7 @@ Return ONLY valid JSON:
         coldCreated++;
       }
 
-      await writeAutomationLog('runMarketIntelligence', businessProfileId, startTime, coldCreated);
+      await writeAutomationLog('synthesizeMarketInsights', businessProfileId, startTime, coldCreated);
       return res.json({ signals_processed: 0, insights_generated: coldCreated, cold_start: true });
     }
 
@@ -208,24 +208,27 @@ Return ONLY valid JSON:
       created++;
     }
 
-    await writeAutomationLog('runMarketIntelligence', businessProfileId, startTime, created);
+    await writeAutomationLog('synthesizeMarketInsights', businessProfileId, startTime, created);
 
     // OTX-001: publish market_signal event for each high-impact insight generated
     if (created > 0) {
       publishEvent({
         businessId: businessProfileId,
         eventType: 'market_signal',
-        source: 'runMarketIntelligence',
+        source: 'synthesizeMarketInsights',
         payload: { insights_generated: created, signals_analyzed: signals.length },
         contextAttrs: { category: profile.category, city: profile.city, impact: created >= 3 ? 'high' : 'medium' },
       }).catch(() => {});
     }
 
-    console.log(`runMarketIntelligence done: ${created} insights from ${signals.length} signals`);
+    console.log(`synthesizeMarketInsights done: ${created} insights from ${signals.length} signals`);
     return res.json({ signals_processed: signals.length, insights_generated: created, duplicates_skipped: dupes });
   } catch (err: any) {
-    console.error('runMarketIntelligence error:', err.message);
-    await writeAutomationLog('runMarketIntelligence', businessProfileId, startTime, 0, 'failed', err.message);
+    console.error('synthesizeMarketInsights error:', err.message);
+    await writeAutomationLog('synthesizeMarketInsights', businessProfileId, startTime, 0, 'failed', err.message);
     return res.status(500).json({ error: err.message });
   }
 }
+
+/** @deprecated use synthesizeMarketInsights */
+export const runMarketIntelligence = synthesizeMarketInsights;

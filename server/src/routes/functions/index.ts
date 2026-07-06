@@ -7,7 +7,7 @@ import { logOutcome } from './logOutcome';
 import { calculateHealthScore } from './calculateHealthScore';
 import { runLeadGeneration } from './runLeadGeneration';
 import { collectWebSignals } from './collectWebSignals';
-import { runMarketIntelligence } from './runMarketIntelligence';
+import { synthesizeMarketInsights, runMarketIntelligence } from './synthesizeMarketInsights';
 import { collectReviews } from './collectReviews';
 import { runCompetitorIdentification } from './runCompetitorIdentification';
 import { collectSocialSignals } from './collectSocialSignals';
@@ -139,6 +139,7 @@ const FUNCTION_MAP: Record<string, any> = {
   calculateHealthScore,
   runLeadGeneration,
   collectWebSignals,
+  synthesizeMarketInsights,
   runMarketIntelligence,
   collectReviews,
   runCompetitorIdentification,

@@ -4,7 +4,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { collectWebSignals } from './collectWebSignals';
 import { collectSocialSignals } from './collectSocialSignals';
 import { collectReviews } from './collectReviews';
-import { runMarketIntelligence } from './runMarketIntelligence';
+import { runMarketIntelligence } from './synthesizeMarketInsights';
 import { runCompetitorIdentification } from './runCompetitorIdentification';
 import { runLeadGeneration } from './runLeadGeneration';
 import { findSocialLeads } from './findSocialLeads';

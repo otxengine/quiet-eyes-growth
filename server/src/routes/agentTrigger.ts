@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { collectWebSignals } from './functions/collectWebSignals';
 import { collectSocialSignals } from './functions/collectSocialSignals';
-import { runMarketIntelligence } from './functions/runMarketIntelligence';
+import { runMarketIntelligence } from './functions/synthesizeMarketInsights';
 import { runCompetitorIdentification } from './functions/runCompetitorIdentification';
 import { generateProactiveAlerts } from './functions/generateProactiveAlerts';
 import { runPredictions } from './functions/runPredictions';
