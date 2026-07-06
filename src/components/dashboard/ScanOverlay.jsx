@@ -38,7 +38,7 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
   const [results, setResults]     = useState({
     reviews: 0, collect: 0, social: 0, compete: 0, leads: 0,
     tiktok_trends: 0, trends: 0, early_trends: 0, viral: 0,
-    alerts: 0, advisory: 0, predictions: 0,
+    alerts: 0, advisory: 0, predictions: 0, analyze: 0,
   });
   const [done, setDone]           = useState(false);
   const cancelledRef = useRef(false);
@@ -57,7 +57,7 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
     if (customSteps) {
       // ── Individual-step mode (backward compat for custom step lists) ──────
       const run = async () => {
-        const finalResults = { reviews: 0, collect: 0, social: 0, compete: 0, leads: 0, tiktok_trends: 0, trends: 0, early_trends: 0, viral: 0, alerts: 0, advisory: 0, predictions: 0 };
+        const finalResults = { reviews: 0, collect: 0, social: 0, compete: 0, leads: 0, tiktok_trends: 0, trends: 0, early_trends: 0, viral: 0, alerts: 0, advisory: 0, predictions: 0, analyze: 0 };
         for (let i = 0; i < customSteps.length; i++) {
           if (cancelledRef.current) return;
           setCurrentStep(i);
@@ -110,6 +110,7 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
             alerts:       r.generateProactiveAlerts?.alerts_created || 0,
             advisory:     r.generateAdvisoryInsights?.insights_created || 0,
             predictions:  r.runPredictions?.predictions_created || 0,
+            analyze:      r.synthesizeMarketInsights?.insights_generated || 0,
           });
           setLabelIdx(SCAN_LABELS.length - 1);
           setCurrentStep(SCAN_LABELS.length - 1);
@@ -138,14 +139,15 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
   const totalTrends   = (results.tiktok_trends || 0) + (results.trends || 0) + (results.early_trends || 0);
   const totalInsights = (results.alerts || 0) + (results.advisory || 0);
   const summary = [
-    totalSignals > 0    ? `${totalSignals} אותות`         : null,
-    results.reviews     ? `${results.reviews} ביקורות`   : null,
-    results.compete     ? `${results.compete} מתחרים`     : null,
-    totalLeads > 0      ? `${totalLeads} לידים`           : null,
-    totalTrends > 0     ? `${totalTrends} טרנדים`         : null,
-    results.viral       ? `${results.viral} ויראלי`       : null,
-    totalInsights > 0   ? `${totalInsights} תובנות`       : null,
-    results.predictions ? `${results.predictions} תחזיות` : null,
+    totalSignals > 0    ? `${totalSignals} אותות`           : null,
+    results.reviews     ? `${results.reviews} ביקורות`      : null,
+    results.compete     ? `${results.compete} מתחרים`        : null,
+    totalLeads > 0      ? `${totalLeads} לידים`              : null,
+    totalTrends > 0     ? `${totalTrends} טרנדים`            : null,
+    results.viral       ? `${results.viral} ויראלי`          : null,
+    results.analyze     ? `${results.analyze} תובנות שוק`   : null,
+    totalInsights > 0   ? `${totalInsights} תובנות`          : null,
+    results.predictions ? `${results.predictions} תחזיות`    : null,
   ].filter(Boolean).join(' · ');
 
   return (
