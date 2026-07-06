@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
-import { writeAutomationLog } from '../../lib/automationLog';
+import { writeAutomationLogDual } from '../../lib/automationLog';
 import { getSectorContentStrategy } from '../../lib/sectorPrompts';
 import { getSectorContext as getAccumulatedSectorCtx } from '../../lib/sectorContext';
 import { buildAgentPromptContext, isSignalRelevant } from '../../lib/businessProfile';
@@ -116,7 +116,7 @@ Return ONLY valid JSON:
         coldCreated++;
       }
 
-      await writeAutomationLog('synthesizeMarketInsights', businessProfileId, startTime, coldCreated);
+      await writeAutomationLogDual('synthesizeMarketInsights', 'runMarketIntelligence', businessProfileId, startTime, coldCreated);
       return res.json({ signals_processed: 0, insights_generated: coldCreated, cold_start: true });
     }
 
@@ -208,7 +208,7 @@ Return ONLY valid JSON:
       created++;
     }
 
-    await writeAutomationLog('synthesizeMarketInsights', businessProfileId, startTime, created);
+    await writeAutomationLogDual('synthesizeMarketInsights', 'runMarketIntelligence', businessProfileId, startTime, created);
 
     // OTX-001: publish market_signal event for each high-impact insight generated
     if (created > 0) {
@@ -225,7 +225,7 @@ Return ONLY valid JSON:
     return res.json({ signals_processed: signals.length, insights_generated: created, duplicates_skipped: dupes });
   } catch (err: any) {
     console.error('synthesizeMarketInsights error:', err.message);
-    await writeAutomationLog('synthesizeMarketInsights', businessProfileId, startTime, 0, 'failed', err.message);
+    await writeAutomationLogDual('synthesizeMarketInsights', 'runMarketIntelligence', businessProfileId, startTime, 0, 'failed', err.message);
     return res.status(500).json({ error: err.message });
   }
 }

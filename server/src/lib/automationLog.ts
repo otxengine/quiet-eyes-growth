@@ -26,3 +26,20 @@ export async function writeAutomationLog(
     console.error(`AutomationLog write failed for ${name}:`, e.message);
   }
 }
+
+// ponytail: migration-window only — remove this + DUAL_WRITE_AUTOMATION_LOG when alias period ends
+export async function writeAutomationLogDual(
+  canonical: string,
+  legacy: string,
+  businessProfileId: string,
+  startTime: string,
+  itemsProcessed: number,
+  status: 'success' | 'failed' = 'success',
+  errorMessage?: string,
+  costUsd?: number,
+) {
+  await writeAutomationLog(canonical, businessProfileId, startTime, itemsProcessed, status, errorMessage, costUsd);
+  if (process.env.DUAL_WRITE_AUTOMATION_LOG === 'true') {
+    await writeAutomationLog(legacy, businessProfileId, startTime, itemsProcessed, status, errorMessage, costUsd);
+  }
+}

@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { buildEnrichedContext } from '../../intelligence/ContextBuilder';
 import { runIntelligenceEngines as runEngines } from '../../services/intelligence/MarketIntelligenceService';
 import { prisma } from '../../db';
-import { writeAutomationLog } from '../../lib/automationLog';
+import { writeAutomationLogDual } from '../../lib/automationLog';
 
 export async function runIntelligenceEngines(req: Request, res: Response) {
   const { businessProfileId } = req.body;
@@ -34,7 +34,7 @@ export async function runIntelligenceEngines(req: Request, res: Response) {
       );
     }
 
-    await writeAutomationLog('runIntelligenceEngines', businessProfileId, startTime, result.insights.length);
+    await writeAutomationLogDual('runIntelligenceEngines', 'runMarketIntelligence', businessProfileId, startTime, result.insights.length);
     return res.json({
       ok: true,
       insights: result.insights.length,
@@ -42,7 +42,7 @@ export async function runIntelligenceEngines(req: Request, res: Response) {
       duration_ms: result.duration_ms,
     });
   } catch (err: any) {
-    await writeAutomationLog('runIntelligenceEngines', businessProfileId, startTime, 0, 'failed', err.message);
+    await writeAutomationLogDual('runIntelligenceEngines', 'runMarketIntelligence', businessProfileId, startTime, 0, 'failed', err.message);
     return res.json({ ok: false, error: err.message });
   }
 }
