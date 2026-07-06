@@ -159,6 +159,8 @@ export async function runPipeline(
   let decisions:       Awaited<ReturnType<typeof makeDecisions>>              = [];
   let recommendations: Awaited<ReturnType<typeof generateRecommendations>>    = [];
 
+  let pipelineError: Error | undefined;
+
   try {
     // ── Stage: context ────────────────────────────────────────────────────────
     if (!skip.has('context') && options.mode !== 'signal_only') {
@@ -308,8 +310,15 @@ export async function runPipeline(
       stages.learn = stageResult;
     }
 
+  } catch (err: any) {
+    pipelineError = err;
   } finally {
     RUNNING.delete(businessId);
+  }
+
+  if (pipelineError) {
+    await writeAutomationLog('masterOrchestrator', businessId, startedAt, 0, 'failed', pipelineError.message).catch(() => {});
+    throw pipelineError;
   }
 
   const duration_ms = Date.now() - new Date(startedAt).getTime();

@@ -37,7 +37,7 @@ export async function systemHealthMonitor(req: Request, res: Response) {
     const agentStatus = Object.values(agentMap).map((log: any) => {
       const lastRunMs = log.start_time ? new Date(log.start_time).getTime() : 0;
       const hoursAgo = Math.floor((now - lastRunMs) / 3600000);
-      const status = log.status === 'error' ? 'error'
+      const status = log.status === 'failed' ? 'error'
         : hoursAgo > 24 ? 'stale'
         : hoursAgo > 12 ? 'warning'
         : 'ok';

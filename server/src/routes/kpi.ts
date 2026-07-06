@@ -7,7 +7,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { computeFunnelKPIs, computePipelineVelocity, computeTenantKPIs } from '../services/metrics/KPIService';
+import { computeFunnelKPIs, computePipelineVelocity, computeTenantKPIs, computeAnalysisObservability } from '../services/metrics/KPIService';
 import { createLogger } from '../infra/logger';
 
 const logger = createLogger('KPIRoute');
@@ -33,6 +33,18 @@ router.get('/:businessId/velocity', async (req: Request, res: Response) => {
     return res.json(velocity);
   } catch (err: any) {
     logger.error('Velocity fetch failed', { error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/:businessId/analysis', async (req: Request, res: Response) => {
+  const businessId = String(req.params.businessId);
+  const days       = Math.min(90, Math.max(1, Number(req.query.days ?? 30)));
+  try {
+    const obs = await computeAnalysisObservability(businessId, days);
+    return res.json(obs);
+  } catch (err: any) {
+    logger.error('Analysis observability fetch failed', { businessId, error: err.message });
     return res.status(500).json({ error: err.message });
   }
 });

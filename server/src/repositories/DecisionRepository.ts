@@ -7,6 +7,9 @@
 
 import { prisma } from '../db';
 import { Decision, FusedInsight, Recommendation, ExecutionTask } from '../models';
+import { createLogger } from '../infra/logger';
+
+const logger = createLogger('DecisionRepository');
 
 // ─── FusedInsight ─────────────────────────────────────────────────────────────
 
@@ -203,22 +206,38 @@ export class DecisionRepository {
     try {
       await prisma.$executeRawUnsafe(
         `INSERT INTO otx_pipeline_runs
-          (id, business_id, trace_id, mode, triggered_by, status, summary, started_at, completed_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::timestamptz,NOW())
-         ON CONFLICT (id) DO UPDATE SET
-           status      = EXCLUDED.status,
-           summary     = EXCLUDED.summary,
-           completed_at = NOW()`,
+          (run_id, business_id, trace_id, mode, triggered_by, status,
+           signals_processed, insights_created, decisions_created, actions_dispatched,
+           opportunities_found, threats_found, duration_ms, started_at, completed_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::timestamptz,NOW())
+         ON CONFLICT (run_id) DO UPDATE SET
+           status              = EXCLUDED.status,
+           signals_processed   = EXCLUDED.signals_processed,
+           insights_created    = EXCLUDED.insights_created,
+           decisions_created   = EXCLUDED.decisions_created,
+           actions_dispatched  = EXCLUDED.actions_dispatched,
+           opportunities_found = EXCLUDED.opportunities_found,
+           threats_found       = EXCLUDED.threats_found,
+           duration_ms         = EXCLUDED.duration_ms,
+           completed_at        = NOW()`,
         runId,
         businessId,
         summary.trace_id ?? runId,
         summary.mode ?? 'full',
         summary.triggered_by ?? 'manual',
         summary.status ?? 'completed',
-        JSON.stringify(summary),
+        summary.signals_processed  ?? 0,
+        summary.insights_created   ?? 0,
+        summary.decisions_created  ?? 0,
+        summary.actions_dispatched ?? 0,
+        summary.opportunities_found ?? 0,
+        summary.threats_found       ?? 0,
+        summary.duration_ms         ?? 0,
         summary.started_at ?? new Date().toISOString(),
       );
-    } catch {}
+    } catch (e: any) {
+      logger.warn('savePipelineRun failed', { runId, error: e.message });
+    }
   }
 }
 
