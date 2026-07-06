@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 
 const scanSteps = [
   { key: 'collect', label: 'אוסף נתונים מהרשת...', fn: 'collectWebSignals', resultKey: 'new_signals_saved', resultLabel: 'אותות' },
-  { key: 'analyze', label: 'מנתח תובנות שוק...', fn: 'runMarketIntelligence', resultKey: 'insights_generated', resultLabel: 'תובנות' },
+  { key: 'analyze', label: 'מנתח תובנות שוק...', fn: 'synthesizeMarketInsights', resultKey: 'insights_generated', resultLabel: 'תובנות' },
   { key: 'compete', label: 'מזהה מתחרים...', fn: 'runCompetitorIdentification', resultKey: 'competitors_found', resultLabel: 'מתחרים' },
   { key: 'leads', label: 'מחפש לידים...', fn: 'runLeadGeneration', resultKey: 'leads_generated', resultLabel: 'לידים' },
   { key: 'enrich', label: 'מעשיר לידים...', fn: 'enrichLeads', resultKey: 'enriched', resultLabel: 'הועשרו' },
