@@ -206,6 +206,39 @@ describe('OpportunityDetector', () => {
     expect(calls.some(c => c[0] === 'opportunity.detected')).toBe(true);
   });
 
+  test('detects seasonal_window when medium-impact prediction with confidence >= 0.5', async () => {
+    const ctx = makeCtx({
+      active_predictions: [{ title: 'Passover season', confidence: 0.7, timeframe: '10d', impact: 'medium' }],
+    });
+    const opps = await detectOpportunities(ctx, 'trace_01');
+    expect(opps.some(o => o.type === 'seasonal_window')).toBe(true);
+  });
+
+  test('does NOT detect seasonal_window for high-impact prediction (that is local_event)', async () => {
+    const ctx = makeCtx({
+      active_predictions: [{ title: 'Trade fair', confidence: 0.8, timeframe: '3d', impact: 'high' }],
+    });
+    const opps = await detectOpportunities(ctx, 'trace_01');
+    expect(opps.some(o => o.type === 'seasonal_window')).toBe(false);
+  });
+
+  test('detects retention_risk when pending_response >= 3', async () => {
+    const ctx = makeCtx({
+      reviews: { total: 20, avg_rating: 4.0, negative_last7d: 1, pending_response: 4 },
+    });
+    const opps = await detectOpportunities(ctx, 'trace_01');
+    expect(opps.some(o => o.type === 'retention_risk')).toBe(true);
+  });
+
+  test('retention_risk urgency is "high" when pending_response >= 6', async () => {
+    const ctx = makeCtx({
+      reviews: { total: 30, avg_rating: 3.9, negative_last7d: 2, pending_response: 7 },
+    });
+    const opps = await detectOpportunities(ctx, 'trace_01');
+    const opp  = opps.find(o => o.type === 'retention_risk');
+    expect(opp?.urgency).toBe('high');
+  });
+
   test('opportunity_score is clamped to [0,1]', async () => {
     // 10 hot leads → score = min(1, 0.5 + 10*0.1) = 1.0
     const ctx = makeCtx({ leads: { total: 10, hot: 10, warm: 0, new: 0, avg_score: 80 } });

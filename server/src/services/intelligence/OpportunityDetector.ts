@@ -140,6 +140,39 @@ function detectCandidates(ctx: EnrichedContext): DetectionCandidate[] {
     });
   }
 
+  // ── seasonal_window ────────────────────────────────────────────────────────
+  // Medium-impact predictions (confidence ≥ 0.5) signal an upcoming calendar
+  // window (holiday, seasonal period). High-impact is already handled by local_event.
+  const hasSeasonalPrediction = ctx.active_predictions.some(
+    p => p.impact === 'medium' && (p.confidence ?? 0) >= 0.5,
+  );
+  if (hasSeasonalPrediction) {
+    candidates.push({
+      type:        'seasonal_window',
+      score:       0.50,
+      urgency:     'medium',
+      confidence:  0.65,
+      explanation: `חלון עונתי מתקרב — הזדמנות לקמפיין ממוקד`,
+      signal_ids:  signalIds.slice(0, 2),
+      window_days: 10,
+    });
+  }
+
+  // ── retention_risk ─────────────────────────────────────────────────────────
+  // Unanswered reviews (≥ 3) are a concrete churn signal: customers reached out
+  // with no response, signalling disengagement before they leave.
+  if ((ctx.reviews.pending_response ?? 0) >= 3) {
+    candidates.push({
+      type:        'retention_risk',
+      score:       0.55,
+      urgency:     (ctx.reviews.pending_response ?? 0) >= 6 ? 'high' : 'medium',
+      confidence:  0.75,
+      explanation: `${ctx.reviews.pending_response} ביקורות ללא מענה — לקוחות עשויים לנטוש`,
+      signal_ids:  signalIds.slice(0, 2),
+      window_days: 3,
+    });
+  }
+
   // ── pricing_opportunity (health is good, sector is growing) ───────────────
   if ((ctx.health_score ?? 0) > 70 && fallingCompetitors.length >= 1) {
     candidates.push({
