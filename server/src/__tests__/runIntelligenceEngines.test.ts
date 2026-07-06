@@ -28,6 +28,7 @@ import { runIntelligenceEngines as routeHandler } from '../routes/functions/runI
 import { buildEnrichedContext }                   from '../intelligence/ContextBuilder';
 import { runIntelligenceEngines as serviceFn }    from '../services/intelligence/MarketIntelligenceService';
 import { prisma }                                 from '../db';
+import { writeAutomationLogDual }                 from '../lib/automationLog';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -89,5 +90,27 @@ describe('runIntelligenceEngines route handler — AC3 behavioral distinction', 
     const res = makeRes();
     await routeHandler({ body: {} } as any, res);
     expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  test('writeAutomationLogDual called after successful run (pipeline run logged)', async () => {
+    await routeHandler(makeReq(), makeRes());
+    expect(writeAutomationLogDual).toHaveBeenCalledWith(
+      'runIntelligenceEngines',
+      'runMarketIntelligence',
+      'biz_001',
+      expect.any(String),
+      0, // BASE_RESULT has 0 insights
+    );
+  });
+
+  test('market_insights written via $executeRawUnsafe, NOT marketSignal.create', async () => {
+    (serviceFn as jest.Mock).mockResolvedValue({
+      ...BASE_RESULT,
+      insights: [{ id: 'i1', type: 'supply_demand_mismatch', title: 'T', summary: 's', urgency: 'high', confidence: 0.8 }],
+    });
+    await routeHandler(makeReq(), makeRes());
+    expect(prisma.marketSignal.create).not.toHaveBeenCalled();
+    const rawCall = (prisma.$executeRawUnsafe as jest.Mock).mock.calls[0][0] as string;
+    expect(rawCall).toContain('market_insights');
   });
 });

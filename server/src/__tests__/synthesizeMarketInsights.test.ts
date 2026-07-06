@@ -90,6 +90,17 @@ describe('synthesizeMarketInsights — AC3 writes to MarketSignal', () => {
     expect(prisma.marketSignal.create).toHaveBeenCalledTimes(1);
   });
 
+  test('source_description is valid JSON', async () => {
+    (invokeLLM as jest.Mock).mockResolvedValue({
+      insights: [{ summary: 'Insight JSON', impact_level: 'high', category: 'opportunity', recommended_action: 'פרסם', confidence: 75, action_label: 'פרסם עכשיו', action_type: 'social_post', action_platform: 'instagram', prefilled_text: 'טקסט', time_minutes: 15 }],
+    });
+    await synthesizeMarketInsights(makeReq(), makeRes());
+    const createCall = (prisma.marketSignal.create as jest.Mock).mock.calls[0][0];
+    expect(() => JSON.parse(createCall.data.source_description)).not.toThrow();
+    const parsed = JSON.parse(createCall.data.source_description);
+    expect(parsed).toMatchObject({ action_type: 'social_post', action_platform: 'instagram' });
+  });
+
   test('response includes insights_generated count', async () => {
     (invokeLLM as jest.Mock).mockResolvedValue({
       insights: [{ summary: 'Insight B', impact_level: 'medium', category: 'trend', recommended_action: 'שלח', confidence: 80 }],
@@ -139,6 +150,23 @@ describe('synthesizeMarketInsights — AC4 cold-start response shape', () => {
       signals_processed: 0,
       duplicates_skipped: 0,
     }));
+  });
+
+  test('cold-start produces 4-5 sector insights when LLM returns them', async () => {
+    const coldInsights = Array.from({ length: 4 }, (_, i) => ({
+      summary: `Cold sector insight ${i + 1}`,
+      impact_level: 'medium',
+      category: 'opportunity',
+      recommended_action: 'פרסם',
+      confidence: 70,
+    }));
+    (invokeLLM as jest.Mock).mockResolvedValue({ insights: coldInsights });
+    const res = makeRes();
+    await synthesizeMarketInsights(makeReq(), res);
+    const call = (res.json as jest.Mock).mock.calls[0][0];
+    expect(call.cold_start).toBe(true);
+    expect(call.insights_generated).toBeGreaterThanOrEqual(4);
+    expect(call.insights_generated).toBeLessThanOrEqual(5);
   });
 });
 
