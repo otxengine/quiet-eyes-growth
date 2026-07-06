@@ -224,6 +224,14 @@ const AuthenticatedApp = () => {
   );
 };
 
+// Renders LandingMain for guests, redirects to /dashboard for authenticated users
+function RootRoute() {
+  const { isAuthenticated, isLoadingAuth } = useAuth();
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+  // While auth is loading, show landing immediately (no flash)
+  return <LandingMain />;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -231,12 +239,24 @@ function App() {
         <OrganizationProvider>
         <Router future={ROUTER_FUTURE}>
           <Routes>
-            {/* Landing page renders immediately — no auth gate */}
-            <Route path="/" element={<LandingMain />} />
+            {/* Root: guests see landing, authenticated users → dashboard */}
+            <Route path="/" element={<RootRoute />} />
+            {/* Segment landing pages — standalone */}
             <Route path="/restaurants" element={<LandingRestaurants />} />
             <Route path="/fitness" element={<LandingFitness />} />
             <Route path="/beauty" element={<LandingBeauty />} />
             <Route path="/join" element={<JoinPage />} />
+            {/* Auth pages at top level so Clerk can always mount them */}
+            <Route path="/sign-in/*" element={
+              <div className="min-h-screen flex items-center justify-center bg-secondary/50">
+                <SignIn routing="path" path="/sign-in" fallbackRedirectUrl="/dashboard" />
+              </div>
+            } />
+            <Route path="/sign-up/*" element={
+              <div className="min-h-screen flex items-center justify-center bg-secondary/50">
+                <SignUp routing="path" path="/sign-up" fallbackRedirectUrl="/onboarding" />
+              </div>
+            } />
             {/* Everything else goes through auth */}
             <Route path="/*" element={<AuthenticatedApp />} />
           </Routes>
