@@ -180,6 +180,7 @@ function ReviewReplyPanel({ review, bpId, onClose, onSent }) {
 }
 
 export default function Reputation() {
+  // @ts-ignore -- outlet context shape not inferred in JSX
   const { businessProfile } = useOutletContext();
   const bpId = businessProfile?.id;
   const queryClient = useQueryClient();
@@ -250,7 +251,9 @@ export default function Reputation() {
   };
 
   useEffect(() => {
+    // @ts-ignore -- internal scan hook for DevTools
     window.__cortexi_scan = handleCollectReviews;
+    // @ts-ignore
     return () => { delete window.__cortexi_scan; };
   }, [bpId]);
 

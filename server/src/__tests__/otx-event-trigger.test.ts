@@ -67,7 +67,7 @@ describe('runOTXIntentClassification — AC2 polling fallback', () => {
     await runOTXIntentClassification();
 
     expect(classifiedInsertSpy).toHaveBeenCalled();
-    const [insertedRows] = classifiedInsertSpy.mock.calls[0];
+    const insertedRows = (classifiedInsertSpy.mock.calls as any[])[0][0];
     const row = insertedRows[0];
     expect(row.signal_id).toBe('sig1');
     expect(row.qualified).toBe(true);

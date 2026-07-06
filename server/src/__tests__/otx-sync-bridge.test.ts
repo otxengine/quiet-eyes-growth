@@ -81,7 +81,7 @@ describe('SLA/lag — AC7', () => {
     await runOTXSyncBridge();
 
     expect(heartbeatInsertSpy).toHaveBeenCalled();
-    const heartbeatArg = heartbeatInsertSpy.mock.calls[0][0];
+    const heartbeatArg = (heartbeatInsertSpy.mock.calls as any[])[0][0];
     expect(heartbeatArg.status).toBe('OK');
   });
 });
@@ -118,7 +118,7 @@ describe('runOTXSyncBridge — AC3 happy path', () => {
     await runOTXSyncBridge();
 
     expect(leadsInsertSpy).toHaveBeenCalled();
-    const [insertedLeads] = leadsInsertSpy.mock.calls[0];
+    const insertedLeads = (leadsInsertSpy.mock.calls as any[])[0][0];
     // 1 signal × 2 profiles = 2 leads
     expect(insertedLeads).toHaveLength(2);
     expect(insertedLeads[0]).toMatchObject({

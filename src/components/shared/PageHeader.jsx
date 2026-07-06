@@ -1,5 +1,3 @@
-import React from 'react';
-
 /**
  * PageHeader — count + title right-aligned, action button top-left
  * Props:
@@ -10,7 +8,7 @@ import React from 'react';
  *   onAction    {function}
  *   actionIcon  {ReactNode}  optional icon before label
  */
-export default function PageHeader({ count, title, subtitle, actionLabel, onAction, actionIcon }) {
+export default function PageHeader({ count = null, title, subtitle, actionLabel, onAction, actionIcon }) {
   return (
     <div className="flex items-start justify-between mb-6">
       {/* Action button — top-left */}

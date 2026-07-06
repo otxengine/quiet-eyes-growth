@@ -59,12 +59,12 @@ describe('collectOTXSignals — AC1', () => {
     const serpResult = { link: 'https://example.com/rest', title: 'Best Restaurant TLV', snippet: 'Great food' };
     global.fetch = jest.fn((url: string) => {
       const u = String(url);
-      // SerpAPI organic search
-      if (u.includes('serpapi.com') && u.includes('organic')) return Promise.resolve(makeSerpResponse([serpResult]));
+      // Google Trends (must check before generic serpapi to avoid early match)
+      if (u.includes('serpapi.com') && u.includes('engine=google_trends')) return Promise.resolve({ ok: true, json: async () => ({ interest_over_time: { timeline_data: [] } }) });
+      // SerpAPI organic search (hl=iw is the Hebrew locale param unique to this call)
+      if (u.includes('serpapi.com') && u.includes('hl=iw')) return Promise.resolve(makeSerpResponse([serpResult]));
       // Reddit
       if (u.includes('reddit.com')) return Promise.resolve({ ok: true, json: async () => ({ data: { children: [] } }) });
-      // Google Trends (serpapi engine=google_trends)
-      if (u.includes('serpapi.com') && u.includes('google_trends')) return Promise.resolve({ ok: true, json: async () => ({ interest_over_time: { timeline_data: [] } }) });
       // Tavily
       if (u.includes('tavily.com')) return Promise.resolve({ ok: true, json: async () => ({ results: [] }) });
       // Places findplacefromtext
@@ -97,9 +97,9 @@ describe('collectOTXSignals — AC1', () => {
     const dup = { link: 'https://dup.com', title: 'Dup', snippet: 'Same content' };
     global.fetch = jest.fn((url: string) => {
       const u = String(url);
-      if (u.includes('serpapi.com') && u.includes('organic')) return Promise.resolve(makeSerpResponse([dup, dup]));
+      if (u.includes('serpapi.com') && u.includes('engine=google_trends')) return Promise.resolve({ ok: true, json: async () => ({ interest_over_time: { timeline_data: [] } }) });
+      if (u.includes('serpapi.com') && u.includes('hl=iw')) return Promise.resolve(makeSerpResponse([dup, dup]));
       if (u.includes('reddit.com')) return Promise.resolve({ ok: true, json: async () => ({ data: { children: [] } }) });
-      if (u.includes('serpapi.com') && u.includes('google_trends')) return Promise.resolve({ ok: true, json: async () => ({ interest_over_time: { timeline_data: [] } }) });
       if (u.includes('tavily.com')) return Promise.resolve({ ok: true, json: async () => ({ results: [] }) });
       if (u.includes('findplacefromtext')) return Promise.resolve({ ok: true, json: async () => ({ candidates: [] }) });
       return Promise.resolve({ ok: true, json: async () => ({}) });
@@ -122,10 +122,10 @@ describe('collectOTXSignals — AC1', () => {
     const serpResult = { link: 'https://serp-ok.com', title: 'SerpOK', snippet: 'Works' };
     global.fetch = jest.fn((url: string) => {
       const u = String(url);
-      if (u.includes('serpapi.com') && u.includes('organic')) return Promise.resolve(makeSerpResponse([serpResult]));
+      if (u.includes('serpapi.com') && u.includes('engine=google_trends')) return Promise.resolve({ ok: true, json: async () => ({ interest_over_time: { timeline_data: [] } }) });
+      if (u.includes('serpapi.com') && u.includes('hl=iw')) return Promise.resolve(makeSerpResponse([serpResult]));
       // Reddit throws — simulates a network failure
       if (u.includes('reddit.com')) return Promise.reject(new Error('Reddit network failure'));
-      if (u.includes('serpapi.com') && u.includes('google_trends')) return Promise.resolve({ ok: true, json: async () => ({ interest_over_time: { timeline_data: [] } }) });
       if (u.includes('tavily.com')) return Promise.resolve({ ok: true, json: async () => ({ results: [] }) });
       if (u.includes('findplacefromtext')) return Promise.resolve({ ok: true, json: async () => ({ candidates: [] }) });
       return Promise.resolve({ ok: true, json: async () => ({}) });
