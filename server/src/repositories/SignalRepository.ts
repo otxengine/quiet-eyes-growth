@@ -4,7 +4,6 @@
  */
 
 import { prisma } from '../db';
-import { ClassifiedSignal } from '../models';
 
 export class SignalRepository {
   /** Get raw signals for a business, last N hours */
@@ -56,13 +55,15 @@ export class SignalRepository {
   ) {
     return prisma.automationLog.create({
       data: {
-        linked_business:  businessId,
-        automation_name:  'signalClassification',
-        status:           'success',
-        items_processed:  signalsClassified,
-        start_time:       new Date().toISOString(),
-        end_time:         new Date().toISOString(),
-        error_message:    null,
+        linked_business:    businessId,
+        automation_name:    'signalClassification',
+        status:             'success',
+        items_processed:    signalsClassified,
+        high_urgency_count: highUrgencyCount,
+        trace_id:           traceId,
+        start_time:         new Date().toISOString(),
+        end_time:           new Date().toISOString(),
+        error_message:      null,
       },
     });
   }

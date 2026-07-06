@@ -73,16 +73,16 @@ Return ONLY valid JSON. ALL string values must be in Hebrew. {"results":[{"topic
 }
 
 const SOURCE_QUERIES: Record<string, (name: string, city: string) => string> = {
-  facebook:    (n, c) => `"${n}" ביקורות OR reviews site:facebook.com ${c}`,
-  instagram:   (n, _c) => `"${n}" comments OR תגובות site:instagram.com`,
-  tripadvisor: (n, _c) => `"${n}" site:tripadvisor.com OR site:tripadvisor.co.il`,
-  waze:        (n, c) => `"${n}" site:waze.com ${c}`,
-  tiktok:      (n, _c) => `"${n}" site:tiktok.com`,
-  wolt:        (n, _c) => `"${n}" ביקורות site:wolt.com`,
-  '10bis':     (n, c) => `"${n}" ביקורות site:10bis.co.il OR "${n}" ${c} 10bis`,
-  easy:        (n, _c) => `"${n}" ביקורות OR חוות דעת site:easy.co.il`,
-  booking:     (n, _c) => `"${n}" reviews site:booking.com OR site:booking.co.il`,
-  forums:      (n, c) => `"${n}" חוות דעת OR ביקורות OR המלצה site:tapuz.co.il OR site:zap.co.il OR "${n}" פורום ${c}`,
+  facebook:    (n: string, c: string) => `"${n}" ביקורות OR reviews site:facebook.com ${c}`,
+  instagram:   (n: string, _c: string) => `"${n}" comments OR תגובות site:instagram.com`,
+  tripadvisor: (n: string, _c: string) => `"${n}" site:tripadvisor.com OR site:tripadvisor.co.il`,
+  waze:        (n: string, c: string) => `"${n}" site:waze.com ${c}`,
+  tiktok:      (n: string, _c: string) => `"${n}" site:tiktok.com`,
+  wolt:        (n: string, _c: string) => `"${n}" ביקורות site:wolt.com`,
+  '10bis':     (n: string, c: string) => `"${n}" ביקורות site:10bis.co.il OR "${n}" ${c} 10bis`,
+  easy:        (n: string, _c: string) => `"${n}" ביקורות OR חוות דעת site:easy.co.il`,
+  booking:     (n: string, _c: string) => `"${n}" reviews site:booking.com OR site:booking.co.il`,
+  forums:      (n: string, c: string) => `"${n}" חוות דעת OR ביקורות OR המלצה site:tapuz.co.il OR site:zap.co.il OR "${n}" פורום ${c}`,
 };
 const SOURCE_PLATFORM_LABELS: Record<string, string> = {
   facebook: 'Facebook', instagram: 'Instagram', tripadvisor: 'TripAdvisor',
@@ -114,8 +114,8 @@ export async function collectReviews(req: Request, res: Response) {
     let gmbPathResult: 'success' | 'failed' | 'not_connected' = 'not_connected';
 
     const existingReviews = await prisma.review.findMany({ where: { linked_business: businessProfileId } });
-    const existingGoogleIds = new Set(existingReviews.map(r => r.google_review_id).filter(Boolean));
-    const existingTexts = new Set(existingReviews.map(r => (r.text || '').substring(0, 50)));
+    const existingGoogleIds = new Set(existingReviews.map((r: typeof existingReviews[0]) => r.google_review_id).filter(Boolean));
+    const existingTexts = new Set(existingReviews.map((r: typeof existingReviews[0]) => (r.text || '').substring(0, 50)));
 
     // ── Google My Business API (OAuth) — preferred when client has connected ────
     const gmbAccount = await prisma.socialAccount.findFirst({
@@ -396,9 +396,9 @@ export async function collectReviews(req: Request, res: Response) {
 
     const reviewPlatforms = ['google.com/maps', 'facebook.com', 'tripadvisor', 'yelp.com', 'wolt.com', '10bis.co.il'];
     const nameParts = name.split(' ').filter((p: string) => p.length > 2);
-    const existingUrls = new Set(existingReviews.map(r => r.source_url).filter(Boolean));
+    const existingUrls = new Set(existingReviews.map((r: typeof existingReviews[0]) => r.source_url).filter(Boolean));
 
-    const reviewSignals = rawSignals.filter(s => {
+    const reviewSignals = rawSignals.filter((s: typeof rawSignals[0]) => {
       const url = (s.url || '').toLowerCase();
       const content = s.content || '';
       return reviewPlatforms.some(p => url.includes(p)) &&
@@ -410,7 +410,7 @@ export async function collectReviews(req: Request, res: Response) {
     if (reviewSignals.length > 0) {
       // Batch-classify raw signals in one Haiku call
       const signalsStr = reviewSignals
-        .map((s, i) => `[${i}] מ-${s.url}: "${(s.content || '').substring(0, 250)}"`)
+        .map((s: typeof reviewSignals[0], i: number) => `[${i}] מ-${s.url}: "${(s.content || '').substring(0, 250)}"`)
         .join('\n');
       let signalsParsed: any[] = [];
       try {

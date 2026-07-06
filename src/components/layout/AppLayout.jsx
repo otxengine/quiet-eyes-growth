@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -91,7 +91,7 @@ export default function AppLayout() {
   const isAdmin = checkIsAdmin(authUser?.email);
 
   // Organization context: active branch
-  const { currentBranch: orgBranch, isLoading: orgLoading } = useOrganization();
+  const { currentBranch: orgBranch } = useOrganization();
 
   // Get current user
   const { data: user, isLoading: loadingUser, isError: userError } = useQuery({

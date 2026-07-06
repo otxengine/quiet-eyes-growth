@@ -28,14 +28,14 @@ export async function synthesizeMarketInsights(req: Request, res: Response) {
     // Three-tier fallback: 48h → 7 days → all → empty
     // Filter out signals on irrelevant topics based on AI sector profile
     let signals = allRawSignals
-      .filter(s => isSignalRelevant(s, profile))
-      .filter(s => new Date(s.detected_at || s.created_date) >= twoDaysAgo).slice(0, 18);
-    if (signals.length === 0) signals = allRawSignals.filter(s => isSignalRelevant(s, profile) && new Date(s.detected_at || s.created_date) >= sevenDaysAgo).slice(0, 18);
-    if (signals.length === 0) signals = allRawSignals.filter(s => isSignalRelevant(s, profile)).slice(0, 18);
+      .filter((s: typeof allRawSignals[0]) => isSignalRelevant(s, profile))
+      .filter((s: typeof allRawSignals[0]) => new Date(s.detected_at || s.created_date) >= twoDaysAgo).slice(0, 18);
+    if (signals.length === 0) signals = allRawSignals.filter((s: typeof allRawSignals[0]) => isSignalRelevant(s, profile) && new Date(s.detected_at || s.created_date) >= sevenDaysAgo).slice(0, 18);
+    if (signals.length === 0) signals = allRawSignals.filter((s: typeof allRawSignals[0]) => isSignalRelevant(s, profile)).slice(0, 18);
     if (signals.length === 0) signals = allRawSignals.slice(0, 18); // absolute fallback
 
     const competitorContext = competitors.length > 0
-      ? `\nמתחרים מזוהים:\n${competitors.slice(0, 5).map(c => `- ${c.name}: דירוג ${c.rating || '?'}, חוזקות: ${c.strengths || '?'}`).join('\n')}`
+      ? `\nמתחרים מזוהים:\n${competitors.slice(0, 5).map((c: typeof competitors[0]) => `- ${c.name}: דירוג ${c.rating || '?'}, חוזקות: ${c.strengths || '?'}`).join('\n')}`
       : '';
 
     const sectorCtx = getSectorContentStrategy(profile.category);
@@ -82,7 +82,7 @@ Return ONLY valid JSON:
 
       const coldInsights = coldResult?.insights || [];
       const existingCold = await prisma.marketSignal.findMany({ where: { linked_business: businessProfileId } });
-      const existingSumsCold = new Set(existingCold.map(e => e.summary));
+      const existingSumsCold = new Set(existingCold.map((e: typeof existingCold[0]) => e.summary));
       let coldCreated = 0;
 
       for (const insight of coldInsights) {
@@ -131,7 +131,7 @@ Return ONLY valid JSON:
       return res.json({ signals_processed: 0, insights_generated: coldCreated, duplicates_skipped: 0, cold_start: true });
     }
 
-    const contextBlock = signals.map(s =>
+    const contextBlock = signals.map((s: typeof signals[0]) =>
       `[${s.signal_type}/${s.platform || 'web'}] Source: ${s.source}\nContent: ${s.content}\nURL: ${s.url}`
     ).join('\n---\n');
 
@@ -182,7 +182,7 @@ Return ONLY valid JSON:
 
     const insights = result?.insights || [];
     const existingSignals = await prisma.marketSignal.findMany({ where: { linked_business: businessProfileId } });
-    const existingSummaries = new Set(existingSignals.map(e => e.summary));
+    const existingSummaries = new Set(existingSignals.map((e: typeof existingSignals[0]) => e.summary));
 
     let created = 0;
     let dupes = 0;

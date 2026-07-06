@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -57,6 +57,7 @@ const IMPACT_ORDER = { critical: 4, high: 3, medium: 2, low: 1 };
 // ── Phase 3: Relevance scoring ──────────────────────────────────────────────
 // Returns 0-100. Signals below RELEVANCE_THRESHOLD are hidden from the feed.
 // Factors: impact alignment (30) + specificity (25) + actionability (25) + freshness (20)
+/** @param {Record<string, any>} row */
 function computeRelevanceScore(row) {
   let score = 0;
 
@@ -89,6 +90,7 @@ function computeRelevanceScore(row) {
   return Math.min(100, score);
 }
 
+/** @param {Record<string, any>} item */
 function classifyCategory(item) {
   const t = item.type || '';
   if (t.includes('risk') || t.includes('negative') || t.includes('reputation')) return 'risk';
@@ -101,6 +103,7 @@ function classifyCategory(item) {
 }
 
 // Normalize title to a fingerprint for dedup comparison
+/** @param {string} title */
 function fingerprint(title) {
   return (title || '')
     .toLowerCase()
@@ -143,6 +146,7 @@ function capPerCategory(rows) {
   });
 }
 
+/** @param {Record<string, any>} row */
 function rowAgeInDays(row) {
   const d = row.raw?.detected_at || row.raw?.created_at;
   if (!d) return 0;
@@ -150,6 +154,7 @@ function rowAgeInDays(row) {
 }
 
 // Context-aware CTA label instead of generic "פעולה"
+/** @param {Record<string, any>} row */
 function getActionLabel(row) {
   const t = row.type || '';
   if (t === 'negative_review' || t === 'reputation_risk') return 'הגב לביקורת';
@@ -164,6 +169,7 @@ function getActionLabel(row) {
 }
 
 export default function Insights() {
+  // @ts-ignore -- outlet context shape not inferred in JSX
   const { businessProfile } = useOutletContext();
   const navigate = useNavigate();
   const bpId = businessProfile?.id;
@@ -256,8 +262,8 @@ export default function Insights() {
     { key: 'competitor', label: 'מתחרים',    count: compRows.length },
   ].filter(t => t.key === 'all' || t.count > 0);
 
-  const getTypeMeta  = (type)   => TYPE_META[type]   || { label: type, color: 'text-foreground-secondary', bg: 'bg-gray-50' };
-  const getValueMeta = (impact) => VALUE_MAP[impact]  || VALUE_MAP.medium;
+  const getTypeMeta  = (/** @type {string} */ type)   => TYPE_META[type]   || { label: type, color: 'text-foreground-secondary', bg: 'bg-gray-50' };
+  const getValueMeta = (/** @type {string} */ impact) => VALUE_MAP[impact]  || VALUE_MAP.medium;
 
   const removedByDedup = allRows.length - deduped.length;
 

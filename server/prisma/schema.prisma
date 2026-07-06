@@ -341,17 +341,19 @@ model SupportTicket {
 }
 
 model AutomationLog {
-  id               String   @id @default(cuid())
-  created_date     DateTime @default(now())
-  created_by       String?
-  linked_business  String?
-  automation_name  String
-  start_time       String?
-  end_time         String?
-  status           String?
-  items_processed  Float?   @default(0)
-  error_message    String?
-  cost_usd         Float?
+  id                 String   @id @default(cuid())
+  created_date       DateTime @default(now())
+  created_by         String?
+  linked_business    String?
+  automation_name    String
+  start_time         String?
+  end_time           String?
+  status             String?
+  items_processed    Float?   @default(0)
+  error_message      String?
+  cost_usd           Float?
+  trace_id           String?
+  high_urgency_count Float?   @default(0)
 
   @@map("automation_logs")
 }

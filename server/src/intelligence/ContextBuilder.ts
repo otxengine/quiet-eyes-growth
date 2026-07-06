@@ -25,15 +25,15 @@ const logger = createLogger('ContextBuilder');
 
 async function loadMetaConfig(businessId: string, category: string): Promise<MetaConfiguration | null> {
   try {
-    const row = await prisma.$queryRawUnsafe<Array<{
-      auto_execute_enabled: boolean;
-      signal_keywords:      string[];
-      local_radius_meters:  number;
-    }>>(
+    const row = await prisma.$queryRawUnsafe(
       `SELECT auto_execute_enabled, signal_keywords, local_radius_meters
        FROM meta_configurations WHERE business_id = $1 LIMIT 1`,
       businessId,
-    );
+    ) as Array<{
+      auto_execute_enabled: boolean;
+      signal_keywords:      string[];
+      local_radius_meters:  number;
+    }>;
     if (!row[0]) return null;
     return {
       business_id:               businessId,
@@ -54,7 +54,7 @@ async function loadMetaConfig(businessId: string, category: string): Promise<Met
 
 async function loadRecentDecisions(businessId: string): Promise<EnrichedContext['recent_decisions']> {
   try {
-    return await prisma.$queryRawUnsafe<EnrichedContext['recent_decisions']>(
+    return await prisma.$queryRawUnsafe(
       `SELECT id, action_type, status, final_score AS score, created_at
        FROM otx_decisions
        WHERE business_id = $1
@@ -62,7 +62,7 @@ async function loadRecentDecisions(businessId: string): Promise<EnrichedContext[
        ORDER BY created_at DESC
        LIMIT 20`,
       businessId,
-    );
+    ) as EnrichedContext['recent_decisions'];
   } catch {
     return [];
   }
@@ -72,7 +72,7 @@ async function loadRecentDecisions(businessId: string): Promise<EnrichedContext[
 
 async function loadRecentOutcomes(businessId: string): Promise<EnrichedContext['recent_outcomes']> {
   try {
-    return await prisma.$queryRawUnsafe<EnrichedContext['recent_outcomes']>(
+    return await prisma.$queryRawUnsafe(
       `SELECT id, decision_id, outcome_type, outcome_score, conversion_flag, created_at
        FROM otx_outcome_events
        WHERE business_id = $1
@@ -80,7 +80,7 @@ async function loadRecentOutcomes(businessId: string): Promise<EnrichedContext['
        ORDER BY created_at DESC
        LIMIT 20`,
       businessId,
-    );
+    ) as EnrichedContext['recent_outcomes'];
   } catch {
     return [];
   }
@@ -201,18 +201,18 @@ export async function buildEnrichedContext(businessProfileId: string): Promise<E
   ]);
 
   // Aggregate leads
-  const hot      = allLeads.filter(l => l.status === 'hot').length;
-  const warm     = allLeads.filter(l => l.status === 'warm').length;
-  const newL     = allLeads.filter(l => l.status === 'new').length;
-  const scores   = allLeads.map(l => l.score ?? 0).filter(s => s > 0);
-  const avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+  const hot      = allLeads.filter((l: typeof allLeads[0]) => l.status === 'hot').length;
+  const warm     = allLeads.filter((l: typeof allLeads[0]) => l.status === 'warm').length;
+  const newL     = allLeads.filter((l: typeof allLeads[0]) => l.status === 'new').length;
+  const scores   = allLeads.map((l: typeof allLeads[0]) => l.score ?? 0).filter((s: number) => s > 0);
+  const avgScore = scores.length > 0 ? scores.reduce((a: number, b: number) => a + b, 0) / scores.length : 0;
 
   // Reviews avg
-  const ratings   = recentReviews.map(r => r.rating ?? 0).filter(r => r > 0);
-  const avgRating = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null;
+  const ratings   = recentReviews.map((r: typeof recentReviews[0]) => r.rating ?? 0).filter((r: number) => r > 0);
+  const avgRating = ratings.length > 0 ? ratings.reduce((a: number, b: number) => a + b, 0) / ratings.length : null;
 
   // Recent decisions summary (legacy string format)
-  const recentDecisionsSummary = recentActions.map(a => `${a.title} (${a.type}) — ${a.status}`);
+  const recentDecisionsSummary = recentActions.map((a: typeof recentActions[0]) => `${a.title} (${a.type}) — ${a.status}`);
 
   // Sector knowledge
   const sk = sectorKnowledge ? {
@@ -222,7 +222,7 @@ export async function buildEnrichedContext(businessProfileId: string): Promise<E
       ? JSON.parse(sectorKnowledge.winner_lead_dna as string) : null,
   } : null;
 
-  const recentSignalsList = signals.map(s => ({
+  const recentSignalsList = signals.map((s: typeof signals[0]) => ({
     id:           s.id,
     summary:      s.summary,
     category:     s.category,
@@ -269,7 +269,7 @@ export async function buildEnrichedContext(businessProfileId: string): Promise<E
     recent_signals:     recentSignalsList,
     signals: {
       total:        recentSignalsList.length,
-      high_urgency: recentSignalsList.filter(s => s.impact_level === 'high').length,
+      high_urgency: recentSignalsList.filter((s: typeof recentSignalsList[0]) => s.impact_level === 'high').length,
     },
     // Populated by OpportunityDetector / ThreatDetector after context is built
     active_opportunities: [],
@@ -277,7 +277,7 @@ export async function buildEnrichedContext(businessProfileId: string): Promise<E
     trends:               [],
     forecasts:            [],
     leads: { total: allLeads.length, hot, warm, new: newL, avg_score: Math.round(avgScore) },
-    competitors: competitors.map(c => ({
+    competitors: competitors.map((c: typeof competitors[0]) => ({
       name:            c.name,
       rating:          c.rating ?? null,
       trend_direction: c.trend_direction ?? null,
@@ -298,7 +298,7 @@ export async function buildEnrichedContext(businessProfileId: string): Promise<E
       pending_response: pendingReviews,
     },
     sector_knowledge: sk,
-    active_predictions: predictions.map(p => ({
+    active_predictions: predictions.map((p: typeof predictions[0]) => ({
       title:      p.title,
       confidence: p.confidence,
       timeframe:  p.timeframe,

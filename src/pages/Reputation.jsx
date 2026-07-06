@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Star, Plus, Search, Loader2, MessageCircle, BarChart2, Bot, Send, MoreHorizontal, AlertTriangle, X, ChevronDown, MoreVertical } from 'lucide-react';
+import { Star, Plus, Search, Loader2, Bot, Send, X, ChevronDown, MoreVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import AddReviewModal from '@/components/reputation/AddReviewModal';
 import RequestReviewModal from '@/components/reputation/RequestReviewModal';
@@ -28,7 +28,7 @@ const SENTIMENT_DOT = {
   positive: 'bg-green-500',
 };
 
-function ReviewRow({ review, businessProfile, onApprove }) {
+function ReviewRow({ review, onApprove }) {
   const platCfg = PLATFORM_ICONS[review.source] || PLATFORM_ICONS.default;
   const sentDot = SENTIMENT_DOT[review.sentiment] || 'bg-gray-400';
   const relDate = (() => {
@@ -186,48 +186,9 @@ export default function Reputation() {
   const queryClient = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [analyzingSentiment, setAnalyzingSentiment] = useState(false);
-  const [sentimentResult, setSentimentResult] = useState(null);
-  const [autoResponding, setAutoResponding] = useState(false);
+  const [_scanning, setScanning] = useState(false);
   const [selectedReview, setSelectedReview] = useState(null);
-  const [sendingRequests, setSendingRequests] = useState(false);
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
-  const moreMenuRef = useRef(null);
-  const [selectedSources, setSelectedSources] = useState(['google', 'facebook', 'instagram', 'tripadvisor', 'waze', 'tiktok', 'wolt', '10bis', 'easy', 'forums']);
-  const [dismissedAlerts, setDismissedAlerts] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('dismissed_rep_alerts') || '[]'); } catch { return []; }
-  });
-
-  const handleSendRequests = async () => {
-    if (!bpId) return;
-    setSendingRequests(true);
-    setMoreMenuOpen(false);
-    toast.info('שולח בקשות ביקורת ללקוחות מרוצים...');
-    try {
-      const res = await base44.functions.invoke('reviewRequestAutomation', { businessProfileId: bpId });
-      const { requests_sent = 0 } = res?.data || {};
-      queryClient.invalidateQueries({ queryKey: ['reviewRequests', bpId] });
-      toast.success(requests_sent > 0 ? `${requests_sent} בקשות נשלחו ✓` : 'אין לקוחות כשירים כרגע');
-    } catch {
-      toast.error('שגיאה בשליחת בקשות');
-    }
-    setSendingRequests(false);
-  };
-
-  // FIX 7: Sentiment analysis
-  const handleAnalyzeSentiment = async () => {
-    setAnalyzingSentiment(true);
-    setSentimentResult(null);
-    try {
-      const res = await base44.functions.invoke('analyzeSentiment', { businessProfileId: bpId });
-      const data = res?.data || res;
-      setSentimentResult(data);
-    } catch (err) {
-      toast.error('שגיאה בניתוח סנטימנט');
-    }
-    setAnalyzingSentiment(false);
-  };
+  const [selectedSources] = useState(['google', 'facebook', 'instagram', 'tripadvisor', 'waze', 'tiktok', 'wolt', '10bis', 'easy', 'forums']);
 
   const handleCollectReviews = async () => {
     setScanning(true);
@@ -257,72 +218,13 @@ export default function Reputation() {
     return () => { delete window.__cortexi_scan; };
   }, [bpId]);
 
-  useEffect(() => {
-    function handleOutside(e) {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setMoreMenuOpen(false);
-    }
-    if (moreMenuOpen) document.addEventListener('mousedown', handleOutside);
-    return () => document.removeEventListener('mousedown', handleOutside);
-  }, [moreMenuOpen]);
-
   const { data: allReviewsRaw = [] } = useQuery({
     queryKey: ['reviewsPage', bpId],
     queryFn: () => base44.entities.Review.filter({ linked_business: bpId }, '-created_date', 200),
     enabled: !!bpId
   });
 
-  const reviews = allReviewsRaw.filter(r => !r.is_historical && r.rating != null && Number(r.rating) > 0);
-  const historicalReviews = allReviewsRaw.filter(r => r.is_historical);
-  const [showHistorical, setShowHistorical] = useState(false);
-
-  const { data: reviewRequests = [] } = useQuery({
-    queryKey: ['reviewRequests', bpId],
-    queryFn: () => base44.entities.ReviewRequest.filter({ linked_business: bpId }, '-created_date', 100),
-    enabled: !!bpId
-  });
-
-  // Real-time: load reputation-related alerts — poll every 2 minutes
-  const { data: negativeAlerts = [] } = useQuery({
-    queryKey: ['negativeAlerts', bpId],
-    queryFn: async () => {
-      const [neg, risk] = await Promise.all([
-        base44.entities.ProactiveAlert.filter(
-          { linked_business: bpId, alert_type: 'negative_review', is_dismissed: false },
-          '-created_at', 8
-        ),
-        base44.entities.ProactiveAlert.filter(
-          { linked_business: bpId, alert_type: 'reputation_risk', is_dismissed: false },
-          '-created_at', 4
-        ),
-      ]);
-      return [...neg, ...risk].sort((a, b) =>
-        new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-      );
-    },
-    enabled: !!bpId,
-    refetchInterval: 2 * 60 * 1000,
-  });
-
-  // Review timing recommendation from reviewRequestTimingAgent
-  const { data: reviewTimingSignal } = useQuery({
-    queryKey: ['reviewTimingSignal', bpId],
-    queryFn: () => base44.entities.MarketSignal.filter(
-      { linked_business: bpId, category: 'review_timing' },
-      '-detected_at', 1
-    ).then(r => r[0] || null),
-    enabled: !!bpId,
-    staleTime: 60 * 60 * 1000,
-  });
-
-  const visibleAlerts = negativeAlerts.filter(a => !dismissedAlerts.includes(a.id));
-
-  function dismissAlert(id) {
-    const next = [...dismissedAlerts, id];
-    setDismissedAlerts(next);
-    localStorage.setItem('dismissed_rep_alerts', JSON.stringify(next));
-  }
-  const monthStartForReqs = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
-  const requestsThisMonth = reviewRequests.filter(r => (r.sent_at || r.created_date) >= monthStartForReqs).length;
+  const reviews = /** @type {Array<Record<string, any>>} */ (allReviewsRaw).filter(r => !r.is_historical && r.rating != null && Number(r.rating) > 0);
 
   const avgRating = reviews.length > 0 ? (reviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / reviews.length) : 0;
   const now = new Date();
@@ -356,7 +258,6 @@ export default function Reputation() {
     return (new Date(b.created_at || b.created_date || 0).getTime() || 0) - (new Date(a.created_at || a.created_date || 0).getTime() || 0);
   });
 
-  const verifiedCount = reviews.filter(r => r.source_url).length;
   const respondedCount = reviews.filter(r => ['responded', 'auto_responded', 'suggested', 'published'].includes(r.response_status)).length;
   const responseRate = reviews.length > 0 ? Math.round((respondedCount / reviews.length) * 100) : 0;
 
@@ -531,7 +432,7 @@ export default function Reputation() {
                 <p className="text-[12px] text-foreground-muted">אין ביקורות התואמות את הסינון</p>
               </div>
             ) : filteredTable.map(review => (
-              <ReviewRow key={review.id} review={review} businessProfile={businessProfile}
+              <ReviewRow key={review.id} review={review}
                 onApprove={() => setSelectedReview(review)}
               />
             ))}

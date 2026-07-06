@@ -55,14 +55,6 @@ const INTENT_KEYWORDS: string[] = [
   'review', 'feedback', 'customer', 'lead', 'sign up', 'register',
 ];
 
-/** Negative/risk indicator terms */
-const RISK_KEYWORDS: string[] = [
-  'חרם', 'תלונה', 'כישלון', 'נסגר', 'סגור', 'בעיה', 'פגם', 'גרוע',
-  'נורא', 'איום', 'תחרות', 'תחרותי', 'מתחרה', 'הוריד', 'ירד', 'צנח',
-  'crisis', 'complaint', 'closed', 'problem', 'failed', 'bad', 'terrible',
-  'threat', 'competitor', 'dropped', 'declined', 'fell',
-];
-
 /** Sector keyword maps for sector_match scoring */
 const SECTOR_KEYWORDS: Record<string, string[]> = {
   food: [
@@ -192,11 +184,13 @@ function computeComposite(signal: Omit<ClassifiedSignal, 'id' | 'signal_id' | 'b
 
 function extractText(signal: any): string {
   return [
-    signal.summary,
-    signal.content,
-    signal.title,
-    signal.source_url,
-    signal.keywords?.join(' '),
+    signal.summary,           // MarketSignal
+    signal.content,           // RawSignal
+    signal.recommended_action, // MarketSignal
+    signal.url,               // RawSignal
+    signal.source_urls,       // MarketSignal
+    signal.signal_type,       // RawSignal
+    signal.platform,          // RawSignal
   ]
     .filter(Boolean)
     .join(' ')
@@ -237,13 +231,13 @@ export async function processSignals(
     ...rawSignals.map(s => ({
       id:        s.id,
       text:      extractText(s),
-      hash:      (s as any).content_hash ?? s.id, // use hash field if available
+      hash:      s.checksum_hash ?? s.id,
       createdAt: new Date(s.created_date),
     })),
     ...marketSignals.map(s => ({
       id:        s.id,
       text:      extractText(s),
-      hash:      (s as any).content_hash ?? s.id,
+      hash:      (s as any).checksum_hash ?? s.id,
       createdAt: new Date(s.created_date),
     })),
   ];
@@ -259,7 +253,7 @@ export async function processSignals(
     (ctx.signals.items ?? []).map((cs: ClassifiedSignal) => cs.signal_id),
   );
 
-  const { name: bizName, category: bizCategory, city: bizCity } = ctx.profile;
+  const { category: bizCategory, city: bizCity } = ctx.profile;
 
   // ── 3. Score each signal ───────────────────────────────────────────────────
   const classified: ClassifiedSignal[] = [];

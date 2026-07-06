@@ -88,7 +88,7 @@ async function getActiveProfiles(): Promise<string[]> {
       where: { onboarding_completed: true },
       select: { id: true, name: true },
     });
-    return profiles.map(p => p.id);
+    return profiles.map((p: { id: string }) => p.id);
   } catch (err: any) {
     logger.error('Failed to fetch active profiles', { error: err.message });
     return [];

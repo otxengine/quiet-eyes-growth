@@ -35,7 +35,7 @@ export async function collectSocialSignals(req: Request, res: Response) {
     const instagram_url: string | null = (profile as any).instagram_url || null;
     console.log(`[collectSocialSignals] settings → facebook_url=${facebook_url || 'none'} instagram_url=${instagram_url || 'none'} apify=${hasApifyKey()}`);
     const existingSignals = await prisma.rawSignal.findMany({ where: { linked_business: businessProfileId } });
-    const existingUrls = new Set(existingSignals.map(s => s.url).filter(Boolean));
+    const existingUrls = new Set(existingSignals.map((s: typeof existingSignals[0]) => s.url).filter(Boolean));
 
     let newSignals = 0;
     let apifyError: string | undefined;

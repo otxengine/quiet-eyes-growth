@@ -8,7 +8,7 @@
  *   onAction    {function}
  *   actionIcon  {ReactNode}  optional icon before label
  */
-export default function PageHeader({ count = null, title, subtitle, actionLabel, onAction, actionIcon }) {
+export default function PageHeader({ count = null, title, subtitle = undefined, actionLabel = undefined, onAction = undefined, actionIcon = undefined }) {
   return (
     <div className="flex items-start justify-between mb-6">
       {/* Action button — top-left */}

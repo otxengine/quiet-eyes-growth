@@ -35,7 +35,6 @@ import { decisionRepository }  from '../repositories/DecisionRepository';
 import { bus }                 from '../events/EventBus';
 import { createLogger }        from '../infra/logger';
 import { writeAutomationLog }  from '../lib/automationLog';
-import { prisma }              from '../db';
 
 const logger = createLogger('MasterOrchestrator');
 
@@ -239,7 +238,7 @@ export async function runPipeline(
     // ── Stage: predict ─────────────────────────────────────────────────────────
     // DemandForecastingService: compute demand forecasts → inject into context.forecasts
     if (!skip.has('predict') && context && options.mode !== 'signal_only') {
-      const { result: fcResult, stageResult: fcStage } = await runStage(
+      const { stageResult: fcStage } = await runStage(
         'predict',
         () => computeForecasts(context!, traceId),
         traceId, businessId,
@@ -377,7 +376,7 @@ function makeSkippedRun(
   runId:      string,
   businessId: string,
   traceId:    string,
-  reason:     string,
+  _reason:    string,
   startedAt:  string,
 ): PipelineRun {
   return {

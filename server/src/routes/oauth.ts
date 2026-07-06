@@ -84,10 +84,10 @@ async function generateState(platform: string, businessId: string, codeVerifier?
 
 async function consumeState(state: string): Promise<{ businessId: string; platform: string; codeVerifier?: string } | null> {
   try {
-    const rows = await prisma.$queryRawUnsafe<Array<{ business_id: string; platform: string; expires_at: string; code_verifier?: string }>>(
+    const rows = await prisma.$queryRawUnsafe(
       `DELETE FROM oauth_state_store WHERE id=$1 RETURNING business_id, platform, expires_at, code_verifier`,
       state,
-    );
+    ) as Array<{ business_id: string; platform: string; expires_at: string; code_verifier?: string }>;
     const row = rows[0];
     if (!row) return null;
     if (new Date(row.expires_at) < new Date()) return null;
