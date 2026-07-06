@@ -71,6 +71,11 @@ const STRATEGIC_RESPONSE = {
     include_topics: ['food', 'restaurant'],
     exclude_topics: ['sports'],
   },
+  runIntelligenceEngines: {
+    market_context_he: 'שוק המסעדות בתל אביב',
+    watch_signals_he: ['טרנד פסטה'],
+    ignore_signals_he: [],
+  },
 };
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
@@ -124,6 +129,24 @@ describe('generateAgentMissions', () => {
 
     expect(result).toBeNull();
     expect(update).not.toHaveBeenCalled();
+  });
+
+  test('AC#2 prompt template uses canonical key runIntelligenceEngines', async () => {
+    await generateAgentMissions('bp1');
+
+    const promptArg: string = llm.mock.calls[0][0].prompt;
+    expect(promptArg).toContain('runIntelligenceEngines');
+    expect(promptArg).not.toContain('runMarketIntelligence');
+  });
+
+  test('AC#2 persisted blob uses canonical key runIntelligenceEngines, not legacy', async () => {
+    const result = await generateAgentMissions('bp1');
+
+    expect(result).not.toBeNull();
+    const dbArg = update.mock.calls[0][0];
+    const persisted = JSON.parse(dbArg.data.agent_missions);
+    expect(persisted).toHaveProperty('runIntelligenceEngines');
+    expect(persisted).not.toHaveProperty('runMarketIntelligence');
   });
 
   test('AC#1 guard: returns null when priority_queries_en is an empty array', async () => {

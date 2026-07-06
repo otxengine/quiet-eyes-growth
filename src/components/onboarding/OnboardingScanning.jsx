@@ -13,7 +13,7 @@ const scanSteps = [
   { fn: 'learnFromWebsite',        text: 'לומד את האתר שלך...',             narrative: 'קורא את הדפים ומבין את הקול שלך...', requiresWebsite: true },
   { fn: 'collectWebSignals',       text: 'סורק את השוק ברשת...',            narrative: 'מחפש מה לקוחות מדברים על הסקטור שלך...' },
   { fn: 'collectSocialSignals',    text: 'אוסף אותות מרשתות חברתיות...',   narrative: 'מנתח טרנדים רלוונטיים לעסק שלך...' },
-  { fn: 'runMarketIntelligence',   text: 'מנתח תובנות שוק...',              narrative: 'מזהה הזדמנויות ספציפיות לתחום שלך...', delay: 8000 },
+  { fn: 'synthesizeMarketInsights', text: 'מנתח תובנות שוק...',              narrative: 'מזהה הזדמנויות ספציפיות לתחום שלך...', delay: 8000 },
   { fn: 'detectTrends',            text: 'מזהה מגמות בסקטור שלך...',        narrative: 'מה עולה בתחום שלך עכשיו?' },
   { fn: 'runCompetitorIdentification', text: 'מזהה מתחרים רלוונטיים...',   narrative: 'מוצא את המתחרים האמיתיים שלך בלבד...' },
   { fn: 'runLeadGeneration',       text: 'מחפש לידים פוטנציאליים...',       narrative: 'מחפש אנשים שמחפשים בדיוק מה שאתה מציע...' },

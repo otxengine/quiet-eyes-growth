@@ -26,7 +26,7 @@ const tabs = [
 const intelligenceScanSteps = [
   { key: 'collect',      label: 'אוסף אותות מהאינטרנט...',     fn: 'collectWebSignals',    resultKey: 'new_signals_saved' },
   { key: 'social',       label: 'סורק רשתות חברתיות...',        fn: 'collectSocialSignals', resultKey: 'signals_saved' },
-  { key: 'analyze',      label: 'מנתח מודיעין שוק...',          fn: 'runMarketIntelligence', resultKey: 'insights_generated' },
+  { key: 'analyze',      label: 'מנתח מודיעין שוק...',          fn: 'synthesizeMarketInsights', resultKey: 'insights_generated' },
   { key: 'trends',       label: 'מגלה מגמות עולות...',          fn: 'detectTrends',         resultKey: 'trends_detected' },
   { key: 'early_trends', label: 'מגלה טרנדים מוקדמים...',       fn: 'detectEarlyTrends',    resultKey: 'trends_created' },
   { key: 'viral',        label: 'סורק סיגנלים ויראלים...',      fn: 'detectViralSignals',   resultKey: 'signals_created' },

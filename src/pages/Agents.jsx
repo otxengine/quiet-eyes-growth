@@ -36,7 +36,7 @@ const agentConfigs = [
   },
   {
     name: 'המנתח', nameEn: 'Analyzer',
-    functionName: 'runMarketIntelligence',
+    functionName: 'synthesizeMarketInsights',
     intervalHours: 4,
     description: 'מנתח אותות מהאינטרנט ומרשתות חברתיות. מייצר תובנות שוק עם ניתוח סנטימנט מורחב.',
     lastRunLabel: 'ניתוח אחרון',
