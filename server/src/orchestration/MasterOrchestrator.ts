@@ -20,7 +20,7 @@ import {
   PipelineRun, StageResult, PipelineStage, PipelineSummary,
 } from '../models';
 import { buildEnrichedContext, EnrichedContext } from '../intelligence/ContextBuilder';
-import { runMarketIntelligence } from '../services/intelligence/MarketIntelligenceService';
+import { runIntelligenceEngines } from '../services/intelligence/MarketIntelligenceService';
 import { detectOpportunities } from '../services/intelligence/OpportunityDetector';
 import { detectThreats }       from '../services/intelligence/ThreatDetector';
 import { fuseInsight }         from '../services/intelligence/InsightFusion';
@@ -217,15 +217,15 @@ export async function runPipeline(
       }
     }
 
-    // ── Stage: market_intelligence ────────────────────────────────────────────
+    // ── Stage: engine_analysis ────────────────────────────────────────────────
     // Run all 8 intelligence engines in parallel; inject results into context
-    if (!skip.has('market_intelligence') && context && options.mode !== 'signal_only') {
+    if (!skip.has('engine_analysis') && context && options.mode !== 'signal_only') {
       const { result: miResult, stageResult: miStage } = await runStage(
-        'market_intelligence',
-        () => runMarketIntelligence(context!, traceId),
+        'engine_analysis',
+        () => runIntelligenceEngines(context!, traceId),
         traceId, businessId,
       );
-      stages.market_intelligence = miStage;
+      stages.engine_analysis = miStage;
 
       if (miResult && context) {
         context.market_insights    = miResult.insights;

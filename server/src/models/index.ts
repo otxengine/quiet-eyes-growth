@@ -290,7 +290,7 @@ export interface EnrichedContext {
 
   recent_decisions_summary: string[];
 
-  // ── Intelligence Layer outputs (injected by MasterOrchestrator after market_intelligence stage)
+  // ── Intelligence Layer outputs (injected by MasterOrchestrator after engine_analysis stage)
   market_insights:  Insight[];       // structured insights from all intelligence engines
   trust_state:      TrustState | null;
   churn_risk_state: ChurnRiskState | null;
@@ -591,7 +591,7 @@ export type PipelineStage =
   | 'ingest'
   | 'classify'
   | 'opportunities'
-  | 'market_intelligence'
+  | 'engine_analysis'
   | 'trends'
   | 'predict'
   | 'context'
@@ -601,6 +601,11 @@ export type PipelineStage =
   | 'recommend'
   | 'dispatch'
   | 'learn';
+
+// ponytail: back-compat for persisted/in-flight docs that still carry the old stage id
+export const LEGACY_STAGE_MAP: Partial<Record<string, PipelineStage>> = {
+  market_intelligence: 'engine_analysis',
+};
 
 export interface PipelineRun {
   run_id:        string;

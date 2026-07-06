@@ -6,7 +6,7 @@
  * derived from classified signals, lead trends, competitor dynamics, and
  * Israeli seasonal patterns.
  *
- * Pipeline position: market_intelligence → [DemandForecastingService] → fuse
+ * Pipeline position: engine_analysis → [DemandForecastingService] → fuse
  *
  * Forecast windows: 24h, 7d, 30d
  *

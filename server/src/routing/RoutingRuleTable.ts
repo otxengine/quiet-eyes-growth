@@ -8,7 +8,7 @@
  * MasterOrchestrator receives the resolved stage set and skips everything else.
  *
  * ALL_STAGES (in pipeline order):
- *   context → classify → opportunities → market_intelligence →
+ *   context → classify → opportunities → engine_analysis →
  *   predict → fuse → decide → recommend → dispatch → learn
  *
  * Rule evaluation: rules are sorted by priority DESC, first matching rule wins.
@@ -82,7 +82,7 @@ export const ROUTING_RULES: RoutingRule[] = [
       { field: 'relevance_score', operator: '>=', value: 0.6 },
       { field: 'urgency_score',   operator: '>=', value: 0.5 },
     ],
-    stages_to_run: ['opportunities', 'market_intelligence', 'fuse', 'decide', 'recommend', 'dispatch'],
+    stages_to_run: ['opportunities', 'engine_analysis', 'fuse', 'decide', 'recommend', 'dispatch'],
     mode:        'partial',
     priority:    80,
     enabled:     true,
@@ -195,7 +195,7 @@ export const ROUTING_RULES: RoutingRule[] = [
     description: 'High churn risk triggers retention-focused decide + dispatch.',
     trigger:     'churn.risk.detected',
     conditions:  [{ field: 'risk_level', operator: '==', value: 'high' }],
-    stages_to_run: ['market_intelligence', 'fuse', 'decide', 'recommend', 'dispatch'],
+    stages_to_run: ['engine_analysis', 'fuse', 'decide', 'recommend', 'dispatch'],
     mode:        'partial',
     priority:    88,
     enabled:     true,
@@ -237,7 +237,7 @@ export interface RouteResolution {
 }
 
 const ALL_STAGES: PipelineStage[] = [
-  'context', 'classify', 'opportunities', 'market_intelligence',
+  'context', 'classify', 'opportunities', 'engine_analysis',
   'predict', 'fuse', 'decide', 'recommend', 'dispatch', 'learn',
 ];
 
