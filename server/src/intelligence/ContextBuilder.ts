@@ -161,7 +161,36 @@ export async function buildEnrichedContext(businessProfileId: string): Promise<E
     }),
   ]);
 
-  if (!profile) throw new Error(`Business profile not found: ${businessProfileId}`);
+  if (!profile) {
+    logger.warn('Business profile not found — returning empty context', { businessProfileId });
+    return {
+      context_id:               `ctx-${Date.now()}-${businessProfileId.slice(0, 8)}`,
+      business_id:              businessProfileId,
+      built_at:                 new Date().toISOString(),
+      profile:                  { name: '', category: '', city: '', plan_id: null },
+      meta_configuration:       null,
+      recent_signals:           [],
+      signals:                  { total: 0, high_urgency: 0 },
+      active_opportunities:     [],
+      active_threats:           [],
+      trends:                   [],
+      forecasts:                [],
+      leads:                    { total: 0, hot: 0, warm: 0, new: 0, avg_score: 0 },
+      competitors:              [],
+      health_score:             null,
+      health_details:           {},
+      reviews:                  { total: 0, avg_rating: null, negative_last7d: 0, pending_response: 0 },
+      sector_knowledge:         null,
+      active_predictions:       [],
+      memory:                   null,
+      recent_decisions:         [],
+      recent_outcomes:          [],
+      recent_decisions_summary: [],
+      market_insights:          [],
+      trust_state:              null,
+      churn_risk_state:         null,
+    };
+  }
 
   // Parallel secondary loads
   const [mem, metaConfig, recentDecisions, recentOutcomes] = await Promise.all([
