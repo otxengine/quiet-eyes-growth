@@ -556,3 +556,17 @@ describe('runMarketIntelligence (deprecated alias)', () => {
     expect(runMarketIntelligence).toBe(runIntelligenceEngines);
   });
 });
+
+// ─── Canonical name — direct invocation (AC1) ─────────────────────────────────
+
+describe('runIntelligenceEngines (canonical — direct call)', () => {
+  test('called by canonical name returns valid MarketIntelligenceResult', async () => {
+    setupMocks({
+      sdd: [makeInsight({ id: 'i_canonical', dedup_key: 'k_canonical' })],
+    });
+    const result = await runIntelligenceEngines(makeCtx(), 'trace_direct');
+    expect(result.insights).toHaveLength(1);
+    expect(result.engines_run.length).toBeGreaterThan(0);
+    expect(typeof result.duration_ms).toBe('number');
+  });
+});
