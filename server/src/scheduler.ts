@@ -276,11 +276,13 @@ export function startScheduler() {
   // processes the thumbnails they queued. Each agent has 20h checkpoint guard
   // so double-runs (e.g. if server restarts) are safely skipped.
   cron.schedule('0 2 * * *', () => {
-    runAgentForAll('InstagramTrendAgent',    instagramTrendAgent);    // 20h guard
-    runAgentForAll('FacebookGroupTrends',    facebookGroupTrendAgent); // 20h guard
-    runAgentForAll('GoogleTrendsScan',       googleTrendsScanAgent);   // 20h guard
-    // visualTrendAnalyzer runs after others so it has thumbnails to process
-    setTimeout(() => runAgentForAll('VisualTrendAnalyzer', visualTrendAnalyzer), 10 * 60 * 1000);
+    (async () => {
+      await runAgentForAll('InstagramTrendAgent', instagramTrendAgent);    // 20h guard
+      await runAgentForAll('FacebookGroupTrends', facebookGroupTrendAgent); // 20h guard
+      await runAgentForAll('GoogleTrendsScan',    googleTrendsScanAgent);   // 20h guard
+      // visualTrendAnalyzer runs after others so it has thumbnails to process
+      setTimeout(() => runAgentForAll('VisualTrendAnalyzer', visualTrendAnalyzer), 10 * 60 * 1000);
+    })().catch(err => logger.error('02:00 trend pack failed', { error: err.message }));
   });
 
   // ── Every Sunday at 20:00 UTC: weekly content calendar + email digest ────────
