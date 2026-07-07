@@ -47,10 +47,10 @@ const PLAN_SCAN_LIMITS: Record<string, number> = {
   enterprise: Infinity,
 };
 
-async function callHandler(fn: Function, businessProfileId: string): Promise<any> {
+async function callHandler(fn: Function, businessProfileId: string, extra: Record<string, any> = {}): Promise<any> {
   return Promise.race([
     new Promise((resolve) => {
-      const fakeReq = { body: { businessProfileId } } as Request;
+      const fakeReq = { body: { businessProfileId, ...extra } } as Request;
       let done = false;
       const fakeRes: any = {
         json: (data: any) => { if (!done) { done = true; resolve(data); } return fakeRes; },
@@ -67,7 +67,7 @@ async function callHandler(fn: Function, businessProfileId: string): Promise<any
 }
 
 export async function runFullScan(req: Request, res: Response) {
-  let { businessProfileId } = req.body;
+  let { businessProfileId, force } = req.body;
 
   if (!businessProfileId) {
     const profiles = await prisma.businessProfile.findMany({ orderBy: { created_date: 'desc' }, take: 1 });
@@ -141,19 +141,8 @@ export async function runFullScan(req: Request, res: Response) {
     }
   }
 
-  // tiktokSectorTrendAgent uses Apify (real TikTok data) — skip if ran within 12h
-  let tiktokSectorHandler: Function = tiktokSectorTrendAgent;
-  try {
-    const last12h = new Date(Date.now() - 12 * 60 * 60 * 1000);
-    const recentTT = await prisma.automationLog.findFirst({
-      where: { automation_name: 'tiktokSectorTrendAgent', linked_business: businessProfileId, created_date: { gt: last12h } },
-      orderBy: { created_date: 'desc' },
-    });
-    if (recentTT) {
-      tiktokSectorHandler = (_req: Request, res: Response) =>
-        res.json({ skipped: true, reason: 'tiktokSectorTrendAgent ran within 12h' });
-    }
-  } catch (_) {}
+  // ponytail: outer 12h guard removed — agent's own shouldSkipAgent (8h) is authoritative (KAN-77)
+  const tiktokSectorHandler: Function = tiktokSectorTrendAgent;
 
   // detectEarlyTrends is expensive (12 Tavily + 5 SerpAPI) — skip if ran within 48h
   let earlyTrendsHandler: Function = detectEarlyTrends;
@@ -244,7 +233,7 @@ export async function runFullScan(req: Request, res: Response) {
 
   for (const [name, fn] of immediate) {
     try {
-      results[name] = await callHandler(fn, businessProfileId);
+      results[name] = await callHandler(fn, businessProfileId, { force });
     } catch (e: any) {
       results[name] = { error: e.message };
     }
@@ -259,7 +248,7 @@ export async function runFullScan(req: Request, res: Response) {
     await writeAutomationLog('runFullScan', businessProfileId, startTime, pipeline.length);
     for (const [name, fn] of deferred) {
       try {
-        results[name] = await callHandler(fn, businessProfileId);
+        results[name] = await callHandler(fn, businessProfileId, { force });
       } catch (e: any) {
         results[name] = { error: e.message };
       }
