@@ -7,9 +7,9 @@ import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { tryDecryptToken } from '../../lib/crypto';
 import { publishEvent } from '../../lib/eventBus';
 import { normReviewOrigin } from '../../lib/signalGuard';
+import { findPlaceId, getPlaceDetails } from '../../lib/googlePlaces';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours — Google Places API quota
-import { findPlaceId, getPlaceDetails } from '../../lib/googlePlaces';
 
 // ── Batch topic extraction — 1 Haiku call for all reviews ────────────────────
 

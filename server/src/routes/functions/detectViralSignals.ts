@@ -1,14 +1,16 @@
 /**
- * detectViralSignals — Agent that tracks viral content and rising hashtags
- * across TikTok, Instagram, YouTube Shorts, and Israeli social communities.
+ * detectViralSignals — detects viral content RIGHT NOW across local (Israel/Hebrew)
+ * and global sources, so the business can ride the wave within hours.
  *
- * Goal: detect content formats + topics going viral RIGHT NOW in the business's
- * niche — so the business can ride the wave within hours, not days.
+ * Data collection:
+ *   • Apify TikTok hashtag scraper  — 8 local/Hebrew hashtags  → local viral signals
+ *   • Tavily advanced search        — 8 global/English hashtags → global viral signals
  *
- * Outputs:
- *   • MarketSignal with category="viral_signal", source_description includes:
- *     - viral_platform, hashtags, content_format, estimated_views_velocity
- *   • Each signal includes a ready-to-use content template
+ * Hashtags are generated dynamically by Haiku using the business profile,
+ * Google Places metadata, and website text (cached 24h per business).
+ *
+ * Outputs: MarketSignal category="viral_signal" with scope=local|global,
+ * content template (ready_to_post_text), and mixed local+global hashtags.
  */
 
 import { Request, Response } from 'express';
@@ -19,48 +21,122 @@ import { tavilyAdvancedSearch, isTavilyRateLimited } from '../../lib/tavily';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun, cacheGet, cacheSet, TTL } from '../../lib/agentCache';
 import { loadCheckpoint, saveCheckpoint, filterNewIds } from '../../lib/trendMemory';
+import { getPlaceDetails, EMPTY_PLACE } from '../../lib/googlePlaces';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
-// Derives TikTok hashtags from Hebrew business category (mirrors tiktokSectorTrendAgent logic)
-function deriveHashtags(category: string): string[] {
-  const map: Record<string, string[]> = {
-    'מסעדה': ['מסעדה', 'אוכל', 'food_israel', 'restaurant_israel'],
-    'סושי':  ['סושי', 'sushi_israel', 'sushi', 'אוכל_יפני'],
-    'בר סושי': ['סושי', 'sushi_israel', 'sushi', 'food_israel'],
-    'קפה':   ['קפה', 'cafe_israel', 'לאטה', 'coffee'],
-    'כושר':  ['כושר', 'fitness_israel', 'אימון', 'gym_israel'],
-    'יופי':  ['יופי', 'beauty_israel', 'skincare', 'איפור'],
-    'מספרה': ['מספרה', 'haircut_israel', 'שיער', 'beauty_israel'],
-    'ספא':   ['ספא', 'spa_israel', 'עיסוי', 'wellness'],
-    'מאפייה':['מאפייה', 'לחם', 'bakery_israel', 'אפייה'],
-  };
-  const lower = category.toLowerCase();
-  for (const [key, tags] of Object.entries(map)) {
-    if (lower.includes(key) || key.includes(lower)) return tags;
-  }
-  return [category.replace(/\s+/g, '_'), 'food_israel', 'israel'];
+// ── Website text fetcher ─────────────────────────────────────────────────────
+
+async function fetchWebsiteText(url: string | null): Promise<string> {
+  if (!url) return '';
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const resp = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; QuietEyes/1.0)' },
+    });
+    clearTimeout(timeout);
+    const html = await resp.text();
+    return html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .slice(0, 400)
+      .trim();
+  } catch { return ''; }
 }
 
-function buildViralQueries(category: string, city: string): string[] {
-  return [
-    // TikTok viral content
-    `TikTok viral video ${category} Israel this week trending`,
-    `TikTok hashtag #${category.replace(/\s/g, '')} Israel viral 2025`,
-    // Instagram Reels
-    `Instagram Reels viral ${category} Israel trending now`,
-    `Instagram trending hashtag ${category} this week Israel`,
-    // YouTube Shorts
-    `YouTube Shorts viral ${category} Israel 2025 trending`,
-    // Israeli social/news coverage of viral content
-    `${category} ${city} ויראלי טיקטוק אינסטגרם 2025`,
-    `${category} ישראל ויראלי רשתות חברתיות השבוע`,
-    // Content going viral in niche (Hebrew)
-    `פוסט ויראלי ${category} ${city} אינסטגרם טיקטוק`,
-    // Cross-platform signals
-    `"${category}" Israel social media viral challenge trend`,
-  ];
+// ── Hashtag generation — Haiku, cached 24h per business ─────────────────────
+
+async function generateHashtags(
+  profile: any,
+  websiteText: string,
+): Promise<{ local: string[]; global: string[] }> {
+  const cacheKey = `hashtags_generated:${profile.id}`;
+  const cached = cacheGet<{ local: string[]; global: string[] }>(cacheKey);
+  if (cached) return cached;
+
+  const placeDetails = profile.google_place_id
+    ? await getPlaceDetails(profile.google_place_id)
+    : EMPTY_PLACE;
+
+  const PRICE_LABEL: Record<number, string> = { 1: 'budget', 2: 'moderate', 3: 'upscale', 4: 'luxury' };
+  const serves = [
+    placeDetails.servesWine && 'wine',
+    placeDetails.servesBeer && 'beer',
+    placeDetails.servesVegetarianFood && 'vegetarian',
+  ].filter(Boolean).join(', ');
+
+  const context = [
+    `Business: "${profile.name}" — ${profile.category} in ${profile.city}`,
+    profile.relevant_services && `Services: ${profile.relevant_services}`,
+    profile.description       && `Description: ${profile.description}`,
+    profile.target_market     && `Target market: ${profile.target_market}`,
+    profile.custom_keywords   && `Keywords: ${profile.custom_keywords}`,
+    placeDetails.editorialSummary && `Google summary: "${placeDetails.editorialSummary}"`,
+    placeDetails.types.length     && `Google types: ${placeDetails.types.join(', ')}`,
+    placeDetails.priceLevel       && `Price level: ${PRICE_LABEL[placeDetails.priceLevel] || placeDetails.priceLevel}`,
+    serves                        && `Serves: ${serves}`,
+    websiteText                   && `Website: "${websiteText}"`,
+  ].filter(Boolean).join('\n');
+
+  const fallback = {
+    local:  [`#${profile.category.replace(/\s+/g, '_')}`, '#food_israel', '#israel', '#תלאביב'],
+    global: [`#${profile.category.replace(/\s+/g, '')}`,  '#foodie', '#trending', '#viral'],
+  };
+
+  try {
+    const result = await invokeLLM({
+      model: 'haiku',
+      maxTokens: 200,
+      prompt: `Generate TikTok/Instagram hashtags for this Israeli business.
+${context}
+
+Return ONLY valid JSON:
+{
+  "local": ["#hebrewTag1",...],
+  "global": ["#englishTag1",...]
 }
+
+Rules:
+- local: 8 tags — Hebrew words and Israel-specific (e.g. #ריזוטו #food_israel #תלאביב)
+- global: 8 tags — English, internationally searchable (e.g. #italianfood #woodfiredpizza)
+- Both: specific to THIS business's exact dishes/style — no generic tags like #food or #restaurant`,
+      response_json_schema: { type: 'object' },
+    });
+
+    const local  = Array.isArray(result?.local)  && result.local.length  ? result.local.slice(0, 8)  : fallback.local;
+    const global = Array.isArray(result?.global) && result.global.length ? result.global.slice(0, 8) : fallback.global;
+    const hashtags = { local, global };
+    cacheSet(cacheKey, hashtags, TTL.GOOGLE_PLACES); // 24h — business profile data is stable
+    return hashtags;
+  } catch {
+    return fallback;
+  }
+}
+
+// ── Surrogate sanitizer — prevents Anthropic 400 on TikTok text ─────────────
+
+function sanitize(s: string, maxLen = 150): string {
+  if (!s) return '';
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c >= 0xD800 && c <= 0xDBFF) {
+      const next = s.charCodeAt(i + 1);
+      if (next >= 0xDC00 && next <= 0xDFFF) { out += s[i] + s[i + 1]; i++; }
+    } else if (c >= 0xDC00 && c <= 0xDFFF) {
+      // lone low surrogate → drop
+    } else {
+      out += s[i];
+    }
+  }
+  return out.slice(0, maxLen).trim();
+}
+
+// ── Main agent ───────────────────────────────────────────────────────────────
 
 export async function detectViralSignals(req: Request, res: Response) {
   const { businessProfileId } = req.body;
@@ -70,30 +146,31 @@ export async function detectViralSignals(req: Request, res: Response) {
     return res.json({ signals_created: 0, skipped: true, reason: 'ran_recently' });
   }
 
-  // Load persistent checkpoint (survives server restarts)
   const trendCp = await loadCheckpoint('detectViralSignals', businessProfileId, 'tiktok', 'IL');
-
   const startTime = new Date().toISOString();
+
   try {
     const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
     if (!profile) return res.status(404).json({ error: 'Business profile not found' });
 
     const { name, category, city, relevant_services = '', tone_preference = 'friendly', plan_id } = profile as any;
 
-    // AC3: Growth+ gate — viral detection is a premium feature
+    // AC3: Growth+ gate
     const VIRAL_PLANS = new Set(['growth', 'pro', 'enterprise']);
     if (!VIRAL_PLANS.has(plan_id ?? '')) {
       return res.json({ signals_created: 0, skipped: true, reason: 'plan_not_eligible' });
     }
 
-    // ── Source 1: Apify TikTok hashtag scraper (real data) ──────────────────
-    // Derive TikTok hashtags from the business category
-    const sectorHashtags = deriveHashtags(category);
-    let apifyItems: any[] = [];
+    // ── Generate dynamic hashtags (Haiku, cached 24h) ────────────────────────
+    const websiteText = await fetchWebsiteText((profile as any).website_url);
+    const { local: localHashtags, global: globalHashtags } = await generateHashtags(profile, websiteText);
 
+    console.log(`[detectViralSignals] local: ${localHashtags.join(' ')} | global: ${globalHashtags.join(' ')}`);
+
+    // ── Source 1: Apify — local/Hebrew TikTok hashtags ───────────────────────
+    let apifyItems: any[] = [];
     if (hasApifyKey()) {
-      // Reuse cached results from tiktokSectorTrendAgent if run recently (same hashtags, same actor)
-      const apifyCacheKey = `apify_tiktok_hashtags:${sectorHashtags.slice(0, 3).join(',')}`;
+      const apifyCacheKey = `apify_tiktok_hashtags:${localHashtags.slice(0, 3).join(',')}`;
       const cachedApify = cacheGet<any[]>(apifyCacheKey);
       if (cachedApify) {
         apifyItems = cachedApify;
@@ -103,7 +180,7 @@ export async function detectViralSignals(req: Request, res: Response) {
           apifyItems = await runApifyActor(
             'clockworks~tiktok-hashtag-scraper',
             {
-              hashtags:             sectorHashtags.slice(0, 4),
+              hashtags:             localHashtags.slice(0, 8).map((h: string) => h.replace(/^#/, '')),
               resultsPerPage:       20,
               maxItems:             20,
               shouldDownloadVideos: false,
@@ -117,112 +194,90 @@ export async function detectViralSignals(req: Request, res: Response) {
           console.warn('[detectViralSignals] Apify failed:', e.message);
         }
       }
-      // AC2: dedup against trendMemory checkpoint — applies whether data came from cache or fresh Apify call
+      // AC2: dedup regardless of cache vs fresh
       const rawIds = apifyItems.map((v: any) => v.id || v.videoId).filter(Boolean);
       const newIds = filterNewIds(rawIds, trendCp);
       apifyItems = apifyItems.filter((v: any) => newIds.includes(v.id || v.videoId));
-      console.log(`[detectViralSignals] after dedup: ${apifyItems.length} NEW videos (${rawIds.length - apifyItems.length} already seen)`);
+      console.log(`[detectViralSignals] after dedup: ${apifyItems.length} NEW local videos`);
     }
 
-    // ── Source 2: Tavily web search fallback (only if Apify returned nothing) ─
+    // ── Source 2: Tavily — global/English hashtags (always runs) ────────────
     let tavilyContext = '';
-    let resultsScanned = apifyItems.length;
-    if (apifyItems.length === 0 && !isTavilyRateLimited()) {
-      const queries = buildViralQueries(category, city);
-      const rawResults = await Promise.all(queries.slice(0, 5).map(q => tavilyAdvancedSearch(q, 4)));
-      const allResults = rawResults.flat();
+    let tavilyCount = 0;
+    if (!isTavilyRateLimited()) {
+      const globalQueries = globalHashtags
+        .slice(0, 4)
+        .map((tag: string) => `TikTok Instagram viral ${tag.replace(/^#/, '')} trending 2025 content format`);
+      const rawResults = await Promise.all(globalQueries.map((q: string) => tavilyAdvancedSearch(q, 3)));
       const seen = new Set<string>();
-      const unique = allResults.filter(r => {
+      const unique = rawResults.flat().filter(r => {
         if (!r.url || seen.has(r.url)) return false;
         seen.add(r.url);
         return true;
       });
-      resultsScanned = unique.length;
-      tavilyContext = unique.slice(0, 15)
-        .map(r => `[${r.url}]\n${(r.content || r.title || '').slice(0, 250)}`)
+      tavilyCount = unique.length;
+      tavilyContext = unique
+        .slice(0, 12)
+        .map(r => `[${r.url}]\n${(r.content || r.title || '').slice(0, 200)}`)
         .join('\n---\n');
-      console.log(`[detectViralSignals] Tavily fallback: ${unique.length} results`);
+      console.log(`[detectViralSignals] Tavily global: ${unique.length} results`);
     }
 
-    // Skip entirely if no real data — don't let LLM hallucinate trends
     if (apifyItems.length === 0 && !tavilyContext) {
       await writeAutomationLog('detectViralSignals', businessProfileId, startTime, 0);
-      return res.json({ signals_created: 0, results_scanned: 0, note: 'No data sources available (Apify not set, Tavily rate-limited)' });
+      return res.json({ signals_created: 0, results_scanned: 0, note: 'No data sources available' });
     }
 
-    // ── Build context for LLM ────────────────────────────────────────────────
-    // Strip lone surrogates from TikTok text (prevents Anthropic 400 "no low surrogate")
-    const sanitize = (s: string, maxLen = 150): string => {
-      if (!s) return '';
-      let out = '';
-      for (let i = 0; i < s.length; i++) {
-        const c = s.charCodeAt(i);
-        if (c >= 0xD800 && c <= 0xDBFF) {
-          const next = s.charCodeAt(i + 1);
-          if (next >= 0xDC00 && next <= 0xDFFF) { out += s[i] + s[i + 1]; i++; }
-          // else lone high surrogate → drop
-        } else if (c >= 0xDC00 && c <= 0xDFFF) {
-          // lone low surrogate → drop
-        } else {
-          out += s[i];
-        }
-      }
-      return out.slice(0, maxLen).trim();
-    };
-
+    // ── Build LLM context — two labelled sections ────────────────────────────
     let context = '';
     if (apifyItems.length > 0) {
-      // Real TikTok data: include video metrics for grounding
-      context = '=== TikTok Data (Apify — real engagement metrics) ===\n' +
-        apifyItems.slice(0, 20).map(v => {
-          const plays    = v.playCount || v.plays || 0;
-          const likes    = v.diggCount || v.likes || 0;
-          const comments = v.commentCount || v.comments || 0;
-          const desc     = sanitize(v.text || v.desc || v.description || '', 150);
-          const hashtags = (v.hashtags || []).map((h: any) => `#${sanitize(h.name || h, 40)}`).join(' ');
-          return `plays:${plays} likes:${likes} comments:${comments} | "${desc}" ${hashtags}`;
-        }).join('\n');
-    } else {
-      context = '=== Web Search Results (Tavily — articles about trends) ===\n' + tavilyContext;
+      context += `=== TikTok Local (Israel) — hashtags: ${localHashtags.slice(0, 4).join(' ')} ===\n`;
+      context += apifyItems.slice(0, 20).map((v: any) => {
+        const plays    = v.playCount    || v.plays    || 0;
+        const likes    = v.diggCount   || v.likes    || 0;
+        const comments = v.commentCount || v.comments || 0;
+        const desc     = sanitize(v.text || v.desc || v.description || '', 150);
+        const tags     = (v.hashtags || []).map((h: any) => `#${sanitize(h.name || h, 40)}`).join(' ');
+        return `plays:${plays} likes:${likes} comments:${comments} | "${desc}" ${tags}`;
+      }).join('\n');
+      context += '\n\n';
+    }
+    if (tavilyContext) {
+      context += `=== Global Trends — hashtags: ${globalHashtags.slice(0, 4).join(' ')} ===\n`;
+      context += tavilyContext;
     }
 
-    // ── AI viral analysis ────────────────────────────────────────────────────
-    const dataSourceLabel = apifyItems.length > 0
-      ? `REAL TikTok data from Apify (${apifyItems.length} videos with actual play/like counts)`
-      : 'web search results (Tavily — less reliable)';
-
+    // ── LLM viral analysis ───────────────────────────────────────────────────
     const result = await invokeLLM({
       model: 'sonnet',
-      maxTokens: 1200,
-      prompt: `You are a social media virality expert. Analyze what is going viral right now and how the business can leverage it.
-Return ONLY valid JSON. ALL string values must be in Hebrew.
+      maxTokens: 1400,
+      prompt: `You are a social media virality expert. Analyze viral content from two sources and identify signals for the business.
+Return ONLY valid JSON. ALL string values must be in Hebrew EXCEPT evidence_url.
 
 Business: "${name}" — ${category} in ${city}
 Services: ${relevant_services || 'not specified'}
 Tone: ${tone_preference}
-Data source: ${dataSourceLabel}
 
 ${context.slice(0, 3500)}
 
 CRITICAL RULES:
-• ONLY report signals backed by specific numbers or URLs from the data above
-• If the data shows a video with high plays/likes — cite those exact numbers
-• Do NOT invent or extrapolate signals not present in the data
-• The platform must be clear (TikTok / Instagram / YouTube)
-• The format must be specific (Reel / Story / Short / Post)
-• ready_to_post_text — complete text in Hebrew, ready to copy and publish
+• Local signals (from TikTok Israel section): must cite actual play/like numbers from the data
+• Global signals (from Global Trends section): identify the viral FORMAT or STYLE — suggest how to adapt it locally in Hebrew
+• Do NOT invent signals not backed by the data above
+• scope "local" = found in Israeli TikTok data, scope "global" = found in global trends
 
 Return ONLY valid JSON:
 {"signals":[{
-  "title": "שם הסיגנל הויראלי — עד 6 מילים",
+  "title": "שם הסיגנל — עד 6 מילים",
   "description": "מה הולך ויראלי ולמה — עד 12 מילה",
+  "scope": "local|global",
   "platform": "tiktok|instagram|youtube|multiple",
   "content_format": "reel|story|short|post|challenge",
-  "hashtags": ["#tag1","#tag2","#tag3"],
+  "hashtags": ["#localTag1","#localTag2","#globalTag1","#globalTag2"],
   "velocity": "exploding|fast|steady",
   "window_hours": 24,
-  "evidence_url": "URL ספציפי מהנתונים",
-  "ready_to_post_text": "טקסט פוסט מוכן בעברית עם אמוג'י ו-hashtags — עד 80 מילה",
+  "evidence_url": "specific URL from the data",
+  "ready_to_post_text": "טקסט פוסט מוכן בעברית עם אמוג'י — עד 80 מילה",
   "visual_direction": "תיאור קצר מה להצלם — עד 8 מילה",
   "relevance": "high|medium",
   "confidence": 50-95
@@ -238,39 +293,38 @@ Return ONLY valid JSON:
       where: { linked_business: businessProfileId, category: 'viral_signal' },
       select: { summary: true },
     });
-    const existingNames = new Set(existing.map(s => s.summary));
+    const existingNames = new Set(existing.map((s: any) => s.summary));
 
     let created = 0;
     for (const signal of validSignals) {
       const summaryKey = `ויראלי: ${signal.title}`;
       if (existingNames.has(summaryKey)) continue;
 
-      const meta = JSON.stringify({
-        action_type: 'social_post',
-        action_label: `צור תוכן: ${signal.content_format} ב-${signal.platform}`,
-        platform: signal.platform,
-        content_format: signal.content_format,
-        hashtags: signal.hashtags,
-        velocity: signal.velocity,
-        window_hours: signal.window_hours,
-        ready_to_post_text: signal.ready_to_post_text,
-        visual_direction: signal.visual_direction,
-        prefilled_text: signal.ready_to_post_text,
-        is_viral_signal: true,
-        time_minutes: 20,
-      });
-
       await prisma.marketSignal.create({
         data: {
-          linked_business: businessProfileId,
-          summary: summaryKey,
-          impact_level: signal.velocity === 'exploding' ? 'high' : 'medium',
-          category: 'viral_signal',
+          linked_business:    businessProfileId,
+          summary:            summaryKey,
+          impact_level:       signal.velocity === 'exploding' ? 'high' : 'medium',
+          category:           'viral_signal',
           recommended_action: `פרסם ${signal.content_format} ב-${signal.platform} תוך ${signal.window_hours} שעות`,
-          confidence: signal.confidence || 70,
-          source_urls: signal.evidence_url || '',
-          source_description: meta,
-          is_read: false,
+          confidence:         signal.confidence || 70,
+          source_urls:        signal.evidence_url || '',
+          source_description: JSON.stringify({
+            action_type:      'social_post',
+            action_label:     `צור תוכן: ${signal.content_format} ב-${signal.platform}`,
+            scope:            signal.scope,
+            platform:         signal.platform,
+            content_format:   signal.content_format,
+            hashtags:         signal.hashtags,
+            velocity:         signal.velocity,
+            window_hours:     signal.window_hours,
+            ready_to_post_text: signal.ready_to_post_text,
+            visual_direction: signal.visual_direction,
+            prefilled_text:   signal.ready_to_post_text,
+            is_viral_signal:  true,
+            time_minutes:     20,
+          }),
+          is_read:     false,
           detected_at: new Date().toISOString(),
         },
       });
@@ -279,7 +333,6 @@ Return ONLY valid JSON:
       created++;
     }
 
-    // Save checkpoint: mark all processed IDs/URLs as seen
     apifyItems.forEach((v: any) => {
       const id = v.id || v.videoId;
       if (id) trendCp.scannedIds.add(id);
@@ -290,10 +343,12 @@ Return ONLY valid JSON:
     await writeAutomationLog('detectViralSignals', businessProfileId, startTime, created);
 
     return res.json({
-      signals_created: created,
-      results_scanned: resultsScanned,
-      exploding: validSignals.filter(s => s.velocity === 'exploding').length,
-      platforms: [...new Set(validSignals.map(s => s.platform))],
+      signals_created:  created,
+      results_scanned:  apifyItems.length + tavilyCount,
+      local_signals:    validSignals.filter(s => s.scope === 'local').length,
+      global_signals:   validSignals.filter(s => s.scope === 'global').length,
+      exploding:        validSignals.filter(s => s.velocity === 'exploding').length,
+      platforms:        [...new Set(validSignals.map(s => s.platform))],
     });
 
   } catch (err: any) {

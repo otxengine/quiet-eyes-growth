@@ -155,14 +155,21 @@ it('AC2: filterNewIds runs even when Apify result comes from cache', async () =>
     { id: 'vid_001', text: 'video 1', playCount: 100000, diggCount: 5000, commentCount: 200, hashtags: [] },
     { id: 'vid_002', text: 'video 2', playCount: 80000,  diggCount: 3000, commentCount: 100, hashtags: [] },
   ];
-  (hasApifyKey   as jest.Mock).mockReturnValue(true);
-  (cacheGet      as jest.Mock).mockReturnValue(cachedVideos); // simulate cache hit
-  (filterNewIds  as jest.Mock).mockReturnValue(['vid_002']);  // vid_001 already seen
-  (invokeLLM     as jest.Mock).mockResolvedValue({ signals: [makeSignal()] });
+  const cachedHashtags = { local: ['#מסעדה', '#food_israel'], global: ['#italianfood', '#foodie'] };
+
+  (hasApifyKey as jest.Mock).mockReturnValue(true);
+  // different cache keys return different values
+  (cacheGet as jest.Mock).mockImplementation((key: string) => {
+    if (key.startsWith('hashtags_generated:')) return cachedHashtags;
+    if (key.startsWith('apify_tiktok_hashtags:')) return cachedVideos;
+    return null;
+  });
+  (filterNewIds as jest.Mock).mockReturnValue(['vid_002']); // vid_001 already seen
+  (invokeLLM    as jest.Mock).mockResolvedValue({ signals: [makeSignal()] });
 
   const res = makeRes();
   await detectViralSignals(makeReq(), res);
 
   expect(filterNewIds).toHaveBeenCalledWith(['vid_001', 'vid_002'], EMPTY_CP);
-  expect(runApifyActor).not.toHaveBeenCalled(); // confirms it was a cache hit
+  expect(runApifyActor).not.toHaveBeenCalled(); // confirms Apify cache was hit
 });
