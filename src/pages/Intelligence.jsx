@@ -32,6 +32,7 @@ const intelligenceScanSteps = [
   { key: 'viral',        label: 'סורק סיגנלים ויראלים...',      fn: 'detectViralSignals',   resultKey: 'signals_created' },
   { key: 'tiktok_trends', label: 'מנתח טרנדים TikTok...',         fn: 'tiktokSectorTrendAgent', resultKey: 'trends_created', force: true },
   { key: 'tiktok_audience', label: 'ממפה קהל יעד TikTok...',      fn: 'tiktokAudienceAgent',  resultKey: 'signals_created', force: true },
+  { key: 'tiktok_performance', label: 'מנתח ביצועי פוסטים TikTok...', fn: 'tiktokPostTracker', resultKey: 'tracked', force: true },
 ];
 
 export default function Intelligence() {
@@ -72,6 +73,8 @@ export default function Intelligence() {
 
   const mentions = weekSignals.filter(s => s.category === 'mention');
   const tiktokSignals = allSignals.filter(s => s.category === 'tiktok_sector_trend' || s.category === 'tiktok_audience' || s.category === 'tiktok_post_performance');
+  const tiktokPerfSignals = tiktokSignals.filter(s => s.category === 'tiktok_post_performance');
+  const tiktokTrendSignals = tiktokSignals.filter(s => s.category !== 'tiktok_post_performance');
   const filtered = activeTab === 'all' ? allSignals
     : activeTab === 'reports' ? []
     : activeTab === 'tiktok' ? tiktokSignals
@@ -162,6 +165,47 @@ export default function Intelligence() {
         <PlanGate requires="growth" featureName={activeTab === 'reports' ? 'דוחות שבועיים' : 'ניתוח מגמות'} />
       ) : activeTab === 'reports' ? (
         <WeeklyReportsTab bpId={bpId} />
+      ) : activeTab === 'tiktok' ? (
+        <div className="space-y-4">
+          {/* ── Post performance — own posts vs competitor benchmark ── */}
+          <div className="card-base fade-in-up">
+            <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
+              <h3 className="font-semibold text-foreground text-[13px]">ביצועי הפוסטים שלי</h3>
+              <span className="text-[10px] text-foreground-muted">{tiktokPerfSignals.length} תובנות</span>
+            </div>
+            {tiktokPerfSignals.length === 0 ? (
+              <div className="py-10 text-center">
+                <p className="text-[12px] text-foreground-muted">אין נתוני ביצועים עדיין — הסוכן פועל לאחר פרסום פוסטים</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {tiktokPerfSignals.map((signal) => (
+                  <SignalCard key={signal.id} signal={signal} businessProfile={businessProfile} />
+                ))}
+              </div>
+            )}
+          </div>
+          {/* ── Sector trends + audience mapping ── */}
+          <div className="card-base fade-in-up">
+            <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
+              <h3 className="font-semibold text-foreground text-[13px]">טרנדים בסקטור וקהל יעד</h3>
+              <span className="text-[10px] text-foreground-muted">{tiktokTrendSignals.length} תובנות</span>
+            </div>
+            {tiktokTrendSignals.length === 0 ? (
+              <div className="py-10 text-center">
+                <Eye className="w-12 h-12 text-foreground-muted opacity-20 mx-auto mb-3" />
+                <p className="text-[13px] text-foreground-muted mb-1">העיניים סורקות את השוק — תובנות חדשות יופיעו בקרוב</p>
+                <p className="text-[11px] text-foreground-muted opacity-50">הסריקה הראשונה לוקחת עד שעה</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {tiktokTrendSignals.map((signal) => (
+                  <SignalCard key={signal.id} signal={signal} businessProfile={businessProfile} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       ) : (
         <div className="card-base fade-in-up">
           <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">

@@ -25,7 +25,7 @@ export async function tiktokPostTracker(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
-  if (shouldSkipAgent(businessProfileId, 'tiktokPostTracker', MIN_INTERVAL_MS)) {
+  if (!req.body.force && shouldSkipAgent(businessProfileId, 'tiktokPostTracker', MIN_INTERVAL_MS)) {
     return res.json({ tracked: 0, skipped: true, reason: 'ran_recently' });
   }
 
@@ -71,21 +71,55 @@ export async function tiktokPostTracker(req: Request, res: Response) {
       return res.json({ tracked: 0, note: 'No TikTok URL/username or Apify key not configured' });
     }
 
-    // ── 3. Scrape business TikTok profile ──────────────────────────────────
-    const profileVideos = await runApifyActor(
+    // ── 3. Resolve competitor TikTok usernames (up to 3) ───────────────────
+    const competitors = await prisma.competitor.findMany({
+      where: { linked_business: businessProfileId, is_dismissed: false, tiktok_url: { not: null } },
+      take: 3,
+      select: { tiktok_url: true, name: true },
+    });
+    const competitorUsernames: string[] = competitors
+      .map(c => (c.tiktok_url || '').match(/@([\w.]+)/)?.[1] || '')
+      .filter(Boolean);
+
+    // ── 4. Scrape own + competitor profiles in one batch ───────────────────
+    const allProfiles = [tiktokUsername, ...competitorUsernames];
+    const allProfileVideos = await runApifyActor(
       'clockworks~tiktok-profile-scraper',
-      { profiles: [tiktokUsername], resultsPerPage: 20 },
-      60_000,
-      20,
+      { profiles: allProfiles, resultsPerPage: 20 },
+      90_000,
+      allProfiles.length * 20,
     );
 
-    if (profileVideos.length === 0) {
+    // Split results: own videos vs competitor videos
+    const profileVideos = allProfileVideos.filter((v: any) => {
+      const author = v.authorMeta?.name || v.author?.uniqueId || v.uniqueId || '';
+      return author.toLowerCase() === tiktokUsername.toLowerCase();
+    });
+    // If split yields nothing (scraper field varies), fall back to full result set for own videos
+    const ownVideos = profileVideos.length > 0 ? profileVideos : allProfileVideos.filter((_: any, i: number) => i < 20);
+
+    if (ownVideos.length === 0) {
       setLastRun(businessProfileId, 'tiktokPostTracker');
       await writeAutomationLog('tiktokPostTracker', businessProfileId, startTime, 0);
       return res.json({ tracked: 0, note: `No videos found on TikTok profile @${tiktokUsername}` });
     }
 
-    // ── 4. Sector benchmark from recent tiktokSectorTrend signals ──────────
+    // ── 5. Benchmark: competitor avg first, sector avg as fallback ─────────
+    // Competitor plays/day (from scraped competitor videos)
+    const competitorVideos = allProfileVideos.filter((v: any) => {
+      const author = v.authorMeta?.name || v.author?.uniqueId || v.uniqueId || '';
+      return competitorUsernames.some(u => u.toLowerCase() === author.toLowerCase());
+    });
+    const competitorDailyPlays: number[] = [];
+    for (const v of competitorVideos) {
+      const plays     = v.stats?.playCount ?? v.playCount ?? 0;
+      const createTime = v.createTime || v.createTimestamp || 0;
+      if (!plays || !createTime) continue;
+      const ageH = (Date.now() / 1000 - createTime) / 3600;
+      if (ageH > 0 && ageH < 168) competitorDailyPlays.push((plays / ageH) * 24); // only <7d videos
+    }
+
+    // Sector avg from tiktokSectorTrendAgent signals (fallback)
     const benchmarkSignals = await prisma.marketSignal.findMany({
       where: {
         linked_business: businessProfileId,
@@ -94,23 +128,28 @@ export async function tiktokPostTracker(req: Request, res: Response) {
       },
       take: 3,
     });
-
-    let sectorAvgPlaysPerDay = 8000; // conservative default
-    const benchmarkValues: number[] = [];
+    let sectorAvgPlaysPerDay = 8000;
+    const sectorValues: number[] = [];
     for (const sig of benchmarkSignals) {
       try {
         const meta = JSON.parse(sig.source_description || '{}');
-        const benchmarkPlays = meta.evidence?.avg_plays_per_day;
-        if (benchmarkPlays && benchmarkPlays > 0) benchmarkValues.push(benchmarkPlays);
+        const v = meta.evidence?.avg_plays_per_day;
+        if (v && v > 0) sectorValues.push(v);
       } catch (_) {}
     }
-    if (benchmarkValues.length > 0) {
-      sectorAvgPlaysPerDay = Math.round(
-        benchmarkValues.reduce((sum, v) => sum + v, 0) / benchmarkValues.length
-      );
+    if (sectorValues.length > 0) {
+      sectorAvgPlaysPerDay = Math.round(sectorValues.reduce((a, b) => a + b, 0) / sectorValues.length);
     }
 
-    // ── 5. Match and evaluate each published post ──────────────────────────
+    // Prefer competitor benchmark when we have ≥3 data points
+    const benchmarkPlaysPerDay = competitorDailyPlays.length >= 3
+      ? Math.round(competitorDailyPlays.reduce((a, b) => a + b, 0) / competitorDailyPlays.length)
+      : sectorAvgPlaysPerDay;
+    const benchmarkSource = competitorDailyPlays.length >= 3
+      ? `${competitorUsernames.length} מתחרים (${competitorDailyPlays.length} סרטונים)`
+      : 'ממוצע סקטור';
+
+    // ── 6. Match and evaluate each published post ──────────────────────────
     let tracked = 0;
 
     for (const post of publishedPosts) {
@@ -130,7 +169,7 @@ export async function tiktokPostTracker(req: Request, res: Response) {
       const publishedUnix = new Date(post.published_at).getTime() / 1000;
 
       // Find the scraped video closest in time (±3h window)
-      const matchedVideo = profileVideos.find((v: any) => {
+      const matchedVideo = ownVideos.find((v: any) => {
         const vTime = v.createTime || v.createTimestamp || 0;
         return Math.abs(vTime - publishedUnix) < 3 * 3600;
       });
@@ -148,13 +187,13 @@ export async function tiktokPostTracker(req: Request, res: Response) {
       const videoUrl     = matchedVideo.webVideoUrl || matchedVideo.shareUrl || '';
 
       const performance =
-        playsPerDay >= sectorAvgPlaysPerDay * 0.8 ? 'above_benchmark' :
-        playsPerDay >= sectorAvgPlaysPerDay * 0.4 ? 'at_benchmark'    : 'below_benchmark';
+        playsPerDay >= benchmarkPlaysPerDay * 0.8 ? 'above_benchmark' :
+        playsPerDay >= benchmarkPlaysPerDay * 0.4 ? 'at_benchmark'    : 'below_benchmark';
 
       // LLM: improvement recommendation
       const perfLabel =
-        performance === 'above_benchmark' ? `מעל הממוצע ✅ (${Math.round(playsPerDay / sectorAvgPlaysPerDay * 100)}% מהבנצ'מרק)` :
-        performance === 'at_benchmark'    ? `בממוצע ⚠️` : `מתחת לממוצע ❌`;
+        performance === 'above_benchmark' ? `מעל הממוצע ✅ (${Math.round(playsPerDay / benchmarkPlaysPerDay * 100)}% מהבנצ'מרק — ${benchmarkSource})` :
+        performance === 'at_benchmark'    ? `בממוצע ⚠️ (${benchmarkSource})` : `מתחת לממוצע ❌ (${benchmarkSource})`;
 
       const feedback = await invokeLLM({
         model: 'sonnet',
@@ -164,7 +203,7 @@ export async function tiktokPostTracker(req: Request, res: Response) {
 Business: "${profile.name}" | Sector: ${profile.category}
 Content: "${(post.content || '').slice(0, 200)}"
 Performance: ${plays.toLocaleString()} views | ${(engRate * 100).toFixed(1)}% engagement | ${Math.round(playsPerDay).toLocaleString()} views/day after ${Math.round(ageHours)} hours
-Benchmark: ${sectorAvgPlaysPerDay.toLocaleString()} views/day | Status: ${perfLabel}
+Benchmark: ${benchmarkPlaysPerDay.toLocaleString()} views/day (${benchmarkSource}) | Status: ${perfLabel}
 
 Give a specific recommendation + one action (not "improve content" — but e.g. "reply to the first 5 comments within 30 minutes" or "share in Story with a Poll").
 Return ONLY valid JSON. ALL string values must be in Hebrew: { "recommendation": "specific recommendation", "boost_action": "comment_reply|reshare_story|boost_ad|none" }`,
@@ -191,7 +230,8 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: { "recommendation":
             engagement_rate_pct:            parseFloat((engRate * 100).toFixed(1)),
             plays_per_day:                  Math.round(playsPerDay),
             age_hours:                      Math.round(ageHours),
-            sector_benchmark_plays_per_day: sectorAvgPlaysPerDay,
+            sector_benchmark_plays_per_day: benchmarkPlaysPerDay,
+            benchmark_source:               benchmarkSource,
             performance,
             boost_action:                   feedback?.boost_action || 'none',
             video_url:                      videoUrl,
@@ -213,7 +253,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: { "recommendation":
           data: {
             linked_business:  businessProfileId,
             alert_type:       'tiktok_underperforming',
-            title:            `סרטון TikTok מתחת לביצוע: ${plays.toLocaleString()} צפיות (ממוצע סקטור: ${sectorAvgPlaysPerDay.toLocaleString()}/יום)`,
+            title:            `סרטון TikTok מתחת לביצוע: ${plays.toLocaleString()} צפיות (בנצ'מרק: ${benchmarkPlaysPerDay.toLocaleString()}/יום — ${benchmarkSource})`,
             description:      feedback?.recommendation || 'הסרטון מקבל פחות צפיות מהצפוי לסקטור',
             suggested_action: boostLabel,
             priority:         'medium',
@@ -230,9 +270,9 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: { "recommendation":
 
     setLastRun(businessProfileId, 'tiktokPostTracker');
     await writeAutomationLog('tiktokPostTracker', businessProfileId, startTime, tracked);
-    console.log(`tiktokPostTracker done: ${tracked} posts tracked | benchmark: ${sectorAvgPlaysPerDay}/day`);
+    console.log(`tiktokPostTracker done: ${tracked} posts tracked | benchmark: ${benchmarkPlaysPerDay}/day (${benchmarkSource})`);
 
-    return res.json({ tracked, sector_benchmark_plays_per_day: sectorAvgPlaysPerDay });
+    return res.json({ tracked, benchmark_plays_per_day: benchmarkPlaysPerDay, benchmark_source: benchmarkSource });
 
   } catch (err: any) {
     console.error('[tiktokPostTracker] error:', err.message);

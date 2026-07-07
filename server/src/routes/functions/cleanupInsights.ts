@@ -169,7 +169,9 @@ export async function cleanupInsights(req: Request, res: Response) {
 
     // ── 4. SIGNAL TTL: dismiss stale MarketSignals by category ──────────────
     const SIGNAL_TTL_DAYS: Record<string, number> = {
-      tiktok_sector_trend:  14,
+      tiktok_sector_trend:      14,
+      tiktok_audience:           14,
+      tiktok_post_performance:    7,
       viral_signal:         14,
       early_trend:          21,
       social:               21,
