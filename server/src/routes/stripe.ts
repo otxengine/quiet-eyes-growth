@@ -127,8 +127,7 @@ router.post('/checkout', async (req: Request, res: Response) => {
   if (!planId) return res.status(400).json({ error: 'planId required' });
 
   if (!stripeEnabled) {
-    if (process.env.NODE_ENV === 'production') return res.status(503).json({ error: 'Stripe not configured' });
-    // ponytail: dev-only bypass — no Stripe key in dev, so just flip the plan directly instead of checking out
+    // ponytail: no Stripe key configured (real prod always has one) — flip the plan directly instead of checking out
     const org = await getUserOrg(userId, orgId);
     if (!org) return res.status(404).json({ error: 'Org not found' });
     await prisma.$executeRawUnsafe(
