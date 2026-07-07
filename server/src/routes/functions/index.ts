@@ -17,8 +17,8 @@ import { runPredictions } from './runPredictions';
 import { updateSectorKnowledge } from './updateSectorKnowledge';
 import { updateLeadFreshness } from './updateLeadFreshness';
 import { runMLLearning } from './learnFromClosedDeals';
+import { enrichLeads } from './enrichLeads';
 import {
-  enrichLeads,
   fetchSocialData,
   syncLeadToCrm,
   crmWebhookSync,

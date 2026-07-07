@@ -12,10 +12,6 @@ export async function runCompetitorIdentification(_req: Request, res: Response) 
   return res.json({ competitors_found: 0, new_competitors_created: 0, existing_competitors_updated: 0 });
 }
 
-export async function enrichLeads(_req: Request, res: Response) {
-  return res.json({ enriched: 0 });
-}
-
 export async function scanAllReviews(_req: Request, res: Response) {
   // Alias to collectReviews — handled separately
   return res.json({ new_reviews: 0 });
