@@ -259,6 +259,20 @@ ACTION_TIME: [זמן ביצוע ריאלי]
                   חיזוי 🔮
                 </span>
               )}
+              {(() => {
+                try {
+                  const m = JSON.parse(signal.source_description || '{}');
+                  if (!m.is_global_trend) return null;
+                  return (
+                    <span
+                      className="px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-blue-50 text-blue-600 border border-blue-100"
+                      title={m.days_until_israel ? `צפוי להגיע לישראל בעוד ~${m.days_until_israel} ימים` : 'טרנד מוביל מארה״ב'}
+                    >
+                      🌍 גלובלי
+                    </span>
+                  );
+                } catch { return null; }
+              })()}
               <span className={`text-[10px] font-semibold ${impact.cls}`}>{impact.text}</span>
               <span className="text-[10px] text-foreground-muted opacity-60"
                 title={formatDate(signal.detected_at || signal.created_date)}>

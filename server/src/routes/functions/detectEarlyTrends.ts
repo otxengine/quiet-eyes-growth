@@ -20,7 +20,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
-import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { loadCheckpoint, shouldSkipByTime, saveCheckpoint } from '../../lib/trendMemory';
 
 import { tavilyAdvancedSearch } from '../../lib/tavily';
 import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
@@ -95,8 +95,9 @@ export async function detectEarlyTrends(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
-  // ── Delta guard ───────────────────────────────────────────────────────────
-  if (shouldSkipAgent(businessProfileId, 'detectEarlyTrends', MIN_INTERVAL_MS)) {
+  // ── Delta guard (DB-backed so it survives server restarts) ───────────────
+  const cp = await loadCheckpoint('detectEarlyTrends', businessProfileId, 'all');
+  if (shouldSkipByTime(cp, MIN_INTERVAL_MS)) {
     return res.json({ trends_created: 0, skipped: true, reason: 'ran_recently' });
   }
 
@@ -122,21 +123,41 @@ export async function detectEarlyTrends(req: Request, res: Response) {
     ];
 
     const velocityResults: Array<{ keyword: string; data: Awaited<ReturnType<typeof fetchTrendsVelocity>> }> = [];
+    const usLeadingKeywords = new Set<string>();
 
     if (SERP_API_KEY) {
-      const velocities = await Promise.all(trendKeywords.map(k => fetchTrendsVelocity(k)));
+      // AC4: run IL and US scans in parallel
+      const [velocities, usVelocities] = await Promise.all([
+        Promise.all(trendKeywords.map(k => fetchTrendsVelocity(k, 'IL'))),
+        Promise.all(trendKeywords.map(k => fetchTrendsVelocity(k, 'US'))),
+      ]);
+
       velocities.forEach((v, i) => {
         if (v && (v.stage === 'emerging' || v.stage === 'early_growing')) {
           velocityResults.push({ keyword: trendKeywords[i], data: v });
         }
       });
 
+      const usBlock: string[] = [];
+      usVelocities.forEach((v, i) => {
+        if (v && (v.stage === 'emerging' || v.stage === 'early_growing')) {
+          usLeadingKeywords.add(trendKeywords[i]);
+          usBlock.push(`"${trendKeywords[i]}": +${v.growth7d}%/week US, volume=${v.avgVolume}/100, stage=${v.stage}`);
+        }
+      });
+
       if (velocityResults.length > 0) {
-        trendsBlock = '\n\n=== GOOGLE TRENDS VELOCITY (30-day window) ===\n' +
+        trendsBlock = '\n\n=== GOOGLE TRENDS VELOCITY IL (30-day window) ===\n' +
           velocityResults.map(x =>
             `"${x.keyword}": +${x.data!.growth7d}%/week, volume=${x.data!.avgVolume}/100, stage=${x.data!.stage}`
           ).join('\n') +
           '\n(stage "emerging" = low volume + high velocity = PRE-PEAK signal)';
+      }
+
+      if (usBlock.length > 0) {
+        trendsBlock += '\n\n=== US LEADING INDICATORS (typically reach IL in 2-6 weeks) ===\n' +
+          usBlock.join('\n') +
+          '\n(For these keywords: set is_global_trend=true, estimate days_until_israel 14-42)';
       }
     }
 
@@ -241,7 +262,9 @@ Return ONLY valid JSON:
   "opportunity_text": "פעולה ספציפית לעסק — פועל + תוצאה",
   "content_idea": "רעיון תוכן קונקרטי לנצל את הטרנד",
   "urgency": "high|medium",
-  "confidence": 50-95
+  "confidence": 50-95,
+  "is_global_trend": false,
+  "days_until_israel": 0
 }]}`,
       response_json_schema: { type: 'object' },
     });
@@ -271,6 +294,11 @@ Return ONLY valid JSON:
     for (const trend of earlyTrends) {
       if (existingNames.has(trend.name)) continue;
 
+      // AC4: flag as global if AI identified it or if the keyword appears in US leading indicators
+      const isGlobal = !!(trend.is_global_trend ||
+        usLeadingKeywords.has(trend.name) ||
+        [...usLeadingKeywords].some(k => (trend.name || '').includes(k)));
+
       const meta = JSON.stringify({
         action_type: 'social_post',
         action_label: trend.opportunity_text || trend.name,
@@ -280,6 +308,8 @@ Return ONLY valid JSON:
         content_idea: trend.content_idea,
         source_platforms: trend.source_platforms,
         is_early_trend: true,
+        is_global_trend: isGlobal,
+        days_until_israel: isGlobal ? (trend.days_until_israel || 21) : undefined,
       });
 
       await prisma.marketSignal.create({
@@ -301,7 +331,7 @@ Return ONLY valid JSON:
       created++;
     }
 
-    setLastRun(businessProfileId, 'detectEarlyTrends');
+    await saveCheckpoint(cp, { last_created: created });
     await writeAutomationLog('detectEarlyTrends', businessProfileId, startTime, created);
 
     return res.json({
