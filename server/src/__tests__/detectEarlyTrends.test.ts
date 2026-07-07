@@ -9,15 +9,11 @@ jest.mock('../db', () => ({
   prisma: {
     businessProfile: { findUnique: jest.fn() },
     marketSignal:    { findMany: jest.fn(), create: jest.fn() },
+    automationLog:   { findFirst: jest.fn(), create: jest.fn() },
   },
 }));
 jest.mock('../lib/llm',             () => ({ invokeLLM: jest.fn() }));
 jest.mock('../lib/automationLog',   () => ({ writeAutomationLog: jest.fn().mockResolvedValue(undefined) }));
-jest.mock('../lib/trendMemory',     () => ({
-  loadCheckpoint:   jest.fn(),
-  shouldSkipByTime: jest.fn(),
-  saveCheckpoint:   jest.fn().mockResolvedValue(undefined),
-}));
 jest.mock('../lib/tavily',          () => ({ tavilyAdvancedSearch: jest.fn() }));
 jest.mock('../lib/businessContext', () => ({
   loadBusinessContext:    jest.fn(),
@@ -27,15 +23,12 @@ jest.mock('../lib/businessContext', () => ({
 import { detectEarlyTrends } from '../routes/functions/detectEarlyTrends';
 import { prisma } from '../db';
 import { invokeLLM } from '../lib/llm';
-import { loadCheckpoint, shouldSkipByTime } from '../lib/trendMemory';
 import { tavilyAdvancedSearch } from '../lib/tavily';
 import { loadBusinessContext, formatContextForPrompt } from '../lib/businessContext';
 
 const PROFILE = {
   id: 'biz_001', name: 'Test Biz', category: 'מסעדה', city: 'תל אביב', relevant_services: 'פיצה,פסטה',
 };
-
-const EMPTY_CP = { _key: 'k', lastScanAt: null, scannedIds: new Set(), scannedUrls: new Set(), meta: {} };
 
 function makeReq(id = 'biz_001') { return { body: { businessProfileId: id } } as any; }
 function makeRes() {
@@ -59,8 +52,7 @@ beforeEach(() => {
   (prisma.businessProfile.findUnique as jest.Mock).mockResolvedValue(PROFILE);
   (prisma.marketSignal.findMany    as jest.Mock).mockResolvedValue([]);
   (prisma.marketSignal.create      as jest.Mock).mockResolvedValue({});
-  (loadCheckpoint                  as jest.Mock).mockResolvedValue(EMPTY_CP);
-  (shouldSkipByTime                as jest.Mock).mockReturnValue(false);
+  (prisma.automationLog.findFirst  as jest.Mock).mockResolvedValue(null); // no recent run by default
   (tavilyAdvancedSearch            as jest.Mock).mockResolvedValue([]);
   (loadBusinessContext             as jest.Mock).mockResolvedValue({ rejectedPatterns: [] });
   (formatContextForPrompt          as jest.Mock).mockReturnValue('');
@@ -70,7 +62,8 @@ beforeEach(() => {
 // ── AC3 — 12h cooldown ────────────────────────────────────────────────────────
 
 it('AC3: returns ran_recently with 200 when within cooldown', async () => {
-  (shouldSkipByTime as jest.Mock).mockReturnValue(true);
+  // Simulate a recent run in automationLog
+  (prisma.automationLog.findFirst as jest.Mock).mockResolvedValue({ id: 'log_1', created_date: new Date() });
   const res = makeRes();
   await detectEarlyTrends(makeReq(), res);
   expect(res.json).toHaveBeenCalledWith(

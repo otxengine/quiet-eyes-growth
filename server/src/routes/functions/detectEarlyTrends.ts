@@ -20,7 +20,6 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
-import { loadCheckpoint, shouldSkipByTime, saveCheckpoint } from '../../lib/trendMemory';
 
 import { tavilyAdvancedSearch } from '../../lib/tavily';
 import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
@@ -95,9 +94,13 @@ export async function detectEarlyTrends(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
-  // ── Delta guard (DB-backed so it survives server restarts) ───────────────
-  const cp = await loadCheckpoint('detectEarlyTrends', businessProfileId, 'all');
-  if (shouldSkipByTime(cp, MIN_INTERVAL_MS)) {
+  // ── Delta guard — DB-backed via automationLog (survives restarts) ────────
+  const since = new Date(Date.now() - MIN_INTERVAL_MS);
+  const recentRun = await prisma.automationLog.findFirst({
+    where: { automation_name: 'detectEarlyTrends', linked_business: businessProfileId, created_date: { gt: since } },
+    orderBy: { created_date: 'desc' },
+  }).catch(() => null);
+  if (recentRun) {
     return res.json({ trends_created: 0, skipped: true, reason: 'ran_recently' });
   }
 
@@ -331,7 +334,6 @@ Return ONLY valid JSON:
       created++;
     }
 
-    await saveCheckpoint(cp, { last_created: created });
     await writeAutomationLog('detectEarlyTrends', businessProfileId, startTime, created);
 
     return res.json({
