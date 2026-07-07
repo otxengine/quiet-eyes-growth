@@ -342,6 +342,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew. Format: {"messages"
             lifecycle_stage: 'new',
             linked_business: businessProfileId,
             suggested_first_message: suggestedMessage || null,
+            platform_sourced: true,
             created_at: new Date().toISOString(),
           },
         });
