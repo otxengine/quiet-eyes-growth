@@ -19,8 +19,8 @@ import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { tavilyAdvancedSearch, isTavilyRateLimited } from '../../lib/tavily';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
-import { shouldSkipAgent, setLastRun, cacheGet, cacheSet, TTL } from '../../lib/agentCache';
-import { loadCheckpoint, saveCheckpoint, filterNewIds } from '../../lib/trendMemory';
+import { cacheGet, cacheSet, TTL } from '../../lib/agentCache';
+import { loadCheckpoint, saveCheckpoint, shouldSkipByTime, filterNewIds } from '../../lib/trendMemory';
 import { getPlaceDetails, EMPTY_PLACE } from '../../lib/googlePlaces';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
@@ -142,11 +142,11 @@ export async function detectViralSignals(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
-  if (shouldSkipAgent(businessProfileId, 'detectViralSignals', MIN_INTERVAL_MS)) {
+  const trendCp = await loadCheckpoint('detectViralSignals', businessProfileId, 'tiktok', 'IL');
+
+  if (shouldSkipByTime(trendCp, MIN_INTERVAL_MS)) {
     return res.json({ signals_created: 0, skipped: true, reason: 'ran_recently' });
   }
-
-  const trendCp = await loadCheckpoint('detectViralSignals', businessProfileId, 'tiktok', 'IL');
   const startTime = new Date().toISOString();
 
   try {
@@ -339,7 +339,6 @@ Return ONLY valid JSON:
     });
     await saveCheckpoint(trendCp, { signals_created: created, scanned_at: new Date().toISOString() });
 
-    setLastRun(businessProfileId, 'detectViralSignals');
     await writeAutomationLog('detectViralSignals', businessProfileId, startTime, created);
 
     return res.json({

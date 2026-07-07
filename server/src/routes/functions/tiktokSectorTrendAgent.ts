@@ -30,10 +30,10 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { tavilyAdvancedSearch } from '../../lib/tavily';
-import { shouldSkipAgent, setLastRun, cacheGet, cacheSet, TTL } from '../../lib/agentCache';
+import { cacheGet, cacheSet, TTL } from '../../lib/agentCache';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
-import { loadCheckpoint, saveCheckpoint, filterNewIds } from '../../lib/trendMemory';
+import { loadCheckpoint, saveCheckpoint, shouldSkipByTime, filterNewIds } from '../../lib/trendMemory';
 
 const MIN_INTERVAL_MS = 8 * 60 * 60 * 1000; // 8 שעות
 
@@ -361,13 +361,13 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
-  // ── Delta guard: 8h minimum (bypassed with force:true) ───────────────────
-  if (!req.body.force && shouldSkipAgent(businessProfileId, 'tiktokSectorTrendAgent', MIN_INTERVAL_MS)) {
-    return res.json({ trends_created: 0, skipped: true, reason: 'ran_recently' });
-  }
-
   // Persistent checkpoint — remembers video IDs across server restarts
   const trendCp = await loadCheckpoint('tiktokSectorTrendAgent', businessProfileId, 'tiktok', 'IL');
+
+  // ── Delta guard: 8h minimum (bypassed with force:true) ───────────────────
+  if (!req.body.force && shouldSkipByTime(trendCp, MIN_INTERVAL_MS)) {
+    return res.json({ trends_created: 0, skipped: true, reason: 'ran_recently' });
+  }
 
   const startTime = new Date().toISOString();
   try {
@@ -690,7 +690,6 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     videoMetrics.forEach(v => trendCp.scannedIds.add(v.id));
     await saveCheckpoint(trendCp, { trends_created: created, scanned_at: new Date().toISOString() });
 
-    setLastRun(businessProfileId, 'tiktokSectorTrendAgent');
     await writeAutomationLog('tiktokSectorTrendAgent', businessProfileId, startTime, created);
 
     return res.json({
