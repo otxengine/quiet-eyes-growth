@@ -108,7 +108,6 @@ import {
 import { instagramTrendAgent } from './instagramTrendAgent';
 import { facebookGroupTrendAgent } from './facebookGroupTrendAgent';
 import { googleTrendsScanAgent } from './googleTrendsScanAgent';
-import { visualTrendAnalyzer } from './visualTrendAnalyzer';
 import { commandChat } from './commandChat';
 import { submitSupportTicket } from './submitSupportTicket';
 import { submitFeedback } from './submitFeedback';
@@ -230,7 +229,6 @@ const FUNCTION_MAP: Record<string, any> = {
   instagramTrendAgent,
   facebookGroupTrendAgent,
   googleTrendsScanAgent,
-  visualTrendAnalyzer,
   // Layer 7 advanced agents
   runViralCatalyst,
   runInfluenceIntegrity,

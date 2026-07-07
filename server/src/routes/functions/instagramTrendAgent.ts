@@ -14,13 +14,9 @@
  * Memory: checkpoint stores Apify post IDs + Tavily URLs already seen.
  *   Next run only processes NEW content — zero wasted tokens.
  *
- * Visual analysis: thumbnail URLs are passed to visualTrendAnalyzer for
- *   Gemini Flash vision analysis (detects products/services in the images).
- *
  * Output:
  *   • MarketSignal with category='instagram_trend'
  *   • platform_trend record (global trend store)
- *   • visual_trend_item records (for thumbnails analyzed)
  *
  * Schedule: every 24h
  */
@@ -195,29 +191,6 @@ async function savePlatformTrend(
   } catch { return null; }
 }
 
-// ── Save visual trend items (thumbnails for later Gemini analysis) ─────────────
-
-async function queueVisualAnalysis(
-  platformTrendId: string | null,
-  thumbnails: string[],
-  region: string,
-  businessId: string,
-): Promise<void> {
-  if (!platformTrendId || thumbnails.length === 0) return;
-  for (const url of thumbnails.slice(0, 3)) {
-    try {
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO visual_trend_item
-           (id, platform_trend_id, url, media_type, platform, region,
-            analyzed_at, linked_business)
-         VALUES (gen_random_uuid()::text, $1, $2, 'image', 'instagram', $3, NOW(), $4)
-         ON CONFLICT (url) DO NOTHING`,
-        platformTrendId, url, region, businessId,
-      );
-    } catch {}
-  }
-}
-
 // ── Main agent ─────────────────────────────────────────────────────────────────
 
 export async function instagramTrendAgent(req: Request, res: Response) {
@@ -383,14 +356,12 @@ Return ONLY valid JSON. ALL string values in Hebrew:
           },
         });
 
-        // Save to platform_trend + queue visual analysis
-        const ptId = await savePlatformTrend(
+        await savePlatformTrend(
           trend.name, region,
           [trend.evidence].filter(Boolean),
           thumbnails.slice(0, 3),
           [category], businessProfileId,
         );
-        await queueVisualAnalysis(ptId, thumbnails.slice(0, 3), region, businessProfileId);
 
         existingNames.add(summaryKey);
         signalsCreated++;

@@ -691,25 +691,6 @@ router.post('/', async (req: Request, res: Response) => {
       created_at               TIMESTAMPTZ DEFAULT NOW()
     )`,
 
-    // Individual media items analyzed by Gemini Flash Vision
-    `CREATE TABLE IF NOT EXISTS visual_trend_item (
-      id                  TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::text,
-      platform_trend_id   TEXT        REFERENCES platform_trend(id) ON DELETE CASCADE,
-      url                 TEXT        NOT NULL UNIQUE,
-      thumbnail_url       TEXT,
-      media_type          TEXT,
-      platform            TEXT        NOT NULL,
-      region              TEXT        DEFAULT 'IL',
-      detected_products   TEXT        DEFAULT '[]',
-      detected_services   TEXT        DEFAULT '[]',
-      detected_keywords   TEXT        DEFAULT '[]',
-      aesthetic_tags      TEXT        DEFAULT '[]',
-      engagement_metrics  TEXT,
-      visual_analysis     TEXT,
-      analyzed_at         TIMESTAMPTZ DEFAULT NOW(),
-      linked_business     TEXT
-    )`,
-
     // market_signals: add visual_trend to supported categories
     `ALTER TABLE market_signals ADD COLUMN IF NOT EXISTS is_us_leading_indicator BOOLEAN DEFAULT false`,
     `ALTER TABLE market_signals ADD COLUMN IF NOT EXISTS region TEXT DEFAULT 'IL'`,
