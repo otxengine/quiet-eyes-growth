@@ -78,7 +78,13 @@ export async function detectViralSignals(req: Request, res: Response) {
     const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
     if (!profile) return res.status(404).json({ error: 'Business profile not found' });
 
-    const { name, category, city, relevant_services = '', tone_preference = 'friendly' } = profile;
+    const { name, category, city, relevant_services = '', tone_preference = 'friendly', plan_id } = profile as any;
+
+    // AC3: Growth+ gate — viral detection is a premium feature
+    const VIRAL_PLANS = new Set(['growth', 'pro', 'enterprise']);
+    if (!VIRAL_PLANS.has(plan_id ?? '')) {
+      return res.json({ signals_created: 0, skipped: true, reason: 'plan_not_eligible' });
+    }
 
     // ── Source 1: Apify TikTok hashtag scraper (real data) ──────────────────
     // Derive TikTok hashtags from the business category
@@ -93,29 +99,29 @@ export async function detectViralSignals(req: Request, res: Response) {
         apifyItems = cachedApify;
         console.log(`[detectViralSignals] Apify cache hit: ${apifyItems.length} videos`);
       } else {
-      try {
-        apifyItems = await runApifyActor(
-          'clockworks~tiktok-hashtag-scraper',
-          {
-            hashtags:             sectorHashtags.slice(0, 4),
-            resultsPerPage:       20,
-            maxItems:             20,
-            shouldDownloadVideos: false,
-            shouldDownloadCovers: false,
-          },
-          90_000,
-          20,
-        );
-        if (apifyItems.length > 0) cacheSet(apifyCacheKey, apifyItems, TTL.API_RESULT);
-        // Filter to only NEW videos not yet processed
-        const rawIds = apifyItems.map((v: any) => v.id || v.videoId).filter(Boolean);
-        const newIds = filterNewIds(rawIds, trendCp);
-        apifyItems = apifyItems.filter((v: any) => newIds.includes(v.id || v.videoId));
-        console.log(`[detectViralSignals] Apify TikTok: ${apifyItems.length} NEW videos (${rawIds.length - apifyItems.length} already seen)`);
-      } catch (e: any) {
-        console.warn('[detectViralSignals] Apify failed:', e.message);
+        try {
+          apifyItems = await runApifyActor(
+            'clockworks~tiktok-hashtag-scraper',
+            {
+              hashtags:             sectorHashtags.slice(0, 4),
+              resultsPerPage:       20,
+              maxItems:             20,
+              shouldDownloadVideos: false,
+              shouldDownloadCovers: false,
+            },
+            90_000,
+            20,
+          );
+          if (apifyItems.length > 0) cacheSet(apifyCacheKey, apifyItems, TTL.API_RESULT);
+        } catch (e: any) {
+          console.warn('[detectViralSignals] Apify failed:', e.message);
+        }
       }
-      } // end else (no cache)
+      // AC2: dedup against trendMemory checkpoint — applies whether data came from cache or fresh Apify call
+      const rawIds = apifyItems.map((v: any) => v.id || v.videoId).filter(Boolean);
+      const newIds = filterNewIds(rawIds, trendCp);
+      apifyItems = apifyItems.filter((v: any) => newIds.includes(v.id || v.videoId));
+      console.log(`[detectViralSignals] after dedup: ${apifyItems.length} NEW videos (${rawIds.length - apifyItems.length} already seen)`);
     }
 
     // ── Source 2: Tavily web search fallback (only if Apify returned nothing) ─

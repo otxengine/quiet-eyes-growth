@@ -329,15 +329,12 @@ describe('collectReviews — AC2: no GMB → Places API used', () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: jest.fn().mockResolvedValue({
-        result: {
-          reviews: [{
-            author_name: 'דינה כהן',
-            rating: 4,
-            text: 'מקום יפה מאוד',
-            time: 1700000000,
-          }],
-        },
-        status: 'OK',
+        reviews: [{
+          authorAttribution: { displayName: 'דינה כהן' },
+          rating: 4,
+          text: { text: 'מקום יפה מאוד' },
+          publishTime: new Date(1700000000 * 1000).toISOString(),
+        }],
       }),
     });
     llm.mockResolvedValue({ results: [{ topics: ['אווירה'], sentiments: { אווירה: 'positive' } }] });
@@ -345,7 +342,10 @@ describe('collectReviews — AC2: no GMB → Places API used', () => {
     const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
     await collectReviews(req, res);
 
-    expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('ChIJplace123'));
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('ChIJplace123'),
+      expect.anything(),
+    );
     expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         platform:      'Google',
@@ -361,21 +361,17 @@ describe('collectReviews — AC2: no GMB → Places API used', () => {
     socialFindFirst.mockResolvedValue(null);
     bpFindMany.mockResolvedValue([{ ...PROFILE, google_place_id: null }]);
 
-    // findPlaceId call
+    // findPlaceId call — new places:searchText
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: jest.fn().mockResolvedValue({
-        candidates: [{ place_id: 'ChIJresolved' }],
-        status: 'OK',
+        places: [{ id: 'ChIJresolved', displayName: { text: 'Test Place' } }],
       }),
     });
-    // getPlaceReviews call
+    // getPlaceDetails call — new places/{id}
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: jest.fn().mockResolvedValue({
-        result: { reviews: [] },
-        status: 'OK',
-      }),
+      json: jest.fn().mockResolvedValue({ reviews: [] }),
     });
 
     const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
@@ -397,15 +393,12 @@ describe('collectReviews — AC2: no GMB → Places API used', () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: jest.fn().mockResolvedValue({
-        result: {
-          reviews: [{
-            author_name: 'דינה כהן',
-            rating: 4,
-            text: 'מקום יפה מאוד',
-            time: 1700000000,
-          }],
-        },
-        status: 'OK',
+        reviews: [{
+          authorAttribution: { displayName: 'דינה כהן' },
+          rating: 4,
+          text: { text: 'מקום יפה מאוד' },
+          publishTime: new Date(1700000000 * 1000).toISOString(),
+        }],
       }),
     });
 
@@ -660,15 +653,12 @@ describe('collectReviews — KAN-17 Tier 3: Tavily direct', () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: jest.fn().mockResolvedValue({
-        status: 'OK',
-        result: {
-          reviews: [{
-            author_name: 'ישראל ישראלי',
-            text: 'מסעדה מצוינת מאוד אהבתי את האוכל',
-            rating: 5,
-            time: Math.floor(Date.now() / 1000) - 1000,
-          }],
-        },
+        reviews: [{
+          authorAttribution: { displayName: 'ישראל ישראלי' },
+          rating: 5,
+          text: { text: 'מסעדה מצוינת מאוד אהבתי את האוכל' },
+          publishTime: new Date(Date.now() - 1000000).toISOString(),
+        }],
       }),
     });
     llm.mockResolvedValueOnce({ results: [{ topics: ['שירות'], sentiments: { 'שירות': 'positive' } }] });

@@ -9,30 +9,7 @@ import { publishEvent } from '../../lib/eventBus';
 import { normReviewOrigin } from '../../lib/signalGuard';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours — Google Places API quota
-const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
-
-async function findPlaceId(name: string, city: string): Promise<string | null> {
-  if (!GOOGLE_API_KEY) { console.warn('[collectReviews] No GOOGLE_PLACES_API_KEY'); return null; }
-  try {
-    const input = encodeURIComponent(`${name} ${city}`);
-    const res = await fetch(`https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${input}&inputtype=textquery&fields=place_id&key=${GOOGLE_API_KEY}`);
-    const data: any = await res.json();
-    const placeId = data.candidates?.[0]?.place_id || null;
-    console.log(`[collectReviews] findPlaceId status=${data.status} placeId=${placeId} candidates=${data.candidates?.length ?? 0}`);
-    return placeId;
-  } catch (e: any) { console.warn('[collectReviews] findPlaceId error:', e.message); return null; }
-}
-
-async function getPlaceReviews(placeId: string): Promise<any[]> {
-  if (!GOOGLE_API_KEY) return [];
-  try {
-    const res = await fetch(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=rating,user_ratings_total,reviews&language=iw&key=${GOOGLE_API_KEY}`);
-    const data: any = await res.json();
-    const reviews = data.result?.reviews || [];
-    console.log(`[collectReviews] getPlaceReviews status=${data.status} reviews=${reviews.length} total_ratings=${data.result?.user_ratings_total ?? 0}`);
-    return reviews;
-  } catch (e: any) { console.warn('[collectReviews] getPlaceReviews error:', e.message); return []; }
-}
+import { findPlaceId, getPlaceDetails } from '../../lib/googlePlaces';
 
 // ── Batch topic extraction — 1 Haiku call for all reviews ────────────────────
 
@@ -209,33 +186,36 @@ export async function collectReviews(req: Request, res: Response) {
         if (!profile.google_place_id) {
           await prisma.businessProfile.update({ where: { id: businessProfileId }, data: { google_place_id: placeId, google_place_id_verified: true } });
         }
-        const googleReviews = await getPlaceReviews(placeId);
-        const placesPending: Array<{ gr: any; googleId: string; textKey: string; sentiment: string }> = [];
+        const { reviews: googleReviews } = await getPlaceDetails(placeId);
+        const placesPending: Array<{ gr: any; googleId: string; textKey: string; sentiment: string; reviewText: string; authorName: string }> = [];
         for (const gr of googleReviews) {
-          const googleId = `places_${gr.author_name}_${gr.time}`;
+          const reviewText  = gr.text?.text || '';
+          const authorName  = gr.authorAttribution?.displayName || 'לקוח';
+          const reviewTime  = Math.floor(new Date(gr.publishTime).getTime() / 1000);
+          const googleId    = `places_${authorName}_${reviewTime}`;
           if (existingGoogleIds.has(googleId)) continue;
-          const textKey = (gr.text || '').substring(0, 50);
-          if (existingTexts.has(textKey) || !gr.text || gr.text.length < 5) continue;
+          const textKey = reviewText.substring(0, 50);
+          if (existingTexts.has(textKey) || !reviewText || reviewText.length < 5) continue;
           const sentiment = gr.rating >= 4 ? 'positive' : gr.rating <= 2 ? 'negative' : 'neutral';
-          placesPending.push({ gr, googleId, textKey, sentiment });
+          placesPending.push({ gr, googleId, textKey, sentiment, reviewText, authorName });
         }
-        const placesTopics = await batchExtractTopics(placesPending.map(p => ({ text: p.gr.text, sentiment: p.sentiment })));
+        const placesTopics = await batchExtractTopics(placesPending.map(p => ({ text: p.reviewText, sentiment: p.sentiment })));
         for (let i = 0; i < placesPending.length; i++) {
-          const { gr, googleId, textKey, sentiment } = placesPending[i];
+          const { gr, googleId, textKey, sentiment, reviewText, authorName } = placesPending[i];
           const { topics, topic_sentiment } = placesTopics[i];
           await prisma.review.create({
             data: {
               platform: 'Google',
               rating: gr.rating,
-              text: gr.text.substring(0, 500),
-              reviewer_name: gr.author_name || 'לקוח',
+              text: reviewText.substring(0, 500),
+              reviewer_name: authorName,
               sentiment,
               response_status: 'pending',
               source_url: `https://www.google.com/maps/place/?q=place_id:${placeId}`,
               source_origin: 'google_places',
               google_review_id: googleId,
               is_verified: true,
-              created_at: new Date(gr.time * 1000).toISOString(),
+              created_at: new Date(gr.publishTime).toISOString(),
               linked_business: businessProfileId,
               topics,
               topic_sentiment,
