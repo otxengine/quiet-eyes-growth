@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import { trackUxEvent } from '@/lib/trackUxEvent';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Eye, TrendingUp, AlertTriangle, Sparkles, MessageSquare, Users, FileText, Calendar, Archive, ChevronDown } from 'lucide-react';
@@ -360,7 +361,12 @@ export default function Intelligence() {
                 <div key={s.id} className="px-5 py-3 flex items-center gap-3">
                   <p className="text-[12px] text-foreground-muted flex-1 truncate">{s.summary}</p>
                   <button
-                    onClick={() => restoreMutation.mutate(s.id)}
+                    onClick={() => {
+                      if (s.category === 'trend' && s.impact_level === 'high') {
+                        trackUxEvent('ux_early_trend_restore', bpId, { signalId: s.id });
+                      }
+                      restoreMutation.mutate(s.id);
+                    }}
                     disabled={restoreMutation.isPending}
                     className="text-[11px] text-primary hover:underline flex-shrink-0 disabled:opacity-40"
                   >

@@ -40,6 +40,7 @@ import campaignsRouter from './routes/campaigns';
 import organizationsRouter from './routes/organizations';
 import agencyRouter from './routes/agency';
 import stripeRouter from './routes/stripe';
+import uxEventsRouter from './routes/uxEvents';
 
 // Wire up all event choreography handlers at startup
 registerAllHandlers();
@@ -156,6 +157,7 @@ app.use('/api/kpi', kpiRouter);
 app.use('/api/oauth', oauthRouter);
 app.use('/api', roiRouter);
 app.use('/api/admin', adminUsersRouter);
+app.use('/api/events', uxEventsRouter);
 app.use('/api/onboarding', onboardingRouter);
 app.use('/api/social', socialRouter);
 app.use('/api/campaigns', campaignsRouter);

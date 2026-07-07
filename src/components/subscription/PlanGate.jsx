@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Crown } from 'lucide-react';
 import { usePlan, PLAN_LABELS } from '@/lib/usePlan';
+import { trackUxEvent } from '@/lib/trackUxEvent';
 
 const PLAN_COLORS = {
   starter:    { bg: 'bg-blue-50',   border: 'border-blue-200',   text: 'text-blue-700',   badge: 'bg-blue-100 text-blue-700' },
@@ -44,7 +45,7 @@ export default function PlanGate({ requires, children, overlay = false, featureN
             {featureName || 'תכונה זו'} זמינה ב-{planLabel}+
           </p>
           <button
-            onClick={() => navigate('/subscription')}
+            onClick={() => { trackUxEvent('ux_upgrade_from_hint', null, { featureName, requires }); navigate('/subscription'); }}
             className="mt-2 px-4 py-1.5 rounded-lg bg-foreground text-background text-[12px] font-medium hover:opacity-90 transition-all flex items-center gap-1.5"
           >
             <Crown className="w-3.5 h-3.5" />
@@ -75,7 +76,7 @@ export default function PlanGate({ requires, children, overlay = false, featureN
         </p>
       )}
       <button
-        onClick={() => navigate('/subscription')}
+        onClick={() => { trackUxEvent('ux_upgrade_from_hint', null, { featureName, requires }); navigate('/subscription'); }}
         className="px-5 py-2 rounded-lg bg-foreground text-background text-[12px] font-medium hover:opacity-90 transition-all flex items-center gap-2"
       >
         <Crown className="w-3.5 h-3.5" />

@@ -8,7 +8,7 @@ import { prisma } from '../db';
 import { isAdminKeyRequest } from '../middleware/auth';
 import { createLogger } from '../infra/logger';
 import { bulkBootstrapAllBusinesses, bootstrapBusinessIntelligence } from '../lib/bootstrapIntelligence';
-import { getCollectorMetrics, checkAndAlertFailureRate } from '../lib/collectorMetrics';
+import { getCollectorMetrics, checkAndAlertFailureRate, getTrendMetrics } from '../lib/collectorMetrics';
 
 const logger = createLogger('AdminUsers');
 const router = Router();
@@ -175,6 +175,14 @@ router.get('/collector-metrics', async (req: Request, res: Response) => {
   if (!isAdminKeyRequest(req)) return res.status(403).json({ error: 'Admin access required' });
   const windowHours = parseInt(req.query.windowHours as string || '24', 10);
   const metrics = await getCollectorMetrics(windowHours).catch(e => ({ error: e.message }));
+  res.json(metrics);
+});
+
+// GET /api/admin/trend-metrics — KAN-88 trend observability (yield, early rate, viral hit)
+router.get('/trend-metrics', async (req: Request, res: Response) => {
+  if (!isAdminKeyRequest(req)) return res.status(403).json({ error: 'Admin access required' });
+  const windowHours = parseInt(req.query.windowHours as string || '720', 10);
+  const metrics = await getTrendMetrics(windowHours).catch(e => ({ error: e.message }));
   res.json(metrics);
 });
 

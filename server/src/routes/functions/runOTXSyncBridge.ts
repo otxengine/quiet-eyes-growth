@@ -193,8 +193,8 @@ async function syncRawSignals(s: Supa, profiles: QEProfile[], bizSectors: Map<st
 
 // ── 3. sector_trends → market_signals ─────────────────────────────────────────
 
-async function syncSectorTrends(s: Supa, profiles: QEProfile[]): Promise<number> {
-  if (!profiles.length) return 0;
+async function syncSectorTrends(s: Supa, profiles: QEProfile[]): Promise<{ count: number; lagMs: number | null }> {
+  if (!profiles.length) return { count: 0, lagMs: null };
   const { data: existing } = await s.from('market_signals').select('source_description').like('source_description', 'otx_trend:%');
   const synced = new Set((existing ?? []).map((r: any) => r.source_description ?? ''));
 
@@ -202,7 +202,11 @@ async function syncSectorTrends(s: Supa, profiles: QEProfile[]): Promise<number>
     .select('id, sector, geo, z_score, spike_detected, detected_at_utc, source_url, confidence_score')
     .order('detected_at_utc', { ascending: false }).limit(50);
   if (error) throw error;
-  if (!data?.length) return 0;
+  if (!data?.length) return { count: 0, lagMs: null };
+
+  // AC4 (KAN-88): max lag = oldest spike detected_at_utc → now (spike→dashboard sync lag)
+  const lags = (data as any[]).map((r: any) => Date.now() - Date.parse(r.detected_at_utc)).filter(Number.isFinite);
+  const lagMs = lags.length > 0 ? Math.max(...lags) : null;
 
   const signals: any[] = [];
   for (const r of data as any[]) {
@@ -220,10 +224,10 @@ async function syncSectorTrends(s: Supa, profiles: QEProfile[]): Promise<number>
       });
     }
   }
-  if (!signals.length) return 0;
+  if (!signals.length) return { count: 0, lagMs };
   const { error: ie } = await s.from('market_signals').insert(signals);
   if (ie) throw ie;
-  return signals.length;
+  return { count: signals.length, lagMs };
 }
 
 // ── 4. competitor_changes → market_signals ────────────────────────────────────
@@ -384,6 +388,7 @@ export async function runOTXSyncBridge(): Promise<void> {
   const results: Record<string, number> = {};
   const errors: string[] = [];
   let rawSignalLagMs: number | null = null;
+  let sectorTrendLagMs: number | null = null;
 
   const tasks: [string, () => Promise<number>][] = [
     ['leads',        () => syncLeads(s, profiles, bizSectors)],
@@ -392,7 +397,11 @@ export async function runOTXSyncBridge(): Promise<void> {
       rawSignalLagMs = r.lagMs;
       return r.count;
     }],
-    ['trends',       () => syncSectorTrends(s, profiles)],
+    ['trends',       async () => {
+      const r = await syncSectorTrends(s, profiles);
+      sectorTrendLagMs = r.lagMs;
+      return r.count;
+    }],
     ['comp_changes', () => syncCompetitorChanges(s, profiles, bizSectors)],
     ['event_opps',   () => syncEventOpportunities(s, profiles)],
     ['actions',      () => syncActions(s, profiles, bizSectors)],
@@ -413,9 +422,12 @@ export async function runOTXSyncBridge(): Promise<void> {
   const now = new Date().toISOString();
   const status = errors.length > 0 ? 'DELAYED' : 'OK';
 
-  // AC5: log lag from oldest signals_raw row to visible RawSignal
   if (rawSignalLagMs !== null) {
     logger.info(`${AGENT_NAME}: signals_raw→RawSignal lag=${Math.round(rawSignalLagMs / 1000)}s (limit=600s)`);
+  }
+  // AC4 (KAN-88): spike→dashboard lag for SectorTrendRadar
+  if (sectorTrendLagMs !== null) {
+    logger.info(`${AGENT_NAME}: sector_trend spike→dashboard lag=${Math.round(sectorTrendLagMs / 1000)}s`);
   }
 
   logger.info(`${AGENT_NAME}: done. synced=${totalSynced} elapsed=${Math.round(elapsed / 1000)}s status=${status}`, {

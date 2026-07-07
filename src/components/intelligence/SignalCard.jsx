@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { trackUxEvent } from '@/lib/trackUxEvent';
 import { ArrowLeft, Loader2, CheckCheck, ExternalLink, ListPlus, Sparkles, RefreshCw, Megaphone } from 'lucide-react';
 import DismissMenu from '@/components/ui/DismissMenu';
 import { useNavigate } from 'react-router-dom';
@@ -367,6 +368,7 @@ ACTION_TIME: [זמן ביצוע ריאלי]
                 onClick={(e) => {
                   e.stopPropagation();
                   if (signal.category === 'viral_signal') {
+                    trackUxEvent('ux_cta_from_viral', businessProfile?.id, { signalId: signal.id });
                     const params = new URLSearchParams({
                       create: 'organic',
                       type: 'post',
