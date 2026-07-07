@@ -13,6 +13,8 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
 
+const MIN_WINS = 3;
+
 function topN<T>(items: T[], n = 3): T[] {
   const counts = new Map<string, number>();
   for (const item of items) {
@@ -36,24 +38,27 @@ export async function runMLLearning(req: Request, res: Response) {
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
     // All closed-won leads for this business
-    const winners = await prisma.lead.findMany({
-      where: { linked_business: businessProfileId, status: 'closed_won' },
-      select: {
-        score: true,
-        service_needed: true,
-        budget_range: true,
-        urgency: true,
-        city: true,
-        source: true,
-        source_origin: true,
-        closed_value: true,
-        followup_count: true,
-      },
-    });
+    const [winners, totalLeads] = await Promise.all([
+      prisma.lead.findMany({
+        where: { linked_business: businessProfileId, status: 'closed_won' },
+        select: {
+          score: true,
+          service_needed: true,
+          budget_range: true,
+          urgency: true,
+          city: true,
+          source: true,
+          source_origin: true,
+          closed_value: true,
+          followup_count: true,
+        },
+      }),
+      prisma.lead.count({ where: { linked_business: businessProfileId } }),
+    ]);
 
-    if (winners.length === 0) {
+    if (winners.length < MIN_WINS) {
       await writeAutomationLog('runMLLearning', businessProfileId, startTime, 0);
-      return res.json({ message: 'No closed_won leads yet — nothing to learn from', deals_analyzed: 0 });
+      return res.json({ message: `Not enough wins yet (${winners.length}/${MIN_WINS}) — nothing to learn from`, deals_analyzed: winners.length });
     }
 
     const avgScore = winners.reduce((s, l) => s + (l.score ?? 0), 0) / winners.length;
@@ -62,9 +67,10 @@ export async function runMLLearning(req: Request, res: Response) {
     const avgFollowups = winners.reduce((s, l) => s + (l.followup_count ?? 0), 0) / winners.length;
 
     const dna = {
-      deals_analyzed:    winners.length,
-      avg_score:         Math.round(avgScore),
-      avg_closed_value:  Math.round(avgValue),
+      deals_analyzed:         winners.length,
+      conversion_rate:        totalLeads > 0 ? Math.round((winners.length / totalLeads) * 1000) / 1000 : 0,
+      avg_score:              Math.round(avgScore),
+      avg_closed_value:       Math.round(avgValue),
       avg_followups_to_close: Math.round(avgFollowups * 10) / 10,
       top_services:      topN(winners.map(l => l.service_needed).filter(Boolean) as string[]),
       top_budget_ranges: topN(winners.map(l => l.budget_range).filter(Boolean) as string[]),

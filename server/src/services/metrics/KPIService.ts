@@ -56,6 +56,7 @@ export interface FunnelKPIs {
   learning_accuracy_7d:        number;   // avg accuracy last 7d
   learning_accuracy_30d:       number;   // avg accuracy last 30d
   learning_improvement:        number;   // 7d - 30d (positive = improving)
+  has_winner_dna:              boolean;  // AC4: business has DNA after 3+ wins
 }
 
 export interface PipelineVelocity {
@@ -89,6 +90,7 @@ export async function computeFunnelKPIs(
     feedbackRows,
     agentRows,
     agentRows7d,
+    winnerDnaRow,
   ] = await Promise.all([
 
     // Insights fused
@@ -169,8 +171,22 @@ export async function computeFunnelKPIs(
        GROUP BY agent_name`,
       businessId, since7d,
     ).catch(() => [] as any[]),
+
+    // AC4 (KAN-94): business has winner DNA after 3+ wins
+    prisma.$queryRawUnsafe<[{ has_dna: string }]>(
+      `SELECT (
+         EXISTS (
+           SELECT 1 FROM sector_knowledge sk
+           JOIN business_profiles bp ON bp.category = sk.sector AND bp.city = sk.region
+           WHERE bp.id = $1 AND sk.winner_lead_dna IS NOT NULL
+         )
+         AND (SELECT COUNT(*) FROM leads WHERE linked_business = $1 AND status = 'closed_won') >= 3
+       )::text AS has_dna`,
+      businessId,
+    ).catch(() => [{ has_dna: 'false' }]),
   ]);
 
+  const hasWinnerDna  = (winnerDnaRow as any[])[0]?.has_dna === 'true';
   const outcomeCount  = Number(outcomeRows[0]?.n ?? 0);
   const revenueTotal  = Number(outcomeRows[0]?.revenue ?? 0);
   const feedbackTotal = Number(feedbackRows[0]?.total ?? 0);
@@ -224,6 +240,7 @@ export async function computeFunnelKPIs(
     learning_accuracy_7d:        Math.round(acc7d * 1000) / 1000,
     learning_accuracy_30d:       Math.round(acc30d * 1000) / 1000,
     learning_improvement:        Math.round((acc7d - acc30d) * 1000) / 1000,
+    has_winner_dna:              hasWinnerDna,
   };
 }
 
