@@ -545,23 +545,26 @@ ACTION_TIME: [זמן ביצוע ריאלי]
           {signal.category === 'tiktok_sector_trend' && (() => {
             let m = {};
             try { m = JSON.parse(signal.source_description || '{}'); } catch {}
-            const hook     = m.hook || m.script_hook || '';
-            const body     = m.body || m.script_body || '';
-            const cta      = m.cta  || m.script_cta  || '';
+            const s    = m.content_script || {};
+            const hook = s.hook_3sec || m.hook || m.script_hook || '';
+            const body = s.body_20sec || m.body || m.script_body || '';
+            const cta  = s.cta || m.cta || m.script_cta || '';
+            const vis  = s.visual_direction || '';
+            const music = s.music_suggestion || '';
             const examples = Array.isArray(m.competitor_examples) ? m.competitor_examples : [];
-            if (!hook && !body && !cta && !examples.length) return null;
+            if (!hook && !body && !cta) return null;
             return (
               <div>
                 <h4 className="text-[11px] font-semibold text-foreground-secondary mb-2">📝 סקריפט TikTok</h4>
                 {hook && (
                   <div className="bg-white rounded-lg border border-border px-3 py-2 mb-1.5">
-                    <p className="text-[9px] text-foreground-muted mb-0.5">Hook</p>
+                    <p className="text-[9px] text-foreground-muted mb-0.5">Hook (3 שניות)</p>
                     <p className="text-[12px] text-foreground font-medium">{hook}</p>
                   </div>
                 )}
                 {body && (
                   <div className="bg-white rounded-lg border border-border px-3 py-2 mb-1.5">
-                    <p className="text-[9px] text-foreground-muted mb-0.5">Body</p>
+                    <p className="text-[9px] text-foreground-muted mb-0.5">Body (20 שניות)</p>
                     <p className="text-[11px] text-foreground-secondary leading-relaxed">{body}</p>
                   </div>
                 )}
@@ -569,6 +572,12 @@ ACTION_TIME: [זמן ביצוע ריאלי]
                   <div className="bg-white rounded-lg border border-border px-3 py-2 mb-1.5">
                     <p className="text-[9px] text-foreground-muted mb-0.5">CTA</p>
                     <p className="text-[11px] text-foreground font-semibold">{cta}</p>
+                  </div>
+                )}
+                {(vis || music) && (
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {vis && <span className="text-[10px] px-2 py-0.5 bg-secondary text-foreground-secondary rounded-full border border-border">🎬 {vis}</span>}
+                    {music && <span className="text-[10px] px-2 py-0.5 bg-secondary text-foreground-secondary rounded-full border border-border">🎵 {music}</span>}
                   </div>
                 )}
                 {examples.length > 0 && (
