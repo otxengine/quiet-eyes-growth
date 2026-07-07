@@ -63,33 +63,26 @@ export async function detectTrends(req: Request, res: Response) {
     }>(profile, 'runIntelligenceEngines');
     const sp = getSectorProfile(profile);
 
-    // Build search queries — trends are national/global, never city-scoped
+    // Build search queries — trends are national/global, never city-scoped.
+    // custom_keywords are local SEO terms (e.g. "מסעדת דגים בחדרה") — not trend signals, excluded here.
     const searchQueries: string[] = [];
 
     if (marketMission?.watch_signals_he?.length) {
       for (const signal of marketMission.watch_signals_he) {
         searchQueries.push(`${signal} ישראל ${year}`);
-        searchQueries.push(`${signal} טרנד עולמי ${year}`);
       }
     }
 
     if (sp?.relevant_topics?.length) {
-      for (const topic of sp.relevant_topics.slice(0, 4)) {
-        searchQueries.push(`${topic} trend Israel ${year}`);
-        searchQueries.push(`${topic} global trend ${year}`);
+      // Topics may already contain "trend/trends" — just append year + Israel, no extra keyword
+      for (const topic of sp.relevant_topics.slice(0, 6)) {
+        searchQueries.push(`${topic} Israel ${year}`);
       }
     } else {
       searchQueries.push(`${category} מגמות ישראל ${year}`);
-      searchQueries.push(`${category} טרנד עולמי ${year}`);
       searchQueries.push(`${category} ביקוש עולה ישראל`);
       searchQueries.push(`${category} טרנד רשתות חברתיות`);
       searchQueries.push(`${category} העדפות לקוחות חדשות`);
-    }
-
-    // ── custom_keywords: add each keyword as a trend search ──────────────────
-    const { parseKeywords: _parseKw } = await import('../../lib/dataSources');
-    for (const kw of _parseKw(profile).slice(0, 4)) {
-      searchQueries.push(`${kw} טרנד מגמה ${year}`);
     }
 
     const { isTavilyRateLimited } = await import('../../lib/tavily');
