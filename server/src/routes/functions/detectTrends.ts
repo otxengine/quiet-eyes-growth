@@ -51,7 +51,9 @@ export async function detectTrends(req: Request, res: Response) {
     const profile = profiles[0];
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
-    const { name, category, city } = profile;
+    const { name: _name, category } = profile;
+
+    const year = new Date().getFullYear();
 
     // Mission intelligence: sector-specific signals to watch / ignore
     const marketMission = getAgentMission<{
@@ -61,36 +63,33 @@ export async function detectTrends(req: Request, res: Response) {
     }>(profile, 'runIntelligenceEngines');
     const sp = getSectorProfile(profile);
 
-    // Build search queries: mission watch_signals first, then sector-specific, then fallback
+    // Build search queries — trends are national/global, never city-scoped
     const searchQueries: string[] = [];
 
     if (marketMission?.watch_signals_he?.length) {
-      // Primary: exact signals the LLM decided to watch at onboarding
       for (const signal of marketMission.watch_signals_he) {
-        searchQueries.push(`${signal} ישראל 2025`);
-        searchQueries.push(`${signal} ${city} מגמה`);
+        searchQueries.push(`${signal} ישראל ${year}`);
+        searchQueries.push(`${signal} טרנד עולמי ${year}`);
       }
     }
 
     if (sp?.relevant_topics?.length) {
-      // Secondary: sector-specific topics from AI-parsed profile
       for (const topic of sp.relevant_topics.slice(0, 4)) {
-        searchQueries.push(`${topic} trend Israel 2025`);
-        searchQueries.push(`${topic} ${city} שינויים`);
+        searchQueries.push(`${topic} trend Israel ${year}`);
+        searchQueries.push(`${topic} global trend ${year}`);
       }
     } else {
-      // Fallback: generic category queries (only if no sector profile)
-      searchQueries.push(`${category} ${city} מגמות 2025`);
+      searchQueries.push(`${category} מגמות ישראל ${year}`);
+      searchQueries.push(`${category} טרנד עולמי ${year}`);
       searchQueries.push(`${category} ביקוש עולה ישראל`);
       searchQueries.push(`${category} טרנד רשתות חברתיות`);
-      searchQueries.push(`${category} ${city} חדשות שוק`);
-      searchQueries.push(`${category} העדפות לקוחות שינויים`);
+      searchQueries.push(`${category} העדפות לקוחות חדשות`);
     }
 
     // ── custom_keywords: add each keyword as a trend search ──────────────────
     const { parseKeywords: _parseKw } = await import('../../lib/dataSources');
     for (const kw of _parseKw(profile).slice(0, 4)) {
-      searchQueries.push(`${kw} טרנד מגמה 2025`);
+      searchQueries.push(`${kw} טרנד מגמה ${year}`);
     }
 
     const { isTavilyRateLimited } = await import('../../lib/tavily');
@@ -113,7 +112,7 @@ export async function detectTrends(req: Request, res: Response) {
     // -- Google Trends via SerpAPI (if key available) -------------------------
     let trendsBlock = '';
     if (SERP_API_KEY) {
-      const keywords = [category, `${category} ${city}`, `${category} ישראל`];
+      const keywords = [category, `${category} ישראל`, `${category} Israel`];
       const trendResults = await Promise.all(keywords.map(k => fetchGoogleTrends(k)));
       const rising = trendResults
         .map((t, i) => ({ keyword: keywords[i], data: t }))
