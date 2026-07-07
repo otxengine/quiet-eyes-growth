@@ -33,6 +33,7 @@ const categoryConfig = {
   tiktok_audience:       { borderClass: 'signal-border-trend',          label: 'TikTok קהל' },
   tiktok_post_performance: { borderClass: 'signal-border-mention',      label: 'TikTok ביצועים' },
   event:                 { borderClass: 'signal-border-trend',          label: 'אירוע' },
+  early_trend:           { borderClass: 'signal-border-early_trend',    label: '🔥 טרנד מוקדם' },
 };
 
 const impactLabels = {
@@ -262,13 +263,23 @@ ACTION_TIME: [זמן ביצוע ריאלי]
               {(() => {
                 try {
                   const m = JSON.parse(signal.source_description || '{}');
-                  if (!m.is_global_trend) return null;
+                  if (!m.is_global_trend && !signal.is_us_leading_indicator) return null;
                   return (
                     <span
                       className="px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-blue-50 text-blue-600 border border-blue-100"
-                      title={m.days_until_israel ? `צפוי להגיע לישראל בעוד ~${m.days_until_israel} ימים` : 'טרנד מוביל מארה״ב'}
+                      title={m.days_until_israel ? `צפוי להגיע לישראל בעוד ~${m.days_until_israel} ימים` : 'טרנד מוביל מארה״ב — 2–6 שבועות מקדימות'}
                     >
-                      🌍 גלובלי
+                      🌍 Global Trends{m.days_until_israel ? ` · ${m.days_until_israel}י` : ' · 2–6 שבועות מקדימות'}
+                    </span>
+                  );
+                } catch { return null; }
+              })()}
+              {signal.category === 'early_trend' && (() => {
+                try {
+                  const m = JSON.parse(signal.source_description || '{}');
+                  return (
+                    <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-orange-50 text-orange-600 border border-orange-200">
+                      ⚡ עולה לפני השיא{m.days_to_peak ? ` · ${m.days_to_peak}י` : ''}
                     </span>
                   );
                 } catch { return null; }
@@ -278,7 +289,7 @@ ACTION_TIME: [זמן ביצוע ריאלי]
                 title={formatDate(signal.detected_at || signal.created_date)}>
                 {timeAgo(signal.detected_at || signal.created_date)}
               </span>
-              <AiConfidenceBadge confidence={signal.confidence} compact />
+              <AiConfidenceBadge confidence={signal.confidence} compact={signal.confidence == null || signal.confidence >= 50} />
               <DataFreshnessBadge dateStr={signal.detected_at || signal.created_date} maxAgeHours={72} />
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -298,12 +309,13 @@ ACTION_TIME: [זמן ביצוע ריאלי]
                 {creatingTask ? <Loader2 className="w-3 h-3 animate-spin" /> : <ListPlus className="w-3 h-3" />}
                 צור משימה
               </button>
-              {(signal.category === 'trend' || signal.category === 'opportunity') && (
+              {(signal.category === 'trend' || signal.category === 'opportunity' || signal.category === 'early_trend') && (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleCreateCampaignIdea(); }}
                   className="btn-subtle text-[10px] text-foreground-muted hover:text-primary flex items-center gap-1"
                 >
-                  <Megaphone className="w-3 h-3" /> צור קמפיין
+                  <Megaphone className="w-3 h-3" />
+                  {signal.category === 'early_trend' ? 'צור תוכן לטרנד' : 'צור קמפיין'}
                 </button>
               )}
               {(() => {
@@ -450,6 +462,44 @@ ACTION_TIME: [זמן ביצוע ריאלי]
             } catch { return null; }
           })()}
 
+          {/* Aspect matrix — trend signals only */}
+          {signal.category === 'trend' && (() => {
+            let m = {};
+            try { m = JSON.parse(signal.source_description || '{}'); } catch {}
+            const platform = m.platform || m.action_platform || '';
+            const isGoogle = platform === 'google' || (signal.agent_name || '').toLowerCase().includes('google') || (signal.agent_name || '').toLowerCase().includes('trends');
+            const isSocial = platform === 'instagram' || platform === 'facebook';
+            const sourceCount = directUrls.length || sourceIds.length;
+
+            const cells = [
+              { label: 'ביטחון', value: signal.confidence != null ? `${signal.confidence}%` : '—' },
+              { label: 'השפעה', value: signal.impact_level === 'high' ? 'גבוהה' : signal.impact_level === 'medium' ? 'בינונית' : 'נמוכה' },
+              { label: 'מקורות', value: sourceCount || '—' },
+              { label: 'גיל', value: timeAgo(signal.detected_at || signal.created_date) || '—' },
+            ];
+            if (isGoogle) {
+              const kws = m.keywords ? (Array.isArray(m.keywords) ? m.keywords : String(m.keywords).split(',').filter(Boolean)) : [];
+              if (kws.length) cells.push({ label: 'מילות מפתח', value: kws.length });
+              if (m.days_until_israel) cells.push({ label: 'מקדים ישראל', value: `${m.days_until_israel}י` });
+            }
+            if (isSocial && m.engagement_rate) cells.push({ label: 'מעורבות', value: `${m.engagement_rate}%` });
+            if (m.reach_estimate) cells.push({ label: 'חשיפה', value: m.reach_estimate });
+
+            return (
+              <div>
+                <h4 className="text-[11px] font-semibold text-foreground-secondary mb-2">מדדי מגמה</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {cells.map((cell, i) => (
+                    <div key={i} className="bg-white border border-border rounded-lg px-3 py-2 text-center">
+                      <p className="text-[9px] text-foreground-muted mb-0.5">{cell.label}</p>
+                      <p className="text-[13px] font-bold text-foreground">{cell.value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Reasoning chain */}
           {signal.reasoning_chain && (
             <div>
@@ -462,6 +512,32 @@ ACTION_TIME: [זמן ביצוע ריאלי]
               </p>
             </div>
           )}
+
+          {/* Keywords — search/Google trends */}
+          {(() => {
+            try {
+              const m = JSON.parse(signal.source_description || '{}');
+              const isSearch = m.platform === 'google' || (signal.agent_name || '').toLowerCase().includes('google') || (signal.agent_name || '').toLowerCase().includes('trends');
+              const kws = m.keywords
+                ? (Array.isArray(m.keywords) ? m.keywords : String(m.keywords).split(',').map(k => k.trim()).filter(Boolean))
+                : (signal.keywords ? (Array.isArray(signal.keywords) ? signal.keywords : String(signal.keywords).split(',').map(k => k.trim()).filter(Boolean)) : []);
+              if (!isSearch || !kws.length) return null;
+              return (
+                <div>
+                  <h4 className="text-[11px] font-semibold text-foreground-secondary mb-2 flex items-center gap-1.5">
+                    <span>🔍</span> מילות מפתח לטרגוט
+                  </h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {kws.map((kw, i) => (
+                      <span key={i} className="px-2 py-1 text-[11px] font-semibold bg-primary/10 text-primary rounded-lg border border-primary/20">
+                        {kw}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            } catch { return null; }
+          })()}
 
           {/* Source excerpts */}
           {signal.source_raw_excerpts && (() => {
@@ -518,6 +594,33 @@ ACTION_TIME: [זמן ביצוע ריאלי]
             </div>
           )}
 
+          {/* Early trend velocity metrics — detail view only (AC3) */}
+          {signal.category === 'early_trend' && (() => {
+            try {
+              const m = JSON.parse(signal.source_description || '{}');
+              if (!m.velocity_score && !m.days_to_peak) return null;
+              return (
+                <div className="flex flex-wrap gap-2">
+                  {m.velocity_score != null && (
+                    <span className="text-[11px] px-3 py-1.5 bg-orange-50 text-orange-700 rounded-lg border border-orange-100 font-medium">
+                      🚀 מהירות: {m.velocity_score}/100
+                    </span>
+                  )}
+                  {m.days_to_peak != null && (
+                    <span className="text-[11px] px-3 py-1.5 bg-amber-50 text-amber-700 rounded-lg border border-amber-100 font-medium">
+                      📅 שיא צפוי: ~{m.days_to_peak} ימים
+                    </span>
+                  )}
+                  {m.stage && (
+                    <span className="text-[11px] px-3 py-1.5 bg-secondary text-foreground-secondary rounded-lg border border-border">
+                      שלב: {m.stage}
+                    </span>
+                  )}
+                </div>
+              );
+            } catch { return null; }
+          })()}
+
           {/* Agent metadata */}
           <div className="flex items-center gap-3 pt-1 border-t border-border/50 flex-wrap">
             {signal.agent_name && (
@@ -526,7 +629,7 @@ ACTION_TIME: [זמן ביצוע ריאלי]
             {signal.self_score != null && (
               <span className="text-[10px] text-foreground-muted">איכות עצמית: {signal.self_score}/100</span>
             )}
-            {signal.source_description && (
+            {signal.source_description && signal.category !== 'early_trend' && (
               <span className="text-[10px] text-foreground-muted opacity-60">{signal.source_description}</span>
             )}
           </div>

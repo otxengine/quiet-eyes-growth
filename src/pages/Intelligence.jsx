@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Eye, TrendingUp, AlertTriangle, Sparkles, MessageSquare, Users, FileText, Calendar } from 'lucide-react';
+import { Eye, TrendingUp, AlertTriangle, Sparkles, MessageSquare, Users, FileText, Calendar, Archive, ChevronDown } from 'lucide-react';
 import SignalCard from '@/components/intelligence/SignalCard';
 import AiInsightBox from '@/components/ai/AiInsightBox';
 import WeeklyReportsTab from '@/components/intelligence/WeeklyReportsTab';
@@ -67,6 +67,7 @@ export default function Intelligence() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('all');
   const [showScan, setShowScan] = useState(false);
+  const [showDismissed, setShowDismissed] = useState(false);
   const { can, plan } = usePlan();
   const canGrowth = can('growth');
   const planLimits = getLimits(plan);
@@ -93,6 +94,20 @@ export default function Intelligence() {
     queryKey: ['rawSignalStats', bpId],
     queryFn: () => base44.entities.RawSignal.filter({ linked_business: bpId }, '-detected_at', 50),
     enabled: !!bpId
+  });
+
+  const { data: dismissedSignals = [] } = useQuery({
+    queryKey: ['dismissedSignals', bpId],
+    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, is_dismissed: true }, '-detected_at', 50),
+    enabled: !!bpId && showDismissed,
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (id) => base44.entities.MarketSignal.update(id, { is_dismissed: false }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['intelligenceSignals', bpId] });
+      queryClient.invalidateQueries({ queryKey: ['dismissedSignals', bpId] });
+    },
   });
 
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -319,6 +334,40 @@ export default function Intelligence() {
                   </a>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      )}
+      {/* Dismissed bin — restore flow (AC2b) */}
+      {activeTab !== 'reports' && (
+        <div className="card-base fade-in-up">
+          <button
+            onClick={() => setShowDismissed(v => !v)}
+            className="px-5 py-3 flex items-center gap-2 text-[12px] text-foreground-muted hover:text-foreground w-full"
+          >
+            <Archive className="w-3.5 h-3.5" />
+            פריטים שהוסרו
+            {showDismissed && dismissedSignals.length > 0 && (
+              <span className="text-[10px] font-semibold">({dismissedSignals.length})</span>
+            )}
+            <ChevronDown className={`w-3.5 h-3.5 mr-auto transition-transform ${showDismissed ? 'rotate-180' : ''}`} />
+          </button>
+          {showDismissed && (
+            <div className="border-t border-border divide-y divide-border">
+              {dismissedSignals.length === 0 ? (
+                <p className="px-5 py-4 text-[12px] text-foreground-muted">אין פריטים שהוסרו</p>
+              ) : dismissedSignals.map(s => (
+                <div key={s.id} className="px-5 py-3 flex items-center gap-3">
+                  <p className="text-[12px] text-foreground-muted flex-1 truncate">{s.summary}</p>
+                  <button
+                    onClick={() => restoreMutation.mutate(s.id)}
+                    disabled={restoreMutation.isPending}
+                    className="text-[11px] text-primary hover:underline flex-shrink-0 disabled:opacity-40"
+                  >
+                    שחזר
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </div>
