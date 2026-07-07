@@ -57,6 +57,13 @@ describe('KAN-24: scheduler cron + runAgentForAll', () => {
     expect(registered).toContain('0 7 * * *');
   });
 
+  // ── KAN-87 AC7: 02:00 trend pack ─────────────────────────────────────────────
+  it('KAN-87 AC7: registers 02:00 UTC trend intelligence cron', () => {
+    startScheduler();
+    const registered = (cron.schedule as jest.Mock).mock.calls.map((c: any[]) => c[0]);
+    expect(registered).toContain('0 2 * * *');
+  });
+
   // ── AC2 ─────────────────────────────────────────────────────────────────────
   it('AC2: retries agentFn once after 3s and succeeds on second call', async () => {
     jest.useFakeTimers();

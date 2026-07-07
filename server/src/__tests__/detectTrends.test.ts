@@ -25,7 +25,7 @@ jest.mock('../lib/businessProfile', () => ({
   getSectorProfile: jest.fn().mockReturnValue(null),
 }));
 
-const PROFILE = { id: 'bp1', name: 'Test', category: 'מסעדה', city: 'Tel Aviv' };
+const PROFILE = { id: 'bp1', name: 'Test', category: 'מסעדה', city: 'Tel Aviv', plan_id: 'growth' };
 
 function makeRes() {
   const res: any = {};
@@ -92,6 +92,56 @@ describe('detectTrends', () => {
     const created = (prisma.marketSignal.create as jest.Mock).mock.calls[0][0].data;
     expect(created.confidence).toBeLessThanOrEqual(40);
     expect(res._data.trends_created).toBe(1);
+  });
+
+  // AC1 — category field on created MarketSignal
+  it('writes MarketSignal with category=trend', async () => {
+    (invokeLLM as jest.Mock).mockResolvedValue({
+      trends: [{ trend_name: 'טרנד חדש', evidence: 'src', relevance_to_business: 'high', confidence: 70, urgency: 'medium', growth_stage: 'growing', opportunity_for_business: 'x', action_platform: 'instagram', source_type: 'web' }],
+    });
+
+    const req: any = { body: { businessProfileId: 'bp1' } };
+    const res = makeRes();
+    await detectTrends(req, res);
+
+    const created = (prisma.marketSignal.create as jest.Mock).mock.calls[0][0].data;
+    expect(created.category).toBe('trend');
+  });
+
+  // AC4 — plan gating
+  it('skips with plan_not_eligible for free_trial plan', async () => {
+    (prisma.businessProfile.findMany as jest.Mock).mockResolvedValue([{ ...PROFILE, plan_id: 'free_trial' }]);
+
+    const req: any = { body: { businessProfileId: 'bp1' } };
+    const res = makeRes();
+    await detectTrends(req, res);
+
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ skipped: true, reason: 'plan_not_eligible' })
+    );
+    expect(prisma.marketSignal.create).not.toHaveBeenCalled();
+  });
+
+  it('skips with plan_not_eligible for starter plan', async () => {
+    (prisma.businessProfile.findMany as jest.Mock).mockResolvedValue([{ ...PROFILE, plan_id: 'starter' }]);
+
+    const req: any = { body: { businessProfileId: 'bp1' } };
+    const res = makeRes();
+    await detectTrends(req, res);
+
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ skipped: true, reason: 'plan_not_eligible' })
+    );
+  });
+
+  it('growth plan proceeds past gate', async () => {
+    (invokeLLM as jest.Mock).mockResolvedValue({ trends: [] });
+    const req: any = { body: { businessProfileId: 'bp1' } };
+    const res = makeRes();
+    await detectTrends(req, res);
+
+    const call = (res.json as jest.Mock).mock.calls[0][0];
+    expect(call?.reason).not.toBe('plan_not_eligible');
   });
 
   // AC1 — SectorKnowledge created when row missing

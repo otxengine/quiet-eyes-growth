@@ -374,6 +374,12 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
     const profile = await prisma.businessProfile.findFirst({ where: { id: businessProfileId } });
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
+    // AC4: TikTok sector trends are Growth+ only
+    const TREND_PLANS = new Set(['growth', 'pro', 'enterprise']);
+    if (!TREND_PLANS.has((profile as any).plan_id ?? '')) {
+      return res.json({ trends_created: 0, skipped: true, reason: 'plan_not_eligible' });
+    }
+
     const {
       name,
       category,

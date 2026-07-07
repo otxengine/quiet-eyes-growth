@@ -109,6 +109,12 @@ export async function detectEarlyTrends(req: Request, res: Response) {
     const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
     if (!profile) return res.status(404).json({ error: 'Business profile not found' });
 
+    // AC4: early trend content is Growth+ only
+    const TREND_PLANS = new Set(['growth', 'pro', 'enterprise']);
+    if (!TREND_PLANS.has((profile as any).plan_id ?? '')) {
+      return res.json({ trends_created: 0, skipped: true, reason: 'plan_not_eligible' });
+    }
+
     const { name, category, city, relevant_services = '' } = profile;
 
     // Load business memory (rejected patterns + preferences)

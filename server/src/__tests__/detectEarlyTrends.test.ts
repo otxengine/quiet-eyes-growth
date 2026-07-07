@@ -27,7 +27,7 @@ import { tavilyAdvancedSearch } from '../lib/tavily';
 import { loadBusinessContext, formatContextForPrompt } from '../lib/businessContext';
 
 const PROFILE = {
-  id: 'biz_001', name: 'Test Biz', category: 'מסעדה', city: 'תל אביב', relevant_services: 'פיצה,פסטה',
+  id: 'biz_001', name: 'Test Biz', category: 'מסעדה', city: 'תל אביב', relevant_services: 'פיצה,פסטה', plan_id: 'growth',
 };
 
 function makeReq(id = 'biz_001') { return { body: { businessProfileId: id } } as any; }
@@ -57,6 +57,35 @@ beforeEach(() => {
   (loadBusinessContext             as jest.Mock).mockResolvedValue({ rejectedPatterns: [] });
   (formatContextForPrompt          as jest.Mock).mockReturnValue('');
   (invokeLLM                       as jest.Mock).mockResolvedValue({ trends: [] });
+});
+
+// ── AC4 — plan gating ─────────────────────────────────────────────────────────
+
+it('AC4: skips with plan_not_eligible for free_trial', async () => {
+  (prisma.businessProfile.findUnique as jest.Mock).mockResolvedValue({ ...PROFILE, plan_id: 'free_trial' });
+  const res = makeRes();
+  await detectEarlyTrends(makeReq(), res);
+  expect(res.json).toHaveBeenCalledWith(
+    expect.objectContaining({ skipped: true, reason: 'plan_not_eligible' }),
+  );
+  expect(prisma.marketSignal.create).not.toHaveBeenCalled();
+});
+
+it('AC4: skips with plan_not_eligible for starter', async () => {
+  (prisma.businessProfile.findUnique as jest.Mock).mockResolvedValue({ ...PROFILE, plan_id: 'starter' });
+  const res = makeRes();
+  await detectEarlyTrends(makeReq(), res);
+  expect(res.json).toHaveBeenCalledWith(
+    expect.objectContaining({ skipped: true, reason: 'plan_not_eligible' }),
+  );
+});
+
+it('AC4: growth plan proceeds past gate', async () => {
+  (invokeLLM as jest.Mock).mockResolvedValue({ trends: [] });
+  const res = makeRes();
+  await detectEarlyTrends(makeReq(), res);
+  const call = (res.json as jest.Mock).mock.calls[0][0];
+  expect(call?.reason).not.toBe('plan_not_eligible');
 });
 
 // ── AC3 — 12h cooldown ────────────────────────────────────────────────────────

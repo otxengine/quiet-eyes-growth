@@ -112,6 +112,19 @@ describe('AC1 — RawSignal + MarketSignal written', () => {
     }));
   });
 
+  test('MarketSignal categories are social and trend', async () => {
+    bpFindFirst.mockResolvedValue({ ...PROFILE, tiktok_url: 'https://tiktok.com/@testbiz' });
+    apifyKey.mockReturnValue(true);
+    apifyActor.mockResolvedValue(VIDEOS);
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await analyzeTikTokContent(req, res);
+
+    const categories = (marketSignalCreate as jest.Mock).mock.calls.map(c => c[0].data.category);
+    expect(categories).toContain('social');
+    expect(categories).toContain('trend');
+  });
+
   test('no video source → 0 RawSignals, still writes MarketSignals from LLM', async () => {
     const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
     await analyzeTikTokContent(req, res);

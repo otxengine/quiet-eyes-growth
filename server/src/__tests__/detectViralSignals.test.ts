@@ -15,9 +15,10 @@ jest.mock('../db', () => ({
 jest.mock('../lib/llm',           () => ({ invokeLLM: jest.fn() }));
 jest.mock('../lib/automationLog', () => ({ writeAutomationLog: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../lib/trendMemory',   () => ({
-  loadCheckpoint: jest.fn(),
-  filterNewIds:   jest.fn(),
-  saveCheckpoint: jest.fn().mockResolvedValue(undefined),
+  loadCheckpoint:   jest.fn(),
+  filterNewIds:     jest.fn(),
+  saveCheckpoint:   jest.fn().mockResolvedValue(undefined),
+  shouldSkipByTime: jest.fn().mockReturnValue(false),
 }));
 jest.mock('../lib/tavily', () => ({
   tavilyAdvancedSearch: jest.fn(),
@@ -41,7 +42,8 @@ import { invokeLLM } from '../lib/llm';
 import { loadCheckpoint, filterNewIds } from '../lib/trendMemory';
 import { isTavilyRateLimited, tavilyAdvancedSearch } from '../lib/tavily';
 import { hasApifyKey, runApifyActor } from '../lib/apify';
-import { shouldSkipAgent, cacheGet } from '../lib/agentCache';
+import { cacheGet } from '../lib/agentCache';
+import { shouldSkipByTime } from '../lib/trendMemory';
 
 const PROFILE_GROWTH = {
   id: 'biz_001', name: 'Test Biz', category: 'מסעדה', city: 'תל אביב',
@@ -73,7 +75,7 @@ beforeEach(() => {
   (prisma.marketSignal.create       as jest.Mock).mockResolvedValue({});
   (loadCheckpoint                   as jest.Mock).mockResolvedValue(EMPTY_CP);
   (filterNewIds                     as jest.Mock).mockImplementation((ids: string[]) => ids);
-  (shouldSkipAgent                  as jest.Mock).mockReturnValue(false);
+  (shouldSkipByTime                 as jest.Mock).mockReturnValue(false);
   (hasApifyKey                      as jest.Mock).mockReturnValue(false);
   (isTavilyRateLimited              as jest.Mock).mockReturnValue(true); // skip Tavily by default
   (cacheGet                         as jest.Mock).mockReturnValue(null);
@@ -83,7 +85,7 @@ beforeEach(() => {
 // ── AC4 — cooldown ────────────────────────────────────────────────────────────
 
 it('AC4: returns ran_recently within 12h cooldown', async () => {
-  (shouldSkipAgent as jest.Mock).mockReturnValue(true);
+  (shouldSkipByTime as jest.Mock).mockReturnValue(true);
   const res = makeRes();
   await detectViralSignals(makeReq(), res);
   expect(res.json).toHaveBeenCalledWith(

@@ -51,6 +51,12 @@ export async function detectTrends(req: Request, res: Response) {
     const profile = profiles[0];
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
+    // AC4: trend content is Growth+ only
+    const TREND_PLANS = new Set(['growth', 'pro', 'enterprise']);
+    if (!TREND_PLANS.has((profile as any).plan_id ?? '')) {
+      return res.json({ trends_created: 0, skipped: true, reason: 'plan_not_eligible' });
+    }
+
     const { name: _name, category } = profile;
 
     const year = new Date().getFullYear();
@@ -88,7 +94,7 @@ export async function detectTrends(req: Request, res: Response) {
     const { isTavilyRateLimited } = await import('../../lib/tavily');
     if (isTavilyRateLimited() && !SERP_API_KEY) {
       console.log('[detectTrends] skipping — Tavily rate-limited and no SerpAPI key');
-      await writeAutomationLog('detectTrends', businessProfileId, startTime, 0);
+      await writeAutomationLog('detectTrends', businessProfileId, startTime, 0, 'success', 'no_data_sources');
       return res.json({ trends_created: 0, skipped: true, reason: 'no_data_sources' });
     }
 
