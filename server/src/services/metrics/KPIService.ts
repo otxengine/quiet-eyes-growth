@@ -390,7 +390,8 @@ export async function computeAnalysisObservability(
   const avgOpps       = parseFloat((pipelineRows as any[])[0]?.avg_opps     ?? '0') || 0;
   const avgThreats    = parseFloat((pipelineRows as any[])[0]?.avg_threats  ?? '0') || 0;
 
-  const lastOrchAt = (lastOrch as any[])[0]?.last_run ?? null;
+  const rawOrchAt  = (lastOrch as any[])[0]?.last_run ?? null;
+  const lastOrchAt = rawOrchAt ? new Date(rawOrchAt).toISOString() : null;
 
   let freshnessGapHours: number | null = null;
   if (lastSynthAt && lastOrchAt) {
