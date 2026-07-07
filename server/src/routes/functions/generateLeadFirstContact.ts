@@ -30,18 +30,27 @@ export async function generateLeadFirstContact(req: Request, res: Response) {
     }>(bp, 'runLeadGeneration');
 
     // Channel-specific templates from GPT-4o content layer
-    const whatsappTemplate = contentTemplates?.first_contact_templates_he?.whatsapp || '';
-    const emailTemplate    = contentTemplates?.first_contact_templates_he?.email    || '';
-    const linkedinTemplate = contentTemplates?.first_contact_templates_he?.linkedin || '';
+    const whatsappTemplate   = contentTemplates?.first_contact_templates_he?.whatsapp    || '';
+    const emailTemplate      = contentTemplates?.first_contact_templates_he?.email       || '';
+    const linkedinTemplate   = contentTemplates?.first_contact_templates_he?.linkedin    || '';
+    const socialPostTemplate = contentTemplates?.first_contact_templates_he?.social_post || '';
 
     // Determine channel from lead source / request
-    const channel = (req.body.channel || lead.source || '').toLowerCase().includes('linkedin')
-      ? 'linkedin'
-      : (req.body.channel || '').toLowerCase().includes('email')
-      ? 'email'
+    // Platform map: whatsapp | social_post | email | linkedin
+    const rawChannel = (req.body.channel || '').toLowerCase();
+    const rawSource  = (lead.source || '').toLowerCase();
+    const channel =
+      rawChannel.includes('social_post') || rawSource.includes('social_post') ? 'social_post'
+      : rawChannel.includes('linkedin')  || rawSource.includes('linkedin')    ? 'linkedin'
+      : rawChannel.includes('email')     || rawSource.includes('email')       ? 'email'
       : 'whatsapp';
 
-    const templateMap: Record<string, string> = { whatsapp: whatsappTemplate, email: emailTemplate, linkedin: linkedinTemplate };
+    const templateMap: Record<string, string> = {
+      whatsapp:    whatsappTemplate,
+      email:       emailTemplate,
+      linkedin:    linkedinTemplate,
+      social_post: socialPostTemplate,
+    };
     const channelTemplate = templateMap[channel] || whatsappTemplate;
 
     const missionTone = nurtureMission?.tone_he || bp.tone_preference || 'ידידותי ומקצועי';
@@ -72,7 +81,7 @@ Message rules:
 1. Open with their name + the exact thing they wanted (not "שלום, ראיתי שאתם מתעניינים")
 2. One sentence: why they should talk to THIS business specifically (sector-specific value, not generic)
 3. One clear, easy next step (not "ניצור קשר" — be specific)
-4. ${channel === 'whatsapp' ? 'Max 3 lines, conversational, no salesy language' : channel === 'email' ? 'Max 5 lines, clear subject line, professional but warm' : 'Max 4 lines, LinkedIn-professional, show expertise'}
+4. ${channel === 'whatsapp' ? 'Max 3 lines, conversational, no salesy language' : channel === 'email' ? 'Max 5 lines, clear subject line, professional but warm' : channel === 'social_post' ? 'Max 4 lines, public-facing post tone — no personal address (this is a public reply/comment, not a DM), present your business as the obvious solution' : 'Max 4 lines, LinkedIn-professional, show expertise'}
 5. Do NOT promise discounts. Do NOT invent details. Do NOT use generic phrases like "אשמח לעזור".
 
 Return ONLY the final message text in Hebrew. No explanations.`;
@@ -80,6 +89,13 @@ Return ONLY the final message text in Hebrew. No explanations.`;
     const message = await invokeLLM({ prompt, profile: bp, model: 'sonnet', maxTokens: 200, skipCache: true });
 
     const messageText = typeof message === 'string' ? message.trim() : JSON.stringify(message);
+
+    // AC2: persist generated message so Hunter leads get the new copy on the record
+    await prisma.lead.update({
+      where: { id: leadId },
+      data: { suggested_first_message: messageText },
+    });
+
     return res.json({ message: messageText, channel });
   } catch (err: any) {
     console.error('generateLeadFirstContact error:', err.message);
