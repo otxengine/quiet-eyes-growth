@@ -134,6 +134,10 @@ router.post('/checkout', async (req: Request, res: Response) => {
       `UPDATE organizations SET plan_id = $1, subscription_status = 'active' WHERE id = $2`,
       planId, org.id,
     );
+    await prisma.$executeRawUnsafe(
+      `UPDATE business_profiles SET subscription_plan = $1 WHERE organization_id = $2`,
+      planId, org.id,
+    );
     return res.json({ ok: true, devBypass: true });
   }
 
