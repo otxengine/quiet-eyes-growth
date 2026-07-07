@@ -145,6 +145,7 @@ export async function runLeadGeneration(req: Request, res: Response) {
     }).filter(s => !existingUrls.has(s.url || ''));
 
     let newLeads = 0;
+    const newHotLeadIds: string[] = [];
 
     for (const signal of intentSignals.slice(0, 10)) {
       try {
@@ -180,12 +181,13 @@ Return ONLY valid JSON. ALL string values must be in Hebrew.`,
         if (score < 25) continue;
 
         const now = new Date().toISOString();
-        await prisma.lead.create({
+        const status = score >= 80 ? 'hot' : score >= 40 ? 'warm' : 'cold';
+        const created = await prisma.lead.create({
           data: {
             name: extraction.name || 'לקוח פוטנציאלי',
             source: signal.source || 'חיפוש אינטרנט',
             score,
-            status: score >= 80 ? 'hot' : score >= 40 ? 'warm' : 'cold',
+            status,
             service_needed: extraction.service_needed || category,
             city: extraction.city || city,
             urgency: extraction.urgency,
@@ -200,9 +202,11 @@ Return ONLY valid JSON. ALL string values must be in Hebrew.`,
             followup_count: 0,
             score_reasoning: reasoning.join(' | '),
             linked_business: businessProfileId,
+            platform_sourced: true,
           },
         });
 
+        if (status === 'hot') newHotLeadIds.push(created.id);
         newLeads++;
         existingUrls.add(signal.url || '');
       } catch (err: any) {
@@ -244,13 +248,11 @@ Return ONLY valid JSON. ALL string values must be in Hebrew.`,
 
     await writeAutomationLog('runLeadGeneration', businessProfileId, startTime, newLeads);
 
-    // OTX-001: publish hot_lead events for each new hot lead found
-    if (newLeads > 0) {
-      const profile = await prisma.businessProfile.findFirst({ where: { id: businessProfileId }, select: { category: true, city: true } });
+    // OTX-001: publish hot_lead events for each newly created hot lead
+    if (newHotLeadIds.length > 0) {
+      const profileCtx = await prisma.businessProfile.findFirst({ where: { id: businessProfileId }, select: { category: true, city: true } });
       const hotLeads = await prisma.lead.findMany({
-        where: { linked_business: businessProfileId, status: 'hot' },
-        orderBy: { created_date: 'desc' },
-        take: newLeads,
+        where: { id: { in: newHotLeadIds } },
         select: { id: true, name: true, score: true, service_needed: true },
       });
       for (const lead of hotLeads) {
@@ -259,7 +261,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew.`,
           eventType: 'hot_lead',
           source: 'runLeadGeneration',
           payload: { leadId: lead.id, name: lead.name, score: lead.score, service: lead.service_needed },
-          contextAttrs: { category: profile?.category, city: profile?.city, impact: 'high' },
+          contextAttrs: { category: profileCtx?.category, city: profileCtx?.city, impact: 'high' },
         }).catch(() => {});
       }
     }

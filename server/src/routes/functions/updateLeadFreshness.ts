@@ -230,7 +230,7 @@ export async function updateLeadFreshness(req: Request, res: Response) {
 
     const message = parts.join(' · ');
 
-    await writeAutomationLog('applyDataFreshness', businessProfileId, startTime, totalCleaned);
+    await writeAutomationLog('updateLeadFreshness', businessProfileId, startTime, totalCleaned);
     console.log(`Cleaner done: ${JSON.stringify(stats)}`);
 
     return res.json({
@@ -243,7 +243,7 @@ export async function updateLeadFreshness(req: Request, res: Response) {
     });
   } catch (err: any) {
     console.error('updateLeadFreshness error:', err.message);
-    await writeAutomationLog('applyDataFreshness', businessProfileId, startTime, 0, 'failed', err.message);
+    await writeAutomationLog('updateLeadFreshness', businessProfileId, startTime, 0, 'failed', err.message);
     return res.status(500).json({ error: err.message });
   }
 }

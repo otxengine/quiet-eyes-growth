@@ -48,6 +48,7 @@ import { cleanupInsights } from './routes/functions/cleanupInsights';
 import { cleanupAndLearn } from './routes/functions/cleanupAndLearn';
 import { weeklyEmailDigest } from './routes/functions/weeklyEmailDigest';
 import { writeHeartbeat } from './lib/agentMonitor';
+import { writeAutomationLog } from './lib/automationLog';
 import { checkAndAlertFailureRate } from './lib/collectorMetrics';
 import { generateMorningBriefing } from './routes/functions/generateMorningBriefing';
 import { generateProactiveAlerts } from './routes/functions/generateProactiveAlerts';
@@ -157,6 +158,7 @@ async function runForAll(
 async function enrichNewLeadsWithIntent() {
   const ids = await getActiveProfiles();
   for (const businessProfileId of ids) {
+    const startTime = new Date().toISOString();
     try {
       // Only fetch leads without intent_strength created in the last 48h
       const newLeads = await prisma.lead.findMany({
@@ -180,8 +182,10 @@ async function enrichNewLeadsWithIntent() {
           logger.warn('intentClassification failed for lead', { leadId: lead.id, error: err.message });
         }
       }
+      await writeAutomationLog('intentClassification', businessProfileId, startTime, newLeads.length);
     } catch (err: any) {
       logger.error('enrichNewLeadsWithIntent failed', { businessProfileId, error: err.message });
+      await writeAutomationLog('intentClassification', businessProfileId, startTime, 0, 'failed', err.message);
     }
   }
 }
