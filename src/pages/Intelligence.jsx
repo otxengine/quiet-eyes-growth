@@ -35,6 +35,32 @@ const intelligenceScanSteps = [
   { key: 'tiktok_performance', label: 'מנתח ביצועי פוסטים TikTok...', fn: 'tiktokPostTracker', resultKey: 'tracked', force: true },
 ];
 
+function getAspect(signal) {
+  try {
+    const m = JSON.parse(signal.source_description || '{}');
+    const plat = m.platform || m.action_platform || '';
+    if (plat === 'instagram') return 'instagram';
+    if (plat === 'facebook')  return 'facebook';
+    if (plat === 'google')    return 'google';
+  } catch {}
+  const agent = (signal.agent_name || '').toLowerCase();
+  if (agent.includes('google') || agent.includes('trends') || agent.includes('search')) return 'google';
+  if (agent.includes('instagram'))                                                       return 'instagram';
+  if (agent.includes('facebook'))                                                        return 'facebook';
+  if (agent.includes('social'))                                                          return 'social';
+  if (agent.includes('competitor'))                                                      return 'competitor';
+  return 'general';
+}
+
+const ASPECT_CONFIG = {
+  google:     { label: '🔍 חיפוש ו-Google Trends', color: 'text-red-600' },
+  instagram:  { label: '📸 אינסטגרם',              color: 'text-pink-600' },
+  facebook:   { label: '👤 פייסבוק',               color: 'text-blue-600' },
+  social:     { label: '📱 רשתות חברתיות',          color: 'text-purple-600' },
+  competitor: { label: '🏆 פעילות מתחרים',           color: 'text-indigo-600' },
+  general:    { label: '📊 מגמות כלליות',            color: 'text-foreground' },
+};
+
 export default function Intelligence() {
   const { businessProfile } = useOutletContext();
   const bpId = businessProfile?.id;
@@ -42,13 +68,24 @@ export default function Intelligence() {
   const [activeTab, setActiveTab] = useState('all');
   const [showScan, setShowScan] = useState(false);
   const { can, plan } = usePlan();
+  const canGrowth = can('growth');
   const planLimits = getLimits(plan);
   const signalsMax = planLimits.signals_max;
 
+  // AC5: strip trend/viral payload from client state for non-growth users
   const { data: allSignals = [] } = useQuery({
-    queryKey: ['intelligenceSignals', bpId],
+    queryKey: ['intelligenceSignals', bpId, canGrowth],
     queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, is_dismissed: false }, '-detected_at', 100),
-    enabled: !!bpId
+    enabled: !!bpId,
+    select: (data) => canGrowth ? data : data.filter(s => s.category !== 'trend' && s.category !== 'viral_signal'),
+  });
+
+  // AC3: count-only for trend teaser shown inside PlanGate (non-growth only)
+  const { data: trendCountForTeaser = 0 } = useQuery({
+    queryKey: ['trendCount', bpId],
+    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'trend', is_dismissed: false }, '-detected_at', 200),
+    enabled: !!bpId && !canGrowth,
+    select: (data) => data.length,
   });
 
   // Fetch raw signals for trend stats
@@ -88,7 +125,7 @@ export default function Intelligence() {
 
   const statCards = [
     { label: 'תובנות השבוע', value: weekSignals.length, icon: Sparkles, color: 'text-primary' },
-    { label: 'מגמות עולות', value: trends.length, icon: TrendingUp, color: 'text-[#10b981]', sub: `${trendSignals.length} אותות` },
+    { label: 'מגמות עולות', value: canGrowth ? trends.length : trendCountForTeaser, icon: TrendingUp, color: 'text-[#10b981]', sub: `${trendSignals.length} אותות` },
     { label: 'איומים', value: threats.length, icon: AlertTriangle, color: 'text-[#dc2626]' },
     { label: 'הזדמנויות', value: opportunities.length, icon: Sparkles, color: 'text-[#d97706]' },
     { label: 'אזכורים חברתיים', value: socialMentions.length, icon: MessageSquare, color: 'text-purple-500' },
@@ -108,6 +145,7 @@ export default function Intelligence() {
             setShowScan(false);
             queryClient.invalidateQueries({ queryKey: ['intelligenceSignals', bpId] });
             queryClient.invalidateQueries({ queryKey: ['rawSignalStats', bpId] });
+            queryClient.invalidateQueries({ queryKey: ['trendCount', bpId] });
           }}
           onClose={() => setShowScan(false)}
         />
@@ -141,7 +179,7 @@ export default function Intelligence() {
             }`}>
             {tab.label}
             {!['all', 'reports'].includes(tab.key) && (() => {
-              const countMap = { threat: threats.length, opportunity: opportunities.length, trend: trends.length, competitor_intel: competitorMoves.length, mention: mentions.length, event: eventSignals.length, tiktok: tiktokSignals.length };
+              const countMap = { threat: threats.length, opportunity: opportunities.length, trend: canGrowth ? trends.length : trendCountForTeaser, competitor_intel: competitorMoves.length, mention: mentions.length, event: eventSignals.length, tiktok: tiktokSignals.length };
               const count = countMap[tab.key] || 0;
               return count > 0 ? <span className="mr-1 text-[9px] font-bold text-foreground-muted">({count})</span> : null;
             })()}
@@ -161,8 +199,8 @@ export default function Intelligence() {
       />
 
       {/* Trend / Viral tabs gated at Growth+ */}
-      {(activeTab === 'trend' || activeTab === 'reports') && !can('growth') ? (
-        <PlanGate requires="growth" featureName={activeTab === 'reports' ? 'דוחות שבועיים' : 'ניתוח מגמות'} />
+      {(activeTab === 'trend' || activeTab === 'reports') && !canGrowth ? (
+        <PlanGate requires="growth" featureName={activeTab === 'reports' ? 'דוחות שבועיים' : 'ניתוח מגמות'} count={activeTab === 'trend' ? trendCountForTeaser : null} />
       ) : activeTab === 'reports' ? (
         <WeeklyReportsTab bpId={bpId} />
       ) : activeTab === 'tiktok' ? (
@@ -206,6 +244,54 @@ export default function Intelligence() {
             )}
           </div>
         </div>
+      ) : activeTab === 'trend' ? (
+        filtered.length === 0 ? (
+          <div className="card-base fade-in-up">
+            <div className="py-20 text-center">
+              <Eye className="w-12 h-12 text-foreground-muted opacity-20 mx-auto mb-3" />
+              <p className="text-[13px] text-foreground-muted mb-1">העיניים סורקות את השוק — תובנות חדשות יופיעו בקרוב</p>
+              <p className="text-[11px] text-foreground-muted opacity-50">הסריקה הראשונה לוקחת עד שעה</p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {(() => {
+              const limited = signalsMax === Infinity ? filtered : filtered.slice(0, signalsMax);
+              const groups = {};
+              limited.forEach(s => {
+                const aspect = getAspect(s);
+                if (!groups[aspect]) groups[aspect] = [];
+                groups[aspect].push(s);
+              });
+              return Object.entries(groups).map(([aspect, signals]) => {
+                const cfg = ASPECT_CONFIG[aspect] || ASPECT_CONFIG.general;
+                return (
+                  <div key={aspect} className="card-base fade-in-up">
+                    <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                      <h3 className={`font-semibold text-[13px] ${cfg.color}`}>{cfg.label}</h3>
+                      <span className="text-[10px] text-foreground-muted">{signals.length} מגמות</span>
+                    </div>
+                    <div className="divide-y divide-border">
+                      {signals.map(s => (
+                        <SignalCard key={s.id} signal={s} businessProfile={businessProfile} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+            {signalsMax !== Infinity && filtered.length > signalsMax && (
+              <div className="px-5 py-4 text-center bg-amber-50 border border-amber-100 rounded-lg">
+                <p className="text-[12px] text-amber-800 font-medium">
+                  עוד {filtered.length - signalsMax} מגמות מוסתרות (מגבלת תוכנית: {signalsMax})
+                </p>
+                <a href="/subscription" className="mt-1 inline-block text-[11px] font-semibold text-amber-700 underline underline-offset-2">
+                  שדרג לצפות בכולן →
+                </a>
+              </div>
+            )}
+          </div>
+        )
       ) : (
         <div className="card-base fade-in-up">
           <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">

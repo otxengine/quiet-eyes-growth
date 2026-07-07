@@ -24,7 +24,7 @@ const PLAN_COLORS = {
  *     <MyFeature />
  *   </PlanGate>
  */
-export default function PlanGate({ requires, children, overlay = false, featureName = '' }) {
+export default function PlanGate({ requires, children, overlay = false, featureName = '', count = null }) {
   const { can, isLoading } = usePlan();
   const navigate = useNavigate();
 
@@ -66,9 +66,14 @@ export default function PlanGate({ requires, children, overlay = false, featureN
       <p className="text-[14px] font-semibold text-foreground mb-1">
         {featureName || 'תכונה זו'} לא זמינה בתוכנית הנוכחית
       </p>
-      <p className="text-[12px] text-foreground-muted mb-4">
+      <p className="text-[12px] text-foreground-muted mb-1">
         שדרג לתוכנית {planLabel} כדי לפתוח גישה מלאה
       </p>
+      {count !== null && count > 0 && (
+        <p className="text-[12px] font-semibold text-foreground-muted mb-3">
+          {count} פריטים זמינים לצפייה בשדרוג
+        </p>
+      )}
       <button
         onClick={() => navigate('/subscription')}
         className="px-5 py-2 rounded-lg bg-foreground text-background text-[12px] font-medium hover:opacity-90 transition-all flex items-center gap-2"
