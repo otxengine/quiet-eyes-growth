@@ -123,10 +123,20 @@ router.post('/checkout', async (req: Request, res: Response) => {
   const userId = getUserId(req);
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-  if (!stripeEnabled) return res.status(503).json({ error: 'Stripe not configured' });
-
   const { planId, orgId, returnUrl } = req.body;
   if (!planId) return res.status(400).json({ error: 'planId required' });
+
+  if (!stripeEnabled) {
+    if (process.env.NODE_ENV === 'production') return res.status(503).json({ error: 'Stripe not configured' });
+    // ponytail: dev-only bypass — no Stripe key in dev, so just flip the plan directly instead of checking out
+    const org = await getUserOrg(userId, orgId);
+    if (!org) return res.status(404).json({ error: 'Org not found' });
+    await prisma.$executeRawUnsafe(
+      `UPDATE organizations SET plan_id = $1, subscription_status = 'active' WHERE id = $2`,
+      planId, org.id,
+    );
+    return res.json({ ok: true, devBypass: true });
+  }
 
   const priceId = PRICE_IDS[planId];
   if (!priceId) return res.status(400).json({ error: `No Stripe price configured for plan: ${planId}` });

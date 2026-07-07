@@ -248,6 +248,7 @@ export default function Subscription() {
     try {
       const result = await stripeApi.checkout(planId, orgId, window.location.origin + '/subscription');
       if (result.url) window.location.href = result.url;
+      else if (result.devBypass) { toast.success('התוכנית עודכנה (מצב פיתוח, ללא Stripe)'); refetch(); }
       else toast.error(result.error || 'שגיאה ביצירת הזמנה');
     } catch (e) {
       toast.error(e.message || 'שגיאה — נסה שוב');
