@@ -34,6 +34,8 @@ const categoryConfig = {
   tiktok_post_performance: { borderClass: 'signal-border-mention',      label: 'TikTok ביצועים' },
   event:                 { borderClass: 'signal-border-trend',          label: 'אירוע' },
   early_trend:           { borderClass: 'signal-border-early_trend',    label: '🔥 טרנד מוקדם' },
+  viral_signal:          { borderClass: 'signal-border-opportunity',    label: '🔥 ויראלי' },
+  visual_trend:          { borderClass: 'signal-border-trend',          label: '🎨 טרנד ויזואלי' },
 };
 
 const impactLabels = {
@@ -254,6 +256,20 @@ ACTION_TIME: [זמן ביצוע ריאלי]
             {signal.recommended_action && (
               <p className="text-[11px] text-foreground-muted mb-2">{signal.recommended_action}</p>
             )}
+            {(() => {
+              try {
+                const m = JSON.parse(signal.source_description || '{}');
+                const thumbs = Array.isArray(m.images) ? m.images : Array.isArray(m.media_urls) ? m.media_urls : m.thumbnail_url ? [m.thumbnail_url] : [];
+                if (!thumbs.length) return null;
+                return (
+                  <div className="flex gap-1.5 mb-2 overflow-x-auto">
+                    {thumbs.slice(0, 4).map((url, i) => (
+                      <img key={i} src={url} alt="" className="flex-shrink-0 w-14 h-10 rounded-md object-cover border border-border" onError={e => { e.currentTarget.style.display = 'none'; }} />
+                    ))}
+                  </div>
+                );
+              } catch { return null; }
+            })()}
             <div className="flex flex-wrap items-center gap-1.5 mb-1">
               {signal.source_signals === 'trend_prediction' && (
                 <span className="px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-purple-50 text-purple-600 border border-purple-100">
@@ -309,13 +325,16 @@ ACTION_TIME: [זמן ביצוע ריאלי]
                 {creatingTask ? <Loader2 className="w-3 h-3 animate-spin" /> : <ListPlus className="w-3 h-3" />}
                 צור משימה
               </button>
-              {(signal.category === 'trend' || signal.category === 'opportunity' || signal.category === 'early_trend') && (
+              {(signal.category === 'trend' || signal.category === 'opportunity' || signal.category === 'early_trend' || signal.category === 'tiktok_sector_trend' || signal.category === 'viral_signal') && (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleCreateCampaignIdea(); }}
                   className="btn-subtle text-[10px] text-foreground-muted hover:text-primary flex items-center gap-1"
                 >
                   <Megaphone className="w-3 h-3" />
-                  {signal.category === 'early_trend' ? 'צור תוכן לטרנד' : 'צור קמפיין'}
+                  {signal.category === 'early_trend' ? 'צור תוכן לטרנד'
+                    : signal.category === 'tiktok_sector_trend' ? 'פרסם ל-Marketing'
+                    : signal.category === 'viral_signal' ? 'פרסם עכשיו 🔥'
+                    : 'צור קמפיין'}
                 </button>
               )}
               {(() => {
@@ -347,6 +366,28 @@ ACTION_TIME: [זמן ביצוע ריאלי]
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (signal.category === 'viral_signal') {
+                    const params = new URLSearchParams({
+                      create: 'organic',
+                      type: 'post',
+                      signalId: signal.id,
+                      summary: signal.summary || '',
+                      action: signal.recommended_action || '',
+                      viral: 'true',
+                    });
+                    navigate(`/marketing?${params.toString()}`);
+                    return;
+                  }
+                  if (signal.category === 'tiktok_sector_trend') {
+                    const params = new URLSearchParams({
+                      signalId: signal.id,
+                      summary: signal.summary || '',
+                      action: signal.recommended_action || '',
+                      category: 'tiktok_sector_trend',
+                    });
+                    navigate(`/marketing/create?${params.toString()}`);
+                    return;
+                  }
                   let meta = {};
                   try { meta = JSON.parse(signal.source_description || '{}'); } catch {}
                   const popupType = classifyInsight({
@@ -496,6 +537,99 @@ ACTION_TIME: [זמן ביצוע ריאלי]
                     </div>
                   ))}
                 </div>
+              </div>
+            );
+          })()}
+
+          {/* TikTok sector script — hook / body / CTA + competitor examples (AC2) */}
+          {signal.category === 'tiktok_sector_trend' && (() => {
+            let m = {};
+            try { m = JSON.parse(signal.source_description || '{}'); } catch {}
+            const hook     = m.hook || m.script_hook || '';
+            const body     = m.body || m.script_body || '';
+            const cta      = m.cta  || m.script_cta  || '';
+            const examples = Array.isArray(m.competitor_examples) ? m.competitor_examples : [];
+            if (!hook && !body && !cta && !examples.length) return null;
+            return (
+              <div>
+                <h4 className="text-[11px] font-semibold text-foreground-secondary mb-2">📝 סקריפט TikTok</h4>
+                {hook && (
+                  <div className="bg-white rounded-lg border border-border px-3 py-2 mb-1.5">
+                    <p className="text-[9px] text-foreground-muted mb-0.5">Hook</p>
+                    <p className="text-[12px] text-foreground font-medium">{hook}</p>
+                  </div>
+                )}
+                {body && (
+                  <div className="bg-white rounded-lg border border-border px-3 py-2 mb-1.5">
+                    <p className="text-[9px] text-foreground-muted mb-0.5">Body</p>
+                    <p className="text-[11px] text-foreground-secondary leading-relaxed">{body}</p>
+                  </div>
+                )}
+                {cta && (
+                  <div className="bg-white rounded-lg border border-border px-3 py-2 mb-1.5">
+                    <p className="text-[9px] text-foreground-muted mb-0.5">CTA</p>
+                    <p className="text-[11px] text-foreground font-semibold">{cta}</p>
+                  </div>
+                )}
+                {examples.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold text-foreground-secondary mb-1.5 mt-2">דוגמאות מהמתחרים</p>
+                    <div className="space-y-1.5">
+                      {examples.slice(0, 3).map((ex, i) => (
+                        <div key={i} className="bg-secondary/50 rounded-lg border border-border px-3 py-2">
+                          <p className="text-[11px] text-foreground-secondary">{typeof ex === 'string' ? ex : ex.text || ex.content || ''}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Visual trend media — images / videos / links (AC4) */}
+          {signal.category === 'visual_trend' && (() => {
+            let m = {};
+            try { m = JSON.parse(signal.source_description || '{}'); } catch {}
+            const images = Array.isArray(m.images) ? m.images : Array.isArray(m.media_urls) ? m.media_urls : [];
+            const videos = Array.isArray(m.videos) ? m.videos : [];
+            const links  = Array.isArray(m.links) ? m.links : [];
+            if (!images.length && !videos.length && !links.length) return null;
+            return (
+              <div>
+                <h4 className="text-[11px] font-semibold text-foreground-secondary mb-2">🎨 מדיה וויזואלים</h4>
+                {images.length > 0 && (
+                  <div className="grid grid-cols-3 gap-1.5 mb-2">
+                    {images.slice(0, 6).map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+                        <img src={url} alt="" className="w-full aspect-square object-cover rounded-lg border border-border" onError={e => { e.currentTarget.style.display = 'none'; }} />
+                      </a>
+                    ))}
+                  </div>
+                )}
+                {videos.length > 0 && (
+                  <div className="space-y-1.5 mb-2">
+                    {videos.slice(0, 2).map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                        className="flex items-center gap-2 text-[11px] text-primary hover:underline bg-white rounded-lg border border-border px-3 py-2">
+                        ▶ סרטון {i + 1}
+                      </a>
+                    ))}
+                  </div>
+                )}
+                {links.length > 0 && (
+                  <div className="space-y-1.5">
+                    {links.slice(0, 3).map((url, i) => {
+                      const domain = (() => { try { return new URL(url).hostname.replace('www.', ''); } catch { return url; } })();
+                      return (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                          className="flex items-center gap-2 text-[11px] text-primary hover:underline bg-white rounded-lg border border-border px-3 py-2">
+                          🔗 {domain}
+                        </a>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -715,13 +849,13 @@ ACTION_TIME: [זמן ביצוע ריאלי]
                 >
                   <RefreshCw className="w-3 h-3" /> עדכן תובנה
                 </button>
-                {(signal.category === 'trend' || signal.category === 'opportunity') && (
+                {(signal.category === 'trend' || signal.category === 'opportunity' || signal.category === 'tiktok_sector_trend' || signal.category === 'viral_signal') && (
                   <button
                     onClick={handleCreateCampaignIdea}
                     className="text-[10px] text-primary/70 hover:text-primary flex items-center gap-1 transition-colors mr-auto"
                   >
                     <Megaphone className="w-3 h-3" />
-                    צור קמפיין
+                    {signal.category === 'tiktok_sector_trend' ? 'פרסם ל-Marketing' : signal.category === 'viral_signal' ? 'פרסם עכשיו 🔥' : 'צור קמפיין'}
                   </button>
                 )}
               </div>
