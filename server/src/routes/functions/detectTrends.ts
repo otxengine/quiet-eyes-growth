@@ -190,8 +190,8 @@ Return ONLY valid JSON:
     });
 
     const rawTrends: any[] = result?.trends || [];
-    // Filter out low-relevance trends
-    const trends = rawTrends.filter(t => t.relevance_to_business !== 'low');
+    // ponytail: keep low-relevance trends but cap confidence ≤ 40 so UI can badge them as weak evidence (UX-T1.3 / KAN-74 AC4)
+    const trends = rawTrends;
 
     const existingSignals = await prisma.marketSignal.findMany({ where: { linked_business: businessProfileId } });
     const existingSummaries = new Set(existingSignals.map(s => s.summary));
@@ -210,13 +210,15 @@ Return ONLY valid JSON:
         trend.action_platform ? `(${trend.action_platform})` : '',
       ].filter(Boolean).join(' ').slice(0, 120);
 
+      const isLowRelevance = trend.relevance_to_business === 'low';
       await prisma.marketSignal.create({
         data: {
           summary: trend.trend_name,
           impact_level: isEarlyTrend ? 'high' : 'medium',
           category: 'trend',
           recommended_action: action,
-          confidence: trend.confidence || 70,
+          // low-relevance trends capped at 40 so UI can badge them as weak evidence
+          confidence: isLowRelevance ? Math.min(trend.confidence || 70, 40) : (trend.confidence || 70),
           source_urls: '',
           is_read: false,
           detected_at: new Date().toISOString(),
@@ -230,12 +232,16 @@ Return ONLY valid JSON:
     // Update SectorKnowledge if new trends found
     if (created > 0) {
       try {
+        const trendNames = trends.filter(t => t.evidence).map((t: any) => t.trend_name).join(', ');
         const sectorRecord = await prisma.sectorKnowledge.findFirst({ where: { sector: category } });
         if (sectorRecord) {
-          const trendNames = trends.filter(t => t.evidence).map((t: any) => t.trend_name).join(', ');
           await prisma.sectorKnowledge.update({
             where: { id: sectorRecord.id },
             data: { trending_services: trendNames, last_updated: new Date().toISOString() },
+          });
+        } else {
+          await prisma.sectorKnowledge.create({
+            data: { sector: category, trending_services: trendNames, last_updated: new Date().toISOString() },
           });
         }
       } catch (_) {}
