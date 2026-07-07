@@ -859,6 +859,10 @@ router.post('/', async (req: Request, res: Response) => {
       created_at           TIMESTAMPTZ NOT NULL DEFAULT now()
     )`,
     `CREATE INDEX IF NOT EXISTS idx_reputation_biz ON reputation_incidents(business_id, created_at DESC)`,
+
+    // ── automation_logs: missing columns added to schema but not yet in DB ───
+    `ALTER TABLE automation_logs ADD COLUMN IF NOT EXISTS trace_id           TEXT`,
+    `ALTER TABLE automation_logs ADD COLUMN IF NOT EXISTS high_urgency_count DOUBLE PRECISION DEFAULT 0`,
   ];
 
   for (const sql of statements) {
