@@ -306,6 +306,9 @@ html, body {
   .signal-border-default {
     @apply border-r-[3px] border-r-border;
   }
+  .signal-border-early_trend {
+    @apply border-r-[3px] border-r-orange-500 bg-orange-50/20;
+  }
 }
 
 @keyframes pulse-glow {
