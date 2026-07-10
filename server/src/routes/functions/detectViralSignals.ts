@@ -14,6 +14,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
+import { callAIJson } from '../../lib/ai_router';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { tavilyAdvancedSearch, isTavilyRateLimited } from '../../lib/tavily';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
@@ -23,38 +24,43 @@ import { sendOwnerWhatsAppNotification } from '../../services/execution/WhatsApp
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
-// Derives TikTok hashtags from Hebrew business category (mirrors tiktokSectorTrendAgent logic)
-function deriveHashtags(category: string): string[] {
-  const map: Record<string, string[]> = {
-    'מסעדה': ['מסעדה', 'אוכל', 'food_israel', 'restaurant_israel'],
-    'סושי':  ['סושי', 'sushi_israel', 'sushi', 'אוכל_יפני'],
-    'בר סושי': ['סושי', 'sushi_israel', 'sushi', 'food_israel'],
-    'קפה':   ['קפה', 'cafe_israel', 'לאטה', 'coffee'],
-    'כושר':  ['כושר', 'fitness_israel', 'אימון', 'gym_israel'],
-    'יופי':  ['יופי', 'beauty_israel', 'skincare', 'איפור'],
-    'מספרה': ['מספרה', 'haircut_israel', 'שיער', 'beauty_israel'],
-    'ספא':   ['ספא', 'spa_israel', 'עיסוי', 'wellness'],
-    'מאפייה':['מאפייה', 'לחם', 'bakery_israel', 'אפייה'],
-  };
-  const lower = category.toLowerCase();
-  for (const [key, tags] of Object.entries(map)) {
-    if (lower.includes(key) || key.includes(lower)) return tags;
+// Dynamically generates TikTok hashtags for any business category using AI
+async function generateViralHashtags(category: string, services: string): Promise<string[]> {
+  try {
+    const result = await callAIJson<{ hashtags: string[] }>('classify_sector',
+      `Generate 4-6 TikTok hashtags (without the # prefix) for a business in this category.
+Category: "${category}"
+Services: "${services || 'not specified'}"
+
+Rules:
+- Mix Hebrew and English hashtags (both perform well on TikTok Israel)
+- Include at least one Israel-specific hashtag (e.g., "food_israel", "fitness_israel")
+- Be specific to this business type, not generic
+- No spaces in hashtags — use underscores if needed
+
+Return ONLY valid JSON: {"hashtags": ["tag1","tag2","tag3","tag4","tag5"]}`
+    );
+    const tags = result?.hashtags;
+    if (Array.isArray(tags) && tags.length >= 2) return tags.slice(0, 6);
+  } catch (e: any) {
+    console.warn('[detectViralSignals] AI hashtag generation failed:', e.message);
   }
-  return [category.replace(/\s+/g, '_'), 'food_israel', 'israel'];
+  // Fallback: derive from category string
+  return [category.replace(/\s+/g, '_'), `${category.replace(/\s+/g, '')}_israel`, 'israel'];
 }
 
 function buildViralQueries(category: string, city: string): string[] {
   return [
     // TikTok viral content
     `TikTok viral video ${category} Israel this week trending`,
-    `TikTok hashtag #${category.replace(/\s/g, '')} Israel viral 2025`,
+    `TikTok hashtag #${category.replace(/\s/g, '')} Israel viral ${new Date().getFullYear()}`,
     // Instagram Reels
     `Instagram Reels viral ${category} Israel trending now`,
     `Instagram trending hashtag ${category} this week Israel`,
     // YouTube Shorts
-    `YouTube Shorts viral ${category} Israel 2025 trending`,
+    `YouTube Shorts viral ${category} Israel ${new Date().getFullYear()} trending`,
     // Israeli social/news coverage of viral content
-    `${category} ${city} ויראלי טיקטוק אינסטגרם 2025`,
+    `${category} ${city} ויראלי טיקטוק אינסטגרם ${new Date().getFullYear()}`,
     `${category} ישראל ויראלי רשתות חברתיות השבוע`,
     // Content going viral in niche (Hebrew)
     `פוסט ויראלי ${category} ${city} אינסטגרם טיקטוק`,
@@ -82,13 +88,13 @@ export async function detectViralSignals(req: Request, res: Response) {
     const { name, category, city, relevant_services = '', tone_preference = 'friendly' } = profile;
 
     // ── Source 1: Apify TikTok hashtag scraper (real data) ──────────────────
-    // Derive TikTok hashtags from the business category
-    const sectorHashtags = deriveHashtags(category);
+    // Dynamically generate TikTok hashtags from the business category using AI
+    const sectorHashtags = await generateViralHashtags(category, relevant_services);
     let apifyItems: any[] = [];
 
     if (hasApifyKey()) {
-      // Reuse cached results from tiktokSectorTrendAgent if run recently (same hashtags, same actor)
-      const apifyCacheKey = `apify_tiktok_hashtags:${sectorHashtags.slice(0, 3).join(',')}`;
+      // Reuse cached results from tiktokSectorTrendAgent if run recently (same business + hashtags)
+      const apifyCacheKey = `apify_tiktok_hashtags:${businessProfileId}:${sectorHashtags.slice(0, 3).join(',')}`;
       const cachedApify = cacheGet<any[]>(apifyCacheKey);
       if (cachedApify) {
         apifyItems = cachedApify;
@@ -124,7 +130,7 @@ export async function detectViralSignals(req: Request, res: Response) {
     let resultsScanned = apifyItems.length;
     if (apifyItems.length === 0 && !isTavilyRateLimited()) {
       const queries = buildViralQueries(category, city);
-      const rawResults = await Promise.all(queries.slice(0, 5).map(q => tavilyAdvancedSearch(q, 4)));
+      const rawResults = await Promise.all(queries.slice(0, 5).map(q => tavilyAdvancedSearch(q, 4, 7)));
       const allResults = rawResults.flat();
       const seen = new Set<string>();
       const unique = allResults.filter(r => {

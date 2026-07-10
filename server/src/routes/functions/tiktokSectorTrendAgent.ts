@@ -28,6 +28,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
+import { callAIJson } from '../../lib/ai_router';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { tavilyAdvancedSearch } from '../../lib/tavily';
 import { shouldSkipAgent, setLastRun, cacheGet, cacheSet, TTL } from '../../lib/agentCache';
@@ -38,103 +39,36 @@ import { sendOwnerWhatsAppNotification } from '../../services/execution/WhatsApp
 
 const MIN_INTERVAL_MS = 8 * 60 * 60 * 1000; // 8 שעות
 
-// ─── Sector knowledge (Hebrew → TikTok hashtag sets) ─────────────────────────
+// ─── Dynamic hashtag generation (per business, via Claude Haiku) ─────────────
+// Replaces the old hardcoded SECTOR_HASHTAGS map.
+// Cache key includes businessProfileId so each business gets its own hashtags.
 
-const SECTOR_HASHTAGS: Record<string, string[]> = {
-  // מסעדות
-  'מסעדה':        ['מסעדה', 'אוכל', 'food_israel', 'restaurant_israel', 'שף', 'מנה_חדשה'],
-  'סושי':         ['סושי', 'sushi_israel', 'sushi', 'אוכל_יפני', 'מסעדה', 'food_israel'],
-  'בר סושי':      ['סושי', 'sushi_israel', 'sushi', 'אוכל_יפני', 'מסעדה', 'food_israel'],
-  'סושי בר':      ['סושי', 'sushi_israel', 'sushi', 'אוכל_יפני', 'מסעדה', 'food_israel'],
-  'יפני':         ['אוכל_יפני', 'סושי', 'sushi', 'ramen_israel', 'מסעדה'],
-  'פיצה':         ['פיצה', 'pizza_israel', 'pizza', 'אוכל', 'food_israel'],
-  'המבורגר':      ['המבורגר', 'burger_israel', 'burger', 'אוכל', 'food_israel'],
-  'שווארמה':      ['שווארמה', 'shawarma_israel', 'אוכל_רחוב', 'food_israel'],
-  'קינוחים':      ['קינוחים', 'dessert_israel', 'עוגות', 'גלידה', 'אוכל'],
-  'בר':           ['בר', 'bar_israel', 'קוקטייל', 'נאיטלייף', 'ירושלים'],
-  // קפה ומאפייה
-  'קפה':          ['קפה', 'cafe_israel', 'לאטה', 'coffee', 'בית_קפה', 'קפה_ישראל'],
-  'מאפייה':       ['מאפייה', 'לחם', 'bakery_israel', 'עוגה', 'בצק', 'אפייה'],
-  'פטיסרי':       ['פטיסרי', 'עוגות', 'bakery_israel', 'קינוחים', 'אפייה'],
-  // כושר ובריאות
-  'כושר':         ['כושר', 'fitness_israel', 'אימון', 'gym_israel', 'ספורט', 'workout', 'בריאות'],
-  'חדר כושר':     ['כושר', 'fitness_israel', 'אימון', 'gym_israel', 'workout'],
-  'יוגה':         ['יוגה', 'yoga_israel', 'מדיטציה', 'wellness', 'בריאות'],
-  'פילאטיס':      ['פילאטיס', 'pilates_israel', 'כושר', 'fitness_israel'],
-  // יופי וטיפוח
-  'יופי':         ['יופי', 'beauty_israel', 'מספרה', 'טיפוח', 'מניקור', 'פדיקור', 'איפור', 'skincare'],
-  'מספרה':        ['מספרה', 'haircut_israel', 'שיער', 'beauty_israel', 'איפור'],
-  'קוסמטיקה':     ['קוסמטיקה', 'beauty_israel', 'skincare', 'טיפוח', 'פנים'],
-  'ציפורניים':    ['מניקור', 'פדיקור', 'nails_israel', 'beauty_israel', 'ציפורניים'],
-  // ספא ורווחה
-  'ספא':          ['ספא', 'spa_israel', 'עיסוי', 'טיפולי_פנים', 'relax', 'wellness'],
-  // קניות
-  'חנות':         ['עסק_קטן_ישראל', 'חנות', 'קניות', 'מוצרים', 'shopping_israel'],
-  'אופנה':        ['אופנה', 'fashion_israel', 'בגדים', 'shopping_israel', 'סטייל'],
-  // בריאות
-  'שיניים':       ['שיניים', 'dental_israel', 'חיוך', 'רופא_שיניים'],
-  'רפואה':        ['בריאות', 'health_israel', 'רפואה', 'wellness'],
-  // חינוך
-  'חינוך':        ['חינוך', 'לימודים', 'מורה', 'students_israel', 'קורס'],
-  // נדל"ן
-  'נדלן':         ['נדלן', 'דירה', 'real_estate_israel', 'בית', 'השקעות'],
-  "נדל\"ן":       ['נדלן', 'דירה', 'real_estate_israel', 'בית', 'השקעות'],
-  // יין ואלכוהול
-  'יין':          ['יין', 'wine_israel', 'יקב', 'בר_יין', 'winery', 'sommelier_israel'],
-  'בר יין':       ['יין', 'wine_israel', 'בר_יין', 'winery', 'יקב', 'kosher_wine'],
-  'בית יין':      ['יין', 'wine_israel', 'בר_יין', 'winery', 'יקב', 'kosher_wine'],
-  'יקב':          ['יקב', 'winery', 'יין', 'wine_israel', 'kosher_wine'],
-  'בירה':         ['בירה', 'beer_israel', 'craft_beer_israel', 'ברוארי', 'brewery_israel'],
-  'ברוארי':       ['ברוארי', 'brewery_israel', 'craft_beer_israel', 'בירה', 'beer_israel'],
-  // אירועים וקייטרינג
-  'קייטרינג':     ['קייטרינג', 'catering_israel', 'אירוע', 'event_food', 'אוכל'],
-  'אירועים':      ['אירוע', 'event_israel', 'חתונה', 'wedding_israel', 'קייטרינג'],
-  // מוזיקה, פסטיבלים ואירועי לילה
-  'מוזיקה':       ['מוזיקה', 'music_israel', 'dj_israel', 'festival_israel', 'rave_israel', 'edm', 'techno_israel'],
-  'dj':           ['dj_israel', 'edm', 'rave_israel', 'festival_music', 'techno', 'music_israel'],
-  'פסטיבל':       ['festival_israel', 'dj_israel', 'edm', 'rave_israel', 'music_israel', 'nightlife'],
-  'מועדון':       ['nightlife_israel', 'clubbing', 'dj_israel', 'edm', 'rave_israel', 'party_israel'],
-  'הפקה':         ['event_israel', 'festival_israel', 'מוזיקה', 'dj_israel', 'nightlife_israel'],
-  // תוספי תזונה וספורט
-  'תוספי תזונה':  ['supplements_israel', 'protein_israel', 'preworkout', 'creatine', 'כושר', 'gym_israel'],
-  'תזונת ספורט':  ['sports_nutrition', 'protein_israel', 'supplements_israel', 'כושר', 'preworkout'],
-  'חלבון':        ['protein_israel', 'supplements_israel', 'whey', 'כושר', 'gym_israel'],
-  'קריאטין':      ['creatine', 'supplements_israel', 'protein_israel', 'preworkout', 'כושר'],
-  // מזון פרימיום ויבוא
-  'מזון פרימיום': ['premium_food', 'wagyu_israel', 'chef_israel', 'מסעדת_שף', 'fine_dining_israel'],
-  'בשר פרימיום':  ['wagyu_israel', 'premium_meat', 'שף', 'chef_israel', 'fine_dining_israel'],
-  'יבוא מזון':    ['premium_food', 'gourmet_israel', 'chef_israel', 'מסעדת_שף', 'food_import'],
-  'טרופל':        ['truffle_israel', 'פטריות_טרופל', 'chef_israel', 'fine_dining_israel', 'gourmet'],
-  // פיננסים ומסחר
-  'מסחר':         ['trading_il', 'stocks_israel', 'forex_israel', 'crypto_il', 'השקעות'],
-  'השקעות':       ['השקעות', 'stocks_israel', 'trading_il', 'finance_israel', 'investment_israel'],
-  'קריפטו':       ['crypto_il', 'bitcoin_israel', 'trading_il', 'defi_israel', 'web3_israel'],
-  'תעופה':        ['aviation_israel', 'private_jet', 'business_aviation', 'flight', 'luxury_travel'],
-  'מטוסים':       ['aviation_israel', 'private_jet', 'business_aviation', 'luxury_travel', 'vip_travel'],
-};
+async function generateTikTokHashtags(
+  category: string,
+  services: string,
+  businessProfileId: string,
+): Promise<string[]> {
+  const cacheKey = `tiktok_hashtags:${businessProfileId}`;
+  const cached = cacheGet<string[]>(cacheKey);
+  if (cached) return cached;
 
-// Fuzzy match: if category doesn't match exactly, try prefix/keyword match
-function resolveHashtags(category: string, services = ''): string[] {
-  // First: check relevant_services for a more specific match (e.g. "יין" beats "בר" → wine hashtags)
-  if (services) {
-    const serviceLower = services.toLowerCase();
-    for (const [key, tags] of Object.entries(SECTOR_HASHTAGS)) {
-      if (key.length > 2 && serviceLower.includes(key.toLowerCase())) return tags;
-    }
-  }
-  if (SECTOR_HASHTAGS[category]) return SECTOR_HASHTAGS[category];
-  // Try case-insensitive substring match on category
-  const lower = category.toLowerCase();
-  for (const [key, tags] of Object.entries(SECTOR_HASHTAGS)) {
-    if (lower.includes(key) || key.includes(lower)) return tags;
-  }
-  // Generic food fallback — only if category explicitly mentions food/cooking (not generic "בר")
-  const foodKeywords = ['אוכל', 'מנה', 'מסעדה', 'שף', 'בישול', 'קינוח'];
-  if (foodKeywords.some(k => lower.includes(k) || category.includes(k))) {
-    return ['אוכל', 'food_israel', 'מסעדה', 'restaurant_israel', 'שף'];
-  }
-  // Final fallback
-  return [category, 'israel', 'עסק_קטן_ישראל'];
+  const result = await callAIJson<{ hashtags: string[] }>('classify_sector',
+    `Generate 8 TikTok hashtags for a business:
+- Category: "${category}"
+- Services/products: "${services || category}"
+- Country: Israel
+
+Rules:
+• Mix Hebrew and English hashtags (e.g. "כושר", "fitness_israel", "workout")
+• Include 2-3 service-specific hashtags (e.g. "pilates_israel") and 2-3 broader ones
+• Use underscores_for_spaces in English, no underscores in Hebrew
+• No # prefix
+• Return ONLY valid JSON: {"hashtags": ["tag1", "tag2", ...]}`
+  ).catch(() => ({ hashtags: [category.replace(/\s+/g, ''), 'israel', 'עסק_קטן_ישראל'] }));
+
+  const tags = (result.hashtags || []).filter(Boolean).slice(0, 8);
+  cacheSet(cacheKey, tags, TTL.API_RESULT); // 4h cache per business
+  return tags;
 }
 
 const CAT_EN: Record<string, string> = {
@@ -163,10 +97,10 @@ const CONTENT_PATTERNS = [
 
 // ─── Apify: TikTok hashtag scraper (with 4h cache) ──────────────────────────
 
-async function apifyTikTokHashtags(hashtags: string[], maxItems = 30): Promise<any[]> {
+async function apifyTikTokHashtags(hashtags: string[], businessProfileId: string, maxItems = 30): Promise<any[]> {
   if (!hasApifyKey()) return [];
 
-  const cacheKey = `apify_tiktok_hashtags:${hashtags.slice(0, 3).join(',')}`;
+  const cacheKey = `apify_tiktok_hashtags:${businessProfileId}:${hashtags.slice(0, 3).join(',')}`;
   const cached = cacheGet<any[]>(cacheKey);
   if (cached) { console.log('[tiktokSectorTrendAgent] Apify cache hit'); return cached; }
 
@@ -395,7 +329,7 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
     const rejectedPatterns: string[] = bizCtx?.rejectedPatterns || [];
 
     const catEn = CAT_EN[category] || category;
-    const sectorHashtags = resolveHashtags(category, relevant_services);
+    const sectorHashtags = await generateTikTokHashtags(category, relevant_services, businessProfileId);
     console.log(`[tiktokSectorTrendAgent] category="${category}" → hashtags: ${sectorHashtags.slice(0, 4).join(', ')}`);
 
     // ── 1. Apify A: sector hashtag scraping (trend detection) ─────────────
@@ -404,7 +338,7 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
 
     if (hasApifyKey()) {
       console.log(`[tiktokSectorTrendAgent] Running Apify for hashtags: ${sectorHashtags.slice(0, 3).join(', ')}`);
-      const rawVideos = await apifyTikTokHashtags(sectorHashtags, 40);
+      const rawVideos = await apifyTikTokHashtags(sectorHashtags, businessProfileId, 40);
 
       // Filter to only NEW videos not yet processed by this agent
       const rawIds = rawVideos.map((v: any) => v.id).filter(Boolean);
@@ -458,7 +392,7 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
     // ── 2. Tavily — profile-aware queries ─────────────────────────────────
     const tavilyQueries = buildSectorQueries(category, city, relevant_services, catEn, custom_keywords);
     const tavilyResults = (
-      await Promise.all(tavilyQueries.slice(0, 6).map(q => tavilyAdvancedSearch(q, 3)))
+      await Promise.all(tavilyQueries.slice(0, 6).map(q => tavilyAdvancedSearch(q, 3, 7)))
     ).flat();
 
     const seenUrls = new Set<string>();

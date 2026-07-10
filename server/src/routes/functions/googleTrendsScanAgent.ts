@@ -89,7 +89,7 @@ async function fetchTrendArticles(
     `"${k}" trend ${country} ${year} rising growing popular`,
   );
   const results = (
-    await Promise.all(queries.map(q => tavilyAdvancedSearch(q, 3).catch(() => [])))
+    await Promise.all(queries.map(q => tavilyAdvancedSearch(q, 3, 7).catch(() => [])))
   ).flat();
   const seen = new Set<string>();
   return results

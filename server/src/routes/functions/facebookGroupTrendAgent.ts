@@ -86,7 +86,7 @@ export async function facebookGroupTrendAgent(req: Request, res: Response) {
 
       // Fetch results
       const rawResults = (
-        await Promise.all(queries.slice(0, 5).map(q => tavilyAdvancedSearch(q, 3).catch(() => [])))
+        await Promise.all(queries.slice(0, 5).map(q => tavilyAdvancedSearch(q, 3, 7).catch(() => [])))
       ).flat();
 
       // Only new URLs

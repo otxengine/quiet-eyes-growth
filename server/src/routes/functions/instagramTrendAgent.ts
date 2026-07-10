@@ -46,8 +46,9 @@ async function generateHashtags(
   category: string,
   services: string,
   region: string,
+  businessProfileId: string,
 ): Promise<string[]> {
-  const cacheKey = `ig_hashtags:${category}:${region}`;
+  const cacheKey = `ig_hashtags:${businessProfileId}:${region}`;
   const cached = cacheGet<string[]>(cacheKey);
   if (cached) return cached;
 
@@ -88,11 +89,12 @@ interface IGPost {
 
 async function apifyInstagramHashtags(
   hashtags: string[],
+  businessProfileId: string,
   maxItems = 20,
 ): Promise<IGPost[]> {
   if (!hasApifyKey()) return [];
 
-  const cacheKey = `apify_ig_hashtags:${hashtags.slice(0, 3).join(',')}`;
+  const cacheKey = `apify_ig_hashtags:${businessProfileId}:${hashtags.slice(0, 3).join(',')}`;
   const cached = cacheGet<IGPost[]>(cacheKey);
   if (cached) { console.log('[instagramTrendAgent] Apify cache hit'); return cached; }
 
@@ -145,7 +147,7 @@ async function tavilyInstagramSearch(
   ];
 
   const results = (
-    await Promise.all(queries.map(q => tavilyAdvancedSearch(q, 3).catch(() => [])))
+    await Promise.all(queries.map(q => tavilyAdvancedSearch(q, 3, 7).catch(() => [])))
   ).flat();
 
   const seen = new Set<string>();
@@ -247,13 +249,13 @@ export async function instagramTrendAgent(req: Request, res: Response) {
       const country = region === 'IL' ? 'Israel' : 'United States';
 
       // Generate hashtags dynamically (universal, cached 4h)
-      const hashtags = await generateHashtags(category, relevant_services, region);
+      const hashtags = await generateHashtags(category, relevant_services, region, businessProfileId);
       console.log(`[instagramTrendAgent] region=${region} hashtags: ${hashtags.slice(0, 4).join(', ')}`);
 
       // ── Source 1: Apify Instagram scraper ─────────────────────────────
       let igPosts: IGPost[] = [];
       if (hasApifyKey()) {
-        const rawPosts = await apifyInstagramHashtags(hashtags, 25);
+        const rawPosts = await apifyInstagramHashtags(hashtags, businessProfileId, 25);
         const newIds   = filterNewIds(rawPosts.map(p => p.id), cp);
         igPosts = rawPosts
           .filter(p => newIds.includes(p.id))
