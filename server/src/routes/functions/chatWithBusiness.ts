@@ -129,15 +129,30 @@ export async function chatWithBusiness(req: Request, res: Response) {
       } catch {}
     }
 
-    // Agent missions context
+    // Agent missions context (enriched)
     let agentMissionsLines = '';
     try {
       const missions = JSON.parse((profile as any).agent_missions || '{}');
-      const wins = missions.quick_wins_he?.slice(0, 3).join('\n') || '';
-      const focus = missions.weekly_focus_he || '';
       agentMissionsLines = [
-        wins ? `ניצחונות מהירים:\n${wins}` : '',
-        focus ? `מוקד שבועי: ${focus}` : '',
+        missions.quick_wins_he?.length   ? `ניצחונות מהירים:\n${missions.quick_wins_he.slice(0, 3).map((w: string) => `• ${w}`).join('\n')}` : '',
+        missions.weekly_focus_he         ? `מוקד שבועי: ${missions.weekly_focus_he}` : '',
+        missions.market_watch_he         ? `לעקוב בשוק: ${missions.market_watch_he}` : '',
+        missions.competitor_watch_he     ? `לעקוב אצל מתחרים: ${missions.competitor_watch_he}` : '',
+        missions.business_summary        ? `תקציר עסקי (AI): ${missions.business_summary}` : '',
+      ].filter(Boolean).join('\n');
+    } catch {}
+
+    // Business deep profile (scraped website + social intelligence)
+    let deepProfileLines = '';
+    try {
+      const dp = JSON.parse((profile as any).business_deep_profile || '{}');
+      deepProfileLines = [
+        dp.actual_services?.length          ? `שירותים מאומתים מהאתר: ${dp.actual_services.join(', ')}` : '',
+        dp.unique_selling_points?.length    ? `יתרונות ייחודיים (USPs): ${dp.unique_selling_points.join(' | ')}` : '',
+        dp.target_audience_detected         ? `קהל יעד מזוהה: ${dp.target_audience_detected}` : '',
+        dp.tone_from_website                ? `טון מותג: ${dp.tone_from_website}` : '',
+        dp.sector_specific_insights?.length ? `תובנות סקטור:\n${dp.sector_specific_insights.slice(0, 3).map((i: string) => `• ${i}`).join('\n')}` : '',
+        dp.brand_keywords?.length           ? `מילות מפתח: ${dp.brand_keywords.join(', ')}` : '',
       ].filter(Boolean).join('\n');
     } catch {}
 
@@ -155,6 +170,7 @@ ${(profile as any).description ? `• תיאור: ${(profile as any).description
 ${healthScoreVal ? `• ציון בריאות עסקית: ${healthScoreVal}/100` : ''}
 ${preferredTone !== 'professional' ? `• סגנון תקשורת מועדף: ${preferredTone}` : ''}
 ${sectorProfile ? `• פרופיל סקטור: ${sectorProfile}` : ''}
+${deepProfileLines ? `\n=== פרופיל עסקי עמוק (AI — מאתר ורשתות חברתיות) ===\n${deepProfileLines}` : ''}
 
 === תובנות שוק (${weekSignalCount} השבוע, ${highImpactSignals.length} השפעה גבוהה) ===
 ${signalLines}
@@ -168,7 +184,7 @@ ${reviewLines}
 === לידים ===
 ${leadLines}
 
-${alertLines ? `=== התראות פעילות ===\n${alertLines}\n` : ''}${sectorKnowledgeLines ? `=== תובנות סקטור (למידה חוצת-עסקים) ===\n${sectorKnowledgeLines}\n` : ''}${agentMissionsLines ? `=== משימות הסוכנים ===\n${agentMissionsLines}\n` : ''}=== כללי תגובה ===
+${alertLines ? `=== התראות פעילות ===\n${alertLines}\n` : ''}${sectorKnowledgeLines ? `=== תובנות סקטור (למידה חוצת-עסקים) ===\n${sectorKnowledgeLines}\n` : ''}${agentMissionsLines ? `=== תכנית משימות AI (נוצרה בהרשמה) ===\n${agentMissionsLines}\n` : ''}=== כללי תגובה ===
 1. פנה לבעל העסק בגוף שני: "העסק שלך", "אתה", "הלקוחות שלך"
 2. השתמש בנתונים הספציפיים לעיל — לא עצות גנריות
 3. תן תשובה מפורטת ככל שנדרש. לשאלות פשוטות — 2-3 משפטים. לניתוח או בקשת תוכן — השלם את המשימה במלואה.

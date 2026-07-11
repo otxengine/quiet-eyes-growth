@@ -254,7 +254,7 @@ export async function generateAgentMissions(businessProfileId: string): Promise<
     : buildStrategicPrompt(profile, sp);
   const contentPrompt = buildContentPrompt(profile, sp);
 
-  // ── Run Claude Sonnet + GPT-4o in parallel ───────────────────────────────
+  // ── Run Claude Sonnet + Claude Haiku in parallel ─────────────────────────
   const [strategicResult, contentResult] = await Promise.allSettled([
     invokeLLM({
       prompt: strategicPrompt,
@@ -263,7 +263,13 @@ export async function generateAgentMissions(businessProfileId: string): Promise<
       skipCache: true,
       response_json_schema: { type: 'object' },
     }),
-    callGPT4o(contentPrompt, 2000),
+    invokeLLM({
+      prompt: contentPrompt,
+      model: 'haiku',
+      maxTokens: 2000,
+      skipCache: true,
+      response_json_schema: { type: 'object' },
+    }),
   ]);
 
   const strategic = strategicResult.status === 'fulfilled' ? strategicResult.value : null;

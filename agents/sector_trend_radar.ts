@@ -22,10 +22,31 @@ const CITY_HEBREW: Record<string, string> = {
   petah_tikva: "פתח תקווה", herzliya: "הרצליה", raanana: "רעננה",
 };
 
-const SECTOR_HEBREW: Record<string, string> = {
-  restaurant: "מסעדה אוכל", fitness: "חדר כושר ספורט",
-  beauty: "יופי ספא", local: "עסק מקומי",
-};
+// Sector label resolver — fully dynamic.
+// No hardcoded list: any sector_key registered by any business works automatically.
+// Uses a small cache of common Hebrew labels for the most frequent sectors;
+// everything else gets a clean readable label from the sector key itself.
+
+const SECTOR_LABEL_CACHE = new Map<string, string>([
+  ["restaurant", "מסעדה אוכל"],
+  ["fitness",    "כושר ספורט"],
+  ["beauty",     "יופי ספא"],
+  ["local",      "עסק מקומי"],
+]);
+
+/**
+ * Returns a human-readable sector label for Tavily queries.
+ * Known sectors get a Hebrew label; unknown sectors are automatically
+ * formatted from their key (e.g. "dog_grooming" → "dog grooming").
+ * New sectors are cached so they are not reconstructed on every call.
+ */
+function getSectorLabel(sector: string): string {
+  if (SECTOR_LABEL_CACHE.has(sector)) return SECTOR_LABEL_CACHE.get(sector)!;
+  // Derive label: underscores → spaces, trim
+  const derived = sector.replace(/_/g, " ").trim();
+  SECTOR_LABEL_CACHE.set(sector, derived);
+  return derived;
+}
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
@@ -149,7 +170,7 @@ async function fetchSpikeArticleUrl(
   tavilyKey: string,
 ): Promise<string | null> {
   const cityName = geo ? (CITY_HEBREW[geo] ?? geo.replace(/_/g, " ")) : "ישראל";
-  const sectorName = SECTOR_HEBREW[sector] ?? sector;
+  const sectorName = getSectorLabel(sector);
   const query = `${sectorName} ${cityName} מגמה עדכון`;
 
   try {

@@ -4,6 +4,7 @@ import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { searchAllAds, hasSearchApiKey, AdResult } from '../../lib/searchapi';
+import { getTrendContext } from '../../lib/trendContext';
 
 const MIN_INTERVAL_MS     = 48 * 60 * 60 * 1000; // 48h between full runs (saves API credits)
 const PER_COMP_INTERVAL_MS = 48 * 60 * 60 * 1000; // skip individual competitor if scanned within 48h
@@ -38,6 +39,9 @@ export async function detectCompetitorAds(req: Request, res: Response) {
   try {
     const profile = await prisma.businessProfile.findFirst({ where: { id: businessProfileId } });
     if (!profile) return res.status(404).json({ error: 'No business profile' });
+
+    // Load AI intelligence context for richer strategic analysis
+    const trendCtx = await getTrendContext(businessProfileId, 'detectCompetitorAds');
 
     const competitors = await prisma.competitor.findMany({
       where: { linked_business: businessProfileId },
@@ -149,6 +153,8 @@ Analyze and return ONLY valid JSON. ALL string values MUST be in Hebrew:
           maxTokens: 600,
           prompt: `You are a senior competitive intelligence analyst for Israeli businesses.
 My business: "${profile.name}" (${profile.category}, ${profile.city}).
+${trendCtx.sectorBlock}
+${trendCtx.deepProfileBlock}
 Competitor "${comp.name}" is running ${ads.length} paid ad campaigns across ${platforms.join(', ')}.
 
 Campaign data:

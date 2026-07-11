@@ -5,6 +5,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
 import { loadCompetitorAdsIntel } from '../../lib/competitorAdsIntel';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
+import { getTrendContext } from '../../lib/trendContext';
 
 /**
  * competitorIntelAgent — OSINT cross-reference: competitor weaknesses × upcoming events
@@ -33,6 +34,9 @@ export async function competitorIntelAgent(req: Request, res: Response) {
     }
 
     const { name, category, city } = profile;
+
+    // AI intelligence context (sector profile + deep profile for competitive framing)
+    const trendCtx = await getTrendContext(businessProfileId, 'competitorIntelAgent');
 
     const bizCtx = await loadBusinessContext(businessProfileId);
     const tone = bizCtx?.preferredTone || profile.tone_preference || 'professional';
@@ -123,6 +127,8 @@ export async function competitorIntelAgent(req: Request, res: Response) {
           model: 'sonnet',
           maxTokens: 700,
           prompt: `You are a senior competitive intelligence analyst for small Israeli businesses. Your task: identify a specific opportunity window arising from a competitor's weakness and turn it into an immediate action.
+${trendCtx.sectorBlock}
+${trendCtx.deepProfileBlock}
 
 My business: "${name}" | Industry: ${category} | City: ${city}
 Competitor: "${compName}"

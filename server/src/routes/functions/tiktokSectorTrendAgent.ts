@@ -36,6 +36,7 @@ import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
 import { loadCheckpoint, saveCheckpoint, filterNewIds } from '../../lib/trendMemory';
 import { sendOwnerWhatsAppNotification } from '../../services/execution/WhatsAppOwnerNotifier';
+import { getTrendContext, isSignalIrrelevant } from '../../lib/trendContext';
 
 const MIN_INTERVAL_MS = 8 * 60 * 60 * 1000; // 8 שעות
 
@@ -328,6 +329,9 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
     const memoryBlock = formatContextForPrompt(bizCtx, 'tiktokSectorTrendAgent');
     const rejectedPatterns: string[] = bizCtx?.rejectedPatterns || [];
 
+    // Load AI intelligence context (sector_profile + agent_missions + deep_profile)
+    const trendCtx = await getTrendContext(businessProfileId, 'tiktokSectorTrendAgent');
+
     const catEn = CAT_EN[category] || category;
     const sectorHashtags = await generateTikTokHashtags(category, relevant_services, businessProfileId);
     console.log(`[tiktokSectorTrendAgent] category="${category}" → hashtags: ${sectorHashtags.slice(0, 4).join(', ')}`);
@@ -350,6 +354,7 @@ export async function tiktokSectorTrendAgent(req: Request, res: Response) {
         .filter((v): v is VideoMetrics => v !== null)
         .filter(v => v.plays > 5000)
         .filter(v => v.pattern_score > 2)
+        .filter(v => v.days_old <= 30) // temporal validation: skip content older than 30 days
         .sort((a, b) => b.pattern_score - a.pattern_score);
 
       if (videoMetrics.length > 0) {
@@ -437,16 +442,20 @@ Name: "${name}" | Category: ${category} | City: ${city}
 ${profileCtx}
 Preferred tone: ${toneInstruction}
 ${memoryBlock}
+${trendCtx.sectorBlock}
+${trendCtx.deepProfileBlock}
 CRITICAL — SERVICES LOCK: ONLY generate trends for these exact services this business offers: "${relevant_services || category}".
 Do NOT generate trends for services/products this business does NOT sell. If you see sushi trends but the business sells wine — skip them.
 ${rejectedPatterns.length > 0 ? `NEVER generate trends related to: ${rejectedPatterns.slice(0, 6).join(', ')} (user rejected these before)` : ''}
 
 ${ownVideosCtx}
 
-${hasRealData ? `=== Real ENGAGEMENT data from TikTok (sector videos) ===\n${videoBlock}` : ''}
+${hasRealData ? `=== Real ENGAGEMENT data from TikTok (sector videos, all ≤30 days old) ===\n${videoBlock}` : ''}
 ${soundBlock}
 
-${tavilyContext ? `=== TikTok sector content (web research) ===\n${tavilyContext.slice(0, 2500)}` : ''}
+${tavilyContext ? `=== TikTok sector content (web research) ===\n${tavilyContext.slice(0, 2200)}` : ''}
+
+${trendCtx.trendTypesBlock}
 
 === TikTok content patterns to consider ===
 ${CONTENT_PATTERNS.map((p, i) => `${i + 1}. ${p}`).join('\n')}
@@ -460,6 +469,7 @@ Rules:
 Return ONLY valid JSON. ALL string values must be in Hebrew:
 {"trends": [{
   "pattern_name": "content pattern name — up to 5 words",
+  "trend_type": "purchase_intent|content_format|ad_method|language_shift|new_product_service|cultural_value|pricing_trend|sound_music|viral_challenge|seasonal_early",
   "why_it_works_in_sector": "specific explanation for this sector and business — not generic",
   "service_spotlight": "which specific service/product of the business to feature in this video",
   "evidence": {
@@ -505,6 +515,8 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       // Skip if service_spotlight matches a rejected pattern
       const spotlightText = ((t.service_spotlight || '') + ' ' + (t.pattern_name || '')).toLowerCase();
       if (rejectedPatterns.some((p: string) => p && spotlightText.includes(p.toLowerCase()))) return false;
+      // Skip if signal touches irrelevant topics (sector_profile filter)
+      if (isSignalIrrelevant(spotlightText, trendCtx.irrelevantTopics)) return false;
       // Require trend to be relevant to at least one of the business's actual services
       if (serviceKeywords.length > 0) {
         const trendText = (spotlightText + ' ' + (t.why_it_works_in_sector || '').toLowerCase());
@@ -540,6 +552,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
         action_type:     'tiktok_content',
         action_label:    `צלם עכשיו: ${trend.pattern_name}`,
         pattern_name:    trend.pattern_name,
+        trend_type:      trend.trend_type || 'content_format',
         service_spotlight: trend.service_spotlight,
         why_it_works:    trend.why_it_works_in_sector,
         evidence:        trend.evidence,

@@ -32,6 +32,7 @@ import {
 } from '../../lib/searchapi';
 import { loadDismissedTitles } from '../../lib/insightDedup';
 import { sendOwnerWhatsAppNotification } from '../../services/execution/WhatsAppOwnerNotifier';
+import { getTrendContext, isSignalIrrelevant } from '../../lib/trendContext';
 
 const SERP_API_KEY  = process.env.SERP_API_KEY  || '';
 const MIN_INTERVAL  = 20 * 60 * 60 * 1000; // 20h — slightly less than 24h to handle schedule jitter
@@ -220,12 +221,18 @@ async function runCrossPlatformGapAnalysis(
     .map(s => `[${s.category.toUpperCase().replace('_', ' ')}] ${s.summary}`)
     .join('\n');
 
+  const trendCtxGap = await getTrendContext(businessProfileId, 'googleTrendsScanAgent').catch(() => ({
+    sectorBlock: '', deepProfileBlock: '', trendTypesBlock: '', irrelevantTopics: [],
+  }));
+
   const result = await invokeLLM({
     model: 'sonnet',
     maxTokens: 1200,
     prompt: `You are a business growth analyst for Israeli small businesses.
 Business: "${profile.name}" (${profile.category}, ${profile.city})
 Current services/products: ${profile.relevant_services || profile.description || 'not specified'}
+${trendCtxGap.sectorBlock}
+${trendCtxGap.deepProfileBlock}
 
 Trend signals from the last 14 days across multiple platforms:
 ${platformBlock}
@@ -404,6 +411,11 @@ export async function googleTrendsScanAgent(req: Request, res: Response) {
 
     const { name, category, city, relevant_services = '' } = profile;
 
+    // AI intelligence context (loaded once, reused across regions)
+    const trendCtx = await getTrendContext(businessProfileId, 'googleTrendsScanAgent').catch(() => ({
+      sectorBlock: '', deepProfileBlock: '', trendTypesBlock: '', irrelevantTopics: [] as string[],
+    }));
+
     // ── Checkpoint: skip if ran < 20h ago ─────────────────────────────────
     const cpIL = await loadCheckpoint('googleTrendsScanAgent', businessProfileId, 'google', 'IL');
     const cpUS = await loadCheckpoint('googleTrendsScanAgent', businessProfileId, 'google', 'US');
@@ -478,6 +490,9 @@ this service. Return ONLY valid JSON: {"keywords": ["keyword1", "keyword2", ...]
 Business: "${name}" — ${category} in ${city}
 Country: ${country}
 Services: ${relevant_services || 'not specified'}
+${trendCtx.sectorBlock}
+${trendCtx.deepProfileBlock}
+${trendCtx.trendTypesBlock}
 ${region === 'US' ? 'NOTE: These are US trends — they typically reach Israel 2-6 weeks later (leading indicator).' : ''}
 
 ${trendsBlock}
@@ -503,9 +518,11 @@ Return ONLY valid JSON. ALL string values in Hebrew:
       ).catch(() => ({ trends: [] }));
 
       const rawTrends: any[] = result?.trends || [];
-      const validTrends = rawTrends.filter(t =>
-        t.name && t.evidence && (t.confidence || 0) >= 55,
-      );
+      const validTrends = rawTrends.filter(t => {
+        if (!t.name || !t.evidence || (t.confidence || 0) < 55) return false;
+        if (isSignalIrrelevant(`${t.name} ${t.description || ''}`, trendCtx.irrelevantTopics)) return false;
+        return true;
+      });
 
       // Dedup against existing 24h signals + dismissed records (last 30 days)
       const existing = await prisma.marketSignal.findMany({

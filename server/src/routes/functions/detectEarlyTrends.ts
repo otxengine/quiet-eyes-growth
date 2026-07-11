@@ -24,6 +24,7 @@ import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 
 import { tavilyAdvancedSearch } from '../../lib/tavily';
 import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
+import { getTrendContext, isSignalIrrelevant } from '../../lib/trendContext';
 
 const SERP_API_KEY = process.env.SERP_API_KEY || '';
 
@@ -111,6 +112,9 @@ export async function detectEarlyTrends(req: Request, res: Response) {
     const bizCtx = await loadBusinessContext(businessProfileId);
     const memoryBlock = formatContextForPrompt(bizCtx, 'detectEarlyTrends');
     const rejectedPatterns: string[] = bizCtx?.rejectedPatterns || [];
+
+    // Load AI intelligence context (sector profile + deep profile + trend types)
+    const trendCtx = await getTrendContext(businessProfileId, 'detectEarlyTrends');
 
     // ── 1. Google Trends velocity scan ──────────────────────────────────────
     let trendsBlock = '';
@@ -212,6 +216,8 @@ Return ONLY valid JSON. ALL string values must be in Hebrew.
 Business: "${name}" — ${category} in ${city}
 Services: ${relevant_services || 'not specified'}
 ${memoryBlock}
+${trendCtx.sectorBlock}
+${trendCtx.deepProfileBlock}
 CRITICAL: ONLY include trends that directly relate to what this business actually offers: "${relevant_services || category}".
 Do NOT include trends for products/services this business does not provide.
 ${rejectedPatterns.length > 0 ? `SKIP any trend related to: ${rejectedPatterns.slice(0, 5).join(', ')} (user dismissed these before)` : ''}
@@ -227,6 +233,7 @@ Important instructions:
 • Important: how many days until the trend reaches its peak? (range: 7-60 days)
 • opportunity_text — what the business needs to do right now, very specific
 • Cross-sector borrowing: if you see a trend succeeding in an adjacent sector that could apply here — flag it with stage="early_growing" and note the source sector in evidence
+${trendCtx.trendTypesBlock}
 
 Return ONLY valid JSON:
 {"trends":[{
@@ -241,7 +248,8 @@ Return ONLY valid JSON:
   "opportunity_text": "פעולה ספציפית לעסק — פועל + תוצאה",
   "content_idea": "רעיון תוכן קונקרטי לנצל את הטרנד",
   "urgency": "high|medium",
-  "confidence": 50-95
+  "confidence": 50-95,
+  "trend_type": "purchase_intent|content_format|ad_method|language_shift|new_product_service|cultural_value|pricing_trend|sound_music|viral_challenge|seasonal_early"
 }]}`,
       response_json_schema: { type: 'object' },
     });
@@ -257,6 +265,7 @@ Return ONLY valid JSON:
       // Reject if matches a previously dismissed pattern
       const trendText = ((t.name || '') + ' ' + (t.description || '') + ' ' + (t.opportunity_text || '')).toLowerCase();
       if (rejectedPatterns.some((p: string) => p && trendText.includes(p.toLowerCase()))) return false;
+      if (isSignalIrrelevant(trendText, trendCtx.irrelevantTopics)) return false;
       return true;
     });
 
@@ -279,6 +288,7 @@ Return ONLY valid JSON:
         days_to_peak: trend.days_to_peak_estimate,
         content_idea: trend.content_idea,
         source_platforms: trend.source_platforms,
+        trend_type: trend.trend_type || 'purchase_intent',
         is_early_trend: true,
       });
 

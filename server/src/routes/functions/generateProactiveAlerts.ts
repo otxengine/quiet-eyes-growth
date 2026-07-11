@@ -9,6 +9,7 @@ import { getAgentMission, getAllMissions } from '../../lib/missionPlanner';
 import { getSectorContentStrategy } from '../../lib/sectorPrompts';
 import { getSectorContext as getAccumulatedSectorCtx } from '../../lib/sectorContext';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { getTrendContext } from '../../lib/trendContext';
 
 const MIN_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours between LLM generations
 
@@ -202,6 +203,9 @@ ${allMissions?.osint_persona ? `OSINT persona: ${allMissions.osint_persona}` : '
     const bizCtx = await loadBusinessContext(businessProfileId);
     const ctxPrompt = formatContextForPrompt(bizCtx, 'generateProactiveAlerts');
 
+    // AI intelligence context (sector profile + deep profile)
+    const trendCtx = await getTrendContext(businessProfileId, 'generateProactiveAlerts');
+
     // Build recently-done context so agent doesn't re-suggest what was already handled
     const recentlyDoneBlock = recentlyCompleted.length > 0
       ? `\nAlready handled in the past 7 days (DO NOT re-suggest these):\n${recentlyCompleted.map(a => `  • [${a.alert_type}] ${a.title}`).join('\n')}`
@@ -217,6 +221,8 @@ Return ONLY valid JSON. ALL string values must be in Hebrew.
 
 ${ctxPrompt}
 ${sectorInsightBlock}
+${trendCtx.sectorBlock}
+${trendCtx.deepProfileBlock}
 ${missionBlock}
 
 ${sectorContentBlock}

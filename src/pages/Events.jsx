@@ -2,12 +2,55 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2, Zap } from 'lucide-react';
+import { Loader2, Zap, Sparkles } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { Copy, CheckCheck, ListPlus, X, AlertCircle } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
+
+// ── Sector Opportunity Banner ─────────────────────────────────────────────────
+// Uses the AI deep_profile + agent_missions to surface a sector-specific
+// opportunity note above the events list.
+
+function SectorOpportunityBanner({ businessProfile }) {
+  const dp = useMemo(() => {
+    try { return JSON.parse(businessProfile?.business_deep_profile || '{}'); } catch { return {}; }
+  }, [businessProfile?.business_deep_profile]);
+
+  const missions = useMemo(() => {
+    try { return JSON.parse(businessProfile?.agent_missions || '{}'); } catch { return {}; }
+  }, [businessProfile?.agent_missions]);
+
+  // Use sector-specific insights or seasonal focus from missions
+  const insights = dp.sector_specific_insights || [];
+  const seasonalFocus = missions.seasonal_focus_he || missions.weekly_focus_he;
+  const services = dp.actual_services || [];
+
+  if (!insights.length && !seasonalFocus && !services.length) return null;
+
+  return (
+    <div className="rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-100 p-4 flex items-start gap-3">
+      <Sparkles className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] font-semibold text-amber-700 mb-1">הזדמנות לפי הפרופיל שלך</p>
+        {seasonalFocus && (
+          <p className="text-[12px] text-amber-900 font-medium mb-1">{seasonalFocus}</p>
+        )}
+        {insights.length > 0 && (
+          <p className="text-[11px] text-amber-800">{insights[0]}</p>
+        )}
+        {services.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {services.slice(0, 4).map((s, i) => (
+              <span key={i} className="text-[9px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{s}</span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const EVENT_TABS = [
   { key: 'all',       label: 'כל האירועים' },
@@ -93,7 +136,16 @@ function EventActSheet({ item, businessProfile, onClose }) {
   const title = item._type === 'alert' ? item.title : (item.agent_name || item.summary);
   const description = item._type === 'alert' ? item.description : item.summary;
   const cleanTitle = (title || '').split(' — ')[0].replace(/^[^\u0590-\u05FFa-zA-Z0-9]*/, '').trim();
-  const prefilled = meta.prefilled_text || meta.prefilled || `🎉 ${cleanTitle}\n\n${(description || '').slice(0, 120)}\n\n${businessProfile?.name || ''}`;
+
+  // Enrich prefilled text with deep_profile brand keywords + USPs if available
+  const deepProfile = useMemo(() => {
+    try { return JSON.parse(businessProfile?.business_deep_profile || '{}'); } catch { return {}; }
+  }, [businessProfile?.business_deep_profile]);
+  const brandKeywords = deepProfile.brand_keywords?.slice(0, 2).join(', ') || '';
+  const topUsp = deepProfile.unique_selling_points?.[0] || '';
+  const businessSignature = [businessProfile?.name, brandKeywords].filter(Boolean).join(' | ');
+  const prefilled = meta.prefilled_text || meta.prefilled ||
+    `🎉 ${cleanTitle}\n\n${(description || '').slice(0, 120)}\n${topUsp ? `\n✨ ${topUsp}` : ''}\n\n${businessSignature}`;
   const eventDate = meta.event_date ? formatEventDate(meta.event_date) : null;
 
   return createPortal(
@@ -332,6 +384,8 @@ export default function Events() {
       />
 
       <StatCards cards={statCards} />
+
+      <SectorOpportunityBanner businessProfile={businessProfile} />
 
       {/* Tab bar */}
       <div className="flex gap-1 p-1 bg-gray-100 rounded-xl overflow-x-auto">

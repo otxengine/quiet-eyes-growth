@@ -9,6 +9,9 @@ import { prisma } from '../db';
 import { invokeLLM } from './llm';
 import { generateAgentMissions } from './missionPlanner';
 import { createLogger } from '../infra/logger';
+import { tavilyAdvancedSearch } from './tavily';
+import { callAIJson } from './ai_router';
+import { type BusinessDeepProfile } from './trendContext';
 
 const logger = createLogger('BootstrapIntelligence');
 
@@ -97,7 +100,81 @@ Respond ONLY with valid JSON (no markdown, no explanation) matching this exact s
     }
   }
 
+  // ── Step 3: Deep-profile from website + social URLs (non-blocking) ───────
+  if (!(profile as any).business_deep_profile) {
+    bootstrapDeepProfile(businessProfileId, profile).catch(err => {
+      logger.warn(`[bootstrap] deep profile failed for ${businessProfileId}: ${err.message}`);
+    });
+  }
+
   return didWork;
+}
+
+/**
+ * Internal: scrape website + social URLs and build business_deep_profile.
+ * Called non-blocking after sector_profile + missions are generated.
+ */
+async function bootstrapDeepProfile(
+  businessProfileId: string,
+  profile: { name: string; category: string; city: string; relevant_services?: string | null;
+             website_url?: string | null; instagram_url?: string | null;
+             tiktok_url?: string | null; facebook_url?: string | null },
+): Promise<void> {
+  const { name, category, city, relevant_services = '' } = profile;
+  const urls = [
+    profile.website_url,
+    profile.instagram_url,
+    profile.tiktok_url,
+    profile.facebook_url,
+  ].filter(Boolean) as string[];
+
+  const contentChunks: string[] = [];
+
+  for (const url of urls.slice(0, 3)) {
+    try {
+      const domain = (() => {
+        try { return new URL(url.startsWith('http') ? url : `https://${url}`).hostname; } catch { return url; }
+      })();
+      const results = await tavilyAdvancedSearch(`site:${domain} ${name}`, 2, 7).catch(() => []);
+      if (results.length > 0) {
+        contentChunks.push(
+          results.slice(0, 2).map(r => `[${r.url}] ${(r.content || r.title || '').slice(0, 350)}`).join('\n'),
+        );
+      }
+    } catch {}
+  }
+
+  if (contentChunks.length === 0) {
+    const results = await tavilyAdvancedSearch(`"${name}" ${category} ${city} ישראל`, 3, 7).catch(() => []);
+    if (results.length > 0) {
+      contentChunks.push(
+        results.slice(0, 3).map(r => `[${r.url}] ${(r.content || r.title || '').slice(0, 300)}`).join('\n'),
+      );
+    }
+  }
+
+  if (contentChunks.length === 0) return;
+
+  const extracted = await callAIJson<BusinessDeepProfile>('classify_sector',
+    `Extract business DNA from this web content.
+Business: "${name}" — ${category} in ${city}
+Services at signup: "${relevant_services || 'not specified'}"
+Content:
+${contentChunks.join('\n').slice(0, 3000)}
+
+Return ONLY valid JSON:
+{"actual_services":[],"actual_products":[],"price_range":"unknown","tone_from_website":"friendly","target_audience_detected":"","content_themes_detected":[],"unique_selling_points":[],"brand_keywords":[],"social_presence":{},"website_content_summary":"","sector_specific_insights":[],"last_scraped_at":"${new Date().toISOString()}"}`,
+  ).catch(() => null);
+
+  if (!extracted) return;
+  extracted.last_scraped_at = new Date().toISOString();
+
+  await prisma.$executeRawUnsafe(
+    `UPDATE business_profiles SET business_deep_profile = $1 WHERE id = $2`,
+    JSON.stringify(extracted),
+    businessProfileId,
+  );
+  logger.info(`[bootstrap] deep_profile saved for ${name} (${businessProfileId})`);
 }
 
 /**

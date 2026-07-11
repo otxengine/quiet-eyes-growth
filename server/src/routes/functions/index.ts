@@ -116,6 +116,7 @@ import { systemHealthMonitor } from './systemHealthMonitor';
 import { intentClassification } from './intentClassification';
 import { otxSyncBridge } from './otxSyncBridge';
 import { competitorDataBootstrap } from './competitorDataBootstrap';
+import { businessDeepProfiler } from './businessDeepProfiler';
 import { prisma } from '../../db';
 import { sendEmail as sendTransactionalEmail, buildApprovalEmail } from '../../lib/email';
 import { sendOwnerWhatsAppNotification } from '../../services/execution/WhatsAppOwnerNotifier';
@@ -248,6 +249,7 @@ const FUNCTION_MAP: Record<string, any> = {
   intentClassification,
   otxSyncBridge,
   competitorDataBootstrap,
+  businessDeepProfiler,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,

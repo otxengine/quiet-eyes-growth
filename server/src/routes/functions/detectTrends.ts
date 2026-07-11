@@ -5,6 +5,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { getAgentMission } from '../../lib/missionPlanner';
 import { filterSignals, getSectorProfile } from '../../lib/businessProfile';
 import { tavilyAdvancedSearch } from '../../lib/tavily';
+import { getTrendContext, isSignalIrrelevant } from '../../lib/trendContext';
 
 const SERP_API_KEY = process.env.SERP_API_KEY || '';
 
@@ -52,6 +53,9 @@ export async function detectTrends(req: Request, res: Response) {
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
     const { name, category, city } = profile;
+
+    // AI intelligence context (sector profile + deep profile + trend types)
+    const trendCtx = await getTrendContext(businessProfileId, 'detectTrends');
 
     // Mission intelligence: sector-specific signals to watch / ignore
     const marketMission = getAgentMission<{
@@ -161,6 +165,9 @@ export async function detectTrends(req: Request, res: Response) {
 Return ONLY valid JSON. ALL string values must be in Hebrew.
 ${marketContextBlock}
 ${ignoreSignalsBlock}
+${trendCtx.sectorBlock}
+${trendCtx.deepProfileBlock}
+${trendCtx.trendTypesBlock}
 
 Data:
 ${combinedContext.substring(0, 3200)}
@@ -184,14 +191,20 @@ Return ONLY valid JSON:
   "action_platform":"instagram|facebook|google_ads|content|whatsapp",
   "opportunity_for_business":"פועל + יעד ספציפי לעסק זה — עד 8 מילים",
   "confidence":60-90,
-  "source_type":"web|signal|both"
+  "source_type":"web|signal|both",
+  "trend_type":"purchase_intent|content_format|ad_method|language_shift|new_product_service|cultural_value|pricing_trend|sound_music|viral_challenge|seasonal_early"
 }]}`,
       response_json_schema: { type: 'object' },
     });
 
     const rawTrends: any[] = result?.trends || [];
-    // Filter out low-relevance trends
-    const trends = rawTrends.filter(t => t.relevance_to_business !== 'low');
+    // Filter out low-relevance trends + irrelevant topics
+    const trends = rawTrends.filter(t => {
+      if (t.relevance_to_business === 'low') return false;
+      const trendText = `${t.trend_name || ''} ${t.description || ''}`;
+      if (isSignalIrrelevant(trendText, trendCtx.irrelevantTopics)) return false;
+      return true;
+    });
 
     const existingSignals = await prisma.marketSignal.findMany({ where: { linked_business: businessProfileId } });
     const existingSummaries = new Set(existingSignals.map(s => s.summary));

@@ -116,6 +116,7 @@ model BusinessProfile {
   customer_sources           String?  // JSON array: ['google', 'instagram', 'word_of_mouth', ...]
   sector_profile             String?  // JSON: AI-parsed sub-sector context for agents
   agent_missions             String?  // JSON: LLM-generated per-agent mission plan (generated once at onboarding)
+  business_deep_profile      String?  // JSON: scraped intelligence from website + social URLs
 
   @@map("business_profiles")
 }

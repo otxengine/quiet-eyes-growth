@@ -54,6 +54,44 @@ function writeRecoCache(bpId, data) {
   try { localStorage.setItem(recoCacheKey(bpId), JSON.stringify(data)); } catch {}
 }
 
+// ── Intelligence context builder ─────────────────────────────────────────────
+// Extracts agent_missions + business_deep_profile from the loaded businessProfile
+// and formats them as a concise LLM-ready block.
+
+function buildIntelContext(bp) {
+  if (!bp) return '';
+  const parts = [];
+
+  // Agent missions (generated at onboarding by LLM planner)
+  try {
+    const m = JSON.parse(bp.agent_missions || '{}');
+    if (m.quick_wins_he?.length)
+      parts.push(`ניצחונות מהירים שזוהו ע"י AI:\n${m.quick_wins_he.slice(0, 3).map(w => `• ${w}`).join('\n')}`);
+    if (m.weekly_focus_he)   parts.push(`מוקד שבועי: ${m.weekly_focus_he}`);
+    if (m.market_watch_he)   parts.push(`לעקוב בשוק: ${m.market_watch_he}`);
+    if (m.business_summary)  parts.push(`תקציר עסקי (AI): ${m.business_summary}`);
+  } catch {}
+
+  // Deep profile (scraped from website + social URLs)
+  try {
+    const dp = JSON.parse(bp.business_deep_profile || '{}');
+    if (dp.actual_services?.length)
+      parts.push(`שירותים מאומתים מהאתר: ${dp.actual_services.join(', ')}`);
+    if (dp.unique_selling_points?.length)
+      parts.push(`יתרונות ייחודיים: ${dp.unique_selling_points.join(' | ')}`);
+    if (dp.target_audience_detected)
+      parts.push(`קהל יעד מזוהה: ${dp.target_audience_detected}`);
+    if (dp.sector_specific_insights?.length)
+      parts.push(`תובנות סקטור AI:\n${dp.sector_specific_insights.slice(0, 2).map(i => `• ${i}`).join('\n')}`);
+    if (dp.price_range)
+      parts.push(`טווח מחירים: ${dp.price_range}`);
+  } catch {}
+
+  return parts.length > 0
+    ? `\n=== נתוני AI Intelligence Machine ===\n${parts.join('\n')}\n=== סוף נתוני AI ===\n`
+    : '';
+}
+
 // ── LLM JSON call ────────────────────────────────────────────────────────────
 
 async function callLLM(prompt) {
@@ -206,10 +244,12 @@ export default function Strategy() {
     setChatLoading(true);
     setChatResult(null);
     try {
+      const intelCtx = buildIntelContext(businessProfile);
       const parsed = await callLLM(
         `אתה יועץ עסקי AI לעסקים קטנים ישראלים. בעל עסק "${businessProfile.name}" (${businessProfile.category || 'עסק'}, ${businessProfile.city || ''}) הגדיר את המטרה: "${g}"
-
-בנה 2 אסטרטגיות פעולה ספציפיות ומעשיות להשגת המטרה. כל אסטרטגיה ממוקדת, מבוססת נתונים ומותאמת לעסק הזה.
+${intelCtx}
+בנה 2 אסטרטגיות פעולה ספציפיות ומעשיות להשגת המטרה. כל אסטרטגיה ממוקדת, מבוססת על המידע שלמעלה, ומותאמת לעסק הזה בדיוק.
+השתמש בנתוני ה-Intelligence Machine לעיל — אל תמציא נתונים שאינם מופיעים שם.
 
 החזר JSON בלבד (ללא \`\`\`json ולא טקסט נוסף):
 {
@@ -243,8 +283,12 @@ export default function Strategy() {
     }
     setRecosLoading(true);
     try {
+      const intelCtx = buildIntelContext(businessProfile);
       const parsed = await callLLM(
-        `אתה יועץ עסקי AI. נתח את עסק "${businessProfile.name}" (${businessProfile.category || 'עסק'}, ${businessProfile.city || ''}) וזהה 2 תחומים מרכזיים לשיפור. לכל תחום — בנה אסטרטגיה מפורטת עם שלבים ברורים.
+        `אתה יועץ עסקי AI. נתח את עסק "${businessProfile.name}" (${businessProfile.category || 'עסק'}, ${businessProfile.city || ''}) בהתבסס על נתוני ה-Intelligence Machine שלהלן וזהה 2 תחומים מרכזיים לשיפור.
+${intelCtx}
+לכל תחום — בנה אסטרטגיה מפורטת עם שלבים ברורים, המבוססת על הנתונים לעיל בלבד.
+הימנע מהמלצות גנריות — כל שלב חייב להתייחס לנתון ספציפי מהפרופיל לעיל.
 
 החזר JSON בלבד (ללא \`\`\`json ולא טקסט נוסף):
 {

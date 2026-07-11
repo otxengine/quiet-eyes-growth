@@ -27,6 +27,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import {
   loadCheckpoint, saveCheckpoint, shouldSkipByTime, filterNewUrls,
 } from '../../lib/trendMemory';
+import { getTrendContext, isSignalIrrelevant } from '../../lib/trendContext';
 
 const MIN_INTERVAL = 20 * 60 * 60 * 1000; // 20h
 
@@ -67,6 +68,9 @@ export async function facebookGroupTrendAgent(req: Request, res: Response) {
     if (!profile) return res.status(404).json({ error: 'Business not found' });
 
     const { name, category, city, relevant_services = '' } = profile;
+
+    // ── Load AI intelligence context ───────────────────────────────────────
+    const trendCtx = await getTrendContext(businessProfileId, 'facebookGroupTrendAgent');
 
     // ── Checkpoint ────────────────────────────────────────────────────────
     const cpIL = await loadCheckpoint('facebookGroupTrendAgent', businessProfileId, 'facebook', 'IL');
@@ -110,17 +114,24 @@ Business: "${name}" — ${category} in ${city}
 Region: ${region === 'US' ? 'United States (leading indicator — arrives in Israel ~3 weeks later)' : 'Israel'}
 Services: ${relevant_services || 'not specified'}
 
+${trendCtx.sectorBlock}
+${trendCtx.deepProfileBlock}
+
 Facebook content (groups + pages):
-${context.slice(0, 2800)}
+${context.slice(0, 2400)}
+
+${trendCtx.trendTypesBlock}
 
 Rules:
 • Only include trends backed by specific content above
-• Must be relevant to this business's actual services
+• Must be relevant to this business's actual confirmed services
 • Facebook-specific: note if it's a group discussion, page engagement, or community recommendation
+• Detect ALL 10 trend types: new language/slang, content formats, cultural shifts, not just purchase intent
 
 Return ONLY valid JSON. ALL string values in Hebrew:
 {"trends":[{
   "name": "שם הטרנד — עד 6 מילים",
+  "trend_type": "purchase_intent|content_format|ad_method|language_shift|new_product_service|cultural_value|pricing_trend|sound_music|viral_challenge|seasonal_early",
   "description": "מה אנשים מדברים עליו ולמה — עד 12 מילה",
   "fb_context": "מה ספציפית מדברים בפייסבוק (קבוצה/דף/המלצות)",
   "evidence_url": "URL ספציפי מהנתונים",
@@ -133,9 +144,11 @@ Return ONLY valid JSON. ALL string values in Hebrew:
       ).catch(() => ({ trends: [] }));
 
       const rawTrends: any[] = result?.trends || [];
-      const validTrends = rawTrends.filter(t =>
-        t.name && t.evidence_url && (t.confidence || 0) >= 55 && t.sentiment !== 'negative',
-      );
+      const validTrends = rawTrends.filter(t => {
+        if (!t.name || !t.evidence_url || (t.confidence || 0) < 55 || t.sentiment === 'negative') return false;
+        if (isSignalIrrelevant(`${t.name} ${t.description}`, trendCtx.irrelevantTopics)) return false;
+        return true;
+      });
 
       // Dedup against recent signals
       const existing = await prisma.marketSignal.findMany({
@@ -157,6 +170,7 @@ Return ONLY valid JSON. ALL string values in Hebrew:
           action_type:             'content_opportunity',
           action_label:            trend.opportunity || trend.name,
           platform:                'facebook',
+          trend_type:              trend.trend_type || 'purchase_intent',
           region,
           is_us_leading_indicator: region === 'US',
           fb_context:              trend.fb_context,

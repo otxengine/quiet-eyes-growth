@@ -3,6 +3,7 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
+import { getTrendContext } from '../../lib/trendContext';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 
@@ -52,6 +53,9 @@ export async function detectCompetitorChanges(req: Request, res: Response) {
     const bizCtx = await loadBusinessContext(businessProfileId);
     const preferredChannel = bizCtx?.preferredChannels?.[0] || 'instagram';
 
+    // AI intelligence context (sector profile + deep profile for richer competitor framing)
+    const trendCtx = await getTrendContext(businessProfileId, 'detectCompetitorChanges');
+
     const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 
     for (const comp of competitors) {
@@ -85,6 +89,8 @@ export async function detectCompetitorChanges(req: Request, res: Response) {
           model: 'sonnet',
           maxTokens: 500,
           prompt: `You are a competitive intelligence analyst. Analyze the information gathered about the competitor "${comp.name}" and identify real business changes.
+${trendCtx.sectorBlock}
+${trendCtx.deepProfileBlock}
 
 ${textBlob.slice(0, 3000)}
 

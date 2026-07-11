@@ -21,6 +21,7 @@ import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun, cacheGet, cacheSet, TTL } from '../../lib/agentCache';
 import { loadCheckpoint, saveCheckpoint, filterNewIds } from '../../lib/trendMemory';
 import { sendOwnerWhatsAppNotification } from '../../services/execution/WhatsAppOwnerNotifier';
+import { getTrendContext, filterByAge, isSignalIrrelevant, TREND_TYPES } from '../../lib/trendContext';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
@@ -87,6 +88,9 @@ export async function detectViralSignals(req: Request, res: Response) {
 
     const { name, category, city, relevant_services = '', tone_preference = 'friendly' } = profile;
 
+    // ── Load AI intelligence context ─────────────────────────────────────────
+    const trendCtx = await getTrendContext(businessProfileId, 'detectViralSignals');
+
     // ── Source 1: Apify TikTok hashtag scraper (real data) ──────────────────
     // Dynamically generate TikTok hashtags from the business category using AI
     const sectorHashtags = await generateViralHashtags(category, relevant_services);
@@ -118,7 +122,10 @@ export async function detectViralSignals(req: Request, res: Response) {
         const rawIds = apifyItems.map((v: any) => v.id || v.videoId).filter(Boolean);
         const newIds = filterNewIds(rawIds, trendCp);
         apifyItems = apifyItems.filter((v: any) => newIds.includes(v.id || v.videoId));
-        console.log(`[detectViralSignals] Apify TikTok: ${apifyItems.length} NEW videos (${rawIds.length - apifyItems.length} already seen)`);
+        // Temporal validation: reject content older than 30 days
+        const beforeTemporalFilter = apifyItems.length;
+        apifyItems = filterByAge(apifyItems, (v: any) => v.createTime || v.createTimestamp || 0, 30);
+        console.log(`[detectViralSignals] Apify TikTok: ${apifyItems.length} NEW videos (${rawIds.length - apifyItems.length} already seen, ${beforeTemporalFilter - apifyItems.length} too old)`);
       } catch (e: any) {
         console.warn('[detectViralSignals] Apify failed:', e.message);
       }
@@ -194,7 +201,7 @@ export async function detectViralSignals(req: Request, res: Response) {
 
     const result = await invokeLLM({
       model: 'sonnet',
-      maxTokens: 1200,
+      maxTokens: 1400,
       prompt: `You are a social media virality expert. Analyze what is going viral right now and how the business can leverage it.
 Return ONLY valid JSON. ALL string values must be in Hebrew.
 
@@ -203,7 +210,12 @@ Services: ${relevant_services || 'not specified'}
 Tone: ${tone_preference}
 Data source: ${dataSourceLabel}
 
-${context.slice(0, 3500)}
+${trendCtx.sectorBlock}
+${trendCtx.deepProfileBlock}
+
+${context.slice(0, 3000)}
+
+${trendCtx.trendTypesBlock}
 
 CRITICAL RULES:
 • ONLY report signals backed by specific numbers or URLs from the data above
@@ -212,11 +224,14 @@ CRITICAL RULES:
 • The platform must be clear (TikTok / Instagram / YouTube)
 • The format must be specific (Reel / Story / Short / Post)
 • ready_to_post_text — complete text in Hebrew, ready to copy and publish
+• trend_type — must be one of: ${TREND_TYPES.map(t => t.key).join('|')}
+• ONLY generate signals relevant to this business's actual confirmed services
 
 Return ONLY valid JSON:
 {"signals":[{
   "title": "שם הסיגנל הויראלי — עד 6 מילים",
   "description": "מה הולך ויראלי ולמה — עד 12 מילה",
+  "trend_type": "purchase_intent|content_format|ad_method|language_shift|new_product_service|cultural_value|pricing_trend|sound_music|viral_challenge|seasonal_early",
   "platform": "tiktok|instagram|youtube|multiple",
   "content_format": "reel|story|short|post|challenge",
   "hashtags": ["#tag1","#tag2","#tag3"],
@@ -232,7 +247,13 @@ Return ONLY valid JSON:
     });
 
     const rawSignals: any[] = result?.signals || [];
-    const validSignals = rawSignals.filter(s => s.title && s.platform && s.evidence_url && s.relevance !== 'low');
+    const validSignals = rawSignals.filter(s => {
+      if (!s.title || !s.platform || !s.evidence_url || s.relevance === 'low') return false;
+      // Filter out signals that touch irrelevant topics for this business
+      const signalText = `${s.title} ${s.description}`;
+      if (isSignalIrrelevant(signalText, trendCtx.irrelevantTopics)) return false;
+      return true;
+    });
 
     // ── Save signals ─────────────────────────────────────────────────────────
     const existing = await prisma.marketSignal.findMany({
@@ -250,6 +271,7 @@ Return ONLY valid JSON:
         action_type: 'social_post',
         action_label: `צור תוכן: ${signal.content_format} ב-${signal.platform}`,
         platform: signal.platform,
+        trend_type: signal.trend_type || 'purchase_intent',
         content_format: signal.content_format,
         hashtags: signal.hashtags,
         velocity: signal.velocity,

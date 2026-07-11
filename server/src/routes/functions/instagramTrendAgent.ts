@@ -36,6 +36,7 @@ import {
   loadCheckpoint, saveCheckpoint, shouldSkipByTime,
   filterNewIds, filterNewUrls,
 } from '../../lib/trendMemory';
+import { getTrendContext, isContentTooOld, isSignalIrrelevant } from '../../lib/trendContext';
 
 const MIN_INTERVAL = 20 * 60 * 60 * 1000; // 20h
 
@@ -233,6 +234,9 @@ export async function instagramTrendAgent(req: Request, res: Response) {
 
     const { name, category, city, relevant_services = '' } = profile;
 
+    // ── Load AI intelligence context ───────────────────────────────────────
+    const trendCtx = await getTrendContext(businessProfileId, 'instagramTrendAgent');
+
     // ── Checkpoint ────────────────────────────────────────────────────────
     const cpIL = await loadCheckpoint('instagramTrendAgent', businessProfileId, 'instagram', 'IL');
     const cpUS = await loadCheckpoint('instagramTrendAgent', businessProfileId, 'instagram', 'US');
@@ -259,9 +263,11 @@ export async function instagramTrendAgent(req: Request, res: Response) {
         const newIds   = filterNewIds(rawPosts.map(p => p.id), cp);
         igPosts = rawPosts
           .filter(p => newIds.includes(p.id))
+          // Temporal validation: skip posts older than 30 days
+          .filter(p => !isContentTooOld(p.timestamp, 30))
           .sort((a, b) => igEngagementScore(b) - igEngagementScore(a))
           .slice(0, 15);
-        console.log(`[instagramTrendAgent] Apify new posts: ${igPosts.length} of ${rawPosts.length}`);
+        console.log(`[instagramTrendAgent] Apify new posts: ${igPosts.length} of ${rawPosts.length} (after temporal filter)`);
       }
 
       // ── Source 2: Tavily fallback ──────────────────────────────────────
@@ -306,17 +312,26 @@ Country: ${country}
 Services: ${relevant_services || 'not specified'}
 ${region === 'US' ? 'NOTE: US trends — estimate days until they reach Israel (10-45 days).' : ''}
 
-${context.slice(0, 3000)}
+${trendCtx.sectorBlock}
+${trendCtx.deepProfileBlock}
 
-Focus on:
+${context.slice(0, 2500)}
+
+${trendCtx.trendTypesBlock}
+
+Focus on ALL 10 trend types, especially:
 • What content FORMAT is getting high saves/engagement (Reels vs Carousels vs Stories)
 • What PRODUCTS or SERVICES are being highlighted in trending posts
 • What AESTHETIC or VISUAL STYLE is resonating
-• What TEXT/CAPTION style is working
+• What TEXT/CAPTION style or new LANGUAGE is working
+• What CHALLENGES or CAMPAIGNS the business could join
+
+ONLY generate trends relevant to this business's actual confirmed services.
 
 Return ONLY valid JSON. ALL string values in Hebrew:
 {"trends":[{
   "name": "שם הטרנד — עד 6 מילים",
+  "trend_type": "purchase_intent|content_format|ad_method|language_shift|new_product_service|cultural_value|pricing_trend|sound_music|viral_challenge|seasonal_early",
   "description": "מה עולה ולמה עובד — עד 15 מילה",
   "content_format": "Reels|Carousel|Story|Post",
   "visual_style": "תיאור סגנון ויזואלי — צבעים/פורמט/אווירה",
@@ -332,9 +347,12 @@ Return ONLY valid JSON. ALL string values in Hebrew:
       ).catch(() => ({ trends: [] }));
 
       const rawTrends: any[] = result?.trends || [];
-      const validTrends = rawTrends.filter(t =>
-        t.name && t.evidence && (t.confidence || 0) >= 55,
-      );
+      const validTrends = rawTrends.filter(t => {
+        if (!t.name || !t.evidence || (t.confidence || 0) < 55) return false;
+        // Filter irrelevant topics from sector_profile
+        if (isSignalIrrelevant(`${t.name} ${t.description}`, trendCtx.irrelevantTopics)) return false;
+        return true;
+      });
 
       // Dedup
       const existing = await prisma.marketSignal.findMany({
@@ -356,6 +374,7 @@ Return ONLY valid JSON. ALL string values in Hebrew:
           action_type:             'social_post',
           action_label:            trend.action || trend.name,
           platform:                'instagram',
+          trend_type:              trend.trend_type || 'content_format',
           region,
           is_us_leading_indicator: region === 'US',
           days_until_israel:       region === 'US' ? (trend.days_until_israel || 14) : 0,
