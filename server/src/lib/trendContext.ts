@@ -134,7 +134,7 @@ export async function getTrendContext(
 
   const relevantTopics: string[]   = sectorProfile?.relevant_topics   || [];
   const irrelevantTopics: string[] = sectorProfile?.irrelevant_topics  || [];
-  const serviceKeywords: string[]  = (
+  const serviceKeywords: string[]  = String(
     profile?.relevant_services || profile?.category || ''
   ).toLowerCase().split(/[,\s]+/).filter((k: string) => k.length > 2);
 
