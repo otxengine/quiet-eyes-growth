@@ -2,13 +2,13 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { computeThemeRollup } from './computeThemeRollup';
 
 /**
  * analyzeSentiment
- * Analyzes recent reviews to produce a sentiment breakdown and key themes.
- *
  * Body: { businessProfileId }
- * Returns: { overall, score, positive_count, negative_count, neutral_count, top_themes, key_insight, recommendations, sample_size }
+ * Returns: { overall, score, positive_count, negative_count, neutral_count,
+ *            top_themes (rollup), theme_narrative (LLM gloss), key_insight, recommendations, sample_size }
  */
 export async function analyzeSentiment(req: Request, res: Response) {
   const { businessProfileId } = req.body;
@@ -26,7 +26,8 @@ export async function analyzeSentiment(req: Request, res: Response) {
       return res.json({
         overall: 'neutral', score: 50,
         positive_count: 0, negative_count: 0, neutral_count: 0,
-        top_themes: [], key_insight: 'אין ביקורות לניתוח עדיין',
+        top_themes: [], theme_narrative: null,
+        key_insight: 'אין ביקורות לניתוח עדיין',
         recommendations: [], sample_size: 0,
       });
     }
@@ -35,6 +36,9 @@ export async function analyzeSentiment(req: Request, res: Response) {
     const negativeCount = reviews.filter(r => r.sentiment === 'negative').length;
     const neutralCount  = reviews.length - positiveCount - negativeCount;
     const avgRating     = reviews.reduce((s, r) => s + (r.rating || 0), 0) / reviews.length;
+
+    // AC1 + AC2: rollup is the source of truth for top_themes
+    const topThemes = await computeThemeRollup(businessProfileId);
 
     const prompt = `Analyze ${reviews.length} reviews for an Israeli business.
 
@@ -51,9 +55,6 @@ Return ONLY valid JSON. ALL string values must be in Hebrew.
 {
   "overall": "positive|negative|neutral|mixed",
   "score": 0-100,
-  "top_themes": [
-    {"theme": "נושא עיקרי", "sentiment": "positive|negative", "count": number}
-  ],
   "key_insight": "תובנה אחת חשובה — עד 15 מילה",
   "recommendations": ["המלצה 1", "המלצה 2", "המלצה 3"]
 }`;
@@ -72,7 +73,10 @@ Return ONLY valid JSON. ALL string values must be in Hebrew.
       positive_count: positiveCount,
       negative_count: negativeCount,
       neutral_count: neutralCount,
-      top_themes: result?.top_themes || [],
+      // AC2: rollup is authoritative
+      top_themes: topThemes,
+      // AC3: LLM narrative is gloss only
+      theme_narrative: { is_gloss: true, themes: result?.top_themes ?? null },
       key_insight: result?.key_insight || '',
       recommendations: result?.recommendations || [],
       sample_size: reviews.length,
