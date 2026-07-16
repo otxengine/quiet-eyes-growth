@@ -848,6 +848,9 @@ router.post('/', async (req: Request, res: Response) => {
     // ── KAN-121: Competitor Google review ingest ──────────────────────────────
     `ALTER TABLE reviews     ADD COLUMN IF NOT EXISTS linked_competitor TEXT`,
     `ALTER TABLE competitors ADD COLUMN IF NOT EXISTS google_place_id   TEXT`,
+
+    // ── KAN-120: Dedup guard — partial unique index on google_review_id ──────
+    `CREATE UNIQUE INDEX IF NOT EXISTS reviews_google_review_id_unique ON reviews (linked_business, google_review_id) WHERE google_review_id IS NOT NULL`,
   ];
 
   for (const sql of statements) {
