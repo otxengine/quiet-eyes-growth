@@ -6,13 +6,19 @@ import { invokeLLM } from '../lib/llm';
 import { tavilySearch } from '../lib/tavily';
 import { writeAutomationLog } from '../lib/automationLog';
 import { publishEvent } from '../lib/eventBus';
+import * as serpapi from '../lib/serpapi';
 
 // ── Mocks ──────────────────────────────────────────────────────────────────────
+
+jest.mock('../lib/serpapi', () => ({
+  hasSerpApiKey:         jest.fn().mockReturnValue(false),
+  serpGoogleMapsReviews: jest.fn().mockResolvedValue([]),
+}));
 
 jest.mock('../db', () => ({
   prisma: {
     businessProfile: { findMany: jest.fn(), update: jest.fn() },
-    review:          { findMany: jest.fn(), create: jest.fn(), findFirst: jest.fn() },
+    review:          { findMany: jest.fn(), create: jest.fn(), findFirst: jest.fn(), updateMany: jest.fn() },
     socialAccount:   { findFirst: jest.fn(), update: jest.fn() },
     competitor:      { findMany: jest.fn() },
     marketSignal:    { findFirst: jest.fn(), create: jest.fn() },
@@ -35,6 +41,7 @@ const bpUpdate         = prisma.businessProfile.update      as jest.Mock;
 const reviewFindMany   = prisma.review.findMany             as jest.Mock;
 const reviewCreate     = prisma.review.create               as jest.Mock;
 const reviewFindFirst  = prisma.review.findFirst            as jest.Mock;
+const reviewUpdateMany = prisma.review.updateMany           as jest.Mock;
 const socialFindFirst  = prisma.socialAccount.findFirst     as jest.Mock;
 const competitorFindMany = prisma.competitor.findMany       as jest.Mock;
 const msFindFirst      = prisma.marketSignal.findFirst      as jest.Mock;
@@ -47,7 +54,9 @@ const skipAgent        = shouldSkipAgent                    as jest.Mock;
 const llm              = invokeLLM                          as jest.Mock;
 const tavily           = tavilySearch                       as jest.Mock;
 const autoLog          = writeAutomationLog                 as jest.Mock;
-const mockFetch        = global.fetch                       as jest.Mock;
+const mockFetch          = global.fetch                       as jest.Mock;
+const mockHasSerpKey     = serpapi.hasSerpApiKey              as jest.Mock;
+const mockSerpReviews    = serpapi.serpGoogleMapsReviews       as jest.Mock;
 
 const PROFILE = {
   id: 'bp1', name: 'Test Biz', city: 'תל אביב',
@@ -100,6 +109,7 @@ beforeEach(() => {
   alertFindFirst.mockResolvedValue(null);
   alertCreate.mockResolvedValue({});
   rawSignalFindMany.mockResolvedValue([]);
+  reviewUpdateMany.mockResolvedValue({ count: 0 });
   execRaw.mockResolvedValue(undefined);
   skipAgent.mockReturnValue(false);
   (setLastRun as jest.Mock).mockReturnValue(undefined);
@@ -108,6 +118,8 @@ beforeEach(() => {
   autoLog.mockResolvedValue(undefined);
   (publishEvent as jest.Mock).mockResolvedValue(undefined);
   mockFetch.mockResolvedValue({ ok: false, status: 404, json: jest.fn().mockResolvedValue({}) });
+  mockHasSerpKey.mockReturnValue(false);
+  mockSerpReviews.mockResolvedValue([]);
 });
 
 // ── Input validation ───────────────────────────────────────────────────────────
@@ -153,8 +165,8 @@ describe('collectReviews — cooldown', () => {
 
 describe('collectReviews — KAN-23 AC#1 content truncation', () => {
 
-  test('review text longer than 500 chars is truncated to 500 before storage (GMB path)', async () => {
-    const longText = 'מ'.repeat(600);
+  test('review text longer than 2000 chars is truncated to 2000 before storage (GMB path)', async () => {
+    const longText = 'מ'.repeat(2500);
     socialFindFirst.mockResolvedValue(GMB_ACCOUNT);
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -166,9 +178,9 @@ describe('collectReviews — KAN-23 AC#1 content truncation', () => {
     await collectReviews(req, res);
 
     expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ text: longText.substring(0, 500) }),
+      data: expect.objectContaining({ text: longText.substring(0, 2000) }),
     }));
-    expect(reviewCreate.mock.calls[0][0].data.text).toHaveLength(500);
+    expect(reviewCreate.mock.calls[0][0].data.text).toHaveLength(2000);
   });
 
 });
@@ -851,6 +863,274 @@ describe('collectReviews — KAN-17 deduplication', () => {
     await collectReviews(req, res);
 
     expect(reviewCreate).not.toHaveBeenCalled();
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 0 }));
+  });
+});
+
+// ── KAN-120 AC2: early stop when page is all-known ────────────────────────────
+
+describe('collectReviews — KAN-120 AC2: early stop when page is all-known', () => {
+  test('stops after first page when all its reviews are already known', async () => {
+    socialFindFirst.mockResolvedValue(GMB_ACCOUNT);
+    reviewFindMany.mockResolvedValue([{
+      google_review_id: 'accounts/123/locations/456/reviews/rev001',
+      text: 'מעולה מאוד!',
+    }]);
+    // page 1 returns only the known review but advertises a page 2 — should not be fetched
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ reviews: [gmbReview()], nextPageToken: 'token-page2' }),
+    });
+
+    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+
+    // Assert pagination stopped — GMB page 2 must never be requested
+    expect(mockFetch).not.toHaveBeenCalledWith(
+      expect.stringContaining('pageToken=token-page2'),
+      expect.anything(),
+    );
+    expect(reviewCreate).not.toHaveBeenCalled();
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ google_reviews_added: 0 }));
+  });
+
+  test('continues to page 2 when page 1 has at least one new review', async () => {
+    socialFindFirst.mockResolvedValue(GMB_ACCOUNT);
+    // comments must be >5 chars to pass the short-text guard
+    const page1New = gmbReview({ name: 'accounts/123/locations/456/reviews/new1', comment: 'ביקורת מעולה על השירות' });
+    const page2New = gmbReview({ name: 'accounts/123/locations/456/reviews/new2', comment: 'אוכל טעים ומחיר סביר' });
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValue({ reviews: [page1New], nextPageToken: 'tok2' }) })
+      .mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValue({ reviews: [page2New], nextPageToken: undefined }) });
+    llm.mockResolvedValue({ results: [{ topics: [], sentiments: {} }, { topics: [], sentiments: {} }] });
+
+    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+
+    expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('pageToken=tok2'), expect.anything());
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ google_reviews_added: 2 }));
+  });
+});
+
+// ── KAN-120 AC4: reply sync on already-stored review ─────────────────────────
+
+describe('collectReviews — KAN-120 AC4: reply sync on known review', () => {
+  test('updateMany called with response_status + suggested_response when known review has a reply', async () => {
+    socialFindFirst.mockResolvedValue(GMB_ACCOUNT);
+    reviewFindMany.mockResolvedValue([{
+      google_review_id: 'accounts/123/locations/456/reviews/rev001',
+      text: 'מעולה מאוד!',
+    }]);
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        reviews: [gmbReview({ reviewReply: { comment: 'תודה רבה!' } })],
+        nextPageToken: undefined,
+      }),
+    });
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+
+    expect(reviewUpdateMany).toHaveBeenCalledWith({
+      where: { google_review_id: 'accounts/123/locations/456/reviews/rev001', linked_business: 'bp1' },
+      data:  { response_status: 'published', suggested_response: 'תודה רבה!' },
+    });
+    expect(reviewCreate).not.toHaveBeenCalled();
+  });
+
+  test('no updateMany when known review has no reply', async () => {
+    socialFindFirst.mockResolvedValue(GMB_ACCOUNT);
+    reviewFindMany.mockResolvedValue([{
+      google_review_id: 'accounts/123/locations/456/reviews/rev001',
+      text: 'מעולה מאוד!',
+    }]);
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ reviews: [gmbReview({ reviewReply: null })], nextPageToken: undefined }),
+    });
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+
+    expect(reviewUpdateMany).not.toHaveBeenCalled();
+    expect(reviewCreate).not.toHaveBeenCalled();
+  });
+});
+
+// ── KAN-120 AC3: immutable fields never written on update ────────────────────
+
+describe('collectReviews — KAN-120 AC3: immutable fields not overwritten', () => {
+  test('update data never contains text, rating, topics, or topic_sentiment', async () => {
+    socialFindFirst.mockResolvedValue(GMB_ACCOUNT);
+    reviewFindMany.mockResolvedValue([{
+      google_review_id: 'accounts/123/locations/456/reviews/rev001',
+      text: 'original text',
+    }]);
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        reviews: [gmbReview({ comment: 'changed body!', starRating: 'ONE', reviewReply: { comment: 'תגובה' } })],
+        nextPageToken: undefined,
+      }),
+    });
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+
+    expect(reviewUpdateMany).toHaveBeenCalled();
+    for (const call of reviewUpdateMany.mock.calls) {
+      const data = call[0].data;
+      expect(data).not.toHaveProperty('text');
+      expect(data).not.toHaveProperty('rating');
+      expect(data).not.toHaveProperty('topics');
+      expect(data).not.toHaveProperty('topic_sentiment');
+    }
+  });
+});
+
+// ── KAN-119: SerpAPI google_maps_reviews tier (priority 2) ───────────────────
+
+const PROFILE_WITH_PLACE = { ...PROFILE, google_place_id: 'ChIJplace123' };
+
+function serpReview(overrides: any = {}) {
+  return {
+    user:    { name: 'יוסי כהן', link: 'https://www.google.com/maps/contrib/123' },
+    rating:  5,
+    snippet: 'מקום מדהים, שירות מעולה!',
+    date:    'לפני שבוע',
+    ...overrides,
+  };
+}
+
+describe('collectReviews — KAN-119 AC1: SerpAPI 300-review backfill', () => {
+  beforeEach(() => {
+    socialFindFirst.mockResolvedValue(null);
+    bpFindMany.mockResolvedValue([PROFILE_WITH_PLACE]);
+    mockHasSerpKey.mockReturnValue(true);
+    mockSerpReviews.mockResolvedValue([]);
+  });
+
+  test('SerpAPI reviews are fetched and persisted with correct fields', async () => {
+    mockSerpReviews.mockResolvedValue([serpReview()]);
+    llm.mockResolvedValue({ results: [{ topics: ['שירות'], sentiments: { שירות: 'positive' } }] });
+
+    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+
+    expect(mockSerpReviews).toHaveBeenCalledWith('ChIJplace123', 300);
+    expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        platform:      'Google',
+        source_origin: 'serp_google_maps_reviews',
+        is_verified:   true,
+        linked_business: 'bp1',
+        google_review_id: expect.stringContaining('serpgmr_'),
+      }),
+    }));
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 1, google_reviews_added: 1 }));
+  });
+
+  test('SerpAPI deduplicates by google_review_id across runs', async () => {
+    const rev = serpReview();
+    const reviewId = `serpgmr_${rev.user.link.replace(/[^a-z0-9]/gi, '_').substring(0, 40)}`;
+    reviewFindMany.mockResolvedValue([{ google_review_id: reviewId, text: rev.snippet }]);
+    mockSerpReviews.mockResolvedValue([rev]);
+
+    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+
+    expect(reviewCreate).not.toHaveBeenCalled();
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 0 }));
+  });
+
+  test('SerpAPI text longer than 2000 chars is capped at 2000', async () => {
+    const longSnippet = 'א'.repeat(2500);
+    mockSerpReviews.mockResolvedValue([serpReview({ snippet: longSnippet })]);
+    llm.mockResolvedValue({ results: [{ topics: [], sentiments: {} }] });
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+
+    expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ text: longSnippet.substring(0, 2000) }),
+    }));
+    expect(reviewCreate.mock.calls[0][0].data.text).toHaveLength(2000);
+  });
+
+  test('SerpAPI skipped when hasSerpApiKey() returns false', async () => {
+    mockHasSerpKey.mockReturnValue(false);
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+
+    expect(mockSerpReviews).not.toHaveBeenCalled();
+  });
+});
+
+describe('collectReviews — KAN-119 AC2: GMB priority 1 over SerpAPI', () => {
+  test('SerpAPI not called when GMB already added reviews', async () => {
+    mockHasSerpKey.mockReturnValue(true);
+    bpFindMany.mockResolvedValue([PROFILE_WITH_PLACE]);
+    socialFindFirst.mockResolvedValue(GMB_ACCOUNT);
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ reviews: [gmbReview()], nextPageToken: undefined }),
+    });
+    llm.mockResolvedValue({ results: [{ topics: [], sentiments: {} }] });
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+
+    expect(mockSerpReviews).not.toHaveBeenCalled();
+    expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ source_origin: 'google_business_api' }),
+    }));
+  });
+});
+
+describe('collectReviews — KAN-119 AC3: SerpAPI unavailable → Places fallback', () => {
+  test('Places API runs when SerpAPI returns empty (unavailable/no results)', async () => {
+    mockHasSerpKey.mockReturnValue(true);
+    mockSerpReviews.mockResolvedValue([]);   // SerpAPI returns nothing
+    bpFindMany.mockResolvedValue([PROFILE_WITH_PLACE]);
+    socialFindFirst.mockResolvedValue(null);
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        reviews: [{
+          authorAttribution: { displayName: 'דינה כהן' },
+          rating: 4,
+          text: { text: 'מקום יפה מאוד' },
+          publishTime: new Date(1700000000 * 1000).toISOString(),
+        }],
+      }),
+    });
+    llm.mockResolvedValue({ results: [{ topics: ['אווירה'], sentiments: { אווירה: 'positive' } }] });
+
+    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+
+    expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ source_origin: 'google_places' }),
+    }));
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 1 }));
+  });
+
+  test('Places API also runs when SerpAPI throws (no error propagated)', async () => {
+    mockHasSerpKey.mockReturnValue(true);
+    mockSerpReviews.mockRejectedValue(new Error('SerpAPI timeout'));
+    bpFindMany.mockResolvedValue([PROFILE_WITH_PLACE]);
+    socialFindFirst.mockResolvedValue(null);
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ reviews: [] }),
+    });
+
+    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
+    await expect(collectReviews(req, res)).resolves.not.toThrow();
     expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 0 }));
   });
 });

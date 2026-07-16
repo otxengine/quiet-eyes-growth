@@ -8,6 +8,7 @@ import { tryDecryptToken } from '../../lib/crypto';
 import { publishEvent } from '../../lib/eventBus';
 import { normReviewOrigin } from '../../lib/signalGuard';
 import { findPlaceId, getPlaceDetails } from '../../lib/googlePlaces';
+import { serpGoogleMapsReviews, hasSerpApiKey } from '../../lib/serpapi';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours — Google Places API quota
 
@@ -21,7 +22,7 @@ async function batchExtractTopics(
   if (reviews.length === 0) return fallback;
 
   const itemsStr = reviews
-    .map((r, i) => `[${i}] "${r.text.substring(0, 200)}"`)
+    .map((r, i) => `[${i}] "${r.text.substring(0, 1500)}"`)
     .join('\n');
 
   try {
@@ -112,6 +113,7 @@ export async function collectReviews(req: Request, res: Response) {
           let nextPageToken: string | undefined;
           const gmbPending: Array<{ gr: any; reviewId: string; text: string; textKey: string; rating: number; sentiment: string; reviewerName: string }> = [];
           do {
+            // GMB API returns reviews newest-first (updateTime desc) by default
             const pageUrl = `https://mybusiness.googleapis.com/v4/${gmbLocationPath}/reviews?pageSize=50${nextPageToken ? `&pageToken=${nextPageToken}` : ''}`;
             const gmbRes = await fetch(pageUrl, { headers: { Authorization: `Bearer ${gmbToken}` } });
             if (!gmbRes.ok) {
@@ -131,9 +133,19 @@ export async function collectReviews(req: Request, res: Response) {
             }
             const gmbData: any = await gmbRes.json();
             nextPageToken = gmbData.nextPageToken;
+            const pendingBefore = gmbPending.length;
             for (const gr of (gmbData.reviews || [])) {
               const reviewId = gr.name;
-              if (existingGoogleIds.has(reviewId)) continue;
+              if (existingGoogleIds.has(reviewId)) {
+                // AC4: sync owner reply on already-stored review — only mutable fields touched
+                if (gr.reviewReply?.comment) {
+                  await prisma.review.updateMany({
+                    where: { google_review_id: reviewId, linked_business: businessProfileId },
+                    data:  { response_status: 'published', suggested_response: gr.reviewReply.comment },
+                  });
+                }
+                continue;
+              }
               const text = gr.comment || '';
               const textKey = text.substring(0, 50);
               if (existingTexts.has(textKey) || text.length < 5) continue;
@@ -142,6 +154,8 @@ export async function collectReviews(req: Request, res: Response) {
               const reviewerName = gr.reviewer?.displayName || 'לקוח';
               gmbPending.push({ gr, reviewId, text, textKey, rating, sentiment, reviewerName });
             }
+            // AC2: page had no new reviews — stop early, older pages won't have new ones either
+            if (gmbPending.length === pendingBefore) break;
           } while (nextPageToken);
 
           if (gmbPending.length > 0) {
@@ -153,7 +167,7 @@ export async function collectReviews(req: Request, res: Response) {
                 data: {
                   platform: 'Google',
                   rating,
-                  text: text.substring(0, 500),
+                  text: text.substring(0, 2000),
                   reviewer_name: reviewerName,
                   sentiment,
                   response_status: gr.reviewReply ? 'published' : 'pending',
@@ -179,7 +193,66 @@ export async function collectReviews(req: Request, res: Response) {
       }
     }
 
-    // ── Google Places API — fallback when no OAuth token ─────────────────────
+    // ── SerpAPI google_maps_reviews — depth backfill, priority 2 ─────────────
+    if (googleAdded === 0 && hasSerpApiKey()) {
+      try {
+        const serpPlaceId: string | null = profile.google_place_id || await findPlaceId(name, city);
+        if (serpPlaceId && !profile.google_place_id) {
+          await prisma.businessProfile.update({ where: { id: businessProfileId }, data: { google_place_id: serpPlaceId, google_place_id_verified: true } });
+        }
+        if (serpPlaceId) {
+          const serpReviews = await serpGoogleMapsReviews(serpPlaceId, 300);
+          const serpPending: Array<{
+            reviewId: string; textKey: string; text: string;
+            rating: number; sentiment: string; reviewerName: string;
+          }> = [];
+          for (const sr of serpReviews) {
+            const text: string = sr.snippet || '';
+            if (!text || text.length < 5) continue;
+            const reviewId = `serpgmr_${(sr.user?.link || sr.user?.name || '').replace(/[^a-z0-9]/gi, '_').substring(0, 40)}`;
+            if (existingGoogleIds.has(reviewId)) continue;
+            const textKey = text.substring(0, 50);
+            if (existingTexts.has(textKey)) continue;
+            const rating: number = sr.rating || 0;
+            const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
+            serpPending.push({ reviewId, textKey, text, rating, sentiment, reviewerName: sr.user?.name || 'לקוח' });
+          }
+          if (serpPending.length > 0) {
+            const serpTopics = await batchExtractTopics(serpPending.map(p => ({ text: p.text, sentiment: p.sentiment })));
+            for (let i = 0; i < serpPending.length; i++) {
+              const { reviewId, textKey, text, rating, sentiment, reviewerName } = serpPending[i];
+              const { topics, topic_sentiment } = serpTopics[i];
+              await prisma.review.create({
+                data: {
+                  platform:        'Google',
+                  rating,
+                  text:            text.substring(0, 2000),
+                  reviewer_name:   reviewerName,
+                  sentiment,
+                  response_status: 'pending',
+                  source_url:      `https://www.google.com/maps/search/?q=${encodeURIComponent(name)}`,
+                  source_origin:   normReviewOrigin('serp_google_maps_reviews', 'collectReviews:serp'),
+                  google_review_id: reviewId,
+                  is_verified:     true,
+                  created_at:      new Date().toISOString(),
+                  linked_business: businessProfileId,
+                  topics,
+                  topic_sentiment,
+                },
+              });
+              existingGoogleIds.add(reviewId);
+              existingTexts.add(textKey);
+              newReviews++;
+              googleAdded++;
+            }
+          }
+        }
+      } catch (err: any) {
+        console.warn('[collectReviews] SerpAPI google_maps_reviews failed, falling through to Places:', err.message);
+      }
+    }
+
+    // ── Google Places API — fallback, priority 3 (≤5 sample) ────────────────
     if (googleAdded === 0) {
       const placeId = profile.google_place_id || await findPlaceId(name, city);
       if (placeId) {
@@ -207,7 +280,7 @@ export async function collectReviews(req: Request, res: Response) {
             data: {
               platform: 'Google',
               rating: gr.rating,
-              text: reviewText.substring(0, 500),
+              text: reviewText.substring(0, 2000),
               reviewer_name: authorName,
               sentiment,
               response_status: 'pending',
@@ -274,7 +347,7 @@ export async function collectReviews(req: Request, res: Response) {
               data: {
                 platform: parsed.platform || 'אתר חיצוני',
                 rating,
-                text: parsed.text.substring(0, 500),
+                text: parsed.text.substring(0, 2000),
                 reviewer_name: parsed.reviewer_name || 'לקוח',
                 sentiment,
                 response_status: 'pending',
@@ -346,7 +419,7 @@ export async function collectReviews(req: Request, res: Response) {
             data: {
               platform: platformLabel,
               rating,
-              text: p.text.substring(0, 500),
+              text: p.text.substring(0, 2000),
               reviewer_name: p.reviewer_name || 'לקוח',
               sentiment,
               response_status: 'pending',
@@ -426,7 +499,7 @@ export async function collectReviews(req: Request, res: Response) {
             data: {
               platform: parsed.platform || 'אתר חיצוני',
               rating,
-              text: parsed.text.substring(0, 500),
+              text: parsed.text.substring(0, 2000),
               reviewer_name: parsed.reviewer_name || 'לקוח',
               sentiment,
               response_status: 'pending',
