@@ -1024,6 +1024,8 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS topic_sentiment TEXT`);
   await sql(`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS google_review_id TEXT`);
   await sql(`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT false`);
+  await sql(`ALTER TABLE reviews     ADD COLUMN IF NOT EXISTS linked_competitor TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS google_place_id   TEXT`);
   await sql(`ALTER TABLE health_scores ADD COLUMN IF NOT EXISTS seo_score DOUBLE PRECISION`);
   await sql(`ALTER TABLE health_scores ADD COLUMN IF NOT EXISTS google_rank_estimate TEXT`);
   await sql(`ALTER TABLE health_scores ADD COLUMN IF NOT EXISTS reviews_needed_for_top3 DOUBLE PRECISION`);
