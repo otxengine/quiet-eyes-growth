@@ -175,6 +175,7 @@ model Review {
   created_date     DateTime @default(now())
   created_by       String?
   linked_business  String?
+  linked_competitor String?  // KAN-121: set for competitor reviews; null for own-business reviews
   linked_location  String?
   platform         String?
   rating           Float?
@@ -259,6 +260,7 @@ model Competitor {
   ad_intel_updated_at      String?  // when Claude last analyzed their ads
   not_relevant             Boolean? @default(false)
   not_relevant_reason      String?
+  google_place_id          String?  // KAN-121: place_id used for review ingest
 
   @@map("competitors")
 }

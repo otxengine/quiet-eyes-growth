@@ -10,6 +10,7 @@ import { collectWebSignals } from './collectWebSignals';
 import { synthesizeMarketInsights, runMarketIntelligence } from './synthesizeMarketInsights';
 import { runIntelligenceEngines } from './runIntelligenceEngines';
 import { collectReviews } from './collectReviews';
+import { collectCompetitorReviews } from './collectCompetitorReviews';
 import { runCompetitorIdentification } from './runCompetitorIdentification';
 import { collectSocialSignals } from './collectSocialSignals';
 import { generateProactiveAlerts } from './generateProactiveAlerts';
@@ -145,6 +146,7 @@ const FUNCTION_MAP: Record<string, any> = {
   runMarketIntelligence,
   'run-market-intelligence': runMarketIntelligence,
   collectReviews,
+  collectCompetitorReviews,
   runCompetitorIdentification,
   collectSocialSignals,
   generateProactiveAlerts,

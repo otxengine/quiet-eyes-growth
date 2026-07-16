@@ -50,9 +50,11 @@ export async function autoRespondToReviews(req: Request, res: Response) {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 3600000).toISOString();
 
     // Priority 1: negative/low reviews from last 30 days
-    const negativeReviews = await prisma.review.findMany({
+    // AC4 (KAN-121): linked_competitor: null guards against competitor reviews leaking into ops inbox
+    const negativeReviews = await (prisma.review as any).findMany({
       where: {
         linked_business: businessProfileId,
+        linked_competitor: null,
         suggested_response: null,
         created_date: { gte: new Date(thirtyDaysAgo) },
         OR: [
@@ -66,9 +68,10 @@ export async function autoRespondToReviews(req: Request, res: Response) {
 
     // Also grab all-time unresponded negative reviews if we got fewer than 5
     const allNegative = negativeReviews.length < 5
-      ? await prisma.review.findMany({
+      ? await (prisma.review as any).findMany({
           where: {
             linked_business: businessProfileId,
+            linked_competitor: null,
             suggested_response: null,
             OR: [{ sentiment: 'negative' }, { rating: { lte: 3 } }],
           },
@@ -78,9 +81,10 @@ export async function autoRespondToReviews(req: Request, res: Response) {
       : negativeReviews;
 
     // Priority 2: positive reviews with no response — brand building (last 14 days, cap 3)
-    const positiveReviews = await prisma.review.findMany({
+    const positiveReviews = await (prisma.review as any).findMany({
       where: {
         linked_business: businessProfileId,
+        linked_competitor: null,
         suggested_response: null,
         response_status: 'pending',
         sentiment: 'positive',

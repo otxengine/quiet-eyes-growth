@@ -78,6 +78,37 @@ export async function serpGoogleMaps(query: string, location: string): Promise<a
 }
 
 /**
+ * Google Maps Reviews — paginated fetch up to maxResults reviews.
+ * Accepts Google Place ID (places/ChIJ...) via place_id parameter.
+ * Returns [] on missing SERPAPI_KEY or errors.
+ */
+export async function serpGoogleMapsReviews(placeId: string, maxResults = 300): Promise<any[]> {
+  if (!placeId || !SERPAPI_KEY) return [];
+  const allReviews: any[] = [];
+  let nextPageToken: string | undefined;
+
+  do {
+    const params: Record<string, string> = {
+      engine:   'google_maps_reviews',
+      place_id: placeId,
+      hl:       'iw',
+      sort_by:  'newestFirst',
+    };
+    if (nextPageToken) params.next_page_token = nextPageToken;
+
+    const data = await _get(params);
+    if (!data) break;
+
+    const batch: any[] = data.reviews || [];
+    allReviews.push(...batch);
+    nextPageToken = data.serpapi_pagination?.next_page_token;
+    if (batch.length === 0) break;
+  } while (nextPageToken && allReviews.length < maxResults);
+
+  return allReviews.slice(0, maxResults);
+}
+
+/**
  * Google Trends interest-over-time for a query in Israel.
  * Returns { timeline: [{date, value}], rising_queries: string[], top_queries: string[] }
  * or null on failure.
@@ -119,3 +150,4 @@ export async function serpGoogleTrends(query: string): Promise<{
   if (timeline.length || rising_queries.length) _setCache(cacheKey, result);
   return result;
 }
+

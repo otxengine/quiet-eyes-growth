@@ -844,6 +844,10 @@ router.post('/', async (req: Request, res: Response) => {
     // ── automation_logs: missing columns added to schema but not yet in DB ───
     `ALTER TABLE automation_logs ADD COLUMN IF NOT EXISTS trace_id           TEXT`,
     `ALTER TABLE automation_logs ADD COLUMN IF NOT EXISTS high_urgency_count DOUBLE PRECISION DEFAULT 0`,
+
+    // ── KAN-121: Competitor Google review ingest ──────────────────────────────
+    `ALTER TABLE reviews     ADD COLUMN IF NOT EXISTS linked_competitor TEXT`,
+    `ALTER TABLE competitors ADD COLUMN IF NOT EXISTS google_place_id   TEXT`,
   ];
 
   for (const sql of statements) {
