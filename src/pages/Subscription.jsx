@@ -18,10 +18,10 @@ import { cn } from '@/lib/utils';
 
 const PLANS = [
   {
-    id: 'starter',
-    name: 'Starter',
+    id: 'basic',
+    name: 'Basic',
     subtitle: 'לעסקים שמתחילים',
-    pricePerBranch: 149,
+    pricePerBranch: 29,
     color: '2196F3',
     features: [
       { label: 'Dashboard + Morning Briefing', included: true },
@@ -37,12 +37,12 @@ const PLANS = [
     ],
   },
   {
-    id: 'growth',
-    name: 'Growth',
+    id: 'best',
+    name: 'Best',
     subtitle: 'לעסקים בצמיחה',
-    pricePerBranch: 349,
+    pricePerBranch: 54,
     highlighted: true,
-    color: '9C27B0',
+    color: 'e8344d',
     features: [
       { label: 'Dashboard + Morning Briefing', included: true },
       { label: 'ביקורות ומוניטין מלא', included: true },
@@ -57,13 +57,14 @@ const PLANS = [
     ],
   },
   {
-    id: 'pro',
-    name: 'Pro',
+    id: 'extra',
+    name: 'Extra',
     subtitle: 'לעסקים מתקדמים',
-    pricePerBranch: 699,
+    pricePerBranch: 119,
     color: 'FF5722',
     features: [
-      { label: 'כל מה שב-Growth', included: true },
+      { label: 'תיאור החבילה, מטסמת מלאה לעסק', included: true },
+      { label: 'ניהול כל האופרציה העסקית במקום אחד', included: true },
       { label: 'סריקות ללא הגבלה', included: true },
       { label: 'מתחרים ללא הגבלה', included: true },
       { label: 'תמונות AI ללא הגבלה', included: true },
@@ -71,8 +72,7 @@ const PLANS = [
       { label: 'מקורות מידע מותאמים', included: true },
       { label: 'תמיכה Priority 4h', included: true },
       { label: 'Onboarding אישי', included: true },
-      { label: 'SLA 99.5%', included: false },
-      { label: 'Account Manager', included: false },
+      { label: 'SLA 99.5%', included: true },
     ],
   },
 ];

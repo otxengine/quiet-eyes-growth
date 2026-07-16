@@ -598,7 +598,12 @@ export default function OnboardingForm() {
   // ── CONVERSATIONAL LAYOUT (steps 1–9) ──────────────────────────────────────
   return (
     <div dir="rtl" className="min-h-screen flex" style={BG_STYLE}>
-      {/* Right: Conversation area (flex-1) */}
+      {/* Right: Progress tracker sidebar */}
+      <div className="w-56 border-l border-gray-200/70 bg-white/50 px-5 py-8 flex-shrink-0 hidden md:block">
+        <ProgressTracker step={step} />
+      </div>
+
+      {/* Left: Conversation area (flex-1) */}
       <div className="flex-1 flex flex-col h-screen">
         {/* Scrollable conversation history */}
         <div
@@ -627,7 +632,7 @@ export default function OnboardingForm() {
               onClick={step === 10 ? handleSubmit : skipStep}
               className="border border-gray-300 text-gray-500 rounded-full px-6 py-2.5 text-[13px] font-medium hover:border-gray-400 transition-colors"
             >
-              {step === 10 ? 'דלג' : 'מלאו אחר כך'}
+              {step === 10 ? 'דלג' : 'מלאו אחרי כך'}
             </button>
             <button
               onClick={handlePrimaryAction}
@@ -636,15 +641,10 @@ export default function OnboardingForm() {
             >
               {isSubmitting ? (
                 <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> שומר...</>
-              ) : step === 10 ? '🚀 קדימה לסריקה!' : 'בואו נתקדם'}
+              ) : step === 10 ? '🚀 קדימה לסריקה!' : 'בוא נתקדם'}
             </button>
           </div>
         )}
-      </div>
-
-      {/* Left: Progress tracker */}
-      <div className="w-56 border-r border-gray-200/70 bg-white/50 px-5 py-8 flex-shrink-0 hidden md:block">
-        <ProgressTracker step={step} />
       </div>
     </div>
   );

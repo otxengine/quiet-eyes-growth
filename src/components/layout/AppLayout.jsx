@@ -59,7 +59,7 @@ const pageTitles = {
   '/tasks':         'משימות',
   '/reports':       'דוחות',
   '/strategy':      'אסטרטגיה',
-  '/demand-gap':    'פערי ביקוש',
+  '/demand-gap':    'מרכז ההדמנויות',
   '/signals':       'תובנות',
   '/approvals':     'לאישור',
   '/market-analysis':'ניתוח שוק',
@@ -259,6 +259,7 @@ export default function AppLayout() {
           onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
           badges={badges}
           user={user}
+          businessProfile={businessProfile}
         />
       </div>
 
@@ -277,6 +278,7 @@ export default function AppLayout() {
               onToggle={() => setMobileMenuOpen(false)}
               badges={badges}
               user={user}
+              businessProfile={businessProfile}
               onNavigate={() => setMobileMenuOpen(false)}
             />
           </div>

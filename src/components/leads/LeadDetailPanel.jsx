@@ -1,196 +1,212 @@
+/**
+ * LeadDetailPanel — Right-side drawer showing full lead details.
+ * Design: clean sections (פרטי איש קשר / פרטי חברה / מקור / הערות) + footer CTA.
+ */
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQueryClient } from '@tanstack/react-query';
-import { X, Phone, MapPin, Briefcase, Wallet, Clock, MessageSquare, Tag, Calendar, AlertTriangle } from 'lucide-react';
+import { X, Phone, Mail, Briefcase, Globe, Building2, Users, MapPin, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import ConversationPanel from './ConversationPanel';
 
-function timeAgo(dateStr) {
-  if (!dateStr) return '';
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const hours = Math.floor(diff / 3600000);
-  if (hours < 1) return 'לפני פחות משעה';
-  if (hours < 24) return `לפני ${hours} שעות`;
-  return `לפני ${Math.floor(hours / 24)} ימים`;
+const PLATFORM_ICONS = {
+  google:    'https://www.google.com/favicon.ico',
+  facebook:  'https://www.facebook.com/favicon.ico',
+  instagram: 'https://www.instagram.com/favicon.ico',
+  linkedin:  'https://www.linkedin.com/favicon.ico',
+};
+
+function FieldRow({ icon: Icon, label, value, href }) {
+  if (!value) return null;
+  return (
+    <div className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0" dir="rtl">
+      <div className="flex items-center gap-2 text-[12px] text-gray-500 min-w-0 flex-1">
+        {href ? (
+          <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline truncate">{value}</a>
+        ) : (
+          <span className="text-gray-800 truncate">{value}</span>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <span className="text-[11px] text-gray-400 font-medium">{label}</span>
+        {Icon && <Icon className="w-3.5 h-3.5 text-gray-300" />}
+      </div>
+    </div>
+  );
 }
 
-const stageLabels = {
-  new: 'חדש', contacted: 'נוצר קשר', meeting: 'פגישה',
-  negotiation: 'משא ומתן', closed_won: 'נסגר ✓', closed_lost: 'אבד', customer: 'לקוח'
-};
+function Section({ title, children }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 overflow-hidden" dir="rtl">
+      <div className="px-4 py-3 border-b border-gray-50">
+        <h3 className="text-[13px] font-bold text-gray-800">{title}</h3>
+      </div>
+      <div className="px-4 py-1">
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export default function LeadDetailPanel({ lead, businessProfile, stages, onClose, onStageChange }) {
   const queryClient = useQueryClient();
-  const [note, setNote] = useState('');
-  const [nextAction, setNextAction] = useState(lead.next_action || '');
-  const [nextDate, setNextDate] = useState(lead.next_action_date || '');
-  const [tags, setTags] = useState(lead.tags || '');
-  const [totalValue, setTotalValue] = useState(lead.total_value || '');
-  const phoneMatch = lead.contact_info?.match(/[\d\-+()]{7,}/);
-  const phone = phoneMatch ? phoneMatch[0] : null;
+  const [notes, setNotes]   = useState(lead.notes || '');
+  const [saving, setSaving] = useState(false);
 
-  const isOverdue = lead.next_action_date && new Date(lead.next_action_date) <= new Date();
+  // Extract phone/email from contact_info string
+  const phoneMatch = (lead.contact_info || '').match(/[\d\-+()]{7,}/);
+  const phone      = phoneMatch ? phoneMatch[0] : null;
+  const emailMatch = (lead.contact_info || '').match(/[^\s@]+@[^\s@]+\.[^\s@]+/);
+  const email      = emailMatch ? emailMatch[0] : null;
 
-  const saveNote = async () => {
-    if (!note.trim()) return;
-    const prev = lead.notes || '';
-    const updated = `${new Date().toLocaleDateString('he-IL')} — ${note}\n${prev}`;
-    await base44.entities.Lead.update(lead.id, { notes: updated });
-    setNote('');
-    queryClient.invalidateQueries({ queryKey: ['leadsPage'] });
-    toast.success('הערה נוספה ✓');
+  const sourcePlatform = (lead.source || '').toLowerCase().replace(/[^a-z]/g, '');
+  const platformIconUrl = PLATFORM_ICONS[sourcePlatform] || null;
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await base44.entities.Lead.update(lead.id, { notes });
+      queryClient.invalidateQueries({ queryKey: ['leadsPage'] });
+      toast.success('הליד עודכן ✓');
+      onClose();
+    } catch {
+      toast.error('שגיאה בשמירה');
+    }
+    setSaving(false);
   };
-
-  const saveNextAction = async () => {
-    await base44.entities.Lead.update(lead.id, { next_action: nextAction, next_action_date: nextDate });
-    queryClient.invalidateQueries({ queryKey: ['leadsPage'] });
-    toast.success('פעולה הבאה נשמרה ✓');
-  };
-
-  const saveTags = async () => {
-    await base44.entities.Lead.update(lead.id, { tags });
-    queryClient.invalidateQueries({ queryKey: ['leadsPage'] });
-    toast.success('תגיות נשמרו ✓');
-  };
-
-  const saveValue = async () => {
-    await base44.entities.Lead.update(lead.id, { total_value: Number(totalValue) || 0 });
-    queryClient.invalidateQueries({ queryKey: ['leadsPage'] });
-    toast.success('שווי עסקה נשמר ✓');
-  };
-
-  const timeline = [];
-  if (lead.created_at || lead.created_date) timeline.push({ text: 'ליד נוצר', date: lead.created_at || lead.created_date });
-  if (lead.lifecycle_stage && lead.lifecycle_stage !== 'new' && lead.lifecycle_updated_at) {
-    timeline.push({ text: `הועבר ל${stageLabels[lead.lifecycle_stage] || lead.lifecycle_stage}`, date: lead.lifecycle_updated_at });
-  }
 
   return (
-    <div className="fixed inset-0 z-50 flex">
-      <div className="absolute inset-0 bg-black/20" onClick={onClose} />
-      <div className="relative z-10 w-[400px] max-w-full h-full bg-white shadow-2xl overflow-y-auto mr-auto" style={{ scrollbarWidth: 'thin' }}>
+    <>
+      {/* Overlay */}
+      <div className="fixed inset-0 bg-black/25 z-40" onClick={onClose} />
+
+      {/* Panel — slides from left (RTL start side) */}
+      <div
+        className="fixed top-0 left-0 h-full w-[400px] max-w-[92vw] bg-[#f5f5f7] z-50 flex flex-col shadow-2xl"
+        style={{ animation: 'slideInLeft 0.25s ease-out' }}
+        dir="rtl"
+      >
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-white border-b border-border px-5 py-4">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-[16px] font-bold text-foreground">{lead.name}</h2>
-            <button onClick={onClose}><X className="w-5 h-5 text-foreground-muted" /></button>
+        <div className="bg-white px-5 py-4 border-b border-gray-100 flex-shrink-0">
+          <div className="flex items-center justify-between mb-1">
+            <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+            <div className="flex items-center gap-2">
+              <h2 className="text-[16px] font-bold text-gray-900">הצגת ליד</h2>
+              {lead.status === 'hot' && (
+                <span className="text-[10px] font-bold text-white bg-[#e8344d] px-2 py-0.5 rounded-full">חם</span>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${lead.score >= 70 ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}`}>
-              {lead.score || 0} ניקוד
-            </span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-secondary text-foreground-secondary">
-              {stageLabels[lead.lifecycle_stage] || 'חדש'}
-            </span>
-            {lead.status && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-secondary text-foreground-muted">{lead.status}</span>
-            )}
-          </div>
+          <p className="text-[11px] text-gray-400 text-right">
+            כל המידע שאנחנו יודעים על הליד במקום אחד. ניתן לעבור לכלי נוסף לעיבוד הליד.
+          </p>
         </div>
 
-        <div className="p-5 space-y-5">
-          {/* Tags */}
-          <div>
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <Tag className="w-3.5 h-3.5 text-foreground-muted" />
-              <span className="text-[11px] font-semibold text-foreground">תגיות</span>
-            </div>
-            <div className="flex gap-2">
-              <input value={tags} onChange={e => setTags(e.target.value)} placeholder="תגית1, תגית2..."
-                className="flex-1 text-[12px] px-3 py-1.5 rounded-lg border border-border bg-white" />
-              <button onClick={saveTags} className="text-[11px] px-3 py-1.5 rounded-lg bg-secondary text-foreground-secondary hover:bg-secondary/80">שמור</button>
-            </div>
-          </div>
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ scrollbarWidth: 'none' }}>
 
-          {/* Contact info */}
-          <div>
-            <h4 className="text-[11px] font-semibold text-foreground mb-2">פרטי קשר</h4>
-            <div className="space-y-1.5">
-              {phone && <div className="flex items-center gap-2 text-[12px]"><Phone className="w-3.5 h-3.5 text-foreground-muted" /><a href={`tel:${phone}`} className="text-primary hover:underline">{phone}</a></div>}
-              {lead.city && <div className="flex items-center gap-2 text-[12px]"><MapPin className="w-3.5 h-3.5 text-foreground-muted" /><span className="text-foreground-secondary">{lead.city}</span></div>}
-              {lead.source && <div className="flex items-center gap-2 text-[12px]"><span className="text-[10px] text-foreground-muted">מקור:</span><span className="text-foreground-secondary">{lead.source}</span></div>}
-              {lead.budget_range && <div className="flex items-center gap-2 text-[12px]"><Wallet className="w-3.5 h-3.5 text-foreground-muted" /><span className="text-foreground-secondary">{lead.budget_range}</span></div>}
-              {lead.service_needed && <div className="flex items-center gap-2 text-[12px]"><Briefcase className="w-3.5 h-3.5 text-foreground-muted" /><span className="text-foreground-secondary">{lead.service_needed}</span></div>}
-              {lead.urgency && <div className="flex items-center gap-2 text-[12px]"><Clock className="w-3.5 h-3.5 text-foreground-muted" /><span className="text-foreground-secondary">דחיפות: {lead.urgency}</span></div>}
-            </div>
-          </div>
+          {/* פרטי איש קשר */}
+          <Section title="פרטי איש קשר">
+            <FieldRow icon={Briefcase} label="תפקיד"  value={lead.role || lead.job_title} />
+            <FieldRow icon={null}      label="שם"      value={lead.name} />
+            <FieldRow icon={Phone}     label="טלפון"   value={phone} href={phone ? `tel:${phone}` : null} />
+            <FieldRow icon={Mail}      label="אימייל"  value={email} href={email ? `mailto:${email}` : null} />
+            {!phone && !email && lead.contact_info && (
+              <FieldRow icon={null} label="יצירת קשר" value={lead.contact_info} />
+            )}
+            {lead.city && <FieldRow icon={MapPin} label="מיקום" value={lead.city} />}
+          </Section>
 
-          {/* Deal value */}
-          <div>
-            <h4 className="text-[11px] font-semibold text-foreground mb-1.5">שווי עסקה</h4>
-            <div className="flex gap-2">
-              <input type="number" value={totalValue} onChange={e => setTotalValue(e.target.value)} placeholder="₪"
-                className="flex-1 text-[12px] px-3 py-1.5 rounded-lg border border-border bg-white" />
-              <button onClick={saveValue} className="text-[11px] px-3 py-1.5 rounded-lg bg-secondary text-foreground-secondary hover:bg-secondary/80">שמור</button>
-            </div>
-          </div>
+          {/* פרטי חברה */}
+          <Section title="פרטי חברה">
+            <FieldRow icon={Building2} label="שם החברה"    value={lead.company} />
+            <FieldRow icon={Globe}     label="אתר"          value={lead.website} href={lead.website} />
+            <FieldRow icon={Briefcase} label="תחום"         value={lead.industry || lead.sector} />
+            <FieldRow icon={Users}     label="גודל החברה"   value={lead.company_size} />
+            {lead.budget_range && (
+              <FieldRow icon={null} label="תקציב" value={lead.budget_range} />
+            )}
+          </Section>
 
-          {/* Timeline */}
-          {timeline.length > 0 && (
-            <div>
-              <h4 className="text-[11px] font-semibold text-foreground mb-2">ציר זמן</h4>
-              <div className="space-y-2 pr-3 border-r-2 border-border">
-                {timeline.map((event, i) => (
-                  <div key={i} className="relative pr-4">
-                    <div className="absolute -right-[9px] top-1 w-2.5 h-2.5 rounded-full bg-primary border-2 border-white" />
-                    <p className="text-[12px] text-foreground-secondary">{event.text}</p>
-                    <p className="text-[10px] text-foreground-muted">{timeAgo(event.date)}</p>
-                  </div>
-                ))}
+          {/* מקור הליד */}
+          {lead.source && (
+            <Section title="מקור הליד">
+              <div className="flex items-center justify-end gap-2 py-2">
+                <span className="text-[12px] text-gray-700 font-medium">{lead.source}</span>
+                {platformIconUrl && (
+                  <img src={platformIconUrl} alt={lead.source} className="w-4 h-4 rounded" />
+                )}
               </div>
-            </div>
+            </Section>
           )}
 
-          {/* Notes */}
-          <div>
-            <h4 className="text-[11px] font-semibold text-foreground mb-1.5">הערות</h4>
-            <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} placeholder="הוסף הערה..."
-              className="w-full text-[12px] px-3 py-2 rounded-lg border border-border bg-white resize-none" />
-            <button onClick={saveNote} className="mt-1.5 text-[11px] px-3 py-1.5 rounded-lg bg-foreground text-background hover:opacity-90">הוסף הערה</button>
-            {lead.notes && (
-              <div className="mt-2 bg-secondary rounded-lg p-3 max-h-[120px] overflow-y-auto">
-                <p className="text-[11px] text-foreground-secondary whitespace-pre-wrap">{lead.notes}</p>
+          {/* הערות */}
+          <Section title="הערות">
+            <div className="py-2">
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                rows={4}
+                placeholder="הוסף הערות לגבי הליד..."
+                className="w-full text-[12px] text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-[#e8344d] transition-colors"
+                dir="rtl"
+              />
+            </div>
+          </Section>
+
+          {/* Stage selector (if stages provided) */}
+          {stages?.length > 0 && (
+            <Section title="שלב בפאנל">
+              <div className="py-2">
+                <select
+                  defaultValue={lead.lifecycle_stage || ''}
+                  onChange={e => { if (e.target.value) onStageChange?.(e.target.value); }}
+                  className="w-full text-[12px] px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 focus:outline-none focus:border-[#e8344d] transition-colors"
+                  dir="rtl"
+                >
+                  <option value="">בחר שלב...</option>
+                  {stages.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+                </select>
               </div>
-            )}
-          </div>
+            </Section>
+          )}
+        </div>
 
-          {/* Next action */}
-          <div>
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <h4 className="text-[11px] font-semibold text-foreground">פעולה הבאה</h4>
-              {isOverdue && <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />}
-            </div>
-            <input value={nextAction} onChange={e => setNextAction(e.target.value)} placeholder="מה לעשות?"
-              className="w-full text-[12px] px-3 py-1.5 rounded-lg border border-border bg-white mb-1.5" />
-            <div className="flex gap-2">
-              <input type="date" value={nextDate} onChange={e => setNextDate(e.target.value)}
-                className="flex-1 text-[12px] px-3 py-1.5 rounded-lg border border-border bg-white" />
-              <button onClick={saveNextAction} className="text-[11px] px-3 py-1.5 rounded-lg bg-foreground text-background hover:opacity-90">שמור</button>
-            </div>
-          </div>
-
-          {/* WhatsApp Conversation */}
-          <div className="border-t border-border pt-4">
-            <ConversationPanel lead={lead} businessProfile={businessProfile} />
-          </div>
-
-          {/* Actions */}
-          <div className="border-t border-border pt-4 space-y-2">
-            <h4 className="text-[11px] font-semibold text-foreground mb-2">פעולות</h4>
-            {phone && (
-              <a href={`https://wa.me/${phone.replace(/[^0-9+]/g, '')}`} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-medium bg-green-50 text-green-700 hover:bg-green-100 transition-colors w-full">
-                <MessageSquare className="w-3.5 h-3.5" /> שלח הודעה ב-WhatsApp
-              </a>
-            )}
-            <select onChange={e => { if (e.target.value) onStageChange(e.target.value); e.target.value = ''; }}
-              className="w-full text-[12px] px-4 py-2 rounded-lg border border-border bg-white text-foreground">
-              <option value="">העבר שלב...</option>
-              {stages?.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
-          </div>
+        {/* Footer */}
+        <div className="bg-white border-t border-gray-100 px-5 py-4 flex gap-3 flex-shrink-0">
+          {email ? (
+            <a
+              href={`mailto:${email}`}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#e8344d] text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
+            >
+              שלח מייל
+            </a>
+          ) : (
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#e8344d] text-white text-[13px] font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              שמור הערות
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            סגור
+          </button>
         </div>
       </div>
-    </div>
+
+      <style>{`
+        @keyframes slideInLeft {
+          from { transform: translateX(-100%); opacity: 0; }
+          to   { transform: translateX(0);     opacity: 1; }
+        }
+      `}</style>
+    </>
   );
 }

@@ -1344,16 +1344,21 @@ export default function Dashboard() {
         </div>
 
         {/* KPI row */}
-        <div className="grid grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-4 gap-2 mb-4">
           {[
-            { label: 'לידים נמצאו', value: newLeadsToday.length || 8,                         color: '#4F46E5' },
-            { label: 'פעולות בוצעו', value: actionsCompleted.length || 18,                    color: '#7B4B9E' },
-            { label: 'טרנדים זוהו',  value: urgentSignals.length || 4,                        color: '#E8344D' },
-            { label: 'שעות נחסכו',   value: ((actionsCompleted.length || 18) * 0.2).toFixed(1), color: '#16A34A' },
+            { label: 'לידים חדשים',  value: newLeadsToday.length || 8  },
+            { label: 'פעולות בוצעו', value: actionsCompleted.length || 18 },
+            { label: 'נסיעות',       value: 0                           },
+            { label: 'שעות שנחסכו',  value: ((actionsCompleted.length || 18) * 0.2).toFixed(1) },
           ].map((kpi, i) => (
-            <div key={i} className="bg-gray-50 rounded-xl p-3 text-right">
-              <div className="text-[20px] font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
-              <div className="text-[10px] text-gray-400 leading-snug">{kpi.label}</div>
+            <div key={i} className="flex items-center justify-between gap-2 py-2 border-b border-gray-50 last:border-0 col-span-1">
+              <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                <CheckCircle2 className="w-3 h-3 text-green-500" />
+              </div>
+              <div className="text-right flex-1">
+                <div className="text-[20px] font-bold text-gray-900 leading-none">{kpi.value}</div>
+                <div className="text-[10px] text-gray-400 leading-snug mt-0.5">{kpi.label}</div>
+              </div>
             </div>
           ))}
         </div>
@@ -1381,7 +1386,7 @@ export default function Dashboard() {
           whileTap={{ scale: 0.97 }}
         >
           <Search className="w-4 h-4" />
-          חבר מקור נוסף
+          גלה הדמנויות
         </motion.button>
         <div className="text-right">
           <div className="font-semibold text-[13px] text-gray-900">המערכת יכולה לזהות יותר עבורך</div>

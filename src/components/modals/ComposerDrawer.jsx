@@ -4,6 +4,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Copy, ExternalLink, Check, Instagram, Facebook } from 'lucide-react';
 import { toast } from 'sonner';
+import PostPublishModal from './PostPublishModal';
 
 const PLATFORM_META = {
   instagram: {
@@ -39,6 +40,7 @@ const PLATFORM_META = {
 export default function ComposerDrawer({ text = '', platform, context, onClose }) {
   const [draft, setDraft] = useState(text);
   const [copied, setCopied] = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
   const textRef = useRef(null);
   const meta = PLATFORM_META[platform] ?? PLATFORM_META.default;
   const PlatformIcon = meta.icon;
@@ -64,6 +66,13 @@ export default function ComposerDrawer({ text = '', platform, context, onClose }
   const handleOpen = async () => {
     await handleCopy();
     if (openUrl) window.open(openUrl, '_blank', 'noopener');
+  };
+
+  const handlePublishConfirm = async () => {
+    await handleCopy();
+    if (openUrl) window.open(openUrl, '_blank', 'noopener');
+    setShowPublishModal(false);
+    onClose();
   };
 
   return (
@@ -124,23 +133,12 @@ export default function ComposerDrawer({ text = '', platform, context, onClose }
 
         {/* Action buttons */}
         <div className="px-5 pb-6 pt-2 flex flex-col gap-2.5">
-          {openUrl ? (
-            <button
-              onClick={handleOpen}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-foreground text-background text-[13px] font-medium hover:opacity-90 transition-all"
-            >
-              <ExternalLink className="w-4 h-4" />
-              {meta.copyLabel} ← פתח אפליקציה
-            </button>
-          ) : (
-            <button
-              onClick={handleCopy}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-foreground text-background text-[13px] font-medium hover:opacity-90 transition-all"
-            >
-              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              {copied ? 'הועתק!' : meta.copyLabel}
-            </button>
-          )}
+          <button
+            onClick={() => setShowPublishModal(true)}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#e8344d] text-white text-[13px] font-semibold hover:opacity-90 transition-all"
+          >
+            אישור ופרסום
+          </button>
 
           <button
             onClick={handleCopy}
@@ -156,6 +154,16 @@ export default function ComposerDrawer({ text = '', platform, context, onClose }
           </p>
         </div>
       </div>
+
+      {showPublishModal && (
+        <PostPublishModal
+          text={draft}
+          reason={context}
+          onConfirm={handlePublishConfirm}
+          onBack={() => setShowPublishModal(false)}
+          onClose={() => setShowPublishModal(false)}
+        />
+      )}
     </>
   );
 }

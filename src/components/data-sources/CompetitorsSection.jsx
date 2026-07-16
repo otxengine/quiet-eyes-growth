@@ -3,11 +3,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Users, Trash2, Plus, MapPin, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
+import AddCompetitorModal from '@/components/competitors/AddCompetitorModal';
 
 export default function CompetitorsSection({ competitors, bpId }) {
   const queryClient = useQueryClient();
-  const [showAdd, setShowAdd] = useState(false);
-  const [newComp, setNewComp] = useState({ name: '', category: '', address: '', services: '' });
+  const [showModal, setShowModal] = useState(false);
 
   const handleDelete = async (id) => {
     await base44.entities.Competitor.delete(id);
@@ -15,18 +15,6 @@ export default function CompetitorsSection({ competitors, bpId }) {
     queryClient.invalidateQueries({ queryKey: ['competitorsPage'] });
     toast.success('מתחרה הוסר');
   };
-
-  const handleAdd = async () => {
-    if (!newComp.name.trim()) return;
-    await base44.entities.Competitor.create({ ...newComp, linked_business: bpId });
-    queryClient.invalidateQueries({ queryKey: ['dsCompetitors'] });
-    queryClient.invalidateQueries({ queryKey: ['competitorsPage'] });
-    setNewComp({ name: '', category: '', address: '', services: '' });
-    setShowAdd(false);
-    toast.success('מתחרה נוסף');
-  };
-
-  const inputCls = "w-full bg-secondary border border-border rounded-lg px-3 py-2 text-[12px] text-foreground placeholder-foreground-muted focus:outline-none focus:border-primary/30";
 
   return (
     <div className="card-base p-5 fade-in-up stagger-3">
@@ -36,25 +24,18 @@ export default function CompetitorsSection({ competitors, bpId }) {
           <h3 className="text-[13px] font-semibold text-foreground">מתחרים שזוהו</h3>
           <span className="text-[10px] text-foreground-muted">({competitors.length})</span>
         </div>
-        <button onClick={() => setShowAdd(!showAdd)} className="px-3 py-1.5 rounded-md text-[11px] font-medium bg-secondary border border-border hover:bg-secondary/80 transition-colors flex items-center gap-1">
+        <button onClick={() => setShowModal(true)} className="px-3 py-1.5 rounded-md text-[11px] font-medium bg-secondary border border-border hover:bg-secondary/80 transition-colors flex items-center gap-1">
           <Plus className="w-3 h-3" /> הוסף מתחרה
         </button>
       </div>
       <p className="text-[11px] text-foreground-muted mb-3">הסוכנים יעקבו אחר המתחרים האלה, ינתחו ביקורות, מחירים ופעילות חברתית</p>
 
-      {showAdd && (
-        <div className="p-4 rounded-lg bg-secondary/50 border border-border mb-3 space-y-2">
-          <input value={newComp.name} onChange={(e) => setNewComp({ ...newComp, name: e.target.value })} placeholder="שם המתחרה" className={inputCls} />
-          <div className="grid grid-cols-2 gap-2">
-            <input value={newComp.category} onChange={(e) => setNewComp({ ...newComp, category: e.target.value })} placeholder="קטגוריה" className={inputCls} />
-            <input value={newComp.address} onChange={(e) => setNewComp({ ...newComp, address: e.target.value })} placeholder="כתובת" className={inputCls} />
-          </div>
-          <input value={newComp.services} onChange={(e) => setNewComp({ ...newComp, services: e.target.value })} placeholder="שירותים עיקריים (מופרדים בפסיקים)" className={inputCls} />
-          <div className="flex gap-2 justify-end">
-            <button onClick={() => setShowAdd(false)} className="px-3 py-1.5 rounded-md text-[11px] text-foreground-muted hover:text-foreground transition-colors">ביטול</button>
-            <button onClick={handleAdd} className="px-3 py-1.5 rounded-md text-[11px] font-medium bg-primary text-white hover:opacity-90 transition-all">הוסף</button>
-          </div>
-        </div>
+      {showModal && (
+        <AddCompetitorModal
+          bpId={bpId}
+          onClose={() => setShowModal(false)}
+          onAdded={() => setShowModal(false)}
+        />
       )}
 
       {competitors.length === 0 ? (

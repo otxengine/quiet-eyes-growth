@@ -254,7 +254,7 @@ export default function Tasks() {
           </button>
         </div>
         <div className="text-right">
-          <h1 className="text-[22px] font-bold text-gray-900 leading-tight">ניהול משימות</h1>
+          <h1 className="text-[22px] font-bold text-gray-900 leading-tight">כל המשימות הדחופות</h1>
           <p className="text-[13px] text-gray-500 mt-0.5">כל המשימות במקום אחד, עם פוקוס על מה שדורש טיפול עכשיו.</p>
         </div>
       </div>
@@ -280,36 +280,41 @@ export default function Tasks() {
           </div>
         </div>
 
-        {/* Urgent task */}
+        {/* Urgent task card */}
         <div className="section-card p-5">
           {urgentTask ? (
             <>
               <div className="flex items-center justify-between mb-3">
-                <button
-                  onClick={() => setFilterStatus('in_progress')}
-                  className="text-[11px] text-[#e8344d] border border-[#e8344d]/30 rounded-full px-3 py-1 hover:bg-red-50 transition-colors"
-                >
-                  לכל המשימות הדחופות
-                </button>
-                <div className="flex items-center gap-2 text-right">
-                  <span className="text-[11px] bg-red-50 text-red-600 px-2.5 py-0.5 rounded-full font-medium">מיידי</span>
-                  <span className="text-[12px] text-gray-500">
-                    משימה 1 מתוך {tasks.filter(t => t.priority === 'critical' && t.status !== 'done').length || 1}
+                <span className="text-[11px] bg-[#fce4ec] text-[#e8344d] px-2.5 py-0.5 rounded-full font-semibold">מיידי</span>
+                <span className="text-[12px] text-gray-500 text-right">
+                  משימה 1 מתוך {tasks.filter(t => t.priority === 'critical' && t.status !== 'done').length || 1}
+                </span>
+              </div>
+              <h3 className="text-[18px] font-bold text-gray-900 mb-2 text-right">{urgentTask.title}</h3>
+              {urgentTask.revenue_at_risk ? (
+                <div className="flex justify-end mb-2">
+                  <span className="text-[11px] bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-medium">
+                    ₪{Number(urgentTask.revenue_at_risk).toLocaleString()} הכנסה בסיכון
                   </span>
                 </div>
-              </div>
-              <h3 className="text-[18px] font-bold text-gray-900 mb-3 text-right">{urgentTask.title}</h3>
+              ) : null}
               {urgentTask.description && (
-                <p className="text-[12px] text-gray-500 text-right mb-1 line-clamp-2">{urgentTask.description.slice(0, 80)}</p>
+                <p className="text-[12px] text-gray-500 text-right mb-3 line-clamp-2">{urgentTask.description.slice(0, 80)}</p>
               )}
-              <div className="flex items-center gap-1.5 justify-end mb-4">
-                <span className="text-[12px] text-gray-400">מקור: {SOURCE_LABEL[urgentTask.source_type] || 'ידני'}</span>
+              <div className="flex items-center gap-3 justify-end mb-4">
+                <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                  <span className="text-gray-300">◷</span>
+                  {urgentTask.due_date ? dueLabel(urgentTask.due_date, false)?.text || '24 שעות' : '24 שעות'}
+                </span>
+                <span className="text-[11px] text-gray-400">
+                  {SOURCE_LABEL[urgentTask.source_type] || 'ידני'}
+                </span>
               </div>
               <button
-                onClick={() => { /* navigate */ }}
-                className="btn-pill"
+                onClick={() => navigate(`/tasks/${urgentTask.id}`)}
+                className="text-[12px] font-semibold text-[#e8344d] border border-[#e8344d]/40 px-4 py-2 rounded-full hover:bg-red-50 transition-colors"
               >
-                {ACTION_LABEL[urgentTask.source_type] || 'צפה בפרטים'}
+                פחת לך
               </button>
             </>
           ) : (

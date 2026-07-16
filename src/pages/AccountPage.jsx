@@ -51,9 +51,9 @@ function Toggle({ checked, onChange }) {
 
 // ── Tab config ────────────────────────────────────────────────────────────────
 const TABS = [
-  { key: 'personal', label: 'מידע אישי' },
-  { key: 'billing',  label: 'פרטי חיוב ותשלומים' },
-  { key: 'security', label: 'אבטחת החשבון' },
+  { key: 'personal', label: 'פרטים אישיים' },
+  { key: 'billing',  label: 'חיוב ותשלומים' },
+  { key: 'security', label: 'אבטחת חשבון' },
 ];
 
 // ── Tab 1: מידע אישי ──────────────────────────────────────────────────────────

@@ -482,78 +482,249 @@ export default function Integrations() {
     toast.success('החיבור נותק ✓');
   };
 
+  // Compute stats
+  const allPlatforms = [...SOCIAL_PLATFORMS, ...ADS_PLATFORMS];
+  const connectedCount = allPlatforms.filter(p => connections[p.id]?.connected).length;
+  const notConnectedCount = allPlatforms.filter(p => !connections[p.id]?.connected).length;
+  const needsActionCount = allPlatforms.filter(p => {
+    const conn = connections[p.id];
+    if (!conn?.connected) return false;
+    const exp = conn.token_expires_at ? new Date(conn.token_expires_at) : null;
+    return exp && exp.getTime() - Date.now() < 7 * 86400000;
+  }).length;
+  const totalPlatforms = allPlatforms.length;
+  const connectedPct = totalPlatforms > 0 ? Math.round((connectedCount / totalPlatforms) * 100) : 0;
+
+  const [intSearch, setIntSearch] = useState('');
+  const [infoModalPlatform, setInfoModalPlatform] = useState(null);
+
+  const allIntegrationCards = [
+    ...SOCIAL_PLATFORMS,
+    ...ADS_PLATFORMS,
+    { id: 'hubspot', name: 'HubSpot CRM', icon: '🟠', color: '#FF7A59', bg: '#FFF4F1', description: 'ייבא לידים אוטומטית ל-HubSpot CRM שלך.' },
+    { id: 'monday', name: 'Monday.com', icon: '📋', color: '#FF3750', bg: '#FFF0F2', description: 'סנכרן משימות ולידים עם Monday.com.' },
+    { id: 'pipedrive', name: 'Pipedrive', icon: '🔵', color: '#036', bg: '#E8EEF8', description: 'חבר Pipedrive לניהול ה-Pipeline שלך.', soon: true },
+    { id: 'zapier', name: 'Zapier / Webhook', icon: '⚡', color: '#FF4A00', bg: '#FFF3EE', description: 'חבר Cortexi לאלפי כלים דרך Zapier.' },
+    { id: 'google_business', name: 'Google Business Profile', icon: 'G', color: '#4285F4', bg: '#EBF3FF', description: 'חבר את פרופיל העסק בגוגל לקבלת ביקורות, דירוגים, ופניות מלקוחות.' },
+    { id: 'whatsapp_business', name: 'WhatsApp Business', icon: '💬', color: '#25D366', bg: '#F0FDF4', description: 'חבר את WhatsApp Business כדי לרכז הודעות לקוחות ופניות במערכת.' },
+    { id: 'facebook_pages', name: 'Facebook Pages', icon: 'f', color: '#1877F2', bg: '#EBF3FF', description: 'חבר את דף הפייסבוק העסקי שלכם לניהול פניות, תגובות ולידים.' },
+  ];
+
+  const filteredIntegrations = allIntegrationCards.filter(p =>
+    !intSearch || p.name.toLowerCase().includes(intSearch.toLowerCase()) || p.description.includes(intSearch)
+  );
+
+  // Donut SVG for progress circle
+  const r = 28, circ = 2 * Math.PI * r;
+  const dash = (connectedPct / 100) * circ;
+
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-[16px] font-bold text-foreground tracking-tight">אינטגרציות</h1>
-        <p className="text-[12px] text-foreground-muted mt-0.5">חבר את Cortexi לרשתות החברתיות ול-CRM שלך</p>
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div />
+        <div className="text-right">
+          <h1 className="text-[22px] font-bold text-foreground">תוספים (אינטגרציות)</h1>
+          <p className="text-[12px] text-foreground-muted mt-0.5">חברו את ערוצי השיווק, הפרסום והתקשורת שלכם למערכת כדי לקבל תובנות יותר ולנהל את העסק ממקום אחד.</p>
+        </div>
       </div>
 
-      <SyncStats bp={bp} socialAccounts={socialAccounts} />
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-blue-50 rounded-xl p-4 flex flex-col gap-1">
+          <span className="text-2xl font-bold text-blue-600">{connectedCount}</span>
+          <span className="text-[11px] font-semibold text-blue-700">אינטגרציות פעילות</span>
+          <span className="text-[10px] text-blue-500 mt-0.5">מחוברות</span>
+          <button className="mt-2 text-[11px] font-semibold text-blue-600 bg-white border border-blue-200 rounded-full px-3 py-1 w-fit hover:bg-blue-100 transition-colors">הצג הכל</button>
+        </div>
+        <div className="bg-orange-50 rounded-xl p-4 flex flex-col gap-1">
+          <span className="text-2xl font-bold text-orange-500">{notConnectedCount}</span>
+          <span className="text-[11px] font-semibold text-orange-700">אינטגרציות זמינות</span>
+          <span className="text-[10px] text-orange-500 mt-0.5">לא מחוברות</span>
+          <button className="mt-2 text-[11px] font-semibold text-orange-600 bg-white border border-orange-200 rounded-full px-3 py-1 w-fit hover:bg-orange-100 transition-colors">הצג הכל</button>
+        </div>
+        <div className="bg-red-50 rounded-xl p-4 flex flex-col gap-1">
+          <span className="text-2xl font-bold text-[#e8344d]">{needsActionCount}</span>
+          <span className="text-[11px] font-semibold text-red-700">חיבור דורש עדכון</span>
+          <span className="text-[10px] text-red-500 mt-0.5">דורשת פעולה</span>
+          <button className="mt-2 text-[11px] font-semibold text-[#e8344d] bg-white border border-red-200 rounded-full px-3 py-1 w-fit hover:bg-red-50 transition-colors">הצג הכל</button>
+        </div>
+        <div className="bg-white rounded-xl p-4 flex items-center gap-4 border border-gray-100">
+          <div className="flex-1 text-right">
+            <p className="text-[13px] font-bold text-gray-800">סטטוס אינטגרציות</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">{connectedCount} מתוך {totalPlatforms} אינטגרציות מחוברות</p>
+          </div>
+          <svg width="72" height="72" viewBox="0 0 72 72" className="flex-shrink-0">
+            <circle cx="36" cy="36" r={r} fill="none" stroke="#f0f0f0" strokeWidth="9" />
+            <circle cx="36" cy="36" r={r} fill="none" stroke="#10b981" strokeWidth="9"
+              strokeDasharray={`${dash} ${circ - dash}`}
+              style={{ transform: 'rotate(-90deg)', transformOrigin: '36px 36px' }}
+            />
+            <text x="36" y="41" textAnchor="middle" fontSize="13" fontWeight="700" fill="#111">{connectedPct}%</text>
+          </svg>
+        </div>
+      </div>
 
-      {/* Social Networks */}
-      <div className="space-y-3">
-        <h2 className="text-[13px] font-semibold text-foreground">רשתות חברתיות וגוגל</h2>
-        <p className="text-[11px] text-foreground-muted">לחץ "חבר" — יפתח חלון אישור קצר, וזהו. לאחר מכן Cortexi פועל אוטומטית.</p>
-        <div className="space-y-2">
-          {SOCIAL_PLATFORMS.map(platform => (
+      {/* Filter bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-3 py-1.5">
+          <span className="text-gray-400 text-[12px]">🔍</span>
+          <input
+            value={intSearch}
+            onChange={e => setIntSearch(e.target.value)}
+            placeholder="חיפוש"
+            className="text-[12px] bg-transparent outline-none text-gray-600 w-28 text-right"
+          />
+        </div>
+        <button className="text-[12px] font-medium text-gray-600 bg-white border border-gray-200 rounded-full px-3 py-1.5 hover:border-gray-300 transition-colors flex items-center gap-1">
+          כל האינטגרציות <span className="text-[10px]">▾</span>
+        </button>
+        <button className="text-[12px] font-medium text-gray-600 bg-white border border-gray-200 rounded-full px-3 py-1.5 hover:border-gray-300 transition-colors flex items-center gap-1">
+          כל הסטטוסים <span className="text-[10px]">▾</span>
+        </button>
+        {intSearch && (
+          <button onClick={() => setIntSearch('')} className="text-[11px] text-gray-400 hover:text-gray-600 px-2 py-1.5">
+            נקה פילטרים
+          </button>
+        )}
+      </div>
+
+      {/* Integration cards grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredIntegrations.map(platform => {
+          const conn = connections[platform.id];
+          const isConnected = !!conn?.connected;
+          const isSoon = !!platform.soon;
+          const iconIsEmoji = platform.icon && platform.icon.length > 1;
+          return (
             <div
               key={platform.id}
               ref={el => { platformRefs.current[platform.id] = el; }}
-              className={highlightPlatform === platform.id ? 'ring-2 ring-primary/40 rounded-xl transition-all' : ''}
+              className={`bg-white rounded-xl border border-gray-100 p-4 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow ${
+                highlightPlatform === platform.id ? 'ring-2 ring-blue-300' : ''
+              } ${isSoon ? 'opacity-60' : ''}`}
             >
-              <SocialPlatformCard
-                platform={platform}
-                connection={connections[platform.id]}
-                account={connections[platform.id]?.account}
-                bpId={bp?.id}
-                onConnect={() => connectSocial(platform.id)}
-                onDisconnect={() => disconnectSocial(platform.id)}
-              />
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold flex-shrink-0"
+                  style={{ background: platform.bg, color: platform.color }}
+                >
+                  {iconIsEmoji ? platform.icon : <span style={{ fontSize: 16, fontWeight: 800 }}>{platform.icon}</span>}
+                </div>
+                <div className="flex-1 min-w-0 text-right">
+                  <div className="flex items-center gap-2 justify-end">
+                    <span className="text-[13px] font-bold text-gray-900 truncate">{platform.name}</span>
+                    {isConnected && <span className="text-[9px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full font-semibold">מחובר</span>}
+                    {isSoon && <span className="text-[9px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">בקרוב</span>}
+                  </div>
+                  <p className="text-[11px] text-gray-500 leading-relaxed line-clamp-2">{platform.description}</p>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                {isSoon ? (
+                  <button disabled className="text-[11px] font-semibold px-3 py-1.5 rounded-full border border-gray-200 text-gray-400 cursor-not-allowed">
+                    בקרוב
+                  </button>
+                ) : isConnected ? (
+                  <button
+                    onClick={() => disconnectSocial(platform.id)}
+                    className="text-[11px] font-semibold px-3 py-1.5 rounded-full border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
+                  >
+                    נתק
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => platform.id === 'google_business' ? setInfoModalPlatform(platform.id) : connectSocial(platform.id)}
+                    className="text-[11px] font-semibold px-3 py-1.5 rounded-full border transition-colors"
+                    style={{ borderColor: '#e8344d', color: '#e8344d', background: '#fce4ec' }}
+                  >
+                    מידע והתחברות
+                  </button>
+                )}
+              </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
 
-      {/* Paid Ads */}
-      <div className="space-y-3">
-        <h2 className="text-[13px] font-semibold text-foreground">פרסום בתשלום</h2>
-        <p className="text-[11px] text-foreground-muted">חבר חשבון פרסום — הקמפיינים ייוצרו דרך Cortexi והחיוב עובר ישירות לחשבון שלך בפלטפורמה.</p>
-        <div className="space-y-2">
-          {ADS_PLATFORMS.map(platform => (
-            <div key={platform.id}>
-              <SocialPlatformCard
-                platform={platform}
-                connection={connections[platform.id]}
-                account={connections[platform.id]?.account}
-                onConnect={() => connectSocial(platform.id)}
-                onDisconnect={() => disconnectSocial(platform.id)}
-              />
+      {/* Google Business Profile info modal */}
+      {infoModalPlatform === 'google_business' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setInfoModalPlatform(null)}>
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-[560px] mx-4 overflow-hidden"
+            dir="rtl"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => { setInfoModalPlatform(null); connectSocial('google_business'); }}
+                  className="px-5 py-2 rounded-full text-white text-[13px] font-semibold"
+                  style={{ background: '#e8344d' }}
+                >
+                  להתחברות
+                </button>
+                <button onClick={() => setInfoModalPlatform(null)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex items-center gap-3">
+                <div>
+                  <h2 className="text-[16px] font-bold text-gray-900 text-right">Google Business Profile</h2>
+                  <span className="text-[11px] text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">קיים מסלול חינמי</span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-[18px] font-bold text-blue-600 flex-shrink-0">G</div>
+              </div>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* CRM */}
-      <div className="space-y-3">
-        <h2 className="text-[13px] font-semibold text-foreground">CRM ולידים</h2>
-        <HubSpotConfig bp={bp} saveField={saveField} />
-        <MondayConfig bp={bp} saveField={saveField} />
-        <div className="card-base p-4 flex items-center gap-4 opacity-60">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl bg-blue-50 flex-shrink-0">🔵</div>
-          <div className="flex-1">
-            <span className="text-[13px] font-semibold text-foreground">Pipedrive</span>
-            <p className="text-[11px] text-foreground-muted">בקרוב</p>
+            {/* Body */}
+            <div className="px-6 py-5 space-y-5 max-h-[60vh] overflow-y-auto">
+              <div>
+                <h3 className="text-[14px] font-bold text-gray-900 mb-2">?למה Google Business Profile</h3>
+                <p className="text-[13px] text-gray-600 leading-relaxed">
+                  הפרופיל העסקי שלכם בגוגל הוא המקום הראשון שלקוחות פוגשים את העסק — עוד לפני שהם נכנסים לאתר שלכם. שם הם רואים את הדירוג, קוראים ביקורות, בודקים שעות פעילות ומחליטים אם להשריך אליכם או למתחרים. חיבור הפרופיל למערכת מאפשר לרכז את המידע הכי חשוב על העסק ולהבין יותר טוב איך נראים בזמן ובעיניי הלקוחות.
+                </p>
+              </div>
+              <div>
+                <h3 className="text-[14px] font-bold text-gray-900 mb-2">?למה לחבר את Google Business Profile למערכת</h3>
+                <p className="text-[13px] text-gray-600 leading-relaxed">
+                  לאחר החיבור הראשוני, המערכת תסנכרן לנו נתוני פרופיל הראשוני שלכם, כולל דירוגים, ביקורות ונתוני פעילות רלוונטיים. כן תוכל לקבל התראה בירידה חדשה, לזהות מגמות ולגלות הזדמנויות יותר ביתר מקצועיות בלי מעמד ידני. המערכת מאמפקרציה לייעל לפעולה, להמליץ תובנות מדויקות ולייעץ לכם לשמור על נוכחות חיובית בגוגל.
+                </p>
+              </div>
+
+              {/* Bottom benefit cards */}
+              <div className="grid grid-cols-3 gap-3 pt-1">
+                {[
+                  { icon: 'G', color: '#4285F4', bg: '#EBF3FF', text: 'חברו את הדף עסק שלכם ב-Google כדי לקבל ביקורות, דירוגים ופניות מלקוחות.' },
+                  { icon: '💬', color: '#25D366', bg: '#F0FDF4', text: 'חברו את WhatsApp Business כדי לרכז הודעות לקוחות ופניות במערכת.' },
+                  { icon: 'f', color: '#1877F2', bg: '#EBF3FF', text: 'חברו את הפייסבוק העסקי שלכם לניהול פניות, תגובות ולידים.' },
+                ].map((b, i) => (
+                  <div key={i} className="rounded-xl p-3 text-right" style={{ background: b.bg }}>
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 text-[14px] font-bold" style={{ background: '#fff', color: b.color }}>
+                      {b.icon}
+                    </div>
+                    <p className="text-[10px] text-gray-600 leading-relaxed">{b.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-start">
+              <button
+                onClick={() => { setInfoModalPlatform(null); connectSocial('google_business'); }}
+                className="w-full py-3 rounded-xl text-white text-[14px] font-bold hover:opacity-90 transition-opacity"
+                style={{ background: '#e8344d' }}
+              >
+                להתחברות
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Webhook */}
-      <div className="space-y-3">
-        <h2 className="text-[13px] font-semibold text-foreground">Webhook & Zapier</h2>
-        <WebhookZapierConfig bp={bp} saveField={saveField} />
-      </div>
-
+      <SyncStats bp={bp} socialAccounts={socialAccounts} />
       <SyncEventsConfig bp={bp} saveField={saveField} />
 
       {/* Website Tracking Snippet */}

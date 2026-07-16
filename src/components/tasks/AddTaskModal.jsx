@@ -1,31 +1,32 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { X } from 'lucide-react';
+import { ArrowRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-const priorities = [
-  { value: 'critical', label: 'קריטי' },
-  { value: 'high', label: 'גבוה' },
-  { value: 'medium', label: 'בינוני' },
-  { value: 'low', label: 'נמוך' },
+const SUGGESTION_CHIPS = [
+  'לייצר לקוחות חדשים',
+  'לשמח לקוחות קיימים',
+  'להגדיל מכירות',
+  'להגדיל מניות',
 ];
 
-const inputClass = 'w-full px-3 py-2.5 rounded-lg border border-border bg-white text-[12px] text-foreground placeholder-foreground-muted focus:outline-none focus:border-primary/30 focus:ring-1 focus:ring-primary/20 transition-colors';
+function GradientOrb() {
+  return (
+    <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-5"
+      style={{
+        background: 'radial-gradient(circle at 35% 35%, #a78bfa, #ec4899, #f97316)',
+        boxShadow: '0 8px 32px rgba(167,139,250,0.4)',
+      }}
+    >
+      <span className="text-white text-[22px] font-bold">K</span>
+    </div>
+  );
+}
 
 export default function AddTaskModal({ bpId, onClose, onAdded, prefill }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({
-    title: prefill?.title || '',
-    description: prefill?.description || '',
-    priority: prefill?.priority || 'medium',
-    assignee: '',
-    branch: '',
-    due_date: '',
-    source_alert_id: prefill?.source_alert_id || '',
-    source_type: prefill?.source_alert_id ? 'alert' : 'manual',
-    notes: '',
-  });
+  const [description, setDescription] = useState(prefill?.title || prefill?.description || '');
 
   const createMutation = useMutation({
     mutationFn: (data) => base44.entities.Task.create({ ...data, linked_business: bpId, status: 'pending' }),
@@ -36,72 +37,81 @@ export default function AddTaskModal({ bpId, onClose, onAdded, prefill }) {
     },
   });
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!form.title.trim()) return;
-    createMutation.mutate(form);
+  const handleSubmit = () => {
+    if (!description.trim()) return;
+    createMutation.mutate({
+      title: description.trim(),
+      description: description.trim(),
+      priority: prefill?.priority || 'medium',
+      source_alert_id: prefill?.source_alert_id || '',
+      source_type: prefill?.source_alert_id ? 'alert' : 'manual',
+    });
+  };
+
+  const handleChip = (chip) => {
+    setDescription(chip);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl border border-border shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto fade-in-up">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="text-[15px] font-bold text-foreground">משימה חדשה</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
-            <X className="w-4 h-4 text-foreground-muted" />
-          </button>
+    <div className="fixed inset-0 z-50 bg-white flex flex-col" dir="rtl">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0">
+        <h2 className="text-[15px] font-bold text-gray-900">הוספת משימה חדשה</h2>
+        <button
+          onClick={onClose}
+          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 transition-colors"
+        >
+          <ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 pb-10">
+        <GradientOrb />
+
+        <p className="text-[17px] font-bold text-gray-900 text-center mb-6 leading-snug">
+          ערב טוב טל, תאר במילים שלך<br />את המשימה החדשה
+        </p>
+
+        <textarea
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          placeholder="תאר מה ברצונך להשיג..."
+          rows={3}
+          className="w-full max-w-md bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-[14px] text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:border-[#e8344d]/40 transition-colors mb-5"
+          dir="rtl"
+          autoFocus
+        />
+
+        {/* Suggestion chips */}
+        <div className="flex flex-wrap gap-2 justify-center mb-8 max-w-md">
+          {SUGGESTION_CHIPS.map(chip => (
+            <button
+              key={chip}
+              onClick={() => handleChip(chip)}
+              className="px-3 py-1.5 rounded-full border border-gray-200 text-[12px] text-gray-600 bg-white hover:border-[#e8344d]/40 hover:text-[#e8344d] transition-colors"
+            >
+              {chip}
+            </button>
+          ))}
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="text-[11px] font-medium text-foreground-muted mb-1.5 block">כותרת *</label>
-            <input className={inputClass} placeholder="מה צריך לעשות?" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
-          </div>
-          <div>
-            <label className="text-[11px] font-medium text-foreground-muted mb-1.5 block">תיאור</label>
-            <textarea className={`${inputClass} h-20 resize-none`} placeholder="פרטים נוספים..." value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[11px] font-medium text-foreground-muted mb-1.5 block">הקצה לעובד</label>
-              <input className={inputClass} placeholder="שם העובד" value={form.assignee} onChange={e => setForm({ ...form, assignee: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-[11px] font-medium text-foreground-muted mb-1.5 block">סניף</label>
-              <input className={inputClass} placeholder="שם הסניף" value={form.branch} onChange={e => setForm({ ...form, branch: e.target.value })} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[11px] font-medium text-foreground-muted mb-1.5 block">עדיפות</label>
-              <select className={inputClass} value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}>
-                {priorities.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-[11px] font-medium text-foreground-muted mb-1.5 block">תאריך יעד</label>
-              <input type="date" className={inputClass} value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} />
-            </div>
-          </div>
-          <div>
-            <label className="text-[11px] font-medium text-foreground-muted mb-1.5 block">הערות</label>
-            <textarea className={`${inputClass} h-16 resize-none`} placeholder="הערות..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
-          </div>
-          {form.source_type === 'alert' && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/5 border border-primary/10">
-              <span className="text-[10px] text-primary font-medium">נוצרה מהתראת AI</span>
-            </div>
-          )}
-          <div className="flex gap-2 pt-2">
-            <button type="button" onClick={onClose} className="btn-subtle flex-1 px-4 py-2.5 rounded-lg text-[12px] font-medium bg-secondary border border-border text-foreground-secondary hover:bg-secondary/80 transition-all">
-              ביטול
-            </button>
-            <button type="submit" disabled={!form.title.trim() || createMutation.isPending}
-              className="btn-subtle flex-1 px-4 py-2.5 rounded-lg text-[12px] font-medium bg-foreground text-background hover:opacity-90 transition-all disabled:opacity-50">
-              {createMutation.isPending ? 'יוצר...' : 'צור משימה'}
-            </button>
-          </div>
-        </form>
+
+        {/* CTA */}
+        <button
+          onClick={handleSubmit}
+          disabled={!description.trim() || createMutation.isPending}
+          className="w-full max-w-md py-3 rounded-xl bg-[#e8344d] text-white text-[14px] font-semibold hover:opacity-90 transition-opacity disabled:opacity-40 flex items-center justify-center gap-2 mb-3"
+        >
+          {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+          בוא נתקדם
+        </button>
+
+        <button
+          onClick={onClose}
+          className="text-[13px] text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          מלאו אחרי כך
+        </button>
       </div>
     </div>
   );

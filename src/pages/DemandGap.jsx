@@ -230,9 +230,9 @@ export default function DemandGap() {
         <div>
           <h1 className="text-[16px] font-bold text-foreground flex items-center gap-2">
             <Search className="w-4 h-4 text-primary" />
-            פערי ביקוש
+            מרכז ההדמנויות
           </h1>
-          <p className="text-[11px] text-foreground-muted mt-0.5">ביקושים באזורך שאין להם מענה מקומי מספיק</p>
+          <p className="text-[11px] text-foreground-muted mt-0.5">כאן ניתן להבין את ההדמנויות, כיצד הן משפיעות על העסק שלך ואילו פעולות ממולץ לבצע</p>
         </div>
         <button
           onClick={() => runScan('demandGapEngine')}

@@ -2,11 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2, Star, Zap, Shield, Target, TrendingUp } from 'lucide-react';
+import { Loader2, Star, Zap, Shield, Target, TrendingUp, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
 import DataTable from '@/components/shared/DataTable';
+import AddCompetitorModal from '@/components/competitors/AddCompetitorModal';
 
 const COLUMNS = [
   { key: 'name',     label: 'מתחרה' },
@@ -141,6 +142,7 @@ export default function Competitors() {
   const bpId = businessProfile?.id;
   const queryClient = useQueryClient();
   const [scanning, setScanning] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const { data: competitors = [], isLoading } = useQuery({
     queryKey: ['competitorsPage', bpId],
@@ -198,7 +200,18 @@ export default function Competitors() {
         actionLabel={scanning ? 'סורק...' : 'סרוק מתחרים'}
         actionIcon={scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
         onAction={handleScan}
+        secondaryLabel="הוסף מתחרה"
+        secondaryIcon={<Plus className="w-4 h-4" />}
+        onSecondaryAction={() => setShowAddModal(true)}
       />
+
+      {showAddModal && (
+        <AddCompetitorModal
+          bpId={bpId}
+          onClose={() => setShowAddModal(false)}
+          onAdded={() => setShowAddModal(false)}
+        />
+      )}
 
       <StatCards cards={statCards} />
 
@@ -284,8 +297,8 @@ export default function Competitors() {
             );
             if (col.key === 'ads') return <AdIntelBadge comp={comp} />;
             if (col.key === 'action') return (
-              <button className="text-xs font-semibold text-violet-600 hover:text-violet-800 bg-violet-50 px-3 py-1 rounded-lg transition-colors">
-                ניתוח מעמיק
+              <button className="text-[11px] font-semibold text-[#e8344d] border border-[#e8344d]/30 px-3 py-1 rounded-full hover:bg-red-50 transition-colors">
+                גלה מעמיק
               </button>
             );
             return null;

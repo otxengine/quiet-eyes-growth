@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import React, { useState, useMemo } from 'react';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Plus, Loader2, MessageSquare, Bot, User, UserCheck, RefreshCw, Phone } from 'lucide-react';
+import { Plus, Loader2, MessageSquare, Bot, User, UserCheck, RefreshCw, Phone, Search, ChevronDown, Settings2, Clock, X, MoreVertical, Info, Pencil, Share2, Archive, Trash2, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import AddLeadModal from '@/components/leads/AddLeadModal';
 import LeadDetailPanel from '@/components/leads/LeadDetailPanel';
+import LeadSettingsPanel from '@/components/leads/LeadSettingsPanel';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
-import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
 import DataTable from '@/components/shared/DataTable';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -241,6 +241,14 @@ function ConversationsTab({ bpId, businessProfile }) {
   );
 }
 
+// Filter tab keys — counts filled dynamically per-render
+const FILTER_TAB_DEFS = [
+  { key: 'all',    label: 'כל הלידים' },
+  { key: 'hot',    label: 'לידים חמים' },
+  { key: 'today',  label: 'לידים מהיום' },
+  { key: 'week',   label: 'חזרו להתעניין השבוע' },
+];
+
 const stages = [
   { key: 'new',         label: 'חדש',          color: 'bg-secondary text-foreground-secondary' },
   { key: 'contacted',   label: 'נוצר קשר',      color: 'bg-blue-50 text-blue-600' },
@@ -249,6 +257,36 @@ const stages = [
   { key: 'closed_won',  label: 'נסגר ✓',         color: 'bg-green-50 text-green-600' },
   { key: 'closed_lost', label: 'אבד',            color: 'bg-red-50 text-red-400' },
 ];
+
+// ── "כדאי לטפל היום" insight card ─────────────────────────────────────────────
+function InsightCard({ title, description, ctaLabel, onCta, accent = 'violet' }) {
+  const styles = {
+    violet: { bg: 'from-violet-50 to-indigo-50', border: 'border-violet-100', cta: '#e8344d', ctaBg: '#fce4ec', ctaText: '#e8344d' },
+    red:    { bg: 'from-red-50 to-pink-50',      border: 'border-red-100',    cta: '#e8344d', ctaBg: '#fce4ec', ctaText: '#e8344d' },
+  };
+  const s = styles[accent] || styles.violet;
+  return (
+    <div className={`rounded-xl border ${s.border} bg-gradient-to-br ${s.bg} p-4 flex flex-col gap-2`}>
+      <p className="text-[13px] font-bold text-gray-800 text-right leading-snug">{title}</p>
+      <p className="text-[11px] text-gray-500 text-right leading-relaxed">{description}</p>
+      <div className="flex items-center gap-2 justify-start mt-1">
+        {ctaLabel && (
+          <button
+            onClick={onCta}
+            className="text-[11px] font-semibold px-3 py-1.5 rounded-full border transition-colors"
+            style={{ borderColor: s.cta, color: s.ctaText, background: s.ctaBg }}
+          >
+            {ctaLabel}
+          </button>
+        )}
+        <div className="flex items-center gap-1 text-[10px] text-gray-400">
+          <Clock className="w-3 h-3" />
+          <span>2 דק'</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const SOURCE_ICONS = {
   google:    { label: 'G', bg: 'bg-red-100',   text: 'text-red-600' },
@@ -290,7 +328,68 @@ function ContactIcons({ lead }) {
   );
 }
 
+function RowMenu({ lead, onView, onArchive, onRestore, onDelete, isOpen, onToggle, isArchive }) {
+  return (
+    <div className="relative">
+      <button
+        onClick={e => { e.stopPropagation(); onToggle(); }}
+        className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors text-gray-400"
+      >
+        <MoreVertical className="w-4 h-4" />
+      </button>
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={e => { e.stopPropagation(); onToggle(); }} />
+          <div
+            className="absolute left-0 top-8 bg-white border border-gray-100 rounded-xl shadow-xl z-40 py-1 min-w-[160px]"
+            dir="rtl"
+            onClick={e => e.stopPropagation()}
+          >
+            <button onClick={() => { onView(); onToggle(); }} className="flex items-center gap-2 w-full px-4 py-2 text-[12px] text-gray-700 hover:bg-gray-50 transition-colors">
+              <Info className="w-3.5 h-3.5 text-gray-400" />
+              הצג ליד
+            </button>
+            {isArchive ? (
+              <>
+                <button onClick={() => { onRestore(); onToggle(); }} className="flex items-center gap-2 w-full px-4 py-2 text-[12px] text-gray-700 hover:bg-gray-50 transition-colors">
+                  <RotateCcw className="w-3.5 h-3.5 text-gray-400" />
+                  שחזר לרשימת הלידים
+                </button>
+                <div className="border-t border-gray-100 my-0.5" />
+                <button onClick={() => { onDelete(); onToggle(); }} className="flex items-center gap-2 w-full px-4 py-2 text-[12px] text-red-500 hover:bg-red-50 transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" />
+                  מחק ליד
+                </button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => { onView(); onToggle(); }} className="flex items-center gap-2 w-full px-4 py-2 text-[12px] text-gray-700 hover:bg-gray-50 transition-colors">
+                  <Pencil className="w-3.5 h-3.5 text-gray-400" />
+                  עריכת ליד
+                </button>
+                <button
+                  onClick={() => { navigator.clipboard?.writeText(window.location.origin + '/leads?id=' + lead.id); onToggle(); }}
+                  className="flex items-center gap-2 w-full px-4 py-2 text-[12px] text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <Share2 className="w-3.5 h-3.5 text-gray-400" />
+                  שתף ליד
+                </button>
+                <div className="border-t border-gray-100 my-0.5" />
+                <button onClick={() => { onArchive(); onToggle(); }} className="flex items-center gap-2 w-full px-4 py-2 text-[12px] text-red-500 hover:bg-red-50 transition-colors">
+                  <Archive className="w-3.5 h-3.5" />
+                  העבר לארכיון
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 const COLUMNS = [
+  { key: 'menu',    label: '', className: 'w-8' },
   { key: 'name',    label: 'שם' },
   { key: 'role',    label: 'תפקיד' },
   { key: 'company', label: 'חברה' },
@@ -299,13 +398,29 @@ const COLUMNS = [
   { key: 'contact', label: 'יצירת קשר' },
 ];
 
+const ARCHIVE_COLUMNS = [
+  { key: 'menu',         label: '', className: 'w-8' },
+  { key: 'name',         label: 'שם' },
+  { key: 'role',         label: 'תפקיד' },
+  { key: 'company',      label: 'חברה' },
+  { key: 'archived_at',  label: 'תאריך ארכוב' },
+  { key: 'archive_reason', label: 'סיבת ארכוב' },
+  { key: 'source',       label: 'מקור' },
+];
+
 export default function Leads() {
   const { businessProfile } = useOutletContext();
   const bpId = businessProfile?.id;
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
-  const [activeTab, setActiveTab] = useState('leads');
+  const [showLeadSettings, setShowLeadSettings] = useState(false);
+  const [menuOpenId, setMenuOpenId] = useState(null);
+  const [filterTab, setFilterTab] = useState('all');
+  const [search, setSearch] = useState('');
+  const [urgencyFilter, setUrgencyFilter] = useState('all');
+  const [viewMode, setViewMode] = useState('active'); // 'active' | 'archive'
 
   const { data: allLeadsRaw = [], isLoading } = useQuery({
     queryKey: ['leadsPage', bpId],
@@ -314,116 +429,314 @@ export default function Leads() {
   });
 
   const leads = allLeadsRaw.filter(l => !l.is_archived);
+  const archivedLeads = allLeadsRaw.filter(l => l.is_archived);
   const today = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
   const todayLeads  = leads.filter(l => (l.created_at || '').startsWith(today));
   const hotLeads    = leads.filter(l => l.status === 'hot');
+  const weekLeads   = leads.filter(l => (l.updated_at || l.created_at || '') >= weekAgo && l.status !== 'cold');
   const urgentLeads = leads.filter(l => l.status === 'hot' && !l.last_contacted_at);
   const sources     = new Set(leads.map(l => l.source).filter(Boolean));
 
-  // Urgent actions for section
-  const urgentActions = [
-    urgentLeads[0] && {
-      title: `ליד חם ממתין: ${urgentLeads[0].name}`,
-      description: urgentLeads[0].service_needed || 'לא נוצר קשר עדיין',
-      ctaLabel: 'צור קשר עכשיו',
-      onCta: () => setSelectedLead(urgentLeads[0]),
+  const FILTER_TABS = FILTER_TAB_DEFS.map(t => ({
+    ...t,
+    count: t.key === 'all' ? leads.length : t.key === 'hot' ? hotLeads.length : t.key === 'today' ? todayLeads.length : weekLeads.length,
+  }));
+
+  // Insight cards for "כדאי לטפל היום"
+  const insightCards = [
+    urgentLeads.length > 0 && {
+      title: `${urgentLeads.length} לידים חזרו להתעניין השבוע`,
+      description: 'המערכת זיהתה פעילות חדשה מצד לידים בעלי פוטנציאל גבוה. ממולץ ליצור קשר בזמן שהעניין גבוה.',
+      ctaLabel: 'צפה בלידים',
+      onCta: () => setFilterTab('hot'),
+      accent: 'violet',
     },
-    urgentLeads[1] && {
-      title: `ליד חם נוסף: ${urgentLeads[1].name}`,
-      description: urgentLeads[1].service_needed || 'ממתין לטיפול',
-      ctaLabel: 'פתח ליד',
-      onCta: () => setSelectedLead(urgentLeads[1]),
+    urgentLeads.length > 0 && {
+      title: `${Math.min(8, urgentLeads.length)} לידים הציגו פעילות חדשה`,
+      description: 'זוהתה פעילות חדשה מצד לידים מאינסטגרם. נסחו פניות מותאמות אישית.',
+      ctaLabel: 'צפה בלידים',
+      onCta: () => setFilterTab('hot'),
+      accent: 'red',
     },
   ].filter(Boolean);
 
   const statCards = [
-    { count: todayLeads.length, label: 'לידים מהיום',          borderColor: 'blue' },
-    { count: hotLeads.length,   label: 'לידים חמים',           borderColor: 'red' },
-    { count: urgentLeads.length,label: 'דורש פעולה מיידית',    borderColor: 'yellow' },
-    { count: sources.size,      label: 'מקורות',               borderColor: 'none' },
+    { count: todayLeads.length,  label: 'לידים מהיום',       borderColor: 'blue'   },
+    { count: hotLeads.length,    label: 'לידים חמים',        borderColor: 'red'    },
+    { count: urgentLeads.length, label: 'דורש פעולה מיידית', borderColor: 'yellow' },
+    { count: sources.size,       label: 'מקורות פעילים',     borderColor: 'none'   },
   ];
 
   const sourceLabel = (src) => {
-    const map = { google: 'Google', facebook: 'Facebook', instagram: 'Instagram', whatsapp: 'WhatsApp', web: 'אתר', manual: 'ידני' };
+    const map = { google: 'Google', facebook: 'פייסבוק', instagram: 'אינסטגרם', whatsapp: 'WhatsApp', web: 'אתר', manual: 'ידני' };
     return map[src] || src || '—';
   };
 
+  // Filter leads based on tab + search
+  const filteredLeads = useMemo(() => {
+    let filtered = leads;
+    if (filterTab === 'hot')   filtered = filtered.filter(l => l.status === 'hot');
+    if (filterTab === 'today') filtered = filtered.filter(l => (l.created_at || '').startsWith(today));
+    if (filterTab === 'week')  filtered = filtered.filter(l => (l.updated_at || l.created_at || '') >= weekAgo && l.status !== 'cold');
+    if (urgencyFilter === 'urgent') filtered = filtered.filter(l => l.status === 'hot' && !l.last_contacted_at);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(l =>
+        (l.name || '').toLowerCase().includes(q) ||
+        (l.company || '').toLowerCase().includes(q) ||
+        (l.city || '').toLowerCase().includes(q)
+      );
+    }
+    return filtered;
+  }, [leads, filterTab, urgencyFilter, search, today, weekAgo]);
+
+  const archiveStatCards = [
+    { count: archivedLeads.length, label: 'סך הכול בארכיון', borderColor: 'blue' },
+    {
+      count: archivedLeads.length > 0
+        ? Math.round(archivedLeads.reduce((sum, l) => {
+            const d = l.archived_at ? (Date.now() - new Date(l.archived_at).getTime()) / 86400000 : 0;
+            return sum + d;
+          }, 0) / archivedLeads.length)
+        : 0,
+      label: 'ממוצע ימים בארכיון',
+      borderColor: 'none',
+    },
+    {
+      count: archivedLeads.filter(l => {
+        const d = l.archived_at ? new Date(l.archived_at) : null;
+        return d && d.getMonth() === new Date().getMonth() && d.getFullYear() === new Date().getFullYear();
+      }).length,
+      label: 'שחזורו החודש',
+      borderColor: 'yellow',
+    },
+  ];
+
   return (
     <div className="space-y-5">
-      <PageHeader
-        count={leads.length}
-        title="לידים"
-        actionLabel="ליד חדש"
-        actionIcon={<Plus className="w-4 h-4" />}
-        onAction={() => setShowAddModal(true)}
-      />
-
-      <StatCards cards={statCards} />
-
-      {/* Tab switcher */}
-      <div className="flex gap-1 border-b border-border pb-0">
+      {/* Header: count+title right, filter dropdown + add button */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <button
-          onClick={() => setActiveTab('leads')}
-          className={`px-4 py-2 text-[13px] font-medium rounded-t-md transition-colors ${
-            activeTab === 'leads'
-              ? 'bg-card border border-border border-b-card text-foreground -mb-px'
-              : 'text-foreground-muted hover:text-foreground'
-          }`}
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center gap-1.5 bg-foreground text-background px-4 py-2 rounded-full text-sm font-semibold hover:opacity-85 transition-opacity shadow-sm"
         >
-          לידים
+          <Plus className="w-4 h-4" />
+          ליד חדש
         </button>
-        <button
-          onClick={() => setActiveTab('conversations')}
-          className={`px-4 py-2 text-[13px] font-medium rounded-t-md transition-colors flex items-center gap-1.5 ${
-            activeTab === 'conversations'
-              ? 'bg-card border border-border border-b-card text-foreground -mb-px'
-              : 'text-foreground-muted hover:text-foreground'
-          }`}
-        >
-          <MessageSquare className="w-3.5 h-3.5" />
-          שיחות WhatsApp
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Active / Archive toggle */}
+          <div className="flex items-center gap-1 bg-gray-100 rounded-full p-0.5">
+            <button
+              onClick={() => setViewMode('active')}
+              className={`text-[12px] font-medium px-3 py-1.5 rounded-full transition-colors ${viewMode === 'active' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              לידים פעילים
+            </button>
+            <button
+              onClick={() => setViewMode('archive')}
+              className={`text-[12px] font-medium px-3 py-1.5 rounded-full transition-colors flex items-center gap-1 ${viewMode === 'archive' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              <Archive className="w-3 h-3" />
+              ארכיון
+            </button>
+          </div>
+          <div className="text-right">
+            <div className="flex items-baseline gap-2 justify-end">
+              <span className="text-3xl font-bold text-foreground">{viewMode === 'archive' ? archivedLeads.length : leads.length}</span>
+              <span className="text-lg font-semibold text-foreground">לידים</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {activeTab === 'conversations' ? (
-        <ConversationsTab bpId={bpId} businessProfile={businessProfile} />
-      ) : (
-        <>
-      {urgentActions.length > 0 && (
-        <UrgentActionsSection actions={urgentActions} />
+      {viewMode === 'archive' && (
+        <p className="text-[13px] text-gray-500 text-right">
+          לידים שהועברו לארכיון ואינם מופיעים ברשימת הלידים הפעילים. ניתן לשחזר אותם בכל עת.
+        </p>
       )}
 
-      {isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-6 h-6 animate-spin text-foreground-muted" />
+      <StatCards cards={viewMode === 'archive' ? archiveStatCards : statCards} />
+
+      {/* No criteria banner */}
+      {viewMode === 'active' && leads.length > 0 && urgentLeads.length === 0 && (
+        <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <button
+            onClick={() => setShowLeadSettings(true)}
+            className="text-[12px] font-semibold text-[#e8344d] bg-white border border-[#e8344d]/30 px-3 py-1.5 rounded-full hover:bg-red-50 transition-colors"
+          >
+            הגדרות לידים
+          </button>
+          <div className="text-right">
+            <p className="text-[13px] font-bold text-red-700">טרם הוגדרו קריטריונים ללידים</p>
+            <p className="text-[11px] text-red-500">הסוכן יחפש בצורה כללית, ממולץ להגדיר את קהל היעד המדויק עבורכם</p>
+          </div>
         </div>
-      ) : (
-        <DataTable
-          columns={COLUMNS}
-          rows={leads}
-          emptyText="אין לידים — הסוכן ימצא לידים אוטומטית"
-          renderCell={(lead, col) => {
-            if (col.key === 'name')    return (
-              <button
-                onClick={() => setSelectedLead(lead)}
-                className="font-semibold text-foreground hover:text-[#e8344d] transition-colors"
-              >
-                {lead.name || '—'}
-              </button>
-            );
-            if (col.key === 'role')    return <span className="text-foreground-secondary text-xs">{lead.role || lead.job_title || '—'}</span>;
-            if (col.key === 'company') return <span className="text-foreground-secondary text-xs">{lead.company || '—'}</span>;
-            if (col.key === 'city')    return <span className="text-foreground-secondary text-xs">{lead.city || lead.location || '—'}</span>;
-            if (col.key === 'source')  return (
-              <span className="text-xs bg-gray-100 text-foreground-secondary px-2 py-0.5 rounded-full">
-                {sourceLabel(lead.source)}
-              </span>
-            );
-            if (col.key === 'contact') return <ContactIcons lead={lead} />;
-            return lead[col.key] ?? '—';
-          }}
-        />
       )}
+
+      {/* "כדאי לטפל היום" insight cards */}
+      {viewMode === 'active' && insightCards.length > 0 && (
+        <div>
+          <h3 className="text-[13px] font-semibold text-gray-500 mb-3 text-right">כדאי לטפל היום באלו</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {insightCards.map((card, i) => (
+              <InsightCard key={i} {...card} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Table header + filters */}
+      <div>
+        {viewMode === 'active' && (
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            {/* Filter pills */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {FILTER_TABS.map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setFilterTab(tab.key)}
+                  className="text-[12px] px-3 py-1.5 rounded-full border font-medium transition-colors"
+                  style={
+                    filterTab === tab.key
+                      ? { background: '#111', color: '#fff', borderColor: '#111' }
+                      : { background: '#fff', color: '#555', borderColor: '#e5e7eb' }
+                  }
+                >
+                  {tab.label}
+                  {tab.count > 0 && <span className="mr-1 text-[10px] opacity-70"> ({tab.count})</span>}
+                </button>
+              ))}
+              <button
+                onClick={() => setUrgencyFilter(v => v === 'urgent' ? 'all' : 'urgent')}
+                className="flex items-center gap-1 text-[12px] px-3 py-1.5 rounded-full border font-medium transition-colors"
+                style={
+                  urgencyFilter === 'urgent'
+                    ? { background: '#fce4ec', color: '#e8344d', borderColor: '#e8344d' }
+                    : { background: '#fff', color: '#555', borderColor: '#e5e7eb' }
+                }
+              >
+                רמת דחיפות
+                <ChevronDown className="w-3 h-3" />
+              </button>
+              {(search || urgencyFilter !== 'all' || filterTab !== 'all') && (
+                <button
+                  onClick={() => { setSearch(''); setUrgencyFilter('all'); setFilterTab('all'); }}
+                  className="text-[11px] text-gray-400 hover:text-gray-600 flex items-center gap-1 px-2 py-1.5 rounded-full border border-gray-200 transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                  נקה פילטרים
+                </button>
+              )}
+            </div>
+            {/* Search */}
+            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-3 py-1.5">
+              <Search className="w-3.5 h-3.5 text-gray-400" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="חיפוש ליד"
+                className="text-[12px] bg-transparent outline-none text-gray-600 w-32 text-right"
+              />
+            </div>
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-6 h-6 animate-spin text-foreground-muted" />
+          </div>
+        ) : viewMode === 'archive' ? (
+          <DataTable
+            columns={ARCHIVE_COLUMNS}
+            rows={archivedLeads}
+            emptyText="אין לידים בארכיון"
+            renderCell={(lead, col) => {
+              if (col.key === 'menu') return (
+                <RowMenu
+                  lead={lead}
+                  isArchive
+                  isOpen={menuOpenId === lead.id}
+                  onToggle={() => setMenuOpenId(prev => prev === lead.id ? null : lead.id)}
+                  onView={() => setSelectedLead(lead)}
+                  onRestore={async () => {
+                    await base44.entities.Lead.update(lead.id, { is_archived: false });
+                    queryClient.invalidateQueries({ queryKey: ['leadsPage'] });
+                    toast.success('הליד שוחזר לרשימה');
+                  }}
+                  onDelete={async () => {
+                    if (!window.confirm('למחוק את הליד לצמיתות?')) return;
+                    await base44.entities.Lead.delete(lead.id);
+                    queryClient.invalidateQueries({ queryKey: ['leadsPage'] });
+                    toast.success('הליד נמחק');
+                  }}
+                />
+              );
+              if (col.key === 'name') return (
+                <button onClick={() => setSelectedLead(lead)} className="font-semibold text-foreground hover:text-[#e8344d] transition-colors text-right">
+                  {lead.name || '—'}
+                </button>
+              );
+              if (col.key === 'role')    return <span className="text-foreground-secondary text-xs">{lead.role || lead.job_title || '—'}</span>;
+              if (col.key === 'company') return <span className="text-foreground-secondary text-xs font-semibold">{lead.company || '—'}</span>;
+              if (col.key === 'archived_at') return (
+                <span className="text-foreground-secondary text-xs">
+                  {lead.archived_at ? new Date(lead.archived_at).toLocaleDateString('he-IL') : '—'}
+                </span>
+              );
+              if (col.key === 'archive_reason') return (
+                <span className="text-xs bg-gray-100 text-foreground-secondary px-2 py-0.5 rounded-full">
+                  {lead.archive_reason || 'נפילה'}
+                </span>
+              );
+              if (col.key === 'source') return (
+                <span className="text-xs bg-gray-100 text-foreground-secondary px-2 py-0.5 rounded-full">
+                  {sourceLabel(lead.source)}
+                </span>
+              );
+              return lead[col.key] ?? '—';
+            }}
+          />
+        ) : (
+          <DataTable
+            columns={COLUMNS}
+            rows={filteredLeads}
+            emptyText="אין לידים — הסוכן ימצא לידים אוטומטית"
+            renderCell={(lead, col) => {
+              if (col.key === 'menu') return (
+                <RowMenu
+                  lead={lead}
+                  isOpen={menuOpenId === lead.id}
+                  onToggle={() => setMenuOpenId(prev => prev === lead.id ? null : lead.id)}
+                  onView={() => setSelectedLead(lead)}
+                  onArchive={async () => {
+                    await base44.entities.Lead.update(lead.id, { is_archived: true, archived_at: new Date().toISOString() });
+                    queryClient.invalidateQueries({ queryKey: ['leadsPage'] });
+                  }}
+                />
+              );
+              if (col.key === 'name') return (
+                <button
+                  onClick={() => setSelectedLead(lead)}
+                  className="font-semibold text-foreground hover:text-[#e8344d] transition-colors text-right"
+                >
+                  {lead.name || '—'}
+                </button>
+              );
+              if (col.key === 'role')    return <span className="text-foreground-secondary text-xs">{lead.role || lead.job_title || '—'}</span>;
+              if (col.key === 'company') return <span className="text-foreground-secondary text-xs font-semibold">{lead.company || '—'}</span>;
+              if (col.key === 'city')    return <span className="text-foreground-secondary text-xs">{lead.city || lead.location || '—'}</span>;
+              if (col.key === 'source')  return (
+                <span className="text-xs bg-gray-100 text-foreground-secondary px-2 py-0.5 rounded-full">
+                  {sourceLabel(lead.source)}
+                </span>
+              );
+              if (col.key === 'contact') return <ContactIcons lead={lead} />;
+              return lead[col.key] ?? '—';
+            }}
+          />
+        )}
+      </div>
 
       {selectedLead && (
         <LeadDetailPanel
@@ -438,8 +751,6 @@ export default function Leads() {
           }}
         />
       )}
-        </>
-      )}
 
       {showAddModal && (
         <AddLeadModal
@@ -449,6 +760,14 @@ export default function Leads() {
             queryClient.invalidateQueries({ queryKey: ['leadsPage'] });
             setShowAddModal(false);
           }}
+        />
+      )}
+
+      {showLeadSettings && (
+        <LeadSettingsPanel
+          businessProfile={businessProfile}
+          onClose={() => setShowLeadSettings(false)}
+          onSaved={() => queryClient.invalidateQueries({ queryKey: ['leadsPage', bpId] })}
         />
       )}
     </div>

@@ -5,16 +5,16 @@ export const PLAN_ORDER = ['free_trial', 'starter', 'growth', 'pro', 'enterprise
 
 export const PLAN_LABELS = {
   free_trial: 'Free Trial',
-  starter:    'Starter',
-  growth:     'Growth',
-  pro:        'Pro',
+  starter:    'Basic',
+  growth:     'Best',
+  pro:        'Extra',
   enterprise: 'Enterprise',
 };
 
 export const PLAN_COLORS = {
   free_trial: '#4CAF50',
   starter:    '#2196F3',
-  growth:     '#9C27B0',
+  growth:     '#e8344d',
   pro:        '#FF5722',
   enterprise: '#F4A800',
 };
@@ -59,10 +59,14 @@ export function usePlan() {
   const adminOverride = bp?.subscription_plan || bp?.plan_id;
   const stripePlan    = subData?.plan;
 
-  // Normalize legacy plan IDs
+  // Normalize legacy plan IDs and new plan names
   const normalize = (p) => {
     if (!p) return null;
     if (p === 'free') return 'free_trial';
+    // Map new plan names to canonical IDs
+    if (p === 'basic') return 'starter';
+    if (p === 'best')  return 'growth';
+    if (p === 'extra') return 'pro';
     return PLAN_ORDER.includes(p) ? p : null;
   };
 

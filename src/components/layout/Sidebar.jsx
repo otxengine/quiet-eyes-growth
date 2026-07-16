@@ -11,36 +11,36 @@ import {
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { cn } from '@/lib/utils';
 
-// Main nav structure — Cortexi design: 6 flat pages
+// Main nav structure — matches Cortexi design: בית, לידים, תובנות (group), שיווק וניהול (group)
 const NAV_STRUCTURE = [
-  { type: 'item', path: '/',           label: 'בית',           icon: Home },
-  { type: 'item', path: '/leads',      label: 'לידים',         icon: CheckCircle, badgeKey: 'hotLeads' },
-  { type: 'item', path: '/insights',   label: 'תובנות',        icon: Lightbulb,   badgeKey: 'activeInsights' },
-  { type: 'item', path: '/competitors',label: 'מתחרים',        icon: Eye },
-  { type: 'item', path: '/marketing',  label: 'מרכז השיווק',   icon: Megaphone },
-  { type: 'item', path: '/events',     label: 'אירועים',       icon: Calendar },
+  { type: 'item', path: '/',      label: 'בית',   icon: Home },
+  { type: 'item', path: '/leads', label: 'לידים', icon: CheckCircle, badgeKey: 'hotLeads' },
   {
-    type: 'group', key: 'more', label: 'עוד',
+    type: 'group', key: 'insights', label: 'תובנות',
     items: [
-      { path: '/reviews',    label: 'מוניטין',       badgeKey: 'pendingReviews' },
-      { path: '/retention',  label: 'ניהול לקוחות' },
-      { path: '/tasks',      label: 'משימות' },
-      { path: '/reports',    label: 'דוחות' },
-      { path: '/strategy',   label: 'אסטרטגיה' },
-      { path: '/demand-gap', label: 'פערי ביקוש' },
+      { path: '/insights',    label: 'כל התובנות', badgeKey: 'activeInsights' },
+      { path: '/competitors', label: 'מתחרים'                                 },
+      { path: '/events',      label: 'אירועים'                                },
+    ],
+  },
+  {
+    type: 'group', key: 'marketing', label: 'שיווק וניהול',
+    items: [
+      { path: '/marketing',  label: 'מרכז השיווק'                       },
+      { path: '/reviews',    label: 'מוניטין',   badgeKey: 'pendingReviews' },
+      { path: '/retention',  label: 'ניהול לקוחות'                      },
+      { path: '/strategy',   label: 'אסטרטגיה'                          },
+      { path: '/tasks',      label: 'ניהול משימות'                      },
     ],
   },
 ];
 
 // Collapsed mode icons — one per nav entry
 const COLLAPSED_ICONS = {
-  '/':            Home,
-  '/leads':       CheckCircle,
-  '/insights':    Lightbulb,
-  '/competitors': Eye,
-  '/marketing':   Megaphone,
-  '/events':      Calendar,
-  'more':         Target,
+  '/':         Home,
+  '/leads':    CheckCircle,
+  'insights':  Lightbulb,
+  'marketing': Megaphone,
 };
 
 function getDefaultOpen(key) {
@@ -48,7 +48,7 @@ function getDefaultOpen(key) {
     const stored = localStorage.getItem(`sidebar_group_${key}`);
     if (stored !== null) return stored === 'true';
   } catch {}
-  return false; // closed by default (matches Figma)
+  return false;
 }
 
 function useIsAdmin() {
@@ -58,7 +58,7 @@ function useIsAdmin() {
   } catch { return false; }
 }
 
-export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, user }) {
+export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, user, businessProfile }) {
   const location = useLocation();
   const navigate = useNavigate();
   const isAdmin = useIsAdmin();
@@ -79,7 +79,8 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, 
   }, [userMenuOpen]);
 
   const [openGroups, setOpenGroups] = useState(() => ({
-    more: getDefaultOpen('more'),
+    insights:  getDefaultOpen('insights'),
+    marketing: getDefaultOpen('marketing'),
   }));
 
   // Auto-expand group when a child route is active
@@ -318,6 +319,35 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, 
           })}
         </ul>
 
+        {/* Bottom nav — העסק שלי, תוספים, חשבון, שדרוג */}
+        {!collapsed && (
+          <div className="px-5 mt-4 pt-4 space-y-1" style={{ borderTop: '1px solid hsl(var(--sidebar-border))' }}>
+            {[
+              { path: '/settings',     label: 'העסק שלי' },
+              { path: '/integrations', label: 'תוספים ואינטגרציות' },
+              { path: '/account',      label: 'החשבון שלי' },
+            ].map(({ path, label }) => {
+              const isActive = location.pathname === path;
+              return (
+                <Link key={path} to={path} onClick={() => onNavigate?.()}
+                  className="flex items-center justify-end h-9 text-[13px] transition-colors"
+                  style={{ color: isActive ? '#111111' : '#888888', fontWeight: isActive ? '600' : '400', textDecoration: isActive ? 'underline' : 'none', textUnderlineOffset: '3px' }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = '#333333'; }}
+                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = isActive ? '#111111' : '#888888'; }}
+                >
+                  {label}
+                </Link>
+              );
+            })}
+            <Link to="/subscription" onClick={() => onNavigate?.()}
+              className="flex items-center justify-center mt-2 py-2 rounded-full text-[12px] font-bold text-white transition-opacity hover:opacity-90"
+              style={{ background: '#e8344d' }}
+            >
+              שדרוג המנוי
+            </Link>
+          </div>
+        )}
+
       </nav>
 
       {/* Footer — אזור אישי */}
@@ -393,19 +423,26 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, 
           title="אזור אישי"
         >
           <div
-            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[13px] font-semibold"
-            style={{ background: userMenuOpen ? 'linear-gradient(135deg, #E8344D, #FF6B6B)' : '#f0f0f0' }}
+            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[16px]"
+            style={{ background: userMenuOpen ? 'linear-gradient(135deg, #E8344D, #FF6B6B)' : '#f0f0f0', fontSize: 18 }}
           >
             {userMenuOpen ? (
-              <span style={{ color: 'white' }}>
+              <span style={{ color: 'white', fontSize: 14, fontWeight: 600 }}>
                 {(user?.full_name || user?.email || 'U')[0].toUpperCase()}
               </span>
             ) : (
-              <User className="w-4 h-4" style={{ color: '#555' }} />
+              <span style={{ fontSize: 18 }}>😊</span>
             )}
           </div>
           {!collapsed && (
-            <span className="text-[13px]" style={{ color: '#888' }}>אזור אישי</span>
+            <div className="text-right min-w-0 flex-1">
+              {businessProfile?.name && (
+                <p className="text-[12px] font-semibold text-gray-800 truncate leading-tight">{businessProfile.name}</p>
+              )}
+              <p className="text-[11px] truncate leading-tight" style={{ color: '#999' }}>
+                {user?.full_name || user?.email || 'אזור אישי'}
+              </p>
+            </div>
           )}
         </button>
       </div>

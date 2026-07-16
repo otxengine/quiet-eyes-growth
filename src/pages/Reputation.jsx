@@ -118,7 +118,7 @@ function ReviewRow({ review, businessProfile, onEdit, onRefresh }) {
           onClick={() => onEdit(review)}
           className="flex-shrink-0 text-[11px] px-3 py-1.5 rounded-full border font-medium transition-colors border-border text-foreground-muted hover:bg-secondary"
         >
-          ערוך תגובה
+          אשר/ערוך תגובה
         </button>
       )}
       <button className="text-foreground-muted hover:text-foreground flex-shrink-0">
@@ -485,15 +485,23 @@ export default function Reputation() {
                 </div>
               ) : insights.map((ins, i) => (
                 <div key={i} dir="rtl" className={`flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 border-r-4 ${ins.border}`}>
-                  {/* <button className="flex-shrink-0 text-[11px] border border-rose-300 text-rose-600 px-3 py-1.5 rounded-full hover:bg-rose-50 transition-colors font-medium">
+                  <button
+                    onClick={() => setSelectedReview(sortedReviews.find(r => r.response_status === 'pending') || null)}
+                    className="flex-shrink-0 text-[11px] border border-rose-300 text-rose-600 px-3 py-1.5 rounded-full hover:bg-rose-50 transition-colors font-medium"
+                  >
                     קרא והגב
-                  </button> */}
+                  </button>
                   <div className="flex items-center gap-2 min-w-0">
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${ins.dot}`} />
                     <span className="text-[12px] font-semibold text-foreground truncate">{ins.text}</span>
                   </div>
                 </div>
               ))}
+              <div className="flex justify-start pt-1">
+                <button className="flex items-center gap-1.5 text-[11px] text-foreground-muted border border-gray-200 bg-white/60 rounded-lg px-2.5 py-1.5 hover:bg-white transition-colors">
+                  לכל התגובות וההמלצות
+                </button>
+              </div>
             </div>
           </div>
       </div>

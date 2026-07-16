@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2, Archive } from 'lucide-react';
+import { Loader2, Archive, Search, ChevronDown } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
 import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
@@ -43,7 +43,7 @@ const CATEGORY_MAP = {
 
 const COLUMNS = [
   { key: 'title',    label: 'תובנה' },
-  { key: 'value',    label: 'עדיפות' },
+  { key: 'value',    label: 'ערך עסקי' },
   { key: 'category', label: 'קטגוריה' },
   { key: 'action',   label: 'פעולה' },
 ];
@@ -268,6 +268,22 @@ export default function Insights() {
 
       <StatCards cards={statCards} />
 
+      {/* Upgrade banner */}
+      <div dir="rtl" className="flex items-center justify-between gap-4 bg-white border border-red-100 rounded-xl px-4 py-3">
+        <button
+          onClick={() => navigate('/integrations')}
+          className="flex items-center gap-2 text-[12px] font-semibold text-white px-4 py-2 rounded-full flex-shrink-0"
+          style={{ background: '#e8344d' }}
+        >
+          <Search className="w-3.5 h-3.5" />
+          גלה הדמנויות
+        </button>
+        <div className="text-right">
+          <p className="text-[13px] font-semibold text-gray-900">המערכת יכולה לזהות יותר עבורך</p>
+          <p className="text-[11px] text-gray-500 mt-0.5">ככל שתחבר יותר מקורות מידע, המערכת תזהה יותר הזדמנויות ותספק המלצות מדויקות יותר לפעולה.</p>
+        </div>
+      </div>
+
       {urgentActions.length > 0 && (
         <UrgentActionsSection actions={urgentActions} />
       )}
@@ -290,28 +306,31 @@ export default function Insights() {
             </div>
           )}
 
-          {/* Filter tabs + archived toggle */}
-          <div dir="rtl" className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
-              {FILTER_TABS.map(tab => (
-                <button key={tab.key} onClick={() => setActiveCategory(tab.key)}
-                  className={`px-3 py-1.5 rounded-md text-[11px] font-medium transition-all ${
-                    activeCategory === tab.key
-                      ? 'bg-white shadow-sm text-foreground'
-                      : 'text-foreground-muted hover:text-foreground'
-                  }`}>
-                  {tab.label}
-                  {tab.count > 0 && <span className="mr-1 opacity-50">{tab.count}</span>}
-                </button>
-              ))}
-            </div>
+          {/* Filter bar */}
+          <div dir="rtl" className="flex items-center gap-2 flex-wrap">
+            {FILTER_TABS.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveCategory(tab.key)}
+                className="flex items-center gap-1 text-[12px] px-3 py-1.5 rounded-full border font-medium transition-colors"
+                style={
+                  activeCategory === tab.key
+                    ? { background: '#fce4ec', color: '#e8344d', borderColor: '#e8344d' }
+                    : { background: '#fff', color: '#555', borderColor: '#e5e7eb' }
+                }
+              >
+                {tab.key === 'all' ? `כל התובנות (${tab.count})` : tab.label}
+                {tab.key !== 'all' && tab.count > 0 && <span className="opacity-60">({tab.count})</span>}
+                <ChevronDown className="w-3 h-3 opacity-50" />
+              </button>
+            ))}
             {staleRows.length > 0 && (
               <button
                 onClick={() => setShowArchived(s => !s)}
-                className="flex items-center gap-1.5 text-[11px] text-foreground-muted hover:text-foreground transition-colors"
+                className="flex items-center gap-1.5 text-[11px] text-foreground-muted hover:text-foreground transition-colors mr-auto"
               >
                 <Archive className="w-3.5 h-3.5" />
-                {showArchived ? 'הסתר תובנות ישנות' : `${staleRows.length} תובנות ישנות (מעל ${STALE_DAYS} ימים)`}
+                {showArchived ? 'הסתר ישנות' : `${staleRows.length} ישנות`}
               </button>
             )}
           </div>
@@ -326,31 +345,19 @@ export default function Insights() {
             }
             renderCell={(row, col) => {
               if (col.key === 'title') {
-                const score = row.relevance_score ?? 0;
-                const scoreColor = score >= 80 ? 'text-green-600 bg-green-50'
-                  : score >= 60 ? 'text-blue-600 bg-blue-50'
-                  : 'text-gray-400 bg-gray-50';
+                const dotColor = row.impact === 'critical' ? '#e8344d'
+                  : row.impact === 'high'   ? '#f59e0b'
+                  : row.impact === 'medium' ? '#3b82f6'
+                  : '#9ca3af';
                 return (
-                  <div dir="rtl">
-                    <div className="font-medium text-foreground text-sm leading-snug flex items-center gap-1.5 flex-wrap">
-                      {row.title}
-                      {row.dupeCount > 1 && (
-                        <span className="text-[10px] font-normal text-foreground-muted bg-gray-100 px-1.5 py-0.5 rounded-full">
-                          ×{row.dupeCount}
-                        </span>
+                  <div dir="rtl" className="flex items-start gap-2">
+                    <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style={{ background: dotColor }} />
+                    <div>
+                      <div className="font-medium text-foreground text-[13px] leading-snug">{row.title}</div>
+                      {row.summary && row.summary !== row.title && (
+                        <div className="text-[11px] text-foreground-muted mt-0.5 line-clamp-1">{row.summary}</div>
                       )}
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${scoreColor}`}>
-                        {score}%
-                      </span>
                     </div>
-                    {row.summary && row.summary !== row.title && (
-                      <div className="text-xs text-foreground-muted mt-0.5 line-clamp-1">{row.summary}</div>
-                    )}
-                    {rowAgeInDays(row) >= STALE_DAYS && (
-                      <span className="text-[10px] text-amber-600 mt-0.5 block">
-                        {rowAgeInDays(row)} ימים — ישן
-                      </span>
-                    )}
                   </div>
                 );
               }
@@ -377,9 +384,9 @@ export default function Insights() {
               if (col.key === 'action') return (
                 <button
                   onClick={() => navigate(`/insights/${row.id}?kind=${row.kind}`)}
-                  className="text-xs font-semibold text-[#e8344d] hover:underline whitespace-nowrap"
+                  className="text-[11px] font-semibold text-[#e8344d] border border-[#e8344d]/30 px-3 py-1 rounded-full hover:bg-red-50 transition-colors whitespace-nowrap"
                 >
-                  {getActionLabel(row)} &rarr;
+                  {getActionLabel(row)}
                 </button>
               );
 

@@ -542,10 +542,58 @@ export default function SettingsPage() {
     }
   };
 
+  // Profile completion
+  const completionItems = [
+    { key: 'name',               label: 'הוספת שם עסק',                done: !!form.name },
+    { key: 'contact',            label: 'פרטי יצירת קשר',               done: !!(form.city || businessProfile?.email) },
+    { key: 'relevant_services',  label: 'שירותים המוצעים',               done: !!form.relevant_services },
+    { key: 'description',        label: 'הוספת תיאור עסק',               done: !!form.description },
+    { key: 'channels',           label: 'חיבור ערוץ תקשורת',              done: !!(form.channels_whatsapp_enabled || form.channels_instagram_enabled || form.channels_facebook_enabled) },
+  ];
+  const doneCount = completionItems.filter(i => i.done).length;
+  const completionPct = Math.round((doneCount / completionItems.length) * 100);
+  const radius = 36, circ = 2 * Math.PI * radius;
+  const offset = circ - (completionPct / 100) * circ;
+
   return (
     <div className="space-y-4 max-w-2xl" dir="rtl">
       <div className="text-right pb-1">
-        <h1 className="text-[22px] font-bold text-gray-900">הגדרות</h1>
+        <h1 className="text-[22px] font-bold text-gray-900">העסק שלי</h1>
+      </div>
+
+      {/* Profile completion card */}
+      <div className="section-card px-5 py-4">
+        <div className="flex items-center justify-between gap-4">
+          {/* Left: checklist */}
+          <div className="flex-1 space-y-2">
+            {completionItems.map(item => (
+              <div key={item.key} className="flex items-center gap-2">
+                <span className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${item.done ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-300'}`}>
+                  {item.done ? '✓' : '○'}
+                </span>
+                <span className={`text-[12px] ${item.done ? 'text-gray-600 line-through' : 'text-gray-500'}`}>{item.label}</span>
+              </div>
+            ))}
+          </div>
+          {/* Right: donut + pct */}
+          <div className="flex flex-col items-center gap-1 flex-shrink-0">
+            <svg width="88" height="88" viewBox="0 0 88 88">
+              <circle cx="44" cy="44" r={radius} fill="none" stroke="#F3F4F6" strokeWidth="8" />
+              <circle
+                cx="44" cy="44" r={radius}
+                fill="none" stroke="#e8344d" strokeWidth="8"
+                strokeDasharray={circ} strokeDashoffset={offset}
+                strokeLinecap="round"
+                transform="rotate(-90 44 44)"
+              />
+              <text x="44" y="49" textAnchor="middle" fontSize="16" fontWeight="bold" fill="#111">{completionPct}%</text>
+            </svg>
+            <div className="text-right">
+              <p className="text-[13px] font-bold text-gray-900">השלמת פרופיל העסק</p>
+              <p className="text-[11px] text-gray-400 leading-snug">עוד קצת! השלם את הפרטים לתפוקה מרבית</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <SectionCard title="פרטי העסק" subtitle="שם, קטגוריה, כתובת ותיאור">

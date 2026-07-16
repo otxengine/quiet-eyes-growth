@@ -1,107 +1,223 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { X, ArrowLeft, Loader2 } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-const sources = ['Google', 'Instagram', 'Facebook', 'WhatsApp', 'אתר', 'המלצה', 'אחר'];
-const budgets = ['עד 500₪', '500-1,000₪', '1,000-3,000₪', '3,000-5,000₪', 'מעל 5,000₪'];
-const urgencies = ['היום', 'השבוע', 'החודש', 'רק מתעניין'];
+const SOURCE_OPTIONS = [
+  { value: 'Google',    label: 'Google' },
+  { value: 'Facebook',  label: 'Facebook' },
+  { value: 'WhatsApp',  label: 'WhatsApp' },
+  { value: 'Instagram', label: 'Instagram' },
+  { value: 'other',     label: 'אחר' },
+  { value: 'referral',  label: 'המלצה' },
+];
 
-function calculateScore(data, bp) {
+function calculateScore(form, bp) {
   let score = 0;
-  // City: exact match +20, nearby +10
-  if (data.city && bp?.city) {
-    if (data.city === bp.city) score += 20;
-    else if (data.city.trim()) score += 10;
+  if (form.city && bp?.city) {
+    if (form.city === bp.city) score += 20;
+    else if (form.city.trim()) score += 10;
   }
-  // Budget
-  if (data.budget === 'מעל 5,000₪') score += 30;
-  else if (data.budget === '3,000-5,000₪') score += 30;
-  else if (data.budget === '1,000-3,000₪') score += 20;
-  // Service — always give points if filled, extra if matches category
-  if (data.service && bp?.category && data.service.includes(bp.category)) score += 25;
-  else if (data.service) score += 25;
-  // Urgency
-  if (data.urgency === 'היום') score += 15;
-  else if (data.urgency === 'השבוע') score += 10;
-  else if (data.urgency === 'החודש') score += 5;
-  // Source
-  if (['Instagram', 'WhatsApp'].includes(data.source)) score += 15;
-  else if (data.source === 'Google') score += 10;
-  else if (data.source === 'המלצה') score += 15;
+  if (['WhatsApp', 'Instagram'].includes(form.source)) score += 15;
+  else if (form.source === 'Google') score += 10;
+  else if (form.source === 'referral') score += 15;
   else score += 5;
+  if (form.phone) score += 20;
+  if (form.email) score += 15;
+  if (form.name.trim()) score += 15;
   return Math.max(0, Math.min(100, score));
 }
 
-export default function AddLeadModal({ businessProfile, onClose, onAdded }) {
-  const [step, setStep] = useState(1);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: '', phone: '', service: '', source: 'Google', budget: '', urgency: '', city: '' });
-  const canProceed = step === 1 ? form.name.trim() : true;
-  const inputCls = "w-full bg-secondary/50 border border-border/60 rounded-lg px-3 py-2 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-border";
+const inputCls = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#e8344d]/40 transition-colors';
 
-  const chipCls = (active) => active
-    ? 'bg-[#111111] text-white border border-[#111111]'
-    : 'text-foreground-muted/70 border border-border/60 hover:border-border-hover';
+export default function AddLeadModal({ businessProfile, onClose, onAdded }) {
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    name: '', company: '', role: '', phone: '', email: '', notes: '', source: 'Google',
+  });
 
   const handleSubmit = async () => {
+    if (!form.name.trim()) return;
     setSaving(true);
-    const score = calculateScore(form, businessProfile);
-    const status = score >= 80 ? 'hot' : score >= 40 ? 'warm' : 'cold';
-    const answers = [`תקציב: ${form.budget || 'לא צוין'}`, `דחיפות: ${form.urgency || 'לא צוין'}`, `אזור: ${form.city || 'לא צוין'}`].join('\n');
-    await base44.entities.Lead.create({
-      name: form.name, source: form.source, score, status, budget_range: form.budget,
-      service_needed: form.service, contact_info: form.phone, questionnaire_answers: answers,
-      city: form.city, urgency: form.urgency, created_at: new Date().toISOString(), linked_business: businessProfile?.id,
-    });
-    const statusLabel = status === 'hot' ? 'חם 🔥' : status === 'warm' ? 'פושר' : 'קר';
-    toast.success(`ליד נשמר — ציון: ${score} (${statusLabel})`);
+    try {
+      const score = calculateScore(form, businessProfile);
+      const status = score >= 70 ? 'hot' : score >= 40 ? 'warm' : 'cold';
+      await base44.entities.Lead.create({
+        name: form.name,
+        company: form.company,
+        role: form.role,
+        contact_info: [form.phone, form.email].filter(Boolean).join(' | '),
+        contact_phone: form.phone,
+        source: form.source,
+        notes: form.notes,
+        score,
+        status,
+        created_at: new Date().toISOString(),
+        linked_business: businessProfile?.id,
+      });
+      const statusLabel = status === 'hot' ? 'חם 🔥' : status === 'warm' ? 'פושר' : 'קר';
+      toast.success(`ליד נשמר — ציון: ${score} (${statusLabel})`);
+      onAdded();
+    } catch {
+      toast.error('שגיאה בשמירת הליד');
+    }
     setSaving(false);
-    onAdded();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white border border-border/50 rounded-[10px] p-5 w-full max-w-md mx-4 z-10">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-bold text-[#111111]">ליד חדש — שלב {step}/2</h3>
-          <button onClick={onClose} className="text-foreground-muted/50 hover:text-foreground-muted"><X className="w-4 h-4" /></button>
+    <>
+      {/* Overlay */}
+      <div className="fixed inset-0 bg-black/25 z-40" onClick={onClose} />
+
+      {/* Drawer — slides from right */}
+      <div
+        className="fixed top-0 right-0 h-full w-[400px] max-w-[92vw] bg-white z-50 flex flex-col shadow-2xl"
+        style={{ animation: 'slideInRight 0.25s ease-out' }}
+        dir="rtl"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-[16px] font-bold text-gray-900">ליד חדש</h2>
+            <p className="text-[11px] text-gray-400 mt-0.5">הוסף ליד חדש למערכת.</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
-        {step === 1 && (
-          <div className="space-y-3">
-            <div><label className="text-[12px] text-foreground-muted mb-1 block">שם הלקוח *</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputCls} placeholder="שם..." /></div>
-            <div><label className="text-[12px] text-foreground-muted mb-1 block">טלפון</label><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={inputCls} placeholder="050-0000000" /></div>
-            <div><label className="text-[12px] text-foreground-muted mb-1 block">שירות מבוקש</label><input value={form.service} onChange={(e) => setForm({ ...form, service: e.target.value })} className={inputCls} placeholder="סוג השירות..." /></div>
-            <div>
-              <label className="text-[12px] text-foreground-muted mb-1 block">מקור</label>
-              <div className="flex flex-wrap gap-1.5">{sources.map((s) => <button key={s} onClick={() => setForm({ ...form, source: s })} className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${chipCls(form.source === s)}`}>{s}</button>)}</div>
-            </div>
-            <button onClick={() => setStep(2)} disabled={!canProceed} className="w-full py-2.5 rounded-md text-[12px] font-medium bg-[#111111] hover:bg-[#333333] text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5">המשך <ArrowLeft className="w-4 h-4" /></button>
-          </div>
-        )}
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4" style={{ scrollbarWidth: 'none' }}>
 
-        {step === 2 && (
-          <div className="space-y-3">
-            <div>
-              <label className="text-[12px] text-foreground-muted mb-1 block">מה התקציב המשוער?</label>
-              <div className="flex flex-wrap gap-1.5">{budgets.map((b) => <button key={b} onClick={() => setForm({ ...form, budget: b })} className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${chipCls(form.budget === b)}`}>{b}</button>)}</div>
-            </div>
-            <div>
-              <label className="text-[12px] text-foreground-muted mb-1 block">מתי צריך את השירות?</label>
-              <div className="flex flex-wrap gap-1.5">{urgencies.map((u) => <button key={u} onClick={() => setForm({ ...form, urgency: u })} className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${chipCls(form.urgency === u)}`}>{u}</button>)}</div>
-            </div>
-            <div><label className="text-[12px] text-foreground-muted mb-1 block">באיזה אזור?</label><input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className={inputCls} placeholder="עיר / אזור..." /></div>
-            <div className="flex gap-2">
-              <button onClick={() => setStep(1)} className="px-4 py-2.5 rounded-md text-[12px] font-medium text-foreground-muted/70 bg-white border border-border/60 hover:border-border-hover transition-colors">חזרה</button>
-              <button onClick={handleSubmit} disabled={saving} className="flex-1 py-2.5 rounded-md text-[12px] font-medium bg-[#111111] hover:bg-[#333333] text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />} {saving ? 'מחשב ניקוד...' : 'שמור ליד'}
-              </button>
+          {/* פרטי איש קשר */}
+          <div>
+            <h3 className="text-[12px] font-bold text-gray-700 mb-3">פרטי איש קשר</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[11px] font-medium text-gray-500 block mb-1">שם מלא</label>
+                <input
+                  value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })}
+                  placeholder="הכנס שם מלא"
+                  className={inputCls}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-gray-500 block mb-1">חברה</label>
+                <input
+                  value={form.company}
+                  onChange={e => setForm({ ...form, company: e.target.value })}
+                  placeholder="הכנס שם חברה"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-gray-500 block mb-1">תפקיד</label>
+                <select
+                  value={form.role}
+                  onChange={e => setForm({ ...form, role: e.target.value })}
+                  className={inputCls}
+                >
+                  <option value="">הכנס תפקיד</option>
+                  <option value="מנכ״ל">מנכ״ל</option>
+                  <option value="מנהל שיווק">מנהל שיווק</option>
+                  <option value="בעל עסק">בעל עסק</option>
+                  <option value="מנהל מכירות">מנהל מכירות</option>
+                  <option value="אחר">אחר</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-gray-500 block mb-1">טלפון</label>
+                <input
+                  type="tel"
+                  value={form.phone}
+                  onChange={e => setForm({ ...form, phone: e.target.value })}
+                  placeholder="הכנס טלפון"
+                  className={inputCls}
+                  dir="ltr"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-gray-500 block mb-1">אימייל</label>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={e => setForm({ ...form, email: e.target.value })}
+                  placeholder="הכנס כתובת אימייל"
+                  className={inputCls}
+                  dir="ltr"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-gray-500 block mb-1">אחר</label>
+                <textarea
+                  value={form.notes}
+                  onChange={e => setForm({ ...form, notes: e.target.value })}
+                  placeholder="הוסף מידע נוסף על הליד..."
+                  rows={3}
+                  className={`${inputCls} resize-none`}
+                />
+              </div>
             </div>
           </div>
-        )}
+
+          {/* מקור הליד */}
+          <div>
+            <h3 className="text-[12px] font-bold text-gray-700 mb-3">מקור הליד</h3>
+            <div className="flex flex-wrap gap-2">
+              {SOURCE_OPTIONS.map(opt => (
+                <label
+                  key={opt.value}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-full border text-[12px] cursor-pointer transition-colors ${
+                    form.source === opt.value
+                      ? 'bg-gray-900 text-white border-gray-900'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="source"
+                    value={opt.value}
+                    checked={form.source === opt.value}
+                    onChange={() => setForm({ ...form, source: opt.value })}
+                    className="sr-only"
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="bg-white border-t border-gray-100 px-5 py-4 flex gap-3 flex-shrink-0">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            ביטול
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!form.name.trim() || saving}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#e8344d] text-white text-[13px] font-semibold hover:opacity-90 transition-opacity disabled:opacity-40"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            שמור ליד
+          </button>
+        </div>
       </div>
-    </div>
+
+      <style>{`
+        @keyframes slideInRight {
+          from { transform: translateX(100%); opacity: 0; }
+          to   { transform: translateX(0);    opacity: 1; }
+        }
+      `}</style>
+    </>
   );
 }
