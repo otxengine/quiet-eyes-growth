@@ -18,14 +18,10 @@ const MAX_REVIEWS = 300;
  *   - response_status is NULL → rows never appear in the ops inbox / autoRespondToReviews
  *   - linked_competitor is set → rows are scoped to the competitor, not the owner
  */
-export async function collectCompetitorReviews(req: Request, res: Response) {
-  const { businessProfileId } = req.body;
-  if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
-
+export async function runCollectCompetitorReviews(businessProfileId: string) {
   const startTime = new Date().toISOString();
-  try {
     const profile = await prisma.businessProfile.findFirst({ where: { id: businessProfileId } });
-    if (!profile) return res.status(404).json({ error: 'No business profile' });
+    if (!profile) throw new Error('No business profile');
 
     const competitors = await (prisma.competitor as any).findMany({
       where: { linked_business: businessProfileId },
@@ -130,10 +126,18 @@ export async function collectCompetitorReviews(req: Request, res: Response) {
 
     await writeAutomationLog('collectCompetitorReviews', businessProfileId, startTime, totalNew, 'success');
     console.log(`collectCompetitorReviews done: ${totalNew} new reviews across ${competitors.length} competitors`);
-    return res.json({ total_new: totalNew, per_competitor: perCompetitor });
+    return { total_new: totalNew, per_competitor: perCompetitor };
+}
+
+export async function collectCompetitorReviews(req: Request, res: Response) {
+  const { businessProfileId } = req.body;
+  if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+  try {
+    const result = await runCollectCompetitorReviews(businessProfileId);
+    return res.json(result);
   } catch (err: any) {
     console.error('collectCompetitorReviews error:', err.message);
-    await writeAutomationLog('collectCompetitorReviews', businessProfileId, startTime, 0, 'failed', err.message);
+    await writeAutomationLog('collectCompetitorReviews', businessProfileId, new Date().toISOString(), 0, 'failed', err.message);
     return res.status(500).json({ error: err.message });
   }
 }

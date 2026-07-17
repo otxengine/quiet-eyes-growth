@@ -10,6 +10,7 @@ import { publishEvent } from '../../lib/eventBus';
 import { normReviewOrigin } from '../../lib/signalGuard';
 import { findPlaceId, getPlaceDetails } from '../../lib/googlePlaces';
 import { serpGoogleMapsReviews, hasSerpApiKey } from '../../lib/serpapi';
+import { runCollectCompetitorReviews } from './collectCompetitorReviews';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours — Google Places API quota
 
@@ -613,6 +614,11 @@ export async function collectReviews(req: Request, res: Response) {
         }
       } catch (_) {}
     }
+    // Auto-trigger competitor review collection in background (KAN-127)
+    runCollectCompetitorReviews(businessProfileId).catch(e =>
+      console.error('[collectReviews] background competitor ingest failed:', e.message)
+    );
+
     return res.json({ new_reviews: newReviews, google_reviews_added: googleAdded, sources_scanned: sourcesToScan.length + (googleAdded > 0 ? 1 : 0), gmb_path: gmbPathResult });
   } catch (err: any) {
     console.error('collectReviews error:', err.message);
