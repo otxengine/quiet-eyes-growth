@@ -188,6 +188,7 @@ export default function GoogleCompareWidget({ businessProfileId, businessName })
             name={businessName || 'העסק שלי'}
             rating={own.google_rating}
             reviewCount={own.review_count}
+            delta={null}
             isOwn
           />
           {own.aspects?.length > 0 && (
