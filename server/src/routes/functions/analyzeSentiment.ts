@@ -20,6 +20,7 @@ export async function analyzeSentiment(req: Request, res: Response) {
       where: { linked_business: businessProfileId },
       orderBy: { created_date: 'desc' },
       take: 50,
+      select: { text: true, sentiment: true, rating: true, created_date: true },
     });
 
     if (reviews.length === 0) {
