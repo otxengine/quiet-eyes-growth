@@ -3,7 +3,7 @@ import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { findPlaceId, getPlaceDetails } from '../../lib/googlePlaces';
 import { normReviewOrigin } from '../../lib/signalGuard';
-import { serpGoogleMapsReviews } from '../../lib/serpapi';
+import { serpGoogleMapsReviews, firstValidDate } from '../../lib/serpapi';
 import { batchExtractTopics } from '../../lib/reviewTaxonomy';
 
 const MAX_REVIEWS = 300;
@@ -73,7 +73,9 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
         const text        = gr.snippet || gr.text?.text || gr.comment || '';
         const authorName  = gr.user?.name || gr.authorAttribution?.displayName || 'לקוח';
         const rating      = gr.rating ?? 0;
-        const publishTime = gr.date || gr.publishTime || new Date().toISOString();
+        // gr.iso_date (SerpAPI) / gr.publishTime (Places API) are real timestamps;
+        // gr.date (SerpAPI) is relative text ("3 months ago") and unparseable — never prefer it.
+        const publishTime = firstValidDate(gr.iso_date, gr.publishTime);
         const reviewId    = gr.review_id || gr.name || `comp_${comp.id}_${authorName}_${rating}`;
         const textKey     = text.substring(0, 50);
 
@@ -109,7 +111,7 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
                 source_origin:     normReviewOrigin('google_places', 'collectCompetitorReviews'),
                 google_review_id:  reviewId,
                 is_verified:       true,
-                created_at:        new Date(publishTime).toISOString(),
+                created_at:        publishTime,
                 linked_business:   businessProfileId,
                 linked_competitor: comp.id,  // AC4: scoped to competitor
                 topics,

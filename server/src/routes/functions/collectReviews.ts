@@ -11,7 +11,7 @@ import { tryDecryptToken } from '../../lib/crypto';
 import { publishEvent } from '../../lib/eventBus';
 import { normReviewOrigin } from '../../lib/signalGuard';
 import { findPlaceId, getPlaceDetails } from '../../lib/googlePlaces';
-import { serpGoogleMapsReviews, hasSerpApiKey } from '../../lib/serpapi';
+import { serpGoogleMapsReviews, hasSerpApiKey, firstValidDate } from '../../lib/serpapi';
 import { runCollectCompetitorReviews } from './collectCompetitorReviews';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours — Google Places API quota
@@ -172,7 +172,7 @@ export async function collectReviews(req: Request, res: Response) {
           const serpReviews = await serpGoogleMapsReviews(serpPlaceId, 300);
           const serpPending: Array<{
             reviewId: string; textKey: string; text: string;
-            rating: number; sentiment: string; reviewerName: string;
+            rating: number; sentiment: string; reviewerName: string; createdAt: string;
           }> = [];
           for (const sr of serpReviews) {
             const text: string = sr.snippet || '';
@@ -183,12 +183,13 @@ export async function collectReviews(req: Request, res: Response) {
             if (existingTexts.has(textKey)) continue;
             const rating: number = sr.rating || 0;
             const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
-            serpPending.push({ reviewId, textKey, text, rating, sentiment, reviewerName: sr.user?.name || 'לקוח' });
+            const createdAt = firstValidDate(sr.iso_date);
+            serpPending.push({ reviewId, textKey, text, rating, sentiment, reviewerName: sr.user?.name || 'לקוח', createdAt });
           }
           if (serpPending.length > 0) {
             const serpTopics = await batchExtractTopics(serpPending.map(p => ({ text: p.text })), undefined, topicSet);
             for (let i = 0; i < serpPending.length; i++) {
-              const { reviewId, textKey, text, rating, sentiment, reviewerName } = serpPending[i];
+              const { reviewId, textKey, text, rating, sentiment, reviewerName, createdAt } = serpPending[i];
               const { topics, topic_sentiment } = serpTopics[i];
               await prisma.review.create({
                 data: {
@@ -202,7 +203,7 @@ export async function collectReviews(req: Request, res: Response) {
                   source_origin:   normReviewOrigin('serp_google_maps_reviews', 'collectReviews:serp'),
                   google_review_id: reviewId,
                   is_verified:     true,
-                  created_at:      new Date().toISOString(),
+                  created_at:      createdAt,
                   linked_business: businessProfileId,
                   topics,
                   topic_sentiment,

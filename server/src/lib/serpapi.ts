@@ -29,6 +29,21 @@ function _setCache(key: string, data: any) {
 
 export function hasSerpApiKey(): boolean { return !!SERPAPI_KEY; }
 
+/**
+ * Returns the first candidate that parses as a valid date (ISO'd), else now.
+ * SerpAPI review objects give both `date` (relative, e.g. "3 months ago" / Hebrew
+ * equivalent — NOT parseable by `Date`) and `iso_date` (real timestamp) — always
+ * prefer iso_date over date at call sites.
+ */
+export function firstValidDate(...candidates: Array<string | undefined | null>): string {
+  for (const c of candidates) {
+    if (!c) continue;
+    const d = new Date(c);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  return new Date().toISOString();
+}
+
 async function _get(params: Record<string, string>): Promise<any | null> {
   if (!SERPAPI_KEY) return null;
   const qs = new URLSearchParams({ ...params, api_key: SERPAPI_KEY }).toString();
