@@ -61,28 +61,23 @@ function ReviewRow({ review, onApprove, labelById = {} }) {
   }));
 
   return (
-    <div dir="rtl" className="px-4 py-3 border-b border-border/40 last:border-0 hover:bg-gray-50/40 transition-colors">
+    <div dir="rtl" onClick={() => onApprove(review)} className="px-4 py-3 border-b border-border/40 last:border-0 hover:bg-gray-50/40 transition-colors cursor-pointer">
       <div className="flex items-center gap-3">
         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${sentDot}`} />
         <span className="flex-1 text-[12px] text-foreground truncate min-w-0">
           {(review.text || '').slice(0, 80) || '(ביקורת ללא טקסט)'}
           {(review.text || '').length > 80 ? '...' : ''}
         </span>
-        <span className="text-[12px] font-semibold text-foreground w-8 flex-shrink-0 text-center">
-          {review.rating ? Number(review.rating).toFixed(1) : '—'}
-        </span>
+        <div className="flex gap-0.5 flex-shrink-0 w-12 justify-center">
+          {[1,2,3,4,5].map(i => (
+            <Star key={i} className={`w-3 h-3 ${i <= Math.round(review.rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'}`} />
+          ))}
+        </div>
         <span className="text-[18px] w-8 flex-shrink-0 text-center" title={platCfg.label}>{platCfg.icon}</span>
         <span className="text-[11px] text-foreground-muted w-20 flex-shrink-0">{relDate}</span>
         {isPublished && <span className="flex-shrink-0 text-[11px] font-medium text-green-600">✓ פורסם</span>}
-        <button onClick={() => onApprove(review)}
-          className={`flex-shrink-0 text-[11px] px-3 py-1.5 rounded-full border font-medium transition-colors ${
-            isPending
-              ? 'border-[#e8344d] text-[#e8344d] hover:bg-red-50'
-              : 'border-border text-foreground-muted hover:bg-secondary'
-          }`}>
-          {isPending ? 'אשר/ערוך תגובה' : isPublished ? 'ערוך שוב' : 'ערוך תגובה'}
-        </button>
-        <button className="text-foreground-muted hover:text-foreground flex-shrink-0">
+        {isPending && <span className="flex-shrink-0 w-2 h-2 rounded-full bg-[#e8344d]" />}
+        <button onClick={e => e.stopPropagation()} className="text-foreground-muted hover:text-foreground flex-shrink-0">
           <MoreVertical className="w-4 h-4" />
         </button>
       </div>
@@ -536,7 +531,6 @@ export default function Reputation() {
               <span className="w-12 text-center">דירוג</span>
               <span className="w-12 text-center">פלטפורמה</span>
               <span className="w-24">מועד</span>
-              <span className="w-32" />
               <span className="w-8" />
             </div>
             {filteredTable.length === 0 ? (
