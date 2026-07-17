@@ -119,6 +119,7 @@ import { competitorDataBootstrap } from './competitorDataBootstrap';
 import { compareGoogleMetrics } from './compareGoogleMetrics';
 import { topicTimeline } from './topicTimeline';
 import { getCompetitorReviewInsights } from './getCompetitorReviewInsights';
+import { reputationAdvisorChat } from './reputationAdvisorChat';
 
 const router = Router();
 
@@ -252,6 +253,7 @@ const FUNCTION_MAP: Record<string, any> = {
   compareGoogleMetrics,
   topicTimeline,
   getCompetitorReviewInsights,
+  reputationAdvisorChat,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,
