@@ -263,7 +263,7 @@ export default function Reputation() {
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [_scanning, setScanning] = useState(false);
   const [selectedReview, setSelectedReview] = useState(null);
-  const [selectedSources] = useState(['google', 'facebook', 'instagram', 'tripadvisor', 'waze', 'tiktok', 'wolt', '10bis', 'easy', 'forums']);
+  const [selectedSources] = useState(['google']);
 
   const handleCollectReviews = async () => {
     setScanning(true);
@@ -274,7 +274,7 @@ export default function Reputation() {
       });
       const { new_reviews = 0 } = res?.data || {};
       if (new_reviews > 0) {
-        toast.success(`נמצאו ${new_reviews} ביקורות חדשות מ-${selectedSources.length} מקורות ✓`);
+        toast.success(`נמצאו ${new_reviews} ביקורות חדשות מ-Google ✓`);
       } else {
         toast.info('לא נמצאו ביקורות חדשות');
       }
@@ -390,10 +390,8 @@ export default function Reputation() {
   ];
 
   const [reviewSearch, setReviewSearch] = useState('');
-  const [platformFilter, setPlatformFilter] = useState('google');
 
   const filteredTable = sortedReviews.filter(r => {
-    if (platformFilter !== 'all' && r.source !== platformFilter) return false;
     if (reviewSearch && !(r.text || '').toLowerCase().includes(reviewSearch.toLowerCase()) &&
         !(r.reviewer_name || '').toLowerCase().includes(reviewSearch.toLowerCase())) return false;
     return true;
@@ -505,24 +503,11 @@ export default function Reputation() {
           <h2 className="text-[15px] font-bold text-foreground">ביקורות <span className="text-foreground-muted font-normal">({reviews.length})</span></h2>
           <div className="flex items-center gap-2 flex-wrap">
             {/* Filters first in DOM = appear on RIGHT within the group in RTL */}
-            <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
-              {[{ key: 'all', label: 'הכל' }, { key: 'google', label: 'Google' }, { key: 'facebook', label: 'Facebook' }].map(f => (
-                <button key={f.key} onClick={() => setPlatformFilter(f.key)}
-                  className={`px-3 py-1.5 rounded-md text-[11px] font-medium transition-all ${
-                    platformFilter === f.key ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
-                  }`}>
-                  {f.label}
-                </button>
-              ))}
-            </div>
-            <button className="flex items-center gap-1 text-[11px] text-foreground-muted border border-border rounded-lg px-2.5 py-1.5 hover:bg-secondary transition-colors">
-              כל הפלטפורמות <ChevronDown className="w-3 h-3" />
-            </button>
             <button className="flex items-center gap-1 text-[11px] text-foreground-muted border border-border rounded-lg px-2.5 py-1.5 hover:bg-secondary transition-colors">
               פילטרים מתקדמים <ChevronDown className="w-3 h-3" />
             </button>
-            {(reviewSearch || platformFilter !== 'all') && (
-              <button onClick={() => { setReviewSearch(''); setPlatformFilter('all'); }} className="text-[11px] text-foreground-muted hover:text-foreground transition-colors">
+            {reviewSearch && (
+              <button onClick={() => setReviewSearch('')} className="text-[11px] text-foreground-muted hover:text-foreground transition-colors">
                 נקה פילטרים
               </button>
             )}
