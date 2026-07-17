@@ -6,6 +6,10 @@
  * Run against the target environment's DB/API keys, e.g.:
  *   DATABASE_URL=... SERPAPI_KEY=... GOOGLE_PLACES_API_KEY=... ANTHROPIC_API_KEY=... \
  *     npx ts-node scripts/refreshReviewsDatesAndTopics.ts
+ *
+ * On a low Anthropic usage tier (small account balance → low RPM cap), tune throttling
+ * without editing code:
+ *   TOPIC_BATCH_SIZE=10 BATCH_DELAY_MS=20000 npx ts-node scripts/refreshReviewsDatesAndTopics.ts
  */
 import { prisma } from '../src/db';
 import { serpGoogleMapsReviews, firstValidDate } from '../src/lib/serpapi';
@@ -13,8 +17,10 @@ import { batchExtractTopics } from '../src/lib/reviewTaxonomy';
 import { getSectorProfile } from '../src/lib/businessProfile';
 import { resolveTopicSet } from '../src/lib/reviewTopicPacks';
 
-const TOPIC_BATCH = 100;
-const BATCH_DELAY_MS = 3000; // throttle between LLM calls to avoid tripping rate limits
+// ponytail: defaults tuned for Anthropic's lowest usage tier (small account balance) —
+// raise TOPIC_BATCH_SIZE / lower BATCH_DELAY_MS once the account tier goes up.
+const TOPIC_BATCH = Number(process.env.TOPIC_BATCH_SIZE) || 15;
+const BATCH_DELAY_MS = Number(process.env.BATCH_DELAY_MS) || 15_000;
 const MAX_RETRIES = 3;
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -25,7 +31,7 @@ async function extractWithRetry(texts: Array<{ text: string }>, topicSet?: any) 
     // (see batchExtractTopics' catch-all) rather than every review genuinely lacking topics.
     const allEmpty = results.every(r => !r.topics);
     if (!allEmpty || attempt === MAX_RETRIES) return results;
-    const backoffMs = attempt * 10_000;
+    const backoffMs = attempt * 20_000;
     console.warn(`  batch failed (attempt ${attempt}/${MAX_RETRIES}), retrying in ${backoffMs / 1000}s...`);
     await sleep(backoffMs);
   }
