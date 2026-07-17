@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
 import { invokeLLM } from '../lib/llm';
+import { getSectorProfile } from '../lib/businessProfile';
+import { resolveTopicSet } from '../lib/reviewTopicPacks';
 import FormData from 'form-data';
 import fetch from 'node-fetch';
 import { randomUUID } from 'crypto';
@@ -617,6 +619,134 @@ router.post('/reviews/:id/reply', async (req: Request, res: Response) => {
     return res.json(result);
   } catch (err: any) {
     console.error('[social/reviews/reply]', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/social/reviews/topic-set?businessProfileId=xxx
+ * KAN-122 — returns the resolved review aspect set for a business.
+ * UI uses id→label_he from this response to render aspect pills.
+ */
+router.get('/reviews/topic-set', async (req: Request, res: Response) => {
+  const { businessProfileId } = req.query as { businessProfileId?: string };
+  if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+  const profile = await prisma.businessProfile.findUnique({
+    where: { id: businessProfileId },
+    select: { sector_profile: true },
+  });
+  if (!profile) return res.status(404).json({ error: 'Business not found' });
+
+  const sp = getSectorProfile(profile);
+  const topics = resolveTopicSet(
+    sp?.sector_key ?? 'other',
+    sp?.onboarding_review_extras ?? [],
+  );
+  return res.json({ topics });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/social/reviews/:id/suggest-reply
+// KAN-125 — A2 structured reply draft from aspect checklist + star rating.
+// Body: { businessProfileId }
+// Returns: { draft: string } — no auto-send, no DB write.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Pure prompt builder — exported for unit testing. */
+export function buildA2Prompt(opts: {
+  businessName: string;
+  reviewerName: string;
+  reviewText:   string;
+  rating:       number;
+  positives:    string[];   // aspect label_he values with positive sentiment
+  negatives:    string[];   // aspect label_he values with negative sentiment
+  allAspects:   string[];   // full resolved checklist (label_he)
+  closingStyle: string;
+}): string {
+  const posLine = opts.positives.length
+    ? `Positive aspects mentioned: ${opts.positives.join(', ')}`
+    : 'No clearly positive aspects identified.';
+  const negLine = opts.negatives.length
+    ? `Negative aspects mentioned: ${opts.negatives.join(', ')}`
+    : 'No clearly negative aspects identified.';
+
+  return `You are writing a structured Google review reply in Hebrew for "${opts.businessName}".
+
+Reviewer: ${opts.reviewerName}
+Stars: ${opts.rating}/5
+Review text: "${opts.reviewText}"
+
+Full aspect checklist for this business type:
+${opts.allAspects.map(a => `- ${a}`).join('\n')}
+
+${posLine}
+${negLine}
+
+Write the reply following this EXACT skeleton — preserve this order, no exceptions:
+1. POSITIVES: Acknowledge and thank the reviewer for each positive aspect (skip this block entirely if none).
+2. NEGATIVES: Address each negative aspect in its own sentence — be specific to what the reviewer said, add NO invented facts, claim no knowledge of events not in the review.
+3. CLOSE: One sentence — ${opts.closingStyle}.
+
+Output ONLY the final Hebrew reply text. No intro, no quotes, no markdown.`;
+}
+
+const TONE_CLOSE: Record<string, string> = {
+  casual:       'casual and warm — invite them back by name',
+  warm:         'warm and personal — offer a direct conversation or follow-up',
+  professional: 'professional — offer to discuss further or invite them to return',
+  friendly:     'friendly — thank them and invite them back',
+};
+
+router.post('/reviews/:id/suggest-reply', async (req: Request, res: Response) => {
+  const reviewId = req.params.id as string;
+  const { businessProfileId } = req.body;
+  if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+  const review = await prisma.review.findUnique({ where: { id: reviewId } });
+  if (!review) return res.status(404).json({ error: 'Review not found' });
+
+  const profile = await prisma.businessProfile.findUnique({
+    where: { id: businessProfileId },
+    select: { name: true, tone_preference: true, sector_profile: true },
+  });
+  if (!profile) return res.status(404).json({ error: 'Business not found' });
+
+  const sp      = getSectorProfile(profile);
+  const aspects = resolveTopicSet(sp?.sector_key ?? 'other', sp?.onboarding_review_extras ?? []);
+  const tone    = profile.tone_preference || sp?.content_tone || 'professional';
+
+  // Parse topic_sentiment (from KAN-124 aspect extraction) to split into pos/neg lists
+  let topicSentiment: Record<string, string> = {};
+  try { topicSentiment = review.topic_sentiment ? JSON.parse(review.topic_sentiment) : {}; } catch { /* ignore */ }
+
+  const labelById = Object.fromEntries(aspects.map(a => [a.id, a.label_he]));
+  const positives = Object.entries(topicSentiment)
+    .filter(([, s]) => s === 'positive')
+    .map(([id]) => labelById[id] || id);
+  const negatives = Object.entries(topicSentiment)
+    .filter(([, s]) => s === 'negative' || s === 'mixed')
+    .map(([id]) => labelById[id] || id);
+
+  try {
+    const raw = await invokeLLM({
+      model: 'sonnet',
+      maxTokens: 1000,
+      prompt: buildA2Prompt({
+        businessName: profile.name || '',
+        reviewerName: review.reviewer_name || 'לקוח',
+        reviewText:   review.text || '',
+        rating:       review.rating ?? 3,
+        positives,
+        negatives,
+        allAspects:   aspects.map(a => a.label_he),
+        closingStyle: TONE_CLOSE[tone] ?? TONE_CLOSE.professional,
+      }),
+    });
+
+    const draft = typeof raw === 'string' ? raw.trim() : (raw as any)?.content?.trim() || '';
+    return res.json({ ok: true, draft });
+  } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
 });

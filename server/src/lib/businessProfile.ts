@@ -27,6 +27,8 @@ export interface SectorProfile {
   content_tone:        string;
   seasonality_he:      string;
   key_trust_signals_he: string[];
+  // KAN-122: owner-selected review aspects added at onboarding (≤3, must NOT be relevant_topics)
+  onboarding_review_extras?: Array<{ id: string; label_he: string }>;
 }
 
 /** Parse sector_profile from BusinessProfile. Returns null if missing or invalid. */
