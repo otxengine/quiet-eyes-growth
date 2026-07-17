@@ -122,6 +122,25 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
       }
 
       perCompetitor.push({ name: comp.name, new: pending.length });
+
+      // Backfill: existing reviews that were stored before topic extraction was added
+      const untopiced = await (prisma.review as any).findMany({
+        where: { linked_competitor: comp.id, topic_sentiment: null },
+        select: { id: true, text: true },
+        take: 100,
+      }) as Array<{ id: string; text: string }>;
+
+      if (untopiced.length > 0) {
+        const backfillTopics = await batchExtractTopics(untopiced.map(r => ({ text: r.text || '' })));
+        for (let i = 0; i < untopiced.length; i++) {
+          const { topics, topic_sentiment } = backfillTopics[i];
+          if (!topics) continue;
+          await (prisma.review as any).update({
+            where: { id: untopiced[i].id },
+            data: { topics, topic_sentiment },
+          }).catch(() => {});
+        }
+      }
     }
 
     await writeAutomationLog('collectCompetitorReviews', businessProfileId, startTime, totalNew, 'success');
