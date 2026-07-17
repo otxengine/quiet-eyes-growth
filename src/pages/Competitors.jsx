@@ -8,6 +8,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
 import DataTable from '@/components/shared/DataTable';
 import GoogleCompareWidget from '@/components/competitors/GoogleCompareWidget';
+import BattlecardPanel from '@/components/competitors/BattlecardPanel';
 
 const COLUMNS = [
   { key: 'name',     label: 'מתחרה' },
@@ -46,6 +47,7 @@ export default function Competitors() {
   const bpId = businessProfile?.id;
   const queryClient = useQueryClient();
   const [scanning, setScanning] = useState(false);
+  const [selectedCompetitor, setSelectedCompetitor] = useState(null);
 
   const { data: competitors = [], isLoading } = useQuery({
     queryKey: ['competitorsPage', bpId],
@@ -185,13 +187,28 @@ export default function Competitors() {
               </div>
             );
             if (col.key === 'action') return (
-              <button className="text-xs font-semibold text-violet-600 hover:text-violet-800 bg-violet-50 px-3 py-1 rounded-lg transition-colors">
+              <button
+                onClick={() => setSelectedCompetitor(prev => prev?.id === comp.id ? null : comp)}
+                className={`text-xs font-semibold px-3 py-1 rounded-lg transition-colors ${selectedCompetitor?.id === comp.id ? 'bg-violet-600 text-white' : 'text-violet-600 hover:text-violet-800 bg-violet-50'}`}
+              >
                 ניתוח מעמיק
               </button>
             );
             return null;
           }}
         />
+      )}
+
+      {selectedCompetitor && (
+        <div className="mt-2">
+          <div dir="rtl" className="px-1 mb-2 text-[12px] font-semibold text-foreground-secondary">
+            ניתוח מעמיק — {selectedCompetitor.name}
+          </div>
+          <BattlecardPanel
+            competitor={selectedCompetitor}
+            businessProfile={businessProfile}
+          />
+        </div>
       )}
     </div>
   );
