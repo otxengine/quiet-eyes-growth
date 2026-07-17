@@ -117,6 +117,7 @@ import { intentClassification } from './intentClassification';
 import { otxSyncBridge } from './otxSyncBridge';
 import { competitorDataBootstrap } from './competitorDataBootstrap';
 import { compareGoogleMetrics } from './compareGoogleMetrics';
+import { topicTimeline } from './topicTimeline';
 
 const router = Router();
 
@@ -248,6 +249,7 @@ const FUNCTION_MAP: Record<string, any> = {
   otxSyncBridge,
   competitorDataBootstrap,
   compareGoogleMetrics,
+  topicTimeline,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,
