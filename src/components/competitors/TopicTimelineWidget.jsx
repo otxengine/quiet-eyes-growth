@@ -1,9 +1,15 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, TrendingUp } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api').replace(/\/$/, '');
+
+// positive / (positive + negative) as %, null when no data
+function ratio(pos, neg) {
+  const total = pos + neg;
+  return total === 0 ? null : Math.round((pos / total) * 100);
+}
 
 export default function TopicTimelineWidget({ businessProfileId, businessName }) {
   const [activeTopic, setActiveTopic] = useState(null);
@@ -41,11 +47,10 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
   const compSeries = compEntry?.series?.find(s => s.topic_id === topic);
 
   const chartData = (ownSeries?.buckets ?? []).map(b => {
-    const row = { period: b.period.slice(5), pos: b.positive, neg: b.negative };
+    const row = { period: b.period.slice(5), own: ratio(b.positive, b.negative) };
     if (compSeries) {
       const cb = compSeries.buckets?.find(x => x.period === b.period) ?? { positive: 0, negative: 0 };
-      row.comp_pos = cb.positive;
-      row.comp_neg = cb.negative;
+      row.comp = ratio(cb.positive, cb.negative);
     }
     return row;
   });
@@ -57,6 +62,7 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
       <div className="flex items-center gap-2">
         <TrendingUp className="w-4 h-4 text-blue-500" />
         <h3 className="text-sm font-semibold text-foreground">מגמת נושאים לאורך זמן — Google</h3>
+        <span className="text-[10px] text-foreground-muted mr-auto">% חיובי מתוך סה״כ אזכורים</span>
       </div>
 
       {/* Topic selector */}
@@ -105,17 +111,17 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
       )}
 
       <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+        <LineChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="period" tick={{ fontSize: 9 }} />
-          <YAxis allowDecimals={false} tick={{ fontSize: 9 }} />
-          <Tooltip contentStyle={{ fontSize: 11, borderRadius: 6 }} />
+          <YAxis domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 9 }} />
+          <Tooltip formatter={v => v != null ? `${v}%` : '—'} contentStyle={{ fontSize: 11, borderRadius: 6 }} />
           <Legend wrapperStyle={{ fontSize: 10 }} />
-          <Bar dataKey="pos" name={`חיובי — ${ownLabel}`} fill="#22c55e" radius={[2, 2, 0, 0]} />
-          <Bar dataKey="neg" name={`שלילי — ${ownLabel}`} fill="#ef4444" radius={[2, 2, 0, 0]} />
-          {compEntry && <Bar dataKey="comp_pos" name={`חיובי — ${compEntry.name}`} fill="#a3e635" opacity={0.75} radius={[2, 2, 0, 0]} />}
-          {compEntry && <Bar dataKey="comp_neg" name={`שלילי — ${compEntry.name}`} fill="#fb923c" opacity={0.75} radius={[2, 2, 0, 0]} />}
-        </BarChart>
+          <Line type="monotone" dataKey="own" name={ownLabel} stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
+          {compEntry && (
+            <Line type="monotone" dataKey="comp" name={compEntry.name} stroke="#9333ea" strokeWidth={1.5} strokeDasharray="4 2" dot={{ r: 2.5 }} connectNulls={false} />
+          )}
+        </LineChart>
       </ResponsiveContainer>
     </div>
   );
