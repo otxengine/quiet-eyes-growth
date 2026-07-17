@@ -28,7 +28,14 @@ const SENTIMENT_DOT = {
   positive: 'bg-green-500',
 };
 
-function ReviewRow({ review, onApprove }) {
+const CHIP_COLOR = {
+  positive: 'bg-green-100 text-green-700',
+  negative: 'bg-red-100 text-red-600',
+  neutral:  'bg-amber-100 text-amber-600',
+};
+const CHIP_PREFIX = { positive: '+', negative: '−', neutral: '' };
+
+function ReviewRow({ review, onApprove, labelById = {} }) {
   const platCfg = PLATFORM_ICONS[review.source] || PLATFORM_ICONS.default;
   const sentDot = SENTIMENT_DOT[review.sentiment] || 'bg-gray-400';
   const relDate = (() => {
@@ -43,29 +50,49 @@ function ReviewRow({ review, onApprove }) {
   })();
   const isPending = review.response_status === 'pending';
 
+  const topicIds = review.topics ? review.topics.split(',').map(t => t.trim()).filter(Boolean) : [];
+  let topicSentiment = {};
+  try { topicSentiment = review.topic_sentiment ? JSON.parse(review.topic_sentiment) : {}; } catch {}
+  const chips = topicIds.map(id => ({
+    id,
+    label: labelById[id] || id,
+    polarity: topicSentiment[id] || 'neutral',
+  }));
+
   return (
-    <div dir="rtl" className="flex items-center gap-3 px-4 py-3 border-b border-border/40 last:border-0 hover:bg-gray-50/40 transition-colors">
-      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${sentDot}`} />
-      <span className="flex-1 text-[12px] text-foreground truncate min-w-0">
-        {(review.text || '').slice(0, 80) || '(ביקורת ללא טקסט)'}
-        {(review.text || '').length > 80 ? '...' : ''}
-      </span>
-      <span className="text-[12px] font-semibold text-foreground w-8 flex-shrink-0 text-center">
-        {review.rating ? Number(review.rating).toFixed(1) : '—'}
-      </span>
-      <span className="text-[18px] w-8 flex-shrink-0 text-center" title={platCfg.label}>{platCfg.icon}</span>
-      <span className="text-[11px] text-foreground-muted w-20 flex-shrink-0">{relDate}</span>
-      <button onClick={() => onApprove(review)}
-        className={`flex-shrink-0 text-[11px] px-3 py-1.5 rounded-full border font-medium transition-colors ${
-          isPending
-            ? 'border-[#e8344d] text-[#e8344d] hover:bg-red-50'
-            : 'border-border text-foreground-muted hover:bg-secondary'
-        }`}>
-        {isPending ? 'אשר/ערוך תגובה' : 'ערוך תגובה'}
-      </button>
-      <button className="text-foreground-muted hover:text-foreground flex-shrink-0">
-        <MoreVertical className="w-4 h-4" />
-      </button>
+    <div dir="rtl" className="px-4 py-3 border-b border-border/40 last:border-0 hover:bg-gray-50/40 transition-colors">
+      <div className="flex items-center gap-3">
+        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${sentDot}`} />
+        <span className="flex-1 text-[12px] text-foreground truncate min-w-0">
+          {(review.text || '').slice(0, 80) || '(ביקורת ללא טקסט)'}
+          {(review.text || '').length > 80 ? '...' : ''}
+        </span>
+        <span className="text-[12px] font-semibold text-foreground w-8 flex-shrink-0 text-center">
+          {review.rating ? Number(review.rating).toFixed(1) : '—'}
+        </span>
+        <span className="text-[18px] w-8 flex-shrink-0 text-center" title={platCfg.label}>{platCfg.icon}</span>
+        <span className="text-[11px] text-foreground-muted w-20 flex-shrink-0">{relDate}</span>
+        <button onClick={() => onApprove(review)}
+          className={`flex-shrink-0 text-[11px] px-3 py-1.5 rounded-full border font-medium transition-colors ${
+            isPending
+              ? 'border-[#e8344d] text-[#e8344d] hover:bg-red-50'
+              : 'border-border text-foreground-muted hover:bg-secondary'
+          }`}>
+          {isPending ? 'אשר/ערוך תגובה' : 'ערוך תגובה'}
+        </button>
+        <button className="text-foreground-muted hover:text-foreground flex-shrink-0">
+          <MoreVertical className="w-4 h-4" />
+        </button>
+      </div>
+      {chips.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1.5 pr-5">
+          {chips.map(c => (
+            <span key={c.id} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${CHIP_COLOR[c.polarity] || CHIP_COLOR.neutral}`}>
+              {CHIP_PREFIX[c.polarity]}{c.label}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -234,6 +261,18 @@ export default function Reputation() {
     staleTime: 1000 * 60 * 30,
   });
 
+  const { data: topicSet = [] } = useQuery({
+    queryKey: ['topicSet', bpId],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/social/reviews/topic-set?businessProfileId=${bpId}`);
+      const data = await res.json();
+      return data.topics ?? [];
+    },
+    enabled: !!bpId,
+    staleTime: 1000 * 60 * 60,
+  });
+  const labelById = Object.fromEntries(topicSet.map(a => [a.id, a.label_he]));
+
   const reviews = /** @type {Array<Record<string, any>>} */ (allReviewsRaw).filter(r => !r.is_historical && r.rating != null && Number(r.rating) > 0);
 
   const avgRating = reviews.length > 0 ? (reviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / reviews.length) : 0;
@@ -303,7 +342,7 @@ export default function Reputation() {
   ];
 
   const [reviewSearch, setReviewSearch] = useState('');
-  const [platformFilter, setPlatformFilter] = useState('all');
+  const [platformFilter, setPlatformFilter] = useState('google');
 
   const filteredTable = sortedReviews.filter(r => {
     if (platformFilter !== 'all' && r.source !== platformFilter) return false;
@@ -472,7 +511,7 @@ export default function Reputation() {
                 <p className="text-[12px] text-foreground-muted">אין ביקורות התואמות את הסינון</p>
               </div>
             ) : filteredTable.map(review => (
-              <ReviewRow key={review.id} review={review}
+              <ReviewRow key={review.id} review={review} labelById={labelById}
                 onApprove={() => setSelectedReview(review)}
               />
             ))}
