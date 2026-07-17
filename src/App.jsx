@@ -31,6 +31,7 @@ import Intelligence from '@/pages/Intelligence.jsx';
 import Competitors from '@/pages/Competitors.jsx';
 import Events from '@/pages/Events.jsx';
 import Reputation from '@/pages/Reputation.jsx';
+import ReviewsCompare from '@/pages/ReviewsCompare.jsx';
 import Leads from '@/pages/Leads.jsx';
 import Retention from '@/pages/Retention.jsx';
 import Agents from '@/pages/Agents.jsx';
@@ -166,6 +167,7 @@ const AuthenticatedApp = () => {
         <Route path="/competitors" element={<Competitors />} />
         <Route path="/events" element={<Events />} />
         <Route path="/reviews" element={<Reputation />} />
+        <Route path="/reviews/compare" element={<ReviewsCompare />} />
         <Route path="/social-comments" element={<SocialComments />} />
         <Route path="/leads" element={<Leads />} />
         <Route path="/retention" element={<Retention />} />

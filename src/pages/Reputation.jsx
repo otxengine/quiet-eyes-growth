@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Star, Plus, Search, Loader2, Bot, Send, X, ChevronDown, MoreVertical, Copy, CheckCheck } from 'lucide-react';
@@ -9,8 +10,6 @@ import RequestReviewModal from '@/components/reputation/RequestReviewModal';
 import ScheduledReviewRequests from '@/components/reputation/ScheduledReviewRequests';
 import RatingTrendChart from '@/components/reputation/RatingTrendChart';
 import StatCards from '@/components/shared/StatCards';
-import PageHeader from '@/components/shared/PageHeader';
-import GoogleCompareWidget from '@/components/competitors/GoogleCompareWidget';
 
 const PLATFORM_ICONS = {
   google:    { icon: '🔍', label: 'Google',    color: '#4285f4' },
@@ -411,17 +410,29 @@ export default function Reputation() {
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        title="מוניטין/נראות עסקית"
-        subtitle="מעקב אחר ביקורות, דירוג העסק והמלצות לשיפור המוניטין"
-        actionLabel="הוספת ביקורת"
-        actionIcon={<Plus className="w-4 h-4" />}
-        onAction={() => setShowAddModal(true)}
-      />
+      <div className="flex items-start justify-between mb-6">
+        <div className="flex items-center gap-2 mt-1">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-1.5 bg-foreground text-background px-4 py-2 rounded-full text-sm font-semibold hover:opacity-85 transition-opacity shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            הוספת ביקורת
+          </button>
+          <Link
+            to="/reviews/compare"
+            className="flex items-center gap-1.5 border border-border px-4 py-2 rounded-full text-sm font-semibold text-foreground hover:bg-secondary transition-colors shadow-sm"
+          >
+            השוואת Google
+          </Link>
+        </div>
+        <div className="text-right">
+          <span className="text-lg font-semibold text-foreground">מוניטין/נראות עסקית</span>
+          <p className="text-xs text-foreground-muted mt-0.5">מעקב אחר ביקורות, דירוג העסק והמלצות לשיפור המוניטין</p>
+        </div>
+      </div>
 
       <StatCards cards={statCards} />
-
-      <GoogleCompareWidget businessProfileId={bpId} businessName={businessProfile?.name} />
 
       {/* Two-column: chart (40%) + מבט על (60%) */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
