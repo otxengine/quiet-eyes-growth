@@ -87,43 +87,45 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
         if (pending.length + existing.length >= MAX_REVIEWS) break;
       }
 
-      if (pending.length === 0) { perCompetitor.push({ name: comp.name, new: 0 }); continue; }
+      if (pending.length > 0) {
+        const topicsArr = await batchExtractTopics(
+          pending.map(p => ({ text: p.text })),
+        );
 
-      const topicsArr = await batchExtractTopics(
-        pending.map(p => ({ text: p.text })),
-      );
-
-      for (let i = 0; i < pending.length; i++) {
-        const { reviewId, text, rating, sentiment, reviewerName, publishTime } = pending[i];
-        const { topics, topic_sentiment } = topicsArr[i];
-        try {
-          await (prisma.review as any).create({
-            data: {
-              platform:          'Google',
-              rating,
-              text:              text.substring(0, 500),
-              reviewer_name:     reviewerName,
-              sentiment,
-              // AC3: no response_status → never enters ops inbox or autoRespondToReviews
-              response_status:   null,
-              source_url:        `https://www.google.com/maps/place/?q=place_id:${placeId}`,
-              source_origin:     normReviewOrigin('google_places', 'collectCompetitorReviews'),
-              google_review_id:  reviewId,
-              is_verified:       true,
-              created_at:        new Date(publishTime).toISOString(),
-              linked_business:   businessProfileId,
-              linked_competitor: comp.id,  // AC4: scoped to competitor
-              topics,
-              topic_sentiment,
-            },
-          });
-          totalNew++;
-        } catch { continue; }
+        for (let i = 0; i < pending.length; i++) {
+          const { reviewId, text, rating, sentiment, reviewerName, publishTime } = pending[i];
+          const { topics, topic_sentiment } = topicsArr[i];
+          try {
+            await (prisma.review as any).create({
+              data: {
+                platform:          'Google',
+                rating,
+                text:              text.substring(0, 500),
+                reviewer_name:     reviewerName,
+                sentiment,
+                // AC3: no response_status → never enters ops inbox or autoRespondToReviews
+                response_status:   null,
+                source_url:        `https://www.google.com/maps/place/?q=place_id:${placeId}`,
+                source_origin:     normReviewOrigin('google_places', 'collectCompetitorReviews'),
+                google_review_id:  reviewId,
+                is_verified:       true,
+                created_at:        new Date(publishTime).toISOString(),
+                linked_business:   businessProfileId,
+                linked_competitor: comp.id,  // AC4: scoped to competitor
+                topics,
+                topic_sentiment,
+              },
+            });
+            totalNew++;
+          } catch { continue; }
+        }
       }
 
       perCompetitor.push({ name: comp.name, new: pending.length });
 
-      // Backfill: existing reviews that were stored before topic extraction was added
+      // Backfill: existing reviews that were stored before topic extraction was added.
+      // Runs every pass regardless of `pending.length`, since collection is dedup'd and
+      // most passes find zero new reviews once a competitor is fully synced.
       const untopiced = await (prisma.review as any).findMany({
         where: { linked_competitor: comp.id, topic_sentiment: null },
         select: { id: true, text: true },
