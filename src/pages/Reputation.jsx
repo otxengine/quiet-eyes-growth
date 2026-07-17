@@ -36,7 +36,6 @@ const CHIP_COLOR = {
 const CHIP_PREFIX = { positive: '+', negative: '−', neutral: '' };
 
 function ReviewRow({ review, onApprove, labelById = {} }) {
-  const platCfg = PLATFORM_ICONS[review.source] || PLATFORM_ICONS.default;
   const sentDot = SENTIMENT_DOT[review.sentiment] || 'bg-gray-400';
   const relDate = (() => {
     const d = new Date(review.created_at || review.created_date || '');
