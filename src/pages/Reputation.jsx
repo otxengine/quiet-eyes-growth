@@ -73,7 +73,6 @@ function ReviewRow({ review, onApprove, labelById = {} }) {
             <Star key={i} className={`w-3 h-3 ${i <= Math.round(review.rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'}`} />
           ))}
         </div>
-        <span className="text-[18px] w-8 flex-shrink-0 text-center" title={platCfg.label}>{platCfg.icon}</span>
         <span className="text-[11px] text-foreground-muted w-20 flex-shrink-0">{relDate}</span>
         {isPublished && <span className="flex-shrink-0 text-[11px] font-medium text-green-600">✓ פורסם</span>}
         {isPending && <span className="flex-shrink-0 w-2 h-2 rounded-full bg-[#e8344d]" />}
@@ -529,7 +528,6 @@ export default function Reputation() {
               <span className="w-4" />
               <span className="flex-1">ביקורת</span>
               <span className="w-12 text-center">דירוג</span>
-              <span className="w-12 text-center">פלטפורמה</span>
               <span className="w-24">מועד</span>
               <span className="w-8" />
             </div>
