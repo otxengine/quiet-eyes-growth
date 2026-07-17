@@ -28,25 +28,23 @@ export default function BattlecardPanel({ competitor, businessProfile }) {
     setLoading(false);
   };
 
-  if (!battlecard) {
-    return (
-      <div className="text-center py-6">
-        <p className="text-[12px] text-foreground-muted mb-3">אין פרופיל מתחרה עדיין</p>
-        <button onClick={generate} disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-foreground text-background text-[12px] font-medium rounded-lg hover:opacity-90 transition-opacity mx-auto disabled:opacity-60">
-          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
-          {loading ? 'מייצר...' : 'צור פרופיל מתחרה'}
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
       <CompetitorReviewInsightsPanel
         competitor={competitor}
         businessProfileId={businessProfile?.id}
       />
+
+      {!battlecard ? (
+        <div className="text-center py-6">
+          <p className="text-[12px] text-foreground-muted mb-3">אין פרופיל מתחרה עדיין</p>
+          <button onClick={generate} disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-foreground text-background text-[12px] font-medium rounded-lg hover:opacity-90 transition-opacity mx-auto disabled:opacity-60">
+            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+            {loading ? 'מייצר...' : 'צור פרופיל מתחרה'}
+          </button>
+        </div>
+      ) : <>
 
       <GoogleCompareWidget
         businessProfileId={businessProfile?.id}
@@ -144,6 +142,7 @@ export default function BattlecardPanel({ competitor, businessProfile }) {
           </div>
         </div>
       )}
+      </> }
     </div>
   );
 }
