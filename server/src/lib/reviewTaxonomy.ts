@@ -28,7 +28,7 @@ export async function batchExtractTopics(
 
   try {
     const result = await invokeLLM({
-      prompt: `Extract topics from these reviews. For each review pick up to 6 topics from this exact list only: ${ALLOWED}. Map any phrasing to the nearest id — do not invent new labels. Assign polarity from wording only (positive/negative/neutral), not from the star rating.\n${itemsStr}\nReturn ONLY valid JSON: {"results":[{"topics":["service"],"sentiments":{"service":"positive"}},...]}, same length and order as input.`,
+      prompt: `Extract topics from these reviews. For each review pick up to 6 topics from this exact list only: ${ALLOWED}. Map any phrasing to the nearest id — do not invent new labels.\n\nPolarity rules (must follow):\n- Derive polarity ONLY from the wording of that specific topic — NEVER from the star rating or overall tone.\n- A 5-star review can have a topic marked "negative" if the wording criticizes it.\n- If the wording for a topic has no clear positive or negative signal → assign "neutral". Do not guess.\n\nExamples:\n"האוכל היה מעולה אבל השירות איטי ומאכזב" (5★) → {topics:["quality","service"], sentiments:{quality:"positive",service:"negative"}}\n"מקום סביר, היינו שם" → {topics:["atmosphere"], sentiments:{atmosphere:"neutral"}}\n\n${itemsStr}\nReturn ONLY valid JSON: {"results":[{"topics":["service"],"sentiments":{"service":"positive"}},...]}, same length and order as input.`,
       response_json_schema: { type: 'object' },
       model: 'haiku',
       maxTokens: 900,
