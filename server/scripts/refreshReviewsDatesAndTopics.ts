@@ -14,17 +14,35 @@ import { getSectorProfile } from '../src/lib/businessProfile';
 import { resolveTopicSet } from '../src/lib/reviewTopicPacks';
 
 const TOPIC_BATCH = 100;
+const BATCH_DELAY_MS = 3000; // throttle between LLM calls to avoid tripping rate limits
+const MAX_RETRIES = 3;
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+async function extractWithRetry(texts: Array<{ text: string }>, topicSet?: any) {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const results = await batchExtractTopics(texts, undefined, topicSet);
+    // A whole-batch empty result is the signature of a total provider failure
+    // (see batchExtractTopics' catch-all) rather than every review genuinely lacking topics.
+    const allEmpty = results.every(r => !r.topics);
+    if (!allEmpty || attempt === MAX_RETRIES) return results;
+    const backoffMs = attempt * 10_000;
+    console.warn(`  batch failed (attempt ${attempt}/${MAX_RETRIES}), retrying in ${backoffMs / 1000}s...`);
+    await sleep(backoffMs);
+  }
+  return [];
+}
 
 async function refreshTopics(reviews: Array<{ id: string; text: string | null }>, topicSet?: any) {
   for (let i = 0; i < reviews.length; i += TOPIC_BATCH) {
     const chunk = reviews.slice(i, i + TOPIC_BATCH);
-    const results = await batchExtractTopics(chunk.map(r => ({ text: r.text || '' })), undefined, topicSet);
+    const results = await extractWithRetry(chunk.map(r => ({ text: r.text || '' })), topicSet);
     for (let j = 0; j < chunk.length; j++) {
-      const { topics, topic_sentiment } = results[j];
+      const { topics, topic_sentiment } = results[j] || {};
       if (!topics) continue;
       await (prisma.review as any).update({ where: { id: chunk[j].id }, data: { topics, topic_sentiment } }).catch(() => {});
     }
     console.log(`  topics: ${Math.min(i + TOPIC_BATCH, reviews.length)}/${reviews.length}`);
+    await sleep(BATCH_DELAY_MS);
   }
 }
 
