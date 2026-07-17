@@ -118,6 +118,7 @@ import { otxSyncBridge } from './otxSyncBridge';
 import { competitorDataBootstrap } from './competitorDataBootstrap';
 import { compareGoogleMetrics } from './compareGoogleMetrics';
 import { topicTimeline } from './topicTimeline';
+import { getCompetitorReviewInsights } from './getCompetitorReviewInsights';
 
 const router = Router();
 
@@ -250,6 +251,7 @@ const FUNCTION_MAP: Record<string, any> = {
   competitorDataBootstrap,
   compareGoogleMetrics,
   topicTimeline,
+  getCompetitorReviewInsights,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,

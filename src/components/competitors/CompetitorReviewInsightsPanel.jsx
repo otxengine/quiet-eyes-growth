@@ -1,0 +1,99 @@
+import React, { useState } from 'react';
+import { base44 } from '@/api/base44Client';
+import { Loader2, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+
+const TREND_ICON = {
+  improving: <TrendingUp  className="w-3.5 h-3.5 text-success inline-block" />,
+  declining: <TrendingDown className="w-3.5 h-3.5 text-danger  inline-block" />,
+  stable:    <Minus        className="w-3.5 h-3.5 text-foreground-muted inline-block" />,
+};
+
+export default function CompetitorReviewInsightsPanel({ competitor, businessProfileId }) {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded]   = useState(false);
+
+  const load = async () => {
+    if (loaded) return;
+    setLoading(true);
+    try {
+      const res = await base44.functions.invoke('getCompetitorReviewInsights', {
+        competitorId: competitor.id,
+        businessProfileId,
+      });
+      setData(res?.data ?? res);
+    } catch { /* show nothing on error */ }
+    setLoading(false);
+    setLoaded(true);
+  };
+
+  // Lazy-load on mount
+  React.useEffect(() => { load(); }, []);
+
+  if (!loaded && loading) {
+    return (
+      <div className="flex items-center gap-2 text-[11px] text-foreground-muted py-2">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        טוען תובנות ביקורות...
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const { rating, review_count, top_positive_themes = [], top_negative_themes = [], trend, hebrew_summary } = data;
+
+  return (
+    <div className="rounded-xl border border-border bg-secondary/40 p-4 space-y-3">
+      <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide">
+        תובנות ביקורות Google — {competitor.name}
+      </p>
+
+      {/* Rating + count + trend */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="text-[22px] font-bold text-foreground leading-none">
+          {rating != null ? Number(rating).toFixed(1) : '—'}
+        </span>
+        <span className="text-[11px] text-foreground-muted">{review_count ? `${review_count} ביקורות` : ''}</span>
+        {trend && (
+          <span className="flex items-center gap-1 text-[11px] text-foreground-secondary">
+            {TREND_ICON[trend]} {trend === 'improving' ? 'משתפר' : trend === 'declining' ? 'יורד' : 'יציב'}
+          </span>
+        )}
+      </div>
+
+      {/* Positive themes */}
+      {top_positive_themes.length > 0 && (
+        <div>
+          <p className="text-[10px] font-semibold text-success mb-1">בולטים לטובה</p>
+          <div className="flex flex-wrap gap-1.5">
+            {top_positive_themes.map((t, i) => (
+              <span key={i} className="px-2 py-0.5 rounded-full text-[10px] bg-green-50 border border-green-200 text-green-700">{t}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Negative themes */}
+      {top_negative_themes.length > 0 && (
+        <div>
+          <p className="text-[10px] font-semibold text-danger mb-1">תלונות נפוצות</p>
+          <div className="flex flex-wrap gap-1.5">
+            {top_negative_themes.map((t, i) => (
+              <span key={i} className="px-2 py-0.5 rounded-full text-[10px] bg-red-50 border border-red-200 text-red-700">{t}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Hebrew summary */}
+      {hebrew_summary && (
+        <p className="text-[11px] text-foreground-secondary leading-relaxed border-t border-border pt-3">
+          {hebrew_summary}
+        </p>
+      )}
+
+      {/* AC3: no reply/publish actions rendered here */}
+    </div>
+  );
+}

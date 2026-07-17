@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { tavilySearch } from '../../lib/tavily';
+import { getCompetitorReviewInsightsData } from './getCompetitorReviewInsights';
 
 /**
  * commandChat — AI Command Center for CommandHome.
@@ -84,6 +85,21 @@ export async function commandChat(req: Request, res: Response) {
     const criticalAlerts = alerts.filter(a => a.priority === 'critical' || a.priority === 'high');
     const openTasks = tasks.filter((t: any) => t.status !== 'completed');
 
+    // focused_competitor_insights (R3-5): if user asks about a specific competitor, inject review insights
+    const focusedComp = competitors.find(c =>
+      message.toLowerCase().includes((c.name || '').toLowerCase().split(' ')[0])
+    );
+    let focusedInsightsBlock = '';
+    if (focusedComp) {
+      try {
+        const ins = await getCompetitorReviewInsightsData(businessProfileId, focusedComp.id);
+        focusedInsightsBlock = `\nfocused_competitor_insights (${focusedComp.name}):
+דירוג: ${ins.rating ?? '?'}/5 | ${ins.review_count ?? '?'} ביקורות${ins.trend ? ` | מגמה: ${ins.trend}` : ''}
+נושאים חיוביים: ${(ins.top_positive_themes as string[]).join(', ') || 'אין'}
+נושאים שליליים: ${(ins.top_negative_themes as string[]).join(', ') || 'אין'}${ins.hebrew_summary ? `\nסיכום: ${ins.hebrew_summary}` : ''}`;
+      } catch { /* non-fatal — context degrades gracefully */ }
+    }
+
     const contextBlock = `
 עסק: ${(profile as any).name} | ${(profile as any).category || ''} | ${(profile as any).city || ''}
 ציון בריאות: ${(healthScore as any)?.overall_score ?? 'לא זמין'}/100
@@ -94,7 +110,7 @@ ${hotLeads.slice(0, 3).map(l => `  • ${l.name || 'ליד'} — ${l.service_nee
 ביקורות: ${reviews.length} | ממתינות למענה: ${pendingReviews.length} | שליליות: ${negReviews.length}
 ${negReviews.slice(0, 2).map(r => `  • "${(r.text || '').slice(0, 60)}" (${r.rating}★)`).join('\n')}
 
-מתחרים (${competitors.length}): ${competitors.map(c => `${c.name} (${c.rating || '?'}★)`).join(', ')}
+מתחרים (${competitors.length}): ${competitors.map(c => `${c.name} (${c.rating || '?'}★)`).join(', ')}${focusedInsightsBlock}
 
 התראות פעילות (${alerts.length}) — דחופות: ${criticalAlerts.length}:
 ${criticalAlerts.slice(0, 3).map(a => `  • [${a.priority}] ${a.title} → ${a.suggested_action || ''}`).join('\n')}

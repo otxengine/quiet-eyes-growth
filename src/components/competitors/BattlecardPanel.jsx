@@ -3,6 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { Loader2, Shield, TrendingUp, MessageSquare, Target, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import GoogleCompareWidget from './GoogleCompareWidget';
+import CompetitorReviewInsightsPanel from './CompetitorReviewInsightsPanel';
 
 export default function BattlecardPanel({ competitor, businessProfile }) {
   const [loading, setLoading] = useState(false);
@@ -42,6 +43,11 @@ export default function BattlecardPanel({ competitor, businessProfile }) {
 
   return (
     <div className="space-y-4">
+      <CompetitorReviewInsightsPanel
+        competitor={competitor}
+        businessProfileId={businessProfile?.id}
+      />
+
       <GoogleCompareWidget
         businessProfileId={businessProfile?.id}
         businessName={businessProfile?.name}
