@@ -39,6 +39,8 @@ import {
 import { collectOTXCompetitorChanges } from './functions/collectOTXCompetitorChanges';
 import { runOTXSyncBridge } from './functions/runOTXSyncBridge';
 import { runSectorTrendRadar } from './functions/runSectorTrendRadar';
+import { runAgentForAll } from '../scheduler';
+import { collectReviews } from './functions/collectReviews';
 
 // Rate limit: 10 minutes per business+agent pair (in-memory)
 const lastRun: Map<string, number> = new Map();
@@ -129,6 +131,21 @@ const AGENT_HANDLERS: Record<string, (req: Request, res: Response) => any> = {
 };
 
 const router = Router();
+
+// POST /api/agents/trigger/collect-reviews
+// Global trigger — runs collectReviews (+ background competitor review backfill) for all businesses.
+router.post('/collect-reviews', async (_req: Request, res: Response) => {
+  const key = 'global:collectReviews';
+  const now = Date.now();
+  if ((now - (lastRun.get(key) ?? 0)) < COOLDOWN_MS) {
+    return res.status(429).json({ error: 'Rate limited — wait 10 minutes between manual triggers' });
+  }
+  lastRun.set(key, now);
+  runAgentForAll('CollectReviews', collectReviews).catch(err =>
+    console.error('[agentTrigger] collectReviews failed:', err.message)
+  );
+  return res.json({ ok: true, message: 'CollectReviews started for all businesses — competitor topic backfill will run automatically' });
+});
 
 // POST /api/agents/trigger/otx-sync-bridge
 // Global OTX sync — no businessProfileId needed, fans out to all QE profiles.
