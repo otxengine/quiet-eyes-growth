@@ -18,7 +18,7 @@ function dominant(a) {
 
 function AspectChips({ aspects }) {
   const top = (aspects || []).slice(0, 4);
-  if (!top.length) return <span className="text-[10px] text-foreground-muted opacity-50">אין נתוני נושאים</span>;
+  if (!top.length) return null;
   return (
     <div className="flex flex-wrap gap-1">
       {top.map(a => {
@@ -33,9 +33,9 @@ function AspectChips({ aspects }) {
   );
 }
 
-function Row({ name, rating, reviewCount, aspects, isOwn }) {
+function Row({ name, rating, reviewCount, delta, isOwn }) {
   return (
-    <div dir="rtl" className={`flex items-start gap-4 px-4 py-3 border-b border-border/40 last:border-0 ${isOwn ? 'bg-blue-50/30' : ''}`}>
+    <div dir="rtl" className={`flex items-center gap-4 px-4 py-3 border-b border-border/40 last:border-0 ${isOwn ? 'bg-blue-50/30' : ''}`}>
       <div className="w-24 flex-shrink-0">
         <p className="text-[12px] font-semibold text-foreground truncate">{name}</p>
         {isOwn && <p className="text-[9px] text-blue-500 font-medium mt-0.5">העסק שלי</p>}
@@ -50,8 +50,16 @@ function Row({ name, rating, reviewCount, aspects, isOwn }) {
         <p className="text-[12px] font-medium text-foreground">{reviewCount ?? '—'}</p>
         <p className="text-[9px] text-foreground-muted">ביקורות</p>
       </div>
-      <div className="flex-1 pt-0.5">
-        <AspectChips aspects={aspects} />
+      <div className="w-16 flex-shrink-0 text-center">
+        {isOwn ? (
+          <span className="text-[10px] text-foreground-muted">בסיס</span>
+        ) : delta != null ? (
+          <span className={`text-[13px] font-semibold ${delta <= 0 ? 'text-green-600' : 'text-red-500'}`}>
+            {delta >= 0 ? `+${delta.toFixed(1)}` : delta.toFixed(1)}
+          </span>
+        ) : (
+          <span className="text-[12px] text-foreground-muted">—</span>
+        )}
       </div>
     </div>
   );
@@ -84,6 +92,8 @@ export default function GoogleCompareWidget({ businessProfileId, businessName })
   const { own, competitors = [] } = data;
   if (!own && !competitors.length) return null;
 
+  const ownRating = own?.google_rating != null ? Number(own.google_rating) : null;
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div dir="rtl" className="px-4 py-3 border-b border-gray-100 bg-gray-50/60 flex items-center gap-2">
@@ -94,27 +104,38 @@ export default function GoogleCompareWidget({ businessProfileId, businessName })
         <span className="w-24 flex-shrink-0">עסק</span>
         <span className="w-20 flex-shrink-0 text-center">דירוג Google</span>
         <span className="w-16 flex-shrink-0 text-center">ביקורות</span>
-        <span className="flex-1">נושאים מובילים</span>
+        <span className="w-16 flex-shrink-0 text-center">פער</span>
       </div>
       {own && (
-        <Row
-          name={businessName || 'העסק שלי'}
-          rating={own.google_rating}
-          reviewCount={own.review_count}
-          aspects={own.aspects}
-          isOwn
-        />
+        <>
+          <Row
+            name={businessName || 'העסק שלי'}
+            rating={own.google_rating}
+            reviewCount={own.review_count}
+            delta={null}
+            isOwn
+          />
+          {own.aspects?.length > 0 && (
+            <div dir="rtl" className="px-4 pb-3 border-b border-border/40 bg-blue-50/30">
+              <p className="text-[9px] font-semibold text-foreground-muted mb-1.5">הנושאים שלי</p>
+              <AspectChips aspects={own.aspects} />
+            </div>
+          )}
+        </>
       )}
-      {competitors.map(c => (
-        <Row
-          key={c.id}
-          name={c.name}
-          rating={c.rating}
-          reviewCount={c.review_count}
-          aspects={c.aspects}
-          isOwn={false}
-        />
-      ))}
+      {competitors.map(c => {
+        const delta = ownRating != null && c.rating != null ? Number(c.rating) - ownRating : null;
+        return (
+          <Row
+            key={c.id}
+            name={c.name}
+            rating={c.rating}
+            reviewCount={c.review_count}
+            delta={delta}
+            isOwn={false}
+          />
+        );
+      })}
     </div>
   );
 }
