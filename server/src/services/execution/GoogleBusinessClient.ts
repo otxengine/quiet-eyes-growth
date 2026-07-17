@@ -23,6 +23,7 @@ export interface ReviewReplyPayload {
 export interface ReviewReplyResult {
   published: boolean;
   method: 'api' | 'suggested_only';
+  gmbRequired?: boolean;
   error?: string;
 }
 
@@ -93,6 +94,7 @@ export async function postReviewReply(
   }
 
   // Not published via API — stays as suggested_response for manual approval
+  const gmbConnected = !!(gmbToken && locationPath && locationPath.includes('/'));
   logger.info('Review reply saved as suggestion (no Google API token)', { businessProfileId, reviewId: payload.reviewId });
-  return { published: false, method: 'suggested_only' };
+  return { published: false, method: 'suggested_only', gmbRequired: !gmbConnected };
 }

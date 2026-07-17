@@ -616,7 +616,10 @@ router.post('/reviews/:id/reply', async (req: Request, res: Response) => {
       replyText,
       googleReviewId: (review as any).google_review_id || undefined,
     });
-    return res.json(result);
+    if (result.gmbRequired) {
+      return res.json({ ok: true, published: false, gmbRequired: true, draft: replyText });
+    }
+    return res.json({ ok: true, ...result });
   } catch (err: any) {
     console.error('[social/reviews/reply]', err.message);
     return res.status(500).json({ error: err.message });

@@ -58,8 +58,8 @@ export async function executeOrQueue(action: QueuedAction): Promise<ExecuteResul
 
   const autonomy = (profile?.autonomy_level ?? 'semi_auto') as string;
 
-  // Leads stay manual regardless of autonomy level
-  if (action.isLead) {
+  // Leads and review replies are ALWAYS manual — approval required before publishing (KAN-126)
+  if (action.isLead || action.actionType === 'review_reply') {
     const id = await createAutoAction(action, 'pending_approval', null);
     return { executed: false, autoActionId: id };
   }
