@@ -2,6 +2,7 @@ import { useOutletContext } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import GoogleCompareWidget from '@/components/competitors/GoogleCompareWidget';
+import TopicTimelineWidget from '@/components/competitors/TopicTimelineWidget';
 
 export default function ReviewsCompare() {
   // @ts-ignore
@@ -16,6 +17,7 @@ export default function ReviewsCompare() {
         <span className="text-lg font-semibold text-foreground">השוואת Google</span>
       </div>
       <GoogleCompareWidget businessProfileId={businessProfile?.id} businessName={businessProfile?.name} />
+      <TopicTimelineWidget businessProfileId={businessProfile?.id} businessName={businessProfile?.name} />
     </div>
   );
 }
