@@ -47,7 +47,7 @@ export default function Competitors() {
   const bpId = businessProfile?.id;
   const queryClient = useQueryClient();
   const [scanning, setScanning] = useState(false);
-  const [selectedCompetitor, setSelectedCompetitor] = useState(null);
+  const [selectedCompetitorId, setSelectedCompetitorId] = useState(null);
 
   const { data: competitors = [], isLoading } = useQuery({
     queryKey: ['competitorsPage', bpId],
@@ -188,8 +188,8 @@ export default function Competitors() {
             );
             if (col.key === 'action') return (
               <button
-                onClick={() => setSelectedCompetitor(prev => prev?.id === comp.id ? null : comp)}
-                className={`text-xs font-semibold px-3 py-1 rounded-lg transition-colors ${selectedCompetitor?.id === comp.id ? 'bg-violet-600 text-white' : 'text-violet-600 hover:text-violet-800 bg-violet-50'}`}
+                onClick={() => setSelectedCompetitorId(id => id === comp.id ? null : comp.id)}
+                className={`text-xs font-semibold px-3 py-1 rounded-lg transition-colors ${selectedCompetitorId === comp.id ? 'bg-violet-600 text-white' : 'text-violet-600 hover:text-violet-800 bg-violet-50'}`}
               >
                 ניתוח מעמיק
               </button>
@@ -199,17 +199,18 @@ export default function Competitors() {
         />
       )}
 
-      {selectedCompetitor && (
-        <div className="mt-2">
-          <div dir="rtl" className="px-1 mb-2 text-[12px] font-semibold text-foreground-secondary">
-            ניתוח מעמיק — {selectedCompetitor.name}
+      {selectedCompetitorId && (() => {
+        const comp = competitors.find(c => c.id === selectedCompetitorId);
+        if (!comp) return null;
+        return (
+          <div className="mt-2">
+            <div dir="rtl" className="px-1 mb-2 text-[12px] font-semibold text-foreground-secondary">
+              ניתוח מעמיק — {comp.name}
+            </div>
+            <BattlecardPanel competitor={comp} businessProfile={businessProfile} />
           </div>
-          <BattlecardPanel
-            competitor={selectedCompetitor}
-            businessProfile={businessProfile}
-          />
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
