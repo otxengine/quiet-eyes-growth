@@ -79,8 +79,15 @@ function weightedAgg(list) {
 }
 
 export default function GoogleCompareWidget({ businessProfileId, businessName }) {
-  const [mode, setMode] = useState('market'); // 'market' | 'selected'
-  const [selectedIds, setSelectedIds] = useState([]); // [] = all selected
+  // 'selected' is first-class per KAN-148; 'market' remains as an option
+  const [mode, setMode] = useState('selected');
+
+  // null = no stored preference (defaults to all); [] = user explicitly emptied the set
+  const lsKey = businessProfileId ? `compare-set-${businessProfileId}` : null;
+  const [selectedIds, setSelectedIds] = useState(() => {
+    if (!lsKey) return null;
+    try { return JSON.parse(localStorage.getItem(lsKey) ?? 'null'); } catch { return null; }
+  });
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['googleCompare', businessProfileId],
@@ -97,6 +104,9 @@ export default function GoogleCompareWidget({ businessProfileId, businessName })
     staleTime: 1000 * 60 * 5,
   });
 
+  // Destructure before early returns so all hooks above are unconditional
+  const { own, competitors = [], market: beMarket } = data ?? {};
+
   if (isLoading) return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 flex items-center justify-center">
       <Loader2 className="w-5 h-5 animate-spin text-foreground-muted" />
@@ -104,26 +114,24 @@ export default function GoogleCompareWidget({ businessProfileId, businessName })
   );
 
   if (isError || !data) return null;
-
-  const { own, competitors = [], market: beMarket } = data;
   if (!own && !competitors.length) return null;
 
   const ownRating = own?.google_rating != null ? Number(own.google_rating) : null;
 
-  // In selected mode, filter to checked subset (empty selectedIds = all)
-  const subset = mode === 'selected' && selectedIds.length
-    ? competitors.filter(c => selectedIds.includes(c.id))
-    : competitors;
-
+  // null → show all competitors (first visit, no stored pref)
+  const activeIds = selectedIds ?? competitors.map(c => c.id);
+  const subset = mode === 'selected' ? competitors.filter(c => activeIds.includes(c.id)) : competitors;
   const market = mode === 'market' ? beMarket : weightedAgg(subset);
   const marketDelta = ownRating != null && market != null ? ownRating - market.rating : null;
 
+  function saveIds(next) {
+    setSelectedIds(next);
+    if (lsKey) localStorage.setItem(lsKey, JSON.stringify(next));
+  }
+
   function toggleId(id) {
-    setSelectedIds(prev => {
-      // first uncheck seeds from all competitors, then removes the target
-      const base = prev.length ? prev : competitors.map(c => c.id);
-      return base.includes(id) ? base.filter(x => x !== id) : [...base, id];
-    });
+    const base = selectedIds ?? competitors.map(c => c.id);
+    saveIds(base.includes(id) ? base.filter(x => x !== id) : [...base, id]);
   }
 
   function ModeBtn({ m, label }) {
@@ -148,16 +156,16 @@ export default function GoogleCompareWidget({ businessProfileId, businessName })
           <span className="text-[11px] text-foreground-muted">— Google בלבד</span>
         </div>
         <div className="flex items-center gap-1">
-          <ModeBtn m="market" label="שוק כולל" />
           <ModeBtn m="selected" label="מתחרים נבחרים" />
+          <ModeBtn m="market" label="שוק כולל" />
         </div>
       </div>
 
-      {/* Competitor picker (selected mode only) */}
+      {/* Competitor add/remove controls (selected mode) */}
       {mode === 'selected' && competitors.length > 0 && (
         <div dir="rtl" className="px-4 py-2 border-b border-border/30 flex flex-wrap gap-x-3 gap-y-1.5 bg-gray-50/40">
           {competitors.map(c => {
-            const checked = !selectedIds.length || selectedIds.includes(c.id);
+            const checked = activeIds.includes(c.id);
             return (
               <label key={c.id} className="flex items-center gap-1 text-[11px] cursor-pointer select-none">
                 <input
@@ -181,7 +189,7 @@ export default function GoogleCompareWidget({ businessProfileId, businessName })
         <span className="w-16 flex-shrink-0 text-center">פער</span>
       </div>
 
-      {/* Own row */}
+      {/* Own row — always rendered (AC4) */}
       {own && (
         <>
           <Row
@@ -200,8 +208,8 @@ export default function GoogleCompareWidget({ businessProfileId, businessName })
         </>
       )}
 
-      {/* Weighted aggregate row (own vs market/subset) */}
-      {market && (
+      {/* Weighted aggregate row — only when subset is non-empty */}
+      {market && subset.length > 0 && (
         <div dir="rtl" className="flex items-center gap-4 px-4 py-3 border-b border-border/40 bg-amber-50/30">
           <div className="w-24 flex-shrink-0">
             <p className="text-[12px] font-semibold text-foreground">
@@ -250,6 +258,14 @@ export default function GoogleCompareWidget({ businessProfileId, businessName })
           />
         );
       })}
+
+      {/* Empty set prompt — AC4 */}
+      {mode === 'selected' && subset.length === 0 && (
+        <div dir="rtl" className="px-4 py-5 text-center border-t border-border/30">
+          <p className="text-[12px] text-foreground-muted">לא נבחרו מתחרים להשוואה</p>
+          <p className="text-[11px] text-foreground-muted opacity-60 mt-1">סמן מתחרים מהרשימה למעלה כדי להשוות</p>
+        </div>
+      )}
     </div>
   );
 }
