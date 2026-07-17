@@ -224,6 +224,16 @@ export default function Reputation() {
     enabled: !!bpId
   });
 
+  const { data: topThemes = [] } = useQuery({
+    queryKey: ['topThemes', bpId],
+    queryFn: async () => {
+      const res = await base44.functions.invoke('analyzeSentiment', { businessProfileId: bpId });
+      return res?.data?.top_themes ?? [];
+    },
+    enabled: !!bpId,
+    staleTime: 1000 * 60 * 30,
+  });
+
   const reviews = /** @type {Array<Record<string, any>>} */ (allReviewsRaw).filter(r => !r.is_historical && r.rating != null && Number(r.rating) > 0);
 
   const avgRating = reviews.length > 0 ? (reviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / reviews.length) : 0;
@@ -370,6 +380,36 @@ export default function Reputation() {
             </div>
           </div>
       </div>
+
+      {/* Top themes rollup */}
+      {topThemes.length > 0 && (() => {
+        const maxTotal = topThemes[0]?.total || 1;
+        return (
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3" dir="rtl">
+              <div className="flex items-center gap-3">
+                <span className="flex items-center gap-1 text-[10px] text-foreground-muted"><span className="w-2 h-2 rounded-full bg-green-400 inline-block" /> חיובי</span>
+                <span className="flex items-center gap-1 text-[10px] text-foreground-muted"><span className="w-2 h-2 rounded-full bg-rose-400 inline-block" /> שלילי</span>
+                <span className="flex items-center gap-1 text-[10px] text-foreground-muted"><span className="w-2 h-2 rounded-full bg-amber-300 inline-block" /> ניטרלי</span>
+              </div>
+              <span className="text-[13px] font-semibold text-foreground">נושאים מובילים <span className="text-foreground-muted font-normal text-[11px]">— 90 יום</span></span>
+            </div>
+            <div className="space-y-2" dir="rtl">
+              {topThemes.slice(0, 8).map(t => (
+                <div key={t.theme} className="flex items-center gap-3">
+                  <span className="text-[12px] font-medium text-foreground w-20 flex-shrink-0 text-right truncate">{t.theme}</span>
+                  <div className="flex-1 h-3.5 rounded-full bg-gray-100 overflow-hidden flex" style={{ maxWidth: `${(t.total / maxTotal) * 100}%` }}>
+                    {t.positive > 0 && <div className="bg-green-400 h-full transition-all" style={{ width: `${(t.positive / t.total) * 100}%` }} />}
+                    {t.neutral  > 0 && <div className="bg-amber-300 h-full transition-all" style={{ width: `${(t.neutral  / t.total) * 100}%` }} />}
+                    {t.negative > 0 && <div className="bg-rose-400  h-full transition-all" style={{ width: `${(t.negative / t.total) * 100}%` }} />}
+                  </div>
+                  <span className="text-[11px] text-foreground-muted w-6 flex-shrink-0">{t.total}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Reviews table */}
       <div>
