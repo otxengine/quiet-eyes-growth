@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Loader2, Shield, TrendingUp, MessageSquare, Target, Zap } from 'lucide-react';
 import { toast } from 'sonner';
+import GoogleCompareWidget from './GoogleCompareWidget';
 
 export default function BattlecardPanel({ competitor, businessProfile }) {
   const [loading, setLoading] = useState(false);
@@ -41,6 +42,11 @@ export default function BattlecardPanel({ competitor, businessProfile }) {
 
   return (
     <div className="space-y-4">
+      <GoogleCompareWidget
+        businessProfileId={businessProfile?.id}
+        businessName={businessProfile?.name}
+      />
+
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
