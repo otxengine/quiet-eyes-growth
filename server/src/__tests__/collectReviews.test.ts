@@ -460,8 +460,10 @@ describe('collectReviews — KAN-123 taxonomy', () => {
   });
 
   test('max 6 topics stored even when LLM returns more', async () => {
+    // restaurant sector: 10 topics available (5 CORE + 5 pack) — LLM returns 7, cap must clip to 6
+    bpFindMany.mockResolvedValue([{ ...PROFILE, sector_profile: JSON.stringify({ sector_key: 'restaurant', onboarding_review_extras: [] }) }]);
     llm.mockResolvedValue({
-      results: [{ topics: ['service','price','quality','cleanliness','atmosphere','availability','delivery'], sentiments: { service:'positive', price:'neutral', quality:'positive', cleanliness:'positive', atmosphere:'positive', availability:'positive', delivery:'negative' } }],
+      results: [{ topics: ['service','price','quality','cleanliness','atmosphere','food_quality','wait_time'], sentiments: { service:'positive', price:'neutral', quality:'positive', cleanliness:'positive', atmosphere:'positive', food_quality:'positive', wait_time:'negative' } }],
     });
     const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
     await collectReviews(req, res);

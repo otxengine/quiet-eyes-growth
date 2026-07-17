@@ -1,5 +1,6 @@
 import { batchExtractTopics } from '../lib/reviewTaxonomy';
 import { invokeLLM } from '../lib/llm';
+import { resolveTopicSet } from '../lib/reviewTopicPacks';
 
 jest.mock('../lib/llm', () => ({ invokeLLM: jest.fn(), startCostTracking: jest.fn(), popCost: jest.fn() }));
 
@@ -152,5 +153,85 @@ describe('batchExtractTopics — AC4 constraints', () => {
     const results = await batchExtractTopics([]);
     expect(results).toHaveLength(0);
     expect(llm).not.toHaveBeenCalled();
+  });
+});
+
+// ── KAN-142: sector pack injection ────────────────────────────────────────────
+
+describe('batchExtractTopics — KAN-142 topic recall', () => {
+  test('sector pack topic id accepted when topicSet provided', async () => {
+    const topicSet = resolveTopicSet('restaurant');
+    llm.mockResolvedValue({
+      results: [{ topics: ['food_quality', 'wait_time'], sentiments: { food_quality: 'positive', wait_time: 'negative' } }],
+    });
+
+    const [result] = await batchExtractTopics([{ text: 'האוכל היה מעולה אבל המתנה ארוכה' }], undefined, topicSet);
+
+    expect(result.topics).toBe('food_quality,wait_time');
+    const s = JSON.parse(result.topic_sentiment);
+    expect(s.food_quality).toBe('positive');
+    expect(s.wait_time).toBe('negative');
+  });
+
+  test('pack topic ids NOT present in topicSet are filtered out', async () => {
+    // beauty pack — food_quality should be rejected
+    const topicSet = resolveTopicSet('beauty');
+    llm.mockResolvedValue({
+      results: [{ topics: ['food_quality', 'results'], sentiments: { food_quality: 'positive', results: 'positive' } }],
+    });
+
+    const [result] = await batchExtractTopics([{ text: 'תוצאות מעולות' }], undefined, topicSet);
+
+    expect(result.topics).toBe('results');
+    expect(result.topic_sentiment).not.toContain('food_quality');
+  });
+
+  test('ranking instruction present in prompt when topicSet provided', async () => {
+    const topicSet = resolveTopicSet('restaurant');
+    llm.mockResolvedValue({ results: [{ topics: ['service'], sentiments: { service: 'positive' } }] });
+
+    await batchExtractTopics([{ text: 'שירות מצוין' }], undefined, topicSet);
+
+    const prompt: string = llm.mock.calls[0][0].prompt;
+    expect(prompt).toMatch(/rank|salient|explicit/i);
+  });
+
+  test('prompt includes sector pack labels when topicSet provided', async () => {
+    const topicSet = resolveTopicSet('restaurant');
+    llm.mockResolvedValue({ results: [{ topics: ['food_quality'], sentiments: { food_quality: 'positive' } }] });
+
+    await batchExtractTopics([{ text: 'אוכל מדהים' }], undefined, topicSet);
+
+    const prompt: string = llm.mock.calls[0][0].prompt;
+    expect(prompt).toContain('food_quality');
+    expect(prompt).toContain('איכות המזון');
+  });
+
+  test('falls back to core 7 topics when no topicSet provided', async () => {
+    llm.mockResolvedValue({
+      results: [{ topics: ['food_quality', 'service'], sentiments: { food_quality: 'positive', service: 'positive' } }],
+    });
+
+    const [result] = await batchExtractTopics([{ text: 'שירות ואוכל מעולים' }]);
+
+    // food_quality not in core 7 — filtered out; service retained
+    expect(result.topics).toBe('service');
+  });
+
+  test('polarity rules unchanged when topicSet used (KAN-133 guard)', async () => {
+    const topicSet = resolveTopicSet('restaurant');
+    llm.mockResolvedValue({
+      results: [{ topics: ['food_quality', 'service'], sentiments: { food_quality: 'positive', service: 'negative' } }],
+    });
+
+    const [result] = await batchExtractTopics(
+      [{ text: 'האוכל מצוין אבל השירות גרוע (5★)' }],
+      undefined,
+      topicSet,
+    );
+
+    const s = JSON.parse(result.topic_sentiment);
+    expect(s.food_quality).toBe('positive');
+    expect(s.service).toBe('negative'); // polarity from wording, not star
   });
 });

@@ -3,6 +3,8 @@ import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM, startCostTracking, popCost } from '../../lib/llm';
 import { batchExtractTopics } from '../../lib/reviewTaxonomy';
+import { getSectorProfile } from '../../lib/businessProfile';
+import { resolveTopicSet } from '../../lib/reviewTopicPacks';
 import { tavilySearch } from '../../lib/tavily';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { tryDecryptToken } from '../../lib/crypto';
@@ -51,6 +53,8 @@ export async function collectReviews(req: Request, res: Response) {
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
     const { name, city } = profile;
+    const sp = getSectorProfile(profile);
+    const topicSet = resolveTopicSet(sp?.sector_key ?? 'other', sp?.onboarding_review_extras ?? []);
     let newReviews = 0;
     let googleAdded = 0;
     let gmbPathResult: 'success' | 'failed' | 'not_connected' = 'not_connected';
@@ -123,7 +127,7 @@ export async function collectReviews(req: Request, res: Response) {
           } while (nextPageToken);
 
           if (gmbPending.length > 0) {
-            const gmbTopics = await batchExtractTopics(gmbPending.map(p => ({ text: p.text })));
+            const gmbTopics = await batchExtractTopics(gmbPending.map(p => ({ text: p.text })), undefined, topicSet);
             for (let i = 0; i < gmbPending.length; i++) {
               const { gr, reviewId, text, textKey, rating, sentiment, reviewerName } = gmbPending[i];
               const { topics, topic_sentiment } = gmbTopics[i];
@@ -182,7 +186,7 @@ export async function collectReviews(req: Request, res: Response) {
             serpPending.push({ reviewId, textKey, text, rating, sentiment, reviewerName: sr.user?.name || 'לקוח' });
           }
           if (serpPending.length > 0) {
-            const serpTopics = await batchExtractTopics(serpPending.map(p => ({ text: p.text })));
+            const serpTopics = await batchExtractTopics(serpPending.map(p => ({ text: p.text })), undefined, topicSet);
             for (let i = 0; i < serpPending.length; i++) {
               const { reviewId, textKey, text, rating, sentiment, reviewerName } = serpPending[i];
               const { topics, topic_sentiment } = serpTopics[i];
@@ -236,7 +240,7 @@ export async function collectReviews(req: Request, res: Response) {
           const sentiment = gr.rating >= 4 ? 'positive' : gr.rating <= 2 ? 'negative' : 'neutral';
           placesPending.push({ gr, googleId, textKey, sentiment, reviewText, authorName });
         }
-        const placesTopics = await batchExtractTopics(placesPending.map(p => ({ text: p.reviewText })));
+        const placesTopics = await batchExtractTopics(placesPending.map(p => ({ text: p.reviewText })), undefined, topicSet);
         for (let i = 0; i < placesPending.length; i++) {
           const { gr, googleId, textKey, sentiment, reviewText, authorName } = placesPending[i];
           const { topics, topic_sentiment } = placesTopics[i];
@@ -299,7 +303,7 @@ export async function collectReviews(req: Request, res: Response) {
         }
         const tavilyTopics = await batchExtractTopics(tavilyReviewsPending.map(p => ({
           text: p.parsed.text,
-        })), businessProfileId);
+        })), businessProfileId, topicSet);
         for (let i = 0; i < tavilyReviewsPending.length; i++) {
           const { parsed, url } = tavilyReviewsPending[i];
           const { topics, topic_sentiment } = tavilyTopics[i];
@@ -370,7 +374,7 @@ export async function collectReviews(req: Request, res: Response) {
       }
       const topics = await batchExtractTopics(pending.map(({ p }) => ({
         text: p.text,
-      })), businessProfileId);
+      })), businessProfileId, topicSet);
       for (let i = 0; i < pending.length; i++) {
         const { p, url } = pending[i];
         const { topics: t, topic_sentiment } = topics[i];
@@ -449,7 +453,7 @@ export async function collectReviews(req: Request, res: Response) {
       }
       const signalTopics = await batchExtractTopics(signalReviewsPending.map(p => ({
         text: p.parsed.text,
-      })), businessProfileId);
+      })), businessProfileId, topicSet);
       for (let i = 0; i < signalReviewsPending.length; i++) {
         const { parsed, url } = signalReviewsPending[i];
         const { topics, topic_sentiment } = signalTopics[i];
