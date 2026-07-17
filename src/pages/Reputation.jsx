@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Star, Plus, Search, Loader2, Bot, Send, X, ChevronDown, MoreVertical } from 'lucide-react';
+import { Star, Plus, Search, Loader2, Bot, Send, X, ChevronDown, MoreVertical, Copy, CheckCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import AddReviewModal from '@/components/reputation/AddReviewModal';
 import RequestReviewModal from '@/components/reputation/RequestReviewModal';
@@ -48,7 +48,8 @@ function ReviewRow({ review, onApprove, labelById = {} }) {
     if (diff < 30) return `לפני ${Math.floor(diff / 7)} שבועות`;
     return d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' });
   })();
-  const isPending = review.response_status === 'pending';
+  const isPending   = review.response_status === 'pending';
+  const isPublished = review.response_status === 'published';
 
   const topicIds = review.topics ? review.topics.split(',').map(t => t.trim()).filter(Boolean) : [];
   let topicSentiment = {};
@@ -72,13 +73,14 @@ function ReviewRow({ review, onApprove, labelById = {} }) {
         </span>
         <span className="text-[18px] w-8 flex-shrink-0 text-center" title={platCfg.label}>{platCfg.icon}</span>
         <span className="text-[11px] text-foreground-muted w-20 flex-shrink-0">{relDate}</span>
+        {isPublished && <span className="flex-shrink-0 text-[11px] font-medium text-green-600">✓ פורסם</span>}
         <button onClick={() => onApprove(review)}
           className={`flex-shrink-0 text-[11px] px-3 py-1.5 rounded-full border font-medium transition-colors ${
             isPending
               ? 'border-[#e8344d] text-[#e8344d] hover:bg-red-50'
               : 'border-border text-foreground-muted hover:bg-secondary'
           }`}>
-          {isPending ? 'אשר/ערוך תגובה' : 'ערוך תגובה'}
+          {isPending ? 'אשר/ערוך תגובה' : isPublished ? 'ערוך שוב' : 'ערוך תגובה'}
         </button>
         <button className="text-foreground-muted hover:text-foreground flex-shrink-0">
           <MoreVertical className="w-4 h-4" />
@@ -99,21 +101,37 @@ function ReviewRow({ review, onApprove, labelById = {} }) {
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api').replace(/\/$/, '');
 
-function ReviewReplyPanel({ review, bpId, onClose, onSent }) {
-  const platCfg = PLATFORM_ICONS[review.source] || PLATFORM_ICONS.default;
+const ASPECT_CHIP = {
+  positive: 'bg-green-100 text-green-700',
+  negative: 'bg-red-100 text-red-600',
+  neutral:  'bg-amber-100 text-amber-600',
+  none:     'bg-gray-100 text-gray-400',
+};
+const ASPECT_PREFIX = { positive: '+', negative: '−', neutral: '', none: '' };
+
+function ReviewReplyPanel({ review, bpId, businessProfile, topicSet, onClose, onSent }) {
+  const platCfg    = PLATFORM_ICONS[review.source] || PLATFORM_ICONS.default;
+  const gmbConnected = !!(businessProfile?.google_access_token);
   const [replyText, setReplyText] = useState(review.suggested_response || '');
-  const [sending, setSending] = useState(false);
+  const [sending,   setSending]   = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [copied,    setCopied]    = useState(false);
+
+  let topicSentiment = {};
+  try { topicSentiment = review.topic_sentiment ? JSON.parse(review.topic_sentiment) : {}; } catch {}
 
   const generateReply = async () => {
     setGenerating(true);
     try {
-      await base44.functions.invoke('autoRespondToReviews', { businessProfileId: bpId });
-      const rows = await base44.entities.Review.filter({ id: review.id });
-      const updated = rows?.[0];
-      if (updated?.suggested_response) {
-        setReplyText(updated.suggested_response);
-        toast.success('תגובה AI נוצרה ✓');
+      const res  = await fetch(`${API_BASE}/social/reviews/${review.id}/suggest-reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessProfileId: bpId }),
+      });
+      const data = await res.json();
+      if (data.draft) {
+        setReplyText(data.draft);
+        toast.success('תגובה מובנית נוצרה ✓');
       } else {
         toast.info('לא נמצאה תגובה — נסה שנית');
       }
@@ -123,21 +141,23 @@ function ReviewReplyPanel({ review, bpId, onClose, onSent }) {
     setGenerating(false);
   };
 
+  const copyText = async () => {
+    await navigator.clipboard.writeText(replyText).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const sendReply = async () => {
     if (!replyText.trim()) { toast.error('יש להזין תגובה'); return; }
     setSending(true);
     try {
-      const res = await fetch(`${API_BASE}/social/reviews/${review.id}/reply`, {
+      const res  = await fetch(`${API_BASE}/social/reviews/${review.id}/reply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ businessProfileId: bpId, replyText }),
       });
       const data = await res.json();
-      if (data.published) {
-        toast.success('התגובה פורסמה ב-Google ✓');
-      } else {
-        toast.success('התגובה נשמרה — תפורסם ב-Google כשהחיבור יאומת');
-      }
+      toast.success(data.published ? 'התגובה פורסמה ב-Google ✓' : 'התגובה נשמרה — תפורסם ב-Google כשהחיבור יאומת');
       onSent();
     } catch (e) {
       toast.error('שגיאת חיבור: ' + e.message);
@@ -149,6 +169,7 @@ function ReviewReplyPanel({ review, bpId, onClose, onSent }) {
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-white rounded-t-2xl md:rounded-2xl w-full max-w-lg mx-auto z-10 shadow-xl" dir="rtl">
+        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <span className="text-lg">{platCfg.icon}</span>
@@ -156,6 +177,8 @@ function ReviewReplyPanel({ review, bpId, onClose, onSent }) {
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
         </div>
+
+        {/* Original review */}
         <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[11px] font-semibold text-gray-500">{review.reviewer_name || 'לקוח'}</span>
@@ -163,44 +186,69 @@ function ReviewReplyPanel({ review, bpId, onClose, onSent }) {
           </div>
           <p className="text-[12px] text-gray-700 leading-relaxed">{review.text || '(ביקורת ללא טקסט)'}</p>
         </div>
+
+        {/* Aspect checklist — AC1 */}
+        {topicSet.length > 0 && (
+          <div className="px-5 pt-3 pb-1">
+            <p className="text-[11px] font-semibold text-gray-500 mb-1.5">נושאים לכלול בתגובה</p>
+            <div className="flex flex-wrap gap-1">
+              {topicSet.map(a => {
+                const polarity = topicSentiment[a.id] || 'none';
+                return (
+                  <span key={a.id} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${ASPECT_CHIP[polarity] || ASPECT_CHIP.none}`}>
+                    {ASPECT_PREFIX[polarity]}{a.label_he}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Reply draft — AC2 */}
         <div className="px-5 py-4 space-y-3">
           <div className="flex items-center justify-between">
             <label className="text-[12px] font-semibold text-gray-700">התגובה שלך</label>
-            <button
-              onClick={generateReply}
-              disabled={generating}
-              className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
-            >
+            <button onClick={generateReply} disabled={generating}
+              className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50">
               {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bot className="w-3 h-3" />}
               {generating ? 'מייצר...' : 'צור עם AI'}
             </button>
           </div>
-          <textarea
-            value={replyText}
-            onChange={e => setReplyText(e.target.value)}
-            rows={5}
+          <textarea value={replyText} onChange={e => setReplyText(e.target.value)} rows={5}
             placeholder="כתוב תגובה לביקורת..."
-            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-[13px] text-gray-800 resize-none focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-200"
-          />
-          <p className="text-[10px] text-gray-400">
-            {review.source === 'google'
-              ? 'התגובה תפורסם ישירות ב-Google Business Profile שלך'
-              : 'התגובה תישמר במערכת'}
-          </p>
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-[13px] text-gray-800 resize-none focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-200" />
         </div>
+
+        {/* CTAs — AC3 (GMB connected) / AC4 (no GMB) */}
         <div className="flex gap-2 px-5 pb-5">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-[13px] font-medium text-gray-600 hover:bg-gray-50">
             ביטול
           </button>
-          <button
-            onClick={sendReply}
-            disabled={sending || !replyText.trim()}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-900 text-white text-[13px] font-semibold hover:bg-gray-700 disabled:opacity-50"
-          >
-            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            {sending ? 'שולח...' : 'שלח תגובה'}
-          </button>
+          {gmbConnected ? (
+            <button onClick={sendReply} disabled={sending || !replyText.trim()}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-900 text-white text-[13px] font-semibold hover:bg-gray-700 disabled:opacity-50">
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {sending ? 'שולח...' : 'פרסם ב-Google'}
+            </button>
+          ) : (
+            <>
+              <button onClick={copyText} disabled={!replyText.trim()}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-900 text-white text-[13px] font-semibold hover:bg-gray-700 disabled:opacity-50">
+                {copied ? <CheckCheck className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                {copied ? 'הועתק!' : 'העתק תגובה'}
+              </button>
+              <a href="/integrations"
+                className="flex-shrink-0 flex items-center px-3 py-2.5 rounded-xl border border-blue-200 text-[12px] font-medium text-blue-600 hover:bg-blue-50 transition-colors whitespace-nowrap">
+                חבר Google →
+              </a>
+            </>
+          )}
         </div>
+        {!gmbConnected && (
+          <p className="text-center text-[10px] text-gray-400 pb-3 -mt-2">
+            חבר Google Business Profile כדי לפרסם ישירות
+          </p>
+        )}
       </div>
     </div>
   );
@@ -527,6 +575,8 @@ export default function Reputation() {
         <ReviewReplyPanel
           review={selectedReview}
           bpId={bpId}
+          businessProfile={businessProfile}
+          topicSet={topicSet}
           onClose={() => setSelectedReview(null)}
           onSent={() => {
             queryClient.invalidateQueries({ queryKey: ['reviewsPage', bpId] });
