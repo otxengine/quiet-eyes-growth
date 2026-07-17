@@ -10,6 +10,7 @@ import ScheduledReviewRequests from '@/components/reputation/ScheduledReviewRequ
 import RatingTrendChart from '@/components/reputation/RatingTrendChart';
 import StatCards from '@/components/shared/StatCards';
 import PageHeader from '@/components/shared/PageHeader';
+import GoogleCompareWidget from '@/components/competitors/GoogleCompareWidget';
 
 const PLATFORM_ICONS = {
   google:    { icon: '🔍', label: 'Google',    color: '#4285f4' },
@@ -419,6 +420,8 @@ export default function Reputation() {
       />
 
       <StatCards cards={statCards} />
+
+      <GoogleCompareWidget businessProfileId={bpId} businessName={businessProfile?.name} />
 
       {/* Two-column: chart (40%) + מבט על (60%) */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">

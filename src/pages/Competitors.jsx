@@ -7,7 +7,6 @@ import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
 import DataTable from '@/components/shared/DataTable';
-import GoogleCompareWidget from '@/components/competitors/GoogleCompareWidget';
 import BattlecardPanel from '@/components/competitors/BattlecardPanel';
 
 const COLUMNS = [
@@ -108,11 +107,6 @@ export default function Competitors() {
       />
 
       <StatCards cards={statCards} />
-
-      <GoogleCompareWidget
-        businessProfileId={bpId}
-        businessName={businessProfile?.name}
-      />
 
       {/* מהלכי מתחרים */}
       {(topChange || activityChanges.length > 0) && (
