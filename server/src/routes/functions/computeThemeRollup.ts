@@ -8,22 +8,31 @@ export interface ThemeCount {
   total: number;
 }
 
+const GOOGLE_SOURCES = ['google_business_api', 'google_places', 'serp_google_maps_reviews'];
+
 /**
  * Aggregates topic_sentiment JSON blobs from reviews into per-topic polarity counts.
  * windowDays defaults to 90.
+ * platformFilter='google' restricts to Google-sourced reviews only (AC2: KAN-127).
+ * linkedCompetitorId queries competitor reviews instead of own-business reviews.
  */
 export async function computeThemeRollup(
   businessProfileId: string,
   windowDays = 90,
+  platformFilter?: 'google',
+  linkedCompetitorId?: string,
 ): Promise<ThemeCount[]> {
   const since = new Date();
   since.setDate(since.getDate() - windowDays);
 
   const reviews = await prisma.review.findMany({
     where: {
-      linked_business: businessProfileId,
+      ...(linkedCompetitorId
+        ? { linked_competitor: linkedCompetitorId }
+        : { linked_business: businessProfileId }),
       created_date: { gte: since.toISOString() },
       topic_sentiment: { not: null },
+      ...(platformFilter === 'google' && { source_origin: { in: GOOGLE_SOURCES } }),
     },
     select: { topic_sentiment: true },
   });

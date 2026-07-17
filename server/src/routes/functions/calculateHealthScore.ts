@@ -24,10 +24,12 @@ export async function calculateHealthScore(req: Request, res: Response) {
     ]);
 
     const avgRating = reviews.length > 0 ? reviews.reduce((s, r) => s + (r.rating || 0), 0) / reviews.length : 0;
+    // KAN-127: prefer Google-specific rating for reputation scoring to avoid cross-platform blending
+    const ratingForReputation = profile.google_rating ?? avgRating;
     const pendingReviews = reviews.filter(r => r.response_status === 'pending').length;
     const negativeRatio = reviews.length > 0 ? reviews.filter(r => r.sentiment === 'negative').length / reviews.length : 0;
     let reputationScore = Math.min(100, Math.round(
-      (avgRating / 5 * 40) + (Math.max(0, 1 - pendingReviews / 5) * 30) + (Math.max(0, 1 - negativeRatio) * 30)
+      (ratingForReputation / 5 * 40) + (Math.max(0, 1 - pendingReviews / 5) * 30) + (Math.max(0, 1 - negativeRatio) * 30)
     ));
     if (reviews.length === 0) reputationScore = 50;
 

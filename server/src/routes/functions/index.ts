@@ -116,6 +116,7 @@ import { systemHealthMonitor } from './systemHealthMonitor';
 import { intentClassification } from './intentClassification';
 import { otxSyncBridge } from './otxSyncBridge';
 import { competitorDataBootstrap } from './competitorDataBootstrap';
+import { compareGoogleMetrics } from './compareGoogleMetrics';
 
 const router = Router();
 
@@ -246,6 +247,7 @@ const FUNCTION_MAP: Record<string, any> = {
   intentClassification,
   otxSyncBridge,
   competitorDataBootstrap,
+  compareGoogleMetrics,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,

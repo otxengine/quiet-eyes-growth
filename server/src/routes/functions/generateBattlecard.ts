@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
+import { computeThemeRollup } from './computeThemeRollup';
 
 export async function generateBattlecard(req: Request, res: Response) {
   const { competitorId, businessProfileId } = req.body;
@@ -15,13 +16,22 @@ export async function generateBattlecard(req: Request, res: Response) {
     const bp = profiles[0];
     if (!bp) return res.status(404).json({ error: 'Business profile not found' });
 
-    const reviews = await prisma.review.findMany({ where: { linked_business: bpId } });
+    const [reviews, ownAspects, compAspects] = await Promise.all([
+      prisma.review.findMany({ where: { linked_business: bpId } }),
+      computeThemeRollup(bpId, 90, 'google'),
+      computeThemeRollup(bpId, 90, 'google', competitorId),
+    ]);
     const positiveReviews = reviews.filter(r => r.sentiment === 'positive' || (r.rating && r.rating >= 4));
     const reviewThemes = positiveReviews.slice(0, 5).map(r => r.text).join('; ');
 
     const ourGoogleInfo = bp.google_rating
       ? `Google Rating: ${bp.google_rating}/5 (${bp.google_review_count || 0} reviews)`
       : 'Google Rating: unknown';
+
+    const fmtAspects = (aspects: typeof ownAspects) =>
+      aspects.length
+        ? aspects.slice(0, 6).map(a => `${a.theme}: +${a.positive}/-${a.negative}`).join(', ')
+        : 'no aspect data';
 
     const prompt = `You are a sales strategist for an Israeli small business.
 OUR BUSINESS:
@@ -30,6 +40,7 @@ Category: ${bp.category}
 City: ${bp.city}
 Services: ${bp.relevant_services || 'unknown'}
 ${ourGoogleInfo}
+Our Google review aspects (topic: positive/negative counts): ${fmtAspects(ownAspects)}
 
 COMPETITOR:
 Name: ${competitor.name}
@@ -39,6 +50,7 @@ Weaknesses: ${competitor.weaknesses || 'unknown'}
 Known prices: ${competitor.price_points || competitor.last_known_prices || competitor.price_range || 'unknown'}
 Services: ${competitor.services || 'unknown'}
 Current promotions: ${competitor.current_promotions || 'unknown'}
+Competitor Google review aspects: ${fmtAspects(compAspects)}
 
 OUR REVIEWS (positive themes):
 ${reviewThemes || 'No reviews yet'}
