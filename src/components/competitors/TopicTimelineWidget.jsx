@@ -1,19 +1,70 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, TrendingUp } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api').replace(/\/$/, '');
 
-// positive / (positive + negative) as %, null when no data
 function ratio(pos, neg) {
   const total = pos + neg;
   return total === 0 ? null : Math.round((pos / total) * 100);
 }
 
+function topicTotal(series) {
+  return (series.buckets ?? []).reduce((s, b) => s + b.positive + b.negative, 0);
+}
+
+function buildChartData(ownSeries, compSeries) {
+  return (ownSeries?.buckets ?? []).map(b => {
+    const row = { period: b.period.slice(5), own: ratio(b.positive, b.negative) };
+    if (compSeries) {
+      const cb = compSeries.buckets?.find(x => x.period === b.period) ?? { positive: 0, negative: 0 };
+      row.comp = ratio(cb.positive, cb.negative);
+    }
+    return row;
+  });
+}
+
+function MiniChart({ ownSeries, compSeries, label, mentions }) {
+  const chartData = buildChartData(ownSeries, compSeries);
+  return (
+    <div className="bg-gray-50 rounded-lg p-3 space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-foreground truncate">{label}</span>
+        <span className="text-[9px] text-foreground-muted whitespace-nowrap mr-1">{mentions} אזכורים</span>
+      </div>
+      <ResponsiveContainer width="100%" height={90}>
+        <LineChart data={chartData} margin={{ top: 2, right: 4, left: -28, bottom: 0 }}>
+          <XAxis dataKey="period" tick={{ fontSize: 7 }} tickLine={false} axisLine={false} />
+          <YAxis domain={[0, 100]} hide />
+          <Tooltip formatter={v => v != null ? `${v}%` : '—'} contentStyle={{ fontSize: 10, borderRadius: 4 }} />
+          <Line type="monotone" dataKey="own" stroke="#2563eb" strokeWidth={1.5} dot={false} connectNulls={false} />
+          {compSeries && <Line type="monotone" dataKey="comp" stroke="#9333ea" strokeWidth={1} strokeDasharray="3 2" dot={false} connectNulls={false} />}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function FullChart({ ownSeries, compSeries, compName, ownLabel }) {
+  const chartData = buildChartData(ownSeries, compSeries);
+  return (
+    <ResponsiveContainer width="100%" height={180}>
+      <LineChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+        <XAxis dataKey="period" tick={{ fontSize: 9 }} />
+        <YAxis domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 9 }} />
+        <Tooltip formatter={v => v != null ? `${v}%` : '—'} contentStyle={{ fontSize: 11, borderRadius: 6 }} />
+        <Line type="monotone" dataKey="own" name={ownLabel} stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
+        {compSeries && <Line type="monotone" dataKey="comp" name={compName} stroke="#9333ea" strokeWidth={1.5} strokeDasharray="4 2" dot={{ r: 2.5 }} connectNulls={false} />}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
 export default function TopicTimelineWidget({ businessProfileId, businessName }) {
-  const [activeTopic, setActiveTopic] = useState(null);
   const [showComp, setShowComp] = useState(null);
+  const [activeTopic, setActiveTopic] = useState(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['topicTimeline', businessProfileId],
@@ -39,47 +90,26 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
   if (!data?.own?.length) return null;
 
   const { own, competitors = [] } = data;
-  const topics = own.map(s => s.topic_id);
-  const topic = activeTopic ?? topics[0];
+  const sorted = [...own].sort((a, b) => topicTotal(b) - topicTotal(a));
+  const top4 = sorted.slice(0, 4);
+  const rest = sorted.slice(4);
 
-  const ownSeries  = own.find(s => s.topic_id === topic);
   const compEntry  = showComp ? competitors.find(c => c.id === showComp) : null;
-  const compSeries = compEntry?.series?.find(s => s.topic_id === topic);
+  const ownLabel   = businessName ?? 'העסק שלי';
 
-  const chartData = (ownSeries?.buckets ?? []).map(b => {
-    const row = { period: b.period.slice(5), own: ratio(b.positive, b.negative) };
-    if (compSeries) {
-      const cb = compSeries.buckets?.find(x => x.period === b.period) ?? { positive: 0, negative: 0 };
-      row.comp = ratio(cb.positive, cb.negative);
-    }
-    return row;
-  });
+  function getCompSeries(topicId) {
+    return compEntry?.series?.find(s => s.topic_id === topicId) ?? null;
+  }
 
-  const ownLabel = businessName ?? 'העסק שלי';
+  const selectedRest = activeTopic && rest.find(s => s.topic_id === activeTopic);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4" dir="rtl">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-5" dir="rtl">
+      {/* Header */}
       <div className="flex items-center gap-2">
         <TrendingUp className="w-4 h-4 text-blue-500" />
         <h3 className="text-sm font-semibold text-foreground">מגמת נושאים לאורך זמן — Google</h3>
         <span className="text-[10px] text-foreground-muted mr-auto">% חיובי מתוך סה״כ אזכורים</span>
-      </div>
-
-      {/* Topic selector */}
-      <div className="flex flex-wrap gap-1.5">
-        {topics.map(t => (
-          <button
-            key={t}
-            onClick={() => setActiveTopic(t)}
-            className={`text-[11px] px-2.5 py-1 rounded-full border font-medium transition-colors ${
-              topic === t
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'border-border text-foreground-muted hover:border-blue-400 hover:text-blue-600'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
       </div>
 
       {/* Competitor toggle */}
@@ -110,19 +140,52 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
         </div>
       )}
 
-      <ResponsiveContainer width="100%" height={200}>
-        <LineChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-          <XAxis dataKey="period" tick={{ fontSize: 9 }} />
-          <YAxis domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 9 }} />
-          <Tooltip formatter={v => v != null ? `${v}%` : '—'} contentStyle={{ fontSize: 11, borderRadius: 6 }} />
-          <Legend wrapperStyle={{ fontSize: 10 }} />
-          <Line type="monotone" dataKey="own" name={ownLabel} stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
-          {compEntry && (
-            <Line type="monotone" dataKey="comp" name={compEntry.name} stroke="#9333ea" strokeWidth={1.5} strokeDasharray="4 2" dot={{ r: 2.5 }} connectNulls={false} />
+      {/* Top 4 mini charts — 2×2 grid */}
+      <div className="grid grid-cols-2 gap-3">
+        {top4.map(s => (
+          <MiniChart
+            key={s.topic_id}
+            label={s.topic_id}
+            mentions={topicTotal(s)}
+            ownSeries={s}
+            compSeries={getCompSeries(s.topic_id)}
+          />
+        ))}
+      </div>
+
+      {/* Rest — pill selector + full chart */}
+      {rest.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-1.5 items-center">
+            <span className="text-[10px] text-foreground-muted">נושאים נוספים:</span>
+            {rest.map(s => (
+              <button
+                key={s.topic_id}
+                onClick={() => setActiveTopic(s.topic_id === activeTopic ? null : s.topic_id)}
+                className={`text-[11px] px-2.5 py-1 rounded-full border font-medium transition-colors ${
+                  activeTopic === s.topic_id
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'border-border text-foreground-muted hover:border-blue-400 hover:text-blue-600'
+                }`}
+              >
+                {s.topic_id}
+              </button>
+            ))}
+          </div>
+
+          {selectedRest && (
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-[11px] font-semibold text-foreground mb-2">{selectedRest.topic_id}</p>
+              <FullChart
+                ownSeries={selectedRest}
+                compSeries={getCompSeries(selectedRest.topic_id)}
+                compName={compEntry?.name}
+                ownLabel={ownLabel}
+              />
+            </div>
           )}
-        </LineChart>
-      </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }
