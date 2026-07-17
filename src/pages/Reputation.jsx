@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Star, Plus, Search, X, ChevronDown, MoreVertical, Copy, CheckCheck } from 'lucide-react';
+import { Star, Plus, Search, Loader2, Bot, Send, X, ChevronDown, MoreVertical, Copy, CheckCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import AddReviewModal from '@/components/reputation/AddReviewModal';
 import RequestReviewModal from '@/components/reputation/RequestReviewModal';
