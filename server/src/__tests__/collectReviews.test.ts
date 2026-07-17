@@ -214,7 +214,7 @@ describe('collectReviews — AC1: GMB connected → reviews fetched and de-duped
       ok: true,
       json: jest.fn().mockResolvedValue({ reviews: [gmbReview()], nextPageToken: undefined }),
     });
-    llm.mockResolvedValue({ results: [{ topics: ['שירות'], sentiments: { שירות: 'positive' } }] });
+    llm.mockResolvedValue({ results: [{ topics: ['service'], sentiments: { service: 'positive' } }] });
 
     const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
     await collectReviews(req, res);
@@ -349,7 +349,7 @@ describe('collectReviews — AC2: no GMB → Places API used', () => {
         }],
       }),
     });
-    llm.mockResolvedValue({ results: [{ topics: ['אווירה'], sentiments: { אווירה: 'positive' } }] });
+    llm.mockResolvedValue({ results: [{ topics: ['atmosphere'], sentiments: { atmosphere: 'positive' } }] });
 
     const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
     await collectReviews(req, res);
@@ -433,7 +433,7 @@ describe('collectReviews — KAN-18 AC1: topics and topic_sentiment persisted', 
       json: jest.fn().mockResolvedValue({ reviews: [gmbReview()], nextPageToken: undefined }),
     });
     llm.mockResolvedValue({
-      results: [{ topics: ['שירות', 'מחיר'], sentiments: { שירות: 'positive', מחיר: 'neutral' } }],
+      results: [{ topics: ['service', 'price'], sentiments: { service: 'positive', price: 'neutral' } }],
     });
 
     const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
@@ -441,10 +441,60 @@ describe('collectReviews — KAN-18 AC1: topics and topic_sentiment persisted', 
 
     expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        topics:          'שירות,מחיר',
-        topic_sentiment: JSON.stringify({ שירות: 'positive', מחיר: 'neutral' }),
+        topics:          'service,price',
+        topic_sentiment: JSON.stringify({ service: 'positive', price: 'neutral' }),
       }),
     }));
+  });
+});
+
+// ── KAN-123: taxonomy constraints ────────────────────────────────────────────
+
+describe('collectReviews — KAN-123 taxonomy', () => {
+  beforeEach(() => {
+    socialFindFirst.mockResolvedValue(GMB_ACCOUNT);
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ reviews: [gmbReview()], nextPageToken: undefined }),
+    });
+  });
+
+  test('max 6 topics stored even when LLM returns more', async () => {
+    llm.mockResolvedValue({
+      results: [{ topics: ['service','price','quality','cleanliness','atmosphere','availability','delivery'], sentiments: { service:'positive', price:'neutral', quality:'positive', cleanliness:'positive', atmosphere:'positive', availability:'positive', delivery:'negative' } }],
+    });
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+    const stored: string = reviewCreate.mock.calls[0][0].data.topics;
+    expect(stored.split(',').length).toBe(6);
+  });
+
+  test('free-label topics not in taxonomy are filtered out', async () => {
+    llm.mockResolvedValue({
+      results: [{ topics: ['free_label', 'service'], sentiments: { free_label: 'positive', service: 'positive' } }],
+    });
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+    const stored: string = reviewCreate.mock.calls[0][0].data.topics;
+    expect(stored).toBe('service');
+  });
+
+  test('topics stored empty when LLM returns topics without matching sentiments', async () => {
+    llm.mockResolvedValue({
+      results: [{ topics: ['service'], sentiments: {} }],
+    });
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+    expect(reviewCreate.mock.calls[0][0].data.topics).toBe('');
+    expect(reviewCreate.mock.calls[0][0].data.topic_sentiment).toBe('{}');
+  });
+
+  test('fallback on LLM failure stores empty topics, not sentinel string', async () => {
+    llm.mockRejectedValue(new Error('timeout'));
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+    expect(reviewCreate.mock.calls[0][0].data.topics).toBe('');
+    expect(reviewCreate.mock.calls[0][0].data.topic_sentiment).toBe('{}');
   });
 });
 
@@ -490,7 +540,7 @@ describe('collectReviews — KAN-18 AC3: ProactiveAlert negative_review created'
         nextPageToken: undefined,
       }),
     });
-    llm.mockResolvedValue({ results: [{ topics: ['שירות'], sentiments: { שירות: 'negative' } }] });
+    llm.mockResolvedValue({ results: [{ topics: ['service'], sentiments: { service: 'negative' } }] });
     reviewFindMany
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ rating: 1 }])
@@ -544,7 +594,7 @@ describe('collectReviews — KAN-18 AC3: ProactiveAlert negative_review created'
         nextPageToken: undefined,
       }),
     });
-    llm.mockResolvedValue({ results: [{ topics: ['שירות'], sentiments: { שירות: 'negative' } }] });
+    llm.mockResolvedValue({ results: [{ topics: ['service'], sentiments: { service: 'negative' } }] });
     reviewFindMany.mockImplementation((opts: any) => {
       if (opts?.select?.rating)          return Promise.resolve([{ rating: 1 }]);
       if (opts?.select?.id)              return Promise.resolve([{ id: 'r1' }]);
@@ -673,7 +723,7 @@ describe('collectReviews — KAN-17 Tier 3: Tavily direct', () => {
         }],
       }),
     });
-    llm.mockResolvedValueOnce({ results: [{ topics: ['שירות'], sentiments: { 'שירות': 'positive' } }] });
+    llm.mockResolvedValueOnce({ results: [{ topics: ['service'], sentiments: { service: 'positive' } }] });
 
     const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
     await collectReviews(req, res);
@@ -1013,7 +1063,7 @@ describe('collectReviews — KAN-119 AC1: SerpAPI 300-review backfill', () => {
 
   test('SerpAPI reviews are fetched and persisted with correct fields', async () => {
     mockSerpReviews.mockResolvedValue([serpReview()]);
-    llm.mockResolvedValue({ results: [{ topics: ['שירות'], sentiments: { שירות: 'positive' } }] });
+    llm.mockResolvedValue({ results: [{ topics: ['service'], sentiments: { service: 'positive' } }] });
 
     const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
     await collectReviews(req, res);
@@ -1107,7 +1157,7 @@ describe('collectReviews — KAN-119 AC3: SerpAPI unavailable → Places fallbac
         }],
       }),
     });
-    llm.mockResolvedValue({ results: [{ topics: ['אווירה'], sentiments: { אווירה: 'positive' } }] });
+    llm.mockResolvedValue({ results: [{ topics: ['atmosphere'], sentiments: { atmosphere: 'positive' } }] });
 
     const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
     await collectReviews(req, res);

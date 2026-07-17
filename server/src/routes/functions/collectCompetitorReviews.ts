@@ -4,32 +4,9 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { findPlaceId, getPlaceDetails } from '../../lib/googlePlaces';
 import { normReviewOrigin } from '../../lib/signalGuard';
 import { serpGoogleMapsReviews } from '../../lib/serpapi';
-import { invokeLLM } from '../../lib/llm';
+import { batchExtractTopics } from '../../lib/reviewTaxonomy';
 
 const MAX_REVIEWS = 300;
-
-// Identical taxonomy to collectReviews — same aspect extraction, same model
-async function batchExtractTopics(
-  reviews: Array<{ text: string; sentiment: string }>,
-): Promise<Array<{ topics: string; topic_sentiment: string }>> {
-  const fallback = reviews.map(r => ({ topics: r.sentiment, topic_sentiment: '{}' }));
-  if (reviews.length === 0) return fallback;
-  const itemsStr = reviews.map((r, i) => `[${i}] "${r.text.substring(0, 200)}"`).join('\n');
-  try {
-    const result = await invokeLLM({
-      prompt: `Extract topics from the following reviews. For each review: up to 4 topics (service/price/quality/cleanliness/atmosphere/availability/delivery) and a sentiment per topic (positive/negative/neutral).\n${itemsStr}\nReturn ONLY valid JSON. ALL string values must be in Hebrew. {"results":[{"topics":["נושא1"],"sentiments":{"נושא1":"positive"}},...]}, array of the same length and order.`,
-      response_json_schema: { type: 'object' },
-      model: 'haiku',
-      maxTokens: 900,
-    });
-    const results: any[] = result?.results || [];
-    return reviews.map((r, i) => {
-      const item = results[i];
-      if (!item?.topics || !Array.isArray(item.topics)) return { topics: r.sentiment, topic_sentiment: '{}' };
-      return { topics: item.topics.join(','), topic_sentiment: JSON.stringify(item.sentiments || {}) };
-    });
-  } catch { return fallback; }
-}
 
 /**
  * KAN-121 — Competitor Google review ingest.
@@ -117,7 +94,7 @@ export async function collectCompetitorReviews(req: Request, res: Response) {
       if (pending.length === 0) { perCompetitor.push({ name: comp.name, new: 0 }); continue; }
 
       const topicsArr = await batchExtractTopics(
-        pending.map(p => ({ text: p.text, sentiment: p.sentiment })),
+        pending.map(p => ({ text: p.text })),
       );
 
       for (let i = 0; i < pending.length; i++) {

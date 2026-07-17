@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM, startCostTracking, popCost } from '../../lib/llm';
+import { batchExtractTopics } from '../../lib/reviewTaxonomy';
 import { tavilySearch } from '../../lib/tavily';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { tryDecryptToken } from '../../lib/crypto';
@@ -11,44 +12,6 @@ import { findPlaceId, getPlaceDetails } from '../../lib/googlePlaces';
 import { serpGoogleMapsReviews, hasSerpApiKey } from '../../lib/serpapi';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours — Google Places API quota
-
-// ── Batch topic extraction — 1 Haiku call for all reviews ────────────────────
-
-async function batchExtractTopics(
-  reviews: Array<{ text: string; sentiment: string }>,
-  costTrackingId?: string,
-): Promise<Array<{ topics: string; topic_sentiment: string }>> {
-  const fallback = reviews.map(r => ({ topics: r.sentiment, topic_sentiment: '{}' }));
-  if (reviews.length === 0) return fallback;
-
-  const itemsStr = reviews
-    .map((r, i) => `[${i}] "${r.text.substring(0, 1500)}"`)
-    .join('\n');
-
-  try {
-    const result = await invokeLLM({
-      prompt: `Extract topics from the following reviews. For each review: up to 4 topics (service/price/quality/cleanliness/atmosphere/availability/delivery) and a sentiment per topic (positive/negative/neutral).
-${itemsStr}
-Return ONLY valid JSON. ALL string values must be in Hebrew. {"results":[{"topics":["נושא1"],"sentiments":{"נושא1":"positive"}},...]}, array of the same length and order.`,
-      response_json_schema: { type: 'object' },
-      model: 'haiku',
-      maxTokens: 900,
-      costTrackingId,
-    });
-
-    const results: any[] = result?.results || [];
-    return reviews.map((r, i) => {
-      const item = results[i];
-      if (!item?.topics || !Array.isArray(item.topics)) return { topics: r.sentiment, topic_sentiment: '{}' };
-      return {
-        topics:          item.topics.join(','),
-        topic_sentiment: JSON.stringify(item.sentiments || {}),
-      };
-    });
-  } catch {
-    return fallback;
-  }
-}
 
 const SOURCE_QUERIES: Record<string, (name: string, city: string) => string> = {
   facebook:    (n: string, c: string) => `"${n}" ביקורות OR reviews site:facebook.com ${c}`,
@@ -159,7 +122,7 @@ export async function collectReviews(req: Request, res: Response) {
           } while (nextPageToken);
 
           if (gmbPending.length > 0) {
-            const gmbTopics = await batchExtractTopics(gmbPending.map(p => ({ text: p.text, sentiment: p.sentiment })));
+            const gmbTopics = await batchExtractTopics(gmbPending.map(p => ({ text: p.text })));
             for (let i = 0; i < gmbPending.length; i++) {
               const { gr, reviewId, text, textKey, rating, sentiment, reviewerName } = gmbPending[i];
               const { topics, topic_sentiment } = gmbTopics[i];
@@ -218,7 +181,7 @@ export async function collectReviews(req: Request, res: Response) {
             serpPending.push({ reviewId, textKey, text, rating, sentiment, reviewerName: sr.user?.name || 'לקוח' });
           }
           if (serpPending.length > 0) {
-            const serpTopics = await batchExtractTopics(serpPending.map(p => ({ text: p.text, sentiment: p.sentiment })));
+            const serpTopics = await batchExtractTopics(serpPending.map(p => ({ text: p.text })));
             for (let i = 0; i < serpPending.length; i++) {
               const { reviewId, textKey, text, rating, sentiment, reviewerName } = serpPending[i];
               const { topics, topic_sentiment } = serpTopics[i];
@@ -272,7 +235,7 @@ export async function collectReviews(req: Request, res: Response) {
           const sentiment = gr.rating >= 4 ? 'positive' : gr.rating <= 2 ? 'negative' : 'neutral';
           placesPending.push({ gr, googleId, textKey, sentiment, reviewText, authorName });
         }
-        const placesTopics = await batchExtractTopics(placesPending.map(p => ({ text: p.reviewText, sentiment: p.sentiment })));
+        const placesTopics = await batchExtractTopics(placesPending.map(p => ({ text: p.reviewText })));
         for (let i = 0; i < placesPending.length; i++) {
           const { gr, googleId, textKey, sentiment, reviewText, authorName } = placesPending[i];
           const { topics, topic_sentiment } = placesTopics[i];
@@ -335,7 +298,6 @@ export async function collectReviews(req: Request, res: Response) {
         }
         const tavilyTopics = await batchExtractTopics(tavilyReviewsPending.map(p => ({
           text: p.parsed.text,
-          sentiment: (p.parsed.rating || 0) >= 4 ? 'positive' : (p.parsed.rating || 0) <= 2 ? 'negative' : 'neutral',
         })), businessProfileId);
         for (let i = 0; i < tavilyReviewsPending.length; i++) {
           const { parsed, url } = tavilyReviewsPending[i];
@@ -407,7 +369,6 @@ export async function collectReviews(req: Request, res: Response) {
       }
       const topics = await batchExtractTopics(pending.map(({ p }) => ({
         text: p.text,
-        sentiment: (p.rating || 0) >= 4 ? 'positive' : (p.rating || 0) <= 2 ? 'negative' : 'neutral',
       })), businessProfileId);
       for (let i = 0; i < pending.length; i++) {
         const { p, url } = pending[i];
@@ -487,7 +448,6 @@ export async function collectReviews(req: Request, res: Response) {
       }
       const signalTopics = await batchExtractTopics(signalReviewsPending.map(p => ({
         text: p.parsed.text,
-        sentiment: (p.parsed.rating || 0) >= 4 ? 'positive' : (p.parsed.rating || 0) <= 2 ? 'negative' : 'neutral',
       })), businessProfileId);
       for (let i = 0; i < signalReviewsPending.length; i++) {
         const { parsed, url } = signalReviewsPending[i];
