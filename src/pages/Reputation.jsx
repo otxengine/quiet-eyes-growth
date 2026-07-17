@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Star, Plus, Search, Loader2, Bot, Send, X, ChevronDown, MoreVertical, Copy, CheckCheck } from 'lucide-react';
+import { Star, Plus, Search, X, ChevronDown, MoreVertical, Copy, CheckCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import AddReviewModal from '@/components/reputation/AddReviewModal';
 import RequestReviewModal from '@/components/reputation/RequestReviewModal';
@@ -242,78 +242,6 @@ function ReviewReplyPanel({ review, bpId, businessProfile, topicSet, onClose, on
             חבר Google Business Profile כדי לפרסם ישירות
           </p>
         )}
-      </div>
-    </div>
-  );
-}
-
-const ADVISOR_SUGGESTIONS = [
-  'איפה אני מפסיד למתחרים בנושא ההמתנה?',
-  'מה הנושאים השליליים הנפוצים שלי?',
-  'איך הדירוג שלי מושווה לקבוצה?',
-];
-
-function ReputationAdvisorChat({ bpId }) {
-  const [msg, setMsg] = useState('');
-  const [reply, setReply] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const ask = async (text) => {
-    if (!text.trim() || loading) return;
-    setLoading(true);
-    setReply('');
-    try {
-      const res = await base44.functions.invoke('reputationAdvisorChat', {
-        businessProfileId: bpId,
-        message: text,
-      });
-      const data = res?.data || res;
-      setReply(data?.reply || 'לא התקבלה תשובה');
-    } catch {
-      setReply('שגיאה — נסה שנית');
-    }
-    setLoading(false);
-    setMsg('');
-  };
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4" dir="rtl">
-      <div className="flex items-center gap-2 mb-3">
-        <Bot className="w-4 h-4 text-blue-500" />
-        <span className="text-[13px] font-semibold text-foreground">יועץ מוניטין AI</span>
-        <span className="text-[11px] text-foreground-muted">(מבוסס על נתוני הדף בלבד)</span>
-      </div>
-
-      {!reply && (
-        <div className="flex flex-wrap gap-2 mb-3">
-          {ADVISOR_SUGGESTIONS.map(s => (
-            <button key={s} onClick={() => ask(s)}
-              className="text-[11px] border border-gray-200 rounded-full px-3 py-1 text-gray-600 hover:bg-gray-50 transition-colors">
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {reply && (
-        <div className="bg-blue-50 rounded-xl px-4 py-3 mb-3 text-[13px] text-gray-800 leading-relaxed whitespace-pre-wrap">
-          {reply}
-        </div>
-      )}
-
-      <div className="flex gap-2">
-        <input
-          value={msg}
-          onChange={e => setMsg(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && ask(msg)}
-          placeholder="שאל שאלה על המוניטין שלך..."
-          dir="rtl"
-          className="flex-1 border border-gray-200 rounded-full px-4 py-2 text-[13px] focus:outline-none focus:ring-1 focus:ring-blue-200"
-        />
-        <button onClick={() => ask(msg)} disabled={loading || !msg.trim()}
-          className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-full bg-foreground text-white disabled:opacity-40 hover:opacity-80 transition-opacity">
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-        </button>
       </div>
     </div>
   );
@@ -628,8 +556,6 @@ export default function Reputation() {
           </div>
         )}
       </div>
-
-      <ReputationAdvisorChat bpId={bpId} />
 
       <ScheduledReviewRequests bpId={bpId} />
 
