@@ -2,6 +2,14 @@ import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Loader2, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp } from 'lucide-react';
 
+const TOPIC_HE = {
+  service: 'שירות', price: 'מחיר', quality: 'איכות', cleanliness: 'ניקיון',
+  atmosphere: 'אווירה', availability: 'זמינות', delivery: 'משלוח',
+  food_quality: 'איכות המזון', menu_variety: 'מגוון תפריט', wait_time: 'זמן המתנה',
+  portion_size: 'גודל מנה', freshness: 'טריות',
+};
+const th = id => TOPIC_HE[id] || id;
+
 const TREND_ICON = {
   improving: <TrendingUp  className="w-3.5 h-3.5 text-success inline-block" />,
   declining: <TrendingDown className="w-3.5 h-3.5 text-danger  inline-block" />,
@@ -111,7 +119,7 @@ export default function CompetitorReviewInsightsPanel({ competitor, businessProf
                   onClick={() => toggleTopic(t)}
                   className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-green-50 border border-green-200 text-green-700 hover:bg-green-100 transition-colors"
                 >
-                  {t}
+                  {th(t)}
                   {reviews.length > 0 && (open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
                 </button>
                 {open && reviews.length > 0 && (
@@ -138,7 +146,7 @@ export default function CompetitorReviewInsightsPanel({ competitor, businessProf
                   onClick={() => toggleTopic(t)}
                   className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 transition-colors"
                 >
-                  {t}
+                  {th(t)}
                   {reviews.length > 0 && (open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
                 </button>
                 {open && reviews.length > 0 && (

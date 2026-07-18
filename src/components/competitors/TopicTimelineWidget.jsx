@@ -5,6 +5,26 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api').replace(/\/$/, '');
 
+const TOPIC_HE = {
+  service: 'שירות', price: 'מחיר', quality: 'איכות', cleanliness: 'ניקיון',
+  atmosphere: 'אווירה', availability: 'זמינות', delivery: 'משלוח',
+  food_quality: 'איכות המזון', menu_variety: 'מגוון תפריט', wait_time: 'זמן המתנה',
+  portion_size: 'גודל מנה', freshness: 'טריות', results: 'תוצאות',
+  technique: 'טכניקה', appointment_availability: 'זמינות תורים',
+  product_quality: 'איכות מוצרים', expertise: 'מקצועיות',
+  trainers: 'מאמנים', equipment: 'ציוד', class_variety: 'מגוון שיעורים',
+  schedule_flexibility: 'גמישות לוח זמנים', doctor_expertise: 'מקצועיות רופא',
+  medical_wait_time: 'זמן המתנה', diagnosis_quality: 'איכות אבחון',
+  staff_attitude: 'יחס הצוות', appointment_ease: 'נוחות קביעת תור',
+  legal_expertise: 'מקצועיות', response_time: 'זמן תגובה', communication: 'תקשורת',
+  value_for_money: 'תמורה לכסף', outcome: 'תוצאה', product_variety: 'מגוון מוצרים',
+  staff_helpfulness: 'סיוע הצוות', stock_availability: 'זמינות מלאי',
+  return_policy: 'מדיניות החזרות', repair_quality: 'איכות תיקון',
+  diagnosis_accuracy: 'דיוק אבחון', auto_wait_time: 'זמן המתנה',
+  price_transparency: 'שקיפות במחיר', warranty: 'אחריות על עבודה',
+};
+const th = id => TOPIC_HE[id] || id;
+
 function ratio(pos, neg) {
   const total = pos + neg;
   return total === 0 ? null : Math.round((pos / total) * 100);
@@ -147,12 +167,19 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
         </div>
       )}
 
+      {/* No topic-sentiment data for selected competitor */}
+      {showComp && compEntry && !compEntry.series?.length && (
+        <p className="text-[11px] text-foreground-muted bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          אין נתוני נושאים עדיין למתחרה זה
+        </p>
+      )}
+
       {/* Top 4 mini charts — 2×2 grid */}
       <div className="grid grid-cols-2 gap-3">
         {top4.map(s => (
           <MiniChart
             key={s.topic_id}
-            label={s.topic_id}
+            label={th(s.topic_id)}
             mentions={topicTotal(s)}
             ownSeries={s}
             compSeries={getCompSeries(s.topic_id)}
@@ -175,14 +202,14 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
                     : 'border-border text-foreground-muted hover:border-blue-400 hover:text-blue-600'
                 }`}
               >
-                {s.topic_id}
+                {th(s.topic_id)}
               </button>
             ))}
           </div>
 
           {selectedRest && (
             <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-[11px] font-semibold text-foreground mb-2">{selectedRest.topic_id}</p>
+              <p className="text-[11px] font-semibold text-foreground mb-2">{th(selectedRest.topic_id)}</p>
               <FullChart
                 ownSeries={selectedRest}
                 compSeries={getCompSeries(selectedRest.topic_id)}
