@@ -86,7 +86,7 @@ ${trend ? `מגמה: ${trend}` : ''}
     hebrew_summary = typeof raw === 'string' ? raw.trim() : null;
   }
 
-  const toReviewSnippet = (r: any) => ({
+  const toSnippet = (r: any) => ({
     reviewer_name: r.reviewer_name || null,
     rating: r.rating,
     text: r.text || '',
@@ -105,8 +105,34 @@ ${trend ? `מגמה: ${trend}` : ''}
       })
     )
   );
+
+  // Build all snippets first, then batch-translate non-Hebrew texts in one call
+  const topicSnippets = allTopics.map((_, i) => (topicReviewsArr[i] as any[]).map(toSnippet));
+  const latestSnippets = (latestReviews as any[]).map(toSnippet);
+
+  const isHebrew = (t: string) => /[֐-׿]/.test(t);
+  const uniqueTexts = [...new Set(
+    [...topicSnippets.flat(), ...latestSnippets].map(s => s.text).filter(t => t && !isHebrew(t))
+  )];
+
+  const translationMap: Record<string, string> = {};
+  if (uniqueTexts.length > 0) {
+    const raw = await invokeLLM({
+      prompt: `תרגם את הביקורות הבאות לעברית. החזר אך ורק שורות ממוספרות בפורמט "N. [תרגום]", ללא הסברים:\n\n${uniqueTexts.map((t, i) => `${i + 1}. ${t}`).join('\n')}`,
+      model: 'haiku',
+      maxTokens: 3000,
+      skipCache: false,
+    });
+    (typeof raw === 'string' ? raw : '').split('\n').forEach(line => {
+      const m = line.match(/^(\d+)\.\s*(.+)/);
+      if (m) translationMap[uniqueTexts[+m[1] - 1]] = m[2].trim();
+    });
+  }
+
+  const translate = (s: any) => ({ ...s, text: translationMap[s.text] ?? s.text });
+
   const topic_reviews = Object.fromEntries(
-    allTopics.map((topic, i) => [topic, (topicReviewsArr[i] as any[]).map(toReviewSnippet)])
+    allTopics.map((topic, i) => [topic, topicSnippets[i].map(translate)])
   );
 
   const payload: Record<string, any> = {
@@ -119,7 +145,7 @@ ${trend ? `מגמה: ${trend}` : ''}
     top_negative_themes: top_negative,
     topic_reviews,
     hebrew_summary,
-    latest_reviews: (latestReviews as any[]).map(toReviewSnippet),
+    latest_reviews: latestSnippets.map(translate),
   };
   if (trend !== null) payload.trend = trend;
   return payload;
