@@ -7,11 +7,10 @@ interface TopicBucket { period: string; positive: number; negative: number }
 interface TopicSeries { topic_id: string; buckets: TopicBucket[] }
 type RawMap = Record<string, Record<string, { positive: number; negative: number }>>;
 
-function weekStart(d: Date): string {
-  const copy = new Date(d);
-  copy.setUTCHours(0, 0, 0, 0);
-  copy.setUTCDate(copy.getUTCDate() - copy.getUTCDay()); // snap to Sunday
-  return copy.toISOString().slice(0, 10);
+function quarterStart(d: Date): string {
+  const year = d.getUTCFullYear();
+  const q = Math.floor(d.getUTCMonth() / 3) + 1;
+  return `${year}-Q${q}`;
 }
 
 function parseReviews(
@@ -24,7 +23,7 @@ function parseReviews(
     let parsed: Record<string, string>;
     try { parsed = JSON.parse(r.topic_sentiment); } catch { continue; }
     // Use actual review publish date for bucketing; fall back to DB insertion time
-    const period = weekStart(r.created_at ? new Date(r.created_at) : r.created_date);
+    const period = quarterStart(r.created_at ? new Date(r.created_at) : r.created_date);
     allPeriods.add(period);
     for (const [topic, polarity] of Object.entries(parsed)) {
       if (!map[topic]) map[topic] = {};
@@ -54,7 +53,7 @@ function toSeries(map: RawMap, allPeriods: Set<string>): TopicSeries[] {
  * Google-only. Shape: { own: TopicSeries[], competitors: [{ id, name, series }] }
  */
 export async function topicTimeline(req: Request, res: Response) {
-  const { businessProfileId, competitorIds, windowDays = 90 } = req.body as {
+  const { businessProfileId, competitorIds, windowDays = 730 } = req.body as {
     businessProfileId?: string;
     competitorIds?: string[];
     windowDays?: number;
