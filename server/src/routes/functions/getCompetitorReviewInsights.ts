@@ -30,7 +30,7 @@ async function computeReviewTrend(competitorId: string): Promise<string | null> 
 }
 
 export async function getCompetitorReviewInsightsData(businessProfileId: string, competitorId: string) {
-  const reviewSelect = { reviewer_name: true, rating: true, text: true, created_date: true } as const;
+  const reviewSelect = { reviewer_name: true, rating: true, text: true, created_date: true, topic_sentiment: true } as const;
 
   const [competitor, themes, trend, ownReviews, latestReviews] = await Promise.all([
     prisma.competitor.findUnique({
@@ -91,20 +91,27 @@ ${trend ? `מגמה: ${trend}` : ''}
     rating: r.rating,
     text: r.text || '',
     created_date: r.created_date,
+    // topic_sentiment not forwarded to FE
   });
 
-  // Latest 3 reviews per topic (topics field is comma-separated)
+  // Latest 3 reviews per topic, filtered by the actual per-review topic sentiment
+  const fetchTopicReviews = async (topic: string, polarity: 'positive' | 'negative') => {
+    const rows = await prisma.review.findMany({
+      where: { linked_competitor: competitorId, source_origin: { in: GOOGLE_SOURCES }, topics: { contains: topic } },
+      orderBy: { created_date: 'desc' },
+      select: reviewSelect,
+      take: 20,
+    });
+    return rows.filter(r => {
+      try { return JSON.parse((r as any).topic_sentiment || '{}')[topic] === polarity; } catch { return false; }
+    }).slice(0, 3);
+  };
+
   const allTopics = [...top_positive, ...top_negative];
-  const topicReviewsArr = await Promise.all(
-    allTopics.map(topic =>
-      prisma.review.findMany({
-        where: { linked_competitor: competitorId, source_origin: { in: GOOGLE_SOURCES }, topics: { contains: topic } },
-        orderBy: { created_date: 'desc' },
-        select: reviewSelect,
-        take: 3,
-      })
-    )
-  );
+  const topicReviewsArr = await Promise.all([
+    ...top_positive.map(t => fetchTopicReviews(t, 'positive')),
+    ...top_negative.map(t => fetchTopicReviews(t, 'negative')),
+  ]);
 
   // Build all snippets first, then batch-translate non-Hebrew texts in one call
   const topicSnippets = allTopics.map((_, i) => (topicReviewsArr[i] as any[]).map(toSnippet));
