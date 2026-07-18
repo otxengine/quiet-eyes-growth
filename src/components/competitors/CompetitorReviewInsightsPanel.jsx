@@ -61,7 +61,7 @@ export default function CompetitorReviewInsightsPanel({ competitor, businessProf
 
   if (!data) return null;
 
-  const { rating, review_count, own_rating, rating_delta, top_positive_themes = [], top_negative_themes = [], trend, hebrew_summary, latest_reviews = [] } = data;
+  const { rating, review_count, own_rating, rating_delta, top_positive_themes = [], top_negative_themes = [], topic_reviews = {}, trend, hebrew_summary, latest_reviews = [] } = data;
 
   const deltaColor = rating_delta == null ? '' : rating_delta > 0 ? 'text-red-500' : 'text-green-600';
   const deltaLabel = rating_delta == null ? null : `${rating_delta > 0 ? '+' : ''}${rating_delta} ממך`;
@@ -91,27 +91,29 @@ export default function CompetitorReviewInsightsPanel({ competitor, businessProf
         )}
       </div>
 
-      {/* Positive themes */}
+      {/* Positive themes + their latest reviews */}
       {top_positive_themes.length > 0 && (
-        <div>
-          <p className="text-[10px] font-semibold text-success mb-1">בולטים לטובה</p>
-          <div className="flex flex-wrap gap-1.5">
-            {top_positive_themes.map((t, i) => (
-              <span key={i} className="px-2 py-0.5 rounded-full text-[10px] bg-green-50 border border-green-200 text-green-700">{t}</span>
-            ))}
-          </div>
+        <div className="space-y-2">
+          <p className="text-[10px] font-semibold text-success">בולטים לטובה</p>
+          {top_positive_themes.map(t => (
+            <div key={t} className="space-y-1">
+              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] bg-green-50 border border-green-200 text-green-700">{t}</span>
+              {(topic_reviews[t] || []).map((r, i) => <ReviewSnippet key={i} review={r} />)}
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Negative themes */}
+      {/* Negative themes + their latest reviews */}
       {top_negative_themes.length > 0 && (
-        <div>
-          <p className="text-[10px] font-semibold text-danger mb-1">תלונות נפוצות</p>
-          <div className="flex flex-wrap gap-1.5">
-            {top_negative_themes.map((t, i) => (
-              <span key={i} className="px-2 py-0.5 rounded-full text-[10px] bg-red-50 border border-red-200 text-red-700">{t}</span>
-            ))}
-          </div>
+        <div className="space-y-2">
+          <p className="text-[10px] font-semibold text-danger">תלונות נפוצות</p>
+          {top_negative_themes.map(t => (
+            <div key={t} className="space-y-1">
+              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] bg-red-50 border border-red-200 text-red-700">{t}</span>
+              {(topic_reviews[t] || []).map((r, i) => <ReviewSnippet key={i} review={r} />)}
+            </div>
+          ))}
         </div>
       )}
 

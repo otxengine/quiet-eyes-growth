@@ -93,6 +93,22 @@ ${trend ? `מגמה: ${trend}` : ''}
     created_date: r.created_date,
   });
 
+  // Latest 3 reviews per topic (topics field is comma-separated)
+  const allTopics = [...top_positive, ...top_negative];
+  const topicReviewsArr = await Promise.all(
+    allTopics.map(topic =>
+      prisma.review.findMany({
+        where: { linked_competitor: competitorId, source_origin: { in: GOOGLE_SOURCES }, topics: { contains: topic } },
+        orderBy: { created_date: 'desc' },
+        select: reviewSelect,
+        take: 3,
+      })
+    )
+  );
+  const topic_reviews = Object.fromEntries(
+    allTopics.map((topic, i) => [topic, (topicReviewsArr[i] as any[]).map(toReviewSnippet)])
+  );
+
   const payload: Record<string, any> = {
     competitor_name: competitor.name,
     rating: competitor.rating,
@@ -101,6 +117,7 @@ ${trend ? `מגמה: ${trend}` : ''}
     rating_delta: ratingDelta,
     top_positive_themes: top_positive,
     top_negative_themes: top_negative,
+    topic_reviews,
     hebrew_summary,
     latest_reviews: (latestReviews as any[]).map(toReviewSnippet),
   };
