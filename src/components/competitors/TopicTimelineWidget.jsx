@@ -118,8 +118,6 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
   const { own, competitors: rawComps = [] } = data;
   const competitors = storedSet ? rawComps.filter(c => storedSet.includes(c.id)) : rawComps;
   const sorted = [...own].sort((a, b) => topicTotal(b) - topicTotal(a));
-  const top4 = sorted.slice(0, 4);
-  const rest = sorted.slice(4);
 
   const compEntry  = showComp ? competitors.find(c => c.id === showComp) : null;
   const ownLabel   = businessName ?? 'העסק שלי';
@@ -127,6 +125,14 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
   function getCompSeries(topicId) {
     return compEntry?.series?.find(s => s.topic_id === topicId) ?? null;
   }
+
+  // When a competitor with data is selected, only show topics present in both
+  const compTopicIds = new Set((compEntry?.series ?? []).map(s => s.topic_id));
+  const visibleOwn = showComp && compTopicIds.size > 0
+    ? sorted.filter(s => compTopicIds.has(s.topic_id))
+    : sorted;
+  const top4 = visibleOwn.slice(0, 4);
+  const rest = visibleOwn.slice(4);
 
   const selectedRest = activeTopic && rest.find(s => s.topic_id === activeTopic);
 
