@@ -30,10 +30,9 @@ async function computeReviewTrend(competitorId: string): Promise<string | null> 
 }
 
 export async function getCompetitorReviewInsightsData(businessProfileId: string, competitorId: string) {
-  const reviewBase = { linked_competitor: competitorId, source_origin: { in: GOOGLE_SOURCES } };
   const reviewSelect = { reviewer_name: true, rating: true, text: true, created_date: true } as const;
 
-  const [competitor, themes, trend, ownReviews, topReviews, latestReviews] = await Promise.all([
+  const [competitor, themes, trend, ownReviews, latestReviews] = await Promise.all([
     prisma.competitor.findUnique({
       where: { id: competitorId },
       select: { name: true, rating: true, review_count: true },
@@ -46,13 +45,7 @@ export async function getCompetitorReviewInsightsData(businessProfileId: string,
       take: 500,
     }),
     prisma.review.findMany({
-      where: { ...reviewBase, rating: { not: null } },
-      orderBy: { rating: 'desc' },
-      select: reviewSelect,
-      take: 3,
-    }),
-    prisma.review.findMany({
-      where: reviewBase,
+      where: { linked_competitor: competitorId, source_origin: { in: GOOGLE_SOURCES } },
       orderBy: { created_date: 'desc' },
       select: reviewSelect,
       take: 3,
@@ -109,7 +102,6 @@ ${trend ? `מגמה: ${trend}` : ''}
     top_positive_themes: top_positive,
     top_negative_themes: top_negative,
     hebrew_summary,
-    top_reviews: (topReviews as any[]).map(toReviewSnippet),
     latest_reviews: (latestReviews as any[]).map(toReviewSnippet),
   };
   if (trend !== null) payload.trend = trend;

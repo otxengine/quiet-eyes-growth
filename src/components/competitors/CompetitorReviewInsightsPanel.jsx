@@ -61,7 +61,7 @@ export default function CompetitorReviewInsightsPanel({ competitor, businessProf
 
   if (!data) return null;
 
-  const { rating, review_count, own_rating, rating_delta, top_positive_themes = [], top_negative_themes = [], trend, hebrew_summary, top_reviews = [], latest_reviews = [] } = data;
+  const { rating, review_count, own_rating, rating_delta, top_positive_themes = [], top_negative_themes = [], trend, hebrew_summary, latest_reviews = [] } = data;
 
   const deltaColor = rating_delta == null ? '' : rating_delta > 0 ? 'text-red-500' : 'text-green-600';
   const deltaLabel = rating_delta == null ? null : `${rating_delta > 0 ? '+' : ''}${rating_delta} ממך`;
@@ -120,14 +120,6 @@ export default function CompetitorReviewInsightsPanel({ competitor, businessProf
         <p className="text-[11px] text-foreground-secondary leading-relaxed border-t border-border pt-3">
           {hebrew_summary}
         </p>
-      )}
-
-      {/* Top-rated reviews */}
-      {top_reviews.length > 0 && (
-        <div className="border-t border-border pt-3 space-y-1.5">
-          <p className="text-[10px] font-semibold text-foreground-muted mb-2">ביקורות מובילות ⭐</p>
-          {top_reviews.map((r, i) => <ReviewSnippet key={i} review={r} />)}
-        </div>
       )}
 
       {/* Latest reviews */}
