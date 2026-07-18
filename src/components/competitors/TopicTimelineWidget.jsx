@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, TrendingUp } from 'lucide-react';
 
@@ -46,6 +46,24 @@ function periodLabel(p) {
   return `${q} '${year.slice(2)}`;
 }
 
+function StatCell({ bucket, className = '' }) {
+  if (!bucket || bucket.positive + bucket.negative === 0) {
+    return <td className={`py-2 px-2 text-center text-[10px] text-gray-200 ${className}`}>—</td>;
+  }
+  const r = ratio(bucket.positive, bucket.negative);
+  return (
+    <td className={`py-2 px-2 text-center ${className}`}>
+      <span className={`text-[11px] font-semibold ${ratingColor(r)}`}>
+        {r != null ? `${r}%` : '—'}
+      </span>
+      <div className="flex justify-center gap-1.5 mt-0.5">
+        <span className="text-[9px] text-green-500">↑{bucket.positive}</span>
+        <span className="text-[9px] text-red-400">↓{bucket.negative}</span>
+      </div>
+    </td>
+  );
+}
+
 export default function TopicTimelineWidget({ businessProfileId, businessName }) {
   const [showComp, setShowComp] = useState(null);
 
@@ -82,6 +100,7 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
   const sorted = [...own].sort((a, b) => topicTotal(b) - topicTotal(a));
 
   const compEntry = showComp ? competitors.find(c => c.id === showComp) : null;
+  const hasCompData = !!(compEntry?.series?.length);
 
   // When competitor with data is selected, only show common topics
   const compTopicIds = new Set((compEntry?.series ?? []).map(s => s.topic_id));
@@ -92,14 +111,15 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
   // All periods from own data, last 6 quarters
   const allPeriods = [...new Set(own.flatMap(s => s.buckets.map(b => b.period)))].sort().slice(-6);
 
-  // Build competitor lookup: topic_id → period → bucket
+  // Competitor lookup: topic_id → period → bucket
   const compLookup = {};
   if (compEntry?.series) {
     for (const s of compEntry.series) {
-      compLookup[s.topic_id] = {};
-      for (const b of s.buckets) compLookup[s.topic_id][b.period] = b;
+      compLookup[s.topic_id] = Object.fromEntries(s.buckets.map(b => [b.period, b]));
     }
   }
+
+  const ownLabel = businessName ?? 'העסק שלי';
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4" dir="rtl">
@@ -107,7 +127,7 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
       <div className="flex items-center gap-2">
         <TrendingUp className="w-4 h-4 text-blue-500" />
         <h3 className="text-sm font-semibold text-foreground">נושאים לפי רבעון — Google</h3>
-        <span className="text-[10px] text-foreground-muted mr-auto">% חיובי • ×ביקורות</span>
+        <span className="text-[10px] text-foreground-muted mr-auto">% חיובי • ↑חיובי ↓שלילי</span>
       </div>
 
       {/* Competitor toggle */}
@@ -138,34 +158,22 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
         </div>
       )}
 
-      {showComp && compEntry && !compEntry.series?.length && (
+      {showComp && compEntry && !hasCompData && (
         <p className="text-[11px] text-foreground-muted bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
           אין נתוני נושאים עדיין למתחרה זה
         </p>
       )}
 
-      {/* Legend when competitor selected */}
-      {compEntry && compEntry.series?.length > 0 && (
-        <div className="flex gap-3 text-[10px]">
-          <span className="flex items-center gap-1 text-blue-600">
-            <span className="w-2 h-2 rounded-full bg-blue-600 inline-block" />
-            {businessName ?? 'העסק שלי'}
-          </span>
-          <span className="flex items-center gap-1 text-purple-600">
-            <span className="w-2 h-2 rounded-full bg-purple-500 inline-block" />
-            {compEntry.name}
-          </span>
-        </div>
-      )}
-
-      {/* Comparison table */}
+      {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-right border-collapse">
           <thead>
-            <tr className="border-b border-gray-100">
-              <th className="text-[10px] font-semibold text-foreground-muted py-1.5 pr-0 pl-3 text-right w-24">נושא</th>
+            <tr className="border-b-2 border-gray-100">
+              <th className="text-[10px] font-semibold text-foreground-muted py-2 pr-0 pl-2 text-right">נושא</th>
+              {/* label column — only when competitor is active */}
+              {hasCompData && <th className="text-[10px] font-semibold text-foreground-muted py-2 px-1" />}
               {allPeriods.map(p => (
-                <th key={p} className="text-[10px] font-semibold text-foreground-muted py-1.5 px-2 text-center whitespace-nowrap">
+                <th key={p} className="text-[10px] font-semibold text-foreground-muted py-2 px-2 text-center whitespace-nowrap">
                   {periodLabel(p)}
                 </th>
               ))}
@@ -174,41 +182,40 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
           <tbody>
             {visibleOwn.map((s, idx) => {
               const ownBucketMap = Object.fromEntries(s.buckets.map(b => [b.period, b]));
+              const rowBg = idx % 2 === 0 ? 'bg-gray-50/50' : '';
+
               return (
-                <tr key={s.topic_id} className={idx % 2 === 0 ? 'bg-gray-50/50' : ''}>
-                  <td className="text-[11px] font-medium text-foreground py-2 pr-0 pl-2 whitespace-nowrap">
-                    {th(s.topic_id)}
-                  </td>
-                  {allPeriods.map(p => {
-                    const ob = ownBucketMap[p];
-                    const cb = compLookup[s.topic_id]?.[p];
-                    const ownTotal = ob ? ob.positive + ob.negative : 0;
-                    const compTotal = cb ? cb.positive + cb.negative : 0;
-                    const ownR = ob ? ratio(ob.positive, ob.negative) : null;
-                    const compR = cb ? ratio(cb.positive, cb.negative) : null;
-
-                    if (ownTotal === 0 && (!compEntry || compTotal === 0)) {
-                      return <td key={p} className="py-2 px-2 text-center text-[10px] text-gray-200">—</td>;
-                    }
-
-                    return (
-                      <td key={p} className="py-2 px-2 text-center">
-                        {ownTotal > 0 && (
-                          <div className={`text-[11px] font-semibold leading-tight ${ratingColor(ownR)}`}>
-                            {ownR != null ? `${ownR}%` : '—'}
-                            <span className="text-[9px] font-normal text-gray-400"> ×{ownTotal}</span>
-                          </div>
-                        )}
-                        {compEntry && compTotal > 0 && (
-                          <div className={`text-[10px] leading-tight mt-0.5 ${ratingColor(compR)} opacity-80`}>
-                            {compR != null ? `${compR}%` : '—'}
-                            <span className="text-[9px] text-gray-400"> ×{compTotal}</span>
-                          </div>
-                        )}
+                <Fragment key={s.topic_id}>
+                  {/* Own row */}
+                  <tr className={rowBg}>
+                    <td
+                      rowSpan={hasCompData ? 2 : 1}
+                      className="text-[11px] font-semibold text-foreground pr-0 pl-2 whitespace-nowrap align-middle border-b border-gray-100"
+                    >
+                      {th(s.topic_id)}
+                    </td>
+                    {hasCompData && (
+                      <td className="text-[9px] font-semibold text-blue-600 px-1 py-2 whitespace-nowrap">
+                        {ownLabel}
                       </td>
-                    );
-                  })}
-                </tr>
+                    )}
+                    {allPeriods.map(p => (
+                      <StatCell key={p} bucket={ownBucketMap[p]} />
+                    ))}
+                  </tr>
+
+                  {/* Competitor row */}
+                  {hasCompData && (
+                    <tr className={`${rowBg} border-b border-gray-100`}>
+                      <td className="text-[9px] font-semibold text-purple-600 px-1 py-2 whitespace-nowrap truncate max-w-[90px]">
+                        {compEntry.name}
+                      </td>
+                      {allPeriods.map(p => (
+                        <StatCell key={p} bucket={compLookup[s.topic_id]?.[p]} />
+                      ))}
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
           </tbody>
