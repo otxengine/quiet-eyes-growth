@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, TrendingUp } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api').replace(/\/$/, '');
 
@@ -34,59 +33,22 @@ function topicTotal(series) {
   return (series.buckets ?? []).reduce((s, b) => s + b.positive + b.negative, 0);
 }
 
-function buildChartData(ownSeries, compSeries) {
-  return (ownSeries?.buckets ?? []).map(b => {
-    const row = { period: b.period.slice(5), own: ratio(b.positive, b.negative) };
-    if (compSeries) {
-      const cb = compSeries.buckets?.find(x => x.period === b.period) ?? { positive: 0, negative: 0 };
-      row.comp = ratio(cb.positive, cb.negative);
-    }
-    return row;
-  });
+function ratingColor(r) {
+  if (r == null) return 'text-gray-300';
+  if (r >= 65) return 'text-green-600';
+  if (r <= 40) return 'text-red-500';
+  return 'text-amber-500';
 }
 
-function MiniChart({ ownSeries, compSeries, label, mentions }) {
-  const chartData = buildChartData(ownSeries, compSeries);
-  return (
-    <div className="bg-gray-50 rounded-lg p-3 space-y-1">
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-foreground truncate">{label}</span>
-        <span className="text-[9px] text-foreground-muted whitespace-nowrap mr-1">{mentions} אזכורים</span>
-      </div>
-      <ResponsiveContainer width="100%" height={90}>
-        <LineChart data={chartData} margin={{ top: 2, right: 4, left: -28, bottom: 0 }}>
-          <XAxis dataKey="period" tick={{ fontSize: 7 }} tickLine={false} axisLine={false} />
-          <YAxis domain={[0, 100]} hide />
-          <Tooltip formatter={v => v != null ? `${v}%` : '—'} contentStyle={{ fontSize: 10, borderRadius: 4 }} />
-          <Line type="monotone" dataKey="own" stroke="#2563eb" strokeWidth={1.5} dot={false} connectNulls={false} />
-          {compSeries && <Line type="monotone" dataKey="comp" stroke="#9333ea" strokeWidth={1} strokeDasharray="3 2" dot={false} connectNulls={false} />}
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-function FullChart({ ownSeries, compSeries, compName, ownLabel }) {
-  const chartData = buildChartData(ownSeries, compSeries);
-  return (
-    <ResponsiveContainer width="100%" height={180}>
-      <LineChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="period" tick={{ fontSize: 9 }} />
-        <YAxis domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 9 }} />
-        <Tooltip formatter={v => v != null ? `${v}%` : '—'} contentStyle={{ fontSize: 11, borderRadius: 6 }} />
-        <Line type="monotone" dataKey="own" name={ownLabel} stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
-        {compSeries && <Line type="monotone" dataKey="comp" name={compName} stroke="#9333ea" strokeWidth={1.5} strokeDasharray="4 2" dot={{ r: 2.5 }} connectNulls={false} />}
-      </LineChart>
-    </ResponsiveContainer>
-  );
+// "2025-Q2" → "Q2 '25"
+function periodLabel(p) {
+  const [year, q] = p.split('-');
+  return `${q} '${year.slice(2)}`;
 }
 
 export default function TopicTimelineWidget({ businessProfileId, businessName }) {
   const [showComp, setShowComp] = useState(null);
-  const [activeTopic, setActiveTopic] = useState(null);
 
-  // ponytail: mirror GoogleCompareWidget's set so the timeline respects the same curated list (R3-2)
   const storedSet = (() => {
     if (!businessProfileId) return null;
     try { return JSON.parse(localStorage.getItem(`compare-set-${businessProfileId}`) ?? 'null'); } catch { return null; }
@@ -119,30 +81,33 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
   const competitors = storedSet ? rawComps.filter(c => storedSet.includes(c.id)) : rawComps;
   const sorted = [...own].sort((a, b) => topicTotal(b) - topicTotal(a));
 
-  const compEntry  = showComp ? competitors.find(c => c.id === showComp) : null;
-  const ownLabel   = businessName ?? 'העסק שלי';
+  const compEntry = showComp ? competitors.find(c => c.id === showComp) : null;
 
-  function getCompSeries(topicId) {
-    return compEntry?.series?.find(s => s.topic_id === topicId) ?? null;
-  }
-
-  // When a competitor with data is selected, only show topics present in both
+  // When competitor with data is selected, only show common topics
   const compTopicIds = new Set((compEntry?.series ?? []).map(s => s.topic_id));
   const visibleOwn = showComp && compTopicIds.size > 0
     ? sorted.filter(s => compTopicIds.has(s.topic_id))
     : sorted;
-  const top4 = visibleOwn.slice(0, 4);
-  const rest = visibleOwn.slice(4);
 
-  const selectedRest = activeTopic && rest.find(s => s.topic_id === activeTopic);
+  // All periods from own data, last 6 quarters
+  const allPeriods = [...new Set(own.flatMap(s => s.buckets.map(b => b.period)))].sort().slice(-6);
+
+  // Build competitor lookup: topic_id → period → bucket
+  const compLookup = {};
+  if (compEntry?.series) {
+    for (const s of compEntry.series) {
+      compLookup[s.topic_id] = {};
+      for (const b of s.buckets) compLookup[s.topic_id][b.period] = b;
+    }
+  }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-5" dir="rtl">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4" dir="rtl">
       {/* Header */}
       <div className="flex items-center gap-2">
         <TrendingUp className="w-4 h-4 text-blue-500" />
-        <h3 className="text-sm font-semibold text-foreground">מגמת נושאים לאורך זמן — Google</h3>
-        <span className="text-[10px] text-foreground-muted mr-auto">% חיובי מתוך סה״כ אזכורים</span>
+        <h3 className="text-sm font-semibold text-foreground">נושאים לפי רבעון — Google</h3>
+        <span className="text-[10px] text-foreground-muted mr-auto">% חיובי • ×ביקורות</span>
       </div>
 
       {/* Competitor toggle */}
@@ -173,59 +138,82 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
         </div>
       )}
 
-      {/* No topic-sentiment data for selected competitor */}
       {showComp && compEntry && !compEntry.series?.length && (
         <p className="text-[11px] text-foreground-muted bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
           אין נתוני נושאים עדיין למתחרה זה
         </p>
       )}
 
-      {/* Top 4 mini charts — 2×2 grid */}
-      <div className="grid grid-cols-2 gap-3">
-        {top4.map(s => (
-          <MiniChart
-            key={s.topic_id}
-            label={th(s.topic_id)}
-            mentions={topicTotal(s)}
-            ownSeries={s}
-            compSeries={getCompSeries(s.topic_id)}
-          />
-        ))}
-      </div>
-
-      {/* Rest — pill selector + full chart */}
-      {rest.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex flex-wrap gap-1.5 items-center">
-            <span className="text-[10px] text-foreground-muted">נושאים נוספים:</span>
-            {rest.map(s => (
-              <button
-                key={s.topic_id}
-                onClick={() => setActiveTopic(s.topic_id === activeTopic ? null : s.topic_id)}
-                className={`text-[11px] px-2.5 py-1 rounded-full border font-medium transition-colors ${
-                  activeTopic === s.topic_id
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'border-border text-foreground-muted hover:border-blue-400 hover:text-blue-600'
-                }`}
-              >
-                {th(s.topic_id)}
-              </button>
-            ))}
-          </div>
-
-          {selectedRest && (
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-[11px] font-semibold text-foreground mb-2">{th(selectedRest.topic_id)}</p>
-              <FullChart
-                ownSeries={selectedRest}
-                compSeries={getCompSeries(selectedRest.topic_id)}
-                compName={compEntry?.name}
-                ownLabel={ownLabel}
-              />
-            </div>
-          )}
+      {/* Legend when competitor selected */}
+      {compEntry && compEntry.series?.length > 0 && (
+        <div className="flex gap-3 text-[10px]">
+          <span className="flex items-center gap-1 text-blue-600">
+            <span className="w-2 h-2 rounded-full bg-blue-600 inline-block" />
+            {businessName ?? 'העסק שלי'}
+          </span>
+          <span className="flex items-center gap-1 text-purple-600">
+            <span className="w-2 h-2 rounded-full bg-purple-500 inline-block" />
+            {compEntry.name}
+          </span>
         </div>
       )}
+
+      {/* Comparison table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-right border-collapse">
+          <thead>
+            <tr className="border-b border-gray-100">
+              <th className="text-[10px] font-semibold text-foreground-muted py-1.5 pr-0 pl-3 text-right w-24">נושא</th>
+              {allPeriods.map(p => (
+                <th key={p} className="text-[10px] font-semibold text-foreground-muted py-1.5 px-2 text-center whitespace-nowrap">
+                  {periodLabel(p)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {visibleOwn.map((s, idx) => {
+              const ownBucketMap = Object.fromEntries(s.buckets.map(b => [b.period, b]));
+              return (
+                <tr key={s.topic_id} className={idx % 2 === 0 ? 'bg-gray-50/50' : ''}>
+                  <td className="text-[11px] font-medium text-foreground py-2 pr-0 pl-2 whitespace-nowrap">
+                    {th(s.topic_id)}
+                  </td>
+                  {allPeriods.map(p => {
+                    const ob = ownBucketMap[p];
+                    const cb = compLookup[s.topic_id]?.[p];
+                    const ownTotal = ob ? ob.positive + ob.negative : 0;
+                    const compTotal = cb ? cb.positive + cb.negative : 0;
+                    const ownR = ob ? ratio(ob.positive, ob.negative) : null;
+                    const compR = cb ? ratio(cb.positive, cb.negative) : null;
+
+                    if (ownTotal === 0 && (!compEntry || compTotal === 0)) {
+                      return <td key={p} className="py-2 px-2 text-center text-[10px] text-gray-200">—</td>;
+                    }
+
+                    return (
+                      <td key={p} className="py-2 px-2 text-center">
+                        {ownTotal > 0 && (
+                          <div className={`text-[11px] font-semibold leading-tight ${ratingColor(ownR)}`}>
+                            {ownR != null ? `${ownR}%` : '—'}
+                            <span className="text-[9px] font-normal text-gray-400"> ×{ownTotal}</span>
+                          </div>
+                        )}
+                        {compEntry && compTotal > 0 && (
+                          <div className={`text-[10px] leading-tight mt-0.5 ${ratingColor(compR)} opacity-80`}>
+                            {compR != null ? `${compR}%` : '—'}
+                            <span className="text-[9px] text-gray-400"> ×{compTotal}</span>
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
