@@ -619,6 +619,34 @@ export async function collectReviews(req: Request, res: Response) {
         }
       } catch (_) {}
     }
+    // Backfill own reviews that lack topic_sentiment (pre-extraction era or truncated batch)
+    const ownUntopiced = await prisma.review.findMany({
+      where: {
+        linked_business: businessProfileId,
+        OR: [{ topic_sentiment: null }, { topic_sentiment: '{}' }],
+      },
+      select: { id: true, text: true },
+      take: 30,
+    }) as Array<{ id: string; text: string }>;
+    if (ownUntopiced.length > 0) {
+      const eligible = ownUntopiced.filter(r => ((r as any).text || '').length >= 5);
+      if (eligible.length > 0) {
+        const backfill = await batchExtractTopics(
+          eligible.map(r => ({ text: (r as any).text })),
+          undefined,
+          topicSet,
+        );
+        for (let i = 0; i < eligible.length; i++) {
+          const { topics, topic_sentiment } = backfill[i];
+          if (!topics) continue;
+          await prisma.review.update({
+            where: { id: eligible[i].id },
+            data: { topics, topic_sentiment },
+          }).catch(() => {});
+        }
+      }
+    }
+
     // Auto-trigger competitor review collection in background (KAN-127)
     runCollectCompetitorReviews(businessProfileId).catch(e =>
       console.error('[collectReviews] background competitor ingest failed:', e.message)

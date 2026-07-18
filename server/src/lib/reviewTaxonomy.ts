@@ -41,7 +41,7 @@ export async function batchExtractTopics(
       prompt: `Extract topics from these reviews. For each review pick up to 6 topics from this exact list only: ${allowedStr}. Map any phrasing to the nearest id — do not invent new labels.\n\nRanking rule: if more than 6 topics qualify, keep the 6 most explicitly and directly mentioned — do not drop obvious ones in favour of weak or implied ones.\n\nPolarity rules (must follow):\n- Derive polarity ONLY from the wording of that specific topic — NEVER from the star rating or overall tone.\n- A 5-star review can have a topic marked "negative" if the wording criticizes it.\n- If the wording for a topic has no clear positive or negative signal → assign "neutral". Do not guess.\n\nExamples:\n"האוכל היה מעולה אבל השירות איטי ומאכזב" (5★) → {topics:["quality","service"], sentiments:{quality:"positive",service:"negative"}}\n"מקום סביר, היינו שם" → {topics:["atmosphere"], sentiments:{atmosphere:"neutral"}}\n\n${itemsStr}\nReturn ONLY valid JSON: {"results":[{"topics":["service"],"sentiments":{"service":"positive"}},...]}, same length and order as input.`,
       response_json_schema: { type: 'object' },
       model: 'haiku',
-      maxTokens: 900,
+      maxTokens: 4000,
       costTrackingId,
     });
 

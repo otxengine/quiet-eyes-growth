@@ -5,6 +5,8 @@ import { findPlaceId, getPlaceDetails } from '../../lib/googlePlaces';
 import { normReviewOrigin } from '../../lib/signalGuard';
 import { serpGoogleMapsReviews, firstValidDate } from '../../lib/serpapi';
 import { batchExtractTopics } from '../../lib/reviewTaxonomy';
+import { getSectorProfile } from '../../lib/businessProfile';
+import { resolveTopicSet } from '../../lib/reviewTopicPacks';
 
 const MAX_REVIEWS = 300;
 
@@ -22,6 +24,9 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
   const startTime = new Date().toISOString();
     const profile = await prisma.businessProfile.findFirst({ where: { id: businessProfileId } });
     if (!profile) throw new Error('No business profile');
+
+    const sp = getSectorProfile(profile);
+    const topicSet = resolveTopicSet(sp?.sector_key ?? 'other', sp?.onboarding_review_extras ?? []);
 
     const competitors = await (prisma.competitor as any).findMany({
       where: { linked_business: businessProfileId },
@@ -92,6 +97,8 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
       if (pending.length > 0) {
         const topicsArr = await batchExtractTopics(
           pending.map(p => ({ text: p.text })),
+          undefined,
+          topicSet,
         );
 
         for (let i = 0; i < pending.length; i++) {
@@ -129,20 +136,30 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
       // Runs every pass regardless of `pending.length`, since collection is dedup'd and
       // most passes find zero new reviews once a competitor is fully synced.
       const untopiced = await (prisma.review as any).findMany({
-        where: { linked_competitor: comp.id, topic_sentiment: null },
+        where: {
+          linked_competitor: comp.id,
+          OR: [{ topic_sentiment: null }, { topic_sentiment: '{}' }],
+        },
         select: { id: true, text: true },
-        take: 100,
+        take: 30,
       }) as Array<{ id: string; text: string }>;
 
       if (untopiced.length > 0) {
-        const backfillTopics = await batchExtractTopics(untopiced.map(r => ({ text: r.text || '' })));
-        for (let i = 0; i < untopiced.length; i++) {
-          const { topics, topic_sentiment } = backfillTopics[i];
-          if (!topics) continue;
-          await (prisma.review as any).update({
-            where: { id: untopiced[i].id },
-            data: { topics, topic_sentiment },
-          }).catch(() => {});
+        const eligible = untopiced.filter((r: { text: string }) => (r.text || '').length >= 5);
+        if (eligible.length > 0) {
+          const backfillTopics = await batchExtractTopics(
+            eligible.map((r: { text: string }) => ({ text: r.text })),
+            undefined,
+            topicSet,
+          );
+          for (let i = 0; i < eligible.length; i++) {
+            const { topics, topic_sentiment } = backfillTopics[i];
+            if (!topics) continue;
+            await (prisma.review as any).update({
+              where: { id: eligible[i].id },
+              data: { topics, topic_sentiment },
+            }).catch(() => {});
+          }
         }
       }
     }

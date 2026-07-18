@@ -15,7 +15,7 @@ function weekStart(d: Date): string {
 }
 
 function parseReviews(
-  reviews: { topic_sentiment: string | null; created_date: Date }[],
+  reviews: { topic_sentiment: string | null; created_date: Date; created_at?: string | null }[],
   allPeriods: Set<string>,
 ): RawMap {
   const map: RawMap = {};
@@ -23,7 +23,8 @@ function parseReviews(
     if (!r.topic_sentiment) continue;
     let parsed: Record<string, string>;
     try { parsed = JSON.parse(r.topic_sentiment); } catch { continue; }
-    const period = weekStart(r.created_date);
+    // Use actual review publish date for bucketing; fall back to DB insertion time
+    const period = weekStart(r.created_at ? new Date(r.created_at) : r.created_date);
     allPeriods.add(period);
     for (const [topic, polarity] of Object.entries(parsed)) {
       if (!map[topic]) map[topic] = {};
@@ -82,13 +83,13 @@ export async function topicTimeline(req: Request, res: Response) {
     const [ownReviews, ...compReviews] = await Promise.all([
       prisma.review.findMany({
         where: { ...baseWhere, linked_business: businessProfileId },
-        select: { topic_sentiment: true, created_date: true },
+        select: { topic_sentiment: true, created_date: true, created_at: true },
       }),
       ...competitors.map(c =>
         prisma.review.findMany({
           // ponytail: spread-ternary avoids strict object-literal check on un-regenerated Prisma client
           where: { ...baseWhere, ...(true ? { linked_competitor: c.id } : {}) },
-          select: { topic_sentiment: true, created_date: true },
+          select: { topic_sentiment: true, created_date: true, created_at: true },
         }),
       ),
     ]);
