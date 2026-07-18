@@ -30,7 +30,10 @@ async function computeReviewTrend(competitorId: string): Promise<string | null> 
 }
 
 export async function getCompetitorReviewInsightsData(businessProfileId: string, competitorId: string) {
-  const [competitor, themes, trend, ownReviews] = await Promise.all([
+  const reviewBase = { linked_competitor: competitorId, source_origin: { in: GOOGLE_SOURCES } };
+  const reviewSelect = { reviewer_name: true, rating: true, text: true, created_date: true } as const;
+
+  const [competitor, themes, trend, ownReviews, topReviews, latestReviews] = await Promise.all([
     prisma.competitor.findUnique({
       where: { id: competitorId },
       select: { name: true, rating: true, review_count: true },
@@ -41,6 +44,18 @@ export async function getCompetitorReviewInsightsData(businessProfileId: string,
       where: { linked_business: businessProfileId, source_origin: { in: GOOGLE_SOURCES }, rating: { not: null } },
       select: { rating: true },
       take: 500,
+    }),
+    prisma.review.findMany({
+      where: { ...reviewBase, rating: { not: null } },
+      orderBy: { rating: 'desc' },
+      select: reviewSelect,
+      take: 3,
+    }),
+    prisma.review.findMany({
+      where: reviewBase,
+      orderBy: { created_date: 'desc' },
+      select: reviewSelect,
+      take: 3,
     }),
   ]);
 
@@ -78,6 +93,13 @@ ${trend ? `מגמה: ${trend}` : ''}
     hebrew_summary = typeof raw === 'string' ? raw.trim() : null;
   }
 
+  const toReviewSnippet = (r: any) => ({
+    reviewer_name: r.reviewer_name || null,
+    rating: r.rating,
+    text: (r.text || '').slice(0, 200),
+    created_date: r.created_date,
+  });
+
   const payload: Record<string, any> = {
     competitor_name: competitor.name,
     rating: competitor.rating,
@@ -87,6 +109,8 @@ ${trend ? `מגמה: ${trend}` : ''}
     top_positive_themes: top_positive,
     top_negative_themes: top_negative,
     hebrew_summary,
+    top_reviews: (topReviews as any[]).map(toReviewSnippet),
+    latest_reviews: (latestReviews as any[]).map(toReviewSnippet),
   };
   if (trend !== null) payload.trend = trend;
   return payload;
