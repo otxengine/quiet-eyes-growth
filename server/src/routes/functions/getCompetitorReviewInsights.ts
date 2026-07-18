@@ -30,30 +30,48 @@ async function computeReviewTrend(competitorId: string): Promise<string | null> 
 }
 
 export async function getCompetitorReviewInsightsData(businessProfileId: string, competitorId: string) {
-  const [competitor, themes, trend] = await Promise.all([
+  const [competitor, themes, trend, ownReviews] = await Promise.all([
     prisma.competitor.findUnique({
       where: { id: competitorId },
       select: { name: true, rating: true, review_count: true },
     }),
     computeThemeRollup(businessProfileId, 90, 'google', competitorId),
     computeReviewTrend(competitorId),
+    prisma.review.findMany({
+      where: { linked_business: businessProfileId, source_origin: { in: GOOGLE_SOURCES }, rating: { not: null } },
+      select: { rating: true },
+      take: 500,
+    }),
   ]);
 
   if (!competitor) throw new Error('Competitor not found');
+
+  const ownRatings = (ownReviews as any[]).map((r: any) => r.rating).filter(Boolean);
+  const ownAvg = ownRatings.length > 0
+    ? ownRatings.reduce((s: number, r: number) => s + r, 0) / ownRatings.length
+    : null;
+  const ratingDelta = ownAvg != null && competitor.rating != null
+    ? +((competitor.rating as number) - ownAvg).toFixed(1)
+    : null;
 
   const top_positive = themes.filter(t => t.positive > t.negative).slice(0, 3).map(t => t.theme);
   const top_negative = themes.filter(t => t.negative > t.positive).slice(0, 3).map(t => t.theme);
 
   let hebrew_summary: string | null = null;
   if (themes.length > 0) {
+    const ownLine = ownAvg != null ? `העסק שלך: ${ownAvg.toFixed(1)}/5` : '';
+    const deltaLine = ratingDelta != null
+      ? `פער: ${ratingDelta > 0 ? '+' : ''}${ratingDelta} (המתחרה ${ratingDelta > 0 ? 'מעל' : 'מתחת ל'}עסקך)`
+      : '';
     const raw = await invokeLLM({
-      prompt: `מתחרה: "${competitor.name}"
-דירוג: ${competitor.rating ?? '?'}/5 (${competitor.review_count ?? '?'} ביקורות)
+      prompt: `${ownLine}
+מתחרה: "${competitor.name}" — ${competitor.rating ?? '?'}/5 (${competitor.review_count ?? '?'} ביקורות)
+${deltaLine}
 נושאים חיוביים: ${top_positive.join(', ') || 'אין'}
 נושאים שליליים: ${top_negative.join(', ') || 'אין'}
 ${trend ? `מגמה: ${trend}` : ''}
 
-כתוב סיכום קצר (2-3 משפטים) בעברית על חוויית לקוחות המתחרה הזה. היה ענייני ומדויק.`,
+כתוב סיכום השוואתי קצר (2-3 משפטים) בעברית — השווה את המתחרה לעסקך. ציין אם הדירוג טוב או רע ביחס אליך.`,
       model: 'claude-haiku-4-5-20251001',
       maxTokens: 200,
     });
@@ -64,12 +82,13 @@ ${trend ? `מגמה: ${trend}` : ''}
     competitor_name: competitor.name,
     rating: competitor.rating,
     review_count: competitor.review_count,
+    own_rating: ownAvg != null ? +ownAvg.toFixed(1) : null,
+    rating_delta: ratingDelta,
     top_positive_themes: top_positive,
     top_negative_themes: top_negative,
     hebrew_summary,
-    // AC3: no reply/publish actions in payload
   };
-  if (trend !== null) payload.trend = trend;  // AC2: omit when data is insufficient
+  if (trend !== null) payload.trend = trend;
   return payload;
 }
 

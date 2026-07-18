@@ -41,7 +41,10 @@ export default function CompetitorReviewInsightsPanel({ competitor, businessProf
 
   if (!data) return null;
 
-  const { rating, review_count, top_positive_themes = [], top_negative_themes = [], trend, hebrew_summary } = data;
+  const { rating, review_count, own_rating, rating_delta, top_positive_themes = [], top_negative_themes = [], trend, hebrew_summary } = data;
+
+  const deltaColor = rating_delta == null ? '' : rating_delta > 0 ? 'text-red-500' : 'text-green-600';
+  const deltaLabel = rating_delta == null ? null : `${rating_delta > 0 ? '+' : ''}${rating_delta} ממך`;
 
   return (
     <div className="rounded-xl border border-border bg-secondary/40 p-4 space-y-3">
@@ -49,11 +52,17 @@ export default function CompetitorReviewInsightsPanel({ competitor, businessProf
         תובנות ביקורות Google — {competitor.name}
       </p>
 
-      {/* Rating + count + trend */}
+      {/* Rating + own comparison + trend */}
       <div className="flex items-center gap-3 flex-wrap">
         <span className="text-[22px] font-bold text-foreground leading-none">
           {rating != null ? Number(rating).toFixed(1) : '—'}
         </span>
+        {own_rating != null && (
+          <span className="text-[11px] text-foreground-muted">vs {own_rating.toFixed(1)} שלך</span>
+        )}
+        {deltaLabel && (
+          <span className={`text-[12px] font-semibold ${deltaColor}`}>{deltaLabel}</span>
+        )}
         <span className="text-[11px] text-foreground-muted">{review_count ? `${review_count} ביקורות` : ''}</span>
         {trend && (
           <span className="flex items-center gap-1 text-[11px] text-foreground-secondary">
