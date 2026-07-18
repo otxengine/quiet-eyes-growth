@@ -66,6 +66,12 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
   const [showComp, setShowComp] = useState(null);
   const [activeTopic, setActiveTopic] = useState(null);
 
+  // ponytail: mirror GoogleCompareWidget's set so the timeline respects the same curated list (R3-2)
+  const storedSet = (() => {
+    if (!businessProfileId) return null;
+    try { return JSON.parse(localStorage.getItem(`compare-set-${businessProfileId}`) ?? 'null'); } catch { return null; }
+  })();
+
   const { data, isLoading } = useQuery({
     queryKey: ['topicTimeline', businessProfileId],
     queryFn: async () => {
@@ -89,7 +95,8 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
 
   if (!data?.own?.length) return null;
 
-  const { own, competitors = [] } = data;
+  const { own, competitors: rawComps = [] } = data;
+  const competitors = storedSet ? rawComps.filter(c => storedSet.includes(c.id)) : rawComps;
   const sorted = [...own].sort((a, b) => topicTotal(b) - topicTotal(a));
   const top4 = sorted.slice(0, 4);
   const rest = sorted.slice(4);
