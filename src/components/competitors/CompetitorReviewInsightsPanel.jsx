@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Loader2, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Loader2, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp } from 'lucide-react';
 
 const TREND_ICON = {
   improving: <TrendingUp  className="w-3.5 h-3.5 text-success inline-block" />,
@@ -22,16 +22,23 @@ function ReviewSnippet({ review }) {
         {date && <span className="text-[10px] text-foreground-muted flex-shrink-0">{date}</span>}
       </div>
       {review.text && (
-        <p className="text-[11px] text-foreground-secondary leading-relaxed line-clamp-2">{review.text}</p>
+        <p dir="auto" className="text-[11px] text-foreground-secondary leading-relaxed">{review.text}</p>
       )}
     </div>
   );
 }
 
 export default function CompetitorReviewInsightsPanel({ competitor, businessProfileId }) {
-  const [data, setData]       = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [loaded, setLoaded]   = useState(false);
+  const [data, setData]           = useState(null);
+  const [loading, setLoading]     = useState(false);
+  const [loaded, setLoaded]       = useState(false);
+  const [expandedTopics, setExpandedTopics] = useState(new Set());
+
+  const toggleTopic = t => setExpandedTopics(prev => {
+    const next = new Set(prev);
+    next.has(t) ? next.delete(t) : next.add(t);
+    return next;
+  });
 
   const load = async () => {
     if (loaded) return;
@@ -91,29 +98,57 @@ export default function CompetitorReviewInsightsPanel({ competitor, businessProf
         )}
       </div>
 
-      {/* Positive themes + their latest reviews */}
+      {/* Positive themes + expandable reviews */}
       {top_positive_themes.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <p className="text-[10px] font-semibold text-success">בולטים לטובה</p>
-          {top_positive_themes.map(t => (
-            <div key={t} className="space-y-1">
-              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] bg-green-50 border border-green-200 text-green-700">{t}</span>
-              {(topic_reviews[t] || []).map((r, i) => <ReviewSnippet key={i} review={r} />)}
-            </div>
-          ))}
+          {top_positive_themes.map(t => {
+            const open = expandedTopics.has(t);
+            const reviews = topic_reviews[t] || [];
+            return (
+              <div key={t}>
+                <button
+                  onClick={() => toggleTopic(t)}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-green-50 border border-green-200 text-green-700 hover:bg-green-100 transition-colors"
+                >
+                  {t}
+                  {reviews.length > 0 && (open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                </button>
+                {open && reviews.length > 0 && (
+                  <div className="mt-1.5 space-y-1.5 pr-2 border-r-2 border-green-200">
+                    {reviews.map((r, i) => <ReviewSnippet key={i} review={r} />)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* Negative themes + their latest reviews */}
+      {/* Negative themes + expandable reviews */}
       {top_negative_themes.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <p className="text-[10px] font-semibold text-danger">תלונות נפוצות</p>
-          {top_negative_themes.map(t => (
-            <div key={t} className="space-y-1">
-              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] bg-red-50 border border-red-200 text-red-700">{t}</span>
-              {(topic_reviews[t] || []).map((r, i) => <ReviewSnippet key={i} review={r} />)}
-            </div>
-          ))}
+          {top_negative_themes.map(t => {
+            const open = expandedTopics.has(t);
+            const reviews = topic_reviews[t] || [];
+            return (
+              <div key={t}>
+                <button
+                  onClick={() => toggleTopic(t)}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 transition-colors"
+                >
+                  {t}
+                  {reviews.length > 0 && (open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
+                </button>
+                {open && reviews.length > 0 && (
+                  <div className="mt-1.5 space-y-1.5 pr-2 border-r-2 border-red-200">
+                    {reviews.map((r, i) => <ReviewSnippet key={i} review={r} />)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 

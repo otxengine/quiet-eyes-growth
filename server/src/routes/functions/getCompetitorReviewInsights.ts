@@ -89,7 +89,7 @@ ${trend ? `מגמה: ${trend}` : ''}
   const toReviewSnippet = (r: any) => ({
     reviewer_name: r.reviewer_name || null,
     rating: r.rating,
-    text: (r.text || '').slice(0, 200),
+    text: r.text || '',
     created_date: r.created_date,
   });
 
