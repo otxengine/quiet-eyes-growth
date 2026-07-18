@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Bot, Send, Loader2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import GoogleCompareWidget from '@/components/competitors/GoogleCompareWidget';
 import TopicTimelineWidget from '@/components/competitors/TopicTimelineWidget';
 import CompetitorReviewInsightsPanel from '@/components/competitors/CompetitorReviewInsightsPanel';
 
@@ -108,11 +107,6 @@ export default function ReviewsCompare() {
         </Link>
         <span className="text-lg font-semibold text-foreground">השוואת Google</span>
       </div>
-      <GoogleCompareWidget businessProfileId={bpId} businessName={businessProfile?.name} />
-      <TopicTimelineWidget businessProfileId={bpId} businessName={businessProfile?.name} />
-      <ReputationAdvisorChat bpId={bpId} competitorIds={activeIds} />
-
-      {/* AC1: competitor list visible on Comparison page */}
       {listed.length > 0 && (
         <div className="space-y-3">
           <p className="text-[11px] font-semibold text-foreground-muted uppercase tracking-wide" dir="rtl">
@@ -139,6 +133,8 @@ export default function ReviewsCompare() {
           )}
         </div>
       )}
+      <TopicTimelineWidget businessProfileId={bpId} businessName={businessProfile?.name} />
+      <ReputationAdvisorChat bpId={bpId} competitorIds={activeIds} />
     </div>
   );
 }
