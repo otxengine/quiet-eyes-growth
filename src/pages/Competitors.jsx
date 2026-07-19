@@ -2,20 +2,41 @@ import React, { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2, Star } from 'lucide-react';
+import { Loader2, Star, TrendingUp, TrendingDown, Minus, Trash2, Plus } from 'lucide-react';
 import { toast } from 'sonner';
+import { getLimits } from '@/lib/planConfig';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
 import DataTable from '@/components/shared/DataTable';
 import BattlecardPanel from '@/components/competitors/BattlecardPanel';
+import DismissMenu from '@/components/ui/DismissMenu';
 
 const COLUMNS = [
-  { key: 'name',     label: 'מתחרה' },
-  { key: 'category', label: 'קטגוריה' },
-  { key: 'city',     label: 'מיקום' },
-  { key: 'rating',   label: 'דירוג וביקורות' },
-  { key: 'action',   label: 'פעולה' },
+  { key: 'name',         label: 'מתחרה' },
+  { key: 'category',     label: 'קטגוריה' },
+  { key: 'city',         label: 'מיקום' },
+  { key: 'rating',       label: 'דירוג וביקורות' },
+  { key: 'trend',        label: 'מגמה' },
+  { key: 'last_scanned', label: 'נסרק לאחרונה' },
+  { key: 'action',       label: 'פעולה' },
 ];
+
+function TrendBadge({ comp }) {
+  const dir = comp.trend_direction || (comp.trend === 'rising' ? 'up' : comp.trend === 'declining' ? 'down' : null);
+  if (dir === 'up')   return <TrendingUp   className="w-4 h-4 text-green-500" />;
+  if (dir === 'down') return <TrendingDown className="w-4 h-4 text-red-500" />;
+  return <Minus className="w-4 h-4 text-gray-400" />;
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '—';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const d = Math.floor(diff / 86400000);
+  if (d === 0) return 'היום';
+  if (d === 1) return 'אתמול';
+  if (d < 30)  return `לפני ${d} ימים`;
+  return `לפני ${Math.floor(d / 30)} חודשים`;
+}
 
 function StarRating({ rating }) {
   const r = Math.round(Number(rating) || 0);
@@ -44,15 +65,22 @@ async function fetchCompetitorChanges(bpId) {
 export default function Competitors() {
   const { businessProfile } = useOutletContext();
   const bpId = businessProfile?.id;
+  const plan = businessProfile?.plan || 'free_trial';
   const queryClient = useQueryClient();
   const [scanning, setScanning] = useState(false);
   const [selectedCompetitorId, setSelectedCompetitorId] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newComp, setNewComp] = useState({ name: '', category: '', address: '' });
+  const [adding, setAdding] = useState(false);
 
   const { data: competitors = [], isLoading } = useQuery({
     queryKey: ['competitorsPage', bpId],
-    queryFn: () => base44.entities.Competitor.filter({ linked_business: bpId, not_relevant: false }),
+    queryFn: () => base44.entities.Competitor.filter({ linked_business: bpId, is_dismissed: false, not_relevant: false }),
     enabled: !!bpId,
   });
+
+  const planLimits = getLimits(plan);
+  const atCap = planLimits.competitors_max !== Infinity && competitors.length >= planLimits.competitors_max;
 
   const { data: reviews = [] } = useQuery({
     queryKey: ['competitorsReviews', bpId],
@@ -65,6 +93,26 @@ export default function Competitors() {
     queryFn: () => fetchCompetitorChanges(bpId),
     enabled: !!bpId,
   });
+
+  const handleAdd = async () => {
+    if (!newComp.name.trim()) return;
+    if (atCap) { toast.error(`הגעת למכסת ${planLimits.competitors_max} מתחרים בתוכנית שלך`); return; }
+    setAdding(true);
+    try {
+      await base44.entities.Competitor.create({ ...newComp, linked_business: bpId });
+      queryClient.invalidateQueries({ queryKey: ['competitorsPage', bpId] });
+      setNewComp({ name: '', category: '', address: '' });
+      setShowAdd(false);
+      toast.success('מתחרה נוסף');
+    } catch { toast.error('שגיאה בהוספת מתחרה'); }
+    setAdding(false);
+  };
+
+  const handleDelete = async (id) => {
+    await base44.entities.Competitor.delete(id);
+    queryClient.invalidateQueries({ queryKey: ['competitorsPage', bpId] });
+    toast.success('מתחרה הוסר');
+  };
 
   const handleScan = async () => {
     setScanning(true);
@@ -92,9 +140,10 @@ export default function Competitors() {
     { count: avgRating ? avgRating.toFixed(1) : '—', label: 'הדירוג שלי', borderColor: 'none' },
   ];
 
-  // "מהלכי מתחרים" — top insight card + 3 activity cards
   const topChange = changes[0];
   const activityChanges = changes.slice(1, 4);
+
+  const inputCls = "w-full bg-secondary border border-border rounded-lg px-3 py-2 text-[12px] text-foreground placeholder-foreground-muted focus:outline-none focus:border-primary/30";
 
   return (
     <div className="space-y-5">
@@ -107,6 +156,37 @@ export default function Competitors() {
       />
 
       <StatCards cards={statCards} />
+
+      {/* Add competitor / cap message */}
+      {atCap ? (
+        <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          הגעת למכסת {planLimits.competitors_max} מתחרים בתוכנית שלך — שדרג כדי להוסיף עוד
+        </p>
+      ) : (
+        <>
+          <button
+            onClick={() => setShowAdd(v => !v)}
+            className="flex items-center gap-1 text-xs font-medium text-primary hover:opacity-80 transition-opacity"
+          >
+            <Plus className="w-3.5 h-3.5" /> הוסף מתחרה ידנית
+          </button>
+          {showAdd && (
+            <div className="p-4 rounded-xl bg-secondary/50 border border-border space-y-2">
+              <input value={newComp.name}     onChange={e => setNewComp({ ...newComp, name:     e.target.value })} placeholder="שם המתחרה *" className={inputCls} />
+              <div className="grid grid-cols-2 gap-2">
+                <input value={newComp.category} onChange={e => setNewComp({ ...newComp, category: e.target.value })} placeholder="קטגוריה"  className={inputCls} />
+                <input value={newComp.address}  onChange={e => setNewComp({ ...newComp, address:  e.target.value })} placeholder="כתובת"    className={inputCls} />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button onClick={() => setShowAdd(false)} className="px-3 py-1.5 text-[11px] text-foreground-muted hover:text-foreground transition-colors">ביטול</button>
+                <button onClick={handleAdd} disabled={adding || !newComp.name.trim()} className="px-3 py-1.5 text-[11px] font-medium bg-primary text-white rounded-lg hover:opacity-90 disabled:opacity-50">
+                  {adding ? 'מוסיף...' : 'הוסף'}
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* מהלכי מתחרים */}
       {(topChange || activityChanges.length > 0) && (
@@ -180,13 +260,35 @@ export default function Competitors() {
                 )}
               </div>
             );
+            if (col.key === 'trend') return <TrendBadge comp={comp} />;
+            if (col.key === 'last_scanned') return (
+              <span className="text-[10px] text-foreground-muted">{timeAgo(comp.last_scanned)}</span>
+            );
             if (col.key === 'action') return (
-              <button
-                onClick={() => setSelectedCompetitorId(id => id === comp.id ? null : comp.id)}
-                className={`text-xs font-semibold px-3 py-1 rounded-lg transition-colors ${selectedCompetitorId === comp.id ? 'bg-violet-600 text-white' : 'text-violet-600 hover:text-violet-800 bg-violet-50'}`}
-              >
-                ניתוח מעמיק
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSelectedCompetitorId(id => id === comp.id ? null : comp.id)}
+                  className={`text-xs font-semibold px-3 py-1 rounded-lg transition-colors ${selectedCompetitorId === comp.id ? 'bg-violet-600 text-white' : 'text-violet-600 hover:text-violet-800 bg-violet-50'}`}
+                >
+                  ניתוח מעמיק
+                </button>
+                <DismissMenu
+                  entityType="competitor"
+                  entityId={comp.id}
+                  title={comp.name}
+                  businessProfileId={bpId}
+                  buttonLabel="לא רלוונטי"
+                  buttonClassName="flex items-center gap-1 text-[10px] text-foreground-muted hover:text-red-500 transition-colors"
+                  onDismissed={() => queryClient.invalidateQueries({ queryKey: ['competitorsPage', bpId] })}
+                />
+                <button
+                  onClick={() => handleDelete(comp.id)}
+                  className="p-1 text-foreground-muted hover:text-red-500 transition-colors"
+                  title="הסר מתחרה"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             );
             return null;
           }}
