@@ -109,7 +109,7 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
     : sorted;
 
   // All periods from own data, last 6 quarters
-  const allPeriods = [...new Set(own.flatMap(s => s.buckets.map(b => b.period)))].sort().slice(-6);
+  const allPeriods = [...new Set(own.flatMap(s => s.buckets.map(b => b.period)))].sort().slice(-4);
 
   // Competitor lookup: topic_id → period → bucket
   const compLookup = {};
