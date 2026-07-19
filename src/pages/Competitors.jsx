@@ -50,7 +50,7 @@ export default function Competitors() {
 
   const { data: competitors = [], isLoading } = useQuery({
     queryKey: ['competitorsPage', bpId],
-    queryFn: () => base44.entities.Competitor.filter({ linked_business: bpId }),
+    queryFn: () => base44.entities.Competitor.filter({ linked_business: bpId, not_relevant: false }),
     enabled: !!bpId,
   });
 
@@ -70,7 +70,7 @@ export default function Competitors() {
     setScanning(true);
     toast.info('מתחיל סריקת מתחרים...');
     try {
-      await base44.functions.invoke('scanCompetitors', { businessProfileId: bpId });
+      await base44.functions.invoke('runCompetitorIdentification', { businessProfileId: bpId });
       queryClient.invalidateQueries({ queryKey: ['competitorsPage', bpId] });
       queryClient.invalidateQueries({ queryKey: ['competitorChanges', bpId] });
       toast.success('סריקת מתחרים הושלמה');

@@ -152,6 +152,7 @@ const FUNCTION_MAP: Record<string, any> = {
   collectReviews,
   collectCompetitorReviews,
   runCompetitorIdentification,
+  scanCompetitors: runCompetitorIdentification,
   collectSocialSignals,
   generateProactiveAlerts,
   runPredictions,

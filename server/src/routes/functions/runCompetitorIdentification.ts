@@ -11,6 +11,11 @@ const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
 const SERPAPI_KEY    = process.env.SERPAPI_KEY || process.env.SERPAPI_API_KEY || '';
 const CURRENT_YEAR = new Date().getFullYear();
 
+// ponytail: inline from src/lib/planConfig.js — update both if plan limits change
+const PLAN_COMPETITOR_LIMITS: Record<string, number> = {
+  free_trial: 3, free: 3, starter: 5, growth: 10, pro: Infinity, enterprise: Infinity,
+};
+
 /** SerpAPI Google Maps local search — finds competitors with ratings + review counts */
 async function serpMapsSearch(query: string, city: string): Promise<any[]> {
   if (!SERPAPI_KEY) return [];
@@ -277,6 +282,20 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
       );
       competitors = checked.filter(Boolean) as any[];
     }
+    // ── competitors_max plan guard — cap new creates, always allow updates ──
+    const planId: string = (profile as any).plan_id || 'free_trial';
+    const maxCompetitors = PLAN_COMPETITOR_LIMITS[planId] ?? 3;
+    if (maxCompetitors !== Infinity) {
+      const activeCount = existingCompetitors.filter((c: any) => !c.not_relevant).length;
+      const headroom = Math.max(0, maxCompetitors - activeCount);
+      const updates = competitors.filter(c => existingNames.has((c.name || '').toLowerCase()));
+      const creates = competitors.filter(c => !existingNames.has((c.name || '').toLowerCase()));
+      competitors = [...updates, ...creates.slice(0, headroom)];
+      if (creates.length > headroom) {
+        console.log(`runCompetitorIdentification: plan ${planId} cap ${maxCompetitors} — dropping ${creates.length - headroom} new competitors`);
+      }
+    }
+
     let created = 0;
     let updated = 0;
 

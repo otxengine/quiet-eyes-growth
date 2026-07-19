@@ -224,6 +224,11 @@ router.get('/:entity', async (req: Request, res: Response) => {
   }
 });
 
+// ponytail: inline from src/lib/planConfig.js — update both if plan limits change
+const PLAN_COMPETITOR_LIMITS: Record<string, number> = {
+  free_trial: 3, free: 3, starter: 5, growth: 10, pro: Infinity, enterprise: Infinity,
+};
+
 // POST /api/entities/:entity — create
 router.post('/:entity', async (req: Request, res: Response) => {
   const model = getModel(String(req.params.entity));
@@ -233,6 +238,26 @@ router.post('/:entity', async (req: Request, res: Response) => {
     const userId = getUserId(req);
     const data = { ...req.body };
     if (userId && !data.created_by) data.created_by = userId;
+
+    // competitors_max plan guard for manual add
+    if (req.params.entity === 'Competitor' && data.linked_business) {
+      const biz = await prisma.businessProfile.findUnique({
+        where: { id: data.linked_business }, select: { plan_id: true },
+      });
+      const planId = biz?.plan_id || 'free_trial';
+      const maxCompetitors = PLAN_COMPETITOR_LIMITS[planId] ?? 3;
+      if (maxCompetitors !== Infinity) {
+        const activeCount = await (prisma as any).competitor.count({
+          where: { linked_business: data.linked_business, not_relevant: { not: true } },
+        });
+        if (activeCount >= maxCompetitors) {
+          return res.status(403).json({
+            error: `הגעת למגבלת ${maxCompetitors} מתחרים בתוכנית ${planId}. שדרג את התוכנית להוספת מתחרים נוספים.`,
+            plan_limit: true, competitors_max: maxCompetitors, competitors_current: activeCount,
+          });
+        }
+      }
+    }
 
     const record = await model.create({ data });
     res.status(201).json(record);
