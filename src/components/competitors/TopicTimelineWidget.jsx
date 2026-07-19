@@ -136,7 +136,7 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
           >
             ללא השוואה
           </button>
-          {competitors.slice(0, 4).map(c => (
+          {competitors.map(c => (
             <button
               key={c.id}
               onClick={() => setShowComp(c.id === showComp ? null : c.id)}
