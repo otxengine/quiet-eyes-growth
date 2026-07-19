@@ -15,50 +15,76 @@ const ADVISOR_SUGGESTIONS = [
 
 function ReputationAdvisorChat({ bpId, competitorIds }) {
   const [msg, setMsg] = useState('');
-  const [reply, setReply] = useState('');
+  const [messages, setMessages] = useState([]); // [{ role: 'user'|'ai', text }]
   const [loading, setLoading] = useState(false);
 
   const ask = async (text) => {
     if (!text.trim() || loading) return;
+    const userMsg = { role: 'user', text: text.trim() };
+    const next = [...messages, userMsg];
+    setMessages(next);
+    setMsg('');
     setLoading(true);
-    setReply('');
     try {
       const res = await base44.functions.invoke('reputationAdvisorChat', {
         businessProfileId: bpId,
         competitorIds,
-        message: text,
+        message: text.trim(),
+        history: next.slice(-6),
       });
       const data = res?.data || res;
-      setReply(data?.reply || 'לא התקבלה תשובה');
+      setMessages(prev => [...prev, { role: 'ai', text: data?.reply || 'לא התקבלה תשובה' }]);
     } catch {
-      setReply('שגיאה — נסה שנית');
+      setMessages(prev => [...prev, { role: 'ai', text: 'שגיאה — נסה שנית' }]);
     }
     setLoading(false);
-    setMsg('');
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4" dir="rtl">
-      <div className="flex items-center gap-2 mb-3">
+    <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3" dir="rtl">
+      <div className="flex items-center gap-2">
         <Bot className="w-4 h-4 text-blue-500" />
         <span className="text-[13px] font-semibold text-foreground">יועץ מוניטין AI</span>
         <span className="text-[11px] text-foreground-muted">(מבוסס על נתוני הדף בלבד)</span>
       </div>
-      {!reply && (
-        <div className="flex flex-wrap gap-2 mb-3">
+
+      {/* Suggestions — always visible when conversation is empty */}
+      {messages.length === 0 && (
+        <div className="flex flex-wrap gap-2">
           {ADVISOR_SUGGESTIONS.map(s => (
-            <button key={s} onClick={() => ask(s)}
-              className="text-[11px] border border-gray-200 rounded-full px-3 py-1 text-gray-600 hover:bg-gray-50 transition-colors">
+            <button key={s} onClick={() => ask(s)} disabled={loading}
+              className="text-[11px] border border-gray-200 rounded-full px-3 py-1 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40">
               {s}
             </button>
           ))}
         </div>
       )}
-      {reply && (
-        <div className="bg-blue-50 rounded-xl px-4 py-3 mb-3 text-[13px] text-gray-800 leading-relaxed whitespace-pre-wrap">
-          {reply}
+
+      {/* Message history */}
+      {messages.length > 0 && (
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {messages.map((m, i) => (
+            <div key={i} className={`flex ${m.role === 'user' ? 'justify-start' : 'justify-end'}`}>
+              <div className={`max-w-[85%] rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap ${
+                m.role === 'user'
+                  ? 'bg-gray-100 text-gray-800'
+                  : 'bg-blue-50 text-gray-800'
+              }`}>
+                {m.text}
+              </div>
+            </div>
+          ))}
+          {loading && (
+            <div className="flex justify-end">
+              <div className="bg-blue-50 rounded-xl px-3 py-2">
+                <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+              </div>
+            </div>
+          )}
         </div>
       )}
+
+      {/* Input */}
       <div className="flex gap-2">
         <input
           value={msg}
