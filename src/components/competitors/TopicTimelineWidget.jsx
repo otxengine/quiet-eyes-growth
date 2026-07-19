@@ -67,11 +67,6 @@ function StatCell({ bucket, className = '' }) {
 export default function TopicTimelineWidget({ businessProfileId, businessName }) {
   const [showComp, setShowComp] = useState(null);
 
-  const storedSet = (() => {
-    if (!businessProfileId) return null;
-    try { return JSON.parse(localStorage.getItem(`compare-set-${businessProfileId}`) ?? 'null'); } catch { return null; }
-  })();
-
   const { data, isLoading } = useQuery({
     queryKey: ['topicTimeline', businessProfileId],
     queryFn: async () => {
@@ -95,8 +90,7 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
 
   if (!data?.own?.length) return null;
 
-  const { own, competitors: rawComps = [] } = data;
-  const competitors = storedSet ? rawComps.filter(c => storedSet.includes(c.id)) : rawComps;
+  const { own, competitors = [] } = data;
   const sorted = [...own].sort((a, b) => topicTotal(b) - topicTotal(a));
 
   const compEntry = showComp ? competitors.find(c => c.id === showComp) : null;
