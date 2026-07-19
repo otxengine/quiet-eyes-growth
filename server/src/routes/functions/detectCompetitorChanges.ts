@@ -27,9 +27,15 @@ async function tavilySearch(query: string, maxResults = 3): Promise<any[]> {
 }
 
 /**
- * detectCompetitorChanges
- * Scans competitor online presence for 6 change types:
+ * detectCompetitorChanges — Express leg of the dual change pipeline.
+ * Scans competitor online presence via Tavily+LLM for 6 change types:
  *   price_change | new_menu_item | new_promotion | website_change | review_delta | new_post
+ * Writes results to market_signals (category='competitor_move').
+ *
+ * Dual pipeline: the OTX leg (collectOTXCompetitorChanges → competitor_changes → runOTXSyncBridge)
+ * also writes to market_signals. Both sources are merged there by category.
+ * Rate-limiting is handled by the 48h MarketSignal dedup below, not last_scanned,
+ * to avoid a race with batchSnapshotCompetitors which shares that field.
  *
  * Body: { businessProfileId }
  * Returns: { competitors_checked, changes_detected }
@@ -46,18 +52,11 @@ export async function detectCompetitorChanges(req: Request, res: Response) {
       where: { linked_business: businessProfileId },
     });
 
-    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-
     // Load context for personalized action suggestions
     const bizCtx = await loadBusinessContext(businessProfileId);
     const preferredChannel = bizCtx?.preferredChannels?.[0] || 'instagram';
 
-    const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-
     for (const comp of competitors) {
-      // Per-competitor 6h guard — don't re-scan the same competitor too often
-      const lastScannedMs = comp.last_scanned ? new Date(comp.last_scanned).getTime() : 0;
-      if (Date.now() - lastScannedMs < SIX_HOURS_MS) continue;
 
       try {
         const instagramHandle = (comp as any).instagram_handle

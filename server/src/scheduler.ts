@@ -214,8 +214,12 @@ export function startScheduler() {
     runAgentForAll('SmartLeadNurture', smartLeadNurture);
     runAgentForAll('DeliveryPlatformIntel', detectDeliveryChanges);
     // ── Competitor intelligence pipeline (ordered: snapshot → changes → social → intel → moves) ──
-    runAgentForAll('BatchSnapshotCompetitors', batchSnapshotCompetitors); // takes fresh snapshots
-    runAgentForAll('DetectCompetitorChanges',  detectCompetitorChanges);  // prices/promos/posts → MarketSignals
+    // Dual change pipeline: DetectCompetitorChanges (Express/Tavily) + collectOTXCompetitorChanges (OTX/6h cron)
+    // both write to market_signals[category='competitor_move']. runOTXSyncBridge (every 10min) bridges the OTX leg.
+    // DetectCompetitorChanges no longer uses last_scanned as its guard (race with BatchSnapshotCompetitors);
+    // it relies on the 48h MarketSignal dedup instead.
+    runAgentForAll('BatchSnapshotCompetitors', batchSnapshotCompetitors); // takes fresh snapshots + writes last_scanned
+    runAgentForAll('DetectCompetitorChanges',  detectCompetitorChanges);  // prices/promos/posts → MarketSignals (48h dedup)
     runAgentForAll('AnalyzeCompetitorSocial',   analyzeCompetitorSocial);   // social enrichment + promo/ads/product detection → new fields + alerts
     runAgentForAll('DetectCompetitorAds',       detectCompetitorAds);       // Meta/TikTok/Google paid ad campaigns → ProactiveAlerts
     runAgentForAll('CompetitorIntel',           competitorIntelAgent);      // OSINT × events → ProactiveAlerts

@@ -231,6 +231,9 @@ async function syncSectorTrends(s: Supa, profiles: QEProfile[]): Promise<{ count
 }
 
 // ── 4. competitor_changes → market_signals ────────────────────────────────────
+// Merge point for the dual change pipeline: the OTX leg (collectOTXCompetitorChanges)
+// writes to competitor_changes; this function bridges them into market_signals so both
+// the Express leg (detectCompetitorChanges) and OTX leg land in the same feed.
 
 async function syncCompetitorChanges(s: Supa, profiles: QEProfile[], bizSectors: Map<string, string>): Promise<number> {
   if (!profiles.length) return 0;
