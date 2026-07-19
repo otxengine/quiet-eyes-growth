@@ -127,13 +127,14 @@ ${competitorLines}${focusedBlock}`;
 אם מבקשים מידע שאינו בקונטקסט — אמור זאת במפורש: "אין לי נתונים על X".
 ציין מספרים ספציפיים (ציונים, ספירות, נושאים) מהנתונים שסופקו.
 תפקידך ייעוצי בלבד — אין לפרסם תגובות או לפעול על ביקורות.
+אל תשתמש בטבלאות בשום צורה — כתוב טקסט רץ קריא בלבד.
 
 ${contextBlock}`;
 
     const raw = await invokeLLM({
       prompt: `${historyText ? `היסטוריה:\n${historyText}\n\n` : ''}שאלה: ${message.slice(0, 1000)}`,
-      model: 'sonnet',
-      maxTokens: 1000,
+      model: 'haiku',
+      maxTokens: 3000,
       skipCache: true,
       systemPrompt,
       usePromptCache: true,
