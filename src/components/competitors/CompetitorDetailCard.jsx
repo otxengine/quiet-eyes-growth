@@ -187,6 +187,26 @@ export default function CompetitorDetailCard({
             </div>
           )}
 
+          {comp.sponsored_ads_detected && (
+            <div>
+              <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide mb-2">מודעות ממומנות פעילות</p>
+              <div className="rounded-lg bg-orange-50 border border-orange-100 px-3 py-2.5 space-y-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] font-semibold text-orange-700">📣 {comp.active_ad_platforms || 'לא ידוע'}</span>
+                  {comp.active_ad_count > 0 && (
+                    <span className="text-[10px] text-orange-500">{comp.active_ad_count} מודעות</span>
+                  )}
+                </div>
+                {comp.last_promo_detected && (
+                  <p className="text-[11px] text-foreground-secondary">{comp.last_promo_detected.slice(0, 120)}</p>
+                )}
+                {comp.ad_gaps && (
+                  <p className="text-[11px] text-success font-medium">💡 הזדמנות: {comp.ad_gaps.slice(0, 100)}</p>
+                )}
+              </div>
+            </div>
+          )}
+
           {intelAlert && (
             <div className="rounded-lg bg-primary/5 border border-primary/15 px-3 py-3">
               <p className="text-[10px] font-semibold text-primary mb-1.5">ההזדמנות שלך</p>

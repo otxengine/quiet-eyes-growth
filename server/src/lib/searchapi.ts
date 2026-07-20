@@ -220,5 +220,7 @@ export async function searchAllAds(
     searchTikTokAds(competitorName),
     searchGoogleAds(googleQuery),
   ]);
-  return [...metaAds, ...tikAds, ...gAds];
+  // ponytail: prefer library hits over noisy Google search attribution (AC4)
+  const libraryAds = [...metaAds, ...tikAds];
+  return libraryAds.length > 0 ? libraryAds : gAds;
 }

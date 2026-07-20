@@ -89,8 +89,16 @@ export async function detectCompetitorAds(req: Request, res: Response) {
             }))
           );
         } else {
-          compUpdate.active_ad_platforms = null;
-          compUpdate.active_ad_count     = 0;
+          compUpdate.active_ad_platforms      = null;
+          compUpdate.active_ad_count          = 0;
+          compUpdate.active_ads_summary       = null;
+          compUpdate.last_promo_detected      = null;
+          compUpdate.last_promo_detected_at   = null;
+          compUpdate.ad_target_audience       = null;
+          compUpdate.ad_strategy_summary      = null;
+          compUpdate.ad_spend_signal          = null;
+          compUpdate.ad_gaps                  = null;
+          compUpdate.ad_intel_updated_at      = null;
         }
 
         await prisma.competitor.update({ where: { id: comp.id }, data: compUpdate }).catch(() => {});
