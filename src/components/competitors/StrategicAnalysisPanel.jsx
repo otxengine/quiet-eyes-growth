@@ -5,6 +5,7 @@ import { CATEGORY_META } from '@/components/intelligence/StrategicRecommendation
 import { Loader2, Shield, TrendingUp, MessageSquare, Target, Zap, Lightbulb, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { toast } from 'sonner';
 import ActionPopup from '@/components/ui/ActionPopup';
+import PlanGate from '@/components/subscription/PlanGate';
 
 const PANEL_TABS = [
   { key: 'swot',     label: 'SWOT' },
@@ -54,7 +55,8 @@ JSON בלבד:
   "strengths": ["חוזקה ספציפית 1", "חוזקה 2", "חוזקה 3"],
   "weaknesses": ["חולשה ספציפית 1 — הניסוח מסביר למה זה חולשה", "חולשה 2", "חולשה 3"],
   "opportunities": ["הזדמנות לנו — איך לנצל חולשה שלהם", "הזדמנות 2", "הזדמנות 3"],
-  "threats": ["איום ספציפי שהם מציבים לנו", "איום 2", "איום 3"]
+  "threats": ["איום ספציפי שהם מציבים לנו", "איום 2", "איום 3"],
+  "suggested_actions": ["פעולה קונקרטית 1 — פועל + מה + בכמה זמן", "פעולה 2", "פעולה 3"]
 }`,
         response_json_schema: { type: 'object' },
       });
@@ -95,23 +97,38 @@ JSON בלבד:
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3">
-      {(['strengths', 'weaknesses', 'opportunities', 'threats']).map(key => {
-        const meta = SWOT_COLORS[key];
-        return (
-          <div key={key} className={`rounded-xl border ${meta.border} ${meta.bg} p-3`}>
-            <p className={`text-[11px] font-bold ${meta.text} mb-2`}>{meta.label}</p>
-            <ul className="space-y-1">
-              {(swot[key] || []).map((item, i) => (
-                <li key={i} className={`text-[11px] ${meta.text} flex items-start gap-1.5`}>
-                  <span className="mt-0.5 flex-shrink-0 opacity-60">•</span>
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-        );
-      })}
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        {(['strengths', 'weaknesses', 'opportunities', 'threats']).map(key => {
+          const meta = SWOT_COLORS[key];
+          return (
+            <div key={key} className={`rounded-xl border ${meta.border} ${meta.bg} p-3`}>
+              <p className={`text-[11px] font-bold ${meta.text} mb-2`}>{meta.label}</p>
+              <ul className="space-y-1">
+                {(swot[key] || []).map((item, i) => (
+                  <li key={i} className={`text-[11px] ${meta.text} flex items-start gap-1.5`}>
+                    <span className="mt-0.5 flex-shrink-0 opacity-60">•</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+      {swot.suggested_actions?.length > 0 && (
+        <div className="rounded-xl border border-violet-200 bg-violet-50 p-3">
+          <p className="text-[11px] font-bold text-violet-700 mb-2">פעולות מומלצות</p>
+          <ol className="space-y-1">
+            {swot.suggested_actions.map((action, i) => (
+              <li key={i} className="text-[11px] text-violet-700 flex items-start gap-1.5">
+                <span className="mt-0.5 flex-shrink-0 font-bold">{i + 1}.</span>
+                {action}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
     </div>
   );
 }
@@ -242,6 +259,14 @@ function StrategyTab({ competitor, businessProfile, competitors, signals }) {
 // ─── BattleCard Tab ───────────────────────────────────────────────────────────
 
 function BattleTab({ competitor, businessProfile }) {
+  return (
+    <PlanGate requires="growth" featureName="השוואת מתחרה">
+      <BattleTabContent competitor={competitor} businessProfile={businessProfile} />
+    </PlanGate>
+  );
+}
+
+function BattleTabContent({ competitor, businessProfile }) {
   const [loading, setLoading] = useState(false);
   const [battlecard, setBattlecard] = useState(() => {
     try { return competitor.battlecard_content ? JSON.parse(competitor.battlecard_content) : null; } catch { return null; }

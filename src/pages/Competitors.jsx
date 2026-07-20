@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { getLimits } from '@/lib/planConfig';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
-import BattlecardPanel from '@/components/competitors/BattlecardPanel';
+import StrategicAnalysisPanel from '@/components/competitors/StrategicAnalysisPanel';
 import CompetitorDetailCard from '@/components/competitors/CompetitorDetailCard';
 import ActionPopup from '@/components/ui/ActionPopup';
 
@@ -244,12 +244,13 @@ export default function Competitors() {
         const comp = competitors.find(c => c.id === selectedCompetitorId);
         if (!comp) return null;
         return (
-          <div className="mt-2">
-            <div dir="rtl" className="px-1 mb-2 text-[12px] font-semibold text-foreground-secondary">
-              ניתוח מעמיק — {comp.name}
-            </div>
-            <BattlecardPanel competitor={comp} businessProfile={businessProfile} />
-          </div>
+          <StrategicAnalysisPanel
+            competitor={comp}
+            businessProfile={businessProfile}
+            competitors={competitors}
+            signals={changes}
+            onClose={() => setSelectedCompetitorId(null)}
+          />
         );
       })()}
 

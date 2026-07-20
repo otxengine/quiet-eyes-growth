@@ -16,6 +16,12 @@ export async function generateBattlecard(req: Request, res: Response) {
     const bp = profiles[0];
     if (!bp) return res.status(404).json({ error: 'Business profile not found' });
 
+    // ponytail: inline from src/lib/planConfig.js battlecard entitlement
+    const BATTLECARD_PLANS = new Set(['growth', 'pro', 'enterprise']);
+    if (!BATTLECARD_PLANS.has(bp.plan_id || 'free')) {
+      return res.status(403).json({ error: 'Battlecard requires growth plan or higher', plan_limit: true });
+    }
+
     const [reviews, ownAspects, compAspects] = await Promise.all([
       prisma.review.findMany({ where: { linked_business: bpId } }),
       computeThemeRollup(bpId, 90, 'google'),
