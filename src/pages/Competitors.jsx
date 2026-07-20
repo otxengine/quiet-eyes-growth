@@ -10,6 +10,7 @@ import StatCards from '@/components/shared/StatCards';
 import DataTable from '@/components/shared/DataTable';
 import BattlecardPanel from '@/components/competitors/BattlecardPanel';
 import DismissMenu from '@/components/ui/DismissMenu';
+import ActionPopup from '@/components/ui/ActionPopup';
 
 const COLUMNS = [
   { key: 'name',         label: 'מתחרה' },
@@ -72,6 +73,7 @@ export default function Competitors() {
   const [showAdd, setShowAdd] = useState(false);
   const [newComp, setNewComp] = useState({ name: '', category: '', address: '' });
   const [adding, setAdding] = useState(false);
+  const [selectedMove, setSelectedMove] = useState(null);
 
   const { data: competitors = [], isLoading } = useQuery({
     queryKey: ['competitorsPage', bpId],
@@ -202,11 +204,20 @@ export default function Competitors() {
                 className="rounded-xl p-5"
                 style={{ background: 'linear-gradient(135deg, #f3e5f5 0%, #e8eaf6 100%)' }}
               >
-                <div className="text-xs font-semibold text-violet-600 mb-2">עדכון אחרון</div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-semibold text-violet-600">עדכון אחרון</div>
+                  {topChange.detected_at && <span className="text-[10px] text-foreground-muted">{timeAgo(topChange.detected_at)}</span>}
+                </div>
                 <div className="font-semibold text-sm text-foreground mb-1">{topChange.title}</div>
                 {topChange.summary && topChange.summary !== topChange.title && (
-                  <div className="text-xs text-foreground-secondary">{topChange.summary}</div>
+                  <div className="text-xs text-foreground-secondary mb-3">{topChange.summary}</div>
                 )}
+                <button
+                  onClick={() => setSelectedMove(topChange)}
+                  className="text-[11px] font-medium text-violet-600 hover:text-violet-800 bg-white/60 hover:bg-white rounded-lg px-3 py-1.5 transition-colors"
+                >
+                  ⚡ פעל על זה
+                </button>
               </div>
             )}
             {/* 3 activity cards */}
@@ -214,8 +225,17 @@ export default function Competitors() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {activityChanges.map((c, i) => (
                   <div key={i} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
-                    <div className="font-medium text-xs text-foreground line-clamp-2">{c.title}</div>
-                    {c.summary && <div className="text-[10px] text-foreground-muted mt-1 line-clamp-1">{c.summary}</div>}
+                    <div className="flex items-start justify-between gap-1 mb-1">
+                      <div className="font-medium text-xs text-foreground line-clamp-2">{c.title}</div>
+                      {c.detected_at && <span className="text-[10px] text-foreground-muted flex-shrink-0">{timeAgo(c.detected_at)}</span>}
+                    </div>
+                    {c.summary && <div className="text-[10px] text-foreground-muted line-clamp-1">{c.summary}</div>}
+                    <button
+                      onClick={() => setSelectedMove(c)}
+                      className="mt-2 text-[10px] text-violet-600 hover:text-violet-800 font-medium transition-colors"
+                    >
+                      פעל ←
+                    </button>
                   </div>
                 ))}
               </div>
@@ -307,6 +327,26 @@ export default function Competitors() {
           </div>
         );
       })()}
+
+      {selectedMove && (
+        <ActionPopup
+          signal={{
+            id: selectedMove.id,
+            summary: selectedMove.summary || selectedMove.title,
+            recommended_action: selectedMove.title,
+            category: 'competitor_move',
+            impact_level: 'medium',
+            source_description: JSON.stringify({
+              action_type: 'competitor_response',
+              action_label: 'תגובה לשינוי מתחרה',
+              urgency_hours: 48,
+              impact_reason: selectedMove.title,
+            }),
+          }}
+          businessProfile={businessProfile}
+          onClose={() => setSelectedMove(null)}
+        />
+      )}
     </div>
   );
 }

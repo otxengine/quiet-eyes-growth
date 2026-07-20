@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Loader2, Shield, TrendingUp, MessageSquare, Target, Zap } from 'lucide-react';
 import { toast } from 'sonner';
@@ -9,6 +10,18 @@ export default function BattlecardPanel({ competitor, businessProfile }) {
   const [loading, setLoading] = useState(false);
   const [battlecard, setBattlecard] = useState(() => {
     try { return competitor.battlecard_content ? JSON.parse(competitor.battlecard_content) : null; } catch (_) { return null; }
+  });
+
+  const { data: latestMove } = useQuery({
+    queryKey: ['competitorLatestMove', businessProfile?.id, competitor.id],
+    queryFn: async () => {
+      const alerts = await base44.entities.ProactiveAlert.filter(
+        { linked_business: businessProfile?.id, alert_type: 'competitor_move' },
+        '-created_at', 10
+      );
+      return alerts.find(a => a.title?.startsWith(competitor.name)) || null;
+    },
+    enabled: !!businessProfile?.id && !!competitor.name,
   });
 
   const generate = async () => {
@@ -30,6 +43,18 @@ export default function BattlecardPanel({ competitor, businessProfile }) {
 
   return (
     <div className="space-y-4">
+      {latestMove && (
+        <div className="bg-violet-50 border border-violet-200 rounded-lg px-3 py-2.5">
+          <p className="text-[10px] font-semibold text-violet-600 mb-0.5">מהלך אחרון</p>
+          <p className="text-[12px] text-foreground line-clamp-2">{latestMove.title?.replace(`${competitor.name}: `, '')}</p>
+          {latestMove.created_at && (
+            <p className="text-[10px] text-foreground-muted mt-0.5">
+              {new Date(latestMove.created_at).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })}
+            </p>
+          )}
+        </div>
+      )}
+
       <CompetitorReviewInsightsPanel
         competitor={competitor}
         businessProfileId={businessProfile?.id}
