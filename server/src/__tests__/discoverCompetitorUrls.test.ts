@@ -175,15 +175,15 @@ test('high confidence: overwrites existing URL when 2+ variants agree (AC3)', as
     { id: 'c1', name: 'Comp', social_pages_crawled_at: STALE_DATE,
       instagram_url: 'https://instagram.com/old', facebook_url: null, tiktok_url: null, website_url: null },
   ]);
-  // All IG variants return the same URL → high confidence
+  // All IG variants return the same URL (handle matches business name 'Comp') → high confidence
   mockTavily.mockImplementation(async (query: any) => {
     if (query.includes('site:instagram.com'))
-      return [{ url: 'https://instagram.com/confirmed' }];
+      return [{ url: 'https://instagram.com/comp' }];
     return [];
   });
   await discoverCompetitorUrls(makeReq({ businessProfileId: 'biz1' }), makeRes());
   const updateArg = (mockUpdate.mock.calls as any)[0][0].data;
-  expect(updateArg.instagram_url).toBe('https://instagram.com/confirmed');
+  expect(updateArg.instagram_url).toBe('https://instagram.com/comp');
 });
 
 // ── Profile-URL filter: posts/reels/videos are rejected ───────────────────────
@@ -191,14 +191,14 @@ test('high confidence: overwrites existing URL when 2+ variants agree (AC3)', as
 test('ignores Instagram post/reel URLs, keeps profile URLs only', async () => {
   const { prisma: db } = require('../db');
   db.competitor.findMany.mockResolvedValueOnce([
-    { id: 'c1', name: 'Comp', social_pages_crawled_at: STALE_DATE,
+    { id: 'c1', name: 'Cafe Amor', social_pages_crawled_at: STALE_DATE,
       instagram_url: null, facebook_url: null, tiktok_url: null, website_url: null },
   ]);
   mockTavily.mockImplementation(async (query: any) => {
     if (query.includes('site:instagram.com')) return [
-      { url: 'https://instagram.com/p/ABC123/' },        // post — should be rejected
-      { url: 'https://instagram.com/reel/XYZ/' },        // reel — should be rejected
-      { url: 'https://instagram.com/cafeamor/' },        // profile — should be kept
+      { url: 'https://instagram.com/p/ABC123/' },        // post — rejected
+      { url: 'https://instagram.com/reel/XYZ/' },        // reel — rejected
+      { url: 'https://instagram.com/cafeamor/' },        // profile, handle matches 'cafe' — kept
     ];
     return [];
   });
@@ -210,19 +210,35 @@ test('ignores Instagram post/reel URLs, keeps profile URLs only', async () => {
 test('ignores TikTok video URLs, keeps profile URLs only', async () => {
   const { prisma: db } = require('../db');
   db.competitor.findMany.mockResolvedValueOnce([
-    { id: 'c1', name: 'Comp', social_pages_crawled_at: STALE_DATE,
+    { id: 'c1', name: 'Cafe Amor', social_pages_crawled_at: STALE_DATE,
       instagram_url: null, facebook_url: null, tiktok_url: null, website_url: null },
   ]);
   mockTavily.mockImplementation(async (query: any) => {
     if (query.includes('site:tiktok.com')) return [
       { url: 'https://tiktok.com/@cafeamor/video/123456' }, // video — rejected
-      { url: 'https://tiktok.com/@cafeamor' },              // profile — kept
+      { url: 'https://tiktok.com/@cafeamor' },              // profile, handle matches 'cafe' — kept
     ];
     return [];
   });
   await discoverCompetitorUrls(makeReq({ businessProfileId: 'biz1' }), makeRes());
   const updateArg = (mockUpdate.mock.calls as any)[0][0].data;
   expect(updateArg.tiktok_url).toBe('https://tiktok.com/@cafeamor');
+});
+
+test('rejects TikTok profile belonging to a reviewer, not the business', async () => {
+  const { prisma: db } = require('../db');
+  db.competitor.findMany.mockResolvedValueOnce([
+    { id: 'c1', name: 'Cafe Amor', social_pages_crawled_at: STALE_DATE,
+      instagram_url: null, facebook_url: null, tiktok_url: null, website_url: null },
+  ]);
+  mockTavily.mockImplementation(async (query: any) => {
+    if (query.includes('site:tiktok.com'))
+      return [{ url: 'https://tiktok.com/@israelifoodreviewer' }]; // reviewer — handle doesn't match
+    return [];
+  });
+  await discoverCompetitorUrls(makeReq({ businessProfileId: 'biz1' }), makeRes());
+  const updateArg = (mockUpdate.mock.calls as any)[0][0].data;
+  expect(updateArg.tiktok_url).toBeUndefined();
 });
 
 // ── AC2: canonical field names ─────────────────────────────────────────────────
@@ -234,9 +250,9 @@ test('saves to canonical field names (AC2)', async () => {
       instagram_url: null, facebook_url: null, tiktok_url: null, website_url: null },
   ]);
   mockTavily.mockImplementation(async (query: any) => {
-    if (query.includes('site:instagram.com')) return [{ url: 'https://instagram.com/foo' }];
-    if (query.includes('site:facebook.com'))  return [{ url: 'https://facebook.com/foo' }];
-    if (query.includes('site:tiktok.com'))    return [{ url: 'https://tiktok.com/@foo' }];
+    if (query.includes('site:instagram.com')) return [{ url: 'https://instagram.com/comp' }];
+    if (query.includes('site:facebook.com'))  return [{ url: 'https://facebook.com/comp' }];
+    if (query.includes('site:tiktok.com'))    return [{ url: 'https://tiktok.com/@comp' }];
     return [];
   });
   await discoverCompetitorUrls(makeReq({ businessProfileId: 'biz1' }), makeRes());

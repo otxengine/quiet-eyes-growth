@@ -18,6 +18,28 @@ function isProfileUrl(url: string, domain: string, nonProfile: string[]): boolea
   return path.length > 0 && !nonProfile.some(seg => path.includes(seg));
 }
 
+// Returns the handle/username portion of a social URL (strips @ and trailing path).
+function extractHandle(url: string): string {
+  const stripped = url.replace(/^https?:\/\/(www\.)?/, '');
+  return ((stripped.split('/')[1] ?? '').replace(/^@/, '').split('?')[0]).toLowerCase();
+}
+
+// Returns true if the handle plausibly belongs to the business (not a third-party reviewer).
+// Falls back to true when there is no Latin reference to compare against.
+function handleMatchesBusiness(url: string, name: string, nameEn: string | null): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const h = norm(extractHandle(url));
+  if (!h) return false;
+  const latinWords = (name.match(/[a-zA-Z]{3,}/g) ?? []).map(norm);
+  if (!nameEn && !latinWords.length) return true; // ponytail: no Latin ref → can't reject
+  if (nameEn) {
+    for (const word of nameEn.split(/\s+/).filter(w => w.length >= 3)) {
+      if (h.includes(norm(word))) return true;
+    }
+  }
+  return latinWords.some(w => h.includes(w));
+}
+
 // Vote across N result sets: best URL = most common candidate; high = appears in 2+ sets.
 function pickBest(
   sets: any[][], includes: string,
@@ -113,9 +135,9 @@ export async function discoverCompetitorUrls(req: Request, res: Response) {
           ]),
         ]);
 
-        const ig   = pickBest(igSets,  'instagram.com/', u => isProfileUrl(u, 'instagram.com/', IG_NON_PROFILE));
-        const fb   = pickBest(fbSets,  'facebook.com/',  u => isProfileUrl(u, 'facebook.com/',  FB_NON_PROFILE));
-        const tik  = pickBest(tikSets, 'tiktok.com/',    u => isProfileUrl(u, 'tiktok.com/',    TIK_NON_PROFILE));
+        const ig   = pickBest(igSets,  'instagram.com/', u => isProfileUrl(u, 'instagram.com/', IG_NON_PROFILE)  && handleMatchesBusiness(u, comp.name, nameEn));
+        const fb   = pickBest(fbSets,  'facebook.com/',  u => isProfileUrl(u, 'facebook.com/',  FB_NON_PROFILE)  && handleMatchesBusiness(u, comp.name, nameEn));
+        const tik  = pickBest(tikSets, 'tiktok.com/',    u => isProfileUrl(u, 'tiktok.com/',    TIK_NON_PROFILE) && handleMatchesBusiness(u, comp.name, nameEn));
         const site = pickSite(siteSets);
 
         const c = comp as any;
