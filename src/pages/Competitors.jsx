@@ -2,32 +2,15 @@ import React, { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2, Star, TrendingUp, TrendingDown, Minus, Trash2, Plus } from 'lucide-react';
+import { Loader2, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { getLimits } from '@/lib/planConfig';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
-import DataTable from '@/components/shared/DataTable';
 import BattlecardPanel from '@/components/competitors/BattlecardPanel';
-import DismissMenu from '@/components/ui/DismissMenu';
+import CompetitorDetailCard from '@/components/competitors/CompetitorDetailCard';
 import ActionPopup from '@/components/ui/ActionPopup';
 
-const COLUMNS = [
-  { key: 'name',         label: 'מתחרה' },
-  { key: 'category',     label: 'קטגוריה' },
-  { key: 'city',         label: 'מיקום' },
-  { key: 'rating',       label: 'דירוג וביקורות' },
-  { key: 'trend',        label: 'מגמה' },
-  { key: 'last_scanned', label: 'נסרק לאחרונה' },
-  { key: 'action',       label: 'פעולה' },
-];
-
-function TrendBadge({ comp }) {
-  const dir = comp.trend_direction || (comp.trend === 'rising' ? 'up' : comp.trend === 'declining' ? 'down' : null);
-  if (dir === 'up')   return <TrendingUp   className="w-4 h-4 text-green-500" />;
-  if (dir === 'down') return <TrendingDown className="w-4 h-4 text-red-500" />;
-  return <Minus className="w-4 h-4 text-gray-400" />;
-}
 
 function timeAgo(dateStr) {
   if (!dateStr) return '—';
@@ -39,17 +22,6 @@ function timeAgo(dateStr) {
   return `לפני ${Math.floor(d / 30)} חודשים`;
 }
 
-function StarRating({ rating }) {
-  const r = Math.round(Number(rating) || 0);
-  return (
-    <div className="flex items-center gap-1">
-      {[1,2,3,4,5].map(i => (
-        <Star key={i} className={`w-3 h-3 ${i <= r ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200 fill-gray-200'}`} />
-      ))}
-      <span className="text-xs text-foreground-secondary mr-1">{Number(rating || 0).toFixed(1)}</span>
-    </div>
-  );
-}
 
 async function fetchCompetitorChanges(bpId) {
   const [signals, alerts] = await Promise.all([
@@ -248,71 +220,24 @@ export default function Competitors() {
         <div className="flex items-center justify-center py-16">
           <Loader2 className="w-6 h-6 animate-spin text-foreground-muted" />
         </div>
+      ) : competitors.length === 0 ? (
+        <p className="text-center text-sm text-foreground-muted py-12">אין מתחרים — הוסף מתחרים ידנית או הפעל סריקה</p>
       ) : (
-        <DataTable
-          columns={COLUMNS}
-          rows={competitors}
-          emptyText="אין מתחרים — הוסף מתחרים ידנית או הפעל סריקה"
-          renderCell={(comp, col) => {
-            if (col.key === 'name') return (
-              <div>
-                <div className="font-semibold text-sm text-foreground">{comp.name}</div>
-                {comp.website && (
-                  <a href={comp.website} target="_blank" rel="noreferrer" className="text-[10px] text-blue-500 hover:underline">
-                    {comp.website.replace(/^https?:\/\//, '').slice(0, 30)}
-                  </a>
-                )}
-              </div>
-            );
-            if (col.key === 'category') return (
-              <span className="text-xs bg-gray-100 text-foreground-secondary px-2 py-0.5 rounded-full">
-                {comp.category || '—'}
-              </span>
-            );
-            if (col.key === 'city') return (
-              <span className="text-xs text-foreground-secondary">{comp.city || comp.location || '—'}</span>
-            );
-            if (col.key === 'rating') return (
-              <div>
-                <StarRating rating={comp.google_rating || comp.rating || 0} />
-                {comp.review_count && (
-                  <div className="text-[10px] text-foreground-muted mt-0.5">{comp.review_count} ביקורות</div>
-                )}
-              </div>
-            );
-            if (col.key === 'trend') return <TrendBadge comp={comp} />;
-            if (col.key === 'last_scanned') return (
-              <span className="text-[10px] text-foreground-muted">{timeAgo(comp.last_scanned)}</span>
-            );
-            if (col.key === 'action') return (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setSelectedCompetitorId(id => id === comp.id ? null : comp.id)}
-                  className={`text-xs font-semibold px-3 py-1 rounded-lg transition-colors ${selectedCompetitorId === comp.id ? 'bg-violet-600 text-white' : 'text-violet-600 hover:text-violet-800 bg-violet-50'}`}
-                >
-                  ניתוח מעמיק
-                </button>
-                <DismissMenu
-                  entityType="competitor"
-                  entityId={comp.id}
-                  title={comp.name}
-                  businessProfileId={bpId}
-                  buttonLabel="לא רלוונטי"
-                  buttonClassName="flex items-center gap-1 text-[10px] text-foreground-muted hover:text-red-500 transition-colors"
-                  onDismissed={() => queryClient.invalidateQueries({ queryKey: ['competitorsPage', bpId] })}
-                />
-                <button
-                  onClick={() => handleDelete(comp.id)}
-                  className="p-1 text-foreground-muted hover:text-red-500 transition-colors"
-                  title="הסר מתחרה"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            );
-            return null;
-          }}
-        />
+        <div className="space-y-2">
+          {competitors.map(comp => (
+            <CompetitorDetailCard
+              key={comp.id}
+              competitor={comp}
+              businessName={businessProfile?.name}
+              businessProfileId={bpId}
+              otxBizId={bpId}
+              intelChanges={changes}
+              onDelete={handleDelete}
+              onDismissed={() => queryClient.invalidateQueries({ queryKey: ['competitorsPage', bpId] })}
+              onDeepAnalysis={id => setSelectedCompetitorId(v => v === id ? null : id)}
+            />
+          ))}
+        </div>
       )}
 
       {selectedCompetitorId && (() => {

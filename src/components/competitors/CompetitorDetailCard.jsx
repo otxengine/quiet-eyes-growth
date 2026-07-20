@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, MapPin, ArrowLeft, Clock, ExternalLink, Instagram, Globe } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, MapPin, ArrowLeft, Clock, Instagram, Globe, X, Trash2 } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
+import { toast } from 'sonner';
 import CompetitorSwotCard from '@/components/competitors/CompetitorSwotCard';
 import CompetitorStrategyCard from '@/components/competitors/CompetitorStrategyCard';
+import DismissMenu from '@/components/ui/DismissMenu';
 
 function timeAgo(dateStr) {
   if (!dateStr) return '';
@@ -12,7 +15,6 @@ function timeAgo(dateStr) {
   return `לפני ${Math.floor(hours / 24)} ימים`;
 }
 
-// Parse comma/newline separated list, strip bracketed dates, cap at `max`
 function parseList(str, max = 2) {
   if (!str) return [];
   return str
@@ -22,6 +24,38 @@ function parseList(str, max = 2) {
     .slice(0, max);
 }
 
+function UrlInput({ label, fieldKey, initialValue, competitorId }) {
+  const [val, setVal] = useState(initialValue || '');
+  const save = () => {
+    if (val === (initialValue || '')) return;
+    base44.entities.Competitor.update(competitorId, { [fieldKey]: val || null })
+      .catch(() => toast.error('שגיאה בשמירת קישור'));
+  };
+  const clear = (e) => {
+    e.stopPropagation();
+    setVal('');
+    base44.entities.Competitor.update(competitorId, { [fieldKey]: null })
+      .catch(() => toast.error('שגיאה בשמירת קישור'));
+  };
+  return (
+    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+      <span className="text-[10px] text-foreground-muted w-16 flex-shrink-0">{label}</span>
+      <input
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onBlur={save}
+        placeholder="הוסף קישור..."
+        className="flex-1 min-w-0 text-[11px] bg-transparent border-b border-border focus:border-primary/50 outline-none py-0.5 text-foreground-secondary placeholder-foreground-muted/40 transition-colors"
+      />
+      {val && (
+        <button onClick={clear} className="text-foreground-muted/50 hover:text-danger transition-colors flex-shrink-0">
+          <X className="w-3 h-3" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function CompetitorDetailCard({
   competitor,
   businessName,
@@ -29,12 +63,14 @@ export default function CompetitorDetailCard({
   businessProfileId,
   otxBizId,
   intelChanges = [],
+  onDelete,
+  onDismissed,
+  onDeepAnalysis,
 }) {
   const [expanded, setExpanded] = useState(false);
   const comp = competitor;
   const initials = (comp.name || '??').substring(0, 2);
 
-  // Find the most recent intel insight for this competitor
   const firstName = (comp.name || '').split(' ')[0].toLowerCase();
   const intelAlert = intelChanges.find(c =>
     (c._kind === 'alert' || c.change_type === 'intel') &&
@@ -52,12 +88,10 @@ export default function CompetitorDetailCard({
       {/* ── Header (always visible) ───────────────────────────────────── */}
       <div className="px-5 py-4 cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
         <div className="flex items-center gap-3">
-          {/* Avatar */}
           <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center text-foreground-muted text-[10px] font-bold flex-shrink-0">
             {initials}
           </div>
 
-          {/* Name + location */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[13px] font-semibold text-foreground truncate">{comp.name}</span>
@@ -77,7 +111,6 @@ export default function CompetitorDetailCard({
             </div>
           </div>
 
-          {/* Rating + trend + chevron */}
           <div className="flex items-center gap-3 flex-shrink-0">
             <div className="flex items-center gap-1">
               <span className={`text-[20px] font-bold ${
@@ -104,40 +137,30 @@ export default function CompetitorDetailCard({
       {expanded && (
         <div className="px-5 pb-5 border-t border-border pt-4 space-y-4 fade-in-up">
 
-          {/* SECTION 1 — What they offer */}
           {hasOffer && (
             <div>
-              <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide mb-2">
-                מה הם מציעים
-              </p>
+              <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide mb-2">מה הם מציעים</p>
               <div className="space-y-1.5">
                 {services && (
-                  <p className="text-[11px] text-foreground-secondary leading-snug">
-                    {services.slice(0, 150)}
-                  </p>
+                  <p className="text-[11px] text-foreground-secondary leading-snug">{services.slice(0, 150)}</p>
                 )}
                 {comp.price_range && (
                   <p className="text-[11px] text-foreground-muted">
-                    טווח מחירים:{' '}
-                    <span className="text-foreground font-medium">{comp.price_range}</span>
+                    טווח מחירים:{' '}<span className="text-foreground font-medium">{comp.price_range}</span>
                   </p>
                 )}
                 {comp.current_promotions && (
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-100 text-[11px] text-orange-700">
-                    <span className="font-medium">מבצע:</span>{' '}
-                    {comp.current_promotions.slice(0, 90)}
+                    <span className="font-medium">מבצע:</span>{' '}{comp.current_promotions.slice(0, 90)}
                   </div>
                 )}
               </div>
             </div>
           )}
 
-          {/* SECTION 2 — What customers say */}
           {hasVoice && (
             <div>
-              <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide mb-2">
-                מה הלקוחות אומרים
-              </p>
+              <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide mb-2">מה הלקוחות אומרים</p>
               <div className="space-y-1">
                 {strengths.map((s, i) => (
                   <div key={`s${i}`} className="flex items-start gap-2">
@@ -152,15 +175,12 @@ export default function CompetitorDetailCard({
                   </div>
                 ))}
                 {!strengths.length && !complaints.length && comp.recent_reviews_summary && (
-                  <p className="text-[11px] text-foreground-secondary italic">
-                    {comp.recent_reviews_summary.slice(0, 120)}
-                  </p>
+                  <p className="text-[11px] text-foreground-secondary italic">{comp.recent_reviews_summary.slice(0, 120)}</p>
                 )}
               </div>
             </div>
           )}
 
-          {/* SECTION 3 — Opportunity for you */}
           {intelAlert && (
             <div className="rounded-lg bg-primary/5 border border-primary/15 px-3 py-3">
               <p className="text-[10px] font-semibold text-primary mb-1.5">ההזדמנות שלך</p>
@@ -176,20 +196,32 @@ export default function CompetitorDetailCard({
             </div>
           )}
 
-          {/* On-demand deep analysis */}
-          <div className="flex flex-wrap gap-2 pt-1">
-            <CompetitorSwotCard
-              competitor={comp}
-              businessName={businessName}
-              otxBusinessId={otxBizId}
-            />
-            <CompetitorStrategyCard
-              competitor={comp}
-              businessProfileId={businessProfileId}
-            />
+          {/* Editable URL links */}
+          <div>
+            <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide mb-2">קישורים</p>
+            <div className="space-y-2">
+              <UrlInput label="אתר" fieldKey="website_url" initialValue={comp.website_url} competitorId={comp.id} />
+              <UrlInput label="Instagram" fieldKey="instagram_url" initialValue={comp.instagram_url} competitorId={comp.id} />
+              <UrlInput label="Facebook" fieldKey="facebook_url" initialValue={comp.facebook_url} competitorId={comp.id} />
+              <UrlInput label="TikTok" fieldKey="tiktok_url" initialValue={comp.tiktok_url} competitorId={comp.id} />
+            </div>
           </div>
 
-          {/* Social links + last scanned */}
+          {/* On-demand deep analysis */}
+          <div className="flex flex-wrap gap-2 pt-1">
+            <CompetitorSwotCard competitor={comp} businessName={businessName} otxBusinessId={otxBizId} />
+            <CompetitorStrategyCard competitor={comp} businessProfileId={businessProfileId} />
+            {onDeepAnalysis && (
+              <button
+                onClick={e => { e.stopPropagation(); onDeepAnalysis(comp.id); }}
+                className="text-xs font-semibold px-3 py-1 rounded-lg text-violet-600 hover:text-violet-800 bg-violet-50 transition-colors"
+              >
+                ניתוח מעמיק
+              </button>
+            )}
+          </div>
+
+          {/* Meta — last scanned · quick links · not-relevant · remove */}
           <div className="flex items-center gap-3 flex-wrap pt-1 border-t border-border">
             {comp.last_scanned && (
               <span className="flex items-center gap-1 text-[10px] text-foreground-muted opacity-50">
@@ -197,8 +229,8 @@ export default function CompetitorDetailCard({
                 נסרק {timeAgo(comp.last_scanned)}
               </span>
             )}
-            {comp.instagram_handle && (
-              <a href={comp.instagram_handle} target="_blank" rel="noopener noreferrer"
+            {comp.instagram_url && (
+              <a href={comp.instagram_url} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-1 text-[10px] text-pink-500 hover:underline"
                 onClick={e => e.stopPropagation()}>
                 <Instagram className="w-3 h-3" /> Instagram
@@ -211,6 +243,36 @@ export default function CompetitorDetailCard({
                 <Globe className="w-3 h-3" /> Facebook
               </a>
             )}
+            {comp.tiktok_url && (
+              <a href={comp.tiktok_url} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1 text-[10px] text-foreground-muted hover:underline"
+                onClick={e => e.stopPropagation()}>
+                <Globe className="w-3 h-3" /> TikTok
+              </a>
+            )}
+            {comp.website_url && (
+              <a href={comp.website_url} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1 text-[10px] text-foreground-muted hover:underline"
+                onClick={e => e.stopPropagation()}>
+                <Globe className="w-3 h-3" /> אתר
+              </a>
+            )}
+            <div className="flex-1" />
+            <DismissMenu
+              entityType="competitor"
+              entityId={comp.id}
+              title={comp.name}
+              businessProfileId={businessProfileId}
+              buttonLabel="לא רלוונטי"
+              buttonClassName="flex items-center gap-1 text-[10px] text-foreground-muted hover:text-amber-500 transition-colors"
+              onDismissed={() => onDismissed?.()}
+            />
+            <button
+              onClick={e => { e.stopPropagation(); onDelete?.(comp.id); }}
+              className="flex items-center gap-1 text-[10px] text-foreground-muted hover:text-danger transition-colors"
+            >
+              <Trash2 className="w-3 h-3" /> הסר
+            </button>
           </div>
         </div>
       )}
