@@ -74,6 +74,7 @@ import { scanServicesAndPrices } from './scanServicesAndPrices';
 import { snapshotCompetitor } from './snapshotCompetitor';
 import { diffCompetitorSnapshot } from './diffCompetitorSnapshot';
 import { batchSnapshotCompetitors } from './batchSnapshotCompetitors';
+import { discoverCompetitorUrls } from './discoverCompetitorUrls';
 import { generateMonthlyStrategy } from './generateMonthlyStrategy';
 import { marketMemoryEngine } from './marketMemoryEngine';
 import { demandGapEngine } from './demandGapEngine';
@@ -206,6 +207,7 @@ const FUNCTION_MAP: Record<string, any> = {
   snapshotCompetitor,
   diffCompetitorSnapshot,
   batchSnapshotCompetitors,
+  discoverCompetitorUrls,
   generateMonthlyStrategy,
   marketMemoryEngine,
   demandGapEngine,

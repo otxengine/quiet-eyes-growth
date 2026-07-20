@@ -32,6 +32,7 @@ import { schedulePostPublisher } from './routes/functions/schedulePostPublisher'
 import { analyzeInstagramComments } from './routes/functions/analyzeInstagramComments';
 import { diffCompetitorSnapshot } from './routes/functions/diffCompetitorSnapshot';
 import { batchSnapshotCompetitors } from './routes/functions/batchSnapshotCompetitors';
+import { discoverCompetitorUrls } from './routes/functions/discoverCompetitorUrls';
 import { detectCompetitorChanges } from './routes/functions/detectCompetitorChanges';
 import { analyzeCompetitorSocial } from './routes/functions/analyzeCompetitorSocial';
 import { detectCompetitorAds } from './routes/functions/detectCompetitorAds';
@@ -296,9 +297,12 @@ export function startScheduler() {
     setTimeout(() => runAgentForAll('WeeklyEmailDigest', weeklyEmailDigest), 10 * 60 * 1000);
   });
 
-  // ── Every day at 04:00 UTC: competitor snapshot diff (was weekly, now daily) ──
+  // ── Every day at 04:00 UTC: competitor snapshot diff + URL discovery (KAN-160) ──
+  // discoverCompetitorUrls runs on its own social_pages_crawled_at guard (7d),
+  // independent of snapshot last_scanned — satisfies KAN-160 AC4.
   cron.schedule('0 4 * * *', () => {
     runAgentForAll('DiffCompetitorSnapshot', diffCompetitorSnapshot);
+    runAgentForAll('DiscoverCompetitorUrls', discoverCompetitorUrls);
   });
 
   // ── Every 6 hours: OTX competitor snapshot diff (KAN-45) ─────────────────────
