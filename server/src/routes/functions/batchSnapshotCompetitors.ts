@@ -104,7 +104,13 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
         const updateData: Record<string, any> = {
           last_scanned: new Date().toISOString(),
         };
-        if (snap.promotions?.length)      updateData.current_promotions = snap.promotions[0];
+        if (snap.promotions?.length) {
+          updateData.current_promotions    = snap.promotions[0];
+          updateData.last_promo_detected_at = new Date().toISOString();
+        } else if (comp.current_promotions) {
+          // AC2: clear promo when no longer seen in fresh scan
+          updateData.current_promotions = null;
+        }
         if (snap.negative_reviews)        updateData.recent_reviews_summary = snap.negative_reviews;
         // services: fill if empty, or prepend new_service discovered
         if (snap.services && !comp.services) updateData.services = snap.services;
@@ -124,9 +130,9 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
         }
         if (snap.review_count != null)    updateData.review_count = snap.review_count;
         if (snap.prices?.length) {
-          updateData.price_snapshot     = JSON.stringify(snap.prices);
-          updateData.price_changed_at   = new Date().toISOString();
-          updateData.last_known_prices  = snap.prices.map((p: any) => `${p.item}: ${p.price}`).slice(0, 3).join(' | ');
+          updateData.price_points      = JSON.stringify(snap.prices);
+          updateData.price_changed_at  = new Date().toISOString();
+          updateData.last_known_prices = snap.prices.map((p: any) => `${p.item}: ${p.price}`).slice(0, 3).join(' | ');
         }
 
         await prisma.competitor.update({
