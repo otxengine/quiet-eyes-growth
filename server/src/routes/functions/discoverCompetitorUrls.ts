@@ -7,12 +7,27 @@ import { invokeLLM } from '../../lib/llm';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const SITE_BLACKLIST = ['instagram.com', 'facebook.com', 'tiktok.com', 'google.com', 'yad2'];
 
+// Non-profile path segments for each platform — filter these out so we only keep main pages.
+const IG_NON_PROFILE  = ['p/', 'reel/', 'stories/', 'explore/', 'tv/', 'reels/'];
+const FB_NON_PROFILE  = ['posts/', 'photos/', 'videos/', 'events/', 'photo/', 'video/'];
+const TIK_NON_PROFILE = ['video/', 'discover', 'tag/'];
+
+function isProfileUrl(url: string, domain: string, nonProfile: string[]): boolean {
+  if (!url?.includes(domain)) return false;
+  const path = (url.split(domain)[1] ?? '').replace(/^\/+/, '').split('?')[0];
+  return path.length > 0 && !nonProfile.some(seg => path.includes(seg));
+}
+
 // Vote across N result sets: best URL = most common candidate; high = appears in 2+ sets.
-function pickBest(sets: any[][], includes: string): { url: string | null; high: boolean } {
+function pickBest(
+  sets: any[][], includes: string,
+  keep?: (url: string) => boolean,
+): { url: string | null; high: boolean } {
   const counts = new Map<string, number>();
   for (const set of sets)
     for (const r of set)
-      if (r.url?.includes(includes)) counts.set(r.url, (counts.get(r.url) ?? 0) + 1);
+      if (r.url?.includes(includes) && (!keep || keep(r.url)))
+        counts.set(r.url, (counts.get(r.url) ?? 0) + 1);
   if (!counts.size) return { url: null, high: false };
   const [url, n] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
   return { url, high: n >= 2 };
@@ -20,7 +35,7 @@ function pickBest(sets: any[][], includes: string): { url: string | null; high: 
 
 function pickSite(sets: any[][]): { url: string | null; high: boolean } {
   const ok = (u: string) => !!u && !SITE_BLACKLIST.some(b => u.includes(b));
-  return pickBest(sets.map(s => s.filter(r => ok(r.url ?? ''))), '/');
+  return pickBest(sets.map(s => s.filter(r => ok(r.url ?? ''))), '/', ok);
 }
 
 // Returns the English/Latin transliteration of a Hebrew name, or null if already Latin or LLM fails.
@@ -98,9 +113,9 @@ export async function discoverCompetitorUrls(req: Request, res: Response) {
           ]),
         ]);
 
-        const ig   = pickBest(igSets,  'instagram.com/');
-        const fb   = pickBest(fbSets,  'facebook.com/');
-        const tik  = pickBest(tikSets, 'tiktok.com/');
+        const ig   = pickBest(igSets,  'instagram.com/', u => isProfileUrl(u, 'instagram.com/', IG_NON_PROFILE));
+        const fb   = pickBest(fbSets,  'facebook.com/',  u => isProfileUrl(u, 'facebook.com/',  FB_NON_PROFILE));
+        const tik  = pickBest(tikSets, 'tiktok.com/',    u => isProfileUrl(u, 'tiktok.com/',    TIK_NON_PROFILE));
         const site = pickSite(siteSets);
 
         const c = comp as any;

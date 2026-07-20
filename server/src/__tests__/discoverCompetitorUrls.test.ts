@@ -186,6 +186,45 @@ test('high confidence: overwrites existing URL when 2+ variants agree (AC3)', as
   expect(updateArg.instagram_url).toBe('https://instagram.com/confirmed');
 });
 
+// ── Profile-URL filter: posts/reels/videos are rejected ───────────────────────
+
+test('ignores Instagram post/reel URLs, keeps profile URLs only', async () => {
+  const { prisma: db } = require('../db');
+  db.competitor.findMany.mockResolvedValueOnce([
+    { id: 'c1', name: 'Comp', social_pages_crawled_at: STALE_DATE,
+      instagram_url: null, facebook_url: null, tiktok_url: null, website_url: null },
+  ]);
+  mockTavily.mockImplementation(async (query: any) => {
+    if (query.includes('site:instagram.com')) return [
+      { url: 'https://instagram.com/p/ABC123/' },        // post — should be rejected
+      { url: 'https://instagram.com/reel/XYZ/' },        // reel — should be rejected
+      { url: 'https://instagram.com/cafeamor/' },        // profile — should be kept
+    ];
+    return [];
+  });
+  await discoverCompetitorUrls(makeReq({ businessProfileId: 'biz1' }), makeRes());
+  const updateArg = (mockUpdate.mock.calls as any)[0][0].data;
+  expect(updateArg.instagram_url).toBe('https://instagram.com/cafeamor/');
+});
+
+test('ignores TikTok video URLs, keeps profile URLs only', async () => {
+  const { prisma: db } = require('../db');
+  db.competitor.findMany.mockResolvedValueOnce([
+    { id: 'c1', name: 'Comp', social_pages_crawled_at: STALE_DATE,
+      instagram_url: null, facebook_url: null, tiktok_url: null, website_url: null },
+  ]);
+  mockTavily.mockImplementation(async (query: any) => {
+    if (query.includes('site:tiktok.com')) return [
+      { url: 'https://tiktok.com/@cafeamor/video/123456' }, // video — rejected
+      { url: 'https://tiktok.com/@cafeamor' },              // profile — kept
+    ];
+    return [];
+  });
+  await discoverCompetitorUrls(makeReq({ businessProfileId: 'biz1' }), makeRes());
+  const updateArg = (mockUpdate.mock.calls as any)[0][0].data;
+  expect(updateArg.tiktok_url).toBe('https://tiktok.com/@cafeamor');
+});
+
 // ── AC2: canonical field names ─────────────────────────────────────────────────
 
 test('saves to canonical field names (AC2)', async () => {
