@@ -1,4 +1,10 @@
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState, lazy, Suspense, Component } from 'react';
+
+class SilentBoundary extends Component {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() { return this.state.failed ? null : this.props.children; }
+}
 import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, MapPin, ArrowLeft, Clock, Instagram, Globe, X, Trash2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
@@ -209,9 +215,11 @@ export default function CompetitorDetailCard({
 
           {/* On-demand deep analysis */}
           <div className="flex flex-wrap gap-2 pt-1">
-            <Suspense fallback={null}>
-              <CompetitorSwotCard competitor={comp} businessName={businessName} otxBusinessId={otxBizId} />
-            </Suspense>
+            <SilentBoundary>
+              <Suspense fallback={null}>
+                <CompetitorSwotCard competitor={comp} businessName={businessName} otxBusinessId={otxBizId} />
+              </Suspense>
+            </SilentBoundary>
             <CompetitorStrategyCard competitor={comp} businessProfileId={businessProfileId} />
             {onDeepAnalysis && (
               <button
