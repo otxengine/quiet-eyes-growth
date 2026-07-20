@@ -82,7 +82,7 @@ Previously known: rating ${comp.rating || '?'}, promotions: ${comp.current_promo
 Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "prices": [{"item": "product/service name", "price": "specific price with ₪"}],
-  "promotions": ["specific active promotion with details"],
+  "promotions": ["specific active promotion with details — ONLY discounts, sales, coupons, or time-limited offers. Exclude seasonal greetings, general descriptions, and platform names."],
   "rating": null,
   "review_count": null,
   "services": "what the business offers — comma-separated list of services/products, up to 60 chars",

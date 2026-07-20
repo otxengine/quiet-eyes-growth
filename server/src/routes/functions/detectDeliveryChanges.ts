@@ -542,10 +542,6 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
               ? `10bis: מינימום ₪${tenbisResult.min_order ?? '?'} | ${tenbisResult.delivery_time ?? '?'} דק׳`
               : (woltResult?.delivery_time != null ? `Wolt: ${woltResult.delivery_time} דק׳` : undefined),
             menu_highlights: (woltResult?.snippet || otherSnippet || '').slice(0, 200) || undefined,
-            current_promotions: scanned.results
-              .filter(r => r.found)
-              .map(r => r.platform)
-              .join(', ') || undefined,
           },
         }).catch(() => {});
       } catch (_) {}

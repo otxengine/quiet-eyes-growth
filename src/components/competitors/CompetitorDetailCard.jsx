@@ -156,10 +156,15 @@ export default function CompetitorDetailCard({
                   </p>
                 )}
                 {comp.current_promotions && (
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-100 text-[11px] text-orange-700">
-                    <span className="font-medium">מבצע:</span>{' '}{comp.current_promotions.slice(0, 90)}
-                    {comp.last_promo_detected_at && (
-                      <span className="text-[10px] text-orange-400 mr-1">· {timeAgo(comp.last_promo_detected_at)}</span>
+                  <div className="flex flex-col gap-0.5">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-100 text-[11px] text-orange-700">
+                      <span className="font-medium">מבצע:</span>{' '}{comp.current_promotions.slice(0, 90)}
+                      {comp.last_promo_detected_at && (
+                        <span className="text-[10px] text-orange-400 mr-1">· {timeAgo(comp.last_promo_detected_at)}</span>
+                      )}
+                    </div>
+                    {comp.last_promo_detected && comp.last_promo_detected !== comp.current_promotions && (
+                      <p className="text-[10px] text-foreground-muted pr-1">מקור: {comp.last_promo_detected.slice(0, 80)}</p>
                     )}
                   </div>
                 )}
