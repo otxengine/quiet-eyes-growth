@@ -42,12 +42,12 @@ export async function detectCompetitorPricing(req: Request, res: Response) {
       where: { linked_business: businessProfileId },
     });
 
-    // Use first URL from source_urls (pipe-separated) or name-based search
-    const withWebsites = competitors.filter(c => c.source_urls);
+    // Prefer website_url (real site) over source_urls (often aggregator links)
+    const withWebsites = competitors.filter(c => (c as any).website_url || c.source_urls);
     let pricesFound = 0;
 
     for (const comp of withWebsites) {
-      const firstUrl = (comp.source_urls || '').split(' | ')[0].trim();
+      const firstUrl = ((comp as any).website_url || (comp.source_urls || '').split(' | ')[0]).trim();
       if (!firstUrl) continue;
       const pageText = await fetchPageText(firstUrl);
       if (!pageText || pageText.length < 50) continue;
