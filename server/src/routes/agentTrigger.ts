@@ -41,6 +41,7 @@ import { runOTXSyncBridge } from './functions/runOTXSyncBridge';
 import { runSectorTrendRadar } from './functions/runSectorTrendRadar';
 import { runAgentForAll } from '../scheduler';
 import { collectReviews } from './functions/collectReviews';
+import { discoverCompetitorUrls } from './functions/discoverCompetitorUrls';
 
 // Rate limit: 10 minutes per business+agent pair (in-memory)
 const lastRun: Map<string, number> = new Map();
@@ -131,6 +132,21 @@ const AGENT_HANDLERS: Record<string, (req: Request, res: Response) => any> = {
 };
 
 const router = Router();
+
+// POST /api/agents/trigger/discover-competitor-urls
+// Global trigger — runs discoverCompetitorUrls for all businesses (KAN-160).
+router.post('/discover-competitor-urls', async (_req: Request, res: Response) => {
+  const key = 'global:discoverCompetitorUrls';
+  const now = Date.now();
+  if ((now - (lastRun.get(key) ?? 0)) < COOLDOWN_MS) {
+    return res.status(429).json({ error: 'Rate limited — wait 10 minutes between manual triggers' });
+  }
+  lastRun.set(key, now);
+  runAgentForAll('DiscoverCompetitorUrls', discoverCompetitorUrls).catch(err =>
+    console.error('[agentTrigger] discoverCompetitorUrls failed:', err.message)
+  );
+  return res.json({ ok: true, message: 'DiscoverCompetitorUrls started for all businesses' });
+});
 
 // POST /api/agents/trigger/collect-reviews
 // Global trigger — runs collectReviews (+ background competitor review backfill) for all businesses.
