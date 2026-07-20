@@ -158,6 +158,9 @@ export default function CompetitorDetailCard({
                 {comp.current_promotions && (
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-100 text-[11px] text-orange-700">
                     <span className="font-medium">מבצע:</span>{' '}{comp.current_promotions.slice(0, 90)}
+                    {comp.last_promo_detected_at && (
+                      <span className="text-[10px] text-orange-400 mr-1">· {timeAgo(comp.last_promo_detected_at)}</span>
+                    )}
                   </div>
                 )}
               </div>
@@ -182,6 +185,24 @@ export default function CompetitorDetailCard({
                 ))}
                 {!strengths.length && !complaints.length && comp.recent_reviews_summary && (
                   <p className="text-[11px] text-foreground-secondary italic">{comp.recent_reviews_summary.slice(0, 120)}</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {(comp.social_post_frequency || comp.social_followers_est) && (
+            <div>
+              <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide mb-2">פעילות סושיאל</p>
+              <div className="space-y-1">
+                {comp.social_followers_est && (
+                  <p className="text-[11px] text-foreground-secondary">
+                    <span className="text-foreground-muted">עוקבים (הערכה):</span>{' '}{comp.social_followers_est}
+                  </p>
+                )}
+                {comp.social_post_frequency && (
+                  <p className="text-[11px] text-foreground-secondary">
+                    <span className="text-foreground-muted">תדירות פרסום:</span>{' '}{comp.social_post_frequency}
+                  </p>
                 )}
               </div>
             </div>
