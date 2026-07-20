@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, MapPin, ArrowLeft, Clock, Instagram, Globe, X, Trash2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
-import CompetitorSwotCard from '@/components/competitors/CompetitorSwotCard';
+const CompetitorSwotCard = lazy(() => import('@/components/competitors/CompetitorSwotCard'));
 import CompetitorStrategyCard from '@/components/competitors/CompetitorStrategyCard';
 import DismissMenu from '@/components/ui/DismissMenu';
 
@@ -209,7 +209,9 @@ export default function CompetitorDetailCard({
 
           {/* On-demand deep analysis */}
           <div className="flex flex-wrap gap-2 pt-1">
-            <CompetitorSwotCard competitor={comp} businessName={businessName} otxBusinessId={otxBizId} />
+            <Suspense fallback={null}>
+              <CompetitorSwotCard competitor={comp} businessName={businessName} otxBusinessId={otxBizId} />
+            </Suspense>
             <CompetitorStrategyCard competitor={comp} businessProfileId={businessProfileId} />
             {onDeepAnalysis && (
               <button
