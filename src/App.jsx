@@ -55,6 +55,7 @@ import DemandGap from '@/pages/DemandGap.jsx';
 import Approvals from '@/pages/Approvals.jsx';
 import EventBusDashboard from '@/pages/EventBusDashboard.jsx';
 import SocialComments from '@/pages/SocialComments.jsx';
+import SocialCompetition from '@/pages/SocialCompetition.jsx';
 import AdminDashboard from '@/pages/AdminDashboard.jsx';
 import AdminLayout from '@/components/layout/AdminLayout';
 import DevUserSwitcher from '@/components/DevUserSwitcher';
@@ -169,6 +170,7 @@ const AuthenticatedApp = () => {
         <Route path="/reviews" element={<Reputation />} />
         <Route path="/reviews/compare" element={<ReviewsCompare />} />
         <Route path="/social-comments" element={<SocialComments />} />
+        <Route path="/social-competition" element={<SocialCompetition />} />
         <Route path="/leads" element={<Leads />} />
         <Route path="/retention" element={<Retention />} />
         <Route path="/reports" element={<Reports />} />

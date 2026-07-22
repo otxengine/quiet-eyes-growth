@@ -22,7 +22,8 @@ const NAV_STRUCTURE = [
     type: 'group', key: 'more', label: 'עוד',
     items: [
       { path: '/reviews',         label: 'מוניטין',        badgeKey: 'pendingReviews' },
-      { path: '/social-comments', label: 'תגובות סושיאל' },
+      { path: '/social-comments',   label: 'תגובות סושיאל' },
+      { path: '/social-competition', label: 'תחרות סושיאל' },
       { path: '/retention',       label: 'ניהול לקוחות' },
       { path: '/tasks',      label: 'משימות' },
       { path: '/reports',    label: 'דוחות' },
