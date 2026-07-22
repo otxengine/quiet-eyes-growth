@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useOutletContext, useSearchParams } from 'react-router-dom';
+import { useOutletContext, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Loader2, RefreshCw } from 'lucide-react';
@@ -36,6 +36,12 @@ function getDefaultSection(posts, ads) {
 
 function RivalCard({ competitor, posts, ads, defaultSec }) {
   const [section, setSection] = useState(() => defaultSec || getDefaultSection(posts, ads));
+  const [showHistory, setShowHistory] = useState(false);
+
+  const adSamples = (() => {
+    try { return JSON.parse(competitor.active_ads_summary || '[]'); } catch { return []; }
+  })();
+  const hasGoogle = competitor.active_ad_platforms?.includes('google');
 
   return (
     <div className="border border-border rounded-xl p-4 space-y-3 bg-card">
@@ -56,7 +62,7 @@ function RivalCard({ competitor, posts, ads, defaultSec }) {
         )}
       </div>
 
-      {/* Mutually exclusive section switch */}
+      {/* Section switch */}
       <div className="flex gap-2">
         {['feed', 'ads'].map(s => (
           <button
@@ -68,15 +74,15 @@ function RivalCard({ competitor, posts, ads, defaultSec }) {
                 : 'bg-muted text-muted-foreground hover:bg-muted/80'
             }`}
           >
-            {s === 'feed' ? `פיד (${posts.length})` : `מודעות (${ads.length})`}
+            {s === 'feed' ? `פיד (${posts.length})` : `מודעות (${competitor.active_ad_count || ads.length})`}
           </button>
         ))}
       </div>
 
-      {/* Content */}
-      <div className="max-h-60 overflow-y-auto space-y-2">
-        {section === 'feed' ? (
-          posts.length === 0 ? (
+      {/* Feed section */}
+      {section === 'feed' && (
+        <div className="max-h-60 overflow-y-auto space-y-2">
+          {posts.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-6">אין פוסטים שנאספו עדיין</p>
           ) : posts.slice(0, 10).map(post => (
             <div key={post.id} className="text-xs border border-border rounded-lg p-2 space-y-1">
@@ -93,28 +99,111 @@ function RivalCard({ competitor, posts, ads, defaultSec }) {
                 <a href={post.post_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">צפה בפוסט ↗</a>
               )}
             </div>
-          ))
-        ) : (
-          ads.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-6">לא זוהו מודעות פעילות</p>
-          ) : ads.slice(0, 10).map(ad => (
-            <div key={ad.id} className="text-xs border border-border rounded-lg p-2 space-y-1">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className={`px-1.5 py-0.5 rounded text-[10px] ${PLATFORM_COLORS[ad.platform] || 'bg-gray-100 text-gray-700'}`}>
-                  {PLATFORM_LABELS[ad.platform] || ad.platform}
-                </span>
-                {ad.is_active && <span className="bg-green-100 text-green-700 px-1.5 rounded text-[10px]">פעיל</span>}
-                <span className="text-muted-foreground">{timeAgo(ad.last_seen_at)}</span>
+          ))}
+        </div>
+      )}
+
+      {/* Ads section — Sonnet intel */}
+      {section === 'ads' && (
+        <div className="space-y-3">
+          {!competitor.ad_intel_updated_at ? (
+            <p className="text-xs text-muted-foreground text-center py-6">
+              {!competitor.facebook_url ? 'חסר לינק לפייסבוק' : 'לא זוהו מודעות פעילות'}
+            </p>
+          ) : (
+            <>
+              {/* Header: active platforms + count + freshness */}
+              <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                {competitor.active_ad_platforms?.split(', ').map(p => (
+                  <span key={p} className={`px-1.5 py-0.5 rounded ${PLATFORM_COLORS[p] || 'bg-gray-100 text-gray-700'}`}>
+                    {PLATFORM_LABELS[p] || p}
+                  </span>
+                ))}
+                {(competitor.active_ad_count > 0) && (
+                  <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">{competitor.active_ad_count} מודעות</span>
+                )}
+                <span className="text-muted-foreground mr-auto">עודכן {timeAgo(competitor.ad_intel_updated_at)}</span>
               </div>
-              {ad.title && <p className="font-medium">{ad.title}</p>}
-              {ad.body  && <p className="line-clamp-2 text-muted-foreground">{ad.body}</p>}
-              {ad.link  && (
-                <a href={ad.link} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">צפה במודעה ↗</a>
+
+              {/* Promo */}
+              {competitor.last_promo_detected && (
+                <div className="text-xs bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-yellow-800">
+                  🏷️ {competitor.last_promo_detected}
+                </div>
               )}
-            </div>
-          ))
-        )}
-      </div>
+
+              {/* Deep intel */}
+              {(competitor.ad_target_audience || competitor.ad_strategy_summary || competitor.ad_spend_signal) && (
+                <div className="space-y-1 text-xs">
+                  {competitor.ad_target_audience && (
+                    <p><span className="text-muted-foreground">קהל יעד: </span>{competitor.ad_target_audience}</p>
+                  )}
+                  {competitor.ad_strategy_summary && (
+                    <p><span className="text-muted-foreground">אסטרטגיה: </span>{competitor.ad_strategy_summary}</p>
+                  )}
+                  {competitor.ad_spend_signal && (
+                    <p><span className="text-muted-foreground">תקציב: </span>{competitor.ad_spend_signal}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Samples: active_ads_summary (≤5) */}
+              {adSamples.length > 0 && (
+                <div className="space-y-1.5">
+                  {hasGoogle && (
+                    <p className="text-[10px] text-orange-500">⚠️ גוגל — נתונים עשויים להיות רועשים</p>
+                  )}
+                  {adSamples.map((ad, i) => (
+                    <div key={i} className="text-xs border border-border rounded p-1.5 space-y-0.5">
+                      <span className={`px-1 py-0.5 rounded text-[10px] ${PLATFORM_COLORS[ad.platform] || 'bg-gray-100 text-gray-700'}`}>
+                        {PLATFORM_LABELS[ad.platform] || ad.platform}
+                      </span>
+                      {ad.title && <p className="font-medium line-clamp-1">{ad.title}</p>}
+                      {ad.body  && <p className="text-muted-foreground line-clamp-2">{ad.body}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* ad_gaps CTA */}
+              {competitor.ad_gaps && (
+                <div className="text-xs bg-green-50 border border-green-200 rounded-lg p-2 space-y-1">
+                  <p className="font-medium text-green-800">💡 {competitor.ad_gaps}</p>
+                  <Link to="/competitors" className="text-primary underline text-[10px]">ראה במסך מתחרים ↗</Link>
+                </div>
+              )}
+
+              {/* History toggle */}
+              <button
+                onClick={() => setShowHistory(h => !h)}
+                className="text-[10px] text-muted-foreground underline"
+              >
+                {showHistory ? '▲ הסתר היסטוריית מודעות' : '▼ היסטוריית מודעות'}
+              </button>
+              {showHistory && (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {ads.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-4">אין מודעות בהיסטוריה</p>
+                  ) : ads.slice(0, 10).map(ad => (
+                    <div key={ad.id} className="text-xs border border-border rounded-lg p-2 space-y-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] ${PLATFORM_COLORS[ad.platform] || 'bg-gray-100 text-gray-700'}`}>
+                          {PLATFORM_LABELS[ad.platform] || ad.platform}
+                        </span>
+                        {ad.is_active && <span className="bg-green-100 text-green-700 px-1.5 rounded text-[10px]">פעיל</span>}
+                        <span className="text-muted-foreground">{timeAgo(ad.last_seen_at)}</span>
+                      </div>
+                      {ad.title && <p className="font-medium">{ad.title}</p>}
+                      {ad.body  && <p className="line-clamp-2 text-muted-foreground">{ad.body}</p>}
+                      {ad.link  && <a href={ad.link} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">צפה במודעה ↗</a>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
