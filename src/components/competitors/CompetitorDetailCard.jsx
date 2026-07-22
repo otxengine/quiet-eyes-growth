@@ -1,4 +1,5 @@
 import React, { useState, lazy, Suspense, Component } from 'react';
+import { Link } from 'react-router-dom';
 
 class SilentBoundary extends Component {
   state = { failed: false };
@@ -21,14 +22,6 @@ function timeAgo(dateStr) {
   return `לפני ${Math.floor(hours / 24)} ימים`;
 }
 
-function parseList(str, max = 2) {
-  if (!str) return [];
-  return str
-    .split(/[,\n•]+/)
-    .map(s => s.replace(/^\[.*?\]\s*/, '').trim())
-    .filter(s => s.length > 2)
-    .slice(0, max);
-}
 
 function UrlInput({ label, fieldKey, initialValue, competitorId }) {
   const [val, setVal] = useState(initialValue || '');
@@ -83,10 +76,7 @@ export default function CompetitorDetailCard({
     (c.competitor_name || '').toLowerCase().includes(firstName)
   );
 
-  const strengths  = parseList(comp.strengths,  2);
-  const complaints = parseList(comp.weaknesses, 2);
   const services   = comp.services || comp.menu_highlights || '';
-  const hasVoice   = strengths.length > 0 || complaints.length > 0 || comp.recent_reviews_summary;
   const hasOffer   = services || comp.price_range || comp.current_promotions;
 
   return (
@@ -172,28 +162,24 @@ export default function CompetitorDetailCard({
             </div>
           )}
 
-          {hasVoice && (
-            <div>
-              <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide mb-2">מה הלקוחות אומרים</p>
-              <div className="space-y-1">
-                {strengths.map((s, i) => (
-                  <div key={`s${i}`} className="flex items-start gap-2">
-                    <span className="text-success text-[10px] mt-0.5 flex-shrink-0">✓</span>
-                    <p className="text-[11px] text-foreground-secondary">{s}</p>
-                  </div>
-                ))}
-                {complaints.map((w, i) => (
-                  <div key={`w${i}`} className="flex items-start gap-2">
-                    <span className="text-danger text-[10px] mt-0.5 flex-shrink-0">✗</span>
-                    <p className="text-[11px] text-foreground-secondary">{w}</p>
-                  </div>
-                ))}
-                {!strengths.length && !complaints.length && comp.recent_reviews_summary && (
-                  <p className="text-[11px] text-foreground-secondary italic">{comp.recent_reviews_summary.slice(0, 120)}</p>
-                )}
+          {/* KAN-166: coarse Google-backed teaser + compare CTA; no LLM fields as reviews */}
+          <div className="space-y-2">
+            {comp.rating != null && (
+              <div>
+                <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide mb-1.5">ביקורות Google</p>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-100 text-[11px] text-blue-700">
+                  ★ {Number(comp.rating).toFixed(1)} · {comp.review_count || 0} ביקורות — מקור: Google
+                </span>
               </div>
-            </div>
-          )}
+            )}
+            <Link
+              to="/reviews/compare"
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:opacity-75 transition-opacity"
+              onClick={e => e.stopPropagation()}
+            >
+              פתח השוואת ביקורות ←
+            </Link>
+          </div>
 
           {(comp.social_post_frequency || comp.social_followers_est) && (
             <div>
