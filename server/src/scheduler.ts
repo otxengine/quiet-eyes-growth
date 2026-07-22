@@ -202,6 +202,7 @@ export function startScheduler() {
     runAgentForAll('CollectWebSignals', collectWebSignals);
     runAgentForAll('RunLeadGeneration', runLeadGeneration);
     runAgentForAll('FindSocialLeads', findSocialLeads);
+    runAgentForAll('CollectCompetitorSocialPosts', collectCompetitorSocialPosts);
     // Enrich newly created leads with Haiku intent classification (5min after lead gen)
     setTimeout(() => enrichNewLeadsWithIntent()
       .catch(err => logger.error('enrichNewLeadsWithIntent error', { error: err.message })),

@@ -101,7 +101,6 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
 
           await (prisma as any).competitorPost.create({
             data: {
-              id:               require('crypto').randomUUID(),
               competitor_id:    comp.id,
               platform,
               external_post_id: externalId,
