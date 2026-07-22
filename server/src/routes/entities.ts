@@ -191,6 +191,13 @@ router.get('/:entity', async (req: Request, res: Response) => {
 
     const where = buildWhere(filter);
 
+    // Review rows scraped from competitors (KAN-121) share linked_business with the
+    // owner's own reviews, tagged via linked_competitor. Default callers to their own
+    // reviews only — pass linked_competitor explicitly to fetch a competitor's rows.
+    if (req.params.entity === 'Review' && !('linked_competitor' in filter)) {
+      where.linked_competitor = null;
+    }
+
     if (req.params.entity === 'BusinessProfile') {
       // BusinessProfile: scope to records owned by this user
       where.created_by = userId;
