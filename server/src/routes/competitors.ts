@@ -3,10 +3,6 @@ import { prisma } from '../db';
 
 const router = Router();
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
 function hasUrl(c: any): boolean {
   return !!(c.instagram_url || c.facebook_url || c.tiktok_url);
 }
@@ -14,16 +10,13 @@ function hasUrl(c: any): boolean {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/competitors/social/feed
 // ?businessProfileId=&competitorId=&platform=
-//
-// Per-rival chronological post feed + header chips.
-// emptyState: 'no_url' | 'no_data' | 'ok'
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/social/feed', async (req: Request, res: Response) => {
   const { businessProfileId, competitorId, platform } = req.query as Record<string, string>;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
   if (competitorId) {
-    // Single-rival view
+    // Single-rival view — verify it belongs to this business first
     const competitor = await prisma.competitor.findFirst({
       where: { id: competitorId, linked_business: businessProfileId },
       select: {
@@ -35,7 +28,7 @@ router.get('/social/feed', async (req: Request, res: Response) => {
     });
     if (!competitor) return res.status(404).json({ error: 'Competitor not found' });
 
-    const postWhere: any = { linked_business: businessProfileId, competitor_id: competitorId };
+    const postWhere: any = { competitor_id: competitorId };
     if (platform) postWhere.platform = platform;
 
     const posts = await prisma.competitorPost.findMany({
@@ -51,11 +44,11 @@ router.get('/social/feed', async (req: Request, res: Response) => {
         id: competitor.id,
         name: competitor.name,
         headerChips: {
-          content_themes:       competitor.content_themes,
+          content_themes:        competitor.content_themes,
           social_post_frequency: competitor.social_post_frequency,
-          strongest_channel:    competitor.strongest_channel,
-          social_followers_est: competitor.social_followers_est,
-          engagement_level:     competitor.engagement_level,
+          strongest_channel:     competitor.strongest_channel,
+          social_followers_est:  competitor.social_followers_est,
+          engagement_level:      competitor.engagement_level,
         },
       },
       posts,
@@ -74,22 +67,25 @@ router.get('/social/feed', async (req: Request, res: Response) => {
     orderBy: { name: 'asc' },
   });
 
-  const postCountRows = await prisma.competitorPost.groupBy({
-    by: ['competitor_id'],
-    where: { linked_business: businessProfileId },
-    _count: { id: true },
-    _max:   { posted_at: true },
-  });
+  const ids = competitors.map(c => c.id);
+  const postCountRows = ids.length
+    ? await prisma.competitorPost.groupBy({
+        by: ['competitor_id'],
+        where: { competitor_id: { in: ids } },
+        _count: { id: true },
+        _max:   { posted_at: true },
+      })
+    : [];
   const countMap = Object.fromEntries(postCountRows.map(r => [r.competitor_id, r]));
 
-  const board = competitors.map(c => ({
-    ...c,
-    post_count:    countMap[c.id]?._count.id    ?? 0,
-    last_post_at:  countMap[c.id]?._max.posted_at ?? null,
-    emptyState:    !hasUrl(c) ? 'no_url' : (countMap[c.id]?._count.id ?? 0) === 0 ? 'no_data' : 'ok',
-  }));
-
-  return res.json({ competitors: board });
+  return res.json({
+    competitors: competitors.map(c => ({
+      ...c,
+      post_count:   countMap[c.id]?._count.id    ?? 0,
+      last_post_at: countMap[c.id]?._max.posted_at ?? null,
+      emptyState:   !hasUrl(c) ? 'no_url' : (countMap[c.id]?._count.id ?? 0) === 0 ? 'no_data' : 'ok',
+    })),
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -140,24 +136,22 @@ router.get('/social/ads/history', async (req: Request, res: Response) => {
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
   if (!competitorId)      return res.status(400).json({ error: 'Missing competitorId' });
 
-  const where: any = { linked_business: businessProfileId, competitor_id: competitorId };
-  if (platform) where.platform = platform;
-
-  const ads = await prisma.competitorAdHistory.findMany({
-    where,
-    orderBy: sort === 'first_seen' ? { first_seen_at: 'asc' } : { last_seen_at: 'desc' },
-  });
-
+  // Verify tenant ownership via the Competitor record
   const competitor = await prisma.competitor.findFirst({
     where: { id: competitorId, linked_business: businessProfileId },
     select: { facebook_url: true, instagram_url: true, tiktok_url: true, ad_intel_updated_at: true },
   });
+  if (!competitor) return res.status(404).json({ error: 'Competitor not found' });
 
-  const emptyState = !competitor || !hasUrl(competitor)
-    ? 'no_url'
-    : ads.length === 0
-      ? 'no_data'
-      : 'ok';
+  const adWhere: any = { competitor_id: competitorId };
+  if (platform) adWhere.platform = platform;
+
+  const ads = await prisma.competitorAdHistory.findMany({
+    where: adWhere,
+    orderBy: sort === 'first_seen' ? { first_seen_at: 'asc' } : { last_seen_at: 'desc' },
+  });
+
+  const emptyState = !hasUrl(competitor) ? 'no_url' : ads.length === 0 ? 'no_data' : 'ok';
 
   return res.json({ ads, emptyState });
 });
@@ -181,15 +175,18 @@ router.get('/social/board', async (req: Request, res: Response) => {
     orderBy: { name: 'asc' },
   });
 
-  const postWhere: any = { linked_business: businessProfileId };
+  const ids = competitors.map(c => c.id);
+  const postWhere: any = ids.length ? { competitor_id: { in: ids } } : { competitor_id: 'none' };
   if (platform) postWhere.platform = platform;
 
-  const postCountRows = await prisma.competitorPost.groupBy({
-    by: ['competitor_id'],
-    where: postWhere,
-    _count: { id: true },
-    _max:   { posted_at: true },
-  });
+  const postCountRows = ids.length
+    ? await prisma.competitorPost.groupBy({
+        by: ['competitor_id'],
+        where: postWhere,
+        _count: { id: true },
+        _max:   { posted_at: true },
+      })
+    : [];
   const countMap = Object.fromEntries(postCountRows.map(r => [r.competitor_id, r]));
 
   let board = competitors.map(c => ({
