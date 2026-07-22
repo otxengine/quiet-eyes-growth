@@ -213,11 +213,13 @@ export async function searchAllAds(
   competitorName: string,
   category: string,
   city: string,
+  facebookHandle?: string | null,
+  tiktokHandle?: string | null,
 ): Promise<AdResult[]> {
   const googleQuery = `${competitorName} ${category} ${city}`;
   const [metaAds, tikAds, gAds] = await Promise.all([
-    searchMetaAds(competitorName, 'IL'),
-    searchTikTokAds(competitorName),
+    facebookHandle ? searchMetaAds(facebookHandle, 'IL') : Promise.resolve([]),
+    tiktokHandle   ? searchTikTokAds(tiktokHandle)       : Promise.resolve([]),
     searchGoogleAds(googleQuery),
   ]);
   // ponytail: prefer library hits over noisy Google search attribution (AC4)

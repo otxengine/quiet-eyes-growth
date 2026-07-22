@@ -67,7 +67,14 @@ export async function detectCompetitorAds(req: Request, res: Response) {
 
         console.log(`[detectCompetitorAds] scanning ads for: ${comp.name}`);
 
-        const ads = await searchAllAds(comp.name, profile.category || '', profile.city || '');
+        const fbHandle  = c.facebook_url
+          ? c.facebook_url.replace(/^https?:\/\/(www\.)?facebook\.com\//, '').split(/[/?#]/)[0].replace(/^@/, '') || null
+          : null;
+        const tikHandle = c.tiktok_url
+          ? c.tiktok_url.replace(/^https?:\/\/(www\.)?tiktok\.com\//, '').split(/[/?#]/)[0].replace(/^@/, '') || null
+          : null;
+
+        const ads = await searchAllAds(comp.name, profile.category || '', profile.city || '', fbHandle, tikHandle);
 
         // ── Update competitor record ─────────────────────────────────────────
         const platforms = [...new Set(ads.map(a => a.platform))];
