@@ -121,6 +121,7 @@ import { compareGoogleMetrics } from './compareGoogleMetrics';
 import { topicTimeline } from './topicTimeline';
 import { getCompetitorReviewInsights } from './getCompetitorReviewInsights';
 import { reputationAdvisorChat } from './reputationAdvisorChat';
+import { collectCompetitorSocialPosts } from './collectCompetitorSocialPosts';
 
 const router = Router();
 
@@ -257,6 +258,7 @@ const FUNCTION_MAP: Record<string, any> = {
   topicTimeline,
   getCompetitorReviewInsights,
   reputationAdvisorChat,
+  collectCompetitorSocialPosts,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,

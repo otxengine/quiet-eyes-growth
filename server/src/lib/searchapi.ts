@@ -34,16 +34,17 @@ async function _fetch(params: Record<string, string>): Promise<any> {
 }
 
 export interface AdResult {
-  platform:     'facebook' | 'instagram' | 'tiktok' | 'google';
-  title:        string;
-  body:         string;
-  cta:          string;
-  link:         string;
-  page_name:    string;
-  is_active:    boolean;
-  start_date:   string | null;
-  end_date:     string | null;
-  audience_est: string | null;
+  platform:       'facebook' | 'instagram' | 'tiktok' | 'google';
+  title:          string;
+  body:           string;
+  cta:            string;
+  link:           string;
+  page_name:      string;
+  is_active:      boolean;
+  start_date:     string | null;
+  end_date:       string | null;
+  audience_est:   string | null;
+  external_ad_id: string | null;
 }
 
 // ── Meta Ads Library ──────────────────────────────────────────────────────────
@@ -60,16 +61,17 @@ export async function searchMetaAds(query: string, country = 'IL'): Promise<AdRe
       snap.link_description || '';
     const platforms: string[] = ad.publisher_platform || [];
     return {
-      platform:   platforms.includes('INSTAGRAM') ? 'instagram' : 'facebook',
-      title:      snap.title || snap.cards?.[0]?.title || '',
-      body:       bodyText,
-      cta:        snap.cta_text || snap.cta_type || '',
-      link:       snap.link_url || snap.page_profile_uri || '',
-      page_name:  snap.page_name || ad.page_name || '',
-      is_active:  ad.is_active === true,
-      start_date: ad.start_date || null,
-      end_date:   ad.end_date   || null,
-      audience_est: null,
+      platform:       platforms.includes('INSTAGRAM') ? 'instagram' : 'facebook',
+      title:          snap.title || snap.cards?.[0]?.title || '',
+      body:           bodyText,
+      cta:            snap.cta_text || snap.cta_type || '',
+      link:           snap.link_url || snap.page_profile_uri || '',
+      page_name:      snap.page_name || ad.page_name || '',
+      is_active:      ad.is_active === true,
+      start_date:     ad.start_date || null,
+      end_date:       ad.end_date   || null,
+      audience_est:   null,
+      external_ad_id: ad.id ? String(ad.id) : null,
     } as AdResult;
   }).filter(a => a.is_active);
 }
@@ -89,16 +91,17 @@ export async function searchTikTokAds(query: string): Promise<AdResult[]> {
     })
     .slice(0, 5)
     .map(ad => ({
-      platform:     'tiktok' as const,
-      title:        '',
-      body:         '',
-      cta:          '',
-      link:         ad.video_link || '',
-      page_name:    ad.advertiser || '',
-      is_active:    true,
-      start_date:   ad.first_shown_datetime || null,
-      end_date:     ad.last_shown_datetime  || null,
-      audience_est: ad.estimated_audience   || null,
+      platform:       'tiktok' as const,
+      title:          '',
+      body:           '',
+      cta:            '',
+      link:           ad.video_link || '',
+      page_name:      ad.advertiser || '',
+      is_active:      true,
+      start_date:     ad.first_shown_datetime || null,
+      end_date:       ad.last_shown_datetime  || null,
+      audience_est:   ad.estimated_audience   || null,
+      external_ad_id: ad.id ? String(ad.id) : null,
     }));
 }
 
@@ -108,16 +111,17 @@ export async function searchGoogleAds(query: string): Promise<AdResult[]> {
   if (!data?.ads) return [];
 
   return (data.ads as any[]).slice(0, 5).map(ad => ({
-    platform:     'google' as const,
-    title:        ad.title   || '',
-    body:         ad.snippet || '',
-    cta:          '',
-    link:         ad.link    || '',
-    page_name:    ad.source  || ad.domain || '',
-    is_active:    true,
-    start_date:   null,
-    end_date:     null,
-    audience_est: null,
+    platform:       'google' as const,
+    title:          ad.title   || '',
+    body:           ad.snippet || '',
+    cta:            '',
+    link:           ad.link    || '',
+    page_name:      ad.source  || ad.domain || '',
+    is_active:      true,
+    start_date:     null,
+    end_date:       null,
+    audience_est:   null,
+    external_ad_id: null,
   }));
 }
 

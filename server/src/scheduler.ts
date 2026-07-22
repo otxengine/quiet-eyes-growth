@@ -77,6 +77,7 @@ import { collectOTXCompetitorChanges } from './routes/functions/collectOTXCompet
 import { runOTXSyncBridge } from './routes/functions/runOTXSyncBridge';
 import { runSectorTrendRadar } from './routes/functions/runSectorTrendRadar';
 import { runOTXIntentClassification } from './routes/functions/runOTXIntentClassification';
+import { collectCompetitorSocialPosts } from './routes/functions/collectCompetitorSocialPosts';
 
 const logger = createLogger('Scheduler');
 

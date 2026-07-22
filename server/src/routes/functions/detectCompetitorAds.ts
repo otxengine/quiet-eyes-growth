@@ -1,9 +1,51 @@
+import { createHash } from 'crypto';
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { searchAllAds, hasSearchApiKey, AdResult } from '../../lib/searchapi';
+
+function adContentHash(a: AdResult) {
+  return createHash('sha256')
+    .update(`${a.platform}|${a.title}|${a.body}|${a.cta}`)
+    .digest('hex');
+}
+
+async function upsertAdHistory(competitorId: string, businessProfileId: string, ads: AdResult[]) {
+  const now = new Date();
+  for (const ad of ads) {
+    const content_hash    = adContentHash(ad);
+    const external_ad_id  = ad.external_ad_id || null;
+    const where = external_ad_id
+      ? { competitor_id_platform_external_ad_id: { competitor_id: competitorId, platform: ad.platform, external_ad_id } }
+      : { competitor_id_platform_content_hash:   { competitor_id: competitorId, platform: ad.platform, content_hash: content_hash } };
+    await prisma.competitorAdHistory.upsert({
+      where,
+      create: {
+        competitor_id:   competitorId,
+        linked_business: businessProfileId,
+        platform:        ad.platform,
+        external_ad_id,
+        content_hash,
+        title:           ad.title   || null,
+        body:            ad.body    || null,
+        cta:             ad.cta     || null,
+        link:            ad.link    || null,
+        is_active:       true,
+        first_seen_at:   now,
+        last_seen_at:    now,
+      },
+      update: {
+        is_active:    true,
+        last_seen_at: now,
+        title:        ad.title || null,
+        body:         ad.body  || null,
+        cta:          ad.cta   || null,
+      },
+    }).catch(() => {});
+  }
+}
 
 const MIN_INTERVAL_MS     = 48 * 60 * 60 * 1000; // 48h between full runs (saves API credits)
 const PER_COMP_INTERVAL_MS = 48 * 60 * 60 * 1000; // skip individual competitor if scanned within 48h
@@ -110,7 +152,18 @@ export async function detectCompetitorAds(req: Request, res: Response) {
 
         await prisma.competitor.update({ where: { id: comp.id }, data: compUpdate }).catch(() => {});
 
-        if (ads.length === 0) { processed++; continue; }
+        if (ads.length === 0) {
+          // Mark all history rows for this competitor inactive
+          await prisma.competitorAdHistory.updateMany({
+            where: { competitor_id: comp.id },
+            data:  { is_active: false },
+          }).catch(() => {});
+          processed++;
+          continue;
+        }
+
+        // Persist ad history (append-only upsert)
+        await upsertAdHistory(comp.id, businessProfileId, ads);
 
         // ── LLM analysis ─────────────────────────────────────────────────────
         const adSummary = ads

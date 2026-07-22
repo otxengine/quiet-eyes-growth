@@ -261,6 +261,8 @@ model Competitor {
   not_relevant             Boolean? @default(false)
   not_relevant_reason      String?
   google_place_id          String?  // KAN-121: place_id used for review ingest
+  posts                    CompetitorPost[]
+  ad_history               CompetitorAdHistory[]
 
   @@map("competitors")
 }
@@ -968,4 +970,49 @@ model SocialComment {
 
   @@unique([platform, platform_comment_id])
   @@map("social_comments")
+}
+
+model CompetitorPost {
+  id                String    @id @default(cuid())
+  linked_business   String
+  competitor_id     String
+  competitor        Competitor @relation(fields: [competitor_id], references: [id], onDelete: Cascade)
+  platform          String    // instagram|facebook|tiktok
+  external_post_id  String?
+  post_url          String?
+  caption           String?
+  media_url         String?
+  posted_at         DateTime?
+  likes             Int?
+  comments_count    Int?
+  raw_json          String?
+  first_seen_at     DateTime  @default(now())
+  last_seen_at      DateTime  @default(now())
+
+  @@index([linked_business, competitor_id, posted_at])
+  @@unique([competitor_id, platform, external_post_id])
+  @@map("competitor_posts")
+}
+
+model CompetitorAdHistory {
+  id              String    @id @default(cuid())
+  linked_business String
+  competitor_id   String
+  competitor      Competitor @relation(fields: [competitor_id], references: [id], onDelete: Cascade)
+  platform        String    // facebook|instagram|tiktok|google
+  external_ad_id  String?
+  content_hash    String?   // sha of title+body+cta+platform for dedup fallback
+  title           String?
+  body            String?
+  cta             String?
+  link            String?
+  first_seen_at   DateTime  @default(now())
+  last_seen_at    DateTime  @default(now())
+  is_active       Boolean   @default(true)
+  raw_json        String?
+
+  @@index([competitor_id, last_seen_at])
+  @@unique([competitor_id, platform, external_ad_id])
+  @@unique([competitor_id, platform, content_hash])
+  @@map("competitor_ad_history")
 }
