@@ -62,7 +62,7 @@ export async function batchSnapshotCompetitors(req: Request, res: Response) {
           if (isTavilyRateLimited()) break;
           const results = await tavilySearch(q, 3);
           webData += results
-            .map(r => `[${r.url || ''}] ${r.title || ''}: ${(r.content || '').slice(0, 250)}`)
+            .map(r => `[${r.url || ''}${r.published_date ? ` | ${r.published_date}` : ''}] ${r.title || ''}: ${(r.content || '').slice(0, 250)}`)
             .join('\n');
         }
 

@@ -52,14 +52,14 @@ export async function analyzeCompetitorSocial(req: Request, res: Response) {
           tavilySearch(igQuery, 3),
           tavilySearch(fbQuery, 3),
           tavilySearch(`"${comp.name}" ביקורות לקוחות`, 3),
-          // Active promotions, sponsored ads, new products — exclude generic discount terms that match old content
-          tavilySearch(`"${comp.name}" מבצע OR ממומן OR "שירות חדש" OR "מוצר חדש"`, 4),
+          // Active promotions, sponsored ads, new products — 14-day window only
+          tavilySearch(`"${comp.name}" מבצע OR ממומן OR "שירות חדש" OR "מוצר חדש"`, 4, 14),
         ]);
         const allResults = socialResults.flat();
         if (allResults.length === 0) continue;
 
         const textBlob = allResults
-          .map(r => `[${r.url}] ${r.title} — ${(r.content || '').slice(0, 200)}`)
+          .map(r => `[${r.url}${r.published_date ? ` | ${r.published_date}` : ''}] ${r.title} — ${(r.content || '').slice(0, 200)}`)
           .join('\n\n');
 
         const analysis = await invokeLLM({
