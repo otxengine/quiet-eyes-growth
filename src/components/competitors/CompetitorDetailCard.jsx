@@ -1,4 +1,4 @@
-import React, { useState, lazy, Suspense, Component } from 'react';
+import React, { useState, useEffect, lazy, Suspense, Component } from 'react';
 import { Link } from 'react-router-dom';
 
 class SilentBoundary extends Component {
@@ -21,6 +21,12 @@ function timeAgo(dateStr) {
   if (hours < 24) return `לפני ${hours} שעות`;
   return `לפני ${Math.floor(hours / 24)} ימים`;
 }
+
+const PLATFORM = {
+  instagram: { label: 'Instagram', cls: 'bg-pink-50 text-pink-600 border-pink-200' },
+  facebook:  { label: 'Facebook',  cls: 'bg-blue-50  text-blue-600 border-blue-200' },
+  tiktok:    { label: 'TikTok',    cls: 'bg-gray-100 text-gray-700 border-gray-200' },
+};
 
 
 function UrlInput({ label, fieldKey, initialValue, competitorId }) {
@@ -67,8 +73,49 @@ export default function CompetitorDetailCard({
   onDeepAnalysis,
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [posts, setPosts] = useState(null);
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [postsError, setPostsError] = useState(false);
+  const [expandedCaptions, setExpandedCaptions] = useState(new Set());
+  const [scraping, setScraping] = useState(false);
   const comp = competitor;
   const initials = (comp.name || '??').substring(0, 2);
+
+  const hasAnyUrl = !!(comp.instagram_url || comp.facebook_url || comp.tiktok_url);
+
+  async function loadPosts() {
+    setPostsLoading(true);
+    setPostsError(false);
+    try {
+      const data = await base44.entities.CompetitorPost.filter(
+        { linked_business: businessProfileId, competitor_id: comp.id },
+        '-posted_at',
+        50
+      );
+      setPosts(data);
+    } catch {
+      setPostsError(true);
+      setPosts([]);
+    } finally {
+      setPostsLoading(false);
+    }
+  }
+
+  async function triggerScrape() {
+    setScraping(true);
+    try {
+      await base44.functions.invoke('collectCompetitorSocialPosts', { businessProfileId, force: true }, 120_000);
+      await loadPosts();
+    } catch {
+      toast.error('שגיאה בסריקה');
+    } finally {
+      setScraping(false);
+    }
+  }
+
+  useEffect(() => {
+    if (expanded && posts === null) loadPosts();
+  }, [expanded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const firstName = (comp.name || '').split(' ')[0].toLowerCase();
   const intelAlert = intelChanges.find(c =>
@@ -200,6 +247,103 @@ export default function CompetitorDetailCard({
               </div>
             </div>
           )}
+
+          {/* KAN-175: chronological social feed */}
+          <div>
+            <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide mb-2">פיד פוסטים</p>
+
+            {(comp.content_themes || comp.social_post_frequency) && (
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {comp.social_post_frequency && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] bg-secondary border border-border text-foreground-muted">
+                    {comp.social_post_frequency}
+                  </span>
+                )}
+                {comp.content_themes && comp.content_themes.split(',').map(t => t.trim()).filter(Boolean).map(t => (
+                  <span key={t} className="px-2 py-0.5 rounded-full text-[10px] bg-secondary border border-border text-foreground-muted">{t}</span>
+                ))}
+              </div>
+            )}
+
+            {(postsLoading || posts === null) ? (
+              <p className="text-[11px] text-foreground-muted animate-pulse">טוען פוסטים...</p>
+            ) : postsError ? (
+              <div className="flex items-center gap-2">
+                <p className="text-[11px] text-foreground-muted">לא הצלחנו למשוך את הפיד — נסה שוב</p>
+                <button onClick={loadPosts} className="text-[11px] text-primary hover:underline">רענן</button>
+              </div>
+            ) : !hasAnyUrl ? (
+              <p className="text-[11px] text-foreground-muted">חסר קישור לרשת — הוסף בכרטיס המתחרה</p>
+            ) : posts.length === 0 ? (
+              <div className="flex items-center gap-2">
+                <p className="text-[11px] text-foreground-muted">עדיין אין פוסטים — נסה רענון</p>
+                <button onClick={triggerScrape} disabled={scraping} className="text-[11px] text-primary hover:underline disabled:opacity-50">
+                  {scraping ? 'סורק...' : 'רענן'}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {posts.map(post => (
+                  <div key={post.id} className="rounded-lg border border-border bg-secondary/30 p-2.5 space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase border ${PLATFORM[post.platform]?.cls || 'bg-secondary text-foreground-muted border-border'}`}>
+                        {PLATFORM[post.platform]?.label || post.platform}
+                      </span>
+                      {post.posted_at && (
+                        <span className="text-[10px] text-foreground-muted">{timeAgo(post.posted_at)}</span>
+                      )}
+                      {(post.likes != null || post.comments_count != null) && (
+                        <span className="text-[10px] text-foreground-muted mr-auto">
+                          {post.likes != null && `♥ ${post.likes}`}
+                          {post.likes != null && post.comments_count != null && ' · '}
+                          {post.comments_count != null && `💬 ${post.comments_count}`}
+                        </span>
+                      )}
+                    </div>
+
+                    {post.media_url && (
+                      <img
+                        src={post.media_url}
+                        alt=""
+                        className="w-16 h-16 rounded object-cover"
+                        onError={e => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    )}
+
+                    {post.caption && (
+                      <p className="text-[11px] text-foreground-secondary leading-snug">
+                        {expandedCaptions.has(post.id) ? post.caption : post.caption.slice(0, 120)}
+                        {post.caption.length > 120 && (
+                          <button
+                            onClick={() => setExpandedCaptions(prev => {
+                              const next = new Set(prev);
+                              next.has(post.id) ? next.delete(post.id) : next.add(post.id);
+                              return next;
+                            })}
+                            className="mr-1 text-[10px] text-primary hover:underline"
+                          >
+                            {expandedCaptions.has(post.id) ? 'הצג פחות' : '...הצג עוד'}
+                          </button>
+                        )}
+                      </p>
+                    )}
+
+                    {post.post_url && (
+                      <a
+                        href={post.post_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        פתח מקור ↗
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {comp.sponsored_ads_detected && (
             <div>

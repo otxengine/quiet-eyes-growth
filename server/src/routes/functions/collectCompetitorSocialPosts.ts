@@ -101,6 +101,7 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
 
           await (prisma as any).competitorPost.create({
             data: {
+              linked_business:  businessProfileId,
               competitor_id:    comp.id,
               platform,
               external_post_id: externalId,
@@ -109,7 +110,7 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
               media_url:        mediaUrl,
               posted_at:        postedAt,
               likes,
-              comments,
+              comments_count:   comments,
               last_seen_at:     new Date().toISOString(),
             },
           });
