@@ -163,23 +163,23 @@ export default function CompetitorDetailCard({
           )}
 
           {/* KAN-166: coarse Google-backed teaser + compare CTA; no LLM fields as reviews */}
-          <div className="space-y-2">
-            {comp.rating != null && (
+          {comp.rating != null && (
+            <div className="space-y-2">
               <div>
                 <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide mb-1.5">ביקורות Google</p>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-100 text-[11px] text-blue-700">
                   ★ {Number(comp.rating).toFixed(1)} · {comp.review_count || 0} ביקורות — מקור: Google
                 </span>
               </div>
-            )}
-            <Link
-              to="/reviews/compare"
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:opacity-75 transition-opacity"
-              onClick={e => e.stopPropagation()}
-            >
-              פתח השוואת ביקורות ←
-            </Link>
-          </div>
+              <Link
+                to="/reviews/compare"
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:opacity-75 transition-opacity"
+                onClick={e => e.stopPropagation()}
+              >
+                פתח השוואת ביקורות ←
+              </Link>
+            </div>
+          )}
 
           {(comp.social_post_frequency || comp.social_followers_est) && (
             <div>
