@@ -52,8 +52,8 @@ export async function analyzeCompetitorSocial(req: Request, res: Response) {
           tavilySearch(igQuery, 3),
           tavilySearch(fbQuery, 3),
           tavilySearch(`"${comp.name}" ביקורות לקוחות`, 3),
-          // Active promotions, sponsored ads, new products
-          tavilySearch(`"${comp.name}" מבצע OR הנחה OR ממומן OR "שירות חדש" OR "מוצר חדש"`, 4),
+          // Active promotions, sponsored ads, new products — exclude generic discount terms that match old content
+          tavilySearch(`"${comp.name}" מבצע OR ממומן OR "שירות חדש" OR "מוצר חדש"`, 4),
         ]);
         const allResults = socialResults.flat();
         if (allResults.length === 0) continue;
@@ -83,7 +83,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
   "sentiment_from_reviews": "positive|negative|mixed|unknown",
   "post_frequency": "e.g. 3 פוסטים בשבוע or daily or unknown",
   "has_active_promotion": false,
-  "promotion_description": "current active promotion or discount, or null",
+  "promotion_description": "current active promotion — ONLY if it appears to be running NOW (not expired, not historical). Return null if unsure.",
   "is_running_paid_ads": false,
   "paid_ads_description": "description of sponsored/paid ad campaign, or null",
   "new_service_or_product": "new service or product they recently launched, or null",
@@ -111,6 +111,8 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
           socialUpdate.last_promo_detected    = analysis.promotion_description;
           socialUpdate.last_promo_detected_at = new Date().toISOString();
           socialUpdate.current_promotions     = analysis.promotion_description;
+        } else if ((comp as any).current_promotions) {
+          socialUpdate.current_promotions = null;
         }
         if (analysis.new_service_or_product) {
           socialUpdate.last_product_detected    = analysis.new_service_or_product;

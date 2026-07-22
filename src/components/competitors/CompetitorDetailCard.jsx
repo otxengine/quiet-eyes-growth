@@ -77,7 +77,9 @@ export default function CompetitorDetailCard({
   );
 
   const services   = comp.services || comp.menu_highlights || '';
-  const hasOffer   = services || comp.price_range || comp.current_promotions;
+  const promoFresh = comp.last_promo_detected_at
+    && (Date.now() - new Date(comp.last_promo_detected_at).getTime()) < 14 * 86400000;
+  const hasOffer   = services || comp.price_range || (comp.current_promotions && promoFresh);
 
   return (
     <div className="card-base">
@@ -91,7 +93,7 @@ export default function CompetitorDetailCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[13px] font-semibold text-foreground truncate">{comp.name}</span>
-              {comp.current_promotions && (
+              {comp.current_promotions && promoFresh && (
                 <span className="px-1.5 py-0.5 rounded-full text-[8px] font-bold bg-orange-50 border border-orange-200 text-orange-700 flex-shrink-0">
                   מבצע פעיל
                 </span>
