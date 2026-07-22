@@ -26,6 +26,7 @@ function SwotTab({ competitor, businessProfile }) {
   const [swot, setSwot]       = useState(null);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded]   = useState(false);
+  const [popup, setPopup]     = useState(null);
 
   const generate = async (force = false) => {
     if (!force && loaded) return;
@@ -119,16 +120,20 @@ JSON בלבד:
       {swot.suggested_actions?.length > 0 && (
         <div className="rounded-xl border border-violet-200 bg-violet-50 p-3">
           <p className="text-[11px] font-bold text-violet-700 mb-2">פעולות מומלצות</p>
-          <ol className="space-y-1">
+          <div className="space-y-1.5">
             {swot.suggested_actions.map((action, i) => (
-              <li key={i} className="text-[11px] text-violet-700 flex items-start gap-1.5">
-                <span className="mt-0.5 flex-shrink-0 font-bold">{i + 1}.</span>
-                {action}
-              </li>
+              <button key={i}
+                onClick={() => setPopup({ id: `swot_action_${competitor.id}_${i}`, summary: `SWOT מול ${competitor.name}: ${action}`, recommended_action: action, source_description: JSON.stringify({ action_label: action.split(' ').slice(0, 5).join(' '), action_type: 'task', prefilled_text: `פעולה מניתוח SWOT מול ${competitor.name}:\n\n${action}`, time_minutes: 20 }), impact_level: 'medium', category: 'opportunity' })}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-violet-200 text-[11px] text-violet-700 hover:border-violet-400 hover:bg-violet-100/50 transition-all text-right">
+                <span className="font-bold flex-shrink-0">{i + 1}.</span>
+                <span className="flex-1">{action}</span>
+                <span className="flex-shrink-0 opacity-50">←</span>
+              </button>
             ))}
-          </ol>
+          </div>
         </div>
       )}
+      {popup && <ActionPopup signal={popup} businessProfile={businessProfile} onClose={() => setPopup(null)} />}
     </div>
   );
 }
