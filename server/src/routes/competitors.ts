@@ -33,6 +33,12 @@ router.get('/social/feed', async (req: Request, res: Response) => {
 
     const posts = await prisma.competitorPost.findMany({
       where: postWhere,
+      select: {
+        id: true, competitor_id: true, platform: true,
+        external_post_id: true, post_url: true, caption: true,
+        media_url: true, posted_at: true, likes: true,
+        comments_count: true, first_seen_at: true, last_seen_at: true,
+      },
       orderBy: { posted_at: 'desc' },
       take: 50,
     });
@@ -148,6 +154,12 @@ router.get('/social/ads/history', async (req: Request, res: Response) => {
 
   const ads = await prisma.competitorAdHistory.findMany({
     where: adWhere,
+    select: {
+      id: true, competitor_id: true, platform: true,
+      external_ad_id: true, content_hash: true,
+      title: true, body: true, cta: true, link: true,
+      first_seen_at: true, last_seen_at: true, is_active: true,
+    },
     orderBy: sort === 'first_seen' ? { first_seen_at: 'asc' } : { last_seen_at: 'desc' },
   });
 
