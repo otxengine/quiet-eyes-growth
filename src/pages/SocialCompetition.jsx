@@ -145,16 +145,18 @@ export default function SocialCompetition() {
     enabled:  !!bpId,
   });
 
+  const compIds = competitors.map(c => c.id);
+
   const { data: allPosts = [], isLoading: loadingPosts } = useQuery({
-    queryKey: ['socialPosts', bpId],
-    queryFn:  () => base44.entities.CompetitorPost.filter({ linked_business: bpId }, '-posted_at', 300),
-    enabled:  !!bpId && competitors.length > 0,
+    queryKey: ['socialPosts', bpId, compIds],
+    queryFn:  () => base44.entities.CompetitorPost.filter({ competitor_id: { in: compIds } }, '-posted_at', 300),
+    enabled:  !!bpId && compIds.length > 0,
   });
 
   const { data: allAds = [], isLoading: loadingAds } = useQuery({
-    queryKey: ['socialAds', bpId],
-    queryFn:  () => base44.entities.CompetitorAdHistory.filter({ linked_business: bpId }, '-last_seen_at', 300),
-    enabled:  !!bpId && competitors.length > 0,
+    queryKey: ['socialAds', bpId, compIds],
+    queryFn:  () => base44.entities.CompetitorAdHistory.filter({ competitor_id: { in: compIds } }, '-last_seen_at', 300),
+    enabled:  !!bpId && compIds.length > 0,
   });
 
   // Deep-link scroll: once data is ready, scroll to the focused card
@@ -168,7 +170,7 @@ export default function SocialCompetition() {
     setRefreshingFeed(true);
     try {
       await base44.functions.invoke('collectCompetitorSocialPosts', { businessProfileId: bpId, force: true }, 120000);
-      queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] });
+      queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] }); // prefix match invalidates all compIds variants
       toast.success('פיד מתחרים עודכן');
     } catch { toast.error('שגיאה בעדכון הפיד'); }
     setRefreshingFeed(false);
@@ -178,7 +180,7 @@ export default function SocialCompetition() {
     setRefreshingAds(true);
     try {
       await base44.functions.invoke('detectCompetitorAds', { businessProfileId: bpId, force: true }, 120000);
-      queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] });
+      queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] }); // prefix match invalidates all compIds variants
       toast.success('מודעות מתחרים עודכנו');
     } catch { toast.error('שגיאה בעדכון המודעות'); }
     setRefreshingAds(false);
