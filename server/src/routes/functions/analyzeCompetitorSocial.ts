@@ -118,10 +118,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
           socialUpdate.last_product_detected    = analysis.new_service_or_product;
           socialUpdate.last_product_detected_at = new Date().toISOString();
         }
-        if (typeof analysis.is_running_paid_ads === 'boolean') {
-          socialUpdate.sponsored_ads_detected   = analysis.is_running_paid_ads;
-          socialUpdate.sponsored_ads_updated_at = new Date().toISOString();
-        }
+        // ponytail: detectCompetitorAds owns sponsored_ads_* — don't overwrite here (KAN-172)
         // Extract social URLs from search results (if not already stored)
         const c2 = comp as any;
         const igUrl = allResults.find(r => r.url?.includes('instagram.com/'))?.url;

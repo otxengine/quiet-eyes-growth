@@ -220,13 +220,11 @@ export async function searchAllAds(
   facebookHandle?: string | null,
   tiktokHandle?: string | null,
 ): Promise<AdResult[]> {
-  const googleQuery = `${competitorName} ${category} ${city}`;
-  const [metaAds, tikAds, gAds] = await Promise.all([
+  const [metaAds, tikAds] = await Promise.all([
     facebookHandle ? searchMetaAds(facebookHandle, 'IL') : Promise.resolve([]),
     tiktokHandle   ? searchTikTokAds(tiktokHandle)       : Promise.resolve([]),
-    searchGoogleAds(googleQuery),
   ]);
-  // ponytail: prefer library hits over noisy Google search attribution (AC4)
   const libraryAds = [...metaAds, ...tikAds];
-  return libraryAds.length > 0 ? libraryAds : gAds;
+  // ponytail: Google only when library empty — saves credits (KAN-172)
+  return libraryAds.length > 0 ? libraryAds : searchGoogleAds(`${competitorName} ${category} ${city}`);
 }
