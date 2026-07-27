@@ -29,10 +29,11 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
 
     // Repair rows created before linked_business was required (one-time backfill)
     if (competitors.length > 0) {
-      await (prisma as any).competitorPost.updateMany({
-        where: { competitor_id: { in: competitors.map((c: any) => c.id) }, linked_business: null },
-        data: { linked_business: businessProfileId },
-      });
+      await (prisma as any).$executeRawUnsafe(
+        `UPDATE competitor_posts SET linked_business = $1 WHERE competitor_id = ANY($2::text[]) AND linked_business IS NULL`,
+        businessProfileId,
+        competitors.map((c: any) => c.id),
+      );
     }
 
     let totalUpserted = 0;
