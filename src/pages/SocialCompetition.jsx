@@ -340,10 +340,15 @@ export default function SocialCompetition() {
   const handleRefreshFeed = async () => {
     setRefreshingFeed(true);
     try {
-      await base44.functions.invoke('collectCompetitorSocialPosts', { businessProfileId: bpId, force: true }, 120000);
+      const result = await base44.functions.invoke('collectCompetitorSocialPosts', { businessProfileId: bpId, force: true }, 180000);
       queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] });
-      toast.success('פיד מתחרים עודכן');
-    } catch { toast.error('שגיאה בעדכון הפיד'); }
+      if (result?.upserted > 0) {
+        toast.success(`פיד מתחרים עודכן — ${result.upserted} פוסטים חדשים`);
+      } else {
+        toast.warning('רענון הסתיים — לא נמצאו פוסטים חדשים (ראה רשת לפרטים)');
+        console.info('[refresh-feed] diagnostics:', result?.diagnostics);
+      }
+    } catch (e) { toast.error(`שגיאה בעדכון הפיד: ${e.message}`); }
     setRefreshingFeed(false);
   };
 

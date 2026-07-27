@@ -37,6 +37,7 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
     }
 
     let totalUpserted = 0;
+    const diagnostics: any[] = [];
 
     for (const comp of competitors) {
       const platforms = [
@@ -46,7 +47,10 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
       ];
 
       for (const { platform, url } of platforms) {
-        if (!url) continue; // AC3: skip platforms with no stored URL
+        if (!url) {
+          diagnostics.push({ competitor: comp.name, platform, status: 'skipped', reason: 'no_url' });
+          continue;
+        }
 
         const existing = await (prisma as any).competitorPost.findMany({
           where: { competitor_id: comp.id, platform },
@@ -56,25 +60,36 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
         const existingUrls = new Set<string>(existing.map((p: any) => p.post_url).filter(Boolean));
 
         let posts: any[] = [];
+        let apifyError: string | null = null;
+        const t0 = Date.now();
 
         if (platform === 'instagram') {
           posts = await runApifyActor('apify~instagram-scraper', {
             directUrls: [url],
             resultsType: 'posts',
             resultsLimit: POSTS_CAP,
-          }, 90_000, 50);
+          }, 120_000, 50, (msg) => { apifyError = msg; });
         } else if (platform === 'facebook') {
           posts = await runApifyActor('apify~facebook-posts-scraper', {
             startUrls: [{ url }],
             maxPosts: POSTS_CAP,
             maxPostComments: 0,
-          }, 90_000, 50);
+          }, 120_000, 50, (msg) => { apifyError = msg; });
         } else if (platform === 'tiktok') {
           posts = await runApifyActor('clockworks~tiktok-profile-scraper', {
             profiles: [url],
             resultsPerPage: POSTS_CAP,
-          }, 90_000, 50);
+          }, 120_000, 50, (msg) => { apifyError = msg; });
         }
+
+        diagnostics.push({
+          competitor: comp.name,
+          platform,
+          url,
+          apify_returned: posts.length,
+          elapsed_ms: Date.now() - t0,
+          error: apifyError,
+        });
 
         for (const post of posts) {
           const externalId = post.id || post.shortCode || post.postId || post.videoId || null;
@@ -133,7 +148,7 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
 
     setLastRun(businessProfileId, 'collectCompetitorSocialPosts');
     await writeAutomationLog('collectCompetitorSocialPosts', businessProfileId, startTime, totalUpserted, 'success');
-    return res.json({ upserted: totalUpserted, competitors: competitors.length });
+    return res.json({ upserted: totalUpserted, competitors: competitors.length, diagnostics });
   } catch (err: any) {
     await writeAutomationLog('collectCompetitorSocialPosts', businessProfileId, startTime, 0, 'failed', err.message);
     return res.status(500).json({ error: err.message });
