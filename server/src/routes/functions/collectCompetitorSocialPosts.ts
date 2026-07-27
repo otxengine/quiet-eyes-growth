@@ -28,11 +28,11 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
     const competitors = allCompetitors.filter((c: any) => !c.not_relevant);
 
     // Repair rows created before linked_business was required (one-time backfill)
-    if (competitors.length > 0) {
+    for (const comp of competitors) {
       await (prisma as any).$executeRawUnsafe(
-        `UPDATE competitor_posts SET linked_business = $1 WHERE competitor_id = ANY($2::text[]) AND linked_business IS NULL`,
+        `UPDATE competitor_posts SET linked_business = $1 WHERE competitor_id = $2 AND linked_business IS NULL`,
         businessProfileId,
-        competitors.map((c: any) => c.id),
+        comp.id,
       );
     }
 
