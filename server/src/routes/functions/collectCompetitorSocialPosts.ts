@@ -98,8 +98,6 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
           if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, val]) => [k, deepClean(val)]));
           return v;
         }
-        const clean = (s: any) => typeof s === 'string' ? s.replace(/\x00/g, '') : s;
-
         for (const rawPost of posts) {
           const post = deepClean(rawPost);
           const externalId = post.id || post.shortCode || post.postId || post.videoId || null;
