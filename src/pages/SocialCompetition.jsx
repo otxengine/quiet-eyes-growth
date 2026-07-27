@@ -5,6 +5,7 @@ import { base44 } from '@/api/base44Client';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const PLATFORM_LABELS = { instagram: 'אינסטגרם', facebook: 'פייסבוק', tiktok: 'טיקטוק' };
 const PLATFORM_COLORS = {
@@ -12,6 +13,17 @@ const PLATFORM_COLORS = {
   facebook:  'bg-blue-100 text-blue-700',
   tiktok:    'bg-gray-100 text-gray-800',
 };
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+async function apiFetch(path) {
+  const token = window.__clerk?.session ? await window.__clerk.session.getToken().catch(() => null) : null;
+  const headers = token
+    ? { Authorization: `Bearer ${token}` }
+    : { 'x-dev-user': localStorage.getItem('dev_user_id') || 'dev-user' };
+  const res = await fetch(`${API_BASE}${path}`, { headers });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
 
 function timeAgo(dateStr) {
   if (!dateStr) return '—';
@@ -21,6 +33,11 @@ function timeAgo(dateStr) {
   if (d === 1) return 'אתמול';
   if (d < 30)  return `לפני ${d} ימים`;
   return `לפני ${Math.floor(d / 30)} חודשים`;
+}
+
+function fmtDate(dateStr) {
+  if (!dateStr) return '—';
+  return new Date(dateStr).toLocaleDateString('he-IL');
 }
 
 function resolveSection(param) {
@@ -34,9 +51,85 @@ function getDefaultSection(posts, ads) {
   return 'feed';
 }
 
-function RivalCard({ competitor, posts, ads, defaultSec }) {
-  const [section, setSection] = useState(() => defaultSec || getDefaultSection(posts, ads));
-  const [showHistory, setShowHistory] = useState(false);
+function AdHistoryModal({ open, onClose, competitorId, competitorName, bpId }) {
+  const [sort, setSort] = useState('last_seen');
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['adHistory', competitorId, sort],
+    queryFn:  () => apiFetch(`/competitors/social/ads/history?competitorId=${competitorId}&businessProfileId=${bpId}&sort=${sort}`),
+    enabled:  open && !!competitorId && !!bpId,
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-lg max-h-[80vh] flex flex-col gap-0 p-0">
+        <DialogHeader className="px-4 pt-4 pb-3 border-b border-border">
+          <DialogTitle className="text-sm">היסטוריית מודעות — {competitorName}</DialogTitle>
+          <div className="flex gap-1.5 mt-2">
+            {[['last_seen', 'נראה לאחרונה'], ['first_seen', 'נראה לראשונה']].map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setSort(k)}
+                className={`text-xs px-2.5 py-0.5 rounded-full transition-colors ${
+                  sort === k ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </DialogHeader>
+
+        <div className="overflow-y-auto flex-1 p-4 space-y-2">
+          {isLoading && (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {error && (
+            <p className="text-xs text-destructive text-center py-4">שגיאה בטעינת ההיסטוריה</p>
+          )}
+          {!isLoading && !error && data?.ads?.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">אין מודעות בהיסטוריה</p>
+          )}
+          {data?.ads?.map(ad => (
+            <div key={ad.id} className="text-xs border border-border rounded-lg p-2.5 space-y-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className={`px-1.5 py-0.5 rounded text-[10px] ${PLATFORM_COLORS[ad.platform] || 'bg-gray-100 text-gray-700'}`}>
+                  {PLATFORM_LABELS[ad.platform] || ad.platform}
+                </span>
+                {ad.is_active
+                  ? <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px]">פעיל</span>
+                  : <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded text-[10px]">לא פעיל</span>
+                }
+              </div>
+              {ad.title && <p className="font-medium line-clamp-1">{ad.title}</p>}
+              {ad.body  && <p className="line-clamp-2 text-muted-foreground">{ad.body}</p>}
+              {ad.cta   && <p className="text-[10px] font-medium text-primary">📢 {ad.cta}</p>}
+              <div className="text-[10px] text-muted-foreground flex gap-3 flex-wrap">
+                <span>נראה לראשונה: {fmtDate(ad.first_seen_at)}</span>
+                <span>נראה לאחרונה: {fmtDate(ad.last_seen_at)}</span>
+              </div>
+              {ad.link && (
+                <a href={ad.link} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                  צפה במודעה ↗
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory }) {
+  const [section,     setSection]     = useState(() => defaultSec || getDefaultSection(posts, ads));
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  useEffect(() => {
+    if (autoOpenHistory) setHistoryOpen(true);
+  }, [autoOpenHistory]);
 
   const adSamples = (() => {
     try { return JSON.parse(competitor.active_ads_summary || '[]'); } catch { return []; }
@@ -173,37 +266,25 @@ function RivalCard({ competitor, posts, ads, defaultSec }) {
                 </div>
               )}
 
-              {/* History toggle */}
+              {/* History — opens modal */}
               <button
-                onClick={() => setShowHistory(h => !h)}
+                onClick={() => setHistoryOpen(true)}
                 className="text-[10px] text-muted-foreground underline"
               >
-                {showHistory ? '▲ הסתר היסטוריית מודעות' : '▼ היסטוריית מודעות'}
+                ▼ היסטוריית מודעות
               </button>
-              {showHistory && (
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {ads.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-4">אין מודעות בהיסטוריה</p>
-                  ) : ads.slice(0, 10).map(ad => (
-                    <div key={ad.id} className="text-xs border border-border rounded-lg p-2 space-y-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] ${PLATFORM_COLORS[ad.platform] || 'bg-gray-100 text-gray-700'}`}>
-                          {PLATFORM_LABELS[ad.platform] || ad.platform}
-                        </span>
-                        {ad.is_active && <span className="bg-green-100 text-green-700 px-1.5 rounded text-[10px]">פעיל</span>}
-                        <span className="text-muted-foreground">{timeAgo(ad.last_seen_at)}</span>
-                      </div>
-                      {ad.title && <p className="font-medium">{ad.title}</p>}
-                      {ad.body  && <p className="line-clamp-2 text-muted-foreground">{ad.body}</p>}
-                      {ad.link  && <a href={ad.link} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">צפה במודעה ↗</a>}
-                    </div>
-                  ))}
-                </div>
-              )}
             </>
           )}
         </div>
       )}
+
+      <AdHistoryModal
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        competitorId={competitor.id}
+        competitorName={competitor.name}
+        bpId={bpId}
+      />
     </div>
   );
 }
@@ -226,7 +307,8 @@ export default function SocialCompetition() {
   const cardRefs = useRef({});
 
   const focusId      = searchParams.get('competitorId');
-  const focusSection = resolveSection(searchParams.get('section'));
+  const sectionParam = searchParams.get('section');
+  const focusSection = resolveSection(sectionParam);
 
   const { data: competitors = [], isLoading: loadingComps } = useQuery({
     queryKey: ['socialCompetitors', bpId],
@@ -259,7 +341,7 @@ export default function SocialCompetition() {
     setRefreshingFeed(true);
     try {
       await base44.functions.invoke('collectCompetitorSocialPosts', { businessProfileId: bpId, force: true }, 120000);
-      queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] }); // prefix match invalidates all compIds variants
+      queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] });
       toast.success('פיד מתחרים עודכן');
     } catch { toast.error('שגיאה בעדכון הפיד'); }
     setRefreshingFeed(false);
@@ -269,7 +351,7 @@ export default function SocialCompetition() {
     setRefreshingAds(true);
     try {
       await base44.functions.invoke('detectCompetitorAds', { businessProfileId: bpId, force: true }, 120000);
-      queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] }); // prefix match invalidates all compIds variants
+      queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] });
       toast.success('מודעות מתחרים עודכנו');
     } catch { toast.error('שגיאה בעדכון המודעות'); }
     setRefreshingAds(false);
@@ -361,6 +443,8 @@ export default function SocialCompetition() {
                 posts={allPosts.filter(p => p.competitor_id === comp.id)}
                 ads={allAds.filter(a => a.competitor_id === comp.id)}
                 defaultSec={comp.id === focusId ? focusSection : null}
+                bpId={bpId}
+                autoOpenHistory={comp.id === focusId && sectionParam === 'ad-history'}
               />
             </div>
           ))}
