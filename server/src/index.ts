@@ -425,8 +425,26 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS ad_gaps TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS ad_intel_updated_at TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS active_ads_summary TEXT`);
-  // KAN-169/173: ensure linked_business column exists on competitor social tables
+  // KAN-169/173: ensure competitor social tables exist with all required columns
+  await sql(`CREATE TABLE IF NOT EXISTS competitor_ad_history (
+    id              TEXT PRIMARY KEY,
+    linked_business TEXT,
+    competitor_id   TEXT REFERENCES competitors(id) ON DELETE CASCADE,
+    platform        TEXT NOT NULL,
+    external_ad_id  TEXT,
+    content_hash    TEXT,
+    title           TEXT,
+    body            TEXT,
+    cta             TEXT,
+    link            TEXT,
+    first_seen_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at    TIMESTAMPTZ,
+    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+    raw_json        JSONB
+  )`);
   await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS linked_business TEXT`);
+  await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS comments_count INT`);
+  await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS raw_json JSONB`);
   await sql(`ALTER TABLE competitor_ad_history ADD COLUMN IF NOT EXISTS linked_business TEXT`);
   // Normalize historical NULL → false so {is_dismissed:false} queries work correctly
   await sql(`UPDATE proactive_alerts SET is_dismissed = false WHERE is_dismissed IS NULL`);
