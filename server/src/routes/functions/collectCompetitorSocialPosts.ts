@@ -91,13 +91,21 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
           error: apifyError,
         });
 
+        // Strip null bytes from every string in the Apify response — Postgres rejects 0x00
+        function deepClean(v: any): any {
+          if (typeof v === 'string') return v.replace(/\x00/g, '');
+          if (Array.isArray(v))      return v.map(deepClean);
+          if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, val]) => [k, deepClean(val)]));
+          return v;
+        }
         const clean = (s: any) => typeof s === 'string' ? s.replace(/\x00/g, '') : s;
 
-        for (const post of posts) {
-          const externalId = clean(post.id || post.shortCode || post.postId || post.videoId || null);
-          const postUrl    = clean(post.url || post.postUrl || post.webVideoUrl
+        for (const rawPost of posts) {
+          const post = deepClean(rawPost);
+          const externalId = post.id || post.shortCode || post.postId || post.videoId || null;
+          const postUrl    = post.url || post.postUrl || post.webVideoUrl
             || (post.shortCode ? `https://www.instagram.com/p/${post.shortCode}/` : null)
-            || null);
+            || null;
 
           // AC6: bump last_seen_at on re-scrape, skip insert
           if (externalId && existingIds.has(externalId)) {
@@ -115,13 +123,13 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
             continue;
           }
 
-          // AC7: extract fields
-          const caption  = clean(post.caption || post.text || post.message || post.description || '').substring(0, 1000);
-          const mediaUrl = clean(post.displayUrl || post.thumbnailUrl || post.videoUrl || post.attachments?.[0]?.url || null);
+          // AC7: extract fields (post already deep-cleaned above)
+          const caption  = (post.caption || post.text || post.message || post.description || '').substring(0, 1000);
+          const mediaUrl = post.displayUrl || post.thumbnailUrl || post.videoUrl || post.attachments?.[0]?.url || null;
           const rawTs    = post.timestamp || post.takenAtTimestamp || post.createTime;
           const postedAt = rawTs
             ? new Date(rawTs < 1e12 ? rawTs * 1000 : rawTs).toISOString()
-            : clean(post.date || post.postDate || post.createTimeISO || null);
+            : (post.date || post.postDate || post.createTimeISO || null);
           const likes    = post.likesCount    ?? post.diggCount  ?? post.likes    ?? null;
           const comments = post.commentsCount ?? post.commentCount ?? post.comments ?? null;
 
