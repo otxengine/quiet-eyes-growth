@@ -7,8 +7,20 @@ import { writeAutomationLog } from '../../lib/automationLog';
 const MIN_INTERVAL_MS = 20 * 60 * 60 * 1000; // 20h
 const POSTS_CAP = 15;
 
-// U+0000 via fromCharCode avoids null bytes in source; Postgres rejects them in TEXT columns
 const NULL_CHAR = String.fromCharCode(0);
+
+// Strip U+0000 from any string; recurse into arrays/objects
+function deepPgSafe(v: any): any {
+  if (typeof v === 'string') return v.split(NULL_CHAR).join('');
+  if (Array.isArray(v))     return v.map(deepPgSafe);
+  if (v && typeof v === 'object') {
+    const out: Record<string, any> = {};
+    for (const k of Object.keys(v)) out[k] = deepPgSafe(v[k]);
+    return out;
+  }
+  return v;
+}
+
 function pgSafe(s: string | null | undefined): string | null {
   return s == null ? null : s.split(NULL_CHAR).join('');
 }
@@ -65,24 +77,24 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
         const existingIds  = new Set<string>(existing.map((p: any) => p.external_post_id).filter(Boolean));
         const existingUrls = new Set<string>(existing.map((p: any) => p.post_url).filter(Boolean));
 
-        let posts: any[] = [];
+        let rawPosts: any[] = [];
         let apifyError: string | null = null;
         const t0 = Date.now();
 
         if (platform === 'instagram') {
-          posts = await runApifyActor('apify~instagram-scraper', {
+          rawPosts = await runApifyActor('apify~instagram-scraper', {
             directUrls: [url],
             resultsType: 'posts',
             resultsLimit: POSTS_CAP,
           }, 120_000, 50, (msg) => { apifyError = msg; });
         } else if (platform === 'facebook') {
-          posts = await runApifyActor('apify~facebook-posts-scraper', {
+          rawPosts = await runApifyActor('apify~facebook-posts-scraper', {
             startUrls: [{ url }],
             maxPosts: POSTS_CAP,
             maxPostComments: 0,
           }, 120_000, 50, (msg) => { apifyError = msg; });
         } else if (platform === 'tiktok') {
-          posts = await runApifyActor('clockworks~tiktok-profile-scraper', {
+          rawPosts = await runApifyActor('clockworks~tiktok-profile-scraper', {
             profiles: [url],
             resultsPerPage: POSTS_CAP,
           }, 120_000, 50, (msg) => { apifyError = msg; });
@@ -92,16 +104,19 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
           competitor: comp.name,
           platform,
           url,
-          apify_returned: posts.length,
+          apify_returned: rawPosts.length,
           elapsed_ms: Date.now() - t0,
           error: apifyError,
         });
 
-        for (const rawPost of posts) {
-          const externalId = pgSafe(rawPost.id || rawPost.shortCode || rawPost.postId || rawPost.videoId || null);
+        for (const rawPost of rawPosts) {
+          // Deep-clean the entire post object — strips U+0000 from every string at any depth
+          const post = deepPgSafe(rawPost);
+
+          const externalId = pgSafe(post.id || post.shortCode || post.postId || post.videoId || null);
           const postUrl    = pgSafe(
-            rawPost.url || rawPost.postUrl || rawPost.webVideoUrl
-            || (rawPost.shortCode ? `https://www.instagram.com/p/${rawPost.shortCode}/` : null)
+            post.url || post.postUrl || post.webVideoUrl
+            || (post.shortCode ? `https://www.instagram.com/p/${post.shortCode}/` : null)
             || null,
           );
 
@@ -121,35 +136,45 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
             continue;
           }
 
-          // AC7: extract and sanitise each string field before Postgres insert
-          const caption  = pgSafe((rawPost.caption || rawPost.text || rawPost.message || rawPost.description || '').substring(0, 1000));
-          const mediaUrl = pgSafe(rawPost.displayUrl || rawPost.thumbnailUrl || rawPost.videoUrl || rawPost.attachments?.[0]?.url || null);
-          const rawTs    = rawPost.timestamp || rawPost.takenAtTimestamp || rawPost.createTime;
+          const caption  = pgSafe((post.caption || post.text || post.message || post.description || '').substring(0, 1000));
+          const mediaUrl = pgSafe(post.displayUrl || post.thumbnailUrl || post.videoUrl || post.attachments?.[0]?.url || null);
+          const rawTs    = post.timestamp || post.takenAtTimestamp || post.createTime;
           const postedAt = rawTs
             ? new Date(rawTs < 1e12 ? rawTs * 1000 : rawTs).toISOString()
-            : pgSafe(rawPost.date || rawPost.postDate || rawPost.createTimeISO || null);
-          const likes    = rawPost.likesCount    ?? rawPost.diggCount  ?? rawPost.likes    ?? null;
-          const comments = rawPost.commentsCount ?? rawPost.commentCount ?? rawPost.comments ?? null;
+            : pgSafe(post.date || post.postDate || post.createTimeISO || null);
+          const likes    = post.likesCount    ?? post.diggCount  ?? post.likes    ?? null;
+          const comments = post.commentsCount ?? post.commentCount ?? post.comments ?? null;
 
-          await (prisma as any).competitorPost.create({
-            data: {
-              linked_business:  businessProfileId,
-              competitor_id:    comp.id,
-              platform,
-              external_post_id: externalId,
-              post_url:         postUrl,
-              caption,
-              media_url:        mediaUrl,
-              posted_at:        postedAt,
-              likes,
-              comments_count:   comments,
-              last_seen_at:     new Date().toISOString(),
-            },
-          });
+          try {
+            await (prisma as any).competitorPost.create({
+              data: {
+                linked_business:  businessProfileId,
+                competitor_id:    comp.id,
+                platform,
+                external_post_id: externalId,
+                post_url:         postUrl,
+                caption,
+                media_url:        mediaUrl,
+                posted_at:        postedAt,
+                likes,
+                comments_count:   comments,
+                last_seen_at:     new Date().toISOString(),
+              },
+            });
 
-          if (externalId) existingIds.add(externalId);
-          if (postUrl)    existingUrls.add(postUrl);
-          totalUpserted++;
+            if (externalId) existingIds.add(externalId);
+            if (postUrl)    existingUrls.add(postUrl);
+            totalUpserted++;
+          } catch (insertErr: any) {
+            // Log the exact data so we can identify which field has the problematic byte
+            console.error('[collectCompetitorSocialPosts] insert failed:', insertErr.message, {
+              competitor: comp.name, platform, externalId, postUrl, caption, mediaUrl, postedAt,
+            });
+            diagnostics.push({
+              competitor: comp.name, platform, status: 'insert_error',
+              error: insertErr.message, externalId, postUrl,
+            });
+          }
         }
       }
     }
