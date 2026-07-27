@@ -114,8 +114,9 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
           }
 
           // AC7: extract fields
-          const caption  = (post.caption || post.text || post.message || post.description || '').substring(0, 1000);
-          const mediaUrl = post.displayUrl || post.thumbnailUrl || post.videoUrl || post.attachments?.[0]?.url || null;
+          const clean = (s: any) => typeof s === 'string' ? s.replace(/\x00/g, '') : s;
+          const caption  = clean(post.caption || post.text || post.message || post.description || '').substring(0, 1000);
+          const mediaUrl = clean(post.displayUrl || post.thumbnailUrl || post.videoUrl || post.attachments?.[0]?.url || null);
           const rawTs    = post.timestamp || post.takenAtTimestamp || post.createTime;
           const postedAt = rawTs
             ? new Date(rawTs < 1e12 ? rawTs * 1000 : rawTs).toISOString()
