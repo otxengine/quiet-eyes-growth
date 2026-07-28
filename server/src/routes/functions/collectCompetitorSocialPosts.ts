@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
@@ -22,6 +23,15 @@ function deepPgSafe(v: any): any {
 
 function pgSafe(s: string | null | undefined): string | null {
   return s == null ? null : s.split(NULL_CHAR).join('');
+}
+
+// Hex-encode a string so it arrives at PostgreSQL as pure ASCII.
+// Bypasses Prisma's Linux query-engine bug that re-introduces 0x00 bytes
+// when encoding certain Unicode characters for the PostgreSQL wire protocol.
+// PostgreSQL decodes it back with: convert_from(decode($N, 'hex'), 'UTF8')
+function pgHex(s: string | null | undefined): string | null {
+  if (s == null) return null;
+  return Buffer.from(s.split(NULL_CHAR).join(''), 'utf8').toString('hex');
 }
 
 async function scrapeAndSave(
@@ -94,37 +104,54 @@ async function scrapeAndSave(
     const postedAt = rawTs
       ? new Date(rawTs < 1e12 ? rawTs * 1000 : rawTs).toISOString()
       : pgSafe(post.date || post.postDate || post.createTimeISO || null);
-    const likes    = post.likesCount    ?? post.diggCount  ?? post.likes    ?? null;
-    const comments = post.commentsCount ?? post.commentCount ?? post.comments ?? null;
-
-    // Apply pgSafe to every string field — belt-and-suspenders for fields that bypass deepPgSafe
-    const safeData = {
-      linked_business:  pgSafe(businessProfileId) as string,
-      competitor_id:    pgSafe(comp.id) as string,
-      platform:         pgSafe(platform) as string,
-      external_post_id: externalId,
-      post_url:         postUrl,
-      caption,
-      media_url:        mediaUrl,
-      posted_at:        postedAt,
-      likes,
-      comments_count:   comments,
-      last_seen_at:     new Date().toISOString(),
-    };
+    const likes    = typeof (post.likesCount    ?? post.diggCount  ?? post.likes)    === 'number' ? (post.likesCount    ?? post.diggCount  ?? post.likes)    : null;
+    const comments = typeof (post.commentsCount ?? post.commentCount ?? post.comments) === 'number' ? (post.commentsCount ?? post.commentCount ?? post.comments) : null;
 
     try {
-      await (prisma as any).competitorPost.create({ data: safeData });
+      // Use raw SQL with hex-encoded strings to bypass Prisma query engine's
+      // Linux bug that introduces null bytes (error 22021) for Unicode data.
+      // All string params become pure-ASCII hex; PostgreSQL decodes them back.
+      await (prisma as any).$executeRawUnsafe(
+        `INSERT INTO competitor_posts
+           (id, linked_business, competitor_id, platform,
+            external_post_id, post_url, caption, media_url,
+            posted_at, likes, comments_count, last_seen_at)
+         VALUES (
+           $1,
+           convert_from(decode($2, 'hex'), 'UTF8'),
+           convert_from(decode($3, 'hex'), 'UTF8'),
+           convert_from(decode($4, 'hex'), 'UTF8'),
+           NULLIF(convert_from(decode($5, 'hex'), 'UTF8'), ''),
+           NULLIF(convert_from(decode($6, 'hex'), 'UTF8'), ''),
+           NULLIF(convert_from(decode($7, 'hex'), 'UTF8'), ''),
+           NULLIF(convert_from(decode($8, 'hex'), 'UTF8'), ''),
+           $9::timestamptz,
+           $10::int,
+           $11::int,
+           $12::timestamptz
+         )`,
+        randomUUID(),
+        pgHex(businessProfileId) ?? '',
+        pgHex(comp.id) ?? '',
+        pgHex(platform) ?? '',
+        pgHex(externalId),
+        pgHex(postUrl),
+        pgHex(caption),
+        pgHex(mediaUrl),
+        postedAt,
+        likes,
+        comments,
+        new Date().toISOString(),
+      );
       if (externalId) existingIds.add(externalId);
       if (postUrl)    existingUrls.add(postUrl);
       upserted++;
     } catch (insertErr: any) {
-      // Identify which field still has a null byte for diagnostics
-      const nullFields: string[] = [];
-      for (const [k, v] of Object.entries(safeData)) {
-        if (typeof v === 'string' && v.includes(NULL_CHAR)) nullFields.push(k);
-      }
-      console.error('[collectCompetitorSocialPosts] insert failed:', insertErr.message, { competitor: comp.name, platform, externalId, nullFields });
-      insertErrors.push({ externalId, postUrl, code: insertErr.code ?? null, error: (insertErr.message ?? '').trim().substring(0, 500), nullFields });
+      const errMsg = (insertErr.message ?? '').trim();
+      // 23505 = unique constraint — row already exists, not a real failure
+      if (errMsg.includes('23505') || insertErr.code === '23505') continue;
+      console.error('[collectCompetitorSocialPosts] insert failed:', errMsg.substring(0, 300), { competitor: comp.name, platform, externalId });
+      insertErrors.push({ externalId, postUrl, code: insertErr.code ?? null, error: errMsg.substring(0, 500) });
     }
   }
 
