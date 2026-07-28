@@ -151,6 +151,11 @@ function buildOrderBy(sort?: string): Record<string, 'asc' | 'desc'> | undefined
   return { [mapped]: desc ? 'desc' : 'asc' };
 }
 
+// Review.created_date is the DB insert time (scrape/import time), not the actual
+// review date — that's created_at. Always sort reviews by created_at, newest first,
+// with legacy null values (pre-dating the column) pushed to the end.
+const REVIEW_ORDER_BY = { created_at: { sort: 'desc' as const, nulls: 'last' as const } };
+
 // GET /api/entities/me — current user info
 router.get('/me', (req: Request, res: Response) => {
   if (isAdminKeyRequest(req)) {
@@ -180,7 +185,7 @@ router.get('/:entity', async (req: Request, res: Response) => {
     if (isAdminKeyRequest(req)) {
       const records = await model.findMany({
         where: buildWhere(filter),
-        orderBy: buildOrderBy(sort),
+        orderBy: req.params.entity === 'Review' ? REVIEW_ORDER_BY : buildOrderBy(sort),
         take: Math.min(limit, 1000),
       });
       return res.json(records);
@@ -219,9 +224,11 @@ router.get('/:entity', async (req: Request, res: Response) => {
       }
     }
 
+    const orderBy = req.params.entity === 'Review' ? REVIEW_ORDER_BY : buildOrderBy(sort);
+
     const records = await model.findMany({
       where,
-      orderBy: buildOrderBy(sort),
+      orderBy,
       take: Math.min(limit, 1000),
     });
 

@@ -9,7 +9,6 @@ const POSTS_CAP = 15;
 
 const NULL_CHAR = String.fromCharCode(0);
 
-// Strip U+0000 from any string; recurse into arrays/objects
 function deepPgSafe(v: any): any {
   if (typeof v === 'string') return v.split(NULL_CHAR).join('');
   if (Array.isArray(v))     return v.map(deepPgSafe);
@@ -23,6 +22,113 @@ function deepPgSafe(v: any): any {
 
 function pgSafe(s: string | null | undefined): string | null {
   return s == null ? null : s.split(NULL_CHAR).join('');
+}
+
+async function scrapeAndSave(
+  comp: any,
+  platform: string,
+  url: string,
+  businessProfileId: string,
+): Promise<{ competitor: string; platform: string; url: string; upserted: number; apify_returned: number; elapsed_ms: number; error: string | null; insert_errors?: any[] }> {
+  const existing = await (prisma as any).competitorPost.findMany({
+    where: { competitor_id: comp.id, platform },
+    select: { external_post_id: true, post_url: true },
+  });
+  const existingIds  = new Set<string>(existing.map((p: any) => p.external_post_id).filter(Boolean));
+  const existingUrls = new Set<string>(existing.map((p: any) => p.post_url).filter(Boolean));
+
+  let rawPosts: any[] = [];
+  let apifyError: string | null = null;
+  const t0 = Date.now();
+
+  if (platform === 'instagram') {
+    rawPosts = await runApifyActor('apify~instagram-scraper', {
+      directUrls: [url],
+      resultsType: 'posts',
+      resultsLimit: POSTS_CAP,
+    }, 90_000, 50, (msg) => { apifyError = msg; });
+  } else if (platform === 'facebook') {
+    rawPosts = await runApifyActor('apify~facebook-posts-scraper', {
+      startUrls: [{ url }],
+      maxPosts: POSTS_CAP,
+      maxPostComments: 0,
+    }, 90_000, 50, (msg) => { apifyError = msg; });
+  } else if (platform === 'tiktok') {
+    rawPosts = await runApifyActor('clockworks~tiktok-profile-scraper', {
+      profiles: [url],
+      resultsPerPage: POSTS_CAP,
+    }, 90_000, 50, (msg) => { apifyError = msg; });
+  }
+
+  const insertErrors: any[] = [];
+  let upserted = 0;
+
+  for (const rawPost of rawPosts) {
+    const post = deepPgSafe(rawPost);
+
+    const externalId = pgSafe(post.id || post.shortCode || post.postId || post.videoId || null);
+    const postUrl    = pgSafe(
+      post.url || post.postUrl || post.webVideoUrl
+      || (post.shortCode ? `https://www.instagram.com/p/${post.shortCode}/` : null)
+      || null,
+    );
+
+    if (externalId && existingIds.has(externalId)) {
+      await (prisma as any).competitorPost.updateMany({
+        where: { competitor_id: comp.id, platform, external_post_id: externalId },
+        data: { last_seen_at: new Date().toISOString() },
+      });
+      continue;
+    }
+    if (postUrl && existingUrls.has(postUrl)) {
+      await (prisma as any).competitorPost.updateMany({
+        where: { competitor_id: comp.id, platform, post_url: postUrl },
+        data: { last_seen_at: new Date().toISOString() },
+      });
+      continue;
+    }
+
+    const caption  = pgSafe((post.caption || post.text || post.message || post.description || '').substring(0, 1000));
+    const mediaUrl = pgSafe(post.displayUrl || post.thumbnailUrl || post.videoUrl || post.attachments?.[0]?.url || null);
+    const rawTs    = post.timestamp || post.takenAtTimestamp || post.createTime;
+    const postedAt = rawTs
+      ? new Date(rawTs < 1e12 ? rawTs * 1000 : rawTs).toISOString()
+      : pgSafe(post.date || post.postDate || post.createTimeISO || null);
+    const likes    = post.likesCount    ?? post.diggCount  ?? post.likes    ?? null;
+    const comments = post.commentsCount ?? post.commentCount ?? post.comments ?? null;
+
+    try {
+      await (prisma as any).competitorPost.create({
+        data: {
+          linked_business:  businessProfileId,
+          competitor_id:    comp.id,
+          platform,
+          external_post_id: externalId,
+          post_url:         postUrl,
+          caption,
+          media_url:        mediaUrl,
+          posted_at:        postedAt,
+          likes,
+          comments_count:   comments,
+          last_seen_at:     new Date().toISOString(),
+        },
+      });
+      if (externalId) existingIds.add(externalId);
+      if (postUrl)    existingUrls.add(postUrl);
+      upserted++;
+    } catch (insertErr: any) {
+      console.error('[collectCompetitorSocialPosts] insert failed:', insertErr.message, { competitor: comp.name, platform, externalId, postUrl });
+      insertErrors.push({ externalId, postUrl, error: insertErr.message });
+    }
+  }
+
+  return {
+    competitor: comp.name, platform, url,
+    upserted, apify_returned: rawPosts.length,
+    elapsed_ms: Date.now() - t0,
+    error: apifyError,
+    ...(insertErrors.length ? { insert_errors: insertErrors } : {}),
+  };
 }
 
 export async function collectCompetitorSocialPosts(req: Request, res: Response) {
@@ -45,139 +151,52 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
     });
     const competitors = allCompetitors.filter((c: any) => !c.not_relevant);
 
-    // Repair rows created before linked_business was required (one-time backfill)
+    // One-time backfill: repair posts missing linked_business
     for (const comp of competitors) {
       await (prisma as any).$executeRawUnsafe(
         `UPDATE competitor_posts SET linked_business = $1 WHERE competitor_id = $2 AND linked_business IS NULL`,
-        businessProfileId,
-        comp.id,
+        businessProfileId, comp.id,
       );
     }
 
-    let totalUpserted = 0;
-    const diagnostics: any[] = [];
+    // Build list of (competitor, platform, url) tasks — skip missing URLs immediately
+    const tasks: Array<{ comp: any; platform: string; url: string }> = [];
+    const skipped: any[] = [];
 
     for (const comp of competitors) {
-      const platforms = [
-        { platform: 'instagram', url: (comp as any).instagram_url as string | null },
-        { platform: 'facebook',  url: (comp as any).facebook_url  as string | null },
-        { platform: 'tiktok',    url: (comp as any).tiktok_url    as string | null },
-      ];
-
-      for (const { platform, url } of platforms) {
-        if (!url) {
-          diagnostics.push({ competitor: comp.name, platform, status: 'skipped', reason: 'no_url' });
-          continue;
-        }
-
-        const existing = await (prisma as any).competitorPost.findMany({
-          where: { competitor_id: comp.id, platform },
-          select: { external_post_id: true, post_url: true },
-        });
-        const existingIds  = new Set<string>(existing.map((p: any) => p.external_post_id).filter(Boolean));
-        const existingUrls = new Set<string>(existing.map((p: any) => p.post_url).filter(Boolean));
-
-        let rawPosts: any[] = [];
-        let apifyError: string | null = null;
-        const t0 = Date.now();
-
-        if (platform === 'instagram') {
-          rawPosts = await runApifyActor('apify~instagram-scraper', {
-            directUrls: [url],
-            resultsType: 'posts',
-            resultsLimit: POSTS_CAP,
-          }, 120_000, 50, (msg) => { apifyError = msg; });
-        } else if (platform === 'facebook') {
-          rawPosts = await runApifyActor('apify~facebook-posts-scraper', {
-            startUrls: [{ url }],
-            maxPosts: POSTS_CAP,
-            maxPostComments: 0,
-          }, 120_000, 50, (msg) => { apifyError = msg; });
-        } else if (platform === 'tiktok') {
-          rawPosts = await runApifyActor('clockworks~tiktok-profile-scraper', {
-            profiles: [url],
-            resultsPerPage: POSTS_CAP,
-          }, 120_000, 50, (msg) => { apifyError = msg; });
-        }
-
-        diagnostics.push({
-          competitor: comp.name,
-          platform,
-          url,
-          apify_returned: rawPosts.length,
-          elapsed_ms: Date.now() - t0,
-          error: apifyError,
-        });
-
-        for (const rawPost of rawPosts) {
-          // Deep-clean the entire post object — strips U+0000 from every string at any depth
-          const post = deepPgSafe(rawPost);
-
-          const externalId = pgSafe(post.id || post.shortCode || post.postId || post.videoId || null);
-          const postUrl    = pgSafe(
-            post.url || post.postUrl || post.webVideoUrl
-            || (post.shortCode ? `https://www.instagram.com/p/${post.shortCode}/` : null)
-            || null,
-          );
-
-          // AC6: bump last_seen_at on re-scrape, skip insert
-          if (externalId && existingIds.has(externalId)) {
-            await (prisma as any).competitorPost.updateMany({
-              where: { competitor_id: comp.id, platform, external_post_id: externalId },
-              data: { last_seen_at: new Date().toISOString() },
-            });
-            continue;
-          }
-          if (postUrl && existingUrls.has(postUrl)) {
-            await (prisma as any).competitorPost.updateMany({
-              where: { competitor_id: comp.id, platform, post_url: postUrl },
-              data: { last_seen_at: new Date().toISOString() },
-            });
-            continue;
-          }
-
-          const caption  = pgSafe((post.caption || post.text || post.message || post.description || '').substring(0, 1000));
-          const mediaUrl = pgSafe(post.displayUrl || post.thumbnailUrl || post.videoUrl || post.attachments?.[0]?.url || null);
-          const rawTs    = post.timestamp || post.takenAtTimestamp || post.createTime;
-          const postedAt = rawTs
-            ? new Date(rawTs < 1e12 ? rawTs * 1000 : rawTs).toISOString()
-            : pgSafe(post.date || post.postDate || post.createTimeISO || null);
-          const likes    = post.likesCount    ?? post.diggCount  ?? post.likes    ?? null;
-          const comments = post.commentsCount ?? post.commentCount ?? post.comments ?? null;
-
-          try {
-            await (prisma as any).competitorPost.create({
-              data: {
-                linked_business:  businessProfileId,
-                competitor_id:    comp.id,
-                platform,
-                external_post_id: externalId,
-                post_url:         postUrl,
-                caption,
-                media_url:        mediaUrl,
-                posted_at:        postedAt,
-                likes,
-                comments_count:   comments,
-                last_seen_at:     new Date().toISOString(),
-              },
-            });
-
-            if (externalId) existingIds.add(externalId);
-            if (postUrl)    existingUrls.add(postUrl);
-            totalUpserted++;
-          } catch (insertErr: any) {
-            // Log the exact data so we can identify which field has the problematic byte
-            console.error('[collectCompetitorSocialPosts] insert failed:', insertErr.message, {
-              competitor: comp.name, platform, externalId, postUrl, caption, mediaUrl, postedAt,
-            });
-            diagnostics.push({
-              competitor: comp.name, platform, status: 'insert_error',
-              error: insertErr.message, externalId, postUrl,
-            });
-          }
+      const urls: Record<string, string | null> = {
+        instagram: (comp as any).instagram_url,
+        facebook:  (comp as any).facebook_url,
+        tiktok:    (comp as any).tiktok_url,
+      };
+      for (const [platform, url] of Object.entries(urls)) {
+        if (url) {
+          tasks.push({ comp, platform, url });
+        } else {
+          skipped.push({ competitor: comp.name, platform, status: 'skipped', reason: 'no_url' });
         }
       }
     }
+
+    // Run all Apify scrapes in parallel
+    const results = await Promise.allSettled(
+      tasks.map(({ comp, platform, url }) =>
+        scrapeAndSave(comp, platform, url, businessProfileId),
+      ),
+    );
+
+    const diagnostics = [
+      ...skipped,
+      ...results.map((r, i) =>
+        r.status === 'fulfilled'
+          ? r.value
+          : { competitor: tasks[i].comp.name, platform: tasks[i].platform, url: tasks[i].url, error: (r as any).reason?.message },
+      ),
+    ];
+
+    const totalUpserted = results
+      .filter(r => r.status === 'fulfilled')
+      .reduce((sum, r) => sum + (r as any).value.upserted, 0);
 
     setLastRun(businessProfileId, 'collectCompetitorSocialPosts');
     await writeAutomationLog('collectCompetitorSocialPosts', businessProfileId, startTime, totalUpserted, 'success');
