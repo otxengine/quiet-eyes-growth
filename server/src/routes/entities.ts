@@ -242,7 +242,12 @@ router.get('/:entity', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error(`GET /entities/${req.params.entity}:`, err.message);
     const isDev = process.env.NODE_ENV !== 'production';
-    res.status(500).json({ error: isDev ? err.message : 'Internal server error' });
+    // Include code + hint in production for diagnosing Prisma/PG errors — no sensitive data exposed
+    res.status(500).json({
+      error: isDev ? err.message : 'Internal server error',
+      code: err.code ?? err.meta?.code ?? null,
+      hint: (err.message ?? '').split('\n').find((l: string) => l.trim())?.substring(0, 200) ?? null,
+    });
   }
 });
 

@@ -1236,6 +1236,8 @@ app.listen(PORT, async () => {
   await sql(`CREATE INDEX IF NOT EXISTS idx_health_biz         ON health_scores(linked_business, created_date DESC)`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_automation_biz_name ON automation_logs(linked_business, automation_name, created_date DESC)`);
   await sql(`ALTER TABLE automation_logs ADD COLUMN IF NOT EXISTS cost_usd FLOAT`);
+  await sql(`ALTER TABLE automation_logs ADD COLUMN IF NOT EXISTS trace_id TEXT`);
+  await sql(`ALTER TABLE automation_logs ADD COLUMN IF NOT EXISTS high_urgency_count FLOAT DEFAULT 0`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_competitors_biz    ON competitors(linked_business, not_relevant, created_date DESC)`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_organic_posts_biz  ON organic_posts(linked_business, status, created_date DESC)`);
 
