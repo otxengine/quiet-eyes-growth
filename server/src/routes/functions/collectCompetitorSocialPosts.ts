@@ -4,6 +4,7 @@ import { prisma } from '../../db';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 
 const MIN_INTERVAL_MS = 20 * 60 * 60 * 1000; // 20h
 const POSTS_CAP = 15;
@@ -98,8 +99,12 @@ async function scrapeAndSave(
       continue;
     }
 
-    const caption  = pgSafe((post.caption || post.text || post.message || post.description || '').substring(0, 1000));
-    const mediaUrl = pgSafe(post.displayUrl || post.thumbnailUrl || post.videoUrl || post.attachments?.[0]?.url || null);
+    const caption      = pgSafe((post.caption || post.text || post.message || post.description || '').substring(0, 1000));
+    const rawMediaUrl  = pgSafe(post.displayUrl || post.thumbnailUrl || post.videoUrl || post.attachments?.[0]?.url || null);
+    // Upload to S3 for permanent storage; fall back to CDN URL if S3 not configured or upload fails
+    const mediaUrl     = rawMediaUrl && isS3Configured()
+      ? (await uploadImageFromUrl(rawMediaUrl) ?? rawMediaUrl)
+      : rawMediaUrl;
     const rawTs    = post.timestamp || post.takenAtTimestamp || post.createTime;
     const postedAt = rawTs
       ? new Date(rawTs < 1e12 ? rawTs * 1000 : rawTs).toISOString()
