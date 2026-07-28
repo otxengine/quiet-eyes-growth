@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useOutletContext, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -123,12 +123,13 @@ function AdHistoryModal({ open, onClose, competitorId, competitorName, bpId }) {
   );
 }
 
-function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory }) {
+function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, defaultExpanded }) {
+  const [expanded,    setExpanded]    = useState(defaultExpanded || false);
   const [section,     setSection]     = useState(() => defaultSec || getDefaultSection(posts, ads));
   const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
-    if (autoOpenHistory) setHistoryOpen(true);
+    if (autoOpenHistory) { setExpanded(true); setHistoryOpen(true); }
   }, [autoOpenHistory]);
 
   const adSamples = (() => {
@@ -137,26 +138,53 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory }
   const hasGoogle = competitor.active_ad_platforms?.includes('google');
 
   return (
-    <div className="border border-border rounded-xl p-4 space-y-3 bg-card">
-      {/* Header: rival name + platform links */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="font-semibold text-sm">{competitor.name}</span>
+    <div className="border border-border rounded-xl bg-card overflow-hidden">
+      {/* Clickable header row */}
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center gap-2 p-3 hover:bg-muted/50 transition-colors text-right"
+      >
+        <ChevronDown className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        <span className="font-semibold text-sm flex-1">{competitor.name}</span>
+        {/* platform badges */}
         {competitor.instagram_url && (
-          <a href={competitor.instagram_url} target="_blank" rel="noopener noreferrer"
-             className="text-xs px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 hover:opacity-80">IG</a>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-pink-100 text-pink-700">IG</span>
         )}
         {competitor.facebook_url && (
-          <a href={competitor.facebook_url} target="_blank" rel="noopener noreferrer"
-             className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 hover:opacity-80">FB</a>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">FB</span>
         )}
         {competitor.tiktok_url && (
-          <a href={competitor.tiktok_url} target="_blank" rel="noopener noreferrer"
-             className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 hover:opacity-80">TT</a>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">TT</span>
         )}
-      </div>
+        {/* counts summary */}
+        {posts.length > 0 && (
+          <span className="text-[10px] text-muted-foreground">{posts.length} פוסטים</span>
+        )}
+        {competitor.active_ad_count > 0 && (
+          <span className="text-[10px] text-orange-600">{competitor.active_ad_count} מודעות</span>
+        )}
+      </button>
 
-      {/* Section switch */}
-      <div className="flex gap-2">
+      {expanded && (
+      <div className="px-4 pb-4 space-y-3 border-t border-border pt-3">
+        {/* platform links (clickable, now inside expanded area) */}
+        <div className="flex items-center gap-2 flex-wrap text-xs">
+          {competitor.instagram_url && (
+            <a href={competitor.instagram_url} target="_blank" rel="noopener noreferrer"
+               className="px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 hover:opacity-80">Instagram ↗</a>
+          )}
+          {competitor.facebook_url && (
+            <a href={competitor.facebook_url} target="_blank" rel="noopener noreferrer"
+               className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 hover:opacity-80">Facebook ↗</a>
+          )}
+          {competitor.tiktok_url && (
+            <a href={competitor.tiktok_url} target="_blank" rel="noopener noreferrer"
+               className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 hover:opacity-80">TikTok ↗</a>
+          )}
+        </div>
+
+        {/* Section switch */}
+        <div className="flex gap-2">
         {['feed', 'ads'].map(s => (
           <button
             key={s}
@@ -277,6 +305,7 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory }
           )}
         </div>
       )}
+      </div>)}
 
       <AdHistoryModal
         open={historyOpen}
@@ -440,7 +469,7 @@ export default function SocialCompetition() {
           {competitors.length === 0 ? 'לא נמצאו מתחרים' : 'אין מתחרים התואמים את הסינון'}
         </p>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
           {visible.map(comp => (
             <div key={comp.id} ref={el => { if (el) cardRefs.current[comp.id] = el; }}>
               <RivalCard
@@ -448,6 +477,7 @@ export default function SocialCompetition() {
                 posts={allPosts.filter(p => p.competitor_id === comp.id)}
                 ads={allAds.filter(a => a.competitor_id === comp.id)}
                 defaultSec={comp.id === focusId ? focusSection : null}
+                defaultExpanded={comp.id === focusId}
                 bpId={bpId}
                 autoOpenHistory={comp.id === focusId && sectionParam === 'ad-history'}
               />
