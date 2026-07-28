@@ -156,6 +156,12 @@ function buildOrderBy(sort?: string): Record<string, 'asc' | 'desc'> | undefined
 // with legacy null values (pre-dating the column) pushed to the end.
 const REVIEW_ORDER_BY = { created_at: { sort: 'desc' as const, nulls: 'last' as const } };
 
+// Entities that don't have created_date need their own default sort field.
+const ENTITY_DEFAULT_ORDER: Record<string, any> = {
+  CompetitorPost: { first_seen_at: 'desc' },
+  CompetitorAdHistory: { first_seen_at: 'desc' },
+};
+
 // GET /api/entities/me — current user info
 router.get('/me', (req: Request, res: Response) => {
   if (isAdminKeyRequest(req)) {
@@ -185,7 +191,7 @@ router.get('/:entity', async (req: Request, res: Response) => {
     if (isAdminKeyRequest(req)) {
       const records = await model.findMany({
         where: buildWhere(filter),
-        orderBy: req.params.entity === 'Review' ? REVIEW_ORDER_BY : buildOrderBy(sort),
+        orderBy: req.params.entity === 'Review' ? REVIEW_ORDER_BY : (sort ? buildOrderBy(sort) : (ENTITY_DEFAULT_ORDER[String(req.params.entity)] ?? buildOrderBy(sort))),
         take: Math.min(limit, 1000),
       });
       return res.json(records);
@@ -224,7 +230,7 @@ router.get('/:entity', async (req: Request, res: Response) => {
       }
     }
 
-    const orderBy = req.params.entity === 'Review' ? REVIEW_ORDER_BY : buildOrderBy(sort);
+    const orderBy = req.params.entity === 'Review' ? REVIEW_ORDER_BY : (sort ? buildOrderBy(sort) : (ENTITY_DEFAULT_ORDER[String(req.params.entity)] ?? buildOrderBy(sort)));
 
     const records = await model.findMany({
       where,
