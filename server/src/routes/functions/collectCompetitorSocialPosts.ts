@@ -124,7 +124,7 @@ async function scrapeAndSave(
         if (typeof v === 'string' && v.includes(NULL_CHAR)) nullFields.push(k);
       }
       console.error('[collectCompetitorSocialPosts] insert failed:', insertErr.message, { competitor: comp.name, platform, externalId, nullFields });
-      insertErrors.push({ externalId, postUrl, error: insertErr.message.split('\n')[0], nullFields });
+      insertErrors.push({ externalId, postUrl, code: insertErr.code ?? null, error: (insertErr.message ?? '').trim().substring(0, 500), nullFields });
     }
   }
 
