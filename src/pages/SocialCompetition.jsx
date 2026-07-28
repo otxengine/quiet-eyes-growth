@@ -200,28 +200,58 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, 
         ))}
       </div>
 
-      {/* Feed section */}
+      {/* Feed section — horizontal scroll strip */}
       {section === 'feed' && (
-        <div className="max-h-60 overflow-y-auto space-y-2">
-          {posts.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-6">אין פוסטים שנאספו עדיין</p>
-          ) : posts.slice(0, 10).map(post => (
-            <div key={post.id} className="text-xs border border-border rounded-lg p-2 space-y-1">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className={`px-1.5 py-0.5 rounded text-[10px] ${PLATFORM_COLORS[post.platform] || 'bg-gray-100 text-gray-700'}`}>
+        posts.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-6">אין פוסטים שנאספו עדיין</p>
+        ) : (
+          <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+            {posts.slice(0, 20).map(post => (
+              <a
+                key={post.id}
+                href={post.post_url || '#'}
+                target={post.post_url ? '_blank' : undefined}
+                rel="noopener noreferrer"
+                className="shrink-0 w-36 rounded-xl border border-border bg-background overflow-hidden hover:shadow-md transition-shadow"
+              >
+                {/* Image or placeholder */}
+                {post.media_url ? (
+                  <img
+                    src={post.media_url}
+                    alt=""
+                    className="w-full h-36 object-cover"
+                    loading="lazy"
+                    onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
+                  />
+                ) : null}
+                <div
+                  className={`w-full h-36 bg-muted items-center justify-center text-muted-foreground text-xs ${post.media_url ? 'hidden' : 'flex'}`}
+                >
                   {PLATFORM_LABELS[post.platform] || post.platform}
-                </span>
-                <span className="text-muted-foreground">{timeAgo(post.posted_at || post.first_seen_at)}</span>
-                {post.likes != null && <span className="text-muted-foreground">❤️ {post.likes}</span>}
-                {post.comments_count != null && <span className="text-muted-foreground">💬 {post.comments_count}</span>}
-              </div>
-              {post.caption && <p className="line-clamp-2">{post.caption}</p>}
-              {post.post_url && (
-                <a href={post.post_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">צפה בפוסט ↗</a>
-              )}
-            </div>
-          ))}
-        </div>
+                </div>
+
+                {/* Stats + caption */}
+                <div className="p-2 space-y-1">
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                    <span className={`px-1 py-0.5 rounded ${PLATFORM_COLORS[post.platform] || 'bg-gray-100 text-gray-700'}`}>
+                      {PLATFORM_LABELS[post.platform] || post.platform}
+                    </span>
+                    <span className="mr-auto">{timeAgo(post.posted_at || post.first_seen_at)}</span>
+                  </div>
+                  {(post.likes != null || post.comments_count != null) && (
+                    <div className="flex gap-2 text-[11px]">
+                      {post.likes != null && <span>❤️ {post.likes.toLocaleString()}</span>}
+                      {post.comments_count != null && <span>💬 {post.comments_count.toLocaleString()}</span>}
+                    </div>
+                  )}
+                  {post.caption && (
+                    <p className="text-[11px] line-clamp-2 text-foreground leading-snug">{post.caption}</p>
+                  )}
+                </div>
+              </a>
+            ))}
+          </div>
+        )
       )}
 
       {/* Ads section — Sonnet intel */}
