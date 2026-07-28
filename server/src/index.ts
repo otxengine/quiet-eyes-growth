@@ -446,6 +446,8 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS comments_count INT`);
   await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`);
   await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS raw_json JSONB`);
+  await sql(`ALTER TABLE competitor_posts ALTER COLUMN raw_json TYPE TEXT USING raw_json::TEXT`);
+  await sql(`ALTER TABLE competitor_ad_history ALTER COLUMN raw_json TYPE TEXT USING raw_json::TEXT`);
   await sql(`ALTER TABLE competitor_ad_history ADD COLUMN IF NOT EXISTS linked_business TEXT`);
   // Normalize historical NULL → false so {is_dismissed:false} queries work correctly
   await sql(`UPDATE proactive_alerts SET is_dismissed = false WHERE is_dismissed IS NULL`);

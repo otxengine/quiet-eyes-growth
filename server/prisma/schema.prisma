@@ -985,7 +985,6 @@ model CompetitorPost {
   posted_at         DateTime?
   likes             Int?
   comments_count    Int?
-  raw_json          String?
   first_seen_at     DateTime  @default(now())
   last_seen_at      DateTime  @default(now())
 
@@ -1009,7 +1008,6 @@ model CompetitorAdHistory {
   first_seen_at   DateTime  @default(now())
   last_seen_at    DateTime  @default(now())
   is_active       Boolean   @default(true)
-  raw_json        String?
 
   @@index([competitor_id, last_seen_at])
   @@unique([competitor_id, platform, external_ad_id])
