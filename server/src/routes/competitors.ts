@@ -163,7 +163,8 @@ router.get('/social/ads/history', async (req: Request, res: Response) => {
     const orderByAd = sort === 'first_seen' ? `"first_seen_at" ASC` : `"last_seen_at" DESC NULLS LAST`;
     const ads = await (prisma as any).$queryRawUnsafe(
       `SELECT id, competitor_id, platform, external_ad_id, content_hash,
-              title, body, cta, link, first_seen_at, last_seen_at, is_active
+              title, body, cta, link, media_url, video_url, page_name, start_date, end_date,
+              first_seen_at, last_seen_at, is_active
        FROM competitor_ad_history WHERE ${adWhereSql}
        ORDER BY ${orderByAd}`,
       ...adParams,
@@ -223,6 +224,42 @@ router.get('/social/board', async (req: Request, res: Response) => {
     return res.json({ competitors: board });
   } catch (e: any) {
     return res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/competitors/proxy-image?url=<encoded>
+// Server-side proxy to bypass CORS on Instagram/Facebook/TikTok CDN URLs.
+// Whitelisted to known CDN hostnames to prevent SSRF.
+// Note: CDN URLs expire after 24-48h (IG/FB) or a few hours (TikTok).
+// ─────────────────────────────────────────────────────────────────────────────
+const ALLOWED_CDN_HOSTS = [
+  'cdninstagram.com',
+  'fbcdn.net',
+  'tiktokcdn.com',
+  'tiktokv.com',
+  'tiktokcdn-us.com',
+];
+
+router.get('/proxy-image', async (req: Request, res: Response) => {
+  const { url } = req.query as { url?: string };
+  if (!url) return res.status(400).json({ error: 'Missing url' });
+
+  let parsed: URL;
+  try { parsed = new URL(url); } catch { return res.status(400).json({ error: 'Invalid url' }); }
+
+  const allowed = ALLOWED_CDN_HOSTS.some(h => parsed.hostname.endsWith(h));
+  if (!allowed) return res.status(403).json({ error: 'Host not allowed' });
+
+  try {
+    const upstream = await fetch(url, { headers: { Referer: parsed.origin } });
+    if (!upstream.ok) return res.status(upstream.status).end();
+    res.setHeader('Content-Type', upstream.headers.get('content-type') || 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    const buf = await upstream.arrayBuffer();
+    return res.end(Buffer.from(buf));
+  } catch (e: any) {
+    return res.status(502).json({ error: e.message });
   }
 });
 

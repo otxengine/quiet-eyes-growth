@@ -214,10 +214,10 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, 
                 rel="noopener noreferrer"
                 className="shrink-0 w-36 rounded-xl border border-border bg-background overflow-hidden hover:shadow-md transition-shadow"
               >
-                {/* Image or placeholder */}
+                {/* Image via proxy (bypasses Instagram/Facebook CDN CORS) */}
                 {post.media_url ? (
                   <img
-                    src={post.media_url}
+                    src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(post.media_url)}`}
                     alt=""
                     className="w-full h-36 object-cover"
                     loading="lazy"
