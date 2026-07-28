@@ -28,20 +28,19 @@ router.get('/social/feed', async (req: Request, res: Response) => {
       });
       if (!competitor) return res.status(404).json({ error: 'Competitor not found' });
 
-      const postWhere: any = { competitor_id: competitorId };
-      if (platform) postWhere.platform = platform;
-
-      const posts = await prisma.competitorPost.findMany({
-        where: postWhere,
-        select: {
-          id: true, competitor_id: true, platform: true,
-          external_post_id: true, post_url: true, caption: true,
-          media_url: true, posted_at: true, likes: true,
-          comments_count: true, first_seen_at: true, last_seen_at: true,
-        },
-        orderBy: { posted_at: 'desc' },
-        take: 50,
-      });
+      // Raw SQL: first_seen_at/last_seen_at are TIMESTAMPTZ (OID 1184) in DB but
+      // Prisma's Linux binary expects TIMESTAMP(3) (OID 1114) → P2023 on Render.
+      const postParams: any[] = [competitorId];
+      const postWhereSql = platform
+        ? `"competitor_id" = $1 AND "platform" = $2` + (postParams.push(platform) && '')
+        : `"competitor_id" = $1`;
+      const posts = await (prisma as any).$queryRawUnsafe(
+        `SELECT id, competitor_id, platform, external_post_id, post_url, caption,
+                media_url, posted_at, likes, comments_count, first_seen_at, last_seen_at
+         FROM competitor_posts WHERE ${postWhereSql}
+         ORDER BY "posted_at" DESC NULLS LAST LIMIT 50`,
+        ...postParams,
+      );
 
       const emptyState = !hasUrl(competitor) ? 'no_url' : posts.length === 0 ? 'no_data' : 'ok';
 
@@ -155,19 +154,20 @@ router.get('/social/ads/history', async (req: Request, res: Response) => {
     });
     if (!competitor) return res.status(404).json({ error: 'Competitor not found' });
 
-    const adWhere: any = { competitor_id: competitorId };
-    if (platform) adWhere.platform = platform;
-
-    const ads = await prisma.competitorAdHistory.findMany({
-      where: adWhere,
-      select: {
-        id: true, competitor_id: true, platform: true,
-        external_ad_id: true, content_hash: true,
-        title: true, body: true, cta: true, link: true,
-        first_seen_at: true, last_seen_at: true, is_active: true,
-      },
-      orderBy: sort === 'first_seen' ? { first_seen_at: 'asc' } : { last_seen_at: 'desc' },
-    });
+    // Raw SQL: first_seen_at/last_seen_at are TIMESTAMPTZ in DB but Prisma's
+    // Linux binary expects TIMESTAMP(3) → P2023 on Render.
+    const adParams: any[] = [competitorId];
+    const adWhereSql = platform
+      ? `"competitor_id" = $1 AND "platform" = $2` + (adParams.push(platform) && '')
+      : `"competitor_id" = $1`;
+    const orderByAd = sort === 'first_seen' ? `"first_seen_at" ASC` : `"last_seen_at" DESC NULLS LAST`;
+    const ads = await (prisma as any).$queryRawUnsafe(
+      `SELECT id, competitor_id, platform, external_ad_id, content_hash,
+              title, body, cta, link, first_seen_at, last_seen_at, is_active
+       FROM competitor_ad_history WHERE ${adWhereSql}
+       ORDER BY ${orderByAd}`,
+      ...adParams,
+    );
 
     const emptyState = !hasUrl(competitor) ? 'no_url' : ads.length === 0 ? 'no_data' : 'ok';
 
