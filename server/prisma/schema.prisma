@@ -1005,6 +1005,11 @@ model CompetitorAdHistory {
   body            String?
   cta             String?
   link            String?
+  media_url       String?
+  video_url       String?
+  page_name       String?
+  start_date      String?
+  end_date        String?
   first_seen_at   DateTime  @default(now())
   last_seen_at    DateTime  @default(now())
   is_active       Boolean   @default(true)

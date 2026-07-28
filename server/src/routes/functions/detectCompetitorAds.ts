@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
@@ -13,37 +13,45 @@ function adContentHash(a: AdResult) {
 }
 
 async function upsertAdHistory(competitorId: string, businessProfileId: string, ads: AdResult[]) {
-  const now = new Date();
   for (const ad of ads) {
-    const content_hash    = adContentHash(ad);
-    const external_ad_id  = ad.external_ad_id || null;
-    const where = external_ad_id
-      ? { competitor_id_platform_external_ad_id: { competitor_id: competitorId, platform: ad.platform, external_ad_id } }
-      : { competitor_id_platform_content_hash:   { competitor_id: competitorId, platform: ad.platform, content_hash: content_hash } };
-    await prisma.competitorAdHistory.upsert({
-      where,
-      create: {
-        competitor_id:   competitorId,
-        linked_business: businessProfileId,
-        platform:        ad.platform,
-        external_ad_id,
-        content_hash,
-        title:           ad.title   || null,
-        body:            ad.body    || null,
-        cta:             ad.cta     || null,
-        link:            ad.link    || null,
-        is_active:       true,
-        first_seen_at:   now,
-        last_seen_at:    now,
-      },
-      update: {
-        is_active:    true,
-        last_seen_at: now,
-        title:        ad.title || null,
-        body:         ad.body  || null,
-        cta:          ad.cta   || null,
-      },
-    }).catch(() => {});
+    const content_hash   = adContentHash(ad);
+    const external_ad_id = ad.external_ad_id || null;
+
+    // Lookup existing by external_ad_id if available, else by content_hash
+    const lookup = external_ad_id
+      ? `"competitor_id"=$1 AND "platform"=$2 AND "external_ad_id"=$3`
+      : `"competitor_id"=$1 AND "platform"=$2 AND "content_hash"=$3`;
+    const existing = await (prisma as any).$queryRawUnsafe(
+      `SELECT id FROM "competitor_ad_history" WHERE ${lookup} LIMIT 1`,
+      competitorId, ad.platform, external_ad_id ?? content_hash,
+    ).catch(() => []) as { id: string }[];
+
+    if (existing?.length > 0) {
+      await (prisma as any).$executeRawUnsafe(
+        `UPDATE "competitor_ad_history" SET
+          is_active=$1, last_seen_at=NOW(),
+          title=$2, body=$3, cta=$4, link=$5,
+          media_url=$6, video_url=$7, page_name=$8, end_date=$9
+         WHERE id=$10`,
+        true,
+        ad.title || null, ad.body || null, ad.cta || null, ad.link || null,
+        ad.media_url || null, ad.video_url || null, ad.page_name || null, ad.end_date || null,
+        existing[0].id,
+      ).catch(() => {});
+    } else {
+      await (prisma as any).$executeRawUnsafe(
+        `INSERT INTO "competitor_ad_history"
+          (id, competitor_id, linked_business, platform, external_ad_id, content_hash,
+           title, body, cta, link, media_url, video_url, page_name, start_date, end_date,
+           is_active, first_seen_at, last_seen_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,true,NOW(),NOW())`,
+        randomUUID(), competitorId, businessProfileId, ad.platform,
+        external_ad_id, content_hash,
+        ad.title || null, ad.body || null, ad.cta || null, ad.link || null,
+        ad.media_url || null, ad.video_url || null, ad.page_name || null,
+        ad.start_date || null, ad.end_date || null,
+      ).catch(() => {});
+    }
   }
 }
 

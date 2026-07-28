@@ -45,6 +45,8 @@ export interface AdResult {
   end_date:       string | null;
   audience_est:   string | null;
   external_ad_id: string | null;
+  media_url:      string | null;
+  video_url:      string | null;
 }
 
 // ── Meta Ads Library ──────────────────────────────────────────────────────────
@@ -71,7 +73,9 @@ export async function searchMetaAds(query: string, country = 'IL'): Promise<AdRe
       start_date:     ad.start_date || null,
       end_date:       ad.end_date   || null,
       audience_est:   null,
-      external_ad_id: ad.id ? String(ad.id) : null,
+      external_ad_id: ad.ad_archive_id ? String(ad.ad_archive_id) : null,
+      media_url:      snap.images?.[0]?.resized_image_url || snap.images?.[0]?.url || snap.cards?.[0]?.image_url || snap.videos?.[0]?.thumbnail || null,
+      video_url:      snap.videos?.[0]?.video_hd_url || snap.videos?.[0]?.video_sd_url || null,
     } as AdResult;
   }).filter(a => a.is_active);
 }
@@ -102,6 +106,8 @@ export async function searchTikTokAds(query: string): Promise<AdResult[]> {
       end_date:       ad.last_shown_datetime  || null,
       audience_est:   ad.estimated_audience   || null,
       external_ad_id: ad.id ? String(ad.id) : null,
+      media_url:      ad.thumbnail || null,
+      video_url:      ad.video_link || null,
     }));
 }
 
@@ -122,6 +128,8 @@ export async function searchGoogleAds(query: string): Promise<AdResult[]> {
     end_date:       null,
     audience_est:   null,
     external_ad_id: null,
+    media_url:      null,
+    video_url:      null,
   }));
 }
 
