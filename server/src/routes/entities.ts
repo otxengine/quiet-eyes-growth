@@ -162,6 +162,54 @@ const ENTITY_DEFAULT_ORDER: Record<string, any> = {
   CompetitorAdHistory: { first_seen_at: 'desc' },
 };
 
+// Prisma's Linux query-engine binary (Render) has stricter OID matching:
+// columns added via startup SQL as TIMESTAMPTZ (OID 1184) cause P2023 when
+// Prisma expects TIMESTAMP(3) (OID 1114) for DateTime fields, and JSONB (OID 3802)
+// causes P2023 for String fields. Bypass by using $queryRawUnsafe — returns plain
+// JS objects with no OID validation.
+const RAW_SQL_TABLES: Record<string, string> = {
+  CompetitorPost: 'competitor_posts',
+  CompetitorAdHistory: 'competitor_ad_history',
+};
+
+async function rawEntityQuery(
+  table: string,
+  where: Record<string, any>,
+  sort: string | undefined,
+  limit: number,
+): Promise<any[]> {
+  const params: any[] = [];
+  const conditions: string[] = [];
+
+  for (const [col, val] of Object.entries(where)) {
+    if (!SAFE_COLUMN.test(col)) continue;
+    const inArr = val && typeof val === 'object' && Array.isArray((val as any).in)
+      ? (val as any).in as any[]
+      : null;
+    if (inArr !== null) {
+      if (inArr.length === 0) return [];
+      const ph = inArr.map((_: any, i: number) => `$${params.length + i + 1}`).join(', ');
+      params.push(...inArr);
+      conditions.push(`"${col}" IN (${ph})`);
+    } else if (val !== null && val !== undefined && typeof val !== 'object') {
+      params.push(val);
+      conditions.push(`"${col}" = $${params.length}`);
+    }
+  }
+
+  let orderByClause = `"first_seen_at" DESC NULLS LAST`;
+  if (sort) {
+    const desc = sort.startsWith('-');
+    const f = desc ? sort.slice(1) : sort;
+    if (SAFE_COLUMN.test(f)) orderByClause = `"${f}" ${desc ? 'DESC' : 'ASC'} NULLS LAST`;
+  }
+
+  const whereStr = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  params.push(Math.min(limit, 1000));
+  const sql = `SELECT * FROM "${table}" ${whereStr} ORDER BY ${orderByClause} LIMIT $${params.length}`;
+  return (prisma as any).$queryRawUnsafe(sql, ...params);
+}
+
 // GET /api/entities/me — current user info
 router.get('/me', (req: Request, res: Response) => {
   if (isAdminKeyRequest(req)) {
@@ -189,11 +237,15 @@ router.get('/:entity', async (req: Request, res: Response) => {
 
     // Admin key bypasses all tenant isolation
     if (isAdminKeyRequest(req)) {
-      const records = await model.findMany({
-        where: buildWhere(filter),
-        orderBy: req.params.entity === 'Review' ? REVIEW_ORDER_BY : (sort ? buildOrderBy(sort) : (ENTITY_DEFAULT_ORDER[String(req.params.entity)] ?? buildOrderBy(sort))),
-        take: Math.min(limit, 1000),
-      });
+      const adminWhere = buildWhere(filter);
+      const rawTable = RAW_SQL_TABLES[String(req.params.entity)];
+      const records = rawTable
+        ? await rawEntityQuery(rawTable, adminWhere, sort, limit)
+        : await model.findMany({
+            where: adminWhere,
+            orderBy: req.params.entity === 'Review' ? REVIEW_ORDER_BY : (sort ? buildOrderBy(sort) : (ENTITY_DEFAULT_ORDER[String(req.params.entity)] ?? buildOrderBy(sort))),
+            take: Math.min(limit, 1000),
+          });
       return res.json(records);
     }
 
@@ -228,6 +280,12 @@ router.get('/:entity', async (req: Request, res: Response) => {
         // User has no businesses yet — return empty
         return res.json([]);
       }
+    }
+
+    const rawTable = RAW_SQL_TABLES[String(req.params.entity)];
+    if (rawTable) {
+      const records = await rawEntityQuery(rawTable, where, sort, limit);
+      return res.json(records);
     }
 
     const orderBy = req.params.entity === 'Review' ? REVIEW_ORDER_BY : (sort ? buildOrderBy(sort) : (ENTITY_DEFAULT_ORDER[String(req.params.entity)] ?? buildOrderBy(sort)));
