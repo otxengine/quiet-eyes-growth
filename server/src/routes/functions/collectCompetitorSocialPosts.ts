@@ -97,28 +97,34 @@ async function scrapeAndSave(
     const likes    = post.likesCount    ?? post.diggCount  ?? post.likes    ?? null;
     const comments = post.commentsCount ?? post.commentCount ?? post.comments ?? null;
 
+    // Apply pgSafe to every string field — belt-and-suspenders for fields that bypass deepPgSafe
+    const safeData = {
+      linked_business:  pgSafe(businessProfileId) as string,
+      competitor_id:    pgSafe(comp.id) as string,
+      platform:         pgSafe(platform) as string,
+      external_post_id: externalId,
+      post_url:         postUrl,
+      caption,
+      media_url:        mediaUrl,
+      posted_at:        postedAt,
+      likes,
+      comments_count:   comments,
+      last_seen_at:     new Date().toISOString(),
+    };
+
     try {
-      await (prisma as any).competitorPost.create({
-        data: {
-          linked_business:  businessProfileId,
-          competitor_id:    comp.id,
-          platform,
-          external_post_id: externalId,
-          post_url:         postUrl,
-          caption,
-          media_url:        mediaUrl,
-          posted_at:        postedAt,
-          likes,
-          comments_count:   comments,
-          last_seen_at:     new Date().toISOString(),
-        },
-      });
+      await (prisma as any).competitorPost.create({ data: safeData });
       if (externalId) existingIds.add(externalId);
       if (postUrl)    existingUrls.add(postUrl);
       upserted++;
     } catch (insertErr: any) {
-      console.error('[collectCompetitorSocialPosts] insert failed:', insertErr.message, { competitor: comp.name, platform, externalId, postUrl });
-      insertErrors.push({ externalId, postUrl, error: insertErr.message });
+      // Identify which field still has a null byte for diagnostics
+      const nullFields: string[] = [];
+      for (const [k, v] of Object.entries(safeData)) {
+        if (typeof v === 'string' && v.includes(NULL_CHAR)) nullFields.push(k);
+      }
+      console.error('[collectCompetitorSocialPosts] insert failed:', insertErr.message, { competitor: comp.name, platform, externalId, nullFields });
+      insertErrors.push({ externalId, postUrl, error: insertErr.message.split('\n')[0], nullFields });
     }
   }
 
