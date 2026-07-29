@@ -80,7 +80,7 @@ function AdHistoryModal({ open, onClose, competitorId, competitorName, bpId }) {
           </div>
         </DialogHeader>
 
-        <div className="overflow-y-auto flex-1 p-4 space-y-2">
+        <div className="overflow-y-auto flex-1 p-4 space-y-3">
           {isLoading && (
             <div className="flex justify-center py-8">
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -93,33 +93,80 @@ function AdHistoryModal({ open, onClose, competitorId, competitorName, bpId }) {
             <p className="text-xs text-muted-foreground text-center py-4">אין מודעות בהיסטוריה</p>
           )}
           {data?.ads?.map(ad => (
-            <div key={ad.id} className="text-xs border border-border rounded-lg p-2.5 space-y-1.5">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className={`px-1.5 py-0.5 rounded text-[10px] ${PLATFORM_COLORS[ad.platform] || 'bg-gray-100 text-gray-700'}`}>
-                  {PLATFORM_LABELS[ad.platform] || ad.platform}
-                </span>
-                {ad.is_active
-                  ? <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px]">פעיל</span>
-                  : <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded text-[10px]">לא פעיל</span>
-                }
-              </div>
-              {ad.title && <p className="font-medium line-clamp-1">{ad.title}</p>}
-              {ad.body  && <p className="line-clamp-2 text-muted-foreground">{ad.body}</p>}
-              {ad.cta   && <p className="text-[10px] font-medium text-primary">📢 {ad.cta}</p>}
-              <div className="text-[10px] text-muted-foreground flex gap-3 flex-wrap">
-                <span>נראה לראשונה: {fmtDate(ad.first_seen_at)}</span>
-                <span>נראה לאחרונה: {fmtDate(ad.last_seen_at)}</span>
-              </div>
-              {ad.link && (
-                <a href={ad.link} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-                  צפה במודעה ↗
-                </a>
-              )}
-            </div>
+            <AdCard key={ad.id} ad={ad} />
           ))}
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function AdCard({ ad }) {
+  const hasMedia = !!(ad.media_url || ad.video_url);
+  const thumb = ad.video_url
+    ? (ad.media_url || null)   // use thumbnail image for video if available
+    : ad.media_url;
+
+  return (
+    <div className="border border-border rounded-xl bg-background overflow-hidden">
+      {/* Media */}
+      {hasMedia && (
+        <div className="relative w-full h-44 bg-muted">
+          <img
+            src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(thumb || ad.video_url)}`}
+            alt=""
+            className="w-full h-full object-cover"
+            loading="lazy"
+            onError={e => { e.currentTarget.style.display = 'none'; }}
+          />
+          {ad.video_url && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="bg-black/50 rounded-full w-10 h-10 flex items-center justify-center">
+                <span className="text-white text-lg">▶</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="p-2.5 space-y-1.5">
+        {/* Platform + status badges */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className={`px-1.5 py-0.5 rounded text-[10px] ${PLATFORM_COLORS[ad.platform] || 'bg-gray-100 text-gray-700'}`}>
+            {PLATFORM_LABELS[ad.platform] || ad.platform}
+          </span>
+          {ad.is_active
+            ? <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px]">פעיל</span>
+            : <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded text-[10px]">לא פעיל</span>
+          }
+          {ad.page_name && <span className="text-[10px] text-muted-foreground mr-auto truncate max-w-[120px]">{ad.page_name}</span>}
+        </div>
+
+        {ad.title && <p className="text-xs font-semibold line-clamp-2 leading-snug">{ad.title}</p>}
+        {ad.body  && <p className="text-xs line-clamp-3 text-muted-foreground leading-snug">{ad.body}</p>}
+
+        {/* CTA + link */}
+        <div className="flex items-center gap-2 pt-0.5">
+          {ad.cta && (
+            <span className="text-[10px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded">
+              {ad.cta}
+            </span>
+          )}
+          {ad.link && (
+            <a href={ad.link} target="_blank" rel="noopener noreferrer"
+               className="text-[10px] text-blue-600 underline mr-auto">
+              צפה במודעה ↗
+            </a>
+          )}
+        </div>
+
+        {/* Dates */}
+        <div className="text-[10px] text-muted-foreground flex gap-3 flex-wrap pt-0.5">
+          {ad.start_date && <span>התחיל: {fmtDate(ad.start_date)}</span>}
+          <span>נראה לאחרונה: {fmtDate(ad.last_seen_at)}</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -132,9 +179,6 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, 
     if (autoOpenHistory) { setExpanded(true); setHistoryOpen(true); }
   }, [autoOpenHistory]);
 
-  const adSamples = (() => {
-    try { return JSON.parse(competitor.active_ads_summary || '[]'); } catch { return []; }
-  })();
   const hasGoogle = competitor.active_ad_platforms?.includes('google');
 
   return (
@@ -298,19 +342,15 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, 
                 </div>
               )}
 
-              {/* Samples: active_ads_summary (≤5) */}
-              {adSamples.length > 0 && (
-                <div className="space-y-1.5">
+              {/* Ad cards — horizontal scroll strip */}
+              {ads.length > 0 && (
+                <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
                   {hasGoogle && (
-                    <p className="text-[10px] text-orange-500">⚠️ גוגל — נתונים עשויים להיות רועשים</p>
+                    <p className="text-[10px] text-orange-500 shrink-0 self-center">⚠️ גוגל</p>
                   )}
-                  {adSamples.map((ad, i) => (
-                    <div key={i} className="text-xs border border-border rounded p-1.5 space-y-0.5">
-                      <span className={`px-1 py-0.5 rounded text-[10px] ${PLATFORM_COLORS[ad.platform] || 'bg-gray-100 text-gray-700'}`}>
-                        {PLATFORM_LABELS[ad.platform] || ad.platform}
-                      </span>
-                      {ad.title && <p className="font-medium line-clamp-1">{ad.title}</p>}
-                      {ad.body  && <p className="text-muted-foreground line-clamp-2">{ad.body}</p>}
+                  {ads.map(ad => (
+                    <div key={ad.id} className="shrink-0 w-56">
+                      <AdCard ad={ad} />
                     </div>
                   ))}
                 </div>
