@@ -41,6 +41,12 @@ async function scrapeAndSave(
   url: string,
   businessProfileId: string,
 ): Promise<{ competitor: string; platform: string; url: string; upserted: number; apify_returned: number; media_found: number; media_uploaded: number; first_post_keys?: string[]; first_post_media_sample?: Record<string, any>; elapsed_ms: number; error: string | null; insert_errors?: any[] }> {
+  // One-time backfill: delete posts with no media so they get re-inserted with correct field extraction
+  await (prisma as any).$executeRawUnsafe(
+    `DELETE FROM competitor_posts WHERE competitor_id = $1 AND platform = $2 AND media_url IS NULL`,
+    comp.id, platform,
+  ).catch(() => {});
+
   // Raw SQL to avoid P2023 on Render (TIMESTAMPTZ columns in competitor_posts)
   const existing = await (prisma as any).$queryRawUnsafe(
     `SELECT external_post_id, post_url FROM competitor_posts WHERE competitor_id = $1 AND platform = $2`,
