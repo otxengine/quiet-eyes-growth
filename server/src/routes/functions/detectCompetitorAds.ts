@@ -5,6 +5,7 @@ import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { searchAllAds, hasSearchApiKey, AdResult } from '../../lib/searchapi';
+import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 
 function adContentHash(a: AdResult) {
   return createHash('sha256')
@@ -13,9 +14,18 @@ function adContentHash(a: AdResult) {
 }
 
 async function upsertAdHistory(competitorId: string, businessProfileId: string, ads: AdResult[]) {
+  const s3 = isS3Configured();
   for (const ad of ads) {
     const content_hash   = adContentHash(ad);
     const external_ad_id = ad.external_ad_id || null;
+
+    // Upload media to S3 for permanent URLs; fall back to CDN URL if S3 not configured
+    const media_url = ad.media_url && s3
+      ? (await uploadImageFromUrl(ad.media_url, 'competitor-ads') ?? ad.media_url)
+      : ad.media_url || null;
+    const video_url = ad.video_url && s3
+      ? (await uploadImageFromUrl(ad.video_url, 'competitor-ads') ?? ad.video_url)
+      : ad.video_url || null;
 
     // Lookup existing by external_ad_id if available, else by content_hash
     const lookup = external_ad_id
@@ -35,7 +45,7 @@ async function upsertAdHistory(competitorId: string, businessProfileId: string, 
          WHERE id=$10`,
         true,
         ad.title || null, ad.body || null, ad.cta || null, ad.link || null,
-        ad.media_url || null, ad.video_url || null, ad.page_name || null, ad.end_date || null,
+        media_url, video_url, ad.page_name || null, ad.end_date || null,
         existing[0].id,
       ).catch(() => {});
     } else {
@@ -48,7 +58,7 @@ async function upsertAdHistory(competitorId: string, businessProfileId: string, 
         randomUUID(), competitorId, businessProfileId, ad.platform,
         external_ad_id, content_hash,
         ad.title || null, ad.body || null, ad.cta || null, ad.link || null,
-        ad.media_url || null, ad.video_url || null, ad.page_name || null,
+        media_url, video_url, ad.page_name || null,
         ad.start_date || null, ad.end_date || null,
       ).catch(() => {});
     }
