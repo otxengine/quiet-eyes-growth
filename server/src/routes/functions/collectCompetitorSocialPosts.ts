@@ -40,7 +40,7 @@ async function scrapeAndSave(
   platform: string,
   url: string,
   businessProfileId: string,
-): Promise<{ competitor: string; platform: string; url: string; upserted: number; apify_returned: number; media_found: number; media_uploaded: number; first_post_keys?: string[]; elapsed_ms: number; error: string | null; insert_errors?: any[] }> {
+): Promise<{ competitor: string; platform: string; url: string; upserted: number; apify_returned: number; media_found: number; media_uploaded: number; first_post_keys?: string[]; first_post_media_sample?: Record<string, any>; elapsed_ms: number; error: string | null; insert_errors?: any[] }> {
   // Raw SQL to avoid P2023 on Render (TIMESTAMPTZ columns in competitor_posts)
   const existing = await (prisma as any).$queryRawUnsafe(
     `SELECT external_post_id, post_url FROM competitor_posts WHERE competitor_id = $1 AND platform = $2`,
@@ -77,12 +77,26 @@ async function scrapeAndSave(
   let mediaFound = 0;
   let mediaUploaded = 0;
   let firstPostKeys: string[] = [];
+  let firstPostMediaSample: Record<string, any> | null = null;
 
   for (const rawPost of rawPosts) {
     const post = deepPgSafe(rawPost);
 
-    // Capture keys of first post for diagnostics
-    if (firstPostKeys.length === 0) firstPostKeys = Object.keys(post);
+    // Capture first post's keys + all plausible media fields for diagnostics
+    if (firstPostKeys.length === 0) {
+      firstPostKeys = Object.keys(post);
+      const MEDIA_KEYS = [
+        'displayUrl','images','thumbnailSrc','thumbnail_src','videoUrl','thumbnailUrl',
+        'full_picture','attachments','media','topImage','picture','postImages',
+        'videoMeta','covers','webVideoUrl','url','imageUrl','image_url',
+      ];
+      firstPostMediaSample = {};
+      for (const k of MEDIA_KEYS) {
+        if (k in post) firstPostMediaSample[k] = typeof post[k] === 'string'
+          ? post[k].substring(0, 120)
+          : JSON.stringify(post[k])?.substring(0, 120);
+      }
+    }
 
     const externalId = pgSafe(post.id || post.shortCode || post.postId || post.videoId || null);
     const postUrl    = pgSafe(
@@ -203,6 +217,7 @@ async function scrapeAndSave(
     upserted, apify_returned: rawPosts.length,
     media_found: mediaFound, media_uploaded: mediaUploaded,
     ...(firstPostKeys.length ? { first_post_keys: firstPostKeys } : {}),
+    ...(firstPostMediaSample && Object.keys(firstPostMediaSample).length ? { first_post_media_sample: firstPostMediaSample } : {}),
     elapsed_ms: Date.now() - t0,
     error: apifyError,
     ...(insertErrors.length ? { insert_errors: insertErrors } : {}),
