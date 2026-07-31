@@ -68,9 +68,10 @@ async function scrapeAndSave(
   } else if (platform === 'facebook') {
     rawPosts = await runApifyActor('apify~facebook-posts-scraper', {
       startUrls: [{ url }],
-      maxPosts: POSTS_CAP,
+      maxPosts: 30,
       maxPostComments: 0,
-    }, 90_000, 50, (msg) => { apifyError = msg; });
+      commentsMode: 'DISABLED',
+    }, 120_000, 50, (msg) => { apifyError = msg; });
   } else if (platform === 'tiktok') {
     rawPosts = await runApifyActor('clockworks~tiktok-profile-scraper', {
       profiles: [url],
