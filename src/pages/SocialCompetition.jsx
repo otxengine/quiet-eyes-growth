@@ -35,10 +35,6 @@ function timeAgo(dateStr) {
   return `לפני ${Math.floor(d / 30)} חודשים`;
 }
 
-function fmtDate(dateStr) {
-  if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('he-IL');
-}
 
 function resolveSection(param) {
   if (!param) return null;
