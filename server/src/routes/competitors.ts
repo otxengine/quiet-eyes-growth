@@ -249,6 +249,10 @@ router.get('/proxy-image', async (req: Request, res: Response) => {
   let parsed: URL;
   try { parsed = new URL(url); } catch { return res.status(400).json({ error: 'Invalid url' }); }
 
+  // Allow cross-origin loading — helmet sets same-origin globally but images are served to the FE
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
   // S3/CloudFront URLs: serve with authenticated download
   if (isS3Url(url)) {
     const obj = await downloadFromS3(url);
