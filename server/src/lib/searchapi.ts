@@ -226,13 +226,9 @@ export async function searchAllAds(
   category: string,
   city: string,
   facebookHandle?: string | null,
-  tiktokHandle?: string | null,
+  _tiktokHandle?: string | null,
 ): Promise<AdResult[]> {
-  const [metaAds, tikAds] = await Promise.all([
-    facebookHandle ? searchMetaAds(facebookHandle, 'IL') : Promise.resolve([]),
-    tiktokHandle   ? searchTikTokAds(tiktokHandle)       : Promise.resolve([]),
-  ]);
-  const libraryAds = [...metaAds, ...tikAds];
+  const metaAds = facebookHandle ? await searchMetaAds(facebookHandle, 'IL') : [];
   // ponytail: Google only when library empty — saves credits (KAN-172)
-  return libraryAds.length > 0 ? libraryAds : searchGoogleAds(`${competitorName} ${category} ${city}`);
+  return metaAds.length > 0 ? metaAds : searchGoogleAds(`${competitorName} ${category} ${city}`);
 }

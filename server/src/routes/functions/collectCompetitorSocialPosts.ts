@@ -84,27 +84,30 @@ async function scrapeAndSave(
       || null,
     );
 
+    const rawMediaUrl = pgSafe(post.displayUrl || post.thumbnailUrl || post.videoUrl || post.attachments?.[0]?.url || null);
+    // Upload to S3 for permanent storage; fall back to CDN URL if S3 not configured or upload fails
+    const mediaUrl    = rawMediaUrl && isS3Configured()
+      ? (await uploadImageFromUrl(rawMediaUrl) ?? rawMediaUrl)
+      : rawMediaUrl;
+    // Only write media_url when we got a fresh S3 URL (avoids no-op updates)
+    const upgradedS3  = mediaUrl !== rawMediaUrl ? mediaUrl : null;
+
     if (externalId && existingIds.has(externalId)) {
       await (prisma as any).competitorPost.updateMany({
         where: { competitor_id: comp.id, platform, external_post_id: externalId },
-        data: { last_seen_at: new Date().toISOString() },
+        data: { last_seen_at: new Date().toISOString(), ...(upgradedS3 ? { media_url: upgradedS3 } : {}) },
       });
       continue;
     }
     if (postUrl && existingUrls.has(postUrl)) {
       await (prisma as any).competitorPost.updateMany({
         where: { competitor_id: comp.id, platform, post_url: postUrl },
-        data: { last_seen_at: new Date().toISOString() },
+        data: { last_seen_at: new Date().toISOString(), ...(upgradedS3 ? { media_url: upgradedS3 } : {}) },
       });
       continue;
     }
 
-    const caption      = pgSafe((post.caption || post.text || post.message || post.description || '').substring(0, 1000));
-    const rawMediaUrl  = pgSafe(post.displayUrl || post.thumbnailUrl || post.videoUrl || post.attachments?.[0]?.url || null);
-    // Upload to S3 for permanent storage; fall back to CDN URL if S3 not configured or upload fails
-    const mediaUrl     = rawMediaUrl && isS3Configured()
-      ? (await uploadImageFromUrl(rawMediaUrl) ?? rawMediaUrl)
-      : rawMediaUrl;
+    const caption = pgSafe((post.caption || post.text || post.message || post.description || '').substring(0, 1000));
     const rawTs    = post.timestamp || post.takenAtTimestamp || post.createTime;
     const postedAt = rawTs
       ? new Date(rawTs < 1e12 ? rawTs * 1000 : rawTs).toISOString()
