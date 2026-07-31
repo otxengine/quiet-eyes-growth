@@ -117,7 +117,8 @@ async function scrapeAndSave(
       post.full_picture ||
       post.media?.[0]?.image?.uri ||       // v3 photo format
       post.media?.[0]?.photo?.imageUri ||  // v2 photo format
-      post.media?.[0]?.thumbnail?.uri ||   // video thumbnail
+      post.media?.[0]?.thumbnail?.uri ||   // video thumbnail (object form)
+      (typeof post.media?.[0]?.thumbnail === 'string' ? post.media[0].thumbnail : null) || // video thumbnail (string URL form)
       post.topImage?.uri ||                // top-level image object
       post.topImage?.url ||
       post.image?.uri ||
