@@ -102,71 +102,45 @@ function AdHistoryModal({ open, onClose, competitorId, competitorName, bpId }) {
 }
 
 function AdCard({ ad }) {
-  const hasMedia = !!(ad.media_url || ad.video_url);
-  const thumb = ad.video_url
-    ? (ad.media_url || null)   // use thumbnail image for video if available
-    : ad.media_url;
+  const thumb = ad.media_url || ad.video_url || null;
 
   return (
-    <div className="border border-border rounded-xl bg-background overflow-hidden">
-      {/* Media */}
-      {hasMedia && (
-        <div className="relative w-full h-44 bg-muted">
-          <img
-            src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(thumb || ad.video_url)}`}
-            alt=""
-            className="w-full h-full object-cover"
-            loading="lazy"
-            onError={e => { e.currentTarget.style.display = 'none'; }}
-          />
-          {ad.video_url && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="bg-black/50 rounded-full w-10 h-10 flex items-center justify-center">
-                <span className="text-white text-lg">▶</span>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+    <a
+      href={ad.link || '#'}
+      target={ad.link ? '_blank' : undefined}
+      rel="noopener noreferrer"
+      className="shrink-0 w-36 rounded-xl border border-border bg-background overflow-hidden hover:shadow-md transition-shadow"
+    >
+      {/* Thumbnail */}
+      {thumb ? (
+        <img
+          src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(thumb)}`}
+          alt=""
+          className="w-full h-36 object-cover"
+          loading="lazy"
+          onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
+        />
+      ) : null}
+      <div className={`w-full h-36 bg-muted items-center justify-center text-muted-foreground text-xs ${thumb ? 'hidden' : 'flex'}`}>
+        {ad.is_active ? '📣 מודעה' : PLATFORM_LABELS[ad.platform] || ad.platform}
+      </div>
 
-      <div className="p-2.5 space-y-1.5">
-        {/* Platform + status badges */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className={`px-1.5 py-0.5 rounded text-[10px] ${PLATFORM_COLORS[ad.platform] || 'bg-gray-100 text-gray-700'}`}>
+      <div className="p-2 space-y-1">
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+          <span className={`px-1 py-0.5 rounded ${PLATFORM_COLORS[ad.platform] || 'bg-gray-100 text-gray-700'}`}>
             {PLATFORM_LABELS[ad.platform] || ad.platform}
           </span>
           {ad.is_active
-            ? <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px]">פעיל</span>
-            : <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded text-[10px]">לא פעיל</span>
+            ? <span className="bg-green-100 text-green-700 px-1 py-0.5 rounded mr-auto">פעיל</span>
+            : <span className="mr-auto">{timeAgo(ad.last_seen_at)}</span>
           }
-          {ad.page_name && <span className="text-[10px] text-muted-foreground mr-auto truncate max-w-[120px]">{ad.page_name}</span>}
         </div>
-
-        {ad.title && <p className="text-xs font-semibold line-clamp-2 leading-snug">{ad.title}</p>}
-        {ad.body  && <p className="text-xs line-clamp-3 text-muted-foreground leading-snug">{ad.body}</p>}
-
-        {/* CTA + link */}
-        <div className="flex items-center gap-2 pt-0.5">
-          {ad.cta && (
-            <span className="text-[10px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded">
-              {ad.cta}
-            </span>
-          )}
-          {ad.link && (
-            <a href={ad.link} target="_blank" rel="noopener noreferrer"
-               className="text-[10px] text-blue-600 underline mr-auto">
-              צפה במודעה ↗
-            </a>
-          )}
-        </div>
-
-        {/* Dates */}
-        <div className="text-[10px] text-muted-foreground flex gap-3 flex-wrap pt-0.5">
-          {ad.start_date && <span>התחיל: {fmtDate(ad.start_date)}</span>}
-          <span>נראה לאחרונה: {fmtDate(ad.last_seen_at)}</span>
-        </div>
+        {ad.cta && <p className="text-[11px] font-medium text-primary">{ad.cta}</p>}
+        {(ad.title || ad.body) && (
+          <p className="text-[11px] line-clamp-2 text-foreground leading-snug">{ad.title || ad.body}</p>
+        )}
       </div>
-    </div>
+    </a>
   );
 }
 
@@ -349,9 +323,7 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, 
                     <p className="text-[10px] text-orange-500 shrink-0 self-center">⚠️ גוגל</p>
                   )}
                   {ads.map(ad => (
-                    <div key={ad.id} className="shrink-0 w-56">
-                      <AdCard ad={ad} />
-                    </div>
+                    <AdCard key={ad.id} ad={ad} />
                   ))}
                 </div>
               )}
