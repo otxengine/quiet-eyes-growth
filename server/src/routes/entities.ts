@@ -47,36 +47,26 @@ async function getUserBusinessIds(userId: string): Promise<string[]> {
 
 /** Returns true if the record with `id` on `model` belongs to `userId` */
 async function verifyRecordOwnership(model: any, id: string, userId: string): Promise<boolean> {
+  // Step 1: check created_by (not all models have this field)
   try {
-    // Step 1: check created_by match (works for all models)
-    const base = await model.findFirst({
-      where: { id },
-      select: { id: true, created_by: true },
-    });
+    const base = await model.findFirst({ where: { id }, select: { id: true, created_by: true } });
     if (!base) return false;
     if (base.created_by === userId) return true;
-    // Step 2: also accept email fallback (admin-created profiles store email in created_by)
     const email = await getUserEmail(userId);
     if (email && base.created_by === email) return true;
+  } catch { /* model has no created_by field — fall through to linked_business check */ }
 
-    // Step 3: check linked_business — not all models have this field
-    let linkedBusiness: string | null = null;
-    try {
-      const ext = await model.findFirst({
-        where: { id },
-        select: { linked_business: true },
-      });
-      linkedBusiness = ext?.linked_business ?? null;
-    } catch { /* model has no linked_business field */ }
-
+  // Step 2: check linked_business ownership
+  try {
+    const ext = await model.findFirst({ where: { id }, select: { linked_business: true } });
+    const linkedBusiness = ext?.linked_business ?? null;
     if (linkedBusiness) {
       const bizIds = await getUserBusinessIds(userId);
       return bizIds.includes(linkedBusiness);
     }
-    return false;
-  } catch {
-    return false;
-  }
+  } catch { /* model has no linked_business field */ }
+
+  return false;
 }
 
 const router = Router();
