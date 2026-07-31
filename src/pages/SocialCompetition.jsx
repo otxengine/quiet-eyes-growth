@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useOutletContext, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2, RefreshCw, ChevronDown } from 'lucide-react';
+import { Loader2, RefreshCw, ChevronDown, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -35,6 +35,10 @@ function timeAgo(dateStr) {
   return `לפני ${Math.floor(d / 30)} חודשים`;
 }
 
+function fmtDate(dateStr) {
+  if (!dateStr) return null;
+  return new Date(dateStr).toLocaleDateString('he-IL');
+}
 
 function resolveSection(param) {
   if (!param) return null;
@@ -47,8 +51,108 @@ function getDefaultSection(posts, ads) {
   return 'feed';
 }
 
+function PostDetailModal({ post, onClose }) {
+  if (!post) return null;
+  return (
+    <Dialog open={!!post} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto p-0">
+        {post.media_url && (
+          <img
+            src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(post.media_url)}`}
+            alt=""
+            className="w-full max-h-64 object-cover"
+          />
+        )}
+        <div className="p-4 space-y-3">
+          <div className="flex items-center gap-2 text-xs flex-wrap">
+            <span className={`px-2 py-0.5 rounded ${PLATFORM_COLORS[post.platform] || 'bg-gray-100 text-gray-700'}`}>
+              {PLATFORM_LABELS[post.platform] || post.platform}
+            </span>
+            {post.posted_at && <span className="text-muted-foreground">{fmtDate(post.posted_at)}</span>}
+          </div>
+          {(post.likes != null || post.comments_count != null) && (
+            <div className="flex gap-3 text-sm">
+              {post.likes != null && <span>❤️ {post.likes.toLocaleString()}</span>}
+              {post.comments_count != null && <span>💬 {post.comments_count.toLocaleString()}</span>}
+            </div>
+          )}
+          {post.caption && (
+            <p className="text-sm leading-relaxed whitespace-pre-wrap">{post.caption}</p>
+          )}
+          <div className="text-[11px] text-muted-foreground space-y-0.5">
+            {post.first_seen_at && <p>נראה לראשונה: {timeAgo(post.first_seen_at)}</p>}
+            {post.last_seen_at  && <p>נראה לאחרונה: {timeAgo(post.last_seen_at)}</p>}
+          </div>
+          {post.post_url && (
+            <a
+              href={post.post_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs text-primary underline"
+            >
+              <ExternalLink className="w-3 h-3" /> פתח פוסט מקורי
+            </a>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AdDetailModal({ ad, onClose }) {
+  if (!ad) return null;
+  const thumb = ad.media_url || ad.video_url;
+  return (
+    <Dialog open={!!ad} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto p-0">
+        {thumb && (
+          <img
+            src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(thumb)}`}
+            alt=""
+            className="w-full max-h-64 object-cover"
+          />
+        )}
+        <div className="p-4 space-y-3">
+          <div className="flex items-center gap-2 text-xs flex-wrap">
+            <span className={`px-2 py-0.5 rounded ${PLATFORM_COLORS[ad.platform] || 'bg-gray-100 text-gray-700'}`}>
+              {PLATFORM_LABELS[ad.platform] || ad.platform}
+            </span>
+            {ad.is_active
+              ? <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded">פעיל</span>
+              : <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded">לא פעיל</span>
+            }
+            {ad.page_name && <span className="text-muted-foreground">{ad.page_name}</span>}
+          </div>
+          {ad.title && <p className="font-semibold text-sm">{ad.title}</p>}
+          {ad.body  && <p className="text-sm leading-relaxed whitespace-pre-wrap">{ad.body}</p>}
+          {ad.cta   && (
+            <span className="inline-block bg-primary/10 text-primary text-xs px-2 py-0.5 rounded">{ad.cta}</span>
+          )}
+          <div className="text-[11px] text-muted-foreground space-y-0.5">
+            {ad.start_date    && <p>תחילת קמפיין: {fmtDate(ad.start_date)}</p>}
+            {ad.end_date      && <p>סיום קמפיין: {fmtDate(ad.end_date)}</p>}
+            {ad.first_seen_at && <p>נראה לראשונה: {timeAgo(ad.first_seen_at)}</p>}
+            {ad.last_seen_at  && <p>נראה לאחרונה: {timeAgo(ad.last_seen_at)}</p>}
+          </div>
+          {ad.link && (
+            <a
+              href={ad.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs text-primary underline"
+            >
+              <ExternalLink className="w-3 h-3" /> פתח מודעה מקורית
+            </a>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function AdHistoryModal({ open, onClose, competitorId, competitorName, bpId }) {
   const [sort, setSort] = useState('last_seen');
+  const [selectedAd, setSelectedAd] = useState(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['adHistory', competitorId, sort],
@@ -89,25 +193,23 @@ function AdHistoryModal({ open, onClose, competitorId, competitorName, bpId }) {
             <p className="text-xs text-muted-foreground text-center py-4">אין מודעות בהיסטוריה</p>
           )}
           {data?.ads?.map(ad => (
-            <AdCard key={ad.id} ad={ad} />
+            <AdCard key={ad.id} ad={ad} onSelect={setSelectedAd} />
           ))}
         </div>
       </DialogContent>
+      <AdDetailModal ad={selectedAd} onClose={() => setSelectedAd(null)} />
     </Dialog>
   );
 }
 
-function AdCard({ ad }) {
+function AdCard({ ad, onSelect }) {
   const thumb = ad.media_url || ad.video_url || null;
 
   return (
-    <a
-      href={ad.link || '#'}
-      target={ad.link ? '_blank' : undefined}
-      rel="noopener noreferrer"
-      className="shrink-0 w-36 rounded-xl border border-border bg-background overflow-hidden hover:shadow-md transition-shadow"
+    <div
+      onClick={() => onSelect?.(ad)}
+      className="shrink-0 w-36 rounded-xl border border-border bg-background overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
     >
-      {/* Thumbnail */}
       {thumb ? (
         <img
           src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(thumb)}`}
@@ -122,7 +224,7 @@ function AdCard({ ad }) {
       </div>
 
       <div className="p-2 space-y-1">
-        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
           <span className={`px-1 py-0.5 rounded ${PLATFORM_COLORS[ad.platform] || 'bg-gray-100 text-gray-700'}`}>
             {PLATFORM_LABELS[ad.platform] || ad.platform}
           </span>
@@ -130,13 +232,24 @@ function AdCard({ ad }) {
             ? <span className="bg-green-100 text-green-700 px-1 py-0.5 rounded mr-auto">פעיל</span>
             : <span className="mr-auto">{timeAgo(ad.last_seen_at)}</span>
           }
+          {ad.link && (
+            <a
+              href={ad.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              className="text-muted-foreground hover:text-foreground shrink-0"
+            >
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
         </div>
         {ad.cta && <p className="text-[11px] font-medium text-primary">{ad.cta}</p>}
         {(ad.title || ad.body) && (
           <p className="text-[11px] line-clamp-2 text-foreground leading-snug">{ad.title || ad.body}</p>
         )}
       </div>
-    </a>
+    </div>
   );
 }
 
@@ -144,6 +257,8 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, 
   const [expanded,    setExpanded]    = useState(defaultExpanded || false);
   const [section,     setSection]     = useState(() => defaultSec || getDefaultSection(posts, ads));
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [selectedPost, setSelectedPost] = useState(null);
+  const [selectedAd,   setSelectedAd]   = useState(null);
 
   useEffect(() => {
     if (autoOpenHistory) { setExpanded(true); setHistoryOpen(true); }
@@ -160,7 +275,6 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, 
       >
         <ChevronDown className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} />
         <span className="font-semibold text-sm flex-1">{competitor.name}</span>
-        {/* platform badges */}
         {competitor.instagram_url && (
           <span className="text-xs px-2 py-0.5 rounded-full bg-pink-100 text-pink-700">IG</span>
         )}
@@ -170,7 +284,6 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, 
         {competitor.tiktok_url && (
           <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">TT</span>
         )}
-        {/* counts summary */}
         {posts.length > 0 && (
           <span className="text-[10px] text-muted-foreground">{posts.length} פוסטים</span>
         )}
@@ -181,7 +294,6 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, 
 
       {expanded && (
       <div className="px-4 pb-4 space-y-3 border-t border-border pt-3">
-        {/* platform links (clickable, now inside expanded area) */}
         <div className="flex items-center gap-2 flex-wrap text-xs">
           {competitor.instagram_url && (
             <a href={competitor.instagram_url} target="_blank" rel="noopener noreferrer"
@@ -197,152 +309,152 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, 
           )}
         </div>
 
-        {/* Section switch */}
         <div className="flex gap-2">
-        {['feed', 'ads'].map(s => (
-          <button
-            key={s}
-            onClick={() => setSection(s)}
-            className={`px-3 py-1 text-xs rounded-full transition-colors ${
-              section === s
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
-          >
-            {s === 'feed' ? `פיד (${posts.length})` : `מודעות (${competitor.active_ad_count || ads.length})`}
-          </button>
-        ))}
-      </div>
-
-      {/* Feed section — horizontal scroll strip */}
-      {section === 'feed' && (
-        posts.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-6">אין פוסטים שנאספו עדיין</p>
-        ) : (
-          <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
-            {posts.slice(0, 20).map(post => (
-              <a
-                key={post.id}
-                href={post.post_url || '#'}
-                target={post.post_url ? '_blank' : undefined}
-                rel="noopener noreferrer"
-                className="shrink-0 w-36 rounded-xl border border-border bg-background overflow-hidden hover:shadow-md transition-shadow"
-              >
-                {/* Image via proxy (bypasses Instagram/Facebook CDN CORS) */}
-                {post.media_url ? (
-                  <img
-                    src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(post.media_url)}`}
-                    alt=""
-                    className="w-full h-36 object-cover"
-                    loading="lazy"
-                    onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
-                  />
-                ) : null}
-                <div
-                  className={`w-full h-36 bg-muted items-center justify-center text-muted-foreground text-xs ${post.media_url ? 'hidden' : 'flex'}`}
-                >
-                  {PLATFORM_LABELS[post.platform] || post.platform}
-                </div>
-
-                {/* Stats + caption */}
-                <div className="p-2 space-y-1">
-                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                    <span className={`px-1 py-0.5 rounded ${PLATFORM_COLORS[post.platform] || 'bg-gray-100 text-gray-700'}`}>
-                      {PLATFORM_LABELS[post.platform] || post.platform}
-                    </span>
-                    <span className="mr-auto">{timeAgo(post.posted_at || post.first_seen_at)}</span>
-                  </div>
-                  {(post.likes != null || post.comments_count != null) && (
-                    <div className="flex gap-2 text-[11px]">
-                      {post.likes != null && <span>❤️ {post.likes.toLocaleString()}</span>}
-                      {post.comments_count != null && <span>💬 {post.comments_count.toLocaleString()}</span>}
-                    </div>
-                  )}
-                  {post.caption && (
-                    <p className="text-[11px] line-clamp-2 text-foreground leading-snug">{post.caption}</p>
-                  )}
-                </div>
-              </a>
-            ))}
-          </div>
-        )
-      )}
-
-      {/* Ads section — Sonnet intel */}
-      {section === 'ads' && (
-        <div className="space-y-3">
-          {!competitor.ad_intel_updated_at ? (
-            <p className="text-xs text-muted-foreground text-center py-6">
-              {!competitor.facebook_url ? 'חסר לינק לפייסבוק' : 'לא זוהו מודעות פעילות'}
-            </p>
-          ) : (
-            <>
-              {/* Header: active platforms + count + freshness */}
-              <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
-                {competitor.active_ad_platforms?.split(', ').map(p => (
-                  <span key={p} className={`px-1.5 py-0.5 rounded ${PLATFORM_COLORS[p] || 'bg-gray-100 text-gray-700'}`}>
-                    {PLATFORM_LABELS[p] || p}
-                  </span>
-                ))}
-                {(competitor.active_ad_count > 0) && (
-                  <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">{competitor.active_ad_count} מודעות</span>
-                )}
-                <span className="text-muted-foreground mr-auto">עודכן {timeAgo(competitor.ad_intel_updated_at)}</span>
-              </div>
-
-              {/* Promo */}
-              {competitor.last_promo_detected && (
-                <div className="text-xs bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-yellow-800">
-                  🏷️ {competitor.last_promo_detected}
-                </div>
-              )}
-
-              {/* Deep intel */}
-              {(competitor.ad_target_audience || competitor.ad_strategy_summary || competitor.ad_spend_signal) && (
-                <div className="space-y-1 text-xs">
-                  {competitor.ad_target_audience && (
-                    <p><span className="text-muted-foreground">קהל יעד: </span>{competitor.ad_target_audience}</p>
-                  )}
-                  {competitor.ad_strategy_summary && (
-                    <p><span className="text-muted-foreground">אסטרטגיה: </span>{competitor.ad_strategy_summary}</p>
-                  )}
-                  {competitor.ad_spend_signal && (
-                    <p><span className="text-muted-foreground">תקציב: </span>{competitor.ad_spend_signal}</p>
-                  )}
-                </div>
-              )}
-
-              {/* Ad cards — horizontal scroll strip */}
-              {ads.length > 0 && (
-                <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
-                  {hasGoogle && (
-                    <p className="text-[10px] text-orange-500 shrink-0 self-center">⚠️ גוגל</p>
-                  )}
-                  {ads.map(ad => (
-                    <AdCard key={ad.id} ad={ad} />
-                  ))}
-                </div>
-              )}
-
-              {/* ad_gaps CTA */}
-              {competitor.ad_gaps && (
-                <div className="text-xs bg-green-50 border border-green-200 rounded-lg p-2 space-y-1">
-                  <p className="font-medium text-green-800">💡 {competitor.ad_gaps}</p>
-                  <Link to="/competitors" className="text-primary underline text-[10px]">ראה במסך מתחרים ↗</Link>
-                </div>
-              )}
-
-              {/* History — opens modal */}
-              <button
-                onClick={() => setHistoryOpen(true)}
-                className="text-[10px] text-muted-foreground underline"
-              >
-                ▼ היסטוריית מודעות
-              </button>
-            </>
-          )}
+          {['feed', 'ads'].map(s => (
+            <button
+              key={s}
+              onClick={() => setSection(s)}
+              className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                section === s
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+            >
+              {s === 'feed' ? `פיד (${posts.length})` : `מודעות (${competitor.active_ad_count || ads.length})`}
+            </button>
+          ))}
         </div>
-      )}
+
+        {/* Feed section */}
+        {section === 'feed' && (
+          posts.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-6">אין פוסטים שנאספו עדיין</p>
+          ) : (
+            <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+              {posts.slice(0, 20).map(post => (
+                <div
+                  key={post.id}
+                  onClick={() => setSelectedPost(post)}
+                  className="shrink-0 w-36 rounded-xl border border-border bg-background overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                >
+                  {post.media_url ? (
+                    <img
+                      src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(post.media_url)}`}
+                      alt=""
+                      className="w-full h-36 object-cover"
+                      loading="lazy"
+                      onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
+                    />
+                  ) : null}
+                  <div
+                    className={`w-full h-36 bg-muted items-center justify-center text-muted-foreground text-xs ${post.media_url ? 'hidden' : 'flex'}`}
+                  >
+                    {PLATFORM_LABELS[post.platform] || post.platform}
+                  </div>
+
+                  <div className="p-2 space-y-1">
+                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <span className={`px-1 py-0.5 rounded ${PLATFORM_COLORS[post.platform] || 'bg-gray-100 text-gray-700'}`}>
+                        {PLATFORM_LABELS[post.platform] || post.platform}
+                      </span>
+                      <span className="mr-auto">{timeAgo(post.posted_at || post.first_seen_at)}</span>
+                      {post.post_url && (
+                        <a
+                          href={post.post_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          className="text-muted-foreground hover:text-foreground shrink-0"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                    {(post.likes != null || post.comments_count != null) && (
+                      <div className="flex gap-2 text-[11px]">
+                        {post.likes != null && <span>❤️ {post.likes.toLocaleString()}</span>}
+                        {post.comments_count != null && <span>💬 {post.comments_count.toLocaleString()}</span>}
+                      </div>
+                    )}
+                    {post.caption && (
+                      <p className="text-[11px] line-clamp-2 text-foreground leading-snug">{post.caption}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+        {/* Ads section */}
+        {section === 'ads' && (
+          <div className="space-y-3">
+            {!competitor.ad_intel_updated_at ? (
+              <p className="text-xs text-muted-foreground text-center py-6">
+                {!competitor.facebook_url ? 'חסר לינק לפייסבוק' : 'לא זוהו מודעות פעילות'}
+              </p>
+            ) : (
+              <>
+                <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                  {competitor.active_ad_platforms?.split(', ').map(p => (
+                    <span key={p} className={`px-1.5 py-0.5 rounded ${PLATFORM_COLORS[p] || 'bg-gray-100 text-gray-700'}`}>
+                      {PLATFORM_LABELS[p] || p}
+                    </span>
+                  ))}
+                  {(competitor.active_ad_count > 0) && (
+                    <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">{competitor.active_ad_count} מודעות</span>
+                  )}
+                  <span className="text-muted-foreground mr-auto">עודכן {timeAgo(competitor.ad_intel_updated_at)}</span>
+                </div>
+
+                {competitor.last_promo_detected && (
+                  <div className="text-xs bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-yellow-800">
+                    🏷️ {competitor.last_promo_detected}
+                  </div>
+                )}
+
+                {(competitor.ad_target_audience || competitor.ad_strategy_summary || competitor.ad_spend_signal) && (
+                  <div className="space-y-1 text-xs">
+                    {competitor.ad_target_audience && (
+                      <p><span className="text-muted-foreground">קהל יעד: </span>{competitor.ad_target_audience}</p>
+                    )}
+                    {competitor.ad_strategy_summary && (
+                      <p><span className="text-muted-foreground">אסטרטגיה: </span>{competitor.ad_strategy_summary}</p>
+                    )}
+                    {competitor.ad_spend_signal && (
+                      <p><span className="text-muted-foreground">תקציב: </span>{competitor.ad_spend_signal}</p>
+                    )}
+                  </div>
+                )}
+
+                {ads.length > 0 && (
+                  <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+                    {hasGoogle && (
+                      <p className="text-[10px] text-orange-500 shrink-0 self-center">⚠️ גוגל</p>
+                    )}
+                    {ads.map(ad => (
+                      <AdCard key={ad.id} ad={ad} onSelect={setSelectedAd} />
+                    ))}
+                  </div>
+                )}
+
+                {competitor.ad_gaps && (
+                  <div className="text-xs bg-green-50 border border-green-200 rounded-lg p-2 space-y-1">
+                    <p className="font-medium text-green-800">💡 {competitor.ad_gaps}</p>
+                    <Link to="/competitors" className="text-primary underline text-[10px]">ראה במסך מתחרים ↗</Link>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setHistoryOpen(true)}
+                  className="text-[10px] text-muted-foreground underline"
+                >
+                  ▼ היסטוריית מודעות
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>)}
 
       <AdHistoryModal
@@ -352,6 +464,8 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, 
         competitorName={competitor.name}
         bpId={bpId}
       />
+      <PostDetailModal post={selectedPost} onClose={() => setSelectedPost(null)} />
+      <AdDetailModal   ad={selectedAd}    onClose={() => setSelectedAd(null)} />
     </div>
   );
 }
@@ -398,7 +512,6 @@ export default function SocialCompetition() {
   });
   const allAds = allAdsRaw.filter(a => a.platform !== 'tiktok');
 
-  // Deep-link scroll: once data is ready, scroll to the focused card
   useEffect(() => {
     if (!focusId || loadingComps || loadingPosts || loadingAds) return;
     const el = cardRefs.current[focusId];
@@ -432,7 +545,6 @@ export default function SocialCompetition() {
 
   const loading = loadingComps || loadingPosts || loadingAds;
 
-  // Apply filters
   let visible = competitors;
   if (filter === 'with_posts') visible = visible.filter(c => allPosts.some(p => p.competitor_id === c.id));
   if (filter === 'with_ads')   visible = visible.filter(c => allAds.some(a => a.competitor_id === c.id));
@@ -447,7 +559,6 @@ export default function SocialCompetition() {
     <div className="p-4 space-y-4 max-w-5xl mx-auto">
       <PageHeader title="תחרות סושיאל" />
 
-      {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2">
         {FILTER_TABS.map(f => (
           <button
@@ -463,7 +574,6 @@ export default function SocialCompetition() {
           </button>
         ))}
 
-        {/* Platform chips */}
         {['instagram', 'facebook', 'tiktok'].map(p => (
           <button
             key={p}
@@ -498,7 +608,6 @@ export default function SocialCompetition() {
         </button>
       </div>
 
-      {/* Content */}
       {loading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
