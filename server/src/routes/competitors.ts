@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
+import { isS3Url, downloadFromS3 } from '../lib/s3';
 
 const router = Router();
 
@@ -247,6 +248,15 @@ router.get('/proxy-image', async (req: Request, res: Response) => {
 
   let parsed: URL;
   try { parsed = new URL(url); } catch { return res.status(400).json({ error: 'Invalid url' }); }
+
+  // S3/CloudFront URLs: serve with authenticated download
+  if (isS3Url(url)) {
+    const obj = await downloadFromS3(url);
+    if (!obj) return res.status(404).end();
+    res.setHeader('Content-Type', obj.contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.end(obj.body);
+  }
 
   const allowed = ALLOWED_CDN_HOSTS.some(h => parsed.hostname.endsWith(h));
   if (!allowed) return res.status(403).json({ error: 'Host not allowed' });
