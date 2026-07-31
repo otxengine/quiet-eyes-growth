@@ -158,9 +158,10 @@ router.get('/social/ads/history', async (req: Request, res: Response) => {
     // Raw SQL: first_seen_at/last_seen_at are TIMESTAMPTZ in DB but Prisma's
     // Linux binary expects TIMESTAMP(3) → P2023 on Render.
     const adParams: any[] = [competitorId];
-    const adWhereSql = platform
-      ? `"competitor_id" = $1 AND "platform" = $2` + (adParams.push(platform) && '')
-      : `"competitor_id" = $1`;
+    const platformFilter = platform && platform !== 'tiktok' ? platform : null;
+    const adWhereSql = platformFilter
+      ? `"competitor_id" = $1 AND "platform" = $2` + (adParams.push(platformFilter) && '')
+      : `"competitor_id" = $1 AND "platform" != 'tiktok'`;
     const orderByAd = sort === 'first_seen' ? `"first_seen_at" ASC` : `"last_seen_at" DESC NULLS LAST`;
     const ads = await (prisma as any).$queryRawUnsafe(
       `SELECT id, competitor_id, platform, external_ad_id, content_hash,

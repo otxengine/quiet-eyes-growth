@@ -391,11 +391,12 @@ export default function SocialCompetition() {
     enabled:  !!bpId && compIds.length > 0,
   });
 
-  const { data: allAds = [], isLoading: loadingAds } = useQuery({
+  const { data: allAdsRaw = [], isLoading: loadingAds } = useQuery({
     queryKey: ['socialAds', bpId, compIds],
     queryFn:  () => base44.entities.CompetitorAdHistory.filter({ competitor_id: { in: compIds } }, '-last_seen_at', 300),
     enabled:  !!bpId && compIds.length > 0,
   });
+  const allAds = allAdsRaw.filter(a => a.platform !== 'tiktok');
 
   // Deep-link scroll: once data is ready, scroll to the focused card
   useEffect(() => {

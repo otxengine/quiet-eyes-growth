@@ -1,5 +1,4 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
-import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
 
 const client = new S3Client({
@@ -46,11 +45,8 @@ export async function downloadFromS3(url: string): Promise<{ body: Buffer; conte
       : parsed.pathname.replace(/^\//, '');
 
     const result = await client.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
-    const chunks: Buffer[] = [];
-    for await (const chunk of result.Body as Readable) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    }
-    return { body: Buffer.concat(chunks), contentType: result.ContentType || 'image/jpeg' };
+    const bytes = await (result.Body as any).transformToByteArray();
+    return { body: Buffer.from(bytes), contentType: result.ContentType || 'image/jpeg' };
   } catch {
     return null;
   }
