@@ -493,7 +493,7 @@ export default function SocialCompetition() {
 
   const { data: competitors = [], isLoading: loadingComps } = useQuery({
     queryKey: ['socialCompetitors', bpId],
-    queryFn:  () => base44.entities.Competitor.filter({ linked_business: bpId, is_dismissed: false, not_relevant: false }),
+    queryFn:  () => base44.entities.Competitor.filter({ linked_business: bpId, is_dismissed: { not: true }, not_relevant: { not: true } }),
     enabled:  !!bpId,
   });
 
