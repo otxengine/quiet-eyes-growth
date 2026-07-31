@@ -88,7 +88,7 @@ async function scrapeAndSave(
       const MEDIA_KEYS = [
         'displayUrl','images','thumbnailSrc','thumbnail_src','videoUrl','thumbnailUrl',
         'full_picture','attachments','media','topImage','picture','postImages',
-        'videoMeta','covers','webVideoUrl','url','imageUrl','image_url',
+        'videoMeta','covers','webVideoUrl','url','imageUrl','image_url','image',
       ];
       firstPostMediaSample = {};
       for (const k of MEDIA_KEYS) {
@@ -111,14 +111,22 @@ async function scrapeAndSave(
       post.images?.[0]?.url ||
       post.thumbnailSrc ||
       post.thumbnail_src ||
-      // Video posts
       post.videoUrl ||
       post.thumbnailUrl ||
-      // Facebook (apify~facebook-posts-scraper)
+      // Facebook (apify~facebook-posts-scraper) — multiple actor output formats
       post.full_picture ||
+      post.media?.[0]?.image?.uri ||       // v3 photo format
+      post.media?.[0]?.photo?.imageUri ||  // v2 photo format
+      post.media?.[0]?.thumbnail?.uri ||   // video thumbnail
+      post.topImage?.uri ||                // top-level image object
+      post.topImage?.url ||
+      post.image?.uri ||
+      post.image?.url ||
+      post.imageUrl ||
       post.attachments?.[0]?.media?.image?.src ||
       post.attachments?.[0]?.media?.url ||
       post.attachments?.[0]?.url ||
+      post.attachments?.[0]?.imageUrl ||
       // TikTok (clockworks~tiktok-profile-scraper)
       post.videoMeta?.coverUrl ||
       post.covers?.[0] ||
