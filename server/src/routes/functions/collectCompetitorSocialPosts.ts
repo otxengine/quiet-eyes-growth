@@ -41,12 +41,13 @@ async function scrapeAndSave(
   url: string,
   businessProfileId: string,
 ): Promise<{ competitor: string; platform: string; url: string; upserted: number; apify_returned: number; elapsed_ms: number; error: string | null; insert_errors?: any[] }> {
-  const existing = await (prisma as any).competitorPost.findMany({
-    where: { competitor_id: comp.id, platform },
-    select: { external_post_id: true, post_url: true },
-  });
-  const existingIds  = new Set<string>(existing.map((p: any) => p.external_post_id).filter(Boolean));
-  const existingUrls = new Set<string>(existing.map((p: any) => p.post_url).filter(Boolean));
+  // Raw SQL to avoid P2023 on Render (TIMESTAMPTZ columns in competitor_posts)
+  const existing = await (prisma as any).$queryRawUnsafe(
+    `SELECT external_post_id, post_url FROM competitor_posts WHERE competitor_id = $1 AND platform = $2`,
+    comp.id, platform,
+  ) as { external_post_id: string | null; post_url: string | null }[];
+  const existingIds  = new Set<string>(existing.map(p => p.external_post_id).filter(Boolean) as string[]);
+  const existingUrls = new Set<string>(existing.map(p => p.post_url).filter(Boolean) as string[]);
 
   let rawPosts: any[] = [];
   let apifyError: string | null = null;
@@ -84,7 +85,26 @@ async function scrapeAndSave(
       || null,
     );
 
-    const rawMediaUrl = pgSafe(post.displayUrl || post.thumbnailUrl || post.videoUrl || post.attachments?.[0]?.url || null);
+    const rawMediaUrl = pgSafe(
+      // Instagram (apify~instagram-scraper)
+      post.displayUrl ||
+      post.images?.[0]?.url ||
+      post.thumbnailSrc ||
+      post.thumbnail_src ||
+      // Video posts
+      post.videoUrl ||
+      post.thumbnailUrl ||
+      // Facebook (apify~facebook-posts-scraper)
+      post.full_picture ||
+      post.attachments?.[0]?.media?.image?.src ||
+      post.attachments?.[0]?.media?.url ||
+      post.attachments?.[0]?.url ||
+      // TikTok (clockworks~tiktok-profile-scraper)
+      post.videoMeta?.coverUrl ||
+      post.covers?.[0] ||
+      post.webVideoUrl ||
+      null,
+    );
     // Upload to S3 for permanent storage; fall back to CDN URL if S3 not configured or upload fails
     const mediaUrl    = rawMediaUrl && isS3Configured()
       ? (await uploadImageFromUrl(rawMediaUrl) ?? rawMediaUrl)
