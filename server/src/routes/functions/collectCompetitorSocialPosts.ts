@@ -40,7 +40,7 @@ async function scrapeAndSave(
   platform: string,
   url: string,
   businessProfileId: string,
-): Promise<{ competitor: string; platform: string; url: string; upserted: number; apify_returned: number; elapsed_ms: number; error: string | null; insert_errors?: any[] }> {
+): Promise<{ competitor: string; platform: string; url: string; upserted: number; apify_returned: number; media_found: number; media_uploaded: number; first_post_keys?: string[]; elapsed_ms: number; error: string | null; insert_errors?: any[] }> {
   // Raw SQL to avoid P2023 on Render (TIMESTAMPTZ columns in competitor_posts)
   const existing = await (prisma as any).$queryRawUnsafe(
     `SELECT external_post_id, post_url FROM competitor_posts WHERE competitor_id = $1 AND platform = $2`,
@@ -74,9 +74,15 @@ async function scrapeAndSave(
 
   const insertErrors: any[] = [];
   let upserted = 0;
+  let mediaFound = 0;
+  let mediaUploaded = 0;
+  let firstPostKeys: string[] = [];
 
   for (const rawPost of rawPosts) {
     const post = deepPgSafe(rawPost);
+
+    // Capture keys of first post for diagnostics
+    if (firstPostKeys.length === 0) firstPostKeys = Object.keys(post);
 
     const externalId = pgSafe(post.id || post.shortCode || post.postId || post.videoId || null);
     const postUrl    = pgSafe(
@@ -105,25 +111,34 @@ async function scrapeAndSave(
       post.webVideoUrl ||
       null,
     );
+    if (rawMediaUrl) mediaFound++;
+
     // Upload to S3 for permanent storage; fall back to CDN URL if S3 not configured or upload fails
     const mediaUrl    = rawMediaUrl && isS3Configured()
       ? (await uploadImageFromUrl(rawMediaUrl) ?? rawMediaUrl)
       : rawMediaUrl;
     // Only write media_url when we got a fresh S3 URL (avoids no-op updates)
     const upgradedS3  = mediaUrl !== rawMediaUrl ? mediaUrl : null;
+    if (upgradedS3) mediaUploaded++;
 
     if (externalId && existingIds.has(externalId)) {
-      await (prisma as any).competitorPost.updateMany({
-        where: { competitor_id: comp.id, platform, external_post_id: externalId },
-        data: { last_seen_at: new Date().toISOString(), ...(upgradedS3 ? { media_url: upgradedS3 } : {}) },
-      });
+      const setClause = upgradedS3
+        ? `"last_seen_at" = NOW(), "media_url" = $4`
+        : `"last_seen_at" = NOW()`;
+      await (prisma as any).$executeRawUnsafe(
+        `UPDATE competitor_posts SET ${setClause} WHERE competitor_id = $1 AND platform = $2 AND external_post_id = $3`,
+        comp.id, platform, externalId, ...(upgradedS3 ? [upgradedS3] : []),
+      ).catch(() => {});
       continue;
     }
     if (postUrl && existingUrls.has(postUrl)) {
-      await (prisma as any).competitorPost.updateMany({
-        where: { competitor_id: comp.id, platform, post_url: postUrl },
-        data: { last_seen_at: new Date().toISOString(), ...(upgradedS3 ? { media_url: upgradedS3 } : {}) },
-      });
+      const setClause = upgradedS3
+        ? `"last_seen_at" = NOW(), "media_url" = $4`
+        : `"last_seen_at" = NOW()`;
+      await (prisma as any).$executeRawUnsafe(
+        `UPDATE competitor_posts SET ${setClause} WHERE competitor_id = $1 AND platform = $2 AND post_url = $3`,
+        comp.id, platform, postUrl, ...(upgradedS3 ? [upgradedS3] : []),
+      ).catch(() => {});
       continue;
     }
 
@@ -186,6 +201,8 @@ async function scrapeAndSave(
   return {
     competitor: comp.name, platform, url,
     upserted, apify_returned: rawPosts.length,
+    media_found: mediaFound, media_uploaded: mediaUploaded,
+    ...(firstPostKeys.length ? { first_post_keys: firstPostKeys } : {}),
     elapsed_ms: Date.now() - t0,
     error: apifyError,
     ...(insertErrors.length ? { insert_errors: insertErrors } : {}),
