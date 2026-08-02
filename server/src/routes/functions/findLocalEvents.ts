@@ -253,7 +253,8 @@ ${sportsContext.slice(0, 1600)}
   "relevance_score": 0-100,
   "action_type": "social_post|create_campaign|create_offer",
   "business_opportunity": "הזדמנות ספציפית ל${category} — עד 10 מילים",
-  "source_url": "URL המקור"
+  "source_url": "URL המקור",
+  "provenance": "eventbrite|serpapi|tavily — העתק מתווית [source] בסעיף האירועים המובנים; השתמש ב-tavily לאירועים מחיפוש בלבד"
 }]}
 אם אין שום אירוע רלוונטי (relevance_score >= 50) — החזר {"events":[]}`,
         response_json_schema: { type: 'object' },
@@ -330,7 +331,7 @@ ${sportsContext.slice(0, 1600)}
           impact_level: ev.traffic_impact === 'high' || ev.expected_crowd === 'large' ? 'high' : 'medium',
           recommended_action: ev.business_opportunity || `נצל את ${ev.name}`,
           confidence: ev.source_url ? 80 : 65,
-          source_signals: 'tavily_local_search',
+          source_signals: ev.provenance === 'eventbrite' ? 'eventbrite' : ev.provenance === 'serpapi' ? 'serpapi_events' : 'tavily_local_search',
           source_description: JSON.stringify({
             event_type:           ev.type,
             artist_or_headliner:  ev.artist_or_headliner || null,
