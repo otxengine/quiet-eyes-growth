@@ -269,30 +269,53 @@ async function syncCompetitorChanges(s: Supa, profiles: QEProfile[], bizSectors:
 }
 
 // ── 5. event_opportunities → market_signals ───────────────────────────────────
+// KAN-191: maps to event/local_event taxonomy; enforces date gate + provenance.
 
 async function syncEventOpportunities(s: Supa, profiles: QEProfile[]): Promise<number> {
   if (!profiles.length) return 0;
-  const { data: existing } = await s.from('market_signals').select('source_description').like('source_description', 'otx_event:%');
-  const synced = new Set((existing ?? []).map((r: any) => r.source_description ?? ''));
+  // Dedup: source_description JSON embeds _dedup_key; LIKE matches both old plain strings and new JSON
+  const { data: existing } = await s.from('market_signals').select('source_description')
+    .like('source_description', '%otx_event:%');
+  const synced = new Set(
+    (existing ?? []).map((r: any) => {
+      const raw: string = r.source_description ?? '';
+      try { return JSON.parse(raw)?._dedup_key ?? raw; } catch { return raw; }
+    }),
+  );
 
+  const now = Date.now();
+  // AC3: raise quality floor from 0.25 → 0.5 to match Express quality gate
   const { data, error } = await s.from('event_opportunities')
     .select('id, business_id, impact_score, source_url, confidence_score, events_raw!inner(event_name, event_date, geo)')
-    .gt('impact_score', 0.25).order('impact_score', { ascending: false }).limit(50);
+    .gte('impact_score', 0.5).order('impact_score', { ascending: false }).limit(50);
   if (error) throw error;
   if (!data?.length) return 0;
 
   const signals: any[] = [];
   for (const r of data as any[]) {
+    // AC2 + AC4: skip rows with no confirmed date or past events
+    const eventDate: string | null = r.events_raw?.event_date ?? null;
+    if (!eventDate) continue;
+    const eventMs = new Date(eventDate).getTime();
+    if (!Number.isFinite(eventMs) || eventMs < now - 86_400_000) continue;
+
     for (const profile of profiles) {
       const key = `otx_event:${r.id}:${profile.id}`;
       if (synced.has(key)) continue;
+      // AC1: geo present → local_event; otherwise → event
+      const category = r.events_raw?.geo ? 'local_event' : 'event';
       signals.push({
         id: crypto.randomUUID(), created_by: profile.created_by, linked_business: profile.id,
-        summary: `הזדמנות: ${r.events_raw.event_name} (${r.events_raw.event_date}) | ציון ${Math.round(r.impact_score * 100)}%`,
-        impact_level: r.impact_score >= 0.7 ? 'high' : r.impact_score >= 0.5 ? 'medium' : 'low',
-        category: 'opportunity', recommended_action: 'שקול פעולת קידום לקראת האירוע',
+        agent_name: r.events_raw.event_name,
+        summary: `${r.events_raw.event_name} (${eventDate}) | ציון ${Math.round(r.impact_score * 100)}%`,
+        impact_level: r.impact_score >= 0.7 ? 'high' : 'medium',
+        category,
+        recommended_action: 'שקול פעולת קידום לקראת האירוע',
         confidence: r.confidence_score, source_urls: r.source_url,
-        is_read: false, detected_at: new Date().toISOString(), data_freshness: 'live', source_description: key,
+        source_signals: 'otx_engine', // AC3: provenance
+        is_read: false, detected_at: new Date().toISOString(), data_freshness: 'live',
+        // AC3: store event metadata so getEventMeta() on the FE can read event_date
+        source_description: JSON.stringify({ _dedup_key: key, event_date: eventDate, event_name: r.events_raw.event_name, event_type: category }),
       });
     }
   }
