@@ -13,7 +13,7 @@ const MIN_INTERVAL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days — runs twice a week
 const TYPE_ICON: Record<string, string> = {
   concert: '🎵', conference: '🎙️', festival: '🎪', market: '🛒',
   sports: '⚽', community: '🤝', exhibition: '🖼️', tv_broadcast: '📺',
-  weather_event: '🌡️', other: '📍',
+  other: '📍',
 };
 
 /**
@@ -161,68 +161,24 @@ export async function findLocalEvents(req: Request, res: Response) {
       localEventQueries.push(`מרוץ ריצה תחרות ספורט אירוע בריאות ${city} ${month} ${nextMonth} ${yearStr}`);
     }
 
-    // ── Batch 2: Sports matches — always run, high traffic potential ──────────
-    // These generate massive foot traffic for restaurants/bars/retail
+    // ── Batch 2: Sports matches — IL only, high traffic potential ────────────
     const sportsQueries = [
-      // International football — specific upcoming matches (next 30 days)
-      `international football matches upcoming ${month} ${nextMonth} 2026 specific teams date schedule high profile`,
-      `UEFA Nations League Europa League Champions League upcoming matches ${month} 2026 teams date`,
-      `France Brazil Argentina England Germany Spain upcoming match 2026 ${month} date opponent`,
-      // Israeli football
       `ישראל נבחרת כדורגל משחק קרוב ${month} ${nextMonth} 2026 יריב תאריך`,
       `ליגת העל ישראל כדורגל לוח משחקים ${month} ${nextMonth} 2026`,
-      // Basketball + other sports
-      `NBA Finals 2026 teams date schedule`,
       `ישראל כדורסל ליגה לאומית אירופה ${month} 2026 משחק`,
     ];
 
-    // ── Batch 3: High-rated TV broadcasts — drive social buzz and consumer demand ─
-    // Finales, live events, high-viewership episodes affect social conversation
-    // and purchasing behavior (fashion worn, food mentioned, brands featured)
-    const tvQueries = [
-      `ישראל טלוויזיה פינאלה גמר עונה פרק אחרון ${month} ${yearStr} רייטינג גבוה תאריך`,
-      `ישראל ריאליטי X-factor הכוכב הבא המאסטרשף האח הגדול ${month} ${yearStr} שידור חי`,
-      `ישראל סדרה עונה חדשה השקה ${month} ${nextMonth} ${yearStr} ערוץ 12 ערוץ 13 HOT`,
-      `israel tv ratings top show finale ${month} ${yearStr} broadcast date`,
-      `ישראל שידור ספורט ישיר רייטינג גבוה ${month} ${yearStr} צפייה`,
-    ];
-
-    // ── Batch 4: Weather events — extreme heat, storms, rain affect consumer behavior ─
-    // Heatwaves spike HVAC demand, cold snaps boost restaurants/clothing, heavy rain affects footfall
-    const weatherQueries = [
-      `ישראל מזג אוויר ${month} ${yearStr} גל חום קיצוני טמפרטורות שיא תחזית`,
-      `israel weather forecast ${month} ${yearStr} extreme heat heatwave warning`,
-      `ישראל גשם שיטפון סערה ${month} ${yearStr} אזהרה תחזית`,
-      `israel weather warning storm rain flood ${month} ${yearStr}`,
-    ];
-
     const allResults: any[] = [];
-    // Run local event queries
     for (const q of localEventQueries) {
       if (isTavilyRateLimited()) break;
       const results = await tavilySearch(q, 4);
       allResults.push(...results);
     }
-    // Run sports queries separately
     const sportsResults: any[] = [];
     for (const q of sportsQueries) {
       if (isTavilyRateLimited()) break;
       const results = await tavilySearch(q, 5);
       sportsResults.push(...results);
-    }
-    // Run TV high-viewership queries
-    const tvResults: any[] = [];
-    for (const q of tvQueries) {
-      if (isTavilyRateLimited()) break;
-      const results = await tavilySearch(q, 4);
-      tvResults.push(...results);
-    }
-    // Run weather queries
-    const weatherResults: any[] = [];
-    for (const q of weatherQueries) {
-      if (isTavilyRateLimited()) break;
-      const results = await tavilySearch(q, 3);
-      weatherResults.push(...results);
     }
 
     // Deduplicate combined results by URL
@@ -234,11 +190,9 @@ export async function findLocalEvents(req: Request, res: Response) {
     });
     const uniqueLocal   = dedup(allResults);
     const uniqueSports  = dedup(sportsResults);
-    const uniqueTv      = dedup(tvResults);
-    const uniqueWeather = dedup(weatherResults);
 
-    if (uniqueLocal.length === 0 && uniqueSports.length === 0 && uniqueTv.length === 0 &&
-        uniqueWeather.length === 0 && eventbriteRaw.length === 0 && serpEventRaw.length === 0) {
+    if (uniqueLocal.length === 0 && uniqueSports.length === 0 &&
+        eventbriteRaw.length === 0 && serpEventRaw.length === 0) {
       setLastRun(businessProfileId, 'findLocalEvents');
       await writeAutomationLog('findLocalEvents', businessProfileId, startTime, 0);
       return res.json({ signals_created: 0 });
@@ -250,14 +204,6 @@ export async function findLocalEvents(req: Request, res: Response) {
 
     const sportsContext = uniqueSports.slice(0, 10)
       .map(r => `[${r.url}]\n${r.title || ''}: ${(r.content || '').slice(0, 220)}`)
-      .join('\n\n');
-
-    const tvContext = uniqueTv.slice(0, 8)
-      .map(r => `[${r.url}]\n${r.title || ''}: ${(r.content || '').slice(0, 220)}`)
-      .join('\n\n');
-
-    const weatherContext = uniqueWeather.slice(0, 6)
-      .map(r => `[${r.url}]\n${r.title || ''}: ${(r.content || '').slice(0, 200)}`)
       .join('\n\n');
 
     // Eventbrite + SerpAPI already structured — pass as context for the LLM
@@ -280,19 +226,13 @@ ${structuredEventContext || 'אין נתונים מובנים'}
 == אירועים מקומיים (הופעות, פסטיבלים, שווקים) ==
 ${localContext.slice(0, 2000)}
 
-== משחקי ספורט בינלאומיים ומקומיים ==
+== משחקי ספורט ישראלים ==
 ${sportsContext.slice(0, 1600)}
 
-== שידורי טלוויזיה עם רייטינג גבוה (פינאלות, ריאליטי, סדרות) ==
-${tvContext.slice(0, 800)}
-
-== אירועי מזג אוויר קיצוניים (גל חום, סערה, גשם כבד) ==
-${weatherContext.slice(0, 600)}
-
 חוקים קריטיים:
-- שם האירוע חייב להיות ספציפי: "צרפת נגד סנגל" לא "משחק כדורגל", "הופעת אייגל" לא "הופעה", "פסטיבל הג'אז של חיפה" לא "פסטיבל"
+- שם האירוע חייב להיות ספציפי: "מכבי תל אביב נגד הפועל ירושלים" לא "משחק כדורגל", "הופעת אייגל" לא "הופעה", "פסטיבל הג'אז של חיפה" לא "פסטיבל"
 - תאריך: חובה תאריך מדויק YYYY-MM-DD מתוך המקורות. אם אין תאריך ספציפי (יום+חודש+שנה) — דלג על האירוע לחלוטין. אל תמציא תאריכים.
-- אל תכלול אירועים שתאריכם הוא היום בדיוק (${now.toISOString().slice(0, 10)}) — אלא אם כן זה אירוע מזג אוויר (weather_event)
+- אל תכלול אירועים שתאריכם הוא היום בדיוק (${now.toISOString().slice(0, 10)})
 - רק אירועים בחודשיים הקרובים (עד ${nextMonth} ${yearStr})
 - relevance_score: 0-100 — כמה האירוע הזה רלוונטי ספציפית לעסק "${name}" (${category}).
   דוגמאות: הופעת מוזיקה למסעדה = 85, הופעת מוזיקה למפתח תוכנה = 20, כנס UX לחברת UX = 95, כנס UX למסעדה = 15, גל חום לחנות מזגנים = 90
@@ -306,7 +246,7 @@ ${weatherContext.slice(0, 600)}
   "date_iso": "YYYY-MM-DD",
   "date_text": "תאריך קריא בעברית",
   "venue": "מיקום האירוע",
-  "type": "concert|festival|market|sports|conference|exhibition|community|tv_broadcast|weather_event|other",
+  "type": "concert|festival|market|sports|conference|exhibition|community|tv_broadcast|other",
   "artist_or_headliner": "שם האמן / קבוצות / שם הפסטיבל",
   "expected_crowd": "large|medium|small",
   "traffic_impact": "high|medium|low",
@@ -356,11 +296,10 @@ ${weatherContext.slice(0, 600)}
     for (const ev of events.slice(0, 8)) {
       if (existingNames.has(ev.name.toLowerCase())) continue;
 
-      // Skip past events and today's events (except weather — weather events are always timely)
+      // Skip past events and today's events
       if (ev.date_iso) {
         const eventMs = new Date(ev.date_iso).getTime();
-        const minFuture = ev.type === 'weather_event' ? Date.now() - 86400000 : Date.now() + 86400000;
-        if (eventMs < minFuture) continue;
+        if (eventMs < Date.now() + 86400000) continue;
       }
 
       // Skip event types that are irrelevant for this business's sector
@@ -387,7 +326,7 @@ ${weatherContext.slice(0, 600)}
       await prisma.marketSignal.create({
         data: {
           summary: ev.name,
-          category: ev.type === 'weather_event' ? 'weather_event' : 'local_event',
+          category: 'local_event',
           impact_level: ev.traffic_impact === 'high' || ev.expected_crowd === 'large' ? 'high' : 'medium',
           recommended_action: ev.business_opportunity || `נצל את ${ev.name}`,
           confidence: ev.source_url ? 80 : 65,
