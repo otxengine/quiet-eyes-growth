@@ -15,6 +15,7 @@ const PROVENANCE_LABELS = {
   tavily_il:           'IL Site',
   eventbrite:          'Eventbrite',
   serp_events:         'Google',
+  otx_engine:          'OTX',
 };
 
 const EVENT_TABS = [
