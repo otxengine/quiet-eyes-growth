@@ -101,7 +101,7 @@ export async function analyzeSocialPosts(req: Request, res: Response) {
       }
     }
 
-    const prompt = `Analyze this competitor's social media strategy.
+    const prompt = `Analyze this competitor's social media strategy and return a JSON OBJECT (NOT an array).
 
 Competitor: "${competitor.name}" (${competitor.category || 'business'})
 Known metadata: channel=${competitor.strongest_channel || '?'}, engagement=${competitor.engagement_level || '?'}, frequency=${competitor.social_post_frequency || '?'}, followers=${competitor.social_followers_est || '?'}, themes=${competitor.content_themes || '?'}
@@ -113,26 +113,32 @@ ${captionSummary || 'No captions available.'}
 Ads (${ads.length} total):
 ${adSummary}
 
-Return JSON with these exact keys:
-{
-  "visual_identity": "2-3 sentences on visual style and aesthetic based on available data",
-  "content_pillars": ["topic 1", "topic 2", "topic 3"],
-  "caption_patterns": "1-2 sentences on caption style: CTA usage, hashtags, tone, length",
-  "ad_messaging": "1-2 sentences on ad angle and targeting signals",
-  "top_content_insight": "1 sentence on what content performs best based on engagement data",
-  "our_opportunity": "1-2 sentences on what they are missing that we could exploit"
-}`;
+Return ONLY this JSON object (start with { end with }):
+{"visual_identity":"2-3 sentences on visual style and aesthetic","content_pillars":["topic 1","topic 2","topic 3"],"caption_patterns":"1-2 sentences on caption style: CTA, hashtags, tone","ad_messaging":"1-2 sentences on ad angle and targeting","top_content_insight":"1 sentence on best performing content type","our_opportunity":"1-2 sentences on what they are missing we could exploit"}`;
 
-    const analysis = await invokeLLM({
+    const raw = await invokeLLM({
       prompt,
       model: 'sonnet',
       maxTokens: 700,
       skipCache: true,
-      response_json_schema: { type: 'object' },
     });
 
+    // Parse: invokeLLM without response_json_schema returns raw text
+    let analysis: any = null;
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      analysis = raw;
+    } else if (typeof raw === 'string') {
+      try {
+        const clean = raw.replace(/```json|```/g, '').trim();
+        const match = clean.match(/\{[\s\S]*\}/);
+        if (match) analysis = JSON.parse(match[0]);
+      } catch { /* leave null */ }
+    }
+
+    if (!analysis) return res.status(500).json({ error: 'LLM returned unexpected format, try again' });
+
     return res.json({
-      ...(analysis || {}),
+      ...analysis,
       images_analyzed: imagesAnalyzed,
       posts_analyzed: posts.length,
       ads_analyzed: ads.length,
