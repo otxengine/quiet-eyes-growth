@@ -9,6 +9,14 @@ import { Copy, CheckCheck, ListPlus, X, AlertCircle } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
 
+const PROVENANCE_LABELS = {
+  hebcal:              'HebCal',
+  commercial_calendar: 'מסחרי',
+  tavily_il:           'IL Site',
+  eventbrite:          'Eventbrite',
+  serp_events:         'Google',
+};
+
 const EVENT_TABS = [
   { key: 'all',       label: 'כל האירועים' },
   { key: 'holiday',   label: 'חגים ומועדים' },
@@ -158,6 +166,11 @@ function EventCard({ item, businessProfile }) {
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-sm text-foreground mb-1">{cleanTitle}</div>
+          {item.source_signals && PROVENANCE_LABELS[item.source_signals] && (
+            <span className="inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 mb-1">
+              {PROVENANCE_LABELS[item.source_signals]}
+            </span>
+          )}
           {eventDate && <div className="text-xs text-[#e8344d] font-medium mb-1">📅 {eventDate}</div>}
           <div className="text-xs text-foreground-secondary leading-relaxed line-clamp-2">{description}</div>
           {meta.action_label && (
@@ -221,10 +234,9 @@ export default function Events() {
   useEffect(() => {
     if (!bpId || isLoading || autoScanned || totalEvents > 0) return;
     setAutoScanned(true);
-    Promise.allSettled([
-      base44.functions.invoke('detectEvents',    { businessProfileId: bpId }),
-      base44.functions.invoke('findLocalEvents', { businessProfileId: bpId }),
-    ]).then(() => {
+    const scanners = [base44.functions.invoke('detectEvents', { businessProfileId: bpId })];
+    if (businessProfile?.city) scanners.push(base44.functions.invoke('findLocalEvents', { businessProfileId: bpId }));
+    Promise.allSettled(scanners).then(() => {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ['eventAlerts',       bpId] });
         queryClient.invalidateQueries({ queryKey: ['eventSignals',      bpId] });
@@ -306,10 +318,9 @@ export default function Events() {
     setScanning(true);
     toast.info('סורק אירועים...');
     try {
-      await Promise.allSettled([
-        base44.functions.invoke('detectEvents',    { businessProfileId: bpId, force: true }),
-        base44.functions.invoke('findLocalEvents', { businessProfileId: bpId, force: true }),
-      ]);
+      const scanners = [base44.functions.invoke('detectEvents', { businessProfileId: bpId, force: true })];
+      if (businessProfile?.city) scanners.push(base44.functions.invoke('findLocalEvents', { businessProfileId: bpId, force: true }));
+      await Promise.allSettled(scanners);
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ['eventAlerts',       bpId] });
         queryClient.invalidateQueries({ queryKey: ['eventSignals',      bpId] });
@@ -353,10 +364,24 @@ export default function Events() {
           <Loader2 className="w-6 h-6 animate-spin text-foreground-muted" />
         </div>
       ) : filteredItems.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-foreground-muted">
+        <div className="flex flex-col items-center justify-center py-16 text-foreground-muted text-center">
           <div className="text-4xl mb-3">📅</div>
-          <div className="text-sm font-medium">אין אירועים בקטגוריה זו</div>
-          <div className="text-xs mt-1">לחץ "סרוק אירועים" לעדכון</div>
+          {!businessProfile?.city ? (
+            <>
+              <div className="text-sm font-medium">נדרשת עיר לגילוי אירועים מקומיים</div>
+              <div className="text-xs mt-1">הוסף עיר בהגדרות העסק כדי לגלות אירועים קרובים</div>
+            </>
+          ) : allItems.length === 0 ? (
+            <>
+              <div className="text-sm font-medium">לא נמצאו אירועים קרובים</div>
+              <div className="text-xs mt-1">המקורות לא החזירו תוצאות — לחץ "סרוק אירועים" לנסות שוב</div>
+            </>
+          ) : (
+            <>
+              <div className="text-sm font-medium">אין אירועים בקטגוריה זו</div>
+              <div className="text-xs mt-1">עבור לטאב אחר או לחץ "סרוק אירועים" לעדכון</div>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
