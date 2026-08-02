@@ -79,6 +79,7 @@ export async function findLocalEvents(req: Request, res: Response) {
 
     // ── Targeted queries: Israeli event listing sites + sports ────────────────
     const areaTerms = [city, regionTerms].filter(Boolean).join(' ');
+    const isAlternateRun = Math.floor(Date.now() / 86400000) % 2 === 0;
 
     // ── Phase 0: Eventbrite API — structured event data (direct API, not search) ─
     const eventbriteRaw: any[] = [];
@@ -149,11 +150,33 @@ export async function findLocalEvents(req: Request, res: Response) {
 
     const lower = category.toLowerCase();
 
-    // ── Batch 1: Local events — sector-aware queries ──────────────────────────
-    const localEventQueries: string[] = [
+    // IL allowlist — blocked from open-query Tavily results
+    const IL_BLOCKLIST = ['eventbrite.com', 'facebook.com', 'walla.co.il', 'ynet.co.il', 'mako.co.il', 'haaretz.co.il', 'jpost.com', 'timesofisrael.com'];
+
+    // P1 — IL ticket sites, every run
+    const p1Queries: string[] = [
       `site:kupat.co.il הופעה פסטיבל אירוע ${areaTerms} ${month} ${nextMonth} ${yearStr}`,
       `site:leaan.co.il הופעה פסטיבל אירוע ${areaTerms} ${month} ${nextMonth} ${yearStr}`,
       `site:timeout.co.il הופעות פסטיבלים אירועים ${city} ${month} ${nextMonth}`,
+      `site:eventim.co.il הופעה פסטיבל אירוע ${areaTerms} ${month} ${nextMonth} ${yearStr}`,
+      `site:tickchak.co.il הופעה פסטיבל אירוע ${areaTerms} ${month} ${nextMonth} ${yearStr}`,
+      `site:kupatbravo.co.il הופעה פסטיבל אירוע ${areaTerms} ${month} ${nextMonth} ${yearStr}`,
+    ];
+    // P2 — alternate runs or thin P1 coverage (<6 raw hits)
+    const p2Queries: string[] = [
+      `site:rushtickets.co.il הופעה פסטיבל אירוע ${areaTerms} ${month} ${nextMonth} ${yearStr}`,
+      `site:goout.net הופעה פסטיבל אירוע ${areaTerms} ${month} ${nextMonth} ${yearStr}`,
+      `site:eventer.co.il הופעה פסטיבל אירוע ${areaTerms} ${month} ${nextMonth} ${yearStr}`,
+    ];
+    // P3 — alternate runs only (sports fixtures with date+venue)
+    const p3Queries: string[] = [
+      `site:sport5.co.il ליגה משחק ${areaTerms} ${month} ${nextMonth} ${yearStr}`,
+      `site:one.co.il ליגה משחק ${areaTerms} ${month} ${nextMonth} ${yearStr}`,
+    ];
+
+    // ── Batch 1: Local events — sector-aware queries ──────────────────────────
+    const localEventQueries: string[] = [
+      ...p1Queries,
       `הופעה זמר להקה פסטיבל אירוע ${areaTerms} ${month} ${nextMonth} ${yearStr} כרטיסים`,
       `ירייד שוק אוכל פסטיבל ${areaTerms} ${month} ${nextMonth} ${yearStr}`,
     ];
@@ -188,14 +211,21 @@ export async function findLocalEvents(req: Request, res: Response) {
     const allResults: any[] = [];
     for (const q of localEventQueries) {
       if (isTavilyRateLimited()) break;
-      const results = await tavilySearch(q, 4);
-      allResults.push(...results);
+      allResults.push(...await tavilySearch(q, 4));
     }
+    // P2/P3 — alternate run or thin P1 coverage
+    if (isAlternateRun || allResults.length < 6) {
+      for (const q of [...p2Queries, ...p3Queries]) {
+        if (isTavilyRateLimited()) break;
+        allResults.push(...await tavilySearch(q, 4));
+      }
+    }
+    // Strip blocked domains (open queries may surface Eventbrite, Facebook, news)
+    const filteredResults = allResults.filter(r => !r.url || !IL_BLOCKLIST.some(d => r.url.includes(d)));
     const sportsResults: any[] = [];
     for (const q of sportsQueries) {
       if (isTavilyRateLimited()) break;
-      const results = await tavilySearch(q, 5);
-      sportsResults.push(...results);
+      sportsResults.push(...await tavilySearch(q, 5));
     }
 
     // Deduplicate combined results by URL
@@ -205,7 +235,7 @@ export async function findLocalEvents(req: Request, res: Response) {
       seen.add(r.url);
       return true;
     });
-    const uniqueLocal   = dedup(allResults);
+    const uniqueLocal   = dedup(filteredResults);
     const uniqueSports  = dedup(sportsResults);
 
     if (uniqueLocal.length === 0 && uniqueSports.length === 0 &&
@@ -271,7 +301,7 @@ ${sportsContext.slice(0, 1600)}
   "action_type": "social_post|create_campaign|create_offer",
   "business_opportunity": "הזדמנות ספציפית ל${category} — עד 10 מילים",
   "source_url": "URL המקור",
-  "provenance": "eventbrite|serpapi|tavily — העתק מתווית [source] בסעיף האירועים המובנים; השתמש ב-tavily לאירועים מחיפוש בלבד"
+  "provenance": "eventbrite|serpapi|tavily_il — העתק מתווית [source] בסעיף האירועים המובנים; השתמש ב-tavily_il לאירועים מחיפוש בלבד"
 }]}
 אם אין שום אירוע רלוונטי (relevance_score >= 50) — החזר {"events":[]}`,
         response_json_schema: { type: 'object' },
