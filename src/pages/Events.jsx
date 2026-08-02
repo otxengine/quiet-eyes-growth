@@ -307,8 +307,8 @@ export default function Events() {
     toast.info('סורק אירועים...');
     try {
       await Promise.allSettled([
-        base44.functions.invoke('detectEvents',    { businessProfileId: bpId }),
-        base44.functions.invoke('findLocalEvents', { businessProfileId: bpId }),
+        base44.functions.invoke('detectEvents',    { businessProfileId: bpId, force: true }),
+        base44.functions.invoke('findLocalEvents', { businessProfileId: bpId, force: true }),
       ]);
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ['eventAlerts',       bpId] });
