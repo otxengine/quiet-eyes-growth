@@ -253,6 +253,171 @@ function AdCard({ ad, onSelect }) {
   );
 }
 
+function AnalysisTab({ competitor, posts, bpId }) {
+  const [analysis, setAnalysis] = useState(null);
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState(null);
+
+  // Client-computed metrics
+  const withLikes    = posts.filter(p => p.likes != null);
+  const withComments = posts.filter(p => p.comments_count != null);
+  const withMedia    = posts.filter(p => p.media_url);
+  const avgLikes    = withLikes.length    ? Math.round(withLikes.reduce((s, p) => s + p.likes, 0) / withLikes.length) : null;
+  const avgComments = withComments.length ? Math.round(withComments.reduce((s, p) => s + p.comments_count, 0) / withComments.length) : null;
+  const mediaRatio  = posts.length ? Math.round((withMedia.length / posts.length) * 100) : null;
+
+  let postsPerWeek = null;
+  const datedPosts = posts.filter(p => p.posted_at);
+  if (datedPosts.length >= 2) {
+    const ts = datedPosts.map(p => new Date(p.posted_at).getTime()).sort((a, b) => a - b);
+    const spanWeeks = (ts[ts.length - 1] - ts[0]) / (7 * 24 * 60 * 60 * 1000);
+    if (spanWeeks > 0) postsPerWeek = (datedPosts.length / spanWeeks).toFixed(1);
+  }
+
+  const platformCounts = posts.reduce((acc, p) => { acc[p.platform] = (acc[p.platform] || 0) + 1; return acc; }, {});
+  const themes = competitor.content_themes ? competitor.content_themes.split(',').map(t => t.trim()).filter(Boolean) : [];
+  const spendIcon = { low: '🟢', medium: '🟡', high: '🔴' }[competitor.ad_spend_signal] || '';
+
+  const handleGenerate = async () => {
+    setLoading(true); setError(null);
+    try {
+      const result = await base44.functions.invoke(
+        'analyzeSocialPosts',
+        { competitorId: competitor.id, businessProfileId: bpId },
+        60000,
+      );
+      setAnalysis(result?.data || result);
+    } catch (e) { setError(e.message); }
+    setLoading(false);
+  };
+
+  const noData = posts.length === 0 && !competitor.content_themes && !competitor.ad_strategy_summary;
+
+  return (
+    <div className="space-y-4">
+      {/* Metrics strip */}
+      {posts.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {avgLikes != null && (
+              <div className="bg-muted/50 rounded-lg p-2 text-center">
+                <p className="text-[10px] text-muted-foreground">ממוצע לייקים</p>
+                <p className="font-semibold text-sm">❤️ {avgLikes.toLocaleString()}</p>
+              </div>
+            )}
+            {avgComments != null && (
+              <div className="bg-muted/50 rounded-lg p-2 text-center">
+                <p className="text-[10px] text-muted-foreground">ממוצע תגובות</p>
+                <p className="font-semibold text-sm">💬 {avgComments.toLocaleString()}</p>
+              </div>
+            )}
+            {postsPerWeek != null && (
+              <div className="bg-muted/50 rounded-lg p-2 text-center">
+                <p className="text-[10px] text-muted-foreground">פוסטים/שבוע</p>
+                <p className="font-semibold text-sm">📅 {postsPerWeek}</p>
+              </div>
+            )}
+            {mediaRatio != null && (
+              <div className="bg-muted/50 rounded-lg p-2 text-center">
+                <p className="text-[10px] text-muted-foreground">עם תמונה</p>
+                <p className="font-semibold text-sm">🖼️ {mediaRatio}%</p>
+              </div>
+            )}
+          </div>
+          {Object.keys(platformCounts).length > 0 && (
+            <div className="flex gap-2 flex-wrap text-[11px]">
+              {Object.entries(platformCounts).map(([platform, count]) => (
+                <span key={platform} className={`px-2 py-0.5 rounded-full ${PLATFORM_COLORS[platform] || 'bg-gray-100 text-gray-700'}`}>
+                  {PLATFORM_LABELS[platform] || platform}: {count}
+                </span>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Strategy snapshot */}
+      {(themes.length > 0 || competitor.engagement_level || competitor.social_post_frequency) && (
+        <div className="space-y-2">
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">אסטרטגיית תוכן</p>
+          {themes.length > 0 && (
+            <div className="flex gap-1.5 flex-wrap">
+              {themes.map(t => (
+                <span key={t} className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[11px] border border-blue-200">{t}</span>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-3 flex-wrap text-xs text-muted-foreground">
+            {competitor.engagement_level    && <span>מעורבות: <strong className="text-foreground">{competitor.engagement_level}</strong></span>}
+            {competitor.social_post_frequency && <span>תדירות: <strong className="text-foreground">{competitor.social_post_frequency}</strong></span>}
+            {competitor.social_followers_est  && <span>עוקבים: <strong className="text-foreground">{competitor.social_followers_est}</strong></span>}
+          </div>
+        </div>
+      )}
+
+      {/* Ad intel snapshot */}
+      {(competitor.ad_strategy_summary || competitor.ad_target_audience || competitor.ad_spend_signal || competitor.ad_gaps) && (
+        <div className="space-y-2">
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">אינטל מודעות</p>
+          <div className="space-y-1 text-xs">
+            {competitor.ad_strategy_summary && <p><span className="text-muted-foreground">אסטרטגיה: </span>{competitor.ad_strategy_summary}</p>}
+            {competitor.ad_target_audience  && <p><span className="text-muted-foreground">קהל: </span>{competitor.ad_target_audience}</p>}
+            {competitor.ad_spend_signal     && <p><span className="text-muted-foreground">תקציב: </span>{spendIcon} {competitor.ad_spend_signal}</p>}
+            {competitor.ad_gaps && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-2 text-green-800">💡 {competitor.ad_gaps}</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AI Deep Analysis */}
+      <div className="space-y-2">
+        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">ניתוח AI עמוק</p>
+        {!analysis && !loading && (
+          <button
+            onClick={handleGenerate}
+            className="w-full py-2 text-xs border border-dashed border-border rounded-lg hover:bg-muted/50 text-muted-foreground transition-colors"
+          >
+            ✨ צור ניתוח AI ({posts.length} פוסטים, {competitor.active_ad_count || 0} מודעות)
+          </button>
+        )}
+        {loading && (
+          <div className="flex items-center gap-2 py-3 justify-center text-xs text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" /> מנתח פוסטים ותמונות...
+          </div>
+        )}
+        {error && <p className="text-xs text-destructive text-center py-2">{error}</p>}
+        {analysis && (
+          <div className="space-y-2">
+            {[
+              { key: 'visual_identity',     label: '🎨 זהות ויזואלית' },
+              { key: 'content_pillars',     label: '📌 נושאי תוכן' },
+              { key: 'caption_patterns',    label: '✍️ סגנון כיתוב' },
+              { key: 'ad_messaging',        label: '📣 מסרים במודעות' },
+              { key: 'top_content_insight', label: '🏆 תוכן מוביל' },
+              { key: 'our_opportunity',     label: '💡 ההזדמנות שלנו' },
+            ].map(({ key, label }) => {
+              const val = analysis[key];
+              if (!val) return null;
+              return (
+                <div key={key} className="bg-muted/40 rounded-lg p-2.5 space-y-0.5">
+                  <p className="text-[10px] font-semibold text-muted-foreground">{label}</p>
+                  <p className="text-xs leading-relaxed">{Array.isArray(val) ? val.join(' • ') : val}</p>
+                </div>
+              );
+            })}
+            <button onClick={handleGenerate} className="text-[10px] text-muted-foreground underline">רענן ניתוח</button>
+          </div>
+        )}
+      </div>
+
+      {noData && (
+        <p className="text-xs text-muted-foreground text-center py-6">אין מספיק נתונים — נסה לרענן את הפיד</p>
+      )}
+    </div>
+  );
+}
+
 function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, defaultExpanded }) {
   const [expanded,    setExpanded]    = useState(defaultExpanded || false);
   const [section,     setSection]     = useState(() => defaultSec || getDefaultSection(posts, ads));
@@ -310,17 +475,21 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, 
         </div>
 
         <div className="flex gap-2">
-          {['feed', 'ads'].map(s => (
+          {[
+            { key: 'feed',     label: `פיד (${posts.length})` },
+            { key: 'ads',      label: `מודעות (${competitor.active_ad_count || ads.length})` },
+            { key: 'analysis', label: 'ניתוח' },
+          ].map(({ key, label }) => (
             <button
-              key={s}
-              onClick={() => setSection(s)}
+              key={key}
+              onClick={() => setSection(key)}
               className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                section === s
+                section === key
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-muted text-muted-foreground hover:bg-muted/80'
               }`}
             >
-              {s === 'feed' ? `פיד (${posts.length})` : `מודעות (${competitor.active_ad_count || ads.length})`}
+              {label}
             </button>
           ))}
         </div>
@@ -384,6 +553,11 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, 
               ))}
             </div>
           )
+        )}
+
+        {/* Analysis section */}
+        {section === 'analysis' && (
+          <AnalysisTab competitor={competitor} posts={posts} bpId={bpId} />
         )}
 
         {/* Ads section */}
