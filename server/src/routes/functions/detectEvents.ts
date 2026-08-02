@@ -398,8 +398,6 @@ function buildEventTavilyQueries(category: string, city: string): string[] {
   const now2 = new Date();
   const month = now2.toLocaleDateString('he-IL', { month: 'long' });
   const nextMonth = new Date(Date.now() + 30 * 24 * 3600000).toLocaleDateString('he-IL', { month: 'long' });
-  const year = now2.getFullYear();
-
   const queries: string[] = [
     // Universal: ticket sites + local event search
     `site:kupat.co.il הופעה פסטיבל אירוע ${city} ${month} ${nextMonth}`,
@@ -441,11 +439,7 @@ function buildEventTavilyQueries(category: string, city: string): string[] {
   // Always include a general cultural/festival search
   queries.push(`פסטיבל תערוכה הופעה ${city} ${nextMonth}`);
 
-  // TV shows — premier/finale dates relevant for businesses (watch parties, trending topics)
-  queries.push(`סדרות ישראליות חדשות פרמיירה עונה ${month} ${year} ערוץ 12 13 כאן`);
-  queries.push(`Netflix ישראל סדרה חדשה פרמיירה ${month} ${year}`);
-
-  // Deduplicate and limit to 8 queries max (TV queries added)
+  // Deduplicate
   return [...new Set(queries)].slice(0, 8);
 }
 
@@ -454,6 +448,40 @@ function selectActionType(eventType: CalendarEvent['type'], daysAway: number): '
   if (eventType === 'commercial') return 'create_offer';
   if ((eventType === 'holiday' || eventType === 'seasonal') && daysAway > 14) return 'create_campaign';
   return 'social_post';
+}
+
+// ── Fetch holidays from HebCal (public HTTP, no key required) ────────────────
+export async function fetchHebCalHolidays(start: Date, end: Date): Promise<CalendarEvent[]> {
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const url = `https://www.hebcal.com/hebcal?v=1&cfg=json&maj=on&min=on&nx=on&start=${fmt(start)}&end=${fmt(end)}`;
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, { signal: controller.signal as any });
+    clearTimeout(t);
+    if (!res.ok) throw new Error(`HebCal ${res.status}`);
+    const data = await res.json() as { items?: any[] };
+    return (data.items || [])
+      .filter((item: any) => item.category === 'holiday' && item.date)
+      .map((item: any): CalendarEvent => {
+        const matched = CALENDAR_EVENTS.find(e =>
+          e.type === 'holiday' &&
+          item.title.toLowerCase().includes(e.nameEn.toLowerCase().split(' ')[0].toLowerCase())
+        );
+        return {
+          name: item.hebrew || item.title,
+          nameEn: item.title,
+          date: item.date,
+          type: 'holiday',
+          leadDays: matched?.leadDays ?? 14,
+          sectors: matched?.sectors ?? [],
+          defaultOpportunity: matched?.defaultOpportunity ?? `${item.hebrew || item.title} — הזדמנות עסקית לחג`,
+        };
+      });
+  } catch (err: any) {
+    console.warn('[detectEvents] HebCal fetch failed, falling back to hardcoded:', err.message);
+    return CALENDAR_EVENTS.filter(e => e.type === 'holiday');
+  }
 }
 
 // ── Core agent ────────────────────────────────────────────────────────────────
@@ -556,10 +584,12 @@ export async function detectEvents(req: Request, res: Response) {
     } catch (_) {}
 
     // ── Phase 1: Find upcoming calendar events ────────────────────────────────
-    const upcomingEvents = CALENDAR_EVENTS.filter(ev => {
+    const hebcalHolidays = await fetchHebCalHolidays(now, windowEnd);
+    const nonHolidayEvents = CALENDAR_EVENTS.filter(ev => {
       const eventDate = new Date(ev.date);
-      return eventDate >= now && eventDate <= windowEnd;
+      return ev.type !== 'holiday' && eventDate >= now && eventDate <= windowEnd;
     });
+    const upcomingEvents = [...hebcalHolidays, ...nonHolidayEvents];
 
     // ── Phase 2: Tavily search — sector-aware + sports-specific queries ──────────
     let tavilyRawEvents: any[] = [];
@@ -732,7 +762,7 @@ Write one specific action to take right now to maximise revenue — up to 8 word
           impact_level: sectorCtx.boost === 'high' ? 'high' : 'medium',
           recommended_action: suggestedAction,
           confidence: event.type === 'holiday' || event.type === 'sports' ? 95 : 80,
-          source_signals: 'event_calendar',
+          source_signals: event.type === 'holiday' ? 'hebcal' : 'event_calendar',
           source_description: JSON.stringify({
             action_label: suggestedAction.split(' ').slice(0, 5).join(' '),
             action_type: 'social_post',

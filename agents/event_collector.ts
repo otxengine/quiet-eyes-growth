@@ -162,11 +162,10 @@ async function fetchSerpApiEvents(): Promise<EventRaw[]> {
         let eventDate: string;
         try {
           const d = new Date(rawDate);
-          eventDate = isNaN(d.getTime())
-            ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
-            : d.toISOString().split("T")[0];
+          if (isNaN(d.getTime())) continue; // drop — no parseable date
+          eventDate = d.toISOString().split("T")[0];
         } catch {
-          eventDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+          continue; // drop — no parseable date
         }
 
         results.push({
@@ -208,16 +207,25 @@ async function fetchTavilyEvents(): Promise<EventRaw[]> {
 
     const data: { results?: Array<{ title: string; url: string; content: string }> } = await res.json();
 
-    return (data.results ?? [])
-      .filter((r) => hasSectorOverlap(r.title, r.content))
-      .map((r): EventRaw => ({
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+    const tavilyEvents: EventRaw[] = [];
+    for (const r of (data.results ?? [])) {
+      if (!hasSectorOverlap(r.title, r.content)) continue;
+      // Extract a YYYY-MM-DD date from the content — drop if none found
+      const m = `${r.title} ${r.content}`.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+      if (!m) continue;
+      const d = new Date(m[1]);
+      if (isNaN(d.getTime()) || m[1] < tomorrow) continue;
+      tavilyEvents.push({
         event_name:      r.title.slice(0, 200),
-        event_date:      new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+        event_date:      m[1],
         geo:             "IL",
         source_url:      r.url,
         detected_at_utc: new Date().toISOString(),
-        confidence_score: 0.70,
-      }));
+        confidence_score: 0.65,
+      });
+    }
+    return tavilyEvents;
   } catch (e) {
     console.warn(`[${AGENT_NAME}] Tavily events failed:`, e);
     return [];
@@ -295,8 +303,12 @@ async function run(): Promise<void> {
 
   collected.push(...buildSeasonalCalendar());
 
-  if (collected.length === 0) {
-    console.log(`[${AGENT_NAME}] No events collected — nothing to upsert`);
+  // Quality gate: drop any row without a real future date (≥ tomorrow)
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+  const gated = collected.filter(e => e.event_date >= tomorrow);
+
+  if (gated.length === 0) {
+    console.log(`[${AGENT_NAME}] No events with valid future dates — nothing to upsert`);
     await pingHeartbeat(AGENT_NAME, "OK");
     return;
   }
@@ -304,7 +316,7 @@ async function run(): Promise<void> {
   // Upsert on (event_name, event_date, geo) — idempotent
   const { error } = await supabase
     .from("events_raw")
-    .upsert(collected, { onConflict: "event_name,event_date,geo", ignoreDuplicates: false });
+    .upsert(gated, { onConflict: "event_name,event_date,geo", ignoreDuplicates: false });
 
   if (error) {
     console.error(`[${AGENT_NAME}] Upsert failed:`, error.message);

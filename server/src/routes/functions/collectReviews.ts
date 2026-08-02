@@ -183,7 +183,7 @@ export async function collectReviews(req: Request, res: Response) {
             if (existingTexts.has(textKey)) continue;
             const rating: number = sr.rating || 0;
             const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
-            const createdAt = firstValidDate(sr.iso_date);
+            const createdAt = firstValidDate(sr.iso_date) ?? new Date().toISOString();
             serpPending.push({ reviewId, textKey, text, rating, sentiment, reviewerName: sr.user?.name || 'לקוח', createdAt });
           }
           if (serpPending.length > 0) {

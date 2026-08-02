@@ -80,7 +80,7 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
         const rating      = gr.rating ?? 0;
         // gr.iso_date (SerpAPI) / gr.publishTime (Places API) are real timestamps;
         // gr.date (SerpAPI) is relative text ("3 months ago") and unparseable — never prefer it.
-        const publishTime = firstValidDate(gr.iso_date, gr.publishTime);
+        const publishTime = firstValidDate(gr.iso_date, gr.publishTime) ?? new Date().toISOString();
         const reviewId    = gr.review_id || gr.name || `comp_${comp.id}_${authorName}_${rating}`;
         const textKey     = text.substring(0, 50);
 

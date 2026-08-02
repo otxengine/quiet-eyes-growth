@@ -35,13 +35,13 @@ export function hasSerpApiKey(): boolean { return !!SERPAPI_KEY; }
  * equivalent — NOT parseable by `Date`) and `iso_date` (real timestamp) — always
  * prefer iso_date over date at call sites.
  */
-export function firstValidDate(...candidates: Array<string | undefined | null>): string {
+export function firstValidDate(...candidates: Array<string | undefined | null>): string | null {
   for (const c of candidates) {
     if (!c) continue;
     const d = new Date(c);
     if (!isNaN(d.getTime())) return d.toISOString();
   }
-  return new Date().toISOString();
+  return null; // no synthetic fallback — callers must handle null
 }
 
 async function _get(params: Record<string, string>): Promise<any | null> {
