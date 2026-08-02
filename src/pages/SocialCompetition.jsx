@@ -476,9 +476,8 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, 
 
         <div className="flex gap-2">
           {[
-            { key: 'feed',     label: `פיד (${posts.length})` },
-            { key: 'ads',      label: `מודעות (${competitor.active_ad_count || ads.length})` },
-            { key: 'analysis', label: 'ניתוח' },
+            { key: 'feed', label: `פיד (${posts.length})` },
+            { key: 'ads',  label: `מודעות (${competitor.active_ad_count || ads.length})` },
           ].map(({ key, label }) => (
             <button
               key={key}
@@ -494,70 +493,70 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, 
           ))}
         </div>
 
-        {/* Feed section */}
+        {/* Feed section — analysis at top, posts below */}
         {section === 'feed' && (
-          posts.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-6">אין פוסטים שנאספו עדיין</p>
-          ) : (
-            <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
-              {posts.slice(0, 20).map(post => (
-                <div
-                  key={post.id}
-                  onClick={() => setSelectedPost(post)}
-                  className="shrink-0 w-36 rounded-xl border border-border bg-background overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
-                >
-                  {post.media_url ? (
-                    <img
-                      src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(post.media_url)}`}
-                      alt=""
-                      className="w-full h-36 object-cover"
-                      loading="lazy"
-                      onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
-                    />
-                  ) : null}
-                  <div
-                    className={`w-full h-36 bg-muted items-center justify-center text-muted-foreground text-xs ${post.media_url ? 'hidden' : 'flex'}`}
-                  >
-                    {PLATFORM_LABELS[post.platform] || post.platform}
-                  </div>
+          <div className="space-y-4">
+            <AnalysisTab competitor={competitor} posts={posts} bpId={bpId} />
 
-                  <div className="p-2 space-y-1">
-                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                      <span className={`px-1 py-0.5 rounded ${PLATFORM_COLORS[post.platform] || 'bg-gray-100 text-gray-700'}`}>
+            {posts.length > 0 && (
+              <>
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">פוסטים אחרונים</p>
+                <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+                  {posts.slice(0, 20).map(post => (
+                    <div
+                      key={post.id}
+                      onClick={() => setSelectedPost(post)}
+                      className="shrink-0 w-36 rounded-xl border border-border bg-background overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                    >
+                      {post.media_url ? (
+                        <img
+                          src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(post.media_url)}`}
+                          alt=""
+                          className="w-full h-36 object-cover"
+                          loading="lazy"
+                          onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
+                        />
+                      ) : null}
+                      <div
+                        className={`w-full h-36 bg-muted items-center justify-center text-muted-foreground text-xs ${post.media_url ? 'hidden' : 'flex'}`}
+                      >
                         {PLATFORM_LABELS[post.platform] || post.platform}
-                      </span>
-                      <span className="mr-auto">{timeAgo(post.posted_at || post.first_seen_at)}</span>
-                      {post.post_url && (
-                        <a
-                          href={post.post_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={e => e.stopPropagation()}
-                          className="text-muted-foreground hover:text-foreground shrink-0"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
-                    </div>
-                    {(post.likes != null || post.comments_count != null) && (
-                      <div className="flex gap-2 text-[11px]">
-                        {post.likes != null && <span>❤️ {post.likes.toLocaleString()}</span>}
-                        {post.comments_count != null && <span>💬 {post.comments_count.toLocaleString()}</span>}
                       </div>
-                    )}
-                    {post.caption && (
-                      <p className="text-[11px] line-clamp-2 text-foreground leading-snug">{post.caption}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
-        )}
 
-        {/* Analysis section */}
-        {section === 'analysis' && (
-          <AnalysisTab competitor={competitor} posts={posts} bpId={bpId} />
+                      <div className="p-2 space-y-1">
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                          <span className={`px-1 py-0.5 rounded ${PLATFORM_COLORS[post.platform] || 'bg-gray-100 text-gray-700'}`}>
+                            {PLATFORM_LABELS[post.platform] || post.platform}
+                          </span>
+                          <span className="mr-auto">{timeAgo(post.posted_at || post.first_seen_at)}</span>
+                          {post.post_url && (
+                            <a
+                              href={post.post_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              className="text-muted-foreground hover:text-foreground shrink-0"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
+                        {(post.likes != null || post.comments_count != null) && (
+                          <div className="flex gap-2 text-[11px]">
+                            {post.likes != null && <span>❤️ {post.likes.toLocaleString()}</span>}
+                            {post.comments_count != null && <span>💬 {post.comments_count.toLocaleString()}</span>}
+                          </div>
+                        )}
+                        {post.caption && (
+                          <p className="text-[11px] line-clamp-2 text-foreground leading-snug">{post.caption}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         {/* Ads section */}

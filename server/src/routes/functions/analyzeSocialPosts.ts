@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
-import Anthropic from '@anthropic-ai/sdk';
 import { prisma } from '../../db';
+import { invokeLLM } from '../../lib/llm';
 import { isS3Url, downloadFromS3 } from '../../lib/s3';
+import Anthropic from '@anthropic-ai/sdk';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' });
 
@@ -15,7 +16,10 @@ async function toBase64Image(url: string): Promise<{ data: string; mediaType: st
       const mt = VALID_MIME.has(obj.contentType) ? obj.contentType : 'image/jpeg';
       return { data: obj.body.toString('base64'), mediaType: mt };
     }
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
     if (!res.ok) return null;
     const buf = Buffer.from(await res.arrayBuffer());
     const ct  = res.headers.get('content-type') || 'image/jpeg';
@@ -43,6 +47,7 @@ export async function analyzeSocialPosts(req: Request, res: Response) {
     });
     if (!competitor) return res.status(404).json({ error: 'Competitor not found' });
 
+    // Raw SQL to avoid Prisma P2023 on Render (TIMESTAMPTZ OID mismatch)
     const posts = await (prisma as any).$queryRawUnsafe(
       `SELECT caption, media_url, posted_at, likes, comments_count
        FROM competitor_posts WHERE competitor_id = $1
@@ -50,17 +55,13 @@ export async function analyzeSocialPosts(req: Request, res: Response) {
       competitorId,
     ) as { caption: string | null; media_url: string | null; posted_at: Date | null; likes: number | null; comments_count: number | null }[];
 
-    const ads = await prisma.competitorAdHistory.findMany({
-      where: { competitor_id: competitorId },
-      select: { title: true, body: true, cta: true, platform: true, is_active: true },
-      orderBy: { last_seen_at: 'desc' },
-      take: 10,
-    });
-
-    // Download up to 3 images in parallel
-    const mediaUrls = posts.map(p => p.media_url).filter(Boolean) as string[];
-    const imageResults = await Promise.all(mediaUrls.slice(0, 3).map(toBase64Image));
-    const images = imageResults.filter(Boolean) as { data: string; mediaType: string }[];
+    // Raw SQL for ads to avoid P2023 on TIMESTAMPTZ columns
+    const ads = await (prisma as any).$queryRawUnsafe(
+      `SELECT title, body, cta, platform, is_active
+       FROM competitor_ad_history WHERE competitor_id = $1
+       ORDER BY last_seen_at DESC NULLS LAST LIMIT 10`,
+      competitorId,
+    ) as { title: string | null; body: string | null; cta: string | null; platform: string; is_active: boolean }[];
 
     const captionSummary = posts
       .filter(p => p.caption)
@@ -69,11 +70,42 @@ export async function analyzeSocialPosts(req: Request, res: Response) {
       .join('\n');
 
     const adSummary = ads.length
-      ? ads.map((a: { platform: string; is_active: boolean; title: string | null; body: string | null; cta: string | null }) => `[${a.platform}${a.is_active ? ' ACTIVE' : ''}] ${a.title || ''} | ${(a.body || '').substring(0, 150)} | CTA: ${a.cta || '—'}`).join('\n')
+      ? ads.map(a => `[${a.platform}${a.is_active ? ' ACTIVE' : ''}] ${a.title || ''} | ${(a.body || '').substring(0, 150)} | CTA: ${a.cta || '—'}`).join('\n')
       : 'No ads found.';
 
-    const contextText = `Competitor: "${competitor.name}" (${competitor.category || 'business'})
-Metadata: channel=${competitor.strongest_channel || '?'}, engagement=${competitor.engagement_level || '?'}, frequency=${competitor.social_post_frequency || '?'}, followers=${competitor.social_followers_est || '?'}, themes=${competitor.content_themes || '?'}
+    // Try vision analysis with Anthropic if credits available (fails gracefully)
+    let visionNote = 'No images analyzed.';
+    const mediaUrls = posts.map(p => p.media_url).filter(Boolean) as string[];
+    let imagesAnalyzed = 0;
+
+    if (process.env.ANTHROPIC_API_KEY && mediaUrls.length > 0) {
+      try {
+        const imageResults = await Promise.all(mediaUrls.slice(0, 3).map(toBase64Image));
+        const images = imageResults.filter(Boolean) as { data: string; mediaType: string }[];
+        if (images.length > 0) {
+          const visionContent: any[] = [
+            ...images.map(img => ({ type: 'image', source: { type: 'base64', media_type: img.mediaType as any, data: img.data } })),
+            { type: 'text', text: `Describe the visual style of these ${images.length} competitor social media images in 2 sentences. Focus on: color palette, subject matter (people/food/product/location), composition style, and overall aesthetic.` },
+          ];
+          const visionMsg = await anthropic.messages.create({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 200,
+            system: 'You are a visual analyst. Be concise and specific.',
+            messages: [{ role: 'user', content: visionContent }],
+          });
+          visionNote = (visionMsg.content[0] as any).text || visionNote;
+          imagesAnalyzed = images.length;
+        }
+      } catch {
+        // Vision failed (likely credits) — text analysis still runs below
+      }
+    }
+
+    const prompt = `Analyze this competitor's social media strategy.
+
+Competitor: "${competitor.name}" (${competitor.category || 'business'})
+Known metadata: channel=${competitor.strongest_channel || '?'}, engagement=${competitor.engagement_level || '?'}, frequency=${competitor.social_post_frequency || '?'}, followers=${competitor.social_followers_est || '?'}, themes=${competitor.content_themes || '?'}
+Visual identity (from images): ${visionNote}
 
 Recent posts (${posts.length} total):
 ${captionSummary || 'No captions available.'}
@@ -81,41 +113,30 @@ ${captionSummary || 'No captions available.'}
 Ads (${ads.length} total):
 ${adSummary}
 
-Analyze this competitor's social media presence${images.length > 0 ? ' and the provided images' : ''}.
-Return ONLY valid JSON:
+Return JSON with these exact keys:
 {
-  "visual_identity": "2-3 sentences on visual style, color palette, composition, subject matter${images.length === 0 ? ' (no images available — infer from captions/context)' : ''}",
+  "visual_identity": "2-3 sentences on visual style and aesthetic based on available data",
   "content_pillars": ["topic 1", "topic 2", "topic 3"],
   "caption_patterns": "1-2 sentences on caption style: CTA usage, hashtags, tone, length",
-  "ad_messaging": "1-2 sentences on ad angle (discount/lifestyle/urgency/quality) and targeting signals",
+  "ad_messaging": "1-2 sentences on ad angle and targeting signals",
   "top_content_insight": "1 sentence on what content performs best based on engagement data",
-  "our_opportunity": "1-2 sentences on what they are NOT doing well or missing that we could exploit"
+  "our_opportunity": "1-2 sentences on what they are missing that we could exploit"
 }`;
 
-    const userContent: any[] = [
-      ...images.map(img => ({
-        type: 'image',
-        source: { type: 'base64', media_type: img.mediaType as any, data: img.data },
-      })),
-      { type: 'text', text: contextText },
-    ];
-
-    const msg = await anthropic.messages.create({
-      model:      'claude-sonnet-4-6',
-      max_tokens: 600,
-      system:     'Return ONLY valid JSON. No markdown, no explanation.',
-      messages:   [{ role: 'user', content: userContent }],
+    const analysis = await invokeLLM({
+      prompt,
+      model: 'sonnet',
+      maxTokens: 700,
+      skipCache: true,
+      response_json_schema: { type: 'object' },
     });
 
-    const raw = (msg.content[0] as any).text || '{}';
-    let analysis: any = {};
-    try {
-      analysis = JSON.parse(raw.replace(/```json|```/g, '').trim());
-    } catch {
-      analysis = { visual_identity: raw.substring(0, 300) };
-    }
-
-    return res.json({ ...analysis, images_analyzed: images.length, posts_analyzed: posts.length, ads_analyzed: ads.length });
+    return res.json({
+      ...(analysis || {}),
+      images_analyzed: imagesAnalyzed,
+      posts_analyzed: posts.length,
+      ads_analyzed: ads.length,
+    });
   } catch (err: any) {
     console.error('[analyzeSocialPosts]', err.message);
     return res.status(500).json({ error: err.message });
