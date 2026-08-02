@@ -1,7 +1,7 @@
 // OTXEngine — Agent 2: EventCollector
 // Schedule: every 60 minutes
 // Output: events_raw
-// Fetches: Israeli holidays, Eventbrite, sports authority, seasonal calendar
+// Fetches: Israeli holidays, Eventbrite, SerpAPI events, Tavily IL events
 
 import { supabase } from "./lib/supabase.ts";
 import { pingHeartbeat } from "./lib/heartbeat.ts";
@@ -17,6 +17,7 @@ interface EventRaw {
   source_url: string;
   detected_at_utc: string;
   confidence_score: number;
+  provenance: string;
 }
 
 interface EventbriteEvent {
@@ -88,6 +89,7 @@ async function fetchIsraeliHolidays(): Promise<EventRaw[]> {
       source_url: item.link ?? `https://www.hebcal.com/holidays/${encodeURIComponent(item.title)}`,
       detected_at_utc: new Date().toISOString(),
       confidence_score: 0.95,
+      provenance: "hebcal",
     }));
 }
 
@@ -119,6 +121,7 @@ async function fetchEventbrite(): Promise<EventRaw[]> {
       source_url:      e.url,
       detected_at_utc: new Date().toISOString(),
       confidence_score: 0.90,
+      provenance:      "eventbrite",
     }));
 }
 
@@ -175,6 +178,7 @@ async function fetchSerpApiEvents(): Promise<EventRaw[]> {
           source_url:      ev.link ?? "https://serpapi.com",
           detected_at_utc: new Date().toISOString(),
           confidence_score: 0.80,
+          provenance:      "serpapi",
         });
       }
     } catch (e) {
@@ -223,6 +227,7 @@ async function fetchTavilyEvents(): Promise<EventRaw[]> {
         source_url:      r.url,
         detected_at_utc: new Date().toISOString(),
         confidence_score: 0.65,
+        provenance:      "tavily_il",
       });
     }
     return tavilyEvents;
@@ -230,40 +235,6 @@ async function fetchTavilyEvents(): Promise<EventRaw[]> {
     console.warn(`[${AGENT_NAME}] Tavily events failed:`, e);
     return [];
   }
-}
-
-// ─── Source: Hardcoded seasonal calendar (Israeli peaks) ─────────────────────
-
-function buildSeasonalCalendar(): EventRaw[] {
-  const year = new Date().getFullYear();
-  const events: Array<{ name: string; month: number; day: number; geo: string | null; relevance: string }> = [
-    { name: "פסח — שיא צריכה", month: 3, day: 15, geo: "IL", relevance: "restaurant local" },
-    { name: "ראש השנה — שיא ביקוש", month: 9, day: 1, geo: "IL", relevance: "restaurant beauty local" },
-    { name: "רמדאן — שיא ביקוש", month: 3, day: 1, geo: "bnei_brak", relevance: "restaurant local" },
-    { name: "קיץ — שיא כושר", month: 6, day: 1, geo: "IL", relevance: "fitness beauty" },
-    { name: "חנוכה — שיא מכירות", month: 12, day: 1, geo: "IL", relevance: "restaurant local" },
-    { name: "יום העצמאות", month: 4, day: 26, geo: "IL", relevance: "restaurant local fitness" },
-  ];
-
-  const now = new Date();
-  return events
-    .map((e): EventRaw => {
-      const eventDate = new Date(year, e.month - 1, e.day);
-      const daysAhead = (eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-      if (daysAhead < 0 || daysAhead > 30) return null as unknown as EventRaw;
-
-      if (!hasSectorOverlap(e.name, e.relevance)) return null as unknown as EventRaw;
-
-      return {
-        event_name: e.name,
-        event_date: `${year}-${String(e.month).padStart(2, "0")}-${String(e.day).padStart(2, "0")}`,
-        geo: e.geo,
-        source_url: `https://calendar.google.com/calendar/r/search?q=${encodeURIComponent(e.name)}`,
-        detected_at_utc: new Date().toISOString(),
-        confidence_score: 0.80,
-      };
-    })
-    .filter((e): e is EventRaw => e !== null);
 }
 
 // ─── Main runner ──────────────────────────────────────────────────────────────
@@ -300,8 +271,6 @@ async function run(): Promise<void> {
     .catch((e) => {
       console.error(`[${AGENT_NAME}] Tavily Events failed:`, e.message);
     });
-
-  collected.push(...buildSeasonalCalendar());
 
   // Quality gate: drop any row without a real future date (≥ tomorrow)
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
