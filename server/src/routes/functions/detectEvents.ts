@@ -457,8 +457,10 @@ export async function fetchHebCalHolidays(start: Date, end: Date): Promise<Calen
   try {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch(url, { signal: controller.signal as any });
-    clearTimeout(t);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let res: any;
+    try { res = await fetch(url, { signal: controller.signal as any }); }
+    finally { clearTimeout(t); }
     if (!res.ok) throw new Error(`HebCal ${res.status}`);
     const data = await res.json() as { items?: any[] };
     return (data.items || [])
