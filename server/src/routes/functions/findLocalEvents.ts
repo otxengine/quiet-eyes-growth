@@ -61,6 +61,16 @@ export async function findLocalEvents(req: Request, res: Response) {
       'באר שבע': 'נגב',
       'אילת': 'נגב',
     };
+    const CITY_EN_MAP: Record<string, string> = {
+      'תל אביב': 'Tel Aviv', 'ירושלים': 'Jerusalem', 'חיפה': 'Haifa',
+      'באר שבע': 'Beer Sheva', 'אילת': 'Eilat', 'נתניה': 'Netanya',
+      'ראשון לציון': 'Rishon LeZion', 'פתח תקוה': 'Petah Tikva',
+      'אשדוד': 'Ashdod', 'אשקלון': 'Ashkelon', 'הרצליה': 'Herzliya',
+      'רעננה': 'Raanana', 'כפר סבא': 'Kfar Saba', 'נס ציונה': 'Nes Ziona',
+      'עפולה': 'Afula', 'מגדל העמק': 'Migdal HaEmek', 'עתלית': 'Atlit',
+      'בנימינה': 'Binyamina', 'זכרון יעקב': 'Zichron Yaakov',
+    };
+    const cityEn = CITY_EN_MAP[city] || city;
     const regionTerms = REGION_MAP[city] || '';
 
     if (isTavilyRateLimited()) {
@@ -105,10 +115,17 @@ export async function findLocalEvents(req: Request, res: Response) {
     if (hasSerpApiKey()) {
       try {
         const [serpCity, serpHeb] = await Promise.all([
-          serpGoogleEvents(`events in ${city} Israel ${month} ${yearStr}`, `${city}, Israel`),
-          serpGoogleEvents(`אירועים הופעות ${city} ${month} ${yearStr}`, `${city}, Israel`),
+          serpGoogleEvents(`events in ${cityEn} Israel ${month} ${yearStr}`, `${cityEn}, Israel`),
+          serpGoogleEvents(`אירועים הופעות ${city} ${month} ${yearStr}`, `${cityEn}, Israel`),
         ]);
-        for (const ev of [...serpCity, ...serpHeb]) {
+        const serpAll = [...serpCity, ...serpHeb];
+        // ponytail: thin-result region fallback — only fires for small towns in REGION_MAP
+        if (serpAll.length < 3 && regionTerms) {
+          const firstRegion = regionTerms.split(' ')[0];
+          const serpRegion = await serpGoogleEvents(`אירועים ${regionTerms} ${month} ${yearStr}`, `${firstRegion}, Israel`);
+          serpAll.push(...serpRegion);
+        }
+        for (const ev of serpAll) {
           if (!ev.title || !ev.date?.start_date) continue;
           serpEventRaw.push({
             name:               ev.title,
@@ -331,7 +348,7 @@ ${sportsContext.slice(0, 1600)}
           impact_level: ev.traffic_impact === 'high' || ev.expected_crowd === 'large' ? 'high' : 'medium',
           recommended_action: ev.business_opportunity || `נצל את ${ev.name}`,
           confidence: ev.source_url ? 80 : 65,
-          source_signals: ev.provenance === 'eventbrite' ? 'eventbrite' : ev.provenance === 'serpapi' ? 'serpapi_events' : 'tavily_local_search',
+          source_signals: ev.provenance === 'eventbrite' ? 'eventbrite' : ev.provenance === 'serpapi_events' ? 'serpapi_events' : 'tavily_local_search',
           source_description: JSON.stringify({
             event_type:           ev.type,
             artist_or_headliner:  ev.artist_or_headliner || null,
