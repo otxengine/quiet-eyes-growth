@@ -348,7 +348,7 @@ ${sportsContext.slice(0, 1600)}
           impact_level: ev.traffic_impact === 'high' || ev.expected_crowd === 'large' ? 'high' : 'medium',
           recommended_action: ev.business_opportunity || `נצל את ${ev.name}`,
           confidence: ev.source_url ? 80 : 65,
-          source_signals: ev.provenance === 'eventbrite' ? 'eventbrite' : ev.provenance === 'serpapi_events' ? 'serpapi_events' : 'tavily_local_search',
+          source_signals: ev.provenance === 'eventbrite' ? 'eventbrite' : ev.provenance === 'serpapi' ? 'serp_events' : 'tavily_il',
           source_description: JSON.stringify({
             event_type:           ev.type,
             artist_or_headliner:  ev.artist_or_headliner || null,

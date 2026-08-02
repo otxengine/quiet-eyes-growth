@@ -703,7 +703,7 @@ If no events with specific details found — return {"events":[]}.`,
       try {
         const [ctaRes, actionRes] = await Promise.all([
           invokeLLM({
-            model: 'sonnet',
+            model: 'haiku',
             maxTokens: 200,
             prompt: `Write a marketing post in Hebrew (2-3 lines) for the business "${name}" (${category} in ${city}) for the occasion of "${event.name}" in ${daysAway} days.
 
@@ -714,7 +714,7 @@ Structure: Hook (line 1) + value/offer (line 2) + specific CTA (line 3).
 Tone: ${toneInstruction}. Write only the post text. ALL text must be in Hebrew.`,
           }),
           invokeLLM({
-            model: 'sonnet',
+            model: 'haiku',
             maxTokens: 80,
             prompt: `Business: "${name}" (${category}). Event: "${event.name}" in ${daysAway} days.
 Opportunity: ${sectorCtx.opportunity}
@@ -764,7 +764,7 @@ Write one specific action to take right now to maximise revenue — up to 8 word
           impact_level: sectorCtx.boost === 'high' ? 'high' : 'medium',
           recommended_action: suggestedAction,
           confidence: event.type === 'holiday' || event.type === 'sports' ? 95 : 80,
-          source_signals: event.type === 'holiday' ? 'hebcal' : 'event_calendar',
+          source_signals: event.type === 'holiday' ? 'hebcal' : 'commercial_calendar',
           source_description: JSON.stringify({
             action_label: suggestedAction.split(' ').slice(0, 5).join(' '),
             action_type: 'social_post',
@@ -789,6 +789,12 @@ Write one specific action to take right now to maximise revenue — up to 8 word
     for (const event of extraEvents.slice(0, 3)) {
       if (!event.name || existingSignalNames.has(event.name) || dedup.hasSignal(event.name)) continue;
 
+      // Quality gate: require date ≥ tomorrow
+      if (event.date_estimate) {
+        const eventMs = new Date(event.date_estimate).getTime();
+        if (eventMs < Date.now() + 86400000) continue;
+      }
+
       const icon = event.type === 'sports' ? '⚽' : event.type === 'concert' ? '🎵' : event.type === 'tv_premiere' ? '📺' : '🎯';
       const alertTitle = `${icon} ${event.name} — הזדמנות עסקית`;
       if (existingTitles.has(alertTitle) || dedup.hasAlert(alertTitle)) continue;
@@ -800,7 +806,7 @@ Write one specific action to take right now to maximise revenue — up to 8 word
       let prefilledText = '';
       try {
         const ctaRes = await invokeLLM({
-          model: 'sonnet',
+          model: 'haiku',
           maxTokens: 180,
           prompt: `Write a marketing post in Hebrew (2-3 lines) for the business "${name}" (${category} in ${city}) for the occasion of "${event.name}".
 Opportunity: ${event.opportunity || 'local event'}.
@@ -854,7 +860,7 @@ Structure: Hook + specific value + CTA. Tone: ${toneInstruction}. Write only the
           impact_level: isLarge ? 'high' : 'medium',
           recommended_action: event.opportunity || `נצל את ${event.name}`,
           confidence: 65,
-          source_signals: 'tavily_search',
+          source_signals: 'tavily_il',
           source_description: JSON.stringify({
             action_label: `נצל את ${event.name}`,
             action_type: 'social_post',
