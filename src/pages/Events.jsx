@@ -104,6 +104,7 @@ function EventActSheet({ item, businessProfile, onClose }) {
   const cleanTitle = (title || '').split(' — ')[0].replace(/^[^\u0590-\u05FFa-zA-Z0-9]*/, '').trim();
   const prefilled = meta.prefilled_text || meta.prefilled || `🎉 ${cleanTitle}\n\n${(description || '').slice(0, 120)}\n\n${businessProfile?.name || ''}`;
   const eventDate = meta.event_date ? formatEventDate(meta.event_date) : null;
+  const opportunity = item.recommended_action || meta.impact_reason || '';
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
@@ -112,6 +113,13 @@ function EventActSheet({ item, businessProfile, onClose }) {
           <div>
             <h3 className="text-[15px] font-bold text-foreground">{cleanTitle}</h3>
             {eventDate && <p className="text-[11px] text-[#e8344d] font-medium mt-0.5">📅 {eventDate}</p>}
+            {meta.venue && <p className="text-[11px] text-foreground-muted mt-0.5">📍 {meta.venue}</p>}
+            {meta.source_url && item.source_signals && PROVENANCE_LABELS[item.source_signals] && (
+              <a href={meta.source_url} target="_blank" rel="noopener noreferrer"
+                 className="text-[11px] text-blue-500 hover:underline mt-0.5 block">
+                🔗 {PROVENANCE_LABELS[item.source_signals]} ↗
+              </a>
+            )}
             <p className="text-[11px] text-foreground-muted mt-0.5 line-clamp-2">{description}</p>
           </div>
           <button onClick={onClose} className="text-foreground-muted hover:text-foreground"><X className="w-4 h-4" /></button>
@@ -126,14 +134,26 @@ function EventActSheet({ item, businessProfile, onClose }) {
           </button>
         </div>
         <div className="space-y-2">
-          <button onClick={() => { navigate('/marketing/create'); onClose(); }}
+          <button onClick={() => {
+            const params = new URLSearchParams({ signalId: item.id || '', summary: cleanTitle, action: opportunity, event: meta.event_date || '' });
+            navigate(`/marketing/create?${params.toString()}`);
+            onClose();
+          }}
             className="w-full py-2.5 rounded-xl bg-foreground text-background text-[12px] font-semibold hover:opacity-90">
             📢 צור קמפיין מראש
           </button>
           <button onClick={async () => {
             setCreatingTask(true);
             try {
-              await base44.entities.Task.create({ title: `הכן תוכן לרגל: ${cleanTitle.slice(0, 60)}`, description: description || '', status: 'pending', priority: 'medium', source_type: 'alert', linked_business: businessProfile?.id || '' });
+              await base44.entities.Task.create({
+                title: `הכן תוכן לרגל: ${cleanTitle.slice(0, 60)}`,
+                description: `[signal:${item.id}]\n${opportunity ? opportunity + '\n\n' : ''}${prefilled}`,
+                due_date: meta.event_date || null,
+                status: 'pending',
+                priority: 'medium',
+                source_type: 'alert',
+                linked_business: businessProfile?.id || '',
+              });
               toast.success('משימה נוצרה ✓');
               onClose();
             } catch { toast.error('שגיאה'); }
@@ -168,11 +188,17 @@ function EventCard({ item, businessProfile }) {
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-sm text-foreground mb-1">{cleanTitle}</div>
           {item.source_signals && PROVENANCE_LABELS[item.source_signals] && (
-            <span className="inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 mb-1">
-              {PROVENANCE_LABELS[item.source_signals]}
-            </span>
+            meta.source_url
+              ? <a href={meta.source_url} target="_blank" rel="noopener noreferrer"
+                   className="inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 mb-1 hover:bg-gray-200 hover:text-gray-700 underline underline-offset-1">
+                  {PROVENANCE_LABELS[item.source_signals]} ↗
+                </a>
+              : <span className="inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 mb-1">
+                  {PROVENANCE_LABELS[item.source_signals]}
+                </span>
           )}
           {eventDate && <div className="text-xs text-[#e8344d] font-medium mb-1">📅 {eventDate}</div>}
+          {meta.venue && <div className="text-xs text-foreground-muted mb-1">📍 {meta.venue}</div>}
           <div className="text-xs text-foreground-secondary leading-relaxed line-clamp-2">{description}</div>
           {meta.action_label && (
             <div className="text-xs text-foreground-muted mt-2">{meta.action_label}</div>
