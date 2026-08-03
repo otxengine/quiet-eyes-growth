@@ -117,7 +117,7 @@ export default function Intelligence() {
   const opportunities = weekSignals.filter(s => s.category === 'opportunity');
   const trends = weekSignals.filter(s => s.category === 'trend');
   const competitorMoves = weekSignals.filter(s => s.category === 'competitor_move' || s.category === 'competitor');
-  const eventSignals = allSignals.filter(s => s.category === 'event');
+  const eventSignals = allSignals.filter(s => s.category === 'event' || s.category === 'local_event');
 
   // Raw signal stats
   const trendSignals = rawSignals.filter(s => s.signal_type === 'social_trend');
@@ -132,6 +132,7 @@ export default function Intelligence() {
     : activeTab === 'reports' ? []
     : activeTab === 'tiktok' ? tiktokSignals
     : activeTab === 'competitor_intel' ? allSignals.filter(s => s.category === 'competitor_move' || s.category === 'competitor')
+    : activeTab === 'event' ? allSignals.filter(s => s.category === 'event' || s.category === 'local_event')
     : allSignals.filter(s => s.category === activeTab);
 
   useEffect(() => {
