@@ -542,8 +542,12 @@ router.post('/', async (req: Request, res: Response) => {
     `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS customer_sources TEXT`,
     `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS sector_profile TEXT`,
     `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS agent_missions TEXT`,
-    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_draft    TEXT`,
-    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_status   TEXT DEFAULT 'pending'`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_draft        TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_status       TEXT DEFAULT 'pending'`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_approved     TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_sources      TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_generated_at TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_approved_at  TEXT`,
 
     // ── Integration layer upgrades ────────────────────────────────────────────
     // OAuth state persistence

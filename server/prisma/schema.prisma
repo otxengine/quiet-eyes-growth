@@ -118,7 +118,12 @@ model BusinessProfile {
   agent_missions             String?  // JSON: LLM-generated per-agent mission plan (generated once at onboarding)
   // §5.0 identity draft (KAN-196)
   about_draft                String?  // JSON: 9-key identity draft pending owner approval
-  about_status               String?  @default("pending") // 'pending' | 'approved'
+  about_status               String?  @default("pending") // 'pending' | 'approved' | 'rejected'
+  // §5.2 identity persistence (KAN-197)
+  about_approved              String?  // JSON: approved 9-key identity (canonical; written only on Approve)
+  about_sources               String?  // JSON array: source types used for the last generate/regenerate
+  about_generated_at          String?  // ISO timestamp of last generate/regenerate
+  about_approved_at           String?  // ISO timestamp of last Approve
 
   @@map("business_profiles")
 }

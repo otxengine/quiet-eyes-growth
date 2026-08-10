@@ -220,9 +220,21 @@ Respond ONLY with valid JSON matching this exact schema (no markdown):
     }
 
     // AC2: write only to draft fields — never touch canonical profile
+    const sourcesUsed = [
+      hasDesc    ? 'profile_description' : null,
+      hasWebsite ? 'website' : null,
+      hasSocial  ? 'social' : null,
+      hasPlace   ? 'google_place' : null,
+      hasSeed    ? 'seed_info' : null,
+    ].filter(Boolean);
     await prisma.businessProfile.update({
       where: { id: businessProfileId },
-      data: { about_draft: JSON.stringify(draft), about_status: 'pending' },
+      data: {
+        about_draft: JSON.stringify(draft),
+        about_status: 'pending',
+        about_sources: JSON.stringify(sourcesUsed),
+        about_generated_at: new Date().toISOString(),
+      },
     });
 
     return res.json({ ok: true, draft, about_status: 'pending' });
@@ -230,6 +242,42 @@ Respond ONLY with valid JSON matching this exact schema (no markdown):
     logger.warn(`generate-about failed for ${businessProfileId}: ${err.message}`);
     return res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+// ── POST /api/onboarding/approve-about ──────────────────────────────────────────
+// KAN-197 AC3: promotes the pending draft to the canonical, approved identity JSON.
+router.post('/approve-about', async (req: Request, res: Response) => {
+  const { businessProfileId } = req.body;
+  if (!businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
+
+  const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
+  if (!profile) return res.status(404).json({ error: 'Business not found' });
+  if (!profile.about_draft) return res.status(400).json({ error: 'No draft to approve' });
+
+  await prisma.businessProfile.update({
+    where: { id: businessProfileId },
+    data: {
+      about_approved: profile.about_draft,
+      about_status: 'approved',
+      about_approved_at: new Date().toISOString(),
+    },
+  });
+
+  return res.json({ ok: true, about_status: 'approved' });
+});
+
+// ── POST /api/onboarding/reject-about ───────────────────────────────────────────
+// KAN-197 AC4: rejects the pending draft — the approved canonical JSON is never touched.
+router.post('/reject-about', async (req: Request, res: Response) => {
+  const { businessProfileId } = req.body;
+  if (!businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
+
+  await prisma.businessProfile.update({
+    where: { id: businessProfileId },
+    data: { about_status: 'rejected' },
+  });
+
+  return res.json({ ok: true, about_status: 'rejected' });
 });
 
 // ── POST /api/onboarding/generate-missions ────────────────────────────────────

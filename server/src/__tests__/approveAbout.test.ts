@@ -1,0 +1,77 @@
+import router from '../routes/onboarding';
+import { prisma } from '../db';
+
+jest.mock('../db', () => ({
+  prisma: {
+    businessProfile: {
+      findUnique: jest.fn(),
+      update:     jest.fn(),
+    },
+  },
+}));
+jest.mock('../lib/llm',            () => ({ invokeLLM:             jest.fn() }));
+jest.mock('../lib/automationLog',  () => ({ writeAutomationLog:    jest.fn() }));
+jest.mock('../lib/missionPlanner', () => ({ generateAgentMissions: jest.fn() }));
+jest.mock('../infra/logger', () => ({
+  createLogger: jest.fn(() => ({ warn: jest.fn(), info: jest.fn(), error: jest.fn() })),
+}));
+
+const findUnique = prisma.businessProfile.findUnique as jest.Mock;
+const update     = prisma.businessProfile.update     as jest.Mock;
+
+function post(url: string, body: Record<string, any>): Promise<{ statusCode: number; body: any }> {
+  return new Promise((resolve, reject) => {
+    const req: any = { method: 'POST', url, originalUrl: url, params: {}, headers: {}, body };
+    const res: any = {
+      statusCode: 200,
+      status(code: number) { this.statusCode = code; return this; },
+      json(data: any) { resolve({ statusCode: this.statusCode, body: data }); return this; },
+    };
+    router(req, res, (err?: any) => err ? reject(err) : resolve({ statusCode: 200, body: null }));
+  });
+}
+
+const DRAFT_JSON = JSON.stringify({ business_name: 'Test Biz', sector_key: 'beauty' });
+
+beforeEach(() => { jest.clearAllMocks(); update.mockResolvedValue({}); });
+
+describe('POST /api/onboarding/approve-about', () => {
+  it('AC3: promotes about_draft to about_approved and stamps about_approved_at', async () => {
+    findUnique.mockResolvedValue({ id: 'bp1', about_draft: DRAFT_JSON, about_status: 'pending' });
+    const { body } = await post('/approve-about', { businessProfileId: 'bp1' });
+    expect(body.ok).toBe(true);
+    expect(body.about_status).toBe('approved');
+    const data = update.mock.calls[0][0].data;
+    expect(data.about_approved).toBe(DRAFT_JSON);
+    expect(data.about_status).toBe('approved');
+    expect(data.about_approved_at).toBeTruthy();
+  });
+
+  it('400s when there is no draft to approve', async () => {
+    findUnique.mockResolvedValue({ id: 'bp1', about_draft: null });
+    const { statusCode } = await post('/approve-about', { businessProfileId: 'bp1' });
+    expect(statusCode).toBe(400);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('400s when businessProfileId missing', async () => {
+    const { statusCode } = await post('/approve-about', {});
+    expect(statusCode).toBe(400);
+  });
+});
+
+describe('POST /api/onboarding/reject-about', () => {
+  it('AC4: sets about_status=rejected without touching about_approved', async () => {
+    const { body } = await post('/reject-about', { businessProfileId: 'bp1' });
+    expect(body.ok).toBe(true);
+    expect(body.about_status).toBe('rejected');
+    const data = update.mock.calls[0][0].data;
+    expect(data).toEqual({ about_status: 'rejected' });
+    expect(data).not.toHaveProperty('about_approved');
+  });
+
+  it('400s when businessProfileId missing', async () => {
+    const { statusCode } = await post('/reject-about', {});
+    expect(statusCode).toBe(400);
+  });
+});

@@ -78,6 +78,15 @@ describe('POST /api/onboarding/generate-about', () => {
     expect(data).not.toHaveProperty('sector_profile');
   });
 
+  it('AC1: writes about_sources + about_generated_at provenance', async () => {
+    findUnique.mockResolvedValue(BASE_PROFILE);
+    llm.mockResolvedValue(JSON.stringify(VALID_DRAFT));
+    await post({ businessProfileId: 'bp1' });
+    const data = update.mock.calls[0][0].data;
+    expect(JSON.parse(data.about_sources)).toContain('profile_description');
+    expect(data.about_generated_at).toBeTruthy();
+  });
+
   it('AC2: response includes about_status=pending', async () => {
     findUnique.mockResolvedValue(BASE_PROFILE);
     llm.mockResolvedValue(JSON.stringify(VALID_DRAFT));

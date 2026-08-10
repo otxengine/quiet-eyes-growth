@@ -1039,6 +1039,12 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS customer_sources TEXT`);
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS sector_profile TEXT`);
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS agent_missions TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_draft TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_status TEXT DEFAULT 'pending'`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_approved TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_sources TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_generated_at TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_approved_at TEXT`);
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS owner_name TEXT`);
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS phone TEXT`);
   await sql(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS discovered_at TEXT`);
