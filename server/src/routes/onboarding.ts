@@ -156,39 +156,40 @@ router.post('/generate-about', async (req: Request, res: Response) => {
   const { businessProfileId, seed_info, website_url, social_urls, google_place_id } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
 
-  const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
-  if (!profile) return res.status(404).json({ error: 'Business not found' });
+  try {
+    const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
+    if (!profile) return res.status(404).json({ error: 'Business not found' });
 
-  // AC4: no usable source at all → return retry prompt instead of hallucinating
-  const hasSeed    = !!seed_info;
-  const hasWebsite = !!(website_url || profile.website_url || profile.channels_website);
-  const hasSocial  = !!(social_urls || profile.instagram_url || profile.facebook_url || profile.tiktok_url);
-  const hasPlace   = !!(google_place_id || profile.google_place_id);
-  const hasDesc    = !!(profile.description || profile.category);
-  if (!hasSeed && !hasWebsite && !hasSocial && !hasPlace && !hasDesc) {
-    return res.json({
-      ok: false,
-      needs_seed: true,
-      prompt: 'כדי לייצר את הסקירה העסקית, אנא ספר לנו בכמה משפטים על העסק שלך — מה אתה מציע, למי, ואיפה.',
-    });
-  }
+    // AC4: no usable source at all → return retry prompt instead of hallucinating
+    const hasSeed    = !!seed_info;
+    const hasWebsite = !!(website_url || profile.website_url || profile.channels_website);
+    const hasSocial  = !!(social_urls || profile.instagram_url || profile.facebook_url || profile.tiktok_url);
+    const hasPlace   = !!(google_place_id || profile.google_place_id);
+    const hasDesc    = !!(profile.description || profile.category);
+    if (!hasSeed && !hasWebsite && !hasSocial && !hasPlace && !hasDesc) {
+      return res.json({
+        ok: false,
+        needs_seed: true,
+        prompt: 'כדי לייצר את הסקירה העסקית, אנא ספר לנו בכמה משפטים על העסק שלך — מה אתה מציע, למי, ואיפה.',
+      });
+    }
 
-  // Build source summary for the LLM
-  const sources = [
-    profile.description ? `Description: ${profile.description}` : null,
-    profile.category    ? `Category: ${profile.category}` : null,
-    profile.city        ? `City: ${profile.city}` : null,
-    (website_url || profile.website_url) ? `Website: ${website_url || profile.website_url}` : null,
-    (google_place_id || profile.google_place_id) ? `Google Place ID: ${google_place_id || profile.google_place_id}` : null,
-    seed_info           ? `Owner-provided context: ${seed_info}` : null,
-  ].filter(Boolean).join('\n');
+    // Build source summary for the LLM
+    const sources = [
+      profile.description ? `Description: ${profile.description}` : null,
+      profile.category    ? `Category: ${profile.category}` : null,
+      profile.city        ? `City: ${profile.city}` : null,
+      (website_url || profile.website_url) ? `Website: ${website_url || profile.website_url}` : null,
+      (google_place_id || profile.google_place_id) ? `Google Place ID: ${google_place_id || profile.google_place_id}` : null,
+      seed_info           ? `Owner-provided context: ${seed_info}` : null,
+    ].filter(Boolean).join('\n');
 
-  const SECTOR_KEYS  = 'restaurant|beauty|fitness|legal|medical|real_estate|retail|auto|cleaning|education|tech_services|accounting|construction|events|design|marketing|photography|childcare|health|other';
-  const BUSINESS_TYPES = 'B2B|B2C|B2B2C';
-  const SERVICE_MODELS = 'project_based|subscription|appointment|walk_in|ecommerce';
-  const TONES         = 'professional|friendly|inspirational|technical|casual';
+    const SECTOR_KEYS  = 'restaurant|beauty|fitness|legal|medical|real_estate|retail|auto|cleaning|education|tech_services|accounting|construction|events|design|marketing|photography|childcare|health|other';
+    const BUSINESS_TYPES = 'B2B|B2C|B2B2C';
+    const SERVICE_MODELS = 'project_based|subscription|appointment|walk_in|ecommerce';
+    const TONES         = 'professional|friendly|inspirational|technical|casual';
 
-  const prompt = `You are a business identity writer. Based ONLY on the sources below, produce a JSON identity draft.
+    const prompt = `You are a business identity writer. Based ONLY on the sources below, produce a JSON identity draft.
 Do NOT invent services, cities, or claims not supported by the sources.
 If a field cannot be determined from the sources, use "" for strings and [] for arrays.
 
@@ -209,7 +210,6 @@ Respond ONLY with valid JSON matching this exact schema (no markdown):
   "business_description": "<2-3 sentence business description>"
 }`;
 
-  try {
     const raw = await invokeLLM({ prompt, model: 'haiku', maxTokens: 600, skipCache: true, response_json_schema: { type: 'object' } });
     const draft = typeof raw === 'string' ? JSON.parse(raw) : raw;
 
@@ -250,20 +250,25 @@ router.post('/approve-about', async (req: Request, res: Response) => {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
 
-  const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
-  if (!profile) return res.status(404).json({ error: 'Business not found' });
-  if (!profile.about_draft) return res.status(400).json({ error: 'No draft to approve' });
+  try {
+    const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
+    if (!profile) return res.status(404).json({ error: 'Business not found' });
+    if (!profile.about_draft) return res.status(400).json({ error: 'No draft to approve' });
 
-  await prisma.businessProfile.update({
-    where: { id: businessProfileId },
-    data: {
-      about_approved: profile.about_draft,
-      about_status: 'approved',
-      about_approved_at: new Date().toISOString(),
-    },
-  });
+    await prisma.businessProfile.update({
+      where: { id: businessProfileId },
+      data: {
+        about_approved: profile.about_draft,
+        about_status: 'approved',
+        about_approved_at: new Date().toISOString(),
+      },
+    });
 
-  return res.json({ ok: true, about_status: 'approved' });
+    return res.json({ ok: true, about_status: 'approved' });
+  } catch (err: any) {
+    logger.warn(`approve-about failed for ${businessProfileId}: ${err.message}`);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // ── POST /api/onboarding/reject-about ───────────────────────────────────────────
@@ -272,12 +277,17 @@ router.post('/reject-about', async (req: Request, res: Response) => {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
 
-  await prisma.businessProfile.update({
-    where: { id: businessProfileId },
-    data: { about_status: 'rejected' },
-  });
+  try {
+    await prisma.businessProfile.update({
+      where: { id: businessProfileId },
+      data: { about_status: 'rejected' },
+    });
 
-  return res.json({ ok: true, about_status: 'rejected' });
+    return res.json({ ok: true, about_status: 'rejected' });
+  } catch (err: any) {
+    logger.warn(`reject-about failed for ${businessProfileId}: ${err.message}`);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // ── POST /api/onboarding/generate-missions ────────────────────────────────────
