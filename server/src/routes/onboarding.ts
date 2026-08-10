@@ -16,6 +16,9 @@ import { writeAutomationLog } from '../lib/automationLog';
 const logger = createLogger('Onboarding');
 const router = Router();
 
+// §5.0/§5.2 identity draft — 9 keys shared by generate-about + approve-about
+const ABOUT_KEYS = ['business_name','sector_key','sub_sector_key','business_type','service_model','target_audience','relevant_topics','content_tone','business_description'];
+
 router.post('/parse-profile', async (req: Request, res: Response) => {
   const { businessProfileId, description, category, city, goal, price_tier, customer_sources } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
@@ -214,8 +217,7 @@ Respond ONLY with valid JSON matching this exact schema (no markdown):
     const draft = typeof raw === 'string' ? JSON.parse(raw) : raw;
 
     // Validate all 9 keys present (AC1)
-    const REQUIRED = ['business_name','sector_key','sub_sector_key','business_type','service_model','target_audience','relevant_topics','content_tone','business_description'];
-    for (const key of REQUIRED) {
+    for (const key of ABOUT_KEYS) {
       if (!(key in draft)) draft[key] = Array.isArray(draft[key]) ? [] : '';
     }
 
@@ -245,26 +247,36 @@ Respond ONLY with valid JSON matching this exact schema (no markdown):
 });
 
 // ── POST /api/onboarding/approve-about ──────────────────────────────────────────
-// KAN-197 AC3: promotes the pending draft to the canonical, approved identity JSON.
+// KAN-197 AC3: promotes the draft to the canonical, approved identity JSON.
+// KAN-198 AC2/AC5: when the owner edited fields in the approval screen, the EDITED
+// values are what get saved — not just whatever was last generated.
 router.post('/approve-about', async (req: Request, res: Response) => {
-  const { businessProfileId } = req.body;
+  const { businessProfileId, draft } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
 
   try {
     const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
     if (!profile) return res.status(404).json({ error: 'Business not found' });
-    if (!profile.about_draft) return res.status(400).json({ error: 'No draft to approve' });
+    if (!profile.about_draft && !draft) return res.status(400).json({ error: 'No draft to approve' });
+
+    let approved = profile.about_draft;
+    if (draft) {
+      for (const key of ABOUT_KEYS) {
+        if (!(key in draft)) return res.status(400).json({ error: `draft missing required key: ${key}` });
+      }
+      approved = JSON.stringify(draft);
+    }
 
     await prisma.businessProfile.update({
       where: { id: businessProfileId },
       data: {
-        about_approved: profile.about_draft,
+        about_approved: approved,
         about_status: 'approved',
         about_approved_at: new Date().toISOString(),
       },
     });
 
-    return res.json({ ok: true, about_status: 'approved' });
+    return res.json({ ok: true, about_status: 'approved', approved: JSON.parse(approved) });
   } catch (err: any) {
     logger.warn(`approve-about failed for ${businessProfileId}: ${err.message}`);
     return res.status(500).json({ ok: false, error: err.message });

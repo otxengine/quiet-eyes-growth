@@ -33,6 +33,13 @@ function post(url: string, body: Record<string, any>): Promise<{ statusCode: num
 
 const DRAFT_JSON = JSON.stringify({ business_name: 'Test Biz', sector_key: 'beauty' });
 
+const NINE_KEY_DRAFT = {
+  business_name: 'Test Biz', sector_key: 'beauty', sub_sector_key: 'hair_salon',
+  business_type: 'B2C', service_model: 'appointment', target_audience: 'Women 25-45',
+  relevant_topics: ['hair care'], content_tone: 'friendly',
+  business_description: 'A hair salon in Tel Aviv.',
+};
+
 beforeEach(() => { jest.clearAllMocks(); update.mockResolvedValue({}); });
 
 describe('POST /api/onboarding/approve-about', () => {
@@ -45,6 +52,23 @@ describe('POST /api/onboarding/approve-about', () => {
     expect(data.about_approved).toBe(DRAFT_JSON);
     expect(data.about_status).toBe('approved');
     expect(data.about_approved_at).toBeTruthy();
+  });
+
+  it('KAN-198 AC2/AC5: an edited draft in the body overrides the stored about_draft', async () => {
+    const editedDraft = { ...NINE_KEY_DRAFT, business_description: 'OWNER-EDITED description' };
+    findUnique.mockResolvedValue({ id: 'bp1', about_draft: JSON.stringify(NINE_KEY_DRAFT), about_status: 'pending' });
+    const { body } = await post('/approve-about', { businessProfileId: 'bp1', draft: editedDraft });
+    expect(body.ok).toBe(true);
+    const data = update.mock.calls[0][0].data;
+    expect(JSON.parse(data.about_approved).business_description).toBe('OWNER-EDITED description');
+    expect(body.approved.business_description).toBe('OWNER-EDITED description');
+  });
+
+  it('KAN-198 AC1: 400s when an edited draft is missing a required key', async () => {
+    findUnique.mockResolvedValue({ id: 'bp1', about_draft: DRAFT_JSON, about_status: 'pending' });
+    const { statusCode } = await post('/approve-about', { businessProfileId: 'bp1', draft: { business_name: 'x' } });
+    expect(statusCode).toBe(400);
+    expect(update).not.toHaveBeenCalled();
   });
 
   it('400s when there is no draft to approve', async () => {

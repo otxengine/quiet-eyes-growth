@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import OnboardingForm from '@/components/onboarding/OnboardingForm';
 import OnboardingScanning from '@/components/onboarding/OnboardingScanning';
+import OnboardingApproveIdentity from '@/components/onboarding/OnboardingApproveIdentity';
 import OnboardingInsights from '@/components/onboarding/OnboardingInsights';
 
 const ADMIN_EMAILS = ['contact@otxengine.io', 'admin@cortexi.ai'];
@@ -43,6 +44,7 @@ export default function Onboarding() {
       <Routes>
         <Route index element={<OnboardingForm />} />
         <Route path="scanning" element={<OnboardingScanning />} />
+        <Route path="approve-identity" element={<OnboardingApproveIdentity />} />
         <Route path="insights" element={<OnboardingInsights />} />
         <Route path="*" element={<Navigate to="/onboarding" replace />} />
       </Routes>

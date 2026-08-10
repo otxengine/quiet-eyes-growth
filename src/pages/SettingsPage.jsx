@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Save, Loader2, Zap, MapPin, Plus, X, ShieldAlert } from 'lucide-react';
+import { Save, Loader2, Zap, MapPin, Plus, X, ShieldAlert, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 const RADIUS_OPTIONS = [5, 10, 15, 20, 30, 50];
@@ -250,6 +250,7 @@ import SettingsChannels from '@/components/settings/SettingsChannels';
 import SettingsDataSources from '@/components/settings/SettingsDataSources.jsx';
 import SettingsAutoRespond from '@/components/settings/SettingsAutoRespond.jsx';
 import SettingsWhatsAppBot from '@/components/settings/SettingsWhatsAppBot';
+import IdentityApprovalScreen from '@/components/identity/IdentityApprovalScreen';
 
 function ConstraintsSection({ businessProfileId }) {
   const queryClient = useQueryClient();
@@ -435,6 +436,7 @@ function ConstraintsSection({ businessProfileId }) {
 
 export default function SettingsPage() {
   const { businessProfile } = useOutletContext();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [form, setForm] = useState({
     name: '', category: '', city: '', full_address: '', description: '', target_market: '',
@@ -547,7 +549,24 @@ export default function SettingsPage() {
   return (
     <div className="space-y-5 max-w-2xl">
       <h1 className="text-[16px] font-bold text-foreground tracking-tight">הגדרות</h1>
+
+      <div className="card-base p-5 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-[14px] font-semibold text-foreground">תהליך קליטה (Onboarding)</h2>
+          <p className="text-[11px] text-foreground-muted mt-0.5">בצע מחדש את תהליך הקליטה כדי ליצור פרופיל עסקי חדש</p>
+        </div>
+        <button
+          onClick={() => navigate('/onboarding')}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary border border-border text-[11px] font-medium text-foreground-muted hover:text-foreground transition-colors flex-shrink-0"
+        >
+          <RefreshCw className="w-3.5 h-3.5" /> בצע קליטה מחדש
+        </button>
+      </div>
+
       <SettingsBusinessDetails form={form} setForm={setForm} onSave={handleSaveAll} saving={saving} />
+      {businessProfile?.id && (
+        <IdentityApprovalScreen businessProfileId={businessProfile.id} onApproved={() => queryClient.invalidateQueries({ queryKey: ['businessProfiles'] })} />
+      )}
       <SettingsTone form={form} onToneChange={(tone) => { setForm({ ...form, tone_preference: tone }); saveField({ tone_preference: tone }); toast.success('הטון עודכן ✓'); }} />
       <SettingsLeadCriteria form={form} setForm={setForm} onSave={() => saveField({ min_budget: form.min_budget, relevant_services: form.relevant_services, preferred_area: form.preferred_area, lead_intent_signals: form.lead_intent_signals, lead_quality_notes: form.lead_quality_notes })} />
       <SettingsChannels

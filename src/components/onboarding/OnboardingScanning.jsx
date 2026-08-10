@@ -9,6 +9,7 @@ const API_BASE = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_U
 const scanSteps = [
   { fn: 'parseProfile',            text: 'מנתח את פרופיל העסק שלך...',      narrative: 'מבין את הסקטור שלך לעומק...' },
   { fn: 'generateMissions',        text: 'מתכנן משימות לכל הסוכנים...',     narrative: 'Claude + GPT-4o בונים תוכנית עבודה מותאמת...' },
+  { fn: 'generateAbout',           text: 'מכין טיוטת זהות עסקית...',        narrative: 'מנסח תיאור, קהל יעד וטון תוכן לאישורך...' },
   { fn: 'autoConfigOsint',         text: 'מגדיר מקורות מידע מותאמים...',    narrative: 'בוחר את המקורות הרלוונטיים לתחום שלך...' },
   { fn: 'learnFromWebsite',        text: 'לומד את האתר שלך...',             narrative: 'קורא את הדפים ומבין את הקול שלך...', requiresWebsite: true },
   { fn: 'collectWebSignals',       text: 'סורק את השוק ברשת...',            narrative: 'מחפש מה לקוחות מדברים על הסקטור שלך...' },
@@ -100,6 +101,8 @@ export default function OnboardingScanning() {
             }).catch(() => {});
           } else if (step.fn === 'learnFromWebsite') {
             await base44.functions.invoke('learnFromWebsite', { businessProfileId: bp.id, websiteUrl: bp.website_url });
+          } else if (step.fn === 'generateAbout') {
+            await base44.raw.post('/onboarding/generate-about', { businessProfileId: bp.id }).catch(() => {});
           } else {
             await base44.functions.invoke(step.fn, params);
           }
@@ -134,7 +137,7 @@ export default function OnboardingScanning() {
         }
       }
 
-      navigate('/onboarding/insights', { state: { businessProfile: freshProfile, signals, proactiveAlerts } });
+      navigate('/onboarding/approve-identity', { state: { businessProfile: freshProfile, signals, proactiveAlerts } });
     };
 
     run();
