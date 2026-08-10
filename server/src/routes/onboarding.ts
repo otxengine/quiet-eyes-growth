@@ -149,6 +149,89 @@ Respond ONLY with valid JSON (no markdown, no explanation) matching this exact s
   }
 });
 
+// ── POST /api/onboarding/generate-about ───────────────────────────────────────
+// KAN-196 §5.0: Generates a 9-key identity draft (pending owner approval).
+// Writes to about_draft / about_status only — never to canonical profile fields.
+router.post('/generate-about', async (req: Request, res: Response) => {
+  const { businessProfileId, seed_info, website_url, social_urls, google_place_id } = req.body;
+  if (!businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
+
+  const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
+  if (!profile) return res.status(404).json({ error: 'Business not found' });
+
+  // AC4: no usable source at all → return retry prompt instead of hallucinating
+  const hasSeed    = !!seed_info;
+  const hasWebsite = !!(website_url || profile.website_url || profile.channels_website);
+  const hasSocial  = !!(social_urls || profile.instagram_url || profile.facebook_url || profile.tiktok_url);
+  const hasPlace   = !!(google_place_id || profile.google_place_id);
+  const hasDesc    = !!(profile.description || profile.category);
+  if (!hasSeed && !hasWebsite && !hasSocial && !hasPlace && !hasDesc) {
+    return res.json({
+      ok: false,
+      needs_seed: true,
+      prompt: 'כדי לייצר את הסקירה העסקית, אנא ספר לנו בכמה משפטים על העסק שלך — מה אתה מציע, למי, ואיפה.',
+    });
+  }
+
+  // Build source summary for the LLM
+  const sources = [
+    profile.description ? `Description: ${profile.description}` : null,
+    profile.category    ? `Category: ${profile.category}` : null,
+    profile.city        ? `City: ${profile.city}` : null,
+    (website_url || profile.website_url) ? `Website: ${website_url || profile.website_url}` : null,
+    (google_place_id || profile.google_place_id) ? `Google Place ID: ${google_place_id || profile.google_place_id}` : null,
+    seed_info           ? `Owner-provided context: ${seed_info}` : null,
+  ].filter(Boolean).join('\n');
+
+  const SECTOR_KEYS  = 'restaurant|beauty|fitness|legal|medical|real_estate|retail|auto|cleaning|education|tech_services|accounting|construction|events|design|marketing|photography|childcare|health|other';
+  const BUSINESS_TYPES = 'B2B|B2C|B2B2C';
+  const SERVICE_MODELS = 'project_based|subscription|appointment|walk_in|ecommerce';
+  const TONES         = 'professional|friendly|inspirational|technical|casual';
+
+  const prompt = `You are a business identity writer. Based ONLY on the sources below, produce a JSON identity draft.
+Do NOT invent services, cities, or claims not supported by the sources.
+If a field cannot be determined from the sources, use "" for strings and [] for arrays.
+
+Business name: ${profile.name}
+Sources:
+${sources}
+
+Respond ONLY with valid JSON matching this exact schema (no markdown):
+{
+  "business_name": "<string>",
+  "sector_key": "<${SECTOR_KEYS}>",
+  "sub_sector_key": "<specific sub-category slug, e.g. hair_salon>",
+  "business_type": "<${BUSINESS_TYPES}>",
+  "service_model": "<${SERVICE_MODELS}>",
+  "target_audience": "<1-2 sentences describing the target customer>",
+  "relevant_topics": ["<5-8 topics this business cares about>"],
+  "content_tone": "<${TONES}>",
+  "business_description": "<2-3 sentence business description>"
+}`;
+
+  try {
+    const raw = await invokeLLM({ prompt, model: 'haiku', maxTokens: 600, skipCache: true, response_json_schema: { type: 'object' } });
+    const draft = typeof raw === 'string' ? JSON.parse(raw) : raw;
+
+    // Validate all 9 keys present (AC1)
+    const REQUIRED = ['business_name','sector_key','sub_sector_key','business_type','service_model','target_audience','relevant_topics','content_tone','business_description'];
+    for (const key of REQUIRED) {
+      if (!(key in draft)) draft[key] = Array.isArray(draft[key]) ? [] : '';
+    }
+
+    // AC2: write only to draft fields — never touch canonical profile
+    await prisma.businessProfile.update({
+      where: { id: businessProfileId },
+      data: { about_draft: JSON.stringify(draft), about_status: 'pending' },
+    });
+
+    return res.json({ ok: true, draft, about_status: 'pending' });
+  } catch (err: any) {
+    logger.warn(`generate-about failed for ${businessProfileId}: ${err.message}`);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ── POST /api/onboarding/generate-missions ────────────────────────────────────
 // Called after parse-profile. Sends full profile to Claude Sonnet + GPT-4o
 // and generates per-agent mission plans stored in BusinessProfile.agent_missions.

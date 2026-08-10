@@ -116,6 +116,9 @@ model BusinessProfile {
   customer_sources           String?  // JSON array: ['google', 'instagram', 'word_of_mouth', ...]
   sector_profile             String?  // JSON: AI-parsed sub-sector context for agents
   agent_missions             String?  // JSON: LLM-generated per-agent mission plan (generated once at onboarding)
+  // §5.0 identity draft (KAN-196)
+  about_draft                String?  // JSON: 9-key identity draft pending owner approval
+  about_status               String?  @default("pending") // 'pending' | 'approved'
 
   @@map("business_profiles")
 }
