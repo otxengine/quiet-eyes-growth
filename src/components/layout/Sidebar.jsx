@@ -1,49 +1,26 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {
-  ChevronLeft, ChevronRight, LogOut,
+  ChevronRight, LogOut,
   ShieldAlert, Sparkles, Bot, Building2, GitBranch, User,
-  Eye, Settings,
-  Calendar, Megaphone, Lightbulb, Target, Home, CreditCard
+  Eye, Settings, Star, Users, Heart,
+  Calendar, Megaphone, Lightbulb, Home, CreditCard
 } from 'lucide-react';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { cn } from '@/lib/utils';
 
-// Main nav structure — Cortexi design: 6 flat pages
+// Main nav structure — Cortexi design: flat list, no nested groups
 const NAV_STRUCTURE = [
-  { type: 'item', path: '/',           label: 'בית',           icon: Home },
-  { type: 'item', path: '/insights',   label: 'תובנות',        icon: Lightbulb,   badgeKey: 'activeInsights' },
-  { type: 'item', path: '/competitors',label: 'מתחרים',        icon: Eye },
-  { type: 'item', path: '/marketing',  label: 'מרכז השיווק',   icon: Megaphone },
-  { type: 'item', path: '/events',     label: 'אירועים',       icon: Calendar },
-  {
-    type: 'group', key: 'more', label: 'עוד',
-    items: [
-      { path: '/reviews',         label: 'מוניטין',        badgeKey: 'pendingReviews' },
-      { path: '/social-competition', label: 'תחרות סושיאל' },
-      { path: '/retention',       label: 'ניהול לקוחות' },
-    ],
-  },
+  { path: '/',                   label: 'בית',           icon: Home },
+  { path: '/insights',           label: 'תובנות',        icon: Lightbulb, badgeKey: 'activeInsights' },
+  { path: '/competitors',        label: 'מתחרים',        icon: Eye },
+  { path: '/marketing',          label: 'מרכז השיווק',   icon: Megaphone },
+  { path: '/events',             label: 'אירועים',       icon: Calendar },
+  { path: '/reviews',            label: 'מוניטין',        icon: Star, badgeKey: 'pendingReviews' },
+  { path: '/social-competition', label: 'תחרות סושיאל',  icon: Users },
+  { path: '/retention',          label: 'ניהול לקוחות',   icon: Heart },
 ];
-
-// Collapsed mode icons — one per nav entry
-const COLLAPSED_ICONS = {
-  '/':            Home,
-  '/insights':    Lightbulb,
-  '/competitors': Eye,
-  '/marketing':   Megaphone,
-  '/events':      Calendar,
-  'more':         Target,
-};
-
-function getDefaultOpen(key) {
-  try {
-    const stored = localStorage.getItem(`sidebar_group_${key}`);
-    if (stored !== null) return stored === 'true';
-  } catch {}
-  return false; // closed by default (matches Figma)
-}
 
 function useIsAdmin() {
   try {
@@ -71,31 +48,6 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, 
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [userMenuOpen]);
-
-  const [openGroups, setOpenGroups] = useState(() => ({
-    more: getDefaultOpen('more'),
-  }));
-
-  // Auto-expand group when a child route is active
-  useEffect(() => {
-    NAV_STRUCTURE.forEach(node => {
-      if (node.type === 'group' && node.items.some(i => i.path === location.pathname)) {
-        setOpenGroups(prev => ({ ...prev, [node.key]: true }));
-      }
-    });
-  }, [location.pathname]);
-
-  const toggleGroup = (key) => {
-    setOpenGroups(prev => {
-      const next = { ...prev, [key]: !prev[key] };
-      try { localStorage.setItem(`sidebar_group_${key}`, String(next[key])); } catch {}
-      return next;
-    });
-  };
-
-  // Check if any child of a group is active
-  const isGroupActive = (node) =>
-    node.items.some(i => location.pathname === i.path || location.pathname.startsWith(i.path + '/'));
 
   return (
     <aside
@@ -187,127 +139,48 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, 
         {/* Main nav */}
         <ul className={cn('space-y-1', collapsed ? 'px-2' : 'px-5')}>
           {NAV_STRUCTURE.map((node) => {
-            if (node.type === 'item') {
-              const isActive =
-                (node.path === '/' ? (location.pathname === '/' || location.pathname === '/dashboard') : location.pathname === node.path);
-              const badgeCount = node.badgeKey ? (badges[node.badgeKey] || 0) : 0;
+            const isActive =
+              (node.path === '/' ? (location.pathname === '/' || location.pathname === '/dashboard') : location.pathname === node.path);
+            const badgeCount = node.badgeKey ? (badges[node.badgeKey] || 0) : 0;
+            const Icon = node.icon;
 
-              if (collapsed) {
-                const Icon = node.icon || COLLAPSED_ICONS[node.path] || Home;
-                return (
-                  <li key={node.path}>
-                    <Link to={node.path} onClick={() => onNavigate?.()}
-                      title={node.label}
-                      className="flex items-center justify-center w-10 h-10 rounded-lg mx-auto transition-colors relative"
-                      style={{ background: isActive ? 'hsl(var(--sidebar-accent-active))' : 'transparent', color: isActive ? 'hsl(var(--sidebar-primary))' : 'hsl(var(--sidebar-foreground-muted))' }}
-                      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'hsl(var(--sidebar-accent))'; }}
-                      onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
-                    >
-                      <Icon className="w-[15px] h-[15px]" />
-                      {badgeCount > 0 && (
-                        <span className="absolute top-1 right-1 w-2 h-2 rounded-full" style={{ background: 'hsl(var(--sidebar-primary))' }} />
-                      )}
-                    </Link>
-                  </li>
-                );
-              }
-
+            if (collapsed) {
               return (
                 <li key={node.path}>
-                  <Link
-                    to={node.path}
-                    onClick={() => onNavigate?.()}
-                    className="flex items-center justify-between h-9 text-[14px] transition-colors group"
-                    style={{ color: isActive ? '#111111' : '#888888', fontWeight: isActive ? '600' : '400', textDecoration: isActive ? 'underline' : 'none', textUnderlineOffset: '3px' }}
-                    onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = '#333333'; }}
-                    onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = '#888888'; }}
+                  <Link to={node.path} onClick={() => onNavigate?.()}
+                    title={node.label}
+                    className="flex items-center justify-center w-10 h-10 rounded-lg mx-auto transition-colors relative"
+                    style={{ background: isActive ? 'hsl(var(--sidebar-accent-active))' : 'transparent', color: isActive ? 'hsl(var(--sidebar-primary))' : 'hsl(var(--sidebar-foreground-muted))' }}
+                    onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'hsl(var(--sidebar-accent))'; }}
+                    onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                   >
-                    <span>{node.label}</span>
+                    <Icon className="w-[15px] h-[15px]" />
                     {badgeCount > 0 && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'hsl(var(--sidebar-primary) / 0.12)', color: 'hsl(var(--sidebar-primary))' }}>
-                        {badgeCount}
-                      </span>
+                      <span className="absolute top-1 right-1 w-2 h-2 rounded-full" style={{ background: 'hsl(var(--sidebar-primary))' }} />
                     )}
                   </Link>
                 </li>
               );
             }
 
-            // Group node
-            const isOpen = openGroups[node.key];
-            const groupActive = isGroupActive(node);
-            const childBadge = node.items.reduce((s, i) => s + (i.badgeKey ? (badges[i.badgeKey] || 0) : 0), 0);
-
-            if (collapsed) {
-              const Icon = COLLAPSED_ICONS[node.key] || Eye;
-              return (
-                <li key={node.key}>
-                  <button
-                    onClick={() => toggleGroup(node.key)}
-                    title={node.label}
-                    className="flex items-center justify-center w-10 h-10 rounded-lg mx-auto transition-colors relative"
-                    style={{ background: groupActive ? 'hsl(var(--sidebar-accent-active))' : 'transparent', color: groupActive ? 'hsl(var(--sidebar-primary))' : 'hsl(var(--sidebar-foreground-muted))' }}
-                    onMouseEnter={e => { if (!groupActive) e.currentTarget.style.background = 'hsl(var(--sidebar-accent))'; }}
-                    onMouseLeave={e => { if (!groupActive) e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    <Icon className="w-[15px] h-[15px]" />
-                    {childBadge > 0 && (
-                      <span className="absolute top-1 right-1 w-2 h-2 rounded-full" style={{ background: 'hsl(var(--sidebar-primary))' }} />
-                    )}
-                  </button>
-                </li>
-              );
-            }
-
             return (
-              <React.Fragment key={node.key}>
-                {/* Group header */}
-                <li>
-                  <button
-                    onClick={() => toggleGroup(node.key)}
-                    className="w-full flex items-center justify-between h-9 text-[14px] transition-colors"
-                    style={{ color: groupActive ? '#111111' : '#888888', fontWeight: groupActive ? '500' : '400' }}
-                    onMouseEnter={e => e.currentTarget.style.color = '#333333'}
-                    onMouseLeave={e => e.currentTarget.style.color = groupActive ? '#111111' : '#888888'}
-                  >
-                    <ChevronLeft
-                      className="w-3.5 h-3.5 flex-shrink-0 transition-transform duration-200"
-                      style={{ transform: isOpen ? 'rotate(-90deg)' : 'rotate(0deg)', color: 'inherit', opacity: 0.5 }}
-                    />
-                    <span className="flex-1 text-right mr-1">{node.label}</span>
-                    {!isOpen && childBadge > 0 && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'hsl(var(--sidebar-primary) / 0.12)', color: 'hsl(var(--sidebar-primary))' }}>
-                        {childBadge}
-                      </span>
-                    )}
-                  </button>
-                </li>
-
-                {/* Group children */}
-                {isOpen && node.items.map(item => {
-                  const isActive = location.pathname === item.path;
-                  const badgeCount = item.badgeKey ? (badges[item.badgeKey] || 0) : 0;
-                  return (
-                    <li key={item.path}>
-                      <Link
-                        to={item.path}
-                        onClick={() => onNavigate?.()}
-                        className="flex items-center justify-between h-8 text-[13px] transition-colors pr-4"
-                        style={{ color: isActive ? '#111111' : '#aaaaaa', fontWeight: isActive ? '500' : '400', textDecoration: isActive ? 'underline' : 'none', textUnderlineOffset: '3px' }}
-                        onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = '#555555'; }}
-                        onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = '#aaaaaa'; }}
-                      >
-                        <span>{item.label}</span>
-                        {badgeCount > 0 && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'hsl(var(--sidebar-primary) / 0.12)', color: 'hsl(var(--sidebar-primary))' }}>
-                            {badgeCount}
-                          </span>
-                        )}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </React.Fragment>
+              <li key={node.path}>
+                <Link
+                  to={node.path}
+                  onClick={() => onNavigate?.()}
+                  className="flex items-center justify-between h-9 text-[14px] transition-colors group"
+                  style={{ color: isActive ? '#111111' : '#888888', fontWeight: isActive ? '600' : '400', textDecoration: isActive ? 'underline' : 'none', textUnderlineOffset: '3px' }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = '#333333'; }}
+                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = '#888888'; }}
+                >
+                  <span>{node.label}</span>
+                  {badgeCount > 0 && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'hsl(var(--sidebar-primary) / 0.12)', color: 'hsl(var(--sidebar-primary))' }}>
+                      {badgeCount}
+                    </span>
+                  )}
+                </Link>
+              </li>
             );
           })}
         </ul>
