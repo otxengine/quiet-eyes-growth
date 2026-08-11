@@ -397,7 +397,7 @@ function buildAISectorBlock(sp: Record<string, any>, rawCategory: string): strin
   const lines: string[] = [
     `=== פרופיל עסקי מדויק: ${sp.sector_label_he || rawCategory} ===`,
     `תת-סקטור: ${sp.sub_sector || 'לא מוגדר'}`,
-    `סוג עסק: ${sp.business_type || 'לא מוגדר'} | מודל: ${sp.service_model || 'לא מוגדר'}`,
+    `סוג עסק: ${sp.business_type || 'לא מוגדר'} | מודל: ${Array.isArray(sp.service_model) ? sp.service_model.join(' + ') : (sp.service_model || 'לא מוגדר')}`,
     `קהל יעד: ${sp.target_audience_he || ''}`,
     `הקשר מחיר: ${sp.price_context_he || ''}`,
   ];

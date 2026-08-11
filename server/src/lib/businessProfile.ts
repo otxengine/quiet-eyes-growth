@@ -15,7 +15,7 @@ export interface SectorProfile {
   sub_sector:          string;
   sector_label_he:     string;
   business_type:       string;   // B2B | B2C | B2B2C
-  service_model:       string;   // project_based | subscription | appointment | walk_in | ecommerce
+  service_model:       string | string[];   // project_based | subscription | appointment | walk_in | ecommerce
   target_audience_he:  string;
   relevant_topics:     string[];
   irrelevant_topics:   string[];
@@ -294,7 +294,7 @@ export function buildAgentPromptContext(
     `=== פרופיל עסק מדויק ===`,
     `שם: ${profile.name}`,
     `סוג עסק: ${sp.sector_label_he} (${sp.sub_sector})`,
-    `מודל: ${sp.business_type} | ${sp.service_model}`,
+    `מודל: ${sp.business_type} | ${Array.isArray(sp.service_model) ? sp.service_model.join(' + ') : (sp.service_model || '')}`,
     `עיר: ${profile.city}`,
     `קהל יעד: ${sp.target_audience_he}`,
     `הקשר מחיר: ${sp.price_context_he}`,

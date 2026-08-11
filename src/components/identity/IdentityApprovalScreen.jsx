@@ -33,9 +33,14 @@ const SOURCE_LABELS = {
 
 const inputCls = 'w-full bg-secondary/50 border border-border/60 rounded-lg px-3 py-2 text-[12px] text-[#111111] focus:outline-none focus:border-border';
 
+const normSM = (d) => {
+  const sm = d.service_model;
+  return { ...d, service_model: Array.isArray(sm) ? sm : sm ? [sm] : [] };
+};
+
 const emptyDraft = () => ({
   business_description: '', business_name: '', sector_key: '', sub_sector_key: '',
-  business_type: '', service_model: '', target_audience: '', relevant_topics: [], content_tone: '',
+  business_type: '', service_model: [], target_audience: '', relevant_topics: [], content_tone: '',
 });
 
 function Field({ label, children, old }) {
@@ -69,12 +74,12 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
     setApprovedAt(profile?.about_approved_at || null);
     try { setSources(JSON.parse(profile?.about_sources || '[]')); } catch { setSources([]); }
     if (profile?.about_approved) {
-      try { setApprovedDraft({ ...emptyDraft(), ...JSON.parse(profile.about_approved) }); } catch { /* keep null */ }
+      try { setApprovedDraft(normSM({ ...emptyDraft(), ...JSON.parse(profile.about_approved) })); } catch { /* keep null */ }
     }
     // After approval, show what was actually approved (possibly edited), not a newer/older draft.
     const source = profile?.about_status === 'approved' ? profile?.about_approved : profile?.about_draft;
     if (source) {
-      try { setDraft({ ...emptyDraft(), ...JSON.parse(source) }); } catch { /* keep empty draft */ }
+      try { setDraft(normSM({ ...emptyDraft(), ...JSON.parse(source) })); } catch { /* keep empty draft */ }
     }
     setLoading(false);
   };
@@ -88,7 +93,7 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
       if (res.needs_seed) {
         toast.error(res.prompt || 'צריך עוד מידע כדי לייצר טיוטה');
       } else if (res.ok) {
-        const newDraft = { ...emptyDraft(), ...res.draft };
+        const newDraft = normSM({ ...emptyDraft(), ...res.draft });
         setDraft(newDraft);
         setStatus('pending');
         if (approvedDraft) setDiffMap(computeDiff(newDraft, approvedDraft));
@@ -220,9 +225,17 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
               </select>
             </Field>
             <Field label="מודל שירות" old={diffMap?.service_model}>
-              <select value={draft.service_model} onChange={(e) => set('service_model', e.target.value)} className={inputCls}>
-                {SERVICE_MODELS.map((k) => <option key={k} value={k}>{k}</option>)}
-              </select>
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {SERVICE_MODELS.map((m) => {
+                  const active = (draft.service_model || []).includes(m);
+                  return (
+                    <button key={m} type="button" onClick={() => set('service_model', active ? draft.service_model.filter(v => v !== m) : [...(draft.service_model || []), m])}
+                      className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${active ? 'bg-[#6366f1] text-white border-[#6366f1]' : 'bg-secondary/50 text-foreground-secondary border-border/60 hover:border-border'}`}>
+                      {m}
+                    </button>
+                  );
+                })}
+              </div>
             </Field>
             <Field label="טון תוכן" old={diffMap?.content_tone}>
               <select value={draft.content_tone} onChange={(e) => set('content_tone', e.target.value)} className={inputCls}>

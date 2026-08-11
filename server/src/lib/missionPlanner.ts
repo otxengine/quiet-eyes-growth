@@ -53,7 +53,7 @@ async function callGPT4o(prompt: string, maxTokens = 2000): Promise<any> {
 function buildStrategicPrompt(profile: any, sp: any): string {
   const spBlock = sp ? `
 תת-סקטור מדויק: ${sp.sub_sector} (${sp.sector_label_he})
-סוג עסק: ${sp.business_type} | מודל: ${sp.service_model}
+סוג עסק: ${sp.business_type} | מודל: ${Array.isArray(sp.service_model) ? sp.service_model.join(' + ') : (sp.service_model || '')}
 קהל יעד: ${sp.target_audience_he}
 הקשר מחיר: ${sp.price_context_he}
 נושאים רלוונטיים: ${(sp.relevant_topics || []).join(', ')}
