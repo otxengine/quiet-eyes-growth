@@ -13,6 +13,16 @@ const TONES = ['professional', 'friendly', 'inspirational', 'technical', 'casual
 
 // ponytail: backend only tracks the coarse 'social' bucket, not per-platform (IG/FB/TikTok) —
 // upgrade path is having generate-about tag which platform it actually read from.
+
+function computeDiff(newDraft, base) {
+  const diff = {};
+  REQUIRED_KEYS.forEach((k) => {
+    const toStr = (v) => Array.isArray(v) ? v.join(', ') : (v || '');
+    if (toStr(base[k]) !== toStr(newDraft[k])) diff[k] = base[k];
+  });
+  return diff;
+}
+
 const SOURCE_LABELS = {
   profile_description: { label: 'פרופיל קיים', scrape: false },
   website: { label: 'אתר', scrape: false },
@@ -28,11 +38,16 @@ const emptyDraft = () => ({
   business_type: '', service_model: '', target_audience: '', relevant_topics: [], content_tone: '',
 });
 
-function Field({ label, children }) {
+function Field({ label, children, old }) {
   return (
-    <div>
+    <div className={old != null ? 'rounded-lg ring-1 ring-amber-300 bg-amber-50/30 px-1.5 pt-1 pb-0.5' : ''}>
       <label className="text-[11px] font-medium text-foreground-secondary block mb-1">{label}</label>
       {children}
+      {old != null && (
+        <p className="text-[10px] text-amber-600 mt-0.5 line-through leading-relaxed">
+          {Array.isArray(old) ? old.join(', ') : (old || '—')}
+        </p>
+      )}
     </div>
   );
 }
@@ -44,6 +59,8 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
   const [sources, setSources] = useState([]);
   const [draft, setDraft] = useState(emptyDraft());
   const [approvedAt, setApprovedAt] = useState(null);
+  const [approvedDraft, setApprovedDraft] = useState(null);
+  const [diffMap, setDiffMap] = useState(null); // null=no regen yet, {}=no changes, {key:old}=changes
 
   const load = async () => {
     setLoading(true);
@@ -51,6 +68,9 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
     setStatus(profile?.about_status || null);
     setApprovedAt(profile?.about_approved_at || null);
     try { setSources(JSON.parse(profile?.about_sources || '[]')); } catch { setSources([]); }
+    if (profile?.about_approved) {
+      try { setApprovedDraft({ ...emptyDraft(), ...JSON.parse(profile.about_approved) }); } catch { /* keep null */ }
+    }
     // After approval, show what was actually approved (possibly edited), not a newer/older draft.
     const source = profile?.about_status === 'approved' ? profile?.about_approved : profile?.about_draft;
     if (source) {
@@ -68,8 +88,10 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
       if (res.needs_seed) {
         toast.error(res.prompt || 'צריך עוד מידע כדי לייצר טיוטה');
       } else if (res.ok) {
-        setDraft({ ...emptyDraft(), ...res.draft });
+        const newDraft = { ...emptyDraft(), ...res.draft };
+        setDraft(newDraft);
         setStatus('pending');
+        if (approvedDraft) setDiffMap(computeDiff(newDraft, approvedDraft));
         const p = await base44.entities.BusinessProfile.get(businessProfileId);
         try { setSources(JSON.parse(p?.about_sources || '[]')); } catch { /* keep prior sources */ }
       } else {
@@ -89,6 +111,8 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
       if (res.ok) {
         toast.success('הזהות העסקית אושרה ✓');
         setStatus('approved');
+        setApprovedDraft(draft);
+        setDiffMap(null);
         onApproved?.(draft);
       } else {
         toast.error(res.error || 'האישור נכשל');
@@ -152,7 +176,20 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
             </div>
           )}
 
-          <Field label="תיאור העסק">
+          {/* AC3: no significant change banner */}
+          {diffMap !== null && Object.keys(diffMap).length === 0 && (
+            <div className="rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-[12px] text-green-700 text-center">
+              לא נמצאו שינויים משמעותיים בהשוואה לגרסה המאושרת
+            </div>
+          )}
+
+          {/* AC2: business_description is primary — show old value prominently above the textarea */}
+          <Field label="תיאור העסק" old={diffMap?.business_description}>
+            {diffMap !== null && 'business_description' in diffMap && (
+              <div className="mb-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[12px] text-amber-800 line-through leading-relaxed">
+                {approvedDraft?.business_description || '—'}
+              </div>
+            )}
             <textarea
               value={draft.business_description}
               onChange={(e) => set('business_description', e.target.value)}
@@ -161,37 +198,38 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
             />
           </Field>
 
+          {/* AC1: per-field diff highlights for remaining 8 keys */}
           <div className="grid grid-cols-2 gap-3">
-            <Field label="שם העסק">
+            <Field label="שם העסק" old={diffMap?.business_name}>
               <input value={draft.business_name} onChange={(e) => set('business_name', e.target.value)} className={inputCls} />
             </Field>
-            <Field label="קהל יעד">
+            <Field label="קהל יעד" old={diffMap?.target_audience}>
               <input value={draft.target_audience} onChange={(e) => set('target_audience', e.target.value)} className={inputCls} />
             </Field>
-            <Field label="סקטור">
+            <Field label="סקטור" old={diffMap?.sector_key}>
               <select value={draft.sector_key} onChange={(e) => set('sector_key', e.target.value)} className={inputCls}>
                 {SECTOR_KEYS.map((k) => <option key={k} value={k}>{k}</option>)}
               </select>
             </Field>
-            <Field label="תת-סקטור">
+            <Field label="תת-סקטור" old={diffMap?.sub_sector_key}>
               <input value={draft.sub_sector_key} onChange={(e) => set('sub_sector_key', e.target.value)} className={inputCls} />
             </Field>
-            <Field label="סוג עסק">
+            <Field label="סוג עסק" old={diffMap?.business_type}>
               <select value={draft.business_type} onChange={(e) => set('business_type', e.target.value)} className={inputCls}>
                 {BUSINESS_TYPES.map((k) => <option key={k} value={k}>{k}</option>)}
               </select>
             </Field>
-            <Field label="מודל שירות">
+            <Field label="מודל שירות" old={diffMap?.service_model}>
               <select value={draft.service_model} onChange={(e) => set('service_model', e.target.value)} className={inputCls}>
                 {SERVICE_MODELS.map((k) => <option key={k} value={k}>{k}</option>)}
               </select>
             </Field>
-            <Field label="טון תוכן">
+            <Field label="טון תוכן" old={diffMap?.content_tone}>
               <select value={draft.content_tone} onChange={(e) => set('content_tone', e.target.value)} className={inputCls}>
                 {TONES.map((k) => <option key={k} value={k}>{k}</option>)}
               </select>
             </Field>
-            <Field label="נושאים רלוונטיים (מופרדים בפסיק)">
+            <Field label="נושאים רלוונטיים (מופרדים בפסיק)" old={diffMap?.relevant_topics}>
               <input
                 value={(draft.relevant_topics || []).join(', ')}
                 onChange={(e) => set('relevant_topics', e.target.value.split(',').map((s) => s.trim()).filter(Boolean))}
