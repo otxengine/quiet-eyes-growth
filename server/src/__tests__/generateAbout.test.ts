@@ -13,13 +13,20 @@ jest.mock('../db', () => ({
 jest.mock('../lib/llm',            () => ({ invokeLLM:             jest.fn() }));
 jest.mock('../lib/automationLog',  () => ({ writeAutomationLog:    jest.fn() }));
 jest.mock('../lib/missionPlanner', () => ({ generateAgentMissions: jest.fn() }));
+jest.mock('../lib/websiteFetch',   () => ({ fetchWebsiteSource:    jest.fn() }));
+jest.mock('../lib/googlePlaces',   () => ({ getPlaceDetails:       jest.fn() }));
 jest.mock('../infra/logger', () => ({
   createLogger: jest.fn(() => ({ warn: jest.fn(), info: jest.fn(), error: jest.fn() })),
 }));
 
+import { fetchWebsiteSource } from '../lib/websiteFetch';
+import { getPlaceDetails } from '../lib/googlePlaces';
+
 const findUnique = prisma.businessProfile.findUnique as jest.Mock;
 const update     = prisma.businessProfile.update     as jest.Mock;
 const llm        = invokeLLM as jest.Mock;
+const websiteFetch = fetchWebsiteSource as jest.Mock;
+const placeDetails = getPlaceDetails as jest.Mock;
 
 function post(body: Record<string, any>): Promise<{ statusCode: number; body: any }> {
   return new Promise((resolve, reject) => {
@@ -46,7 +53,12 @@ const VALID_DRAFT = {
   business_description: 'A hair salon in Tel Aviv.',
 };
 
-beforeEach(() => { jest.clearAllMocks(); update.mockResolvedValue({}); });
+beforeEach(() => {
+  jest.clearAllMocks();
+  update.mockResolvedValue({});
+  websiteFetch.mockResolvedValue(null);
+  placeDetails.mockResolvedValue({ editorialSummary: '' });
+});
 
 describe('POST /api/onboarding/generate-about', () => {
   it('AC4: returns needs_seed when no source available', async () => {
@@ -114,5 +126,77 @@ describe('POST /api/onboarding/generate-about', () => {
     const { body } = await post({ businessProfileId: 'bp1', seed_info: 'A hair salon' });
     expect(body.ok).toBe(true);
     expect(llm).toHaveBeenCalled();
+  });
+});
+
+// KAN-202: website multi-source discovery + Google Places editorial about
+describe('POST /api/onboarding/generate-about — KAN-202 sources', () => {
+  it('AC1: fetches website content and includes the excerpt + provenance', async () => {
+    findUnique.mockResolvedValue({ ...BASE_PROFILE, website_url: 'https://biz.co.il' });
+    websiteFetch.mockResolvedValue({ text: 'We cut hair beautifully.', sourceUrl: 'https://biz.co.il/about' });
+    llm.mockResolvedValue(JSON.stringify(VALID_DRAFT));
+
+    await post({ businessProfileId: 'bp1' });
+
+    expect(websiteFetch).toHaveBeenCalledWith('https://biz.co.il');
+    const prompt = llm.mock.calls[0][0].prompt;
+    expect(prompt).toContain('We cut hair beautifully.');
+    expect(prompt).toContain('https://biz.co.il/about');
+
+    const data = update.mock.calls[0][0].data;
+    const excerpts = JSON.parse(data.about_source_excerpts);
+    expect(excerpts.website).toEqual({ url: 'https://biz.co.il/about', excerpt: 'We cut hair beautifully.' });
+  });
+
+  it('AC4: degrades gracefully when the website fetch fails (SPA/thin site) — generation still succeeds', async () => {
+    findUnique.mockResolvedValue({ ...BASE_PROFILE, website_url: 'https://spa.co.il' });
+    websiteFetch.mockResolvedValue(null);
+    llm.mockResolvedValue(JSON.stringify(VALID_DRAFT));
+
+    const { body } = await post({ businessProfileId: 'bp1' });
+
+    expect(body.ok).toBe(true);
+    const prompt = llm.mock.calls[0][0].prompt;
+    expect(prompt).toContain('Website: https://spa.co.il');
+    const data = update.mock.calls[0][0].data;
+    expect(JSON.parse(data.about_source_excerpts).website).toBeUndefined();
+  });
+
+  it('AC2: pulls the Places editorial summary when google_place_id is present', async () => {
+    findUnique.mockResolvedValue({ ...BASE_PROFILE, google_place_id: 'place123' });
+    placeDetails.mockResolvedValue({ editorialSummary: 'A cozy neighborhood salon.' });
+    llm.mockResolvedValue(JSON.stringify(VALID_DRAFT));
+
+    await post({ businessProfileId: 'bp1' });
+
+    expect(placeDetails).toHaveBeenCalledWith('place123');
+    const prompt = llm.mock.calls[0][0].prompt;
+    expect(prompt).toContain('A cozy neighborhood salon.');
+    const data = update.mock.calls[0][0].data;
+    expect(JSON.parse(data.about_source_excerpts).google_place).toEqual({ excerpt: 'A cozy neighborhood salon.' });
+  });
+
+  it('AC2: no google_place_id — Places is never called, nothing invented', async () => {
+    findUnique.mockResolvedValue(BASE_PROFILE);
+    llm.mockResolvedValue(JSON.stringify(VALID_DRAFT));
+
+    await post({ businessProfileId: 'bp1' });
+
+    expect(placeDetails).not.toHaveBeenCalled();
+    const data = update.mock.calls[0][0].data;
+    expect(JSON.parse(data.about_source_excerpts).google_place).toBeUndefined();
+  });
+
+  it('AC2: place present but editorial summary empty — nothing invented, ID label used instead', async () => {
+    findUnique.mockResolvedValue({ ...BASE_PROFILE, google_place_id: 'place123' });
+    placeDetails.mockResolvedValue({ editorialSummary: '' });
+    llm.mockResolvedValue(JSON.stringify(VALID_DRAFT));
+
+    await post({ businessProfileId: 'bp1' });
+
+    const prompt = llm.mock.calls[0][0].prompt;
+    expect(prompt).toContain('Google Place ID: place123');
+    const data = update.mock.calls[0][0].data;
+    expect(JSON.parse(data.about_source_excerpts).google_place).toBeUndefined();
   });
 });

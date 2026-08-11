@@ -12,6 +12,8 @@ import { invokeLLM } from '../lib/llm';
 import { generateAgentMissions } from '../lib/missionPlanner';
 import { createLogger } from '../infra/logger';
 import { writeAutomationLog } from '../lib/automationLog';
+import { fetchWebsiteSource } from '../lib/websiteFetch';
+import { getPlaceDetails } from '../lib/googlePlaces';
 
 const logger = createLogger('Onboarding');
 const router = Router();
@@ -177,13 +179,24 @@ router.post('/generate-about', async (req: Request, res: Response) => {
       });
     }
 
+    // KAN-202 AC1/AC4: fetch real website content (prefers /about, /אודות, /services; degrades to null on failure)
+    const websiteUrlToUse = website_url || profile.website_url || profile.channels_website;
+    const websiteSource = hasWebsite && websiteUrlToUse ? await fetchWebsiteSource(websiteUrlToUse) : null;
+
+    // KAN-202 AC2: pull the Places editorial summary when a place is linked; nothing invented when absent
+    const placeIdToUse = google_place_id || profile.google_place_id;
+    const placeDetails = hasPlace && placeIdToUse ? await getPlaceDetails(placeIdToUse) : null;
+    const placeExcerpt = placeDetails?.editorialSummary || '';
+
     // Build source summary for the LLM
     const sources = [
       profile.description ? `Description: ${profile.description}` : null,
       profile.category    ? `Category: ${profile.category}` : null,
       profile.city        ? `City: ${profile.city}` : null,
-      (website_url || profile.website_url) ? `Website: ${website_url || profile.website_url}` : null,
-      (google_place_id || profile.google_place_id) ? `Google Place ID: ${google_place_id || profile.google_place_id}` : null,
+      websiteSource ? `Website (${websiteSource.sourceUrl}): ${websiteSource.text}`
+        : (hasWebsite ? `Website: ${websiteUrlToUse}` : null),
+      placeExcerpt ? `Google Place editorial summary: ${placeExcerpt}`
+        : (hasPlace ? `Google Place ID: ${placeIdToUse}` : null),
       seed_info           ? `Owner-provided context: ${seed_info}` : null,
     ].filter(Boolean).join('\n');
 
@@ -235,12 +248,19 @@ Respond ONLY with valid JSON matching this exact schema (no markdown):
       hasPlace   ? 'google_place' : null,
       hasSeed    ? 'seed_info' : null,
     ].filter(Boolean);
+
+    // KAN-202 AC3: raw excerpt + provenance per source (only for sources actually fetched)
+    const sourceExcerpts: Record<string, { url?: string; excerpt: string }> = {};
+    if (websiteSource) sourceExcerpts.website = { url: websiteSource.sourceUrl, excerpt: websiteSource.text };
+    if (placeExcerpt)  sourceExcerpts.google_place = { excerpt: placeExcerpt };
+
     await prisma.businessProfile.update({
       where: { id: businessProfileId },
       data: {
         about_draft: JSON.stringify(draft),
         about_status: 'pending',
         about_sources: JSON.stringify(sourcesUsed),
+        about_source_excerpts: JSON.stringify(sourceExcerpts),
         about_generated_at: new Date().toISOString(),
       },
     });

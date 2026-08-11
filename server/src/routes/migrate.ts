@@ -546,6 +546,7 @@ router.post('/', async (req: Request, res: Response) => {
     `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_status       TEXT DEFAULT 'pending'`,
     `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_approved     TEXT`,
     `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_sources      TEXT`,
+    `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_source_excerpts TEXT`,
     `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_generated_at TEXT`,
     `ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_approved_at  TEXT`,
 

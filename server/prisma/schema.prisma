@@ -122,6 +122,7 @@ model BusinessProfile {
   // §5.2 identity persistence (KAN-197)
   about_approved              String?  // JSON: approved 9-key identity (canonical; written only on Approve)
   about_sources               String?  // JSON array: source types used for the last generate/regenerate
+  about_source_excerpts       String?  // JSON: {source_type: {url?, excerpt}} raw provenance (KAN-202)
   about_generated_at          String?  // ISO timestamp of last generate/regenerate
   about_approved_at           String?  // ISO timestamp of last Approve
 
