@@ -15,7 +15,6 @@ export default function SettingsBusinessDetails({ form, setForm, onSave, saving 
         <input value={form.full_address || ''} onChange={(e) => setForm({ ...form, full_address: e.target.value })} placeholder="רחוב, מספר, עיר" className={inputCls} />
         <p className="text-[9px] text-foreground-muted/50 mt-0.5">משמש לזיהוי מתחרים ולידים באזור שלך</p>
       </div>
-      <div><label className="text-[12px] text-foreground-muted mb-1 block">תיאור העסק</label><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} placeholder="ספר בקצרה על העסק שלך..." className={`${inputCls} resize-none`} /></div>
       <div><label className="text-[12px] text-foreground-muted mb-1 block">קהל יעד</label><input value={form.target_market} onChange={(e) => setForm({ ...form, target_market: e.target.value })} placeholder="לדוגמה: משפחות צעירות באזור המרכז" className={inputCls} /></div>
       <button onClick={onSave} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[12px] font-medium bg-[#111111] text-white hover:bg-[#333333] transition-colors disabled:opacity-50">
         {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} {saving ? 'שומר...' : 'שמור שינויים'}
