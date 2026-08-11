@@ -250,7 +250,7 @@ import SettingsChannels from '@/components/settings/SettingsChannels';
 import SettingsDataSources from '@/components/settings/SettingsDataSources.jsx';
 import SettingsAutoRespond from '@/components/settings/SettingsAutoRespond.jsx';
 import SettingsWhatsAppBot from '@/components/settings/SettingsWhatsAppBot';
-import IdentityApprovalScreen from '@/components/identity/IdentityApprovalScreen';
+import SettingsLearnBusiness from '@/components/settings/SettingsLearnBusiness';
 
 function ConstraintsSection({ businessProfileId }) {
   const queryClient = useQueryClient();
@@ -565,7 +565,7 @@ export default function SettingsPage() {
 
       <SettingsBusinessDetails form={form} setForm={setForm} onSave={handleSaveAll} saving={saving} />
       {businessProfile?.id && (
-        <IdentityApprovalScreen businessProfileId={businessProfile.id} onApproved={() => queryClient.invalidateQueries({ queryKey: ['businessProfiles'] })} />
+        <SettingsLearnBusiness businessProfile={businessProfile} onApproved={() => queryClient.invalidateQueries({ queryKey: ['businessProfiles'] })} />
       )}
       <SettingsTone form={form} onToneChange={(tone) => { setForm({ ...form, tone_preference: tone }); saveField({ tone_preference: tone }); toast.success('הטון עודכן ✓'); }} />
       <SettingsLeadCriteria form={form} setForm={setForm} onSave={() => saveField({ min_budget: form.min_budget, relevant_services: form.relevant_services, preferred_area: form.preferred_area, lead_intent_signals: form.lead_intent_signals, lead_quality_notes: form.lead_quality_notes })} />

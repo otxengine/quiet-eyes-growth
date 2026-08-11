@@ -35,7 +35,6 @@ import { bootstrapBusinessIntelligence } from '../../lib/bootstrapIntelligence';
 import { evaluateCollectionStatus } from '../../lib/collectionStatus';
 import { contentPerformanceAgent } from './contentPerformanceAgent';
 import { reviewRequestTimingAgent } from './reviewRequestTimingAgent';
-import { learnFromWebsite } from './stubs';
 
 // ponytail: inline from src/lib/planConfig.js — update both if plan limits change
 const PLAN_SCAN_LIMITS: Record<string, number> = {
@@ -157,20 +156,6 @@ export async function runFullScan(req: Request, res: Response) {
         res.json({ skipped: true, reason: 'detectEarlyTrends ran within 48h — trends do not change hourly' });
     }
   } catch (_) {}
-
-  // KAN-9 prep: scrape brand voice/context before collectors — fire-and-forget, does not block response
-  if (profile?.website_url) {
-    new Promise<void>((resolve) => {
-      const fakeReq = { body: { businessProfileId, websiteUrl: profile.website_url } } as Request;
-      const fakeRes: any = { json: () => { resolve(); return fakeRes; }, status: () => fakeRes };
-      Promise.resolve().then(() => learnFromWebsite(fakeReq, fakeRes)).catch((e: any) => {
-        console.warn('[runFullScan] learnFromWebsite prep error:', e.message);
-        resolve();
-      });
-    });
-  } else {
-    console.log('[runFullScan] learnFromWebsite skipped — no website_url on profile');
-  }
 
   // Full pipeline — ordered from data collection → analysis → learning → cleanup
   const pipeline: Array<[string, Function]> = [

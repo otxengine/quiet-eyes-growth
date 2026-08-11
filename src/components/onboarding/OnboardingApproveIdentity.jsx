@@ -31,7 +31,7 @@ export default function OnboardingApproveIdentity() {
         <IdentityApprovalScreen
           businessProfileId={businessProfile.id}
           onApproved={continueOn}
-          onCancel={continueOn}
+          onCancel={() => navigate(-1)}
         />
       </div>
     </div>

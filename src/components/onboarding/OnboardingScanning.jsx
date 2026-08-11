@@ -11,7 +11,6 @@ const scanSteps = [
   { fn: 'generateMissions',        text: 'מתכנן משימות לכל הסוכנים...',     narrative: 'Claude + GPT-4o בונים תוכנית עבודה מותאמת...' },
   { fn: 'generateAbout',           text: 'מכין טיוטת זהות עסקית...',        narrative: 'מנסח תיאור, קהל יעד וטון תוכן לאישורך...' },
   { fn: 'autoConfigOsint',         text: 'מגדיר מקורות מידע מותאמים...',    narrative: 'בוחר את המקורות הרלוונטיים לתחום שלך...' },
-  { fn: 'learnFromWebsite',        text: 'לומד את האתר שלך...',             narrative: 'קורא את הדפים ומבין את הקול שלך...', requiresWebsite: true },
   { fn: 'collectWebSignals',       text: 'סורק את השוק ברשת...',            narrative: 'מחפש מה לקוחות מדברים על הסקטור שלך...' },
   { fn: 'collectSocialSignals',    text: 'אוסף אותות מרשתות חברתיות...',   narrative: 'מנתח טרנדים רלוונטיים לעסק שלך...' },
   { fn: 'synthesizeMarketInsights', text: 'מנתח תובנות שוק...',              narrative: 'מזהה הזדמנויות ספציפיות לתחום שלך...', delay: 8000 },
@@ -25,11 +24,6 @@ const scanSteps = [
   { fn: 'generateProactiveAlerts', text: 'מייצר המלצות ראשונות...',         narrative: 'רק תובנות שרלוונטיות לעסק שלך בדיוק...' },
 ];
 
-const fallbackInsights = [
-  { category: 'threat',      title: 'תחרות גוברת באזור',                  recommended_action: 'בדוק את המתחרים החדשים.',              confidence: 75 },
-  { category: 'opportunity', title: 'ביקוש גובר לשירותים דיגיטליים',      recommended_action: 'שקול להוסיף הזמנה אונליין.',             confidence: 80 },
-  { category: 'trend',       title: 'עלייה בחיפושים מקומיים',             recommended_action: 'וודא שפרופיל Google Business מעודכן.',  confidence: 85 },
-];
 
 const BG_STYLE = {
   backgroundColor: '#f5f5f7',
@@ -99,10 +93,11 @@ export default function OnboardingScanning() {
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
               body: JSON.stringify({ businessProfileId: bp.id }),
             }).catch(() => {});
-          } else if (step.fn === 'learnFromWebsite') {
-            await base44.functions.invoke('learnFromWebsite', { businessProfileId: bp.id, websiteUrl: bp.website_url });
           } else if (step.fn === 'generateAbout') {
-            await base44.raw.post('/onboarding/generate-about', { businessProfileId: bp.id }).catch(() => {});
+            await base44.raw.post('/onboarding/generate-about', {
+              businessProfileId: bp.id,
+              ...(onboardingData.seed_info ? { seed_info: onboardingData.seed_info } : {}),
+            }).catch(() => {});
           } else {
             await base44.functions.invoke(step.fn, params);
           }
@@ -124,18 +119,6 @@ export default function OnboardingScanning() {
         proactiveAlerts = alertsRes || [];
         if (profileRes) freshProfile = profileRes;
       } catch (_) {}
-
-      if (signals.length === 0) {
-        const now = new Date().toISOString();
-        for (const insight of fallbackInsights) {
-          const signal = await base44.entities.MarketSignal.create({
-            summary: insight.title, impact_level: insight.category === 'threat' ? 'high' : 'medium',
-            category: insight.category, recommended_action: insight.recommended_action,
-            confidence: insight.confidence, is_read: false, detected_at: now, linked_business: bp.id,
-          });
-          signals.push(signal);
-        }
-      }
 
       navigate('/onboarding/approve-identity', { state: { businessProfile: freshProfile, signals, proactiveAlerts } });
     };

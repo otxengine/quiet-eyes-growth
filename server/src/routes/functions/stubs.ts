@@ -279,25 +279,13 @@ Return JSON:
 
     if (!result) return res.json({ success: false, message: 'Could not parse website' });
 
-    const updateData: Record<string, any> = {};
-    if (result.description && !profile.description) updateData.description = result.description;
-    if (result.target_market && !profile.target_market) updateData.target_market = result.target_market;
-    if (result.services?.length) updateData.relevant_services = result.services.join(', ');
-    if (result.keywords?.length) {
-      const existing = profile.custom_keywords?.split(',').map((k: string) => k.trim()).filter(Boolean) || [];
-      const merged = [...new Set([...existing, ...result.keywords])].slice(0, 20);
-      updateData.custom_keywords = merged.join(', ');
-    }
-
-    if (Object.keys(updateData).length > 0) {
-      await prisma.businessProfile.update({ where: { id: businessProfileId }, data: updateData });
-    }
-
+    // KAN-205 AC2: deprecated — this no longer writes to the canonical profile.
+    // Use POST /api/onboarding/generate-about + approve-about for the approve-gated identity flow.
     return res.json({
       success: true,
       services_found: result.services?.length || 0,
       keywords_added: result.keywords?.length || 0,
-      description_set: !!updateData.description,
+      description_set: false,
     });
   } catch (err: any) {
     console.error('[learnFromWebsite]', err.message);

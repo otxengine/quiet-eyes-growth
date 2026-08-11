@@ -6,7 +6,6 @@ import { analyzeInstagramComments } from '../routes/functions/analyzeInstagramCo
 import { collectWebSignals } from '../routes/functions/collectWebSignals';
 import { collectSocialSignals } from '../routes/functions/collectSocialSignals';
 import { collectReviews } from '../routes/functions/collectReviews';
-import { learnFromWebsite } from '../routes/functions/stubs';
 
 // ── DB & infrastructure ───────────────────────────────────────────────────────
 jest.mock('../db', () => ({
@@ -52,7 +51,6 @@ jest.mock('../routes/functions/updateSectorKnowledge',       () => ({ updateSect
 jest.mock('../routes/functions/contentPerformanceAgent',     () => ({ contentPerformanceAgent:    jest.fn((_r: any, res: any) => res.json({ ok: true })) }));
 jest.mock('../routes/functions/reviewRequestTimingAgent',    () => ({ reviewRequestTimingAgent:   jest.fn((_r: any, res: any) => res.json({ ok: true })) }));
 jest.mock('../routes/functions/generateMorningBriefing',     () => ({ generateMorningBriefing:    jest.fn((_r: any, res: any) => res.json({ ok: true })) }));
-jest.mock('../routes/functions/stubs',                       () => ({ learnFromWebsite:           jest.fn((_r: any, res: any) => res.json({ ok: true })) }));
 
 // ── Shared fixtures ───────────────────────────────────────────────────────────
 const PROFILE = { id: 'bp1', name: 'Test Biz', sector_profile: 'x', agent_missions: 'x', website_url: null };
@@ -225,45 +223,5 @@ describe('runFullScan — KAN-34 collection status (§2.1)', () => {
       'runFullScan:collectionStatus', 'bp1', expect.any(String),
       0, 'success', 'collection_status:not_yet_done',
     );
-  });
-});
-
-// ── KAN-38: onboarding branch — website vs no-website ────────────────────────
-describe('runFullScan — KAN-38 onboarding website branch', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    (prisma.automationLog.findFirst  as jest.Mock).mockResolvedValue(null);
-    (prisma.automationLog.count      as jest.Mock).mockResolvedValue(0);
-    (prisma.businessMemory.findFirst as jest.Mock).mockResolvedValue(null);
-    (writeAutomationLog              as jest.Mock).mockResolvedValue(undefined);
-  });
-
-  // AC1: business has website_url → learnFromWebsite fires (fire-and-forget, before pipeline)
-  it('AC1: calls learnFromWebsite with website_url when profile has one', async () => {
-    const profile = { ...PROFILE, website_url: 'https://example.com' };
-    (prisma.businessProfile.findMany as jest.Mock).mockResolvedValue([profile]);
-
-    const { res } = makeRes();
-    await runFullScan(makeReq(), res);
-    await new Promise(r => setTimeout(r, 50));
-
-    expect(learnFromWebsite as jest.Mock).toHaveBeenCalledWith(
-      expect.objectContaining({ body: expect.objectContaining({ businessProfileId: 'bp1', websiteUrl: 'https://example.com' }) }),
-      expect.anything(),
-    );
-    expect(collectWebSignals as jest.Mock).toHaveBeenCalled();
-  });
-
-  // AC2: no website_url → learnFromWebsite skipped, web/social collectors still run
-  it('AC2: skips learnFromWebsite and still runs collectWebSignals when no website_url', async () => {
-    (prisma.businessProfile.findMany as jest.Mock).mockResolvedValue([PROFILE]); // website_url: null
-
-    const { res } = makeRes();
-    await runFullScan(makeReq(), res);
-    await new Promise(r => setTimeout(r, 50));
-
-    expect(learnFromWebsite as jest.Mock).not.toHaveBeenCalled();
-    expect(collectWebSignals    as jest.Mock).toHaveBeenCalled();
-    expect(collectSocialSignals as jest.Mock).toHaveBeenCalled();
   });
 });

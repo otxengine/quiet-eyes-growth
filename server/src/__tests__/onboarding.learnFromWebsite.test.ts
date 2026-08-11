@@ -54,19 +54,18 @@ beforeEach(() => {
 
 describe('learnFromWebsite', () => {
 
-  test('AC1: persists website context to profile when website_url provided', async () => {
+  // KAN-205 AC2: deprecated — must never write to the canonical profile, even on a full
+  // successful extraction. Use /api/onboarding/generate-about + approve-about instead.
+  test('AC1 (KAN-205): extracts website context but never writes it to the canonical profile', async () => {
     const { statusCode, body } = await call({ businessProfileId: 'bp1', websiteUrl: 'https://example.com' });
 
     expect(statusCode).toBe(200);
     expect(body.success).toBe(true);
     expect(body.services_found).toBe(2);
     expect(body.keywords_added).toBe(2);
+    expect(body.description_set).toBe(false);
 
-    const { data } = update.mock.calls[0][0];
-    expect(data.description).toBe('פיצה איטלקית אותנטית');
-    expect(data.target_market).toBe('משפחות וצעירים');
-    expect(data.relevant_services).toBe('פיצה, פסטה');
-    expect(data.custom_keywords).toContain('פיצה תל אביב');
+    expect(update).not.toHaveBeenCalled();
   });
 
   test('AC2: returns success:false immediately when websiteUrl is absent — no DB write', async () => {

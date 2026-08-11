@@ -43,11 +43,13 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
   const [status, setStatus] = useState(null);
   const [sources, setSources] = useState([]);
   const [draft, setDraft] = useState(emptyDraft());
+  const [approvedAt, setApprovedAt] = useState(null);
 
   const load = async () => {
     setLoading(true);
     const profile = await base44.entities.BusinessProfile.get(businessProfileId);
     setStatus(profile?.about_status || null);
+    setApprovedAt(profile?.about_approved_at || null);
     try { setSources(JSON.parse(profile?.about_sources || '[]')); } catch { setSources([]); }
     // After approval, show what was actually approved (possibly edited), not a newer/older draft.
     const source = profile?.about_status === 'approved' ? profile?.about_approved : profile?.about_draft;
@@ -116,7 +118,11 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
           <h2 className="text-[14px] font-semibold text-[#222222]">זהות עסקית — סקירה לאישור</h2>
           <p className="text-[11px] text-foreground-muted mt-0.5">בדוק ועדכן את הפרטים שנוצרו אוטומטית לפני שהם הופכים לרשמיים</p>
         </div>
-        {status !== 'approved' && (
+        {status === 'approved' && approvedAt ? (
+          <span className="text-[10px] text-foreground-muted flex-shrink-0 whitespace-nowrap">
+            אושר {new Date(approvedAt).toLocaleDateString('he-IL')}
+          </span>
+        ) : status !== 'approved' && (
           <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2.5 py-1 flex-shrink-0 whitespace-nowrap">
             טיוטה — טרם אושר
           </span>
