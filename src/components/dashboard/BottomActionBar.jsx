@@ -10,11 +10,6 @@ export default function BottomActionBar({ stats, hasWeeklyReport }) {
       path: '/reviews',
       variant: 'default',
     },
-    stats?.hotLeads > 0 && {
-      label: `צפה בלידים חמים (${stats.hotLeads})`,
-      path: '/leads',
-      variant: 'success',
-    },
   ].filter(Boolean);
 
   if (actions.length === 0) return null;

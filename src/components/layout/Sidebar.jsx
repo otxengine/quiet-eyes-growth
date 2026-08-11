@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import {
   ChevronLeft, ChevronRight, LogOut,
   ShieldAlert, Sparkles, Bot, Building2, GitBranch, User,
-  Eye, CheckCircle, Settings,
+  Eye, Settings,
   Calendar, Megaphone, Lightbulb, Target, Home, CreditCard
 } from 'lucide-react';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -13,7 +13,6 @@ import { cn } from '@/lib/utils';
 // Main nav structure — Cortexi design: 6 flat pages
 const NAV_STRUCTURE = [
   { type: 'item', path: '/',           label: 'בית',           icon: Home },
-  { type: 'item', path: '/leads',      label: 'לידים',         icon: CheckCircle, badgeKey: 'hotLeads' },
   { type: 'item', path: '/insights',   label: 'תובנות',        icon: Lightbulb,   badgeKey: 'activeInsights' },
   { type: 'item', path: '/competitors',label: 'מתחרים',        icon: Eye },
   { type: 'item', path: '/marketing',  label: 'מרכז השיווק',   icon: Megaphone },
@@ -24,7 +23,6 @@ const NAV_STRUCTURE = [
       { path: '/reviews',         label: 'מוניטין',        badgeKey: 'pendingReviews' },
       { path: '/social-competition', label: 'תחרות סושיאל' },
       { path: '/retention',       label: 'ניהול לקוחות' },
-      { path: '/intelligence', label: 'מודיעין שוק' },
     ],
   },
 ];
@@ -32,7 +30,6 @@ const NAV_STRUCTURE = [
 // Collapsed mode icons — one per nav entry
 const COLLAPSED_ICONS = {
   '/':            Home,
-  '/leads':       CheckCircle,
   '/insights':    Lightbulb,
   '/competitors': Eye,
   '/marketing':   Megaphone,
