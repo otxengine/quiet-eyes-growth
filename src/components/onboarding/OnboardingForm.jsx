@@ -18,21 +18,6 @@ const CITIES = [
   'זכרון יעקב', 'נס ציונה', 'ראש העין', 'ירוחם', 'דימונה', 'אור יהודה', 'גבעת שמואל',
 ];
 
-const CATEGORIES = [
-  { value: 'restaurants', label: 'מסעדות ואוכל' },
-  { value: 'health', label: 'בריאות וטיפולים' },
-  { value: 'realestate', label: 'נדל"ן ותיווך' },
-  { value: 'construction', label: 'קבלנות ושיפוצים' },
-  { value: 'ecommerce', label: 'מסחר אונליין' },
-  { value: 'professionals', label: 'בעלי מקצוע' },
-  { value: 'beauty', label: 'יופי וספא' },
-  { value: 'education', label: 'חינוך והדרכה' },
-  { value: 'tech', label: 'טכנולוגיה' },
-  { value: 'fitness', label: 'כושר וספורט' },
-  { value: 'legal', label: 'עריכת דין' },
-  { value: 'finance', label: 'פיננסים' },
-];
-
 const SERVICES = [
   { value: 'consulting', label: 'ייעוץ' },
   { value: 'installation', label: 'התקנה' },
@@ -86,7 +71,7 @@ const SOCIAL_CHANNELS = [
 ];
 
 const SECTIONS = [
-  { id: 'business', label: 'על העסק',          steps: [1, 2, 3] },
+  { id: 'business', label: 'על העסק',          steps: [1, 2] },
   { id: 'service',  label: 'על השירות/מוצר',   steps: [4, 5, 6] },
   { id: 'audience', label: 'על קהל היעד',       steps: [7, 8, 9] },
 ];
@@ -192,6 +177,7 @@ export default function OnboardingForm() {
     relevant_services: [], description: '', price_tier: '',
     customer_sources: [], business_goal: '',
     website_url: '', instagram_url: '', facebook_url: '', tiktok_url: '',
+    seed_info: '',
   });
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
@@ -200,22 +186,22 @@ export default function OnboardingForm() {
     switch (s) {
       case 1: return 'בואו נתחיל! מה שם העסק שלך?';
       case 2: return `מעולה! באיזה עיר נמצא "${formData.name}"?`;
-      case 3: return 'מה סוג העסק שלך?';
       case 4: return 'מה בדיוק אתה מציע? (בחר הכל שרלוונטי)';
-      case 5: return 'ספר לנו קצת על העסק שלך בחופשיות...';
+      case 5: return 'ספר לנו קצת על העסק שלך בחופשיות... (אופציונלי)';
       case 6: return 'איפה העסק שלך ממוקם מבחינת מחיר?';
       case 7: return 'מאיפה רוב הלקוחות שלך מגיעים?';
       case 8: return 'מה הכי חשוב לך לשפר ב-30 הימים הקרובים?';
-      case 9: return 'רוצה לחבר גם פלטפורמות חברתיות? (אופציונלי)';
+      case 9: return 'ספק קישורים לנוכחות הדיגיטלית שלך — נשתמש בהם לבניית הזהות העסקית';
       default: return '';
     }
   };
 
-  // Add AI question when step advances
+  // Add AI question when step advances (skip step 3 — category removed)
   useEffect(() => {
+    if (step === 3) { setStep(4); return; }
     if (step >= 1 && step <= 9) {
       const q = getQuestion(step);
-      setMessages(prev => [...prev, { type: 'ai', text: q }]);
+      if (q) setMessages(prev => [...prev, { type: 'ai', text: q }]);
       setTimeout(() => inputRef.current?.focus(), 150);
     }
   }, [step]);
@@ -278,6 +264,7 @@ export default function OnboardingForm() {
             goal:             formData.business_goal,
             price_tier:       formData.price_tier,
             customer_sources: formData.customer_sources,
+            seed_info:        formData.seed_info || undefined,
           },
         },
       });
@@ -313,33 +300,6 @@ export default function OnboardingForm() {
               onChange={setCitySearch}
               onSelect={city => { setCitySearch(city); advance('city', city, city); }}
             />
-          </div>
-        );
-
-      case 3:
-        return (
-          <div className="space-y-3 max-w-md">
-            <PillSelector
-              options={CATEGORIES}
-              selected={formData.category}
-              onSelect={val => {
-                const opt = CATEGORIES.find(c => c.value === val);
-                advance('category', val, opt?.label || val);
-              }}
-            />
-            <div className="relative">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                placeholder='אחר — הקלד וגש Enter'
-                className="w-full bg-white border border-gray-200 rounded-full pr-10 pl-4 py-2 text-[13px] outline-none focus:border-[#e8344d] transition-colors"
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    const v = e.target.value.trim();
-                    if (v) advance('category', v, v);
-                  }
-                }}
-              />
-            </div>
           </div>
         );
 
@@ -432,7 +392,8 @@ export default function OnboardingForm() {
           </div>
         );
 
-      case 9:
+      case 9: {
+        const hasIdentityInput = !!(formData.website_url || formData.instagram_url || formData.facebook_url || formData.tiktok_url || formData.seed_info?.trim());
         return (
           <div className="space-y-2.5 max-w-sm">
             {SOCIAL_CHANNELS.map(ch => (
@@ -447,8 +408,21 @@ export default function OnboardingForm() {
                 />
               </div>
             ))}
+            <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3 focus-within:border-[#e8344d] transition-colors">
+              <textarea
+                value={formData.seed_info}
+                onChange={e => setFormData(prev => ({ ...prev, seed_info: e.target.value }))}
+                placeholder="או ספר לנו בקצרה — מה אתה מציע, למי, ואיפה (גם זה מספיק)"
+                rows={3}
+                className="w-full bg-transparent text-[12px] text-gray-700 outline-none resize-none"
+              />
+            </div>
+            {!hasIdentityInput && (
+              <p className="text-[11px] text-[#e8344d] text-right">יש להזין לפחות קישור אחד או כמה מילים על העסק כדי להמשיך</p>
+            )}
           </div>
         );
+      }
 
       default:
         return null;
@@ -460,13 +434,13 @@ export default function OnboardingForm() {
     if (step === 1) return textInput.trim().length > 0;
     if (step === 2) return citySearch.trim().length > 0;
     if (step === 4) return tempServices.length > 0 || otherService.trim().length > 0;
-    if (step === 5) return textInput.trim().length > 0;
+    if (step === 5) return true; // optional — description is no longer required
     if (step === 7) return tempSources.length > 0;
-    if (step === 9) return true; // optional
+    if (step === 9) return !!(formData.website_url || formData.instagram_url || formData.facebook_url || formData.tiktok_url || formData.seed_info?.trim());
     return false; // auto-advance steps (3, 6, 8)
   };
 
-  const isAutoAdvanceStep = [3, 6, 8].includes(step);
+  const isAutoAdvanceStep = [6, 8].includes(step);
 
   const handlePrimaryAction = () => {
     if (step === 9) {
@@ -484,7 +458,8 @@ export default function OnboardingForm() {
       const labels = [...knownLabels, ...customLabels];
       advance('relevant_services', allServices, labels.join(', '));
     } else if (step === 5) {
-      if (textInput.trim()) advance('description', textInput.trim(), textInput.trim().slice(0, 30) + (textInput.trim().length > 30 ? '...' : ''));
+      const txt = textInput.trim();
+      advance('description', txt, txt ? txt.slice(0, 30) + (txt.length > 30 ? '...' : '') : null);
     } else if (step === 7) {
       const labels = SOURCE_OPTIONS.filter(s => tempSources.includes(s.value)).map(s => s.label);
       advance('customer_sources', tempSources, labels.join(', '));
