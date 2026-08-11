@@ -49,8 +49,10 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
     const profile = await base44.entities.BusinessProfile.get(businessProfileId);
     setStatus(profile?.about_status || null);
     try { setSources(JSON.parse(profile?.about_sources || '[]')); } catch { setSources([]); }
-    if (profile?.about_draft) {
-      try { setDraft({ ...emptyDraft(), ...JSON.parse(profile.about_draft) }); } catch { /* keep empty draft */ }
+    // After approval, show what was actually approved (possibly edited), not a newer/older draft.
+    const source = profile?.about_status === 'approved' ? profile?.about_approved : profile?.about_draft;
+    if (source) {
+      try { setDraft({ ...emptyDraft(), ...JSON.parse(source) }); } catch { /* keep empty draft */ }
     }
     setLoading(false);
   };
