@@ -15,11 +15,6 @@ export default function BottomActionBar({ stats, hasWeeklyReport }) {
       path: '/leads',
       variant: 'success',
     },
-    hasWeeklyReport && {
-      label: 'דוח שבועי מוכן ←',
-      path: '/reports',
-      variant: 'default',
-    },
   ].filter(Boolean);
 
   if (actions.length === 0) return null;
