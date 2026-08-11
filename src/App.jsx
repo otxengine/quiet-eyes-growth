@@ -51,7 +51,6 @@ import Insights from '@/pages/Insights.jsx';
 import InsightDetail from '@/pages/InsightDetail.jsx';
 import MarketAnalysis from '@/pages/MarketAnalysis.jsx';
 import Strategy from '@/pages/Strategy.jsx';
-import DemandGap from '@/pages/DemandGap.jsx';
 import Approvals from '@/pages/Approvals.jsx';
 import EventBusDashboard from '@/pages/EventBusDashboard.jsx';
 import SocialComments from '@/pages/SocialComments.jsx';
@@ -193,7 +192,7 @@ const AuthenticatedApp = () => {
         <Route path="/market-analysis" element={<MarketAnalysis />} />
         <Route path="/intelligence" element={<Intelligence />} />
         <Route path="/strategy" element={<Strategy />} />
-        <Route path="/demand-gap" element={<DemandGap />} />
+        <Route path="/demand-gap" element={<Navigate to="/insights" replace />} />
         <Route path="/approvals" element={<Approvals />} />
         <Route path="/event-bus" element={<EventBusDashboard />} />
         <Route path="/org/settings" element={<OrganizationSettings />} />

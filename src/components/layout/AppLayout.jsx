@@ -59,7 +59,6 @@ const pageTitles = {
   '/tasks':         'משימות',
   '/reports':       'דוחות',
   '/strategy':      'אסטרטגיה',
-  '/demand-gap':    'פערי ביקוש',
   '/signals':       'תובנות',
   '/approvals':     'לאישור',
   '/market-analysis':'ניתוח שוק',
