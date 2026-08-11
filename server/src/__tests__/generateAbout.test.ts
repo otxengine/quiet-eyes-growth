@@ -87,6 +87,15 @@ describe('POST /api/onboarding/generate-about', () => {
     expect(data.about_generated_at).toBeTruthy();
   });
 
+  it('rejects a malformed (non-object) LLM response instead of silently persisting it', async () => {
+    findUnique.mockResolvedValue(BASE_PROFILE);
+    llm.mockResolvedValue(JSON.stringify(['topic one', 'topic two']));
+    const { statusCode, body } = await post({ businessProfileId: 'bp1' });
+    expect(statusCode).toBe(500);
+    expect(body.ok).toBe(false);
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it('AC2: response includes about_status=pending', async () => {
     findUnique.mockResolvedValue(BASE_PROFILE);
     llm.mockResolvedValue(JSON.stringify(VALID_DRAFT));

@@ -214,11 +214,17 @@ Respond ONLY with valid JSON matching this exact schema (no markdown):
 }`;
 
     const raw = await invokeLLM({ prompt, model: 'haiku', maxTokens: 600, skipCache: true, response_json_schema: { type: 'object' } });
-    const draft = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    // Providers occasionally return a bare array (e.g. just relevant_topics) instead of
+    // the object schema — JSON.stringify would silently drop it down to that array.
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('LLM returned a malformed identity draft (not a JSON object)');
+    }
+    const draft = parsed;
 
     // Validate all 9 keys present (AC1)
     for (const key of ABOUT_KEYS) {
-      if (!(key in draft)) draft[key] = Array.isArray(draft[key]) ? [] : '';
+      if (!(key in draft)) draft[key] = key === 'relevant_topics' ? [] : '';
     }
 
     // AC2: write only to draft fields — never touch canonical profile
