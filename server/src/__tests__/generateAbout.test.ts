@@ -13,20 +13,23 @@ jest.mock('../db', () => ({
 jest.mock('../lib/llm',            () => ({ invokeLLM:             jest.fn() }));
 jest.mock('../lib/automationLog',  () => ({ writeAutomationLog:    jest.fn() }));
 jest.mock('../lib/missionPlanner', () => ({ generateAgentMissions: jest.fn() }));
-jest.mock('../lib/websiteFetch',   () => ({ fetchWebsiteSource:    jest.fn() }));
-jest.mock('../lib/googlePlaces',   () => ({ getPlaceDetails:       jest.fn() }));
+jest.mock('../lib/websiteFetch',         () => ({ fetchWebsiteSource:    jest.fn() }));
+jest.mock('../lib/googlePlaces',         () => ({ getPlaceDetails:       jest.fn() }));
+jest.mock('../lib/fetchSocialPageAbout', () => ({ fetchSocialPageAbout:  jest.fn() }));
 jest.mock('../infra/logger', () => ({
   createLogger: jest.fn(() => ({ warn: jest.fn(), info: jest.fn(), error: jest.fn() })),
 }));
 
 import { fetchWebsiteSource } from '../lib/websiteFetch';
 import { getPlaceDetails } from '../lib/googlePlaces';
+import { fetchSocialPageAbout } from '../lib/fetchSocialPageAbout';
 
-const findUnique = prisma.businessProfile.findUnique as jest.Mock;
-const update     = prisma.businessProfile.update     as jest.Mock;
-const llm        = invokeLLM as jest.Mock;
+const findUnique   = prisma.businessProfile.findUnique as jest.Mock;
+const update       = prisma.businessProfile.update     as jest.Mock;
+const llm          = invokeLLM as jest.Mock;
 const websiteFetch = fetchWebsiteSource as jest.Mock;
 const placeDetails = getPlaceDetails as jest.Mock;
+const socialFetch  = fetchSocialPageAbout as jest.Mock;
 
 function post(body: Record<string, any>): Promise<{ statusCode: number; body: any }> {
   return new Promise((resolve, reject) => {
@@ -58,6 +61,7 @@ beforeEach(() => {
   update.mockResolvedValue({});
   websiteFetch.mockResolvedValue(null);
   placeDetails.mockResolvedValue({ editorialSummary: '' });
+  socialFetch.mockResolvedValue([]);
 });
 
 describe('POST /api/onboarding/generate-about', () => {
@@ -198,5 +202,48 @@ describe('POST /api/onboarding/generate-about — KAN-202 sources', () => {
     expect(prompt).toContain('Google Place ID: place123');
     const data = update.mock.calls[0][0].data;
     expect(JSON.parse(data.about_source_excerpts).google_place).toBeUndefined();
+  });
+});
+
+// KAN-203: social source integration, TTL cache, soft-fail
+describe('POST /api/onboarding/generate-about — KAN-203 social sources', () => {
+  it('AC1/AC3: social bio appears in prompt and about_source_excerpts', async () => {
+    findUnique.mockResolvedValue({ ...BASE_PROFILE, instagram_url: 'https://instagram.com/testbiz' });
+    socialFetch.mockResolvedValue([{ platform: 'instagram', aboutText: 'Best hair in town.', profileUrl: 'https://instagram.com/testbiz' }]);
+    llm.mockResolvedValue(JSON.stringify(VALID_DRAFT));
+
+    await post({ businessProfileId: 'bp1' });
+
+    const prompt = llm.mock.calls[0][0].prompt;
+    expect(prompt).toContain('Best hair in town.');
+    const data = update.mock.calls[0][0].data;
+    const excerpts = JSON.parse(data.about_source_excerpts);
+    expect(excerpts.instagram).toEqual({ url: 'https://instagram.com/testbiz', excerpt: 'Best hair in town.' });
+    expect(JSON.parse(data.about_sources)).toContain('social');
+  });
+
+  it('AC4: no force flag → fetchSocialPageAbout called with forceRegenerate=false (cache preserved)', async () => {
+    findUnique.mockResolvedValue({ ...BASE_PROFILE, instagram_url: 'https://instagram.com/testbiz' });
+    socialFetch.mockResolvedValue([]);
+    llm.mockResolvedValue(JSON.stringify(VALID_DRAFT));
+
+    await post({ businessProfileId: 'bp1' });
+
+    expect(socialFetch).toHaveBeenCalledWith(
+      expect.objectContaining({ instagramUrl: 'https://instagram.com/testbiz' }),
+      expect.objectContaining({ forceRegenerate: false }),
+    );
+  });
+
+  it('AC5: social scrape fails → generation still succeeds from remaining sources', async () => {
+    findUnique.mockResolvedValue({ ...BASE_PROFILE, instagram_url: 'https://instagram.com/testbiz' });
+    socialFetch.mockResolvedValue([]); // soft-fail: returns empty, not throws
+    llm.mockResolvedValue(JSON.stringify(VALID_DRAFT));
+
+    const { body } = await post({ businessProfileId: 'bp1' });
+
+    expect(body.ok).toBe(true);
+    const data = update.mock.calls[0][0].data;
+    expect(JSON.parse(data.about_sources)).not.toContain('social');
   });
 });

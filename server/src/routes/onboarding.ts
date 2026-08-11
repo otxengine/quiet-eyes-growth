@@ -14,6 +14,8 @@ import { createLogger } from '../infra/logger';
 import { writeAutomationLog } from '../lib/automationLog';
 import { fetchWebsiteSource } from '../lib/websiteFetch';
 import { getPlaceDetails } from '../lib/googlePlaces';
+import { autoConfigOsint } from './functions/stubs';
+import { fetchSocialPageAbout } from '../lib/fetchSocialPageAbout';
 
 const logger = createLogger('Onboarding');
 const router = Router();
@@ -124,9 +126,11 @@ Respond ONLY with valid JSON (no markdown, no explanation) matching this exact s
 
     // Build update data — also update category to clean AI-inferred label
     const updateData: Record<string, any> = {
-      sector_profile: sectorProfileStr,
       category: sectorProfile.sector_label_he || sectorProfile.sub_sector || catText,
     };
+    // KAN-204 AC4: approve-about owns sector_profile once an identity is approved —
+    // a later parse-profile run must not silently overwrite it
+    if (profile.about_status !== 'approved') updateData.sector_profile = sectorProfileStr;
     if (goal)            updateData.business_goal    = goal;
     if (price_tier)      updateData.price_tier       = price_tier;
     if (customer_sources) updateData.customer_sources = typeof customer_sources === 'string'
@@ -158,7 +162,7 @@ Respond ONLY with valid JSON (no markdown, no explanation) matching this exact s
 // KAN-196 §5.0: Generates a 9-key identity draft (pending owner approval).
 // Writes to about_draft / about_status only — never to canonical profile fields.
 router.post('/generate-about', async (req: Request, res: Response) => {
-  const { businessProfileId, seed_info, website_url, social_urls, google_place_id } = req.body;
+  const { businessProfileId, seed_info, website_url, social_urls, google_place_id, force } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
 
   try {
@@ -188,7 +192,17 @@ router.post('/generate-about', async (req: Request, res: Response) => {
     const placeDetails = hasPlace && placeIdToUse ? await getPlaceDetails(placeIdToUse) : null;
     const placeExcerpt = placeDetails?.editorialSummary || '';
 
-    // Build source summary for the LLM
+    // KAN-203 AC1/AC4: fetch social bios via shared helper; TTL cache suppresses Apify re-burn unless force=true
+    const socialResults = hasSocial ? await fetchSocialPageAbout(
+      {
+        facebookUrl:  profile.facebook_url  || undefined,
+        instagramUrl: profile.instagram_url || undefined,
+        tiktokUrl:    profile.tiktok_url    || undefined,
+      },
+      { forceRegenerate: !!force },
+    ) : [];
+
+    // Build source summary for the LLM (priority: website > Google > social > seed)
     const sources = [
       profile.description ? `Description: ${profile.description}` : null,
       profile.category    ? `Category: ${profile.category}` : null,
@@ -197,6 +211,7 @@ router.post('/generate-about', async (req: Request, res: Response) => {
         : (hasWebsite ? `Website: ${websiteUrlToUse}` : null),
       placeExcerpt ? `Google Place editorial summary: ${placeExcerpt}`
         : (hasPlace ? `Google Place ID: ${placeIdToUse}` : null),
+      ...socialResults.map(r => `${r.platform} bio (${r.profileUrl}): ${r.aboutText}`),
       seed_info           ? `Owner-provided context: ${seed_info}` : null,
     ].filter(Boolean).join('\n');
 
@@ -242,17 +257,18 @@ Respond ONLY with valid JSON matching this exact schema (no markdown):
 
     // AC2: write only to draft fields — never touch canonical profile
     const sourcesUsed = [
-      hasDesc    ? 'profile_description' : null,
-      hasWebsite ? 'website' : null,
-      hasSocial  ? 'social' : null,
-      hasPlace   ? 'google_place' : null,
-      hasSeed    ? 'seed_info' : null,
+      hasDesc                  ? 'profile_description' : null,
+      hasWebsite               ? 'website' : null,
+      socialResults.length > 0 ? 'social' : null,
+      hasPlace                 ? 'google_place' : null,
+      hasSeed                  ? 'seed_info' : null,
     ].filter(Boolean);
 
-    // KAN-202 AC3: raw excerpt + provenance per source (only for sources actually fetched)
+    // KAN-202/KAN-203 AC3: raw excerpt + provenance per source (only for sources actually fetched)
     const sourceExcerpts: Record<string, { url?: string; excerpt: string }> = {};
     if (websiteSource) sourceExcerpts.website = { url: websiteSource.sourceUrl, excerpt: websiteSource.text };
     if (placeExcerpt)  sourceExcerpts.google_place = { excerpt: placeExcerpt };
+    for (const r of socialResults) sourceExcerpts[r.platform] = { url: r.profileUrl, excerpt: r.aboutText };
 
     await prisma.businessProfile.update({
       where: { id: businessProfileId },
@@ -292,6 +308,22 @@ router.post('/approve-about', async (req: Request, res: Response) => {
       }
       approved = JSON.stringify(draft);
     }
+    const approvedObj = JSON.parse(approved);
+
+    // KAN-204 AC1: mirror the approved identity onto the canonical fields agents actually read,
+    // merging into (not replacing) sector_profile so parse-profile-only keys survive
+    let sectorProfile: Record<string, any> = {};
+    try { sectorProfile = profile.sector_profile ? JSON.parse(profile.sector_profile) : {}; } catch { /* keep {} */ }
+    sectorProfile = {
+      ...sectorProfile,
+      sector_key: approvedObj.sector_key,
+      sub_sector: approvedObj.sub_sector_key,
+      business_type: approvedObj.business_type,
+      service_model: approvedObj.service_model,
+      target_audience_he: approvedObj.target_audience,
+      relevant_topics: approvedObj.relevant_topics,
+      content_tone: approvedObj.content_tone,
+    };
 
     await prisma.businessProfile.update({
       where: { id: businessProfileId },
@@ -299,10 +331,22 @@ router.post('/approve-about', async (req: Request, res: Response) => {
         about_approved: approved,
         about_status: 'approved',
         about_approved_at: new Date().toISOString(),
+        description: approvedObj.business_description,
+        name: approvedObj.business_name,
+        tone_preference: approvedObj.content_tone,
+        target_market: approvedObj.target_audience,
+        sector_profile: JSON.stringify(sectorProfile),
       },
     });
 
-    return res.json({ ok: true, about_status: 'approved', approved: JSON.parse(approved) });
+    // KAN-204 AC2: refresh OSINT config + agent missions so competitor/keyword agents use the new about
+    const noopRes = { json: () => noopRes, status: () => noopRes } as unknown as Response;
+    autoConfigOsint({ body: { businessProfileId } } as Request, noopRes)
+      .catch((err: any) => logger.warn(`approve-about: autoConfigOsint refresh failed for ${businessProfileId}: ${err.message}`));
+    generateAgentMissions(businessProfileId)
+      .catch((err: any) => logger.warn(`approve-about: generateMissions refresh failed for ${businessProfileId}: ${err.message}`));
+
+    return res.json({ ok: true, about_status: 'approved', approved: approvedObj });
   } catch (err: any) {
     logger.warn(`approve-about failed for ${businessProfileId}: ${err.message}`);
     return res.status(500).json({ ok: false, error: err.message });
