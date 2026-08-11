@@ -8,7 +8,6 @@ export default function SettingsBusinessDetails({ form, setForm, onSave, saving 
     <div className="bg-white rounded-[10px] border border-border/50 p-5 space-y-4">
       <h2 className="text-[14px] font-semibold text-[#222222]">פרטי עסק</h2>
       <div><label className="text-[12px] text-foreground-muted mb-1 block">שם העסק</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputCls} /></div>
-      <div><label className="text-[12px] text-foreground-muted mb-1 block">קטגוריה</label><input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className={inputCls} /></div>
       <div><label className="text-[12px] text-foreground-muted mb-1 block">עיר</label><input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className={inputCls} /></div>
       <div>
         <label className="text-[12px] text-foreground-muted mb-1 block">כתובת מלאה</label>

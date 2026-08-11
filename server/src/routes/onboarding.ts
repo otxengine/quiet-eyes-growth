@@ -176,6 +176,8 @@ router.post('/generate-about', async (req: Request, res: Response) => {
     const hasPlace   = !!(google_place_id || profile.google_place_id);
     const hasDesc    = !!(profile.description || profile.category);
     if (!hasSeed && !hasWebsite && !hasSocial && !hasPlace && !hasDesc) {
+      // KAN-208: empty-block rate — the only record that a user was blocked here
+      await writeAutomationLog('about_blocked', businessProfileId, new Date().toISOString(), 0);
       return res.json({
         ok: false,
         needs_seed: true,
@@ -238,7 +240,7 @@ Respond ONLY with valid JSON matching this exact schema (no markdown):
   "target_audience": "<1-2 sentences describing the target customer>",
   "relevant_topics": ["<5-8 topics this business cares about>"],
   "content_tone": "<${TONES}>",
-  "business_description": "<2-3 sentence business description>"
+  "business_description": "<2-5 sentence business description, written in Hebrew>"
 }`;
 
     const raw = await invokeLLM({ prompt, model: 'haiku', maxTokens: 600, skipCache: true, response_json_schema: { type: 'object' } });
@@ -333,6 +335,7 @@ router.post('/approve-about', async (req: Request, res: Response) => {
         about_approved_at: new Date().toISOString(),
         description: approvedObj.business_description,
         name: approvedObj.business_name,
+        category: sectorProfile.sector_label_he || approvedObj.sector_key,
         tone_preference: approvedObj.content_tone,
         target_market: approvedObj.target_audience,
         sector_profile: JSON.stringify(sectorProfile),
