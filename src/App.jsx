@@ -27,7 +27,6 @@ import AppLayout from '@/components/layout/AppLayout';
 // App pages
 import Onboarding from '@/pages/Onboarding';
 import Dashboard from '@/pages/Dashboard.jsx';
-import Intelligence from '@/pages/Intelligence.jsx';
 import Competitors from '@/pages/Competitors.jsx';
 import Events from '@/pages/Events.jsx';
 import Reputation from '@/pages/Reputation.jsx';
@@ -190,7 +189,7 @@ const AuthenticatedApp = () => {
         <Route path="/insights" element={<Insights />} />
         <Route path="/insights/:id" element={<InsightDetail />} />
         <Route path="/market-analysis" element={<MarketAnalysis />} />
-        <Route path="/intelligence" element={<Intelligence />} />
+        <Route path="/intelligence" element={<Navigate to="/insights" replace />} />
         <Route path="/strategy" element={<Strategy />} />
         <Route path="/demand-gap" element={<Navigate to="/insights" replace />} />
         <Route path="/approvals" element={<Approvals />} />
