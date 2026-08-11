@@ -12,12 +12,15 @@ jest.mock('../db', () => ({
 jest.mock('../lib/llm',            () => ({ invokeLLM:             jest.fn() }));
 jest.mock('../lib/automationLog',  () => ({ writeAutomationLog:    jest.fn() }));
 jest.mock('../lib/missionPlanner', () => ({ generateAgentMissions: jest.fn() }));
+jest.mock('../routes/functions/stubs', () => ({ autoConfigOsint: jest.fn() }));
 jest.mock('../infra/logger', () => ({
   createLogger: jest.fn(() => ({ warn: jest.fn(), info: jest.fn(), error: jest.fn() })),
 }));
 
-const findUnique = prisma.businessProfile.findUnique as jest.Mock;
-const update     = prisma.businessProfile.update     as jest.Mock;
+const findUnique         = prisma.businessProfile.findUnique as jest.Mock;
+const update             = prisma.businessProfile.update     as jest.Mock;
+const generateAgentMissions = require('../lib/missionPlanner').generateAgentMissions as jest.Mock;
+const autoConfigOsint       = require('../routes/functions/stubs').autoConfigOsint as jest.Mock;
 
 function post(url: string, body: Record<string, any>): Promise<{ statusCode: number; body: any }> {
   return new Promise((resolve, reject) => {
@@ -40,7 +43,12 @@ const NINE_KEY_DRAFT = {
   business_description: 'A hair salon in Tel Aviv.',
 };
 
-beforeEach(() => { jest.clearAllMocks(); update.mockResolvedValue({}); });
+beforeEach(() => {
+  jest.clearAllMocks();
+  update.mockResolvedValue({});
+  generateAgentMissions.mockResolvedValue({});
+  autoConfigOsint.mockResolvedValue(undefined);
+});
 
 describe('POST /api/onboarding/approve-about', () => {
   it('AC3: promotes about_draft to about_approved and stamps about_approved_at', async () => {
@@ -81,6 +89,34 @@ describe('POST /api/onboarding/approve-about', () => {
   it('400s when businessProfileId missing', async () => {
     const { statusCode } = await post('/approve-about', {});
     expect(statusCode).toBe(400);
+  });
+
+  it('KAN-204 AC1: mirrors the approved identity onto description/name/tone_preference/target_market/sector_profile', async () => {
+    findUnique.mockResolvedValue({ id: 'bp1', about_draft: JSON.stringify(NINE_KEY_DRAFT), about_status: 'pending', sector_profile: JSON.stringify({ irrelevant_topics: ['sports'] }) });
+    await post('/approve-about', { businessProfileId: 'bp1' });
+    const data = update.mock.calls[0][0].data;
+    expect(data.description).toBe(NINE_KEY_DRAFT.business_description);
+    expect(data.name).toBe(NINE_KEY_DRAFT.business_name);
+    expect(data.tone_preference).toBe(NINE_KEY_DRAFT.content_tone);
+    expect(data.target_market).toBe(NINE_KEY_DRAFT.target_audience);
+    const mergedSectorProfile = JSON.parse(data.sector_profile);
+    expect(mergedSectorProfile.sector_key).toBe(NINE_KEY_DRAFT.sector_key);
+    expect(mergedSectorProfile.irrelevant_topics).toEqual(['sports']); // pre-existing parse-profile keys survive the merge
+  });
+
+  it('KAN-204 AC2: refreshes autoConfigOsint + generateMissions on approve', async () => {
+    findUnique.mockResolvedValue({ id: 'bp1', about_draft: JSON.stringify(NINE_KEY_DRAFT), about_status: 'pending' });
+    await post('/approve-about', { businessProfileId: 'bp1' });
+    expect(autoConfigOsint).toHaveBeenCalledTimes(1);
+    expect(autoConfigOsint.mock.calls[0][0].body.businessProfileId).toBe('bp1');
+    expect(generateAgentMissions).toHaveBeenCalledWith('bp1');
+  });
+
+  it('KAN-204 AC2: a refresh failure does not fail the approve response', async () => {
+    autoConfigOsint.mockRejectedValue(new Error('osint down'));
+    findUnique.mockResolvedValue({ id: 'bp1', about_draft: JSON.stringify(NINE_KEY_DRAFT), about_status: 'pending' });
+    const { body } = await post('/approve-about', { businessProfileId: 'bp1' });
+    expect(body.ok).toBe(true);
   });
 });
 

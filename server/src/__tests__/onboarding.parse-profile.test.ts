@@ -154,4 +154,19 @@ describe('POST /parse-profile', () => {
     expect(msg).toContain('price_tier');
   });
 
+  test('KAN-204 AC4: an approved identity is not silently overwritten by a later parse-profile run', async () => {
+    findUnique.mockResolvedValueOnce({ ...DB_PROFILE, about_status: 'approved' });
+    const { body } = await post({
+      businessProfileId: 'bp1',
+      description: 'Italian restaurant in Tel Aviv',
+      category: 'food',
+      city: 'TLV',
+    });
+
+    expect(body.ok).toBe(true); // parse-profile still runs — it just doesn't clobber sector_profile
+    const dbArg = update.mock.calls[0][0];
+    expect(dbArg.data).not.toHaveProperty('sector_profile');
+    expect(dbArg.data.category).toBeTruthy(); // category refresh is unaffected
+  });
+
 });
