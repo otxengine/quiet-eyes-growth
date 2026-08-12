@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 
 const clerkKey = process.env.CLERK_SECRET_KEY || '';
-const CLERK_ENABLED = clerkKey && !clerkKey.includes('your_key_here');
+const clerkPubKey = process.env.CLERK_PUBLISHABLE_KEY || '';
+const CLERK_ENABLED = clerkKey && !clerkKey.includes('your_key_here') &&
+                      clerkPubKey && !clerkPubKey.includes('your_key_here');
 const ADMIN_SECRET = process.env.ADMIN_SECRET || '';
 
 export function isAdminKeyRequest(req: Request): boolean {
