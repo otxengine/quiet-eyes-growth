@@ -7,30 +7,13 @@ import { buildCompetitorTerms, buildIdentityCompetitorTerms, buildAgentPromptCon
 import { getAgentMission } from '../../lib/missionPlanner';
 import { searchCompetitorsByKeyword, DataForSEOCandidate } from '../../lib/dataforseo';
 
-const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
-const SERPAPI_KEY    = process.env.SERPAPI_KEY || process.env.SERPAPI_API_KEY || '';
-const CURRENT_YEAR = new Date().getFullYear();
 
 // ponytail: inline from src/lib/planConfig.js — update both if plan limits change
 const PLAN_COMPETITOR_LIMITS: Record<string, number> = {
   free_trial: 3, free: 3, starter: 5, growth: 10, pro: Infinity, enterprise: Infinity,
 };
 
-/** SerpAPI Google Maps local search — finds competitors with ratings + review counts */
-async function serpMapsSearch(query: string, city: string): Promise<any[]> {
-  if (!SERPAPI_KEY) return [];
-  try {
-    const params = new URLSearchParams({
-      engine: 'google_maps', q: query, location: `${city}, Israel`,
-      hl: 'iw', gl: 'il', type: 'search', api_key: SERPAPI_KEY,
-    });
-    const res = await fetch(`https://serpapi.com/search.json?${params}`, { signal: AbortSignal.timeout(10_000) });
-    if (!res.ok) return [];
-    const data: any = await res.json();
-    return data.local_results || [];
-  } catch { return []; }
-}
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -41,19 +24,6 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-async function tavilySearch(query: string, maxResults = 5): Promise<any[]> {
-  if (!TAVILY_API_KEY) return [];
-  try {
-    const res = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: TAVILY_API_KEY, query, search_depth: 'advanced', max_results: maxResults }),
-    });
-    if (!res.ok) return [];
-    const data: any = await res.json();
-    return data.results || [];
-  } catch { return []; }
-}
 
 /** Geocode a city name to lat/lng using Google Geocoding API */
 async function geocodeCity(city: string): Promise<{ lat: number; lng: number } | null> {
@@ -104,6 +74,9 @@ interface MapsCandidate {
   address: string;
   lat: number | null;
   lng: number | null;
+  url?: string;
+  domain?: string;
+  phone?: string;
   discovery_sources: string[];
 }
 
@@ -132,6 +105,7 @@ function mergeMapsCandidates(googlePlaces: any[], dataforseo: DataForSEOCandidat
       merged.push({
         name: d.name, place_id: d.place_id, rating: d.rating, review_count: d.votes_count,
         address: d.address, lat: d.latitude ?? null, lng: d.longitude ?? null,
+        url: d.url, domain: d.domain, phone: d.phone,
         discovery_sources: ['dataforseo_maps'],
       });
     } else {
@@ -144,6 +118,9 @@ function mergeMapsCandidates(googlePlaces: any[], dataforseo: DataForSEOCandidat
         address: g.address || d.address,
         lat: d.latitude ?? g.lat, // prefer DataForSEO lat/lng
         lng: d.longitude ?? g.lng,
+        url: d.url ?? g.url,
+        domain: d.domain ?? g.domain,
+        phone: d.phone ?? g.phone,
         discovery_sources: [...new Set([...g.discovery_sources, 'dataforseo_maps'])],
       };
     }
@@ -166,8 +143,6 @@ export async function runCompetitorIdentification(req: Request, res: Response) {
     const userExtraCities: string[] = ((profile as any).additional_cities || '')
       .split(',').map((c: string) => c.trim()).filter(Boolean);
 
-    if (!SERPAPI_KEY)   console.warn('runCompetitorIdentification: SERPAPI_KEY missing — SerpAPI search skipped');
-    if (!TAVILY_API_KEY) console.warn('runCompetitorIdentification: TAVILY_API_KEY missing — Tavily search skipped');
     if (!GOOGLE_API_KEY) console.warn('runCompetitorIdentification: GOOGLE_PLACES_API_KEY missing — Google Places + geocoding skipped');
 
     const sp = getSectorProfile(profile);
@@ -244,41 +219,21 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       ? searchTerms.map(term => searchCompetitorsByKeyword(term, cityCoords.lat, cityCoords.lng))
       : [];
 
-    // Also search user-requested additional cities by text (they're explicit requests)
-    const extraCitySearchPromises = userExtraCities.flatMap(area =>
-      searchTerms.map(term => tavilySearch(`${term} ${area} ישראל ${CURRENT_YEAR}`, 5))
-    );
-
-    // Tavily for the primary area (use city name for natural-language queries)
-    const tavilyQueries: string[] = [];
-    for (const term of searchTerms) {
-      tavilyQueries.push(`${term} ${city} ישראל ${CURRENT_YEAR}`);
-    }
-    tavilyQueries.push(`site:rest.co.il ${searchTerms[0] || businessType} ${city}`);
-
-    // SerpAPI Maps for primary city — richer structured data than Places alone
-    const serpPromises = SERPAPI_KEY
-      ? searchTerms.slice(0, 2).map(term => serpMapsSearch(`${term} ${city}`, city))
-      : [];
-
-    const [googleResultSets, dataForSeoResultSets, tavilyResultSets, extraResults, serpResultSets] = await Promise.all([
+    const [googleResultSets, dataForSeoResultSets] = await Promise.all([
       Promise.all(googleSearchPromises),
       Promise.all(dataForSeoPromises),
-      Promise.all(tavilyQueries.map(q => tavilySearch(q, 5))),
-      Promise.all(extraCitySearchPromises),
-      Promise.all(serpPromises),
     ]);
 
-    const googleResults    = googleResultSets.flat();
-    const dataForSeoResults = dataForSeoResultSets.flat();
-    const tavilyResults    = [...tavilyResultSets.flat(), ...extraResults];
-    const serpResults      = serpResultSets.flat();
+    const googleResults     = googleResultSets.flat();
+    const dataForSeoResults = dataForSeoResultSets.flatMap(r => r.candidates);
+    // KAN-216 AC4: sum per-call DataForSEO cost for this identify run
+    const dataForSeoCostUsd = dataForSeoResultSets.reduce((sum, r) => sum + r.costUsd, 0);
 
     // KAN-212 AC3/AC4: merge + dedupe the two Maps sources, tag provenance
     const mapsCandidates = mergeMapsCandidates(googleResults, dataForSeoResults, city);
     console.log(`runCompetitorIdentification: discovery_sources=${JSON.stringify(mapsCandidates.map(c => ({ name: c.name, discovery_sources: c.discovery_sources })))}`);
 
-    console.log(`runCompetitorIdentification: ${googleResults.length} Google, ${dataForSeoResults.length} DataForSEO, ${mapsCandidates.length} merged Maps, ${tavilyResults.length} Tavily, ${serpResults.length} SerpAPI results`);
+    console.log(`runCompetitorIdentification: ${googleResults.length} Google, ${dataForSeoResults.length} DataForSEO, ${mapsCandidates.length} merged Maps candidates`);
 
     // ── Step 3: LLM identifies DIRECT competitors only ───────────────────────
     const existingCompetitors = await (prisma as any).competitor.findMany({ where: { linked_business: businessProfileId } });
@@ -294,45 +249,36 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
         ).join('\n')}`
       : '';
 
-    const serpBlock = serpResults.length > 0
-      ? `Google Maps (SerpAPI):\n${serpResults.map((p: any) =>
-          `- ${p.title}: ${p.rating || '?'}★ (${p.reviews || 0} ביקורות) — ${p.address || city}${p.phone ? ' | ' + p.phone : ''}`
-        ).join('\n')}`
-      : '';
-
-    const tavilyBlock = tavilyResults.length > 0
-      ? `תוצאות חיפוש:\n${tavilyResults.map((r: any) =>
-          `- ${r.title}: ${(r.content || '').substring(0, 150)}`
-        ).join('\n')}`
-      : '';
-
-    const contextBlock = [googleBlock, serpBlock, tavilyBlock].filter(Boolean).join('\n\n');
+    const contextBlock = googleBlock;
     const areasDesc = allAreas.join(', ');
 
     const notRelevantBlock = notRelevantNames.size > 0
       ? `\nDo NOT include these businesses (user explicitly marked as irrelevant): ${[...notRelevantNames].join(', ')}.`
       : '';
 
-    const llmPrompt = contextBlock
-      ? `You are a competitive analyst. Identify direct competitors for the business "${name}" (${businessType}).
+    // ponytail: AC7 — no candidates from Maps = empty merge; soft-fail rather than invite invention
+    if (!contextBlock) {
+      console.warn('runCompetitorIdentification: no discovery candidates — soft-fail (AC7)');
+      await writeAutomationLog('runCompetitorIdentification', businessProfileId, startTime, 0, 'success', 'no discovery candidates — soft-fail', dataForSeoCostUsd);
+      return res.json({
+        competitors_found: 0, new_competitors_created: 0, existing_competitors_updated: 0,
+        out_of_scope_removed: 0, business_type: businessType, areas_scanned: allAreas, skipped: 'no_candidates',
+      });
+    }
+
+    const llmPrompt = `You are a competitive analyst. Identify direct competitors for the business "${name}" (${businessType}).
 
 Rules:
 1. A direct competitor = the exact same type of business. For a sushi bar — only sushi/Japanese restaurants, not pizzerias.
 2. Geography: include only businesses located within ${radiusKm} km of ${city} (approved cities: ${areasDesc}). Do not include more distant cities.
 3. Do not include "${name}" itself.
-4. If data is partial, complete from your knowledge — but respect the radius limit.${notRelevantBlock}
+4. Only select from the candidates listed below — do NOT invent businesses not in the list.${notRelevantBlock}
 
 ${contextBlock}
 
 For each competitor:
 - name, rating, review_count, address (must include city), strengths, weaknesses, price_range, source_urls
 
-Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [...]}`
-      : `You are a competitive analyst. List up to 6 direct competitors for "${name}" (${businessType}).
-Geography: only cities within ${radiusKm} km of ${city} (${areasDesc}).
-A direct competitor = the exact same type of business. Use real names.${notRelevantBlock}
-
-For each competitor: name, rating, review_count, address (including city), strengths, weaknesses, price_range, source_urls.
 Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [...]}`;
 
     const result = await invokeLLM({
@@ -384,6 +330,15 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
     let created = 0;
     let updated = 0;
 
+    // AC8b: derive website_url from DataForSEO url/domain; exclude social/maps links
+    const SOCIAL_PATTERN = /instagram\.com|facebook\.com|tiktok\.com|google\.com\/maps/i;
+    const deriveWebsiteUrl = (m: MapsCandidate): string | null => {
+      if (m.url && /^https?:\/\//i.test(m.url) && !SOCIAL_PATTERN.test(m.url)) return m.url;
+      if (m.domain && !SOCIAL_PATTERN.test(m.domain)) return `https://${m.domain}`;
+      return null;
+    };
+    const candidateByName = new Map(mapsCandidates.map(m => [normName(m.name), m]));
+
     // LLM may return rating as "4.5★" or "4.5" — Prisma expects Float
     const parseRating = (r: any): number | null => {
       if (r == null) return null;
@@ -399,6 +354,9 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
       const strengths = Array.isArray(c.strengths) ? c.strengths.join(', ') : (c.strengths || '');
       const weaknesses = Array.isArray(c.weaknesses) ? c.weaknesses.join(', ') : (c.weaknesses || '');
 
+      const mapMatch = candidateByName.get(normName(c.name));
+      const websiteUrl = mapMatch ? deriveWebsiteUrl(mapMatch) : null;
+
       if (existingNames.has(nameKey)) {
         const existing = existingCompetitors.find(e => e.name.toLowerCase() === nameKey);
         if (existing) {
@@ -413,6 +371,10 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
               source_urls: sourceUrls || existing.source_urls,
               last_scanned: new Date().toISOString(),
               data_freshness: 'fresh',
+              // AC8b: fill only if currently empty — never overwrite owner/Tavily URL
+              ...(websiteUrl && !(existing as any).website_url ? { website_url: websiteUrl } : {}),
+              // KAN-216 AC3: re-tag provenance on every scan that still sees this row
+              ...(mapMatch ? { discovery_sources: JSON.stringify(mapMatch.discovery_sources) } : {}),
             },
           });
           updated++;
@@ -433,6 +395,10 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
             data_freshness: 'fresh',
             verification_status: 'מאומתת',
             linked_business: businessProfileId,
+            website_url: websiteUrl || undefined,
+            google_place_id: mapMatch?.place_id || undefined,
+            // KAN-216 AC3: which API(s) surfaced this row
+            discovery_sources: mapMatch ? JSON.stringify(mapMatch.discovery_sources) : undefined,
           },
         });
         existingNames.add(nameKey);
@@ -475,7 +441,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
       console.log(`Cleanup: removed ${idsToDelete.length} out-of-scope competitors`);
     }
 
-    await writeAutomationLog('runCompetitorIdentification', businessProfileId, startTime, created + updated);
+    await writeAutomationLog('runCompetitorIdentification', businessProfileId, startTime, created + updated, 'success', undefined, dataForSeoCostUsd);
     console.log(`runCompetitorIdentification done: ${created} created, ${updated} updated, areas: ${areasDesc}`);
     // Publish to event bus (OTX-001)
     if (created > 0 || updated > 0) {

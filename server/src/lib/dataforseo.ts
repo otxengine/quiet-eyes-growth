@@ -20,16 +20,21 @@ export interface DataForSEOCandidate {
   domain?:               string;
 }
 
+export interface DataForSEOSearchResult {
+  candidates: DataForSEOCandidate[];
+  costUsd:    number;
+}
+
 export async function searchCompetitorsByKeyword(
   keyword: string,
   lat: number,
   lng: number,
   zoom  = 14,
   depth = 20,
-): Promise<DataForSEOCandidate[]> {
+): Promise<DataForSEOSearchResult> {
   if (!LOGIN || !PASSWORD) {
     console.warn('[dataforseo] Missing DATAFORSEO_LOGIN / DATAFORSEO_PASSWORD — skipping');
-    return [];
+    return { candidates: [], costUsd: 0 };
   }
 
   const auth = Buffer.from(`${LOGIN}:${PASSWORD}`).toString('base64');
@@ -49,24 +54,26 @@ export async function searchCompetitorsByKeyword(
     });
   } catch (e: any) {
     console.warn('[dataforseo] Network error:', e.message);
-    return [];
+    return { candidates: [], costUsd: 0 };
   }
 
   if (!res.ok) {
     console.warn(`[dataforseo] HTTP ${res.status} for keyword="${keyword}"`);
-    return [];
+    return { candidates: [], costUsd: 0 };
   }
 
   let body: any;
   try { body = await res.json(); } catch {
     console.warn('[dataforseo] Failed to parse response JSON');
-    return [];
+    return { candidates: [], costUsd: 0 };
   }
 
   const items: any[] =
     body?.tasks?.[0]?.result?.[0]?.items ?? [];
+  // KAN-216 AC4: DataForSEO returns per-task cost (USD) alongside results.
+  const costUsd = Number(body?.tasks?.[0]?.cost ?? body?.cost) || 0;
 
-  return items
+  const candidates = items
     .filter((item: any) => item.type === 'maps_search')
     .map((item: any): DataForSEOCandidate => ({
       name:                  item.title         ?? '',
@@ -84,4 +91,6 @@ export async function searchCompetitorsByKeyword(
       ...(item.url         ? { url:         item.url         } : {}),
       ...(item.domain      ? { domain:      item.domain      } : {}),
     }));
+
+  return { candidates, costUsd };
 }

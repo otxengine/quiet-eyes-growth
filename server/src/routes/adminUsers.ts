@@ -198,7 +198,7 @@ router.post('/collector-metrics/check', async (req: Request, res: Response) => {
 router.get('/test-dataforseo', async (req: Request, res: Response) => {
   if (!isAdminKeyRequest(req)) return res.status(403).json({ error: 'Admin access required' });
   const results = await searchCompetitorsByKeyword('סושי', 32.0853, 34.7818, 14, 5);
-  res.json({ count: results.length, sample: results.slice(0, 2) });
+  res.json({ count: results.candidates.length, sample: results.candidates.slice(0, 2), costUsd: results.costUsd });
 });
 
 export default router;

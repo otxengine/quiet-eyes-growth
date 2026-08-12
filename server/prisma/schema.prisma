@@ -270,6 +270,7 @@ model Competitor {
   not_relevant             Boolean? @default(false)
   not_relevant_reason      String?
   google_place_id          String?  // KAN-121: place_id used for review ingest
+  discovery_sources        String?  // KAN-216: JSON array — which APIs surfaced this row ('google_places'|'dataforseo_maps')
   posts                    CompetitorPost[]
   ad_history               CompetitorAdHistory[]
 

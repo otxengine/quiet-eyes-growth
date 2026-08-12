@@ -484,3 +484,186 @@ export async function computeTenantKPIs(tenantId: string, windowDays = 30): Prom
     total_revenue:    Number(outcomeRows[0]?.revenue ?? 0),
   };
 }
+
+// ─── About-enrichment funnel (KAN-208, PRD 15 Phase D) ────────────────────────
+
+export interface AboutMetrics {
+  tenant_id:            string;
+  window_days:          number;
+  computed_at:          string;
+  approved_count:       number;
+  rejected_count:       number;
+  approve_rate:         number;   // approved / (approved + rejected)
+  edited_count:         number;
+  edit_rate:            number;   // edited / approved — owner changed the draft before approving
+  source_covered_count: number;
+  source_coverage_rate: number;   // approved with >=1 non-seed source / approved
+  blocked_count:        number;
+  generated_count:      number;
+  empty_block_rate:     number;   // blocked / (blocked + generated) — should be low
+}
+
+export async function computeAboutMetrics(tenantId: string, windowDays = 30): Promise<AboutMetrics> {
+  const since = new Date(Date.now() - windowDays * 86_400_000).toISOString();
+
+  const [rows, blockedCount] = await Promise.all([
+    prisma.$queryRawUnsafe<Array<{ about_status: string; about_sources: string | null; about_draft: string | null; about_approved: string | null }>>(
+      `SELECT about_status, about_sources, about_draft, about_approved
+       FROM "business_profiles"
+       WHERE tenant_id = $1
+         AND about_status IN ('approved', 'rejected')
+         AND (about_approved_at >= $2 OR about_generated_at >= $2)`,
+      tenantId, since,
+    ).catch(() => []),
+
+    prisma.$queryRawUnsafe<[{ n: string }]>(
+      `SELECT COUNT(*)::text AS n FROM automation_logs al
+       JOIN business_profiles bp ON bp.id = al.linked_business
+       WHERE bp.tenant_id = $1 AND al.automation_name = 'about_blocked' AND al.created_date >= $2::timestamptz`,
+      tenantId, since,
+    ).then(r => Number(r[0]?.n ?? 0)).catch(() => 0),
+  ]);
+
+  const approved = rows.filter(r => r.about_status === 'approved');
+  const rejected = rows.filter(r => r.about_status === 'rejected');
+
+  // Edit rate compares the last-generated draft to what got approved. Note: about_draft is
+  // overwritten by a later regenerate, so a profile that regenerated again post-approval
+  // reads as "not edited" here even if the original approval was edited.
+  const edited = approved.filter(r => {
+    if (!r.about_draft || !r.about_approved) return false;
+    try { return JSON.stringify(JSON.parse(r.about_draft)) !== JSON.stringify(JSON.parse(r.about_approved)); }
+    catch { return false; }
+  }).length;
+
+  const sourceCovered = approved.filter(r => {
+    try {
+      const sources: string[] = r.about_sources ? JSON.parse(r.about_sources) : [];
+      return sources.some(s => s !== 'seed_info');
+    } catch { return false; }
+  }).length;
+
+  const generatedCount = rows.length; // every approved/rejected row was generated at least once
+
+  return {
+    tenant_id:            tenantId,
+    window_days:          windowDays,
+    computed_at:          new Date().toISOString(),
+    approved_count:       approved.length,
+    rejected_count:       rejected.length,
+    approve_rate:         rows.length ? approved.length / rows.length : 0,
+    edited_count:         edited,
+    edit_rate:            approved.length ? edited / approved.length : 0,
+    source_covered_count: sourceCovered,
+    source_coverage_rate: approved.length ? sourceCovered / approved.length : 0,
+    blocked_count:        blockedCount,
+    generated_count:      generatedCount,
+    empty_block_rate:     (blockedCount + generatedCount) ? blockedCount / (blockedCount + generatedCount) : 0,
+  };
+}
+
+// ─── Competitor-discovery funnel (KAN-216, PRD 16 Phase C) ────────────────────
+
+// ponytail: inline from src/lib/planConfig.js — update both if plan limits change
+const PLAN_COMPETITOR_LIMITS: Record<string, number> = {
+  free_trial: 3, free: 3, starter: 5, growth: 10, pro: Infinity, enterprise: Infinity,
+};
+// ponytail: static per-run budget; move to a per-plan value in planConfig.js if that's ever needed
+const DATAFORSEO_BUDGET_USD_PER_RUN = 0.05;
+
+export interface CompetitorDiscoveryMetrics {
+  tenant_id:              string;
+  window_days:            number;
+  computed_at:            string;
+  identified_count:       number;
+  kept_count:             number;
+  precision:              number;   // kept (not marked not-relevant) / identified
+  scan_count:             number;
+  median_rivals_per_scan: number;
+  avg_cap_utilization:    number;   // avg(items_processed / plan cap), finite-cap plans only
+  both_sources_count:     number;
+  one_source_count:       number;
+  source_mix_rate:        number;   // seen-by-both / (seen-by-both + seen-by-one)
+  total_cost_usd:         number;
+  avg_cost_per_run_usd:   number;
+  budget_usd_per_run:     number;
+  over_budget_rate:       number;   // runs costing over budget / runs with cost recorded
+  empty_scan_count:       number;
+  empty_rate:             number;   // scans with zero candidates / total scans
+}
+
+export async function computeCompetitorDiscoveryMetrics(tenantId: string, windowDays = 30): Promise<CompetitorDiscoveryMetrics> {
+  const since = new Date(Date.now() - windowDays * 86_400_000).toISOString();
+
+  type CompetitorRow = { not_relevant: boolean | null; discovery_sources: string | null };
+  type RunRow = { items_processed: number | null; cost_usd: number | null; plan_id: string | null };
+
+  const [competitorRows, runRows] = await Promise.all([
+    prisma.$queryRawUnsafe<CompetitorRow[]>(
+      `SELECT c.not_relevant, c.discovery_sources
+       FROM competitors c
+       JOIN business_profiles bp ON bp.id = c.linked_business
+       WHERE bp.tenant_id = $1 AND c.created_date >= $2::timestamptz`,
+      tenantId, since,
+    ).catch((): CompetitorRow[] => []),
+
+    prisma.$queryRawUnsafe<RunRow[]>(
+      `SELECT al.items_processed, al.cost_usd, bp.plan_id
+       FROM automation_logs al
+       JOIN business_profiles bp ON bp.id = al.linked_business
+       WHERE bp.tenant_id = $1 AND al.automation_name = 'runCompetitorIdentification'
+         AND al.status = 'success' AND al.created_date >= $2::timestamptz`,
+      tenantId, since,
+    ).catch((): RunRow[] => []),
+  ]);
+
+  const identified = competitorRows.length;
+  const kept = competitorRows.filter(c => !c.not_relevant).length;
+
+  const sourcesOf = (r: { discovery_sources: string | null }): string[] => {
+    try { return r.discovery_sources ? JSON.parse(r.discovery_sources) : []; } catch { return []; }
+  };
+  const bothSources = competitorRows.filter(c => sourcesOf(c).length >= 2).length;
+  const oneSource   = competitorRows.filter(c => sourcesOf(c).length === 1).length;
+
+  const scanCount = runRows.length;
+  const itemCounts = runRows.map(r => Number(r.items_processed ?? 0)).sort((a, b) => a - b);
+  const median = itemCounts.length
+    ? (itemCounts.length % 2
+        ? itemCounts[(itemCounts.length - 1) / 2]
+        : (itemCounts[itemCounts.length / 2 - 1] + itemCounts[itemCounts.length / 2]) / 2)
+    : 0;
+
+  const capUtilizations = runRows
+    .map(r => ({ items: Number(r.items_processed ?? 0), cap: PLAN_COMPETITOR_LIMITS[r.plan_id || 'free_trial'] ?? 3 }))
+    .filter(r => Number.isFinite(r.cap) && r.cap > 0)
+    .map(r => r.items / r.cap);
+  const avgCapUtilization = capUtilizations.length ? capUtilizations.reduce((a, b) => a + b, 0) / capUtilizations.length : 0;
+
+  const totalCost = runRows.reduce((sum, r) => sum + Number(r.cost_usd ?? 0), 0);
+  const costRunsRecorded = runRows.filter(r => r.cost_usd != null);
+  const overBudget = costRunsRecorded.filter(r => Number(r.cost_usd) > DATAFORSEO_BUDGET_USD_PER_RUN).length;
+
+  const emptyScans = runRows.filter(r => Number(r.items_processed ?? 0) === 0).length;
+
+  return {
+    tenant_id:              tenantId,
+    window_days:            windowDays,
+    computed_at:            new Date().toISOString(),
+    identified_count:       identified,
+    kept_count:             kept,
+    precision:              identified ? kept / identified : 0,
+    scan_count:             scanCount,
+    median_rivals_per_scan: median,
+    avg_cap_utilization:    avgCapUtilization,
+    both_sources_count:     bothSources,
+    one_source_count:       oneSource,
+    source_mix_rate:        (bothSources + oneSource) ? bothSources / (bothSources + oneSource) : 0,
+    total_cost_usd:         totalCost,
+    avg_cost_per_run_usd:   scanCount ? totalCost / scanCount : 0,
+    budget_usd_per_run:     DATAFORSEO_BUDGET_USD_PER_RUN,
+    over_budget_rate:       costRunsRecorded.length ? overBudget / costRunsRecorded.length : 0,
+    empty_scan_count:       emptyScans,
+    empty_rate:             scanCount ? emptyScans / scanCount : 0,
+  };
+}

@@ -391,6 +391,7 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE proactive_alerts ADD COLUMN IF NOT EXISTS dismiss_reason TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS not_relevant BOOLEAN DEFAULT false`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS not_relevant_reason TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS discovery_sources TEXT`);
   // ── Competitor enrichment: social presence + pricing + page discovery ───────
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS website_url TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS instagram_url TEXT`);
