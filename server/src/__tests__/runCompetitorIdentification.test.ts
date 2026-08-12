@@ -29,13 +29,18 @@ jest.mock('../lib/eventBus', () => ({
 }));
 
 jest.mock('../lib/businessProfile', () => ({
-  buildCompetitorTerms:    jest.fn().mockReturnValue(['בית קפה']),
-  buildAgentPromptContext: jest.fn().mockReturnValue('ctx'),
-  getSectorProfile:        jest.fn().mockReturnValue(null),
+  buildCompetitorTerms:         jest.fn().mockReturnValue(['בית קפה']),
+  buildIdentityCompetitorTerms: jest.fn().mockReturnValue([]),
+  buildAgentPromptContext:      jest.fn().mockReturnValue('ctx'),
+  getSectorProfile:             jest.fn().mockReturnValue(null),
 }));
 
 jest.mock('../lib/missionPlanner', () => ({
   getAgentMission: jest.fn().mockReturnValue(null),
+}));
+
+jest.mock('../lib/dataforseo', () => ({
+  searchCompetitorsByKeyword: jest.fn(),
 }));
 
 import { runCompetitorIdentification } from '../routes/functions/runCompetitorIdentification';
@@ -43,6 +48,7 @@ import { prisma }           from '../db';
 import { invokeLLM }        from '../lib/llm';
 import { publishEvent }     from '../lib/eventBus';
 import { writeAutomationLog } from '../lib/automationLog';
+import { searchCompetitorsByKeyword } from '../lib/dataforseo';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -73,6 +79,22 @@ const emptyGeoFetch = jest.fn().mockResolvedValue({
   ok: true,
   json: () => Promise.resolve({ results: [] }),
 });
+
+const COORDS = { lat: 32.08, lng: 34.78 };
+
+// Geocoding resolves to COORDS (enables the DataForSEO leg, which requires coords) and
+// Google Places nearbysearch returns `placesResults`.
+function geoAndPlacesFetch(placesResults: any[] = []) {
+  return jest.fn((url: string) => {
+    if (url.includes('geocode')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ results: [{ geometry: { location: COORDS } }] }) });
+    }
+    if (url.includes('nearbysearch')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ results: placesResults }) });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ results: [] }) });
+  });
+}
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
@@ -170,4 +192,71 @@ test('AC3: deletes competitor whose address is outside all scanned areas', async
     expect.objectContaining({ where: { id: { in: ['comp_eilat'] } } })
   );
   expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ out_of_scope_removed: 1 }));
+});
+
+// ─── KAN-212: parallel DataForSEO + Places discovery, merge/dedupe ───────────
+
+test('AC1 (KAN-212): DataForSEO Maps and Google Places nearby both run for the same term', async () => {
+  const placesFetch = geoAndPlacesFetch([
+    { name: 'Google Cafe', place_id: 'gp1', rating: 4, user_ratings_total: 3, formatted_address: 'תל אביב' },
+  ]);
+  (global as any).fetch = placesFetch;
+  (searchCompetitorsByKeyword as jest.Mock).mockResolvedValue([]);
+  (invokeLLM as jest.Mock)
+    .mockResolvedValueOnce({ business_type: 'בית קפה', search_terms: ['בית קפה'], nearby_cities: [] })
+    .mockResolvedValueOnce({ competitors: [] });
+
+  const res = makeRes();
+  await runCompetitorIdentification(makeReq(), res);
+
+  expect(searchCompetitorsByKeyword).toHaveBeenCalledWith('בית קפה', COORDS.lat, COORDS.lng);
+  expect(placesFetch).toHaveBeenCalledWith(expect.stringContaining('nearbysearch'));
+});
+
+test('AC2 (KAN-212): DataForSEO empty/down does not block identify — Places results still used', async () => {
+  (global as any).fetch = geoAndPlacesFetch([
+    { name: 'Google Cafe', place_id: 'gp1', rating: 4.1, user_ratings_total: 8, formatted_address: 'תל אביב' },
+  ]);
+  (searchCompetitorsByKeyword as jest.Mock).mockResolvedValue([]); // soft-fail / empty source
+
+  (invokeLLM as jest.Mock)
+    .mockResolvedValueOnce({ business_type: 'בית קפה', search_terms: ['בית קפה'], nearby_cities: [] })
+    .mockResolvedValueOnce({ competitors: [] });
+
+  const res = makeRes();
+  await runCompetitorIdentification(makeReq(), res);
+
+  const sonnetCall = (invokeLLM as jest.Mock).mock.calls[1][0];
+  expect(sonnetCall.prompt).toContain('Google Cafe');
+  expect(res.status).not.toHaveBeenCalledWith(500);
+});
+
+test('AC3+AC4 (KAN-212): merges candidates sharing a place_id and tags discovery_sources', async () => {
+  (global as any).fetch = geoAndPlacesFetch([
+    { name: 'קפה ורד', place_id: 'place_1', rating: 4.0, user_ratings_total: 5, formatted_address: 'תל אביב' },
+  ]);
+  (searchCompetitorsByKeyword as jest.Mock).mockResolvedValue([
+    {
+      name: 'קפה ורד', place_id: 'place_1', address: 'תל אביב', address_info: {},
+      latitude: 32.1, longitude: 34.8, rating: 4.3, votes_count: 12,
+      category: '', additional_categories: [],
+    },
+  ]);
+  (invokeLLM as jest.Mock)
+    .mockResolvedValueOnce({ business_type: 'בית קפה', search_terms: ['בית קפה'], nearby_cities: [] })
+    .mockResolvedValueOnce({ competitors: [] });
+
+  const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+  const res = makeRes();
+  await runCompetitorIdentification(makeReq(), res);
+
+  const provenanceLine = logSpy.mock.calls.map(c => c[0])
+    .find((l: string) => typeof l === 'string' && l.startsWith('runCompetitorIdentification: discovery_sources='));
+  expect(provenanceLine).toBeDefined();
+
+  const tagged = JSON.parse(provenanceLine.replace('runCompetitorIdentification: discovery_sources=', ''));
+  expect(tagged).toHaveLength(1); // deduped into one candidate by shared place_id
+  expect(tagged[0].discovery_sources.sort()).toEqual(['dataforseo_maps', 'google_places']);
+
+  logSpy.mockRestore();
 });

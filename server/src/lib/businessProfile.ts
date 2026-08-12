@@ -234,6 +234,32 @@ export function buildCompetitorTerms(
 }
 
 /**
+ * Build competitor search terms from the approved Doc 15 identity JSON (about_approved).
+ * KAN-211 AC1: sub_sector_key (+ Hebrew label) is primary, relevant_topics add variants
+ * (cap 5), sector_key is a thin fallback when the primary yields <2 terms. business_type/
+ * service_model are LLM hints elsewhere — never pushed here as raw queries. business_name
+ * is never included (self).
+ * Returns [] when about_status isn't 'approved' or about_approved is missing/unparseable —
+ * callers should fall back to buildCompetitorTerms() / mission search_terms_he (AC3).
+ */
+export function buildIdentityCompetitorTerms(
+  profile: { about_status?: string | null; about_approved?: string | null; sector_profile?: string | null }
+): string[] {
+  if (profile.about_status !== 'approved' || !profile.about_approved) return [];
+  let identity: any;
+  try { identity = JSON.parse(profile.about_approved); } catch { return []; }
+
+  const sp = getSectorProfile(profile);
+  const terms: string[] = [];
+
+  if (identity.sub_sector_key) terms.push(sp?.sector_label_he || identity.sub_sector_key);
+  for (const topic of (identity.relevant_topics || []).slice(0, 5)) terms.push(topic);
+  if (terms.length < 2 && identity.sector_key) terms.push(identity.sector_key);
+
+  return [...new Set(terms.filter(Boolean))].slice(0, 6);
+}
+
+/**
  * Check whether a signal (raw text/category) is relevant for this business.
  * Used to filter out irrelevant signals before they reach the LLM.
  */

@@ -3,8 +3,9 @@ import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
 import { publishEvent } from '../../lib/eventBus';
-import { buildCompetitorTerms, buildAgentPromptContext, getSectorProfile } from '../../lib/businessProfile';
+import { buildCompetitorTerms, buildIdentityCompetitorTerms, buildAgentPromptContext, getSectorProfile } from '../../lib/businessProfile';
 import { getAgentMission } from '../../lib/missionPlanner';
+import { searchCompetitorsByKeyword, DataForSEOCandidate } from '../../lib/dataforseo';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
@@ -95,6 +96,61 @@ async function googlePlacesSearch(query: string, city: string): Promise<any[]> {
   } catch { return []; }
 }
 
+interface MapsCandidate {
+  name: string;
+  place_id: string;
+  rating: number | null;
+  review_count: number | null;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  discovery_sources: string[];
+}
+
+const normName = (s: string) => (s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+const sameCity = (addr: string, city: string) => (addr || '').toLowerCase().includes((city || '').toLowerCase());
+
+/** KAN-212 AC3 (§7.1): dedupe DataForSEO + Google Places candidates by place_id when both
+ * have it, else fuzzy name + same city. Union rating/address (prefer non-null); prefer
+ * DataForSEO lat/lng. */
+function mergeMapsCandidates(googlePlaces: any[], dataforseo: DataForSEOCandidate[], city: string): MapsCandidate[] {
+  const merged: MapsCandidate[] = googlePlaces.map(p => ({
+    name: p.name || '', place_id: p.place_id || '',
+    rating: p.rating ?? null, review_count: p.user_ratings_total ?? null,
+    address: p.formatted_address || p.vicinity || '',
+    lat: p.geometry?.location?.lat ?? null, lng: p.geometry?.location?.lng ?? null,
+    discovery_sources: ['google_places'],
+  }));
+
+  for (const d of dataforseo) {
+    const idx = merged.findIndex(g =>
+      (d.place_id && g.place_id && d.place_id === g.place_id) ||
+      (sameCity(d.address, city) && sameCity(g.address, city) &&
+        normName(d.name) && (normName(d.name) === normName(g.name) || normName(g.name).includes(normName(d.name)) || normName(d.name).includes(normName(g.name))))
+    );
+    if (idx === -1) {
+      merged.push({
+        name: d.name, place_id: d.place_id, rating: d.rating, review_count: d.votes_count,
+        address: d.address, lat: d.latitude ?? null, lng: d.longitude ?? null,
+        discovery_sources: ['dataforseo_maps'],
+      });
+    } else {
+      const g = merged[idx];
+      merged[idx] = {
+        name: g.name || d.name,
+        place_id: g.place_id || d.place_id,
+        rating: g.rating ?? d.rating,
+        review_count: g.review_count ?? d.votes_count,
+        address: g.address || d.address,
+        lat: d.latitude ?? g.lat, // prefer DataForSEO lat/lng
+        lng: d.longitude ?? g.lng,
+        discovery_sources: [...new Set([...g.discovery_sources, 'dataforseo_maps'])],
+      };
+    }
+  }
+  return merged;
+}
+
 export async function runCompetitorIdentification(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
@@ -117,10 +173,14 @@ export async function runCompetitorIdentification(req: Request, res: Response) {
     const sp = getSectorProfile(profile);
     const profileCtx = buildAgentPromptContext(profile);
     const competitorMission = getAgentMission<{ search_terms_he?: string[]; competitor_profile_he?: string }>(profile, 'runCompetitorIdentification');
-    // Mission-provided terms are most precise; fall back to sector-profile terms
-    const prebuiltTerms = competitorMission?.search_terms_he?.length
-      ? competitorMission.search_terms_he
-      : buildCompetitorTerms(profile);
+    // KAN-211 AC1/AC3: approved identity terms are most precise; fall back to mission terms,
+    // then sector-profile terms.
+    const identityTerms = buildIdentityCompetitorTerms(profile);
+    const prebuiltTerms = identityTerms.length
+      ? identityTerms
+      : competitorMission?.search_terms_he?.length
+        ? competitorMission.search_terms_he
+        : buildCompetitorTerms(profile);
 
     // ── Step 1: Understand the business type + get nearby cities ──────────────
     // If we have an AI sector profile, provide it so the LLM generates precise competitor terms
@@ -143,9 +203,12 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     });
 
     const businessType: string = contextResult?.business_type || sp?.sector_label_he || category;
-    // Merge: LLM-suggested terms + pre-built terms from sector_profile, deduplicated
+    // KAN-211 AC5: the Haiku call above always runs (also gives us business_type + nearby_cities),
+    // but its invented search_terms are only used to fill in when identity/sector already gave <2.
+    // ponytail: one shared call rather than a second dedicated refine call — same LLM round-trip
+    // already yields business_type/nearby_cities we need regardless.
     const searchTerms: string[] = [
-      ...(contextResult?.search_terms || []),
+      ...(prebuiltTerms.length < 2 ? (contextResult?.search_terms || []) : []),
       ...prebuiltTerms,
     ].filter((v, i, a) => v && a.indexOf(v) === i).slice(0, 6);
     const nearbyCities: string[] = contextResult?.nearby_cities || [];
@@ -154,6 +217,16 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     const allAreas = [...new Set([city, ...nearbyCities, ...userExtraCities])];
 
     console.log(`runCompetitorIdentification: type="${businessType}", areas=${JSON.stringify(allAreas)}, terms=${JSON.stringify(searchTerms)}`);
+
+    // KAN-211 AC4: no terms at all → soft-fail, don't burn paid Maps/SerpAPI/Tavily calls.
+    if (searchTerms.length === 0) {
+      console.warn(`runCompetitorIdentification: no search terms available for ${businessProfileId} — skipping paid search calls`);
+      await writeAutomationLog('runCompetitorIdentification', businessProfileId, startTime, 0, 'success', 'no search terms available — skipped');
+      return res.json({
+        competitors_found: 0, new_competitors_created: 0, existing_competitors_updated: 0,
+        out_of_scope_removed: 0, business_type: businessType, areas_scanned: allAreas, skipped: 'no_search_terms',
+      });
+    }
 
     // ── Step 2: Google Places — radius-based search for precision ─────────────
     // Geocode the primary city to get coordinates, then use nearbysearch with
@@ -164,6 +237,12 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     const googleSearchPromises = cityCoords
       ? searchTerms.map(term => googleNearbySearch(term, cityCoords.lat, cityCoords.lng, radiusM))
       : [googlePlacesSearch(searchTerms[0] || businessType, city)];
+
+    // KAN-212 AC1: DataForSEO Maps runs in parallel with Places (below, same Promise.all).
+    // Requires coords (no text-search mode) — skipped when ungeocodable, same as AC2 soft-fail.
+    const dataForSeoPromises = cityCoords
+      ? searchTerms.map(term => searchCompetitorsByKeyword(term, cityCoords.lat, cityCoords.lng))
+      : [];
 
     // Also search user-requested additional cities by text (they're explicit requests)
     const extraCitySearchPromises = userExtraCities.flatMap(area =>
@@ -182,18 +261,24 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       ? searchTerms.slice(0, 2).map(term => serpMapsSearch(`${term} ${city}`, city))
       : [];
 
-    const [googleResultSets, tavilyResultSets, extraResults, serpResultSets] = await Promise.all([
+    const [googleResultSets, dataForSeoResultSets, tavilyResultSets, extraResults, serpResultSets] = await Promise.all([
       Promise.all(googleSearchPromises),
+      Promise.all(dataForSeoPromises),
       Promise.all(tavilyQueries.map(q => tavilySearch(q, 5))),
       Promise.all(extraCitySearchPromises),
       Promise.all(serpPromises),
     ]);
 
-    const googleResults = googleResultSets.flat();
-    const tavilyResults = [...tavilyResultSets.flat(), ...extraResults];
-    const serpResults   = serpResultSets.flat();
+    const googleResults    = googleResultSets.flat();
+    const dataForSeoResults = dataForSeoResultSets.flat();
+    const tavilyResults    = [...tavilyResultSets.flat(), ...extraResults];
+    const serpResults      = serpResultSets.flat();
 
-    console.log(`runCompetitorIdentification: ${googleResults.length} Google, ${tavilyResults.length} Tavily, ${serpResults.length} SerpAPI results`);
+    // KAN-212 AC3/AC4: merge + dedupe the two Maps sources, tag provenance
+    const mapsCandidates = mergeMapsCandidates(googleResults, dataForSeoResults, city);
+    console.log(`runCompetitorIdentification: discovery_sources=${JSON.stringify(mapsCandidates.map(c => ({ name: c.name, discovery_sources: c.discovery_sources })))}`);
+
+    console.log(`runCompetitorIdentification: ${googleResults.length} Google, ${dataForSeoResults.length} DataForSEO, ${mapsCandidates.length} merged Maps, ${tavilyResults.length} Tavily, ${serpResults.length} SerpAPI results`);
 
     // ── Step 3: LLM identifies DIRECT competitors only ───────────────────────
     const existingCompetitors = await (prisma as any).competitor.findMany({ where: { linked_business: businessProfileId } });
@@ -203,9 +288,9 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       existingCompetitors.filter((c: any) => c.not_relevant).map((c: any) => c.name.toLowerCase())
     );
 
-    const googleBlock = googleResults.length > 0
-      ? `Google Places:\n${googleResults.map((p: any) =>
-          `- ${p.name}: ${p.rating || '?'}★ (${p.user_ratings_total || 0} ביקורות) — ${p.formatted_address || city}`
+    const googleBlock = mapsCandidates.length > 0
+      ? `Google/DataForSEO Maps:\n${mapsCandidates.map(c =>
+          `- ${c.name}: ${c.rating ?? '?'}★ (${c.review_count || 0} ביקורות) — ${c.address || city}`
         ).join('\n')}`
       : '';
 
