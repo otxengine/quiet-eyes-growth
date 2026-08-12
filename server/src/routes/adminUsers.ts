@@ -8,6 +8,7 @@ import { prisma } from '../db';
 import { isAdminKeyRequest } from '../middleware/auth';
 import { createLogger } from '../infra/logger';
 import { bulkBootstrapAllBusinesses, bootstrapBusinessIntelligence } from '../lib/bootstrapIntelligence';
+import { searchCompetitorsByKeyword } from '../lib/dataforseo';
 import { getCollectorMetrics, checkAndAlertFailureRate, getTrendMetrics } from '../lib/collectorMetrics';
 
 const logger = createLogger('AdminUsers');
@@ -191,6 +192,13 @@ router.post('/collector-metrics/check', async (req: Request, res: Response) => {
   if (!isAdminKeyRequest(req)) return res.status(403).json({ error: 'Admin access required' });
   await checkAndAlertFailureRate().catch(e => logger.warn(`alert check failed: ${e.message}`));
   res.json({ ok: true });
+});
+
+// ponytail: temp test endpoint — remove after KAN-210 is verified
+router.get('/test-dataforseo', async (req: Request, res: Response) => {
+  if (!isAdminKeyRequest(req)) return res.status(403).json({ error: 'Admin access required' });
+  const results = await searchCompetitorsByKeyword('סושי', 32.0853, 34.7818, 14, 5);
+  res.json({ count: results.length, sample: results.slice(0, 2) });
 });
 
 export default router;
