@@ -6,7 +6,7 @@ class SilentBoundary extends Component {
   static getDerivedStateFromError() { return { failed: true }; }
   render() { return this.state.failed ? null : this.props.children; }
 }
-import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, MapPin, ArrowLeft, Clock, Instagram, Globe, X, Trash2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, MapPin, ArrowLeft, Clock, Instagram, Globe, X, Trash2, Check } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 const CompetitorSwotCard = lazy(() => import('@/components/competitors/CompetitorSwotCard'));
@@ -26,15 +26,19 @@ function timeAgo(dateStr) {
 
 function UrlInput({ label, fieldKey, initialValue, competitorId }) {
   const [val, setVal] = useState(initialValue || '');
+  const [saved, setSaved] = useState(initialValue || '');
+  const dirty = val !== saved;
   const save = () => {
-    if (val === (initialValue || '')) return;
+    if (val === saved) return;
     base44.entities.Competitor.update(competitorId, { [fieldKey]: val || null })
+      .then(() => setSaved(val))
       .catch(() => toast.error('שגיאה בשמירת קישור'));
   };
   const clear = (e) => {
     e.stopPropagation();
     setVal('');
     base44.entities.Competitor.update(competitorId, { [fieldKey]: null })
+      .then(() => setSaved(''))
       .catch(() => toast.error('שגיאה בשמירת קישור'));
   };
   return (
@@ -43,11 +47,16 @@ function UrlInput({ label, fieldKey, initialValue, competitorId }) {
       <input
         value={val}
         onChange={e => setVal(e.target.value)}
-        onBlur={save}
+        onKeyDown={e => e.key === 'Enter' && save()}
         placeholder="הוסף קישור..."
         className="flex-1 min-w-0 text-[11px] bg-transparent border-b border-border focus:border-primary/50 outline-none py-0.5 text-foreground-secondary placeholder-foreground-muted/40 transition-colors"
       />
-      {val && (
+      {dirty && (
+        <button onClick={save} className="text-primary hover:opacity-75 transition-opacity flex-shrink-0" title="שמור">
+          <Check className="w-3.5 h-3.5" />
+        </button>
+      )}
+      {val && !dirty && (
         <button onClick={clear} className="text-foreground-muted/50 hover:text-danger transition-colors flex-shrink-0">
           <X className="w-3 h-3" />
         </button>
