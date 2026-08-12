@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import {
   ChevronRight, LogOut,
   ShieldAlert, Sparkles, Bot, Building2, GitBranch, User,
-  Eye, Settings, Star, Users, Heart,
+  Eye, Settings, Star, Users,
   Calendar, Megaphone, Lightbulb, Home, CreditCard
 } from 'lucide-react';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -19,7 +19,6 @@ const NAV_STRUCTURE = [
   { path: '/events',             label: 'אירועים',       icon: Calendar },
   { path: '/reviews',            label: 'מוניטין',        icon: Star, badgeKey: 'pendingReviews' },
   { path: '/social-competition', label: 'תחרות סושיאל',  icon: Users },
-  { path: '/retention',          label: 'ניהול לקוחות',   icon: Heart },
 ];
 
 function useIsAdmin() {
