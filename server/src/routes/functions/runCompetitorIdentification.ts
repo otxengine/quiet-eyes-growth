@@ -384,7 +384,9 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
     for (const c of competitors) {
       if (!c.name || c.name.toLowerCase() === name.toLowerCase()) continue;
       const nameKey = c.name.toLowerCase();
-      const sourceUrls = (c.source_urls || []).filter((u: string) => u?.startsWith('http')).join(' | ');
+      // LLM may return source_urls as an array or, apparently, a bare string — accept either
+      const sourceUrlList: string[] = Array.isArray(c.source_urls) ? c.source_urls : (c.source_urls ? [c.source_urls] : []);
+      const sourceUrls = sourceUrlList.filter((u: string) => u?.startsWith('http')).join(' | ');
       // LLM may return arrays for these fields — Prisma expects strings
       const strengths = Array.isArray(c.strengths) ? c.strengths.join(', ') : (c.strengths || '');
       const weaknesses = Array.isArray(c.weaknesses) ? c.weaknesses.join(', ') : (c.weaknesses || '');

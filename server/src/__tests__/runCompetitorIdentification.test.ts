@@ -326,6 +326,34 @@ test('accepts a bare array from the selection LLM (not wrapped in {competitors: 
   );
 });
 
+test('accepts a bare string for source_urls instead of an array (does not throw)', async () => {
+  (global as any).fetch = geoAndPlacesFetch([]);
+  (searchCompetitorsByKeyword as jest.Mock).mockResolvedValue({ candidates: [{
+    name: 'קפה G', place_id: 'p8', address: 'תל אביב', address_info: {},
+    latitude: 32.08, longitude: 34.78, rating: 4.2, votes_count: 6,
+    category: '', additional_categories: [],
+    url: 'https://cafeg.co.il', domain: 'cafeg.co.il',
+  }], costUsd: 0 });
+  (invokeLLM as jest.Mock)
+    .mockResolvedValueOnce({ business_type: 'בית קפה', search_terms: ['בית קפה'], nearby_cities: [] })
+    .mockResolvedValueOnce({ competitors: [{
+      name: 'קפה G', address: 'תל אביב', rating: 4.2, review_count: 6,
+      strengths: '', weaknesses: '', price_range: '',
+      source_urls: 'https://maps.google.com/?cid=123', // bare string, not an array
+    }] });
+
+  const res = makeRes();
+  await runCompetitorIdentification(makeReq(), res);
+
+  expect(res.status).not.toHaveBeenCalledWith(500);
+  expect(prisma.competitor.create).toHaveBeenCalledWith(
+    expect.objectContaining({ data: expect.objectContaining({
+      name: 'קפה G',
+      source_urls: 'https://maps.google.com/?cid=123',
+    }) })
+  );
+});
+
 // ─── KAN-219 AC0 — enrichCompetitorUrls runs inline, same request ────────────
 
 test('AC0: enrichCompetitorUrls runs inline for the updated competitor id, not deferred', async () => {
