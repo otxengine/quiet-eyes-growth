@@ -47,6 +47,13 @@ jest.mock('../routes/functions/enrichCompetitorUrls', () => ({
   enrichCompetitorUrls: jest.fn().mockResolvedValue({ enriched: 0, skipped: 0 }),
 }));
 
+jest.mock('../lib/googlePlaces', () => ({
+  getPlaceDetails: jest.fn().mockResolvedValue({
+    reviews: [], editorialSummary: '', types: [], priceLevel: null,
+    servesWine: false, servesBeer: false, servesVegetarianFood: false, websiteUri: '',
+  }),
+}));
+
 import { runCompetitorIdentification } from '../routes/functions/runCompetitorIdentification';
 import { prisma }           from '../db';
 import { invokeLLM }        from '../lib/llm';
@@ -54,6 +61,7 @@ import { publishEvent }     from '../lib/eventBus';
 import { writeAutomationLog } from '../lib/automationLog';
 import { searchCompetitorsByKeyword } from '../lib/dataforseo';
 import { enrichCompetitorUrls } from '../routes/functions/enrichCompetitorUrls';
+import { getPlaceDetails } from '../lib/googlePlaces';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -221,6 +229,79 @@ test('AC8b: does not overwrite existing website_url on update', async () => {
 
   const updateCall = (prisma.competitor.update as jest.Mock).mock.calls[0][0];
   expect(updateCall.data.website_url).toBeUndefined(); // must NOT overwrite
+});
+
+test('AC8b (social fallback): DataForSEO url pointing at Instagram populates instagram_url, not website_url', async () => {
+  (global as any).fetch = geoAndPlacesFetch([]);
+  (searchCompetitorsByKeyword as jest.Mock).mockResolvedValue({ candidates: [{
+    name: 'קפה D', place_id: 'p4', address: 'תל אביב', address_info: {},
+    latitude: 32.08, longitude: 34.78, rating: 4.1, votes_count: 8,
+    category: '', additional_categories: [],
+    url: 'https://instagram.com/cafed', domain: undefined,
+  }], costUsd: 0 });
+  (invokeLLM as jest.Mock)
+    .mockResolvedValueOnce({ business_type: 'בית קפה', search_terms: ['בית קפה'], nearby_cities: [] })
+    .mockResolvedValueOnce({ competitors: [{ name: 'קפה D', address: 'תל אביב', rating: 4.1, review_count: 8, strengths: '', weaknesses: '', price_range: '', source_urls: [] }] });
+
+  const res = makeRes();
+  await runCompetitorIdentification(makeReq(), res);
+
+  expect(prisma.competitor.create).toHaveBeenCalledWith(
+    expect.objectContaining({ data: expect.objectContaining({
+      website_url: undefined,
+      instagram_url: 'https://instagram.com/cafed',
+    }) })
+  );
+});
+
+test('website fallback: no DataForSEO url/domain but has place_id → falls back to Google Place Details', async () => {
+  (global as any).fetch = geoAndPlacesFetch([]);
+  (searchCompetitorsByKeyword as jest.Mock).mockResolvedValue({ candidates: [{
+    name: 'קפה E', place_id: 'p5', address: 'תל אביב', address_info: {},
+    latitude: 32.08, longitude: 34.78, rating: 4.3, votes_count: 12,
+    category: '', additional_categories: [],
+    url: undefined, domain: undefined,
+  }], costUsd: 0 });
+  (getPlaceDetails as jest.Mock).mockResolvedValueOnce({
+    reviews: [], editorialSummary: '', types: [], priceLevel: null,
+    servesWine: false, servesBeer: false, servesVegetarianFood: false,
+    websiteUri: 'https://cafee.co.il',
+  });
+  (invokeLLM as jest.Mock)
+    .mockResolvedValueOnce({ business_type: 'בית קפה', search_terms: ['בית קפה'], nearby_cities: [] })
+    .mockResolvedValueOnce({ competitors: [{ name: 'קפה E', address: 'תל אביב', rating: 4.3, review_count: 12, strengths: '', weaknesses: '', price_range: '', source_urls: [] }] });
+
+  const res = makeRes();
+  await runCompetitorIdentification(makeReq(), res);
+
+  expect(getPlaceDetails).toHaveBeenCalledWith('p5');
+  expect(prisma.competitor.create).toHaveBeenCalledWith(
+    expect.objectContaining({ data: expect.objectContaining({ website_url: 'https://cafee.co.il' }) })
+  );
+});
+
+test('fuzzy name match: LLM-paraphrased name still resolves a Maps candidate and derives its website', async () => {
+  (global as any).fetch = geoAndPlacesFetch([]);
+  (searchCompetitorsByKeyword as jest.Mock).mockResolvedValue({ candidates: [{
+    name: 'קפה פלוני בע"מ', place_id: 'p6', address: 'תל אביב', address_info: {},
+    latitude: 32.08, longitude: 34.78, rating: 4.0, votes_count: 3,
+    category: '', additional_categories: [],
+    url: 'https://ploni.co.il', domain: 'ploni.co.il',
+  }], costUsd: 0 });
+  // LLM drops the "בע"מ" (Ltd.) suffix present in the Maps candidate's name.
+  (invokeLLM as jest.Mock)
+    .mockResolvedValueOnce({ business_type: 'בית קפה', search_terms: ['בית קפה'], nearby_cities: [] })
+    .mockResolvedValueOnce({ competitors: [{ name: 'קפה פלוני', address: 'תל אביב', rating: 4.0, review_count: 3, strengths: '', weaknesses: '', price_range: '', source_urls: [] }] });
+
+  const res = makeRes();
+  await runCompetitorIdentification(makeReq(), res);
+
+  expect(prisma.competitor.create).toHaveBeenCalledWith(
+    expect.objectContaining({ data: expect.objectContaining({
+      website_url: 'https://ploni.co.il',
+      google_place_id: 'p6',
+    }) })
+  );
 });
 
 // ─── KAN-219 AC0 — enrichCompetitorUrls runs inline, same request ────────────

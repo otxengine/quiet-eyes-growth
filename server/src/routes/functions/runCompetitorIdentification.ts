@@ -7,6 +7,7 @@ import { buildCompetitorTerms, buildIdentityCompetitorTerms, buildAgentPromptCon
 import { getAgentMission } from '../../lib/missionPlanner';
 import { searchCompetitorsByKeyword, DataForSEOCandidate } from '../../lib/dataforseo';
 import { enrichCompetitorUrls } from './enrichCompetitorUrls';
+import { getPlaceDetails } from '../../lib/googlePlaces';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
 
@@ -332,14 +333,43 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
     let updated = 0;
     const touchedIds: string[] = []; // KAN-219 AC0 — created/updated ids to enrich inline below
 
-    // AC8b: derive website_url from DataForSEO url/domain; exclude social/maps links
-    const SOCIAL_PATTERN = /instagram\.com|facebook\.com|tiktok\.com|google\.com\/maps/i;
-    const deriveWebsiteUrl = (m: MapsCandidate): string | null => {
-      if (m.url && /^https?:\/\//i.test(m.url) && !SOCIAL_PATTERN.test(m.url)) return m.url;
-      if (m.domain && !SOCIAL_PATTERN.test(m.domain)) return `https://${m.domain}`;
-      return null;
+    // AC8b (extended): classify a Maps candidate's url/domain into website vs. social —
+    // restaurants especially often have only a Facebook/Instagram page, no real site.
+    interface DerivedUrls { website: string | null; instagram: string | null; facebook: string | null; tiktok: string | null; }
+    const classifyUrl = (url: string | undefined, out: DerivedUrls) => {
+      if (!url) return;
+      if (/instagram\.com/i.test(url)) { out.instagram ||= url; return; }
+      if (/facebook\.com/i.test(url)) { out.facebook ||= url; return; }
+      if (/tiktok\.com/i.test(url)) { out.tiktok ||= url; return; }
+      if (/google\.com\/maps/i.test(url)) return; // never usable as website or social
+      if (/^https?:\/\//i.test(url)) out.website ||= url;
+    };
+    const deriveUrls = async (m: MapsCandidate): Promise<DerivedUrls> => {
+      const out: DerivedUrls = { website: null, instagram: null, facebook: null, tiktok: null };
+      classifyUrl(m.url, out);
+      if (m.domain) classifyUrl(`https://${m.domain}`, out);
+      // Fallback: DataForSEO had no usable website — try Google's own Place Details data.
+      if (!out.website && m.place_id) {
+        const details = await getPlaceDetails(m.place_id);
+        classifyUrl(details.websiteUri, out);
+      }
+      return out;
     };
     const candidateByName = new Map(mapsCandidates.map(m => [normName(m.name), m]));
+    // Exact normalized-name match first; else fuzzy containment + same-city, mirroring
+    // mergeMapsCandidates' own tolerance — an LLM-paraphrased name shouldn't lose all
+    // provenance data (place_id/url) that the Maps candidate actually has.
+    const findMapMatch = (llmName: string, llmAddress: string): MapsCandidate | undefined => {
+      const key = normName(llmName);
+      if (!key) return undefined;
+      const exact = candidateByName.get(key);
+      if (exact) return exact;
+      return mapsCandidates.find(m => {
+        const mKey = normName(m.name);
+        return !!mKey && (mKey.includes(key) || key.includes(mKey)) &&
+          sameCity(llmAddress || '', city) === sameCity(m.address || '', city);
+      });
+    };
 
     // LLM may return rating as "4.5★" or "4.5" — Prisma expects Float
     const parseRating = (r: any): number | null => {
@@ -356,8 +386,10 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
       const strengths = Array.isArray(c.strengths) ? c.strengths.join(', ') : (c.strengths || '');
       const weaknesses = Array.isArray(c.weaknesses) ? c.weaknesses.join(', ') : (c.weaknesses || '');
 
-      const mapMatch = candidateByName.get(normName(c.name));
-      const websiteUrl = mapMatch ? deriveWebsiteUrl(mapMatch) : null;
+      const mapMatch = findMapMatch(c.name, c.address);
+      const urls: DerivedUrls = mapMatch
+        ? await deriveUrls(mapMatch)
+        : { website: null, instagram: null, facebook: null, tiktok: null };
 
       if (existingNames.has(nameKey)) {
         const existing = existingCompetitors.find(e => e.name.toLowerCase() === nameKey);
@@ -373,8 +405,11 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
               source_urls: sourceUrls || existing.source_urls,
               last_scanned: new Date().toISOString(),
               data_freshness: 'fresh',
-              // AC8b: fill only if currently empty — never overwrite owner/Tavily URL
-              ...(websiteUrl && !(existing as any).website_url ? { website_url: websiteUrl } : {}),
+              // AC8b: fill only if currently empty — never overwrite owner/Tavily/user data
+              ...(urls.website && !(existing as any).website_url ? { website_url: urls.website } : {}),
+              ...(urls.instagram && !(existing as any).instagram_url ? { instagram_url: urls.instagram } : {}),
+              ...(urls.facebook && !(existing as any).facebook_url ? { facebook_url: urls.facebook } : {}),
+              ...(urls.tiktok && !(existing as any).tiktok_url ? { tiktok_url: urls.tiktok } : {}),
               // KAN-216 AC3: re-tag provenance on every scan that still sees this row
               ...(mapMatch ? { discovery_sources: JSON.stringify(mapMatch.discovery_sources) } : {}),
             },
@@ -398,7 +433,10 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
             data_freshness: 'fresh',
             verification_status: 'מאומתת',
             linked_business: businessProfileId,
-            website_url: websiteUrl || undefined,
+            website_url: urls.website || undefined,
+            instagram_url: urls.instagram || undefined,
+            facebook_url: urls.facebook || undefined,
+            tiktok_url: urls.tiktok || undefined,
             google_place_id: mapMatch?.place_id || undefined,
             // KAN-216 AC3: which API(s) surfaced this row
             discovery_sources: mapMatch ? JSON.stringify(mapMatch.discovery_sources) : undefined,
