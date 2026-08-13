@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Navigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminClient } from '@/api/adminClient';
 import { Loader2, ShieldAlert, AlertTriangle } from 'lucide-react';
@@ -16,13 +15,6 @@ import AdminActionsTab       from '@/components/admin/AdminActionsTab';
 import SupportTicketsTab    from '@/components/admin/SupportTicketsTab';
 import AgentHealthTab       from '@/components/admin/AgentHealthTab';
 
-function useIsAdmin() {
-  try {
-    const email = window.__clerk?.user?.primaryEmailAddress?.emailAddress || '';
-    return email === 'contact@otxengine.io' || email === 'admin@cortexi.ai' || email.endsWith('@otx.ai') || email.endsWith('@quieteyes.ai') || email.endsWith('@cortexi.ai');
-  } catch { return false; }
-}
-
 const TABS = [
   { key: 'overview',   label: 'Overview' },
   { key: 'pipeline',   label: 'Cortexi Pipeline' },
@@ -36,10 +28,7 @@ const TABS = [
   { key: 'agents',   label: 'ניטור סוכנים' },
 ];
 
-export default function AdminDashboard({ skipAdminCheck = false }) {
-  const isAdmin = skipAdminCheck || useIsAdmin();
-  if (!isAdmin) return <Navigate to="/" replace />;
-
+export default function AdminDashboard() {
   const qc      = useQueryClient();
   const [tab, setTab] = useState('overview');
 

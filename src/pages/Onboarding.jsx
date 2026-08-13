@@ -6,17 +6,8 @@ import OnboardingScanning from '@/components/onboarding/OnboardingScanning';
 import OnboardingApproveIdentity from '@/components/onboarding/OnboardingApproveIdentity';
 import OnboardingInsights from '@/components/onboarding/OnboardingInsights';
 
-const ADMIN_EMAILS = ['contact@otxengine.io', 'admin@cortexi.ai'];
-const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai', '@cortexi.ai'];
-
-function isAdminEmail(email) {
-  if (!email) return false;
-  const e = email.toLowerCase().trim();
-  return ADMIN_EMAILS.includes(e) || ADMIN_DOMAINS.some(d => e.endsWith(d));
-}
-
 export default function Onboarding() {
-  const { user, isLoadingAuth, logout } = useAuth();
+  const { isLoadingAuth, logout } = useAuth();
 
   if (isLoadingAuth) {
     return (
@@ -24,10 +15,6 @@ export default function Onboarding() {
         <div className="w-8 h-8 border-4 border-border border-t-gray-800 rounded-full animate-spin" />
       </div>
     );
-  }
-
-  if (isAdminEmail(user?.email)) {
-    return <Navigate to="/admin-dashboard" replace />;
   }
 
   return (

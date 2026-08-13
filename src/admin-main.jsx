@@ -82,7 +82,7 @@ function AdminShell() {
           </button>
         </header>
         <main style={{ padding: '16px 24px' }}>
-          <AdminDashboard skipAdminCheck />
+          <AdminDashboard />
         </main>
       </div>
     </BrowserRouter>

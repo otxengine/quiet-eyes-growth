@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {
   ChevronRight, LogOut,
-  ShieldAlert, Sparkles, Bot, Building2, GitBranch, User,
+  Building2, GitBranch, User,
   Eye, Settings, Star, Users,
   Calendar, Megaphone, Lightbulb, Home, CreditCard
 } from 'lucide-react';
@@ -21,17 +21,9 @@ const NAV_STRUCTURE = [
   { path: '/social-competition', label: 'תחרות סושיאל',  icon: Users },
 ];
 
-function useIsAdmin() {
-  try {
-    const email = window.__clerk?.user?.primaryEmailAddress?.emailAddress || '';
-    return email === 'contact@otxengine.io' || email === 'admin@cortexi.ai' || email.endsWith('@otx.ai') || email.endsWith('@quieteyes.ai') || email.endsWith('@cortexi.ai');
-  } catch { return false; }
-}
-
 export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, user }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const isAdmin = useIsAdmin();
   const { isAgency, currentOrg } = useOrganization();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
@@ -92,27 +84,6 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-5 min-h-0" style={{ scrollbarWidth: 'none' }}>
 
-        {/* Admin-only links */}
-        {isAdmin && !collapsed && (
-          <div className="px-5 mb-4">
-            {[
-              { path: '/admin-dashboard', label: 'Admin', icon: ShieldAlert },
-              { path: '/learning',        label: 'למידה', icon: Sparkles },
-              { path: '/agents',          label: 'סוכנים', icon: Bot },
-            ].map(({ path, label, icon: Icon }) => {
-              const isActive = location.pathname === path;
-              return (
-                <Link key={path} to={path} onClick={() => onNavigate?.()}
-                  className="flex items-center gap-2 h-7 text-[10px] transition-colors"
-                  style={{ color: isActive ? '#111' : '#aaa' }}>
-                  <Icon className="w-3 h-3 flex-shrink-0" />
-                  <span>{label}</span>
-                </Link>
-              );
-            })}
-            <div className="mt-3" style={{ borderTop: '1px solid hsl(var(--sidebar-border))' }} />
-          </div>
-        )}
 
         {/* Org links */}
         {currentOrg && !collapsed && (

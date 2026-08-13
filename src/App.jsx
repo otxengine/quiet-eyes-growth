@@ -54,8 +54,6 @@ import Approvals from '@/pages/Approvals.jsx';
 import EventBusDashboard from '@/pages/EventBusDashboard.jsx';
 import SocialComments from '@/pages/SocialComments.jsx';
 import SocialCompetition from '@/pages/SocialCompetition.jsx';
-import AdminDashboard from '@/pages/AdminDashboard.jsx';
-import AdminLayout from '@/components/layout/AdminLayout';
 import DevUserSwitcher from '@/components/DevUserSwitcher';
 import OrganizationSettings from '@/pages/OrganizationSettings.jsx';
 import AgencyDashboard from '@/pages/AgencyDashboard.jsx';
@@ -151,11 +149,6 @@ const AuthenticatedApp = () => {
 
       {/* Onboarding flow */}
       <Route path="/onboarding/*" element={<Onboarding />} />
-
-      {/* Admin — standalone layout, no businessProfile required */}
-      <Route element={<AdminLayout />}>
-        <Route path="/admin-dashboard" element={<AdminDashboard />} />
-      </Route>
 
       {/* Main app with layout */}
       <Route element={<AppLayout />}>
