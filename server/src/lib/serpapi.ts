@@ -129,6 +129,21 @@ export async function serpGoogleMapsReviews(placeId: string, maxResults = 300): 
  * or null on failure.
  * @param query  e.g. "קפה קר"
  */
+/**
+ * KAN-220: organic Google search — soft-fail fallback behind DataForSEO organic
+ * for URL discovery (website / social).
+ */
+export async function serpGoogleOrganic(query: string): Promise<string[]> {
+  const cacheKey = `organic:${query}`;
+  const cached = _getCached(cacheKey);
+  if (cached) return cached;
+
+  const data = await _get({ engine: 'google', q: query, google_domain: 'google.co.il', gl: 'il', hl: 'iw' });
+  const urls = (data?.organic_results || []).map((r: any) => r.link).filter(Boolean);
+  if (urls.length) _setCache(cacheKey, urls);
+  return urls;
+}
+
 export async function serpGoogleTrends(query: string): Promise<{
   timeline: { date: string; value: number }[];
   rising_queries: string[];

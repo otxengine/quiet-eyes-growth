@@ -94,3 +94,32 @@ export async function searchCompetitorsByKeyword(
 
   return { candidates, costUsd };
 }
+
+const ORGANIC_URL = 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced';
+
+/** KAN-220: organic Google SERP — used as the primary source for URL fallback discovery. */
+export async function searchOrganic(keyword: string): Promise<{ urls: string[]; costUsd: number }> {
+  if (!LOGIN || !PASSWORD) return { urls: [], costUsd: 0 };
+
+  const auth = Buffer.from(`${LOGIN}:${PASSWORD}`).toString('base64');
+  let res: Response;
+  try {
+    res = await fetch(ORGANIC_URL, {
+      method: 'POST',
+      headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify([{ keyword, language_code: 'iw', location_name: 'Israel' }]),
+    });
+  } catch (e: any) {
+    console.warn('[dataforseo] organic network error:', e.message);
+    return { urls: [], costUsd: 0 };
+  }
+  if (!res.ok) return { urls: [], costUsd: 0 };
+
+  let body: any;
+  try { body = await res.json(); } catch { return { urls: [], costUsd: 0 }; }
+
+  const items: any[] = body?.tasks?.[0]?.result?.[0]?.items ?? [];
+  const costUsd = Number(body?.tasks?.[0]?.cost ?? body?.cost) || 0;
+  const urls = items.filter((i: any) => i.type === 'organic' && i.url).map((i: any) => i.url);
+  return { urls, costUsd };
+}

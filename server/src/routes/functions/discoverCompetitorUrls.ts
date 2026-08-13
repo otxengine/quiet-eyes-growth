@@ -5,14 +5,14 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-const SITE_BLACKLIST = ['instagram.com', 'facebook.com', 'tiktok.com', 'google.com', 'yad2'];
+export const SITE_BLACKLIST = ['instagram.com', 'facebook.com', 'tiktok.com', 'google.com', 'yad2'];
 
 // Non-profile path segments for each platform — filter these out so we only keep main pages.
-const IG_NON_PROFILE  = ['p/', 'reel/', 'stories/', 'explore/', 'tv/', 'reels/'];
-const FB_NON_PROFILE  = ['posts/', 'photos/', 'videos/', 'events/', 'photo/', 'video/'];
-const TIK_NON_PROFILE = ['video/', 'discover', 'tag/'];
+export const IG_NON_PROFILE  = ['p/', 'reel/', 'stories/', 'explore/', 'tv/', 'reels/'];
+export const FB_NON_PROFILE  = ['posts/', 'photos/', 'videos/', 'events/', 'photo/', 'video/'];
+export const TIK_NON_PROFILE = ['video/', 'discover', 'tag/'];
 
-function isProfileUrl(url: string, domain: string, nonProfile: string[]): boolean {
+export function isProfileUrl(url: string, domain: string, nonProfile: string[]): boolean {
   if (!url?.includes(domain)) return false;
   const path = (url.split(domain)[1] ?? '').replace(/^\/+/, '').split('?')[0];
   return path.length > 0 && !nonProfile.some(seg => path.includes(seg));
@@ -26,7 +26,7 @@ function extractHandle(url: string): string {
 
 // Returns true if the handle plausibly belongs to the business (not a third-party reviewer).
 // Falls back to true when there is no Latin reference to compare against.
-function handleMatchesBusiness(url: string, name: string, nameEn: string | null): boolean {
+export function handleMatchesBusiness(url: string, name: string, nameEn: string | null): boolean {
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
   const h = norm(extractHandle(url));
   if (!h) return false;

@@ -2,17 +2,74 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { extractSocialLinksFromWebsite } from '../../lib/extractSocialLinksFromWebsite';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { getPlaceDetails } from '../../lib/googlePlaces';
+import { searchOrganic } from '../../lib/dataforseo';
+import { serpGoogleOrganic } from '../../lib/serpapi';
+import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
+import { SITE_BLACKLIST, IG_NON_PROFILE, FB_NON_PROFILE, TIK_NON_PROFILE, isProfileUrl, handleMatchesBusiness } from './discoverCompetitorUrls';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const CATCH_UP_CAP = 10; // same cap as discoverCompetitorUrls' own scheduler job
 
+function isValidHost(url: string): boolean {
+  try { return ['http:', 'https:'].includes(new URL(url).protocol); } catch { return false; }
+}
+
+// KAN-220 "SERP transport" AC: DataForSEO organic is primary, SerpAPI is the soft-fail fallback.
+async function organicSearch(queries: string[]): Promise<string[]> {
+  const df = await Promise.all(queries.map(searchOrganic));
+  const dfUrls = df.flatMap(r => r.urls);
+  if (dfUrls.length) return dfUrls;
+  const sp = await Promise.all(queries.map(serpGoogleOrganic));
+  return sp.flat();
+}
+
+// KAN-220 AC3: Places Details (if place_id) → organic SERP → Tavily last resort.
+async function enrichWebsite(placeId: string | null | undefined, name: string, loc: string | null | undefined): Promise<string | null> {
+  if (placeId) {
+    const details = await getPlaceDetails(placeId);
+    if (details.websiteUri && isValidHost(details.websiteUri)) return details.websiteUri;
+  }
+  const location = loc || '';
+  const validHost = (u: string) => isValidHost(u) && !SITE_BLACKLIST.some(b => u.includes(b));
+
+  const serpHit = (await organicSearch([`"${name}" ${location}`, `"${name}" אתר`])).find(validHost);
+  if (serpHit) return serpHit;
+
+  if (isTavilyRateLimited()) return null;
+  const tavilyResults = await tavilySearch(`"${name}" ${location} אתר רשמי`, 3);
+  return tavilyResults.map((r: any) => r.url).find(validHost) ?? null;
+}
+
+// KAN-220 AC4/AC6: organic SERP → Tavily last resort for one still-empty social platform.
+async function enrichSocial(domain: string, nonProfile: string[], name: string, loc: string | null | undefined): Promise<string | null> {
+  const location = loc || '';
+  const matches = (u: string) => isProfileUrl(u, `${domain}/`, nonProfile) && handleMatchesBusiness(u, name, null);
+
+  const serpHit = (await organicSearch([`"${name}" ${location} site:${domain}`, `"${name}" site:${domain}`])).find(matches);
+  if (serpHit) return serpHit;
+
+  if (isTavilyRateLimited()) return null;
+  const tavilyResults = await tavilySearch(`"${name}" ${location} site:${domain}`, 3);
+  return tavilyResults.map((r: any) => r.url).find(matches) ?? null;
+}
+
+const SOCIAL_PLATFORMS: [string, string, string[]][] = [
+  ['instagram_url', 'instagram.com', IG_NON_PROFILE],
+  ['facebook_url',  'facebook.com',  FB_NON_PROFILE],
+  ['tiktok_url',    'tiktok.com',    TIK_NON_PROFILE],
+];
+
 /**
- * enrichCompetitorUrls — KAN-219: site-extract as the primary social path for rivals
- * that already have a `website_url` (consumed from Doc 16 / KAN-213's early identify
- * write), via KAN-218's extractSocialLinksFromWebsite. Fill-if-empty only (AC5 — never
- * overwrites a manual or previously-set value). Called inline from
- * runCompetitorIdentification for the batch of touched ids (AC0), not on a deferred
- * scheduler tick — independent of the snapshot 6h/7d skip (AC2).
+ * enrichCompetitorUrls — KAN-219 (site-extract) + KAN-220 (ordered fallback).
+ *
+ * Primary: site-extract off the competitor's own website_url (KAN-218's
+ * extractSocialLinksFromWebsite). For fields still empty afterwards — including a
+ * missing website_url itself — falls back in order: Places Details (if place_id) /
+ * organic SERP (DataForSEO → SerpAPI soft-fail), then Tavily strictly last (AC3/AC4/AC6).
+ * Fill-if-empty only (AC5 — never overwrites a manual or previously-set value). Called
+ * inline from runCompetitorIdentification for the batch of touched ids (AC0), not on a
+ * deferred scheduler tick — independent of the snapshot 6h/7d skip (AC2).
  */
 export async function enrichCompetitorUrls(
   competitorIds: string[],
@@ -27,21 +84,38 @@ export async function enrichCompetitorUrls(
 
   for (const c of competitors) {
     const comp = c as any;
+    const update: Record<string, any> = {};
+    let attempted = false;
 
-    // AC7 — nothing to consume without a website_url
-    if (!comp.website_url) { skipped++; continue; }
+    // AC3 — website missing: paid-tier fallback before giving up on it
+    if (!comp.website_url) {
+      const found = await enrichWebsite(comp.google_place_id, comp.name, comp.address);
+      if (found) { update.website_url = found; attempted = true; }
+    }
 
+    const websiteForExtract = update.website_url || comp.website_url;
     const anySocialEmpty = !comp.instagram_url || !comp.facebook_url || !comp.tiktok_url;
-    if (!anySocialEmpty && !opts.force) { skipped++; continue; }
 
-    const links = await extractSocialLinksFromWebsite(comp.website_url);
+    // KAN-219 — site-extract stays the primary social source
+    if (websiteForExtract && (anySocialEmpty || opts.force)) {
+      attempted = true;
+      const links = await extractSocialLinksFromWebsite(websiteForExtract);
+      if (links.instagram_url && !comp.instagram_url) update.instagram_url = links.instagram_url;
+      if (links.facebook_url  && !comp.facebook_url)  update.facebook_url  = links.facebook_url;
+      if (links.tiktok_url    && !comp.tiktok_url)    update.tiktok_url    = links.tiktok_url;
+    }
 
-    // Fill-if-empty (AC5) — stamp TTL on success or soft-empty either way (AC0/TTL criterion)
-    const update: Record<string, any> = { social_pages_crawled_at: new Date().toISOString() };
-    if (links.instagram_url && !comp.instagram_url) update.instagram_url = links.instagram_url;
-    if (links.facebook_url  && !comp.facebook_url)  update.facebook_url  = links.facebook_url;
-    if (links.tiktok_url    && !comp.tiktok_url)    update.tiktok_url    = links.tiktok_url;
+    // AC4/AC6 — still-empty socials after site-extract: paid-tier fallback, never re-spend on a filled field
+    for (const [field, domain, nonProfile] of SOCIAL_PLATFORMS) {
+      if (comp[field] || update[field]) continue;
+      const found = await enrichSocial(domain, nonProfile, comp.name, comp.address);
+      if (found) { update[field] = found; attempted = true; }
+    }
 
+    if (!attempted && Object.keys(update).length === 0) { skipped++; continue; }
+
+    // Fill-if-empty (AC5) — stamp TTL whenever real enrichment work ran (found or soft-empty)
+    update.social_pages_crawled_at = new Date().toISOString();
     await prisma.competitor.update({ where: { id: comp.id }, data: update }).catch(() => {});
     enriched++;
   }
