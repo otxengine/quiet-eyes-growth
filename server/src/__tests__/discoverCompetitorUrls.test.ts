@@ -186,6 +186,40 @@ test('high confidence: overwrites existing URL when 2+ variants agree (AC3)', as
   expect(updateArg.instagram_url).toBe('https://instagram.com/comp');
 });
 
+// ── KAN-222: manual edits are protected from high-confidence overwrite ────────
+
+test('high confidence: does NOT overwrite a manually-set URL without force', async () => {
+  const { prisma: db } = require('../db');
+  db.competitor.findMany.mockResolvedValueOnce([
+    { id: 'c1', name: 'Comp', social_pages_crawled_at: STALE_DATE,
+      instagram_url: 'https://instagram.com/manual', facebook_url: null, tiktok_url: null, website_url: null,
+      manual_url_fields: ['instagram_url'] },
+  ]);
+  mockTavily.mockImplementation(async (query: any) => {
+    if (query.includes('site:instagram.com')) return [{ url: 'https://instagram.com/comp' }];
+    return [];
+  });
+  await discoverCompetitorUrls(makeReq({ businessProfileId: 'biz1' }), makeRes());
+  const updateArg = (mockUpdate.mock.calls as any)[0][0].data;
+  expect(updateArg.instagram_url).toBeUndefined();
+});
+
+test('high confidence: overwrites a manually-set URL when force=true', async () => {
+  const { prisma: db } = require('../db');
+  db.competitor.findMany.mockResolvedValueOnce([
+    { id: 'c1', name: 'Comp', social_pages_crawled_at: STALE_DATE,
+      instagram_url: 'https://instagram.com/manual', facebook_url: null, tiktok_url: null, website_url: null,
+      manual_url_fields: ['instagram_url'] },
+  ]);
+  mockTavily.mockImplementation(async (query: any) => {
+    if (query.includes('site:instagram.com')) return [{ url: 'https://instagram.com/comp' }];
+    return [];
+  });
+  await discoverCompetitorUrls(makeReq({ businessProfileId: 'biz1', force: true }), makeRes());
+  const updateArg = (mockUpdate.mock.calls as any)[0][0].data;
+  expect(updateArg.instagram_url).toBe('https://instagram.com/comp');
+});
+
 // ── Profile-URL filter: posts/reels/videos are rejected ───────────────────────
 
 test('ignores Instagram post/reel URLs, keeps profile URLs only', async () => {

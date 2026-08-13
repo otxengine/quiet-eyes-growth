@@ -99,7 +99,7 @@ async function getActiveProfiles(): Promise<string[]> {
 }
 
 /** Runs a single growth agent function for all active profiles */
-export async function runAgentForAll(label: string, agentFn: Function) {
+export async function runAgentForAll(label: string, agentFn: Function, extraBody: Record<string, any> = {}) {
   const ids = await getActiveProfiles();
   if (ids.length === 0) return;
   logger.info(`${label}: running for ${ids.length} profile(s)`);
@@ -107,7 +107,7 @@ export async function runAgentForAll(label: string, agentFn: Function) {
     const batch = ids.slice(i, i + CONCURRENCY);
     await Promise.allSettled(
       batch.map(async (id) => {
-        const fakeReq = { body: { businessProfileId: id } } as any;
+        const fakeReq = { body: { businessProfileId: id, ...extraBody } } as any;
         const fakeRes = {
           json: (data: any) => logger.info(`${label} result`, { id, data }),
           status: () => ({ json: (e: any) => logger.error(`${label} error`, { id, e }) }),

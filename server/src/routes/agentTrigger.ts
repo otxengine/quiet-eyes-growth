@@ -136,14 +136,15 @@ const router = Router();
 
 // POST /api/agents/trigger/discover-competitor-urls
 // Global trigger — runs discoverCompetitorUrls for all businesses (KAN-160).
-router.post('/discover-competitor-urls', async (_req: Request, res: Response) => {
+// Body: { force?: boolean } — KAN-222: force allows high-confidence replace of a manually-set URL.
+router.post('/discover-competitor-urls', async (req: Request, res: Response) => {
   const key = 'global:discoverCompetitorUrls';
   const now = Date.now();
   if ((now - (lastRun.get(key) ?? 0)) < COOLDOWN_MS) {
     return res.status(429).json({ error: 'Rate limited — wait 10 minutes between manual triggers' });
   }
   lastRun.set(key, now);
-  runAgentForAll('DiscoverCompetitorUrls', discoverCompetitorUrls).catch(err =>
+  runAgentForAll('DiscoverCompetitorUrls', discoverCompetitorUrls, { force: !!req.body?.force }).catch(err =>
     console.error('[agentTrigger] discoverCompetitorUrls failed:', err.message)
   );
   return res.json({ ok: true, message: 'DiscoverCompetitorUrls started for all businesses' });
@@ -151,14 +152,15 @@ router.post('/discover-competitor-urls', async (_req: Request, res: Response) =>
 
 // POST /api/agents/trigger/enrich-competitor-urls
 // Global trigger — runs enrichCompetitorUrlsScheduled for all businesses (KAN-221).
-router.post('/enrich-competitor-urls', async (_req: Request, res: Response) => {
+// Body: { force?: boolean } — bypasses the staleness filter (never overwrites, per AC5).
+router.post('/enrich-competitor-urls', async (req: Request, res: Response) => {
   const key = 'global:enrichCompetitorUrlsScheduled';
   const now = Date.now();
   if ((now - (lastRun.get(key) ?? 0)) < COOLDOWN_MS) {
     return res.status(429).json({ error: 'Rate limited — wait 10 minutes between manual triggers' });
   }
   lastRun.set(key, now);
-  runAgentForAll('EnrichCompetitorUrls', enrichCompetitorUrlsScheduled).catch(err =>
+  runAgentForAll('EnrichCompetitorUrls', enrichCompetitorUrlsScheduled, { force: !!req.body?.force }).catch(err =>
     console.error('[agentTrigger] enrichCompetitorUrlsScheduled failed:', err.message)
   );
   return res.json({ ok: true, message: 'EnrichCompetitorUrlsScheduled started for all businesses' });

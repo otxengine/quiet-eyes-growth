@@ -245,6 +245,7 @@ model Competitor {
   facebook_url             String?  // discovered from website or Tavily
   tiktok_url               String?  // discovered from website or Tavily
   social_pages_crawled_at  String?  // last time we crawled the website for social links
+  manual_url_fields        String[] @default([])  // KAN-222: which of website/instagram/facebook/tiktok url the owner set by hand — protected from high-confidence auto overwrite unless force
   strongest_channel        String?  // 'instagram'|'facebook'|'tiktok'|'google'|'unknown'
   social_post_frequency    String?  // e.g. '3 פוסטים בשבוע'
   social_followers_est     String?  // estimated follower range e.g. '1k-5k'

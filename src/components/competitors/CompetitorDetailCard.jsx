@@ -24,20 +24,22 @@ function timeAgo(dateStr) {
 
 
 
-function UrlInput({ label, fieldKey, initialValue, competitorId }) {
+function UrlInput({ label, fieldKey, initialValue, competitorId, manualFields = [] }) {
   const [val, setVal] = useState(initialValue || '');
   const [saved, setSaved] = useState(initialValue || '');
   const dirty = val !== saved;
+  // KAN-222: mark this field manual so auto-discovery won't silently overwrite it later.
+  const markedManual = () => manualFields.includes(fieldKey) ? manualFields : [...manualFields, fieldKey];
   const save = () => {
     if (val === saved) return;
-    base44.entities.Competitor.update(competitorId, { [fieldKey]: val || null })
+    base44.entities.Competitor.update(competitorId, { [fieldKey]: val || null, manual_url_fields: markedManual() })
       .then(() => setSaved(val))
       .catch(() => toast.error('שגיאה בשמירת קישור'));
   };
   const clear = (e) => {
     e.stopPropagation();
     setVal('');
-    base44.entities.Competitor.update(competitorId, { [fieldKey]: null })
+    base44.entities.Competitor.update(competitorId, { [fieldKey]: null, manual_url_fields: markedManual() })
       .then(() => setSaved(''))
       .catch(() => toast.error('שגיאה בשמירת קישור'));
   };
@@ -262,10 +264,10 @@ export default function CompetitorDetailCard({
           <div>
             <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide mb-2">קישורים</p>
             <div className="space-y-2">
-              <UrlInput label="אתר" fieldKey="website_url" initialValue={comp.website_url} competitorId={comp.id} />
-              <UrlInput label="Instagram" fieldKey="instagram_url" initialValue={comp.instagram_url} competitorId={comp.id} />
-              <UrlInput label="Facebook" fieldKey="facebook_url" initialValue={comp.facebook_url} competitorId={comp.id} />
-              <UrlInput label="TikTok" fieldKey="tiktok_url" initialValue={comp.tiktok_url} competitorId={comp.id} />
+              <UrlInput label="אתר" fieldKey="website_url" initialValue={comp.website_url} competitorId={comp.id} manualFields={comp.manual_url_fields} />
+              <UrlInput label="Instagram" fieldKey="instagram_url" initialValue={comp.instagram_url} competitorId={comp.id} manualFields={comp.manual_url_fields} />
+              <UrlInput label="Facebook" fieldKey="facebook_url" initialValue={comp.facebook_url} competitorId={comp.id} manualFields={comp.manual_url_fields} />
+              <UrlInput label="TikTok" fieldKey="tiktok_url" initialValue={comp.tiktok_url} competitorId={comp.id} manualFields={comp.manual_url_fields} />
             </div>
           </div>
 

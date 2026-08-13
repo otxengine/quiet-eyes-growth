@@ -83,9 +83,12 @@ async function toEnglishName(name: string): Promise<string | null> {
  * Independent of batchSnapshotCompetitors; staleness guard on social_pages_crawled_at.
  * Fires 4 query variants per platform (HE+city / HE / EN+city / EN) when an English
  * transliteration is available, otherwise 2. High confidence = same URL in 2+ variants.
+ *
+ * KAN-222: a field the owner manually set (comp.manual_url_fields) is never overwritten,
+ * even at high confidence, unless req.body.force is true.
  */
 export async function discoverCompetitorUrls(req: Request, res: Response) {
-  const { businessProfileId } = req.body;
+  const { businessProfileId, force } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
   const startTime = new Date().toISOString();
@@ -141,12 +144,14 @@ export async function discoverCompetitorUrls(req: Request, res: Response) {
         const site = pickSite(siteSets);
 
         const c = comp as any;
+        const manualFields: string[] = c.manual_url_fields ?? [];
+        const canOverwrite = (field: string) => force || !manualFields.includes(field);
         const update: Record<string, any> = { social_pages_crawled_at: new Date().toISOString() };
 
-        if (ig.url   && (ig.high   || !c.instagram_url)) update.instagram_url = ig.url;
-        if (fb.url   && (fb.high   || !c.facebook_url))  update.facebook_url  = fb.url;
-        if (tik.url  && (tik.high  || !c.tiktok_url))    update.tiktok_url    = tik.url;
-        if (site.url && (site.high || !c.website_url))   update.website_url   = site.url;
+        if (ig.url   && ((ig.high   && canOverwrite('instagram_url')) || !c.instagram_url)) update.instagram_url = ig.url;
+        if (fb.url   && ((fb.high   && canOverwrite('facebook_url'))  || !c.facebook_url))  update.facebook_url  = fb.url;
+        if (tik.url  && ((tik.high  && canOverwrite('tiktok_url'))    || !c.tiktok_url))    update.tiktok_url    = tik.url;
+        if (site.url && ((site.high && canOverwrite('website_url'))   || !c.website_url))   update.website_url   = site.url;
 
         await prisma.competitor.update({ where: { id: comp.id }, data: update }).catch(() => {});
         discovered++;
