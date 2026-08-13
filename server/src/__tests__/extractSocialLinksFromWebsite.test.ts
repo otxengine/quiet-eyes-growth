@@ -121,6 +121,26 @@ describe('extractSocialLinksFromWebsite', () => {
     }
   });
 
+  test('KAN-223 IL sampling: fills all three from a real IL business footer', async () => {
+    global.fetch = jest.fn().mockResolvedValue(htmlResponse(`
+      <html><body>
+        <header><a href="/menu">תפריט</a></header>
+        <footer>
+          <p>פיצה רומא © 2026 - כל הזכויות שמורות</p>
+          <a href="https://www.instagram.com/pizza_roma_il">אינסטגרם</a>
+          <a href="https://www.facebook.com/pizzaromatlv">פייסבוק</a>
+          <a href="https://www.tiktok.com/@pizzaromatlv">טיקטוק</a>
+        </footer>
+      </body></html>
+    `)) as any;
+
+    const result = await extractSocialLinksFromWebsite('https://pizza-roma.co.il');
+
+    expect(result.instagram_url).toBe('https://www.instagram.com/pizza_roma_il/');
+    expect(result.facebook_url).toBe('https://www.facebook.com/pizzaromatlv');
+    expect(result.tiktok_url).toBe('https://www.tiktok.com/@pizzaromatlv');
+  });
+
   test('malformed URL input resolves to empties without fetching', async () => {
     const fetchMock = jest.fn();
     global.fetch = fetchMock as any;

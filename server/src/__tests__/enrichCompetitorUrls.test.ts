@@ -252,6 +252,42 @@ test('host validation rejects a malformed Places Details website', async () => {
   expect(prisma.competitor.update).not.toHaveBeenCalled();
 });
 
+test('KAN-223 IL sampling: IL brand with no footer social falls through organic SERP → Tavily for every platform', async () => {
+  (prisma.competitor.findMany as jest.Mock).mockResolvedValue([
+    { id: 'c1', name: 'פיצה רומא', google_place_id: null, website_url: 'https://pizza-roma.co.il', address: 'תל אביב',
+      instagram_url: null, facebook_url: null, tiktok_url: null },
+  ]);
+  // site-extract found nothing on the site itself (no footer social) — default EMPTY mock applies
+  (searchOrganic as jest.Mock).mockImplementation(async (q: string) => {
+    if (q.includes('site:instagram.com')) return { urls: ['https://instagram.com/pizza_roma_il'], costUsd: 0 };
+    if (q.includes('site:facebook.com'))  return { urls: ['https://facebook.com/pizzaromatlv'], costUsd: 0 };
+    return { urls: [], costUsd: 0 }; // tiktok stays empty from SERP — falls to Tavily
+  });
+  (tavilySearch as jest.Mock).mockImplementation(async (q: string) =>
+    q.includes('site:tiktok.com') ? [{ url: 'https://tiktok.com/@pizzaromatlv' }] : []);
+
+  await enrichCompetitorUrls(['c1']);
+
+  expect(extractSocialLinksFromWebsite).toHaveBeenCalledWith('https://pizza-roma.co.il'); // site-extract tried first
+  const updateData = (prisma.competitor.update as jest.Mock).mock.calls[0][0].data;
+  expect(updateData.instagram_url).toBe('https://instagram.com/pizza_roma_il'); // SERP
+  expect(updateData.facebook_url).toBe('https://facebook.com/pizzaromatlv');    // SERP
+  expect(updateData.tiktok_url).toBe('https://tiktok.com/@pizzaromatlv');       // Tavily last resort
+});
+
+test('AC8: Apify is never imported/called by the URL discovery/enrichment pipeline', () => {
+  const fs = require('fs');
+  const files = [
+    '../routes/functions/enrichCompetitorUrls',
+    '../routes/functions/discoverCompetitorUrls',
+    '../routes/functions/runCompetitorIdentification',
+  ];
+  for (const f of files) {
+    const src = fs.readFileSync(require.resolve(f), 'utf8');
+    expect(src.toLowerCase()).not.toContain('apify');
+  }
+});
+
 describe('enrichCompetitorUrlsScheduled (KAN-221)', () => {
   const mkRes = () => {
     const json = jest.fn();
