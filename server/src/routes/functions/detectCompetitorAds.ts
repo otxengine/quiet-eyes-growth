@@ -6,6 +6,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { searchAllAds, hasSearchApiKey, AdResult } from '../../lib/searchapi';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
+import { analyzePostCreative } from '../../lib/analyzePostCreative';
 
 function adContentHash(a: AdResult) {
   return createHash('sha256')
@@ -15,6 +16,9 @@ function adContentHash(a: AdResult) {
 
 async function upsertAdHistory(competitorId: string, businessProfileId: string, ads: AdResult[]) {
   const s3 = isS3Configured();
+  // Newly-inserted rows only — used to trigger creative analysis without
+  // re-analyzing ads that are just having last_seen_at refreshed.
+  const newRows: Array<{ id: string; media_url: string | null; caption: string; cta: string | null; platform: string }> = [];
   for (const ad of ads) {
     const content_hash   = adContentHash(ad);
     const external_ad_id = ad.external_ad_id || null;
@@ -49,20 +53,29 @@ async function upsertAdHistory(competitorId: string, businessProfileId: string, 
         existing[0].id,
       ).catch(() => {});
     } else {
+      const newId = randomUUID();
       await (prisma as any).$executeRawUnsafe(
         `INSERT INTO "competitor_ad_history"
           (id, competitor_id, linked_business, platform, external_ad_id, content_hash,
            title, body, cta, link, media_url, video_url, page_name, start_date, end_date,
            is_active, first_seen_at, last_seen_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,true,NOW(),NOW())`,
-        randomUUID(), competitorId, businessProfileId, ad.platform,
+        newId, competitorId, businessProfileId, ad.platform,
         external_ad_id, content_hash,
         ad.title || null, ad.body || null, ad.cta || null, ad.link || null,
         media_url, video_url, ad.page_name || null,
         ad.start_date || null, ad.end_date || null,
       ).catch(() => {});
+      newRows.push({
+        id: newId,
+        media_url,
+        caption: [ad.title, ad.body].filter(Boolean).join(' — '),
+        cta: ad.cta || null,
+        platform: ad.platform,
+      });
     }
   }
+  return newRows;
 }
 
 const MIN_INTERVAL_MS     = 48 * 60 * 60 * 1000; // 48h between full runs (saves API credits)
@@ -181,7 +194,26 @@ export async function detectCompetitorAds(req: Request, res: Response) {
         }
 
         // Persist ad history (append-only upsert)
-        await upsertAdHistory(comp.id, businessProfileId, ads);
+        const newAdRows = await upsertAdHistory(comp.id, businessProfileId, ads);
+
+        // Analyze new ad creatives (topic/offer/hooks/style/cta) — best-effort,
+        // never blocks the rest of the agent.
+        for (const row of newAdRows) {
+          if (!row.media_url) continue;
+          try {
+            const creative = await analyzePostCreative({
+              caption: row.caption, cta: row.cta, platform: row.platform, mediaUrl: row.media_url,
+            });
+            if (creative) {
+              await (prisma as any).$executeRawUnsafe(
+                `UPDATE "competitor_ad_history" SET analysis=$1, analyzed_at=NOW() WHERE id=$2`,
+                JSON.stringify(creative), row.id,
+              ).catch(() => {});
+            }
+          } catch (analysisErr: any) {
+            console.warn('[detectCompetitorAds] creative analysis failed:', analysisErr.message);
+          }
+        }
 
         // ── LLM analysis ─────────────────────────────────────────────────────
         const adSummary = ads

@@ -1002,6 +1002,8 @@ model CompetitorPost {
   comments_count    Int?
   first_seen_at     DateTime  @default(now())
   last_seen_at      DateTime  @default(now())
+  analysis          String?   // JSON: {topic, has_offer, offer_details, visual_hooks, text_hooks, style, cta}
+  analyzed_at       DateTime?
 
   @@index([linked_business, competitor_id, posted_at])
   @@unique([competitor_id, platform, external_post_id])
@@ -1028,6 +1030,8 @@ model CompetitorAdHistory {
   first_seen_at   DateTime  @default(now())
   last_seen_at    DateTime  @default(now())
   is_active       Boolean   @default(true)
+  analysis        String?   // JSON: {topic, has_offer, offer_details, visual_hooks, text_hooks, style, cta}
+  analyzed_at     DateTime?
 
   @@index([competitor_id, last_seen_at])
   @@unique([competitor_id, platform, external_ad_id])

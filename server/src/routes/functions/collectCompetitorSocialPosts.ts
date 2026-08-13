@@ -5,6 +5,7 @@ import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
+import { analyzePostCreative } from '../../lib/analyzePostCreative';
 
 const MIN_INTERVAL_MS = 20 * 60 * 60 * 1000; // 20h
 const POSTS_CAP = 15;
@@ -180,6 +181,7 @@ async function scrapeAndSave(
     const likes    = typeof (post.likesCount    ?? post.diggCount  ?? post.likes)    === 'number' ? (post.likesCount    ?? post.diggCount  ?? post.likes)    : null;
     const comments = typeof (post.commentsCount ?? post.commentCount ?? post.comments) === 'number' ? (post.commentsCount ?? post.commentCount ?? post.comments) : null;
 
+    const newPostId = randomUUID();
     try {
       // Use raw SQL with hex-encoded strings to bypass Prisma query engine's
       // Linux bug that introduces null bytes (error 22021) for Unicode data.
@@ -203,7 +205,7 @@ async function scrapeAndSave(
            $11::int,
            $12::timestamptz
          )`,
-        randomUUID(),
+        newPostId,
         pgHex(businessProfileId) ?? '',
         pgHex(comp.id) ?? '',
         pgHex(platform) ?? '',
@@ -219,6 +221,23 @@ async function scrapeAndSave(
       if (externalId) existingIds.add(externalId);
       if (postUrl)    existingUrls.add(postUrl);
       upserted++;
+
+      // Analyze the creative (topic/offer/hooks/style/cta) — best-effort, never
+      // blocks the scrape loop. Only newly-inserted posts with media get analyzed.
+      if (mediaUrl) {
+        try {
+          const analysis = await analyzePostCreative({ caption, platform, mediaUrl });
+          if (analysis) {
+            await (prisma as any).$executeRawUnsafe(
+              `UPDATE competitor_posts SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW() WHERE id = $2`,
+              pgHex(JSON.stringify(analysis)) ?? '',
+              newPostId,
+            );
+          }
+        } catch (analysisErr: any) {
+          console.warn('[collectCompetitorSocialPosts] creative analysis failed:', analysisErr.message);
+        }
+      }
     } catch (insertErr: any) {
       const errMsg = (insertErr.message ?? '').trim();
       // 23505 = unique constraint — row already exists, not a real failure

@@ -55,6 +55,12 @@ export interface LLMOptions {
    */
   usePromptCache?: boolean;
   costTrackingId?: string;
+  /**
+   * Optional image to send alongside the prompt (vision). Anthropic and Gemini
+   * both support it; the OpenAI fallback ignores it (text-only last resort).
+   */
+  imageBase64?: string;
+  imageMediaType?: string; // e.g. 'image/jpeg' — defaults to 'image/jpeg'
 }
 
 const MODEL_MAP: Record<string, string> = {
@@ -82,7 +88,7 @@ const MAX_TOKENS_DEFAULT: Record<string, number> = {
  * Caches responses for 4 hours to avoid duplicate AI calls across pipeline runs.
  */
 export async function invokeLLM(options: { prompt: string } & LLMOptions): Promise<any> {
-  const { prompt, response_json_schema, model, maxTokens: maxTokensOverride, skipCache, profile, systemPrompt, usePromptCache, costTrackingId } = options;
+  const { prompt, response_json_schema, model, maxTokens: maxTokensOverride, skipCache, profile, systemPrompt, usePromptCache, costTrackingId, imageBase64, imageMediaType } = options;
 
   const modelKey = model || 'haiku'; // default to Haiku (cheapest)
   const modelId = MODEL_MAP[modelKey] || model || 'claude-haiku-4-5-20251001';
@@ -94,19 +100,20 @@ export async function invokeLLM(options: { prompt: string } & LLMOptions): Promi
     : prompt;
 
   // ── LLM response cache (4h TTL) ───────────────────────────────────────────
-  if (!skipCache) {
+  // Images bypass the cache — the prompt text alone doesn't uniquely identify them.
+  if (!skipCache && !imageBase64) {
     const cacheKey = `llm:${modelKey}:${hashPrompt(finalPrompt)}`;
     const cached = cacheGet(cacheKey);
     if (cached !== null) {
       return cached;
     }
 
-    const result = await _invokeLLMRaw(finalPrompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache, costTrackingId);
+    const result = await _invokeLLMRaw(finalPrompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache, costTrackingId, imageBase64, imageMediaType);
     cacheSet(cacheKey, result, TTL.LLM_RESPONSE);
     return result;
   }
 
-  return _invokeLLMRaw(finalPrompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache, costTrackingId);
+  return _invokeLLMRaw(finalPrompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache, costTrackingId, imageBase64, imageMediaType);
 }
 
 async function _invokeLLMRaw(
@@ -117,12 +124,14 @@ async function _invokeLLMRaw(
   systemPrompt?: string,
   usePromptCache?: boolean,
   costTrackingId?: string,
+  imageBase64?: string,
+  imageMediaType?: string,
 ): Promise<any> {
 
   // Gemini models — route directly without trying Anthropic first
   if (modelId.startsWith('gemini')) {
     try {
-      return await _callGemini(prompt, modelId, maxTokens, response_json_schema);
+      return await _callGemini(prompt, modelId, maxTokens, response_json_schema, imageBase64);
     } catch (err: any) {
       console.warn('[invokeLLM] Gemini failed, trying OpenAI fallback:', err.message);
       if (process.env.OPENAI_API_KEY) {
@@ -135,7 +144,7 @@ async function _invokeLLMRaw(
   // Try Anthropic first
   if (process.env.ANTHROPIC_API_KEY) {
     try {
-      return await _callAnthropic(prompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache, costTrackingId);
+      return await _callAnthropic(prompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache, costTrackingId, imageBase64, imageMediaType);
     } catch (err: any) {
       const isTokenExhausted = err.status === 429 || /credit|quota|rate.limit|overloaded/i.test(err.message || '');
       if (isTokenExhausted) {
@@ -148,7 +157,7 @@ async function _invokeLLMRaw(
       if (process.env.GEMINI_API_KEY) {
         try {
           const geminiPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
-          return await _callGemini(geminiPrompt, 'gemini-3.5-flash', maxTokens, response_json_schema);
+          return await _callGemini(geminiPrompt, 'gemini-3.5-flash', maxTokens, response_json_schema, imageBase64);
         } catch (geminiErr: any) {
           console.warn('[invokeLLM] Gemini Flash fallback failed:', geminiErr.message);
         }
@@ -156,7 +165,7 @@ async function _invokeLLMRaw(
     }
   }
 
-  // Fallback: OpenAI GPT-4o-mini (cheaper than GPT-4o)
+  // Fallback: OpenAI GPT-4o-mini (cheaper than GPT-4o) — text-only, image dropped
   if (process.env.OPENAI_API_KEY) {
     try {
       return await _callOpenAI(prompt, response_json_schema, maxTokens);
@@ -173,6 +182,7 @@ async function _callGemini(
   modelId: string,
   maxTokens: number,
   response_json_schema: any,
+  imageBase64?: string,
 ): Promise<any> {
   // Map full model IDs back to keys for callGemini
   const modelKey = modelId === 'gemini-3-pro-image' ? 'gemini-pro' : 'gemini-flash';
@@ -184,6 +194,7 @@ async function _callGemini(
   const text = await callGemini(prompt, modelKey as 'gemini-flash' | 'gemini-pro', maxTokens, {
     jsonMode: !!response_json_schema,
     systemPrompt,
+    imageBase64,
   });
 
   if (response_json_schema) {
@@ -202,6 +213,8 @@ async function _callAnthropic(
   callerSystemPrompt?: string,
   usePromptCache?: boolean,
   costTrackingId?: string,
+  imageBase64?: string,
+  imageMediaType?: string,
 ): Promise<any> {
 
   const defaultSystem = response_json_schema
@@ -209,7 +222,15 @@ async function _callAnthropic(
     : 'You are a helpful assistant.';
 
   const finalSystem = callerSystemPrompt || defaultSystem;
-  const messages: Anthropic.MessageParam[] = [{ role: 'user', content: prompt }];
+  const messages: Anthropic.MessageParam[] = [{
+    role: 'user',
+    content: imageBase64
+      ? [
+          { type: 'image', source: { type: 'base64', media_type: (imageMediaType || 'image/jpeg') as any, data: imageBase64 } },
+          { type: 'text', text: prompt },
+        ]
+      : prompt,
+  }];
 
   // Use prompt caching when requested — caches the system prompt for 5 min (~80% input token savings)
   const systemParam: any = (usePromptCache && callerSystemPrompt)
