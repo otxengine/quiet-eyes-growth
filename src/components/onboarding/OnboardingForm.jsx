@@ -475,7 +475,7 @@ export default function OnboardingForm() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900 leading-snug">
               {getGreeting()},<br />
-              האם כבר יש לך משתמש אצלנו?
+              בואו נכיר את העסק שלך
             </h1>
             <p className="text-sm text-gray-500 mt-2">קורי כאן לעזור לך לצמוח</p>
           </div>
@@ -515,18 +515,12 @@ export default function OnboardingForm() {
 
           <div className="flex justify-center gap-3">
             <button
-              onClick={() => navigate('/sign-in')}
-              className="bg-[#e8344d] text-white rounded-full px-8 py-3 font-semibold text-[14px] hover:bg-[#c92b40] transition-colors shadow-sm"
-            >
-              כן, התחבר
-            </button>
-            <button
               onClick={() => agreedToTerms && setStep(1)}
               disabled={!agreedToTerms}
               title={!agreedToTerms ? 'יש לאשר את תנאי השימוש ומדיניות הפרטיות' : ''}
-              className="border border-gray-300 bg-white text-gray-700 rounded-full px-7 py-3 font-medium text-[14px] hover:border-gray-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="bg-[#e8344d] text-white rounded-full px-8 py-3 font-semibold text-[14px] hover:bg-[#c92b40] transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              לא, נרשם
+              בואו נתחיל
             </button>
           </div>
 
