@@ -32,6 +32,16 @@ const DEV_USERS = [
 
 const DEV_USER = DEV_USERS[0];
 
+// Clears cached org/branch selection and per-business content caches so a new
+// login doesn't inherit the previous session's selected org/business.
+function clearCachedOrgState() {
+  const staleKeyPattern = /^(otx_current_org_id|otx_current_branch_id|daily_brief_|strategy_recos_)/;
+  Object.keys(localStorage)
+    .filter(key => staleKeyPattern.test(key))
+    .forEach(key => localStorage.removeItem(key));
+  sessionStorage.removeItem('otx_just_onboarded');
+}
+
 // Only rendered when ClerkProvider is present
 function ClerkAuthProvider({ children }) {
   const { user, isLoaded, isSignedIn } = useUser();
@@ -41,10 +51,10 @@ function ClerkAuthProvider({ children }) {
   useEffect(() => {
     if (isSignedIn && clerk.session) {
       window.__clerk = clerk;
-      clerk.session.getToken().then(token => {
-        if (token) window.__clerk_session_token = token;
-        setTokenReady(true);
-      });
+      clerk.session.getToken()
+        .then(token => { if (token) window.__clerk_session_token = token; })
+        .catch(() => {})
+        .finally(() => setTokenReady(true));
     } else if (isLoaded) {
       setTokenReady(true);
     }
@@ -63,6 +73,7 @@ function ClerkAuthProvider({ children }) {
 
   const logout = (shouldRedirect = true) => {
     clerk.signOut().then(() => {
+      clearCachedOrgState();
       if (shouldRedirect) window.location.href = '/';
     });
   };

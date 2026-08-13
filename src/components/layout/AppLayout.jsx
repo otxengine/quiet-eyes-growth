@@ -8,14 +8,6 @@ import { useScanQuota } from '@/lib/useScanQuota';
 import { PLAN_LABELS } from '@/lib/usePlan';
 import ScanOverlay from '@/components/dashboard/ScanOverlay';
 
-const ADMIN_EMAILS = ['contact@otxengine.io', 'admin@cortexi.ai'];
-const ADMIN_DOMAINS = ['@otx.ai', '@quieteyes.ai', '@cortexi.ai'];
-function checkIsAdmin(email) {
-  if (!email) return false;
-  const e = email.toLowerCase().trim();
-  return ADMIN_EMAILS.includes(e) || ADMIN_DOMAINS.some(d => e.endsWith(d));
-}
-
 // Track page visits in sessionStorage so badge counts clear after visiting the relevant page
 // Sub-paths (e.g. /insights/:id) also mark the parent path as visited
 function usePageVisits(pathname) {
@@ -86,9 +78,7 @@ export default function AppLayout() {
   const queryClient = useQueryClient();
   const pageVisits = usePageVisits(location.pathname);
 
-  // Use reactive auth context for reliable admin detection
-  const { user: authUser, isLoadingAuth } = useAuth();
-  const isAdmin = checkIsAdmin(authUser?.email);
+  const { isLoadingAuth } = useAuth();
 
   // Organization context: active branch
   const { currentBranch: orgBranch } = useOrganization();
@@ -97,6 +87,7 @@ export default function AppLayout() {
   const { data: user, isLoading: loadingUser, isError: userError } = useQuery({
     queryKey: ['currentUser'],
     queryFn: () => base44.auth.me(),
+    enabled: !isLoadingAuth,
     retry: 3,
     retryDelay: 500,
   });
@@ -122,7 +113,10 @@ export default function AppLayout() {
 
   const stillLoading = loadingUser || (!!user?.email && loadingProfiles);
 
-  const fromOnboarding = location.state?.fromOnboarding || sessionStorage.getItem('otx_just_onboarded') === '1';
+  // Only trust the just-onboarded flag briefly, so it can't block a different
+  // user/session that reuses the same browser tab later.
+  const justOnboardedAt = Number(sessionStorage.getItem('otx_just_onboarded')) || 0;
+  const fromOnboarding = location.state?.fromOnboarding || (Date.now() - justOnboardedAt) < 15_000;
 
   // Register service worker once on mount
   useEffect(() => { registerServiceWorker(); }, []);
@@ -130,9 +124,8 @@ export default function AppLayout() {
   // Redirect to onboarding if no business profile found
   useEffect(() => {
     if (stillLoading) return;
-    if (isLoadingAuth) return; // wait for auth to resolve before checking admin
+    if (isLoadingAuth) return;
     if (location.pathname.startsWith('/onboarding')) return;
-    if (isAdmin) return; // admins skip onboarding entirely
     // If the profile loaded successfully, clear the onboarding guard flag
     if (businessProfile) {
       sessionStorage.removeItem('otx_just_onboarded');
@@ -148,7 +141,7 @@ export default function AppLayout() {
     if (userError && !user) {
       navigate('/onboarding');
     }
-  }, [businessProfile, stillLoading, isLoadingAuth, user, userError, navigate, location.pathname, fromOnboarding, isAdmin]);
+  }, [businessProfile, stillLoading, isLoadingAuth, user, userError, navigate, location.pathname, fromOnboarding]);
 
   // Global scan overlay — works on all pages (Dashboard overrides with its own when active)
   const scanQuota = useScanQuota(businessProfile?.id);

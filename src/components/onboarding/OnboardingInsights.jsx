@@ -44,7 +44,7 @@ export default function OnboardingInsights() {
       await base44.entities.BusinessProfile.update(businessProfile.id, { onboarding_completed: true });
       try { base44.functions.invoke('runFullScan', { businessProfileId: businessProfile.id }, 360000); } catch (_) {}
     }
-    sessionStorage.setItem('otx_just_onboarded', '1');
+    sessionStorage.setItem('otx_just_onboarded', String(Date.now()));
     navigate(targetPath, { state: { fromOnboarding: true } });
   };
 
