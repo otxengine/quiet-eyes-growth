@@ -608,7 +608,7 @@ export async function computeCompetitorDiscoveryMetrics(tenantId: string, window
     ).catch((): CompetitorRow[] => []),
 
     prisma.$queryRawUnsafe<RunRow[]>(
-      `SELECT al.items_processed, al.cost_usd, bp.plan_id
+      `SELECT al.items_processed, al.cost_usd, bp.subscription_plan AS plan_id
        FROM automation_logs al
        JOIN business_profiles bp ON bp.id = al.linked_business
        WHERE bp.tenant_id = $1 AND al.automation_name = 'runCompetitorIdentification'

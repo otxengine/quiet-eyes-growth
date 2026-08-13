@@ -27,7 +27,7 @@ import { tavilyAdvancedSearch } from '../lib/tavily';
 import { loadBusinessContext, formatContextForPrompt } from '../lib/businessContext';
 
 const PROFILE = {
-  id: 'biz_001', name: 'Test Biz', category: 'מסעדה', city: 'תל אביב', relevant_services: 'פיצה,פסטה', plan_id: 'growth',
+  id: 'biz_001', name: 'Test Biz', category: 'מסעדה', city: 'תל אביב', relevant_services: 'פיצה,פסטה', subscription_plan: 'growth',
 };
 
 function makeReq(id = 'biz_001') { return { body: { businessProfileId: id } } as any; }
@@ -62,7 +62,7 @@ beforeEach(() => {
 // ── AC4 — plan gating ─────────────────────────────────────────────────────────
 
 it('AC4: skips with plan_not_eligible for free_trial', async () => {
-  (prisma.businessProfile.findUnique as jest.Mock).mockResolvedValue({ ...PROFILE, plan_id: 'free_trial' });
+  (prisma.businessProfile.findUnique as jest.Mock).mockResolvedValue({ ...PROFILE, subscription_plan: 'free_trial' });
   const res = makeRes();
   await detectEarlyTrends(makeReq(), res);
   expect(res.json).toHaveBeenCalledWith(
@@ -72,7 +72,7 @@ it('AC4: skips with plan_not_eligible for free_trial', async () => {
 });
 
 it('AC4: skips with plan_not_eligible for starter', async () => {
-  (prisma.businessProfile.findUnique as jest.Mock).mockResolvedValue({ ...PROFILE, plan_id: 'starter' });
+  (prisma.businessProfile.findUnique as jest.Mock).mockResolvedValue({ ...PROFILE, subscription_plan: 'starter' });
   const res = makeRes();
   await detectEarlyTrends(makeReq(), res);
   expect(res.json).toHaveBeenCalledWith(

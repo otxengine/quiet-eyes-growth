@@ -319,7 +319,9 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
       competitors = checked.filter(Boolean) as any[];
     }
     // ── competitors_max plan guard — cap new creates, always allow updates ──
-    const planId: string = (profile as any).plan_id || 'free_trial';
+    // business_profiles.plan_id is never written after row creation (stays at its "free"
+    // default forever) — Stripe writes the live plan into subscription_plan instead.
+    const planId: string = (profile as any).subscription_plan || 'free_trial';
     const maxCompetitors = PLAN_COMPETITOR_LIMITS[planId] ?? 3;
     if (maxCompetitors !== Infinity) {
       const activeCount = existingCompetitors.filter((c: any) => !c.not_relevant).length;

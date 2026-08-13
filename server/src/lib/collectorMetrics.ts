@@ -155,11 +155,11 @@ export async function getTrendMetrics(windowHours = 720): Promise<TrendMetrics> 
       JOIN business_profiles bp ON bp.id = ms.linked_business
       WHERE ms.category = 'viral_signal'
         AND ms.detected_at >= $1
-        AND bp.plan_id IN ('growth', 'pro', 'enterprise')
+        AND bp.subscription_plan IN ('growth', 'pro', 'enterprise')
     `, since),
     prisma.$queryRawUnsafe<[{ n: string }]>(`
       SELECT COUNT(*)::text AS n FROM business_profiles
-      WHERE plan_id IN ('growth', 'pro', 'enterprise')
+      WHERE subscription_plan IN ('growth', 'pro', 'enterprise')
     `),
     prisma.$queryRawUnsafe<Array<{ event_type: string; n: string }>>(`
       SELECT event_type, COUNT(*)::text AS n

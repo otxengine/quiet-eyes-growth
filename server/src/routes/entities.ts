@@ -317,9 +317,9 @@ router.post('/:entity', async (req: Request, res: Response) => {
     // competitors_max plan guard for manual add
     if (req.params.entity === 'Competitor' && data.linked_business) {
       const biz = await prisma.businessProfile.findUnique({
-        where: { id: data.linked_business }, select: { plan_id: true },
+        where: { id: data.linked_business }, select: { subscription_plan: true },
       });
-      const planId = biz?.plan_id || 'free_trial';
+      const planId = biz?.subscription_plan || 'free_trial';
       const maxCompetitors = PLAN_COMPETITOR_LIMITS[planId] ?? 3;
       if (maxCompetitors !== Infinity) {
         const activeCount = await (prisma as any).competitor.count({

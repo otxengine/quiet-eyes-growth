@@ -122,7 +122,7 @@ export async function runFullScan(req: Request, res: Response) {
   }
 
   // Plan scan-limit enforcement (KAN-20 AC2)
-  const plan      = profile?.plan_id ?? 'free_trial';
+  const plan      = profile?.subscription_plan ?? 'free_trial';
   const scanLimit = PLAN_SCAN_LIMITS[plan] ?? PLAN_SCAN_LIMITS.free_trial;
   if (isFinite(scanLimit)) {
     try {

@@ -25,7 +25,7 @@ jest.mock('../lib/businessProfile', () => ({
   getSectorProfile: jest.fn().mockReturnValue(null),
 }));
 
-const PROFILE = { id: 'bp1', name: 'Test', category: 'מסעדה', city: 'Tel Aviv', plan_id: 'growth' };
+const PROFILE = { id: 'bp1', name: 'Test', category: 'מסעדה', city: 'Tel Aviv', subscription_plan: 'growth' };
 
 function makeRes() {
   const res: any = {};
@@ -110,7 +110,7 @@ describe('detectTrends', () => {
 
   // AC4 — plan gating
   it('skips with plan_not_eligible for free_trial plan', async () => {
-    (prisma.businessProfile.findMany as jest.Mock).mockResolvedValue([{ ...PROFILE, plan_id: 'free_trial' }]);
+    (prisma.businessProfile.findMany as jest.Mock).mockResolvedValue([{ ...PROFILE, subscription_plan: 'free_trial' }]);
 
     const req: any = { body: { businessProfileId: 'bp1' } };
     const res = makeRes();
@@ -123,7 +123,7 @@ describe('detectTrends', () => {
   });
 
   it('skips with plan_not_eligible for starter plan', async () => {
-    (prisma.businessProfile.findMany as jest.Mock).mockResolvedValue([{ ...PROFILE, plan_id: 'starter' }]);
+    (prisma.businessProfile.findMany as jest.Mock).mockResolvedValue([{ ...PROFILE, subscription_plan: 'starter' }]);
 
     const req: any = { body: { businessProfileId: 'bp1' } };
     const res = makeRes();

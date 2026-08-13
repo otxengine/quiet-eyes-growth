@@ -334,7 +334,7 @@ export async function getSubscriptionStatus(req: Request, res: Response) {
   try {
     const profiles = await prisma.businessProfile.findMany({ where: { id: businessProfileId } });
     const p = profiles[0];
-    return res.json({ plan_id: p?.plan_id || 'free', subscription_status: p?.subscription_status || 'none' });
+    return res.json({ plan_id: p?.subscription_plan || 'free', subscription_status: p?.subscription_status || 'none' });
   } catch { return res.json({ plan_id: 'free', subscription_status: 'none' }); }
 }
 

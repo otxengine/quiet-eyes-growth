@@ -18,7 +18,7 @@ export async function generateBattlecard(req: Request, res: Response) {
 
     // ponytail: inline from src/lib/planConfig.js battlecard entitlement
     const BATTLECARD_PLANS = new Set(['growth', 'pro', 'enterprise']);
-    if (!BATTLECARD_PLANS.has(bp.plan_id || 'free')) {
+    if (!BATTLECARD_PLANS.has(bp.subscription_plan || 'free')) {
       return res.status(403).json({ error: 'Battlecard requires growth plan or higher', plan_limit: true });
     }
 

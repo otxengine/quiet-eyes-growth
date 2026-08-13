@@ -46,7 +46,7 @@ import { loadBusinessContext } from '../lib/businessContext';
 
 const PROFILE_GROWTH = {
   id: 'biz_001', name: 'Test Biz', category: 'מסעדה', city: 'תל אביב',
-  relevant_services: 'פיצה', tone_preference: 'friendly', plan_id: 'growth',
+  relevant_services: 'פיצה', tone_preference: 'friendly', subscription_plan: 'growth',
   description: '', target_market: '', custom_keywords: '',
 };
 
@@ -132,7 +132,7 @@ it('AC2: force:true bypasses 8h cooldown', async () => {
 // ── AC4 — plan gating ─────────────────────────────────────────────────────────
 
 it('AC4: free_trial → plan_not_eligible', async () => {
-  (prisma.businessProfile.findFirst as jest.Mock).mockResolvedValue({ ...PROFILE_GROWTH, plan_id: 'free_trial' });
+  (prisma.businessProfile.findFirst as jest.Mock).mockResolvedValue({ ...PROFILE_GROWTH, subscription_plan: 'free_trial' });
   const res = makeRes();
   await tiktokSectorTrendAgent(makeReq(), res);
   expect(res.json).toHaveBeenCalledWith(
@@ -142,7 +142,7 @@ it('AC4: free_trial → plan_not_eligible', async () => {
 });
 
 it('AC4: starter → plan_not_eligible', async () => {
-  (prisma.businessProfile.findFirst as jest.Mock).mockResolvedValue({ ...PROFILE_GROWTH, plan_id: 'starter' });
+  (prisma.businessProfile.findFirst as jest.Mock).mockResolvedValue({ ...PROFILE_GROWTH, subscription_plan: 'starter' });
   const res = makeRes();
   await tiktokSectorTrendAgent(makeReq(), res);
   expect(res.json).toHaveBeenCalledWith(

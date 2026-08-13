@@ -260,7 +260,7 @@ export async function buildEnrichedContext(businessProfileId: string): Promise<E
       name:        profile.name,
       category:    profile.category,
       city:        profile.city,
-      plan_id:     profile.plan_id ?? null,
+      plan_id:     profile.subscription_plan ?? null,
       description: profile.description ?? null,
       owner_name:  (profile as any).owner_name ?? null,
       phone:       (profile as any).phone ?? null,

@@ -108,7 +108,7 @@ describe('runFullScan', () => {
 
   // AC2 — plan limit: scans_per_month exhausted → blocked
   it('AC2a: blocks scan when plan limit is exhausted', async () => {
-    const profile = { ...PROFILE, plan_id: 'free_trial' };
+    const profile = { ...PROFILE, subscription_plan: 'free_trial' };
     (prisma.businessProfile.findMany as jest.Mock).mockResolvedValue([profile]);
     (prisma.automationLog.count      as jest.Mock).mockResolvedValue(1); // limit is 1
 
@@ -120,7 +120,7 @@ describe('runFullScan', () => {
   });
 
   it('AC2b: allows scan when under plan limit', async () => {
-    const profile = { ...PROFILE, plan_id: 'starter' };
+    const profile = { ...PROFILE, subscription_plan: 'starter' };
     (prisma.businessProfile.findMany as jest.Mock).mockResolvedValue([profile]);
     (prisma.automationLog.count      as jest.Mock).mockResolvedValue(3); // limit is 4
 
@@ -132,7 +132,7 @@ describe('runFullScan', () => {
   });
 
   it('AC2c: pro plan bypasses scan limit entirely', async () => {
-    const profile = { ...PROFILE, plan_id: 'pro' };
+    const profile = { ...PROFILE, subscription_plan: 'pro' };
     (prisma.businessProfile.findMany as jest.Mock).mockResolvedValue([profile]);
     // count should never be called for Infinity plans
     const countMock = prisma.automationLog.count as jest.Mock;
