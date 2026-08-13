@@ -291,7 +291,10 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
     });
 
     console.log(`runCompetitorIdentification LLM: ${JSON.stringify(result).substring(0, 600)}`);
-    let competitors: any[] = result?.competitors || [];
+    // Sonnet is asked for {"competitors": [...]} but with a large candidate list (100+)
+    // sometimes returns a bare array instead — accept either shape rather than silently
+    // dropping every pick.
+    let competitors: any[] = Array.isArray(result) ? result : (result?.competitors || []);
 
     // Never re-add businesses the user explicitly marked as not-relevant
     if (notRelevantNames.size > 0) {

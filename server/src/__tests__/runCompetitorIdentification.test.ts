@@ -304,6 +304,28 @@ test('fuzzy name match: LLM-paraphrased name still resolves a Maps candidate and
   );
 });
 
+test('accepts a bare array from the selection LLM (not wrapped in {competitors: [...]})', async () => {
+  (global as any).fetch = geoAndPlacesFetch([]);
+  (searchCompetitorsByKeyword as jest.Mock).mockResolvedValue({ candidates: [{
+    name: 'קפה F', place_id: 'p7', address: 'תל אביב', address_info: {},
+    latitude: 32.08, longitude: 34.78, rating: 4.4, votes_count: 9,
+    category: '', additional_categories: [],
+    url: 'https://cafef.co.il', domain: 'cafef.co.il',
+  }], costUsd: 0 });
+  (invokeLLM as jest.Mock)
+    .mockResolvedValueOnce({ business_type: 'בית קפה', search_terms: ['בית קפה'], nearby_cities: [] })
+    // Sonnet returns a bare array instead of { competitors: [...] } — must not be dropped.
+    .mockResolvedValueOnce([{ name: 'קפה F', address: 'תל אביב', rating: 4.4, review_count: 9, strengths: '', weaknesses: '', price_range: '', source_urls: [] }]);
+
+  const res = makeRes();
+  await runCompetitorIdentification(makeReq(), res);
+
+  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ competitors_found: 1, new_competitors_created: 1 }));
+  expect(prisma.competitor.create).toHaveBeenCalledWith(
+    expect.objectContaining({ data: expect.objectContaining({ name: 'קפה F' }) })
+  );
+});
+
 // ─── KAN-219 AC0 — enrichCompetitorUrls runs inline, same request ────────────
 
 test('AC0: enrichCompetitorUrls runs inline for the updated competitor id, not deferred', async () => {
