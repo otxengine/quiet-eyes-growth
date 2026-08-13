@@ -51,6 +51,40 @@ function getDefaultSection(posts, ads) {
   return 'feed';
 }
 
+function AnalysisBlock({ raw }) {
+  if (!raw) return null;
+  let a;
+  try { a = JSON.parse(raw); } catch { return null; }
+  if (!a) return null;
+  return (
+    <div className="border-t pt-3 space-y-2">
+      <p className="text-[10px] font-semibold text-muted-foreground">ניתוח AI</p>
+      {a.topic && <p className="text-sm font-medium">{a.topic}</p>}
+      <div className="flex flex-wrap gap-1.5">
+        {a.has_offer && (
+          <span className="inline-block bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded">
+            🏷️ {a.offer_details || 'מבצע פעיל'}
+          </span>
+        )}
+        {a.cta && (
+          <span className="inline-block bg-primary/10 text-primary text-xs px-2 py-0.5 rounded">{a.cta}</span>
+        )}
+      </div>
+      {a.style && <p className="text-xs text-muted-foreground">סגנון: {a.style}</p>}
+      {(a.text_hooks?.length > 0 || a.visual_hooks?.length > 0) && (
+        <div className="flex flex-wrap gap-1">
+          {a.text_hooks?.map((h, i) => (
+            <span key={`t${i}`} className="bg-gray-100 text-gray-700 text-[11px] px-1.5 py-0.5 rounded">✍️ {h}</span>
+          ))}
+          {a.visual_hooks?.map((h, i) => (
+            <span key={`v${i}`} className="bg-gray-100 text-gray-700 text-[11px] px-1.5 py-0.5 rounded">🎨 {h}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PostDetailModal({ post, onClose }) {
   if (!post) return null;
   return (
@@ -79,6 +113,7 @@ function PostDetailModal({ post, onClose }) {
           {post.caption && (
             <p className="text-sm leading-relaxed whitespace-pre-wrap">{post.caption}</p>
           )}
+          <AnalysisBlock raw={post.analysis} />
           <div className="text-[11px] text-muted-foreground space-y-0.5">
             {post.first_seen_at && <p>נראה לראשונה: {timeAgo(post.first_seen_at)}</p>}
             {post.last_seen_at  && <p>נראה לאחרונה: {timeAgo(post.last_seen_at)}</p>}
@@ -128,6 +163,7 @@ function AdDetailModal({ ad, onClose }) {
           {ad.cta   && (
             <span className="inline-block bg-primary/10 text-primary text-xs px-2 py-0.5 rounded">{ad.cta}</span>
           )}
+          <AnalysisBlock raw={ad.analysis} />
           <div className="text-[11px] text-muted-foreground space-y-0.5">
             {ad.start_date    && <p>תחילת קמפיין: {fmtDate(ad.start_date)}</p>}
             {ad.end_date      && <p>סיום קמפיין: {fmtDate(ad.end_date)}</p>}
