@@ -667,3 +667,123 @@ export async function computeCompetitorDiscoveryMetrics(tenantId: string, window
     empty_rate:             scanCount ? emptyScans / scanCount : 0,
   };
 }
+
+// ─── URL-enrichment funnel (KAN-224, PRD 17 Phase C) ──────────────────────────
+
+export interface UrlEnrichmentMetrics {
+  tenant_id:                    string;
+  window_days:                  number;
+  computed_at:                  string;
+  identified_count:             number;
+  website_filled_count:         number;
+  website_fill_rate_24h:        number;  // AC1: website_url set within 24h of identify / identified
+  social_fill_count:            number;  // AC2: social fields auto-filled (have a *_source tag)
+  social_from_site_extract:     number;
+  social_from_site_extract_rate: number; // AC2: site-extract share of social fills vs SERP/Tavily
+  auto_filled_field_count:      number;  // AC3: fields any source auto-filled
+  auto_filled_kept_count:       number;  // fields still not in manual_url_fields (owner didn't edit/clear)
+  precision:                    number;  // AC3
+  empty_social_count:           number;
+  empty_social_rate:            number;  // AC4
+  run_count:                    number;
+  failed_run_count:             number;
+  failed_run_rate:              number;  // AC5
+}
+
+export async function computeUrlEnrichmentMetrics(tenantId: string, windowDays = 30): Promise<UrlEnrichmentMetrics> {
+  const since = new Date(Date.now() - windowDays * 86_400_000).toISOString();
+
+  type CompetitorRow = {
+    created_date: string;
+    website_url: string | null; website_url_source: string | null;
+    instagram_url: string | null; instagram_url_source: string | null;
+    facebook_url: string | null; facebook_url_source: string | null;
+    tiktok_url: string | null; tiktok_url_source: string | null;
+    social_pages_crawled_at: string | null;
+    manual_url_fields: string[] | null;
+  };
+  type RunRow = { status: string | null };
+
+  const [rows, runRows] = await Promise.all([
+    prisma.$queryRawUnsafe<CompetitorRow[]>(
+      `SELECT c.created_date, c.website_url, c.website_url_source,
+              c.instagram_url, c.instagram_url_source,
+              c.facebook_url, c.facebook_url_source,
+              c.tiktok_url, c.tiktok_url_source,
+              c.social_pages_crawled_at, c.manual_url_fields
+       FROM competitors c
+       JOIN business_profiles bp ON bp.id = c.linked_business
+       WHERE bp.tenant_id = $1 AND c.created_date >= $2::timestamptz`,
+      tenantId, since,
+    ).catch((): CompetitorRow[] => []),
+
+    prisma.$queryRawUnsafe<RunRow[]>(
+      `SELECT al.status
+       FROM automation_logs al
+       JOIN business_profiles bp ON bp.id = al.linked_business
+       WHERE bp.tenant_id = $1 AND al.automation_name IN ('enrichCompetitorUrls', 'enrichCompetitorUrlsScheduled')
+         AND al.created_date >= $2::timestamptz`,
+      tenantId, since,
+    ).catch((): RunRow[] => []),
+  ]);
+
+  const identified = rows.length;
+  const websiteFilled = rows.filter(r => r.website_url).length;
+  const websiteFilledWithin24h = rows.filter(r => {
+    if (!r.website_url) return false;
+    if (!r.social_pages_crawled_at) return true; // set at identify time itself (e.g. Places match on creation)
+    const ms = new Date(r.social_pages_crawled_at).getTime() - new Date(r.created_date).getTime();
+    return ms <= 24 * 60 * 60 * 1000;
+  }).length;
+
+  const FIELDS: [string, keyof CompetitorRow][] = [
+    ['website_url', 'website_url_source'],
+    ['instagram_url', 'instagram_url_source'],
+    ['facebook_url', 'facebook_url_source'],
+    ['tiktok_url', 'tiktok_url_source'],
+  ];
+  const SOCIAL_FIELDS = FIELDS.slice(1);
+
+  let autoFilledTotal = 0, autoFilledKept = 0;
+  let socialFillCount = 0, socialFromSiteExtract = 0;
+  for (const r of rows) {
+    const manual = r.manual_url_fields ?? [];
+    for (const [field, srcField] of FIELDS) {
+      const source = r[srcField] as string | null;
+      if (!source) continue;
+      autoFilledTotal++;
+      if (!manual.includes(field)) autoFilledKept++;
+    }
+    for (const [, srcField] of SOCIAL_FIELDS) {
+      const source = r[srcField] as string | null;
+      if (!source) continue;
+      socialFillCount++;
+      if (source === 'site_extract') socialFromSiteExtract++;
+    }
+  }
+
+  const emptySocial = rows.filter(r => !r.instagram_url && !r.facebook_url && !r.tiktok_url).length;
+
+  const runCount = runRows.length;
+  const failedRuns = runRows.filter(r => r.status === 'failed').length;
+
+  return {
+    tenant_id:                     tenantId,
+    window_days:                   windowDays,
+    computed_at:                   new Date().toISOString(),
+    identified_count:              identified,
+    website_filled_count:          websiteFilled,
+    website_fill_rate_24h:         identified ? websiteFilledWithin24h / identified : 0,
+    social_fill_count:             socialFillCount,
+    social_from_site_extract:      socialFromSiteExtract,
+    social_from_site_extract_rate: socialFillCount ? socialFromSiteExtract / socialFillCount : 0,
+    auto_filled_field_count:       autoFilledTotal,
+    auto_filled_kept_count:        autoFilledKept,
+    precision:                     autoFilledTotal ? autoFilledKept / autoFilledTotal : 0,
+    empty_social_count:            emptySocial,
+    empty_social_rate:             identified ? emptySocial / identified : 0,
+    run_count:                     runCount,
+    failed_run_count:              failedRuns,
+    failed_run_rate:               runCount ? failedRuns / runCount : 0,
+  };
+}

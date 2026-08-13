@@ -24,34 +24,38 @@ async function organicSearch(queries: string[]): Promise<string[]> {
   return sp.flat();
 }
 
+type Found = { url: string; source: 'places' | 'site_extract' | 'serp' | 'tavily' };
+
 // KAN-220 AC3: Places Details (if place_id) → organic SERP → Tavily last resort.
-async function enrichWebsite(placeId: string | null | undefined, name: string, loc: string | null | undefined): Promise<string | null> {
+async function enrichWebsite(placeId: string | null | undefined, name: string, loc: string | null | undefined): Promise<Found | null> {
   if (placeId) {
     const details = await getPlaceDetails(placeId);
-    if (details.websiteUri && isValidHost(details.websiteUri)) return details.websiteUri;
+    if (details.websiteUri && isValidHost(details.websiteUri)) return { url: details.websiteUri, source: 'places' };
   }
   const location = loc || '';
   const validHost = (u: string) => isValidHost(u) && !SITE_BLACKLIST.some(b => u.includes(b));
 
   const serpHit = (await organicSearch([`"${name}" ${location}`, `"${name}" אתר`])).find(validHost);
-  if (serpHit) return serpHit;
+  if (serpHit) return { url: serpHit, source: 'serp' };
 
   if (isTavilyRateLimited()) return null;
   const tavilyResults = await tavilySearch(`"${name}" ${location} אתר רשמי`, 3);
-  return tavilyResults.map((r: any) => r.url).find(validHost) ?? null;
+  const tavilyHit = tavilyResults.map((r: any) => r.url).find(validHost);
+  return tavilyHit ? { url: tavilyHit, source: 'tavily' } : null;
 }
 
 // KAN-220 AC4/AC6: organic SERP → Tavily last resort for one still-empty social platform.
-async function enrichSocial(domain: string, nonProfile: string[], name: string, loc: string | null | undefined): Promise<string | null> {
+async function enrichSocial(domain: string, nonProfile: string[], name: string, loc: string | null | undefined): Promise<Found | null> {
   const location = loc || '';
   const matches = (u: string) => isProfileUrl(u, `${domain}/`, nonProfile) && handleMatchesBusiness(u, name, null);
 
   const serpHit = (await organicSearch([`"${name}" ${location} site:${domain}`, `"${name}" site:${domain}`])).find(matches);
-  if (serpHit) return serpHit;
+  if (serpHit) return { url: serpHit, source: 'serp' };
 
   if (isTavilyRateLimited()) return null;
   const tavilyResults = await tavilySearch(`"${name}" ${location} site:${domain}`, 3);
-  return tavilyResults.map((r: any) => r.url).find(matches) ?? null;
+  const tavilyHit = tavilyResults.map((r: any) => r.url).find(matches);
+  return tavilyHit ? { url: tavilyHit, source: 'tavily' } : null;
 }
 
 const SOCIAL_PLATFORMS: [string, string, string[]][] = [
@@ -90,7 +94,7 @@ export async function enrichCompetitorUrls(
     // AC3 — website missing: paid-tier fallback before giving up on it
     if (!comp.website_url) {
       const found = await enrichWebsite(comp.google_place_id, comp.name, comp.address);
-      if (found) { update.website_url = found; attempted = true; }
+      if (found) { update.website_url = found.url; update.website_url_source = found.source; attempted = true; }
     }
 
     const websiteForExtract = update.website_url || comp.website_url;
@@ -100,16 +104,16 @@ export async function enrichCompetitorUrls(
     if (websiteForExtract && (anySocialEmpty || opts.force)) {
       attempted = true;
       const links = await extractSocialLinksFromWebsite(websiteForExtract);
-      if (links.instagram_url && !comp.instagram_url) update.instagram_url = links.instagram_url;
-      if (links.facebook_url  && !comp.facebook_url)  update.facebook_url  = links.facebook_url;
-      if (links.tiktok_url    && !comp.tiktok_url)    update.tiktok_url    = links.tiktok_url;
+      if (links.instagram_url && !comp.instagram_url) { update.instagram_url = links.instagram_url; update.instagram_url_source = 'site_extract'; }
+      if (links.facebook_url  && !comp.facebook_url)  { update.facebook_url  = links.facebook_url;  update.facebook_url_source  = 'site_extract'; }
+      if (links.tiktok_url    && !comp.tiktok_url)    { update.tiktok_url    = links.tiktok_url;    update.tiktok_url_source    = 'site_extract'; }
     }
 
     // AC4/AC6 — still-empty socials after site-extract: paid-tier fallback, never re-spend on a filled field
     for (const [field, domain, nonProfile] of SOCIAL_PLATFORMS) {
       if (comp[field] || update[field]) continue;
       const found = await enrichSocial(domain, nonProfile, comp.name, comp.address);
-      if (found) { update[field] = found; attempted = true; }
+      if (found) { update[field] = found.url; update[`${field}_source`] = found.source; attempted = true; }
     }
 
     if (!attempted && Object.keys(update).length === 0) { skipped++; continue; }

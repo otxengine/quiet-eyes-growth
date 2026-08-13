@@ -6,10 +6,11 @@
  * GET /api/kpi/tenant/:tenantId         — tenant-level aggregates
  * GET /api/kpi/tenant/:tenantId/about   — about-enrichment funnel (KAN-208)
  * GET /api/kpi/tenant/:tenantId/competitor-discovery — competitor-discovery funnel (KAN-216)
+ * GET /api/kpi/tenant/:tenantId/url-enrichment — URL-enrichment funnel (KAN-224)
  */
 
 import { Router, Request, Response } from 'express';
-import { computeFunnelKPIs, computePipelineVelocity, computeTenantKPIs, computeAnalysisObservability, computeAboutMetrics, computeCompetitorDiscoveryMetrics } from '../services/metrics/KPIService';
+import { computeFunnelKPIs, computePipelineVelocity, computeTenantKPIs, computeAnalysisObservability, computeAboutMetrics, computeCompetitorDiscoveryMetrics, computeUrlEnrichmentMetrics } from '../services/metrics/KPIService';
 import { createLogger } from '../infra/logger';
 
 const logger = createLogger('KPIRoute');
@@ -85,6 +86,19 @@ router.get('/tenant/:tenantId/competitor-discovery', async (req: Request, res: R
     return res.json(metrics);
   } catch (err: any) {
     logger.error('Competitor discovery metrics fetch failed', { tenantId, error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// KAN-224: URL-enrichment funnel — website fill rate, social source mix, precision, empty-social rate
+router.get('/tenant/:tenantId/url-enrichment', async (req: Request, res: Response) => {
+  const tenantId = String(req.params.tenantId);
+  const days     = Math.min(90, Math.max(1, Number(req.query.days ?? 30)));
+  try {
+    const metrics = await computeUrlEnrichmentMetrics(tenantId, days);
+    return res.json(metrics);
+  } catch (err: any) {
+    logger.error('URL enrichment metrics fetch failed', { tenantId, error: err.message });
     return res.status(500).json({ error: err.message });
   }
 });

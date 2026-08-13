@@ -399,6 +399,10 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS tiktok_url TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS google_business_url TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS social_pages_crawled_at TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS website_url_source TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS instagram_url_source TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS facebook_url_source TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS tiktok_url_source TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS strongest_channel TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS social_post_frequency TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS last_post_date TEXT`);

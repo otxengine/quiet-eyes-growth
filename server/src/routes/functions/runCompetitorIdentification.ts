@@ -417,6 +417,8 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
         console.log(`runCompetitorIdentification: enrichCompetitorUrls → ${enrichResult.enriched} enriched, ${enrichResult.skipped} skipped`);
       } catch (e: any) {
         console.warn('runCompetitorIdentification: enrichCompetitorUrls failed:', e.message);
+        // KAN-224 AC5 — this used to fail silently to console only; now it surfaces in monitoring.
+        await writeAutomationLog('enrichCompetitorUrls', businessProfileId, startTime, 0, 'failed', e.message);
       }
     }
 
