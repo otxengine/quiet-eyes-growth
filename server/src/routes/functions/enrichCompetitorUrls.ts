@@ -1,5 +1,10 @@
+import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { extractSocialLinksFromWebsite } from '../../lib/extractSocialLinksFromWebsite';
+import { writeAutomationLog } from '../../lib/automationLog';
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const CATCH_UP_CAP = 10; // same cap as discoverCompetitorUrls' own scheduler job
 
 /**
  * enrichCompetitorUrls — KAN-219: site-extract as the primary social path for rivals
@@ -42,4 +47,46 @@ export async function enrichCompetitorUrls(
   }
 
   return { enriched, skipped };
+}
+
+/**
+ * enrichCompetitorUrlsScheduled — KAN-221: dedicated scheduler catch-up.
+ * Own TTL (~7d) + cap, independent of batchSnapshotCompetitors' 6h last_scanned skip.
+ * Catches up rivals with a website_url but any social field empty OR crawled >7d ago;
+ * `force` bypasses that filter and re-runs the capped batch regardless of freshness.
+ */
+export async function enrichCompetitorUrlsScheduled(req: Request, res: Response) {
+  const { businessProfileId, force } = req.body;
+  if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+  const startTime = new Date().toISOString();
+  try {
+    const staleCutoff = new Date(Date.now() - SEVEN_DAYS_MS).toISOString();
+    const candidates = await prisma.competitor.findMany({
+      where: {
+        linked_business: businessProfileId,
+        website_url: { not: null },
+        ...(force ? {} : {
+          OR: [
+            { instagram_url: null },
+            { facebook_url: null },
+            { tiktok_url: null },
+            { social_pages_crawled_at: null },
+            { social_pages_crawled_at: { lt: staleCutoff } },
+          ],
+        }),
+      },
+      orderBy: { social_pages_crawled_at: 'asc' },
+      take: CATCH_UP_CAP,
+      select: { id: true },
+    });
+
+    const result = await enrichCompetitorUrls(candidates.map((c: any) => c.id), { force });
+    await writeAutomationLog('enrichCompetitorUrlsScheduled', businessProfileId, startTime, result.enriched);
+    return res.json(result);
+  } catch (err: any) {
+    console.error('[enrichCompetitorUrlsScheduled] error:', err.message);
+    await writeAutomationLog('enrichCompetitorUrlsScheduled', businessProfileId, startTime, 0, 'failed', err.message);
+    return res.status(500).json({ error: err.message });
+  }
 }

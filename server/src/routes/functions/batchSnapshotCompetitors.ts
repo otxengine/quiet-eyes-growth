@@ -11,10 +11,12 @@ const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
  * 1. Takes a fresh Tavily snapshot for every competitor of a business
  * 2. Saves to otx_competitor_snapshots for diff detection (diffCompetitorSnapshot)
  * 3. Updates competitor.last_scanned + price/promotion fields from latest data
- * 4. Discovers social page URLs (Instagram/Facebook/TikTok/website) if not known or stale (7d)
- * 5. Publishes event to agent_data_bus so downstream agents can react
+ * 4. Publishes event to agent_data_bus so downstream agents can react
  *
- * Called by scheduler at 06:00 + 18:00 UTC (alongside detectCompetitorChanges).
+ * URL discovery is NOT this agent's job — see discoverCompetitorUrls (KAN-160) and
+ * enrichCompetitorUrlsScheduled (KAN-221), both on their own social_pages_crawled_at TTL.
+ *
+ * Called by scheduler at 07:00 UTC.
  */
 export async function batchSnapshotCompetitors(req: Request, res: Response) {
   const { businessProfileId } = req.body;

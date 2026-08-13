@@ -33,6 +33,7 @@ import { analyzeInstagramComments } from './routes/functions/analyzeInstagramCom
 import { diffCompetitorSnapshot } from './routes/functions/diffCompetitorSnapshot';
 import { batchSnapshotCompetitors } from './routes/functions/batchSnapshotCompetitors';
 import { discoverCompetitorUrls } from './routes/functions/discoverCompetitorUrls';
+import { enrichCompetitorUrlsScheduled } from './routes/functions/enrichCompetitorUrls';
 import { detectCompetitorChanges } from './routes/functions/detectCompetitorChanges';
 import { analyzeCompetitorSocial } from './routes/functions/analyzeCompetitorSocial';
 import { detectCompetitorAds } from './routes/functions/detectCompetitorAds';
@@ -302,9 +303,13 @@ export function startScheduler() {
   // ── Every day at 04:00 UTC: competitor snapshot diff + URL discovery (KAN-160) ──
   // discoverCompetitorUrls runs on its own social_pages_crawled_at guard (7d),
   // independent of snapshot last_scanned — satisfies KAN-160 AC4.
+  // enrichCompetitorUrlsScheduled (KAN-221) is a second, independent catch-up on the
+  // same guard field — free site-extract fallback for rivals discoverCompetitorUrls
+  // (paid SERP APIs) hasn't filled yet.
   cron.schedule('0 4 * * *', () => {
     runAgentForAll('DiffCompetitorSnapshot', diffCompetitorSnapshot);
     runAgentForAll('DiscoverCompetitorUrls', discoverCompetitorUrls);
+    runAgentForAll('EnrichCompetitorUrls', enrichCompetitorUrlsScheduled);
   });
 
   // ── Every 6 hours: OTX competitor snapshot diff (KAN-45) ─────────────────────

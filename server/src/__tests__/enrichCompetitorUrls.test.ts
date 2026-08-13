@@ -18,8 +18,10 @@ jest.mock('../lib/extractSocialLinksFromWebsite', () => ({
   extractSocialLinksFromWebsite: jest.fn(),
 }));
 
+jest.mock('../lib/automationLog', () => ({ writeAutomationLog: jest.fn(async () => {}) }));
+
 import { prisma } from '../db';
-import { enrichCompetitorUrls } from '../routes/functions/enrichCompetitorUrls';
+import { enrichCompetitorUrls, enrichCompetitorUrlsScheduled } from '../routes/functions/enrichCompetitorUrls';
 import { extractSocialLinksFromWebsite } from '../lib/extractSocialLinksFromWebsite';
 
 const EMPTY = { instagram_url: null, facebook_url: null, tiktok_url: null };
@@ -117,4 +119,61 @@ test('returns immediately for an empty id list without touching the db', async (
   const result = await enrichCompetitorUrls([]);
   expect(result).toEqual({ enriched: 0, skipped: 0 });
   expect(prisma.competitor.findMany).not.toHaveBeenCalled();
+});
+
+describe('enrichCompetitorUrlsScheduled (KAN-221)', () => {
+  const mkRes = () => {
+    const json = jest.fn();
+    return { json, status: jest.fn(() => ({ json })) } as any;
+  };
+
+  test('AC1/AC2: selects rivals with a website_url that are empty-or-stale, capped and ordered oldest-crawled-first, independent of last_scanned', async () => {
+    (prisma.competitor.findMany as jest.Mock)
+      .mockResolvedValueOnce([{ id: 'c1' }])
+      .mockResolvedValueOnce([{ id: 'c1', website_url: 'https://biz.co.il', instagram_url: null, facebook_url: null, tiktok_url: null }]);
+
+    const res = mkRes();
+    await enrichCompetitorUrlsScheduled({ body: { businessProfileId: 'biz1' } } as any, res);
+
+    const selection = (prisma.competitor.findMany as jest.Mock).mock.calls[0][0];
+    expect(selection.where.linked_business).toBe('biz1');
+    expect(selection.where.website_url).toEqual({ not: null });
+    expect(selection.where.OR).toEqual(expect.arrayContaining([
+      { instagram_url: null }, { facebook_url: null }, { tiktok_url: null }, { social_pages_crawled_at: null },
+    ]));
+    expect(selection.where).not.toHaveProperty('last_scanned');
+    expect(selection.take).toBe(10);
+    expect(selection.orderBy).toEqual({ social_pages_crawled_at: 'asc' });
+    expect(res.json).toHaveBeenCalledWith({ enriched: 1, skipped: 0 });
+  });
+
+  test('AC3: a fully-populated, fresh rival never reaches the core (filtered out by the query itself)', async () => {
+    (prisma.competitor.findMany as jest.Mock).mockResolvedValueOnce([]);
+
+    const res = mkRes();
+    await enrichCompetitorUrlsScheduled({ body: { businessProfileId: 'biz1' } } as any, res);
+
+    expect(prisma.competitor.findMany).toHaveBeenCalledTimes(1); // selection only — nothing to enrich
+    expect(res.json).toHaveBeenCalledWith({ enriched: 0, skipped: 0 });
+  });
+
+  test('force=true bypasses the empty/stale filter and re-runs the capped batch', async () => {
+    (prisma.competitor.findMany as jest.Mock)
+      .mockResolvedValueOnce([{ id: 'c1' }])
+      .mockResolvedValueOnce([{ id: 'c1', website_url: 'https://biz.co.il', instagram_url: 'a', facebook_url: 'b', tiktok_url: 'c' }]);
+
+    const res = mkRes();
+    await enrichCompetitorUrlsScheduled({ body: { businessProfileId: 'biz1', force: true } } as any, res);
+
+    const selection = (prisma.competitor.findMany as jest.Mock).mock.calls[0][0];
+    expect(selection.where.OR).toBeUndefined();
+    expect(extractSocialLinksFromWebsite).toHaveBeenCalledWith('https://biz.co.il');
+  });
+
+  test('missing businessProfileId returns 400 without querying the db', async () => {
+    const res = mkRes();
+    await enrichCompetitorUrlsScheduled({ body: {} } as any, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(prisma.competitor.findMany).not.toHaveBeenCalled();
+  });
 });
