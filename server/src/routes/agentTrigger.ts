@@ -42,6 +42,7 @@ import { runSectorTrendRadar } from './functions/runSectorTrendRadar';
 import { runAgentForAll } from '../scheduler';
 import { collectReviews } from './functions/collectReviews';
 import { discoverCompetitorUrls } from './functions/discoverCompetitorUrls';
+import { enrichCompetitorUrlsScheduled } from './functions/enrichCompetitorUrls';
 
 // Rate limit: 10 minutes per business+agent pair (in-memory)
 const lastRun: Map<string, number> = new Map();
@@ -146,6 +147,21 @@ router.post('/discover-competitor-urls', async (_req: Request, res: Response) =>
     console.error('[agentTrigger] discoverCompetitorUrls failed:', err.message)
   );
   return res.json({ ok: true, message: 'DiscoverCompetitorUrls started for all businesses' });
+});
+
+// POST /api/agents/trigger/enrich-competitor-urls
+// Global trigger — runs enrichCompetitorUrlsScheduled for all businesses (KAN-221).
+router.post('/enrich-competitor-urls', async (_req: Request, res: Response) => {
+  const key = 'global:enrichCompetitorUrlsScheduled';
+  const now = Date.now();
+  if ((now - (lastRun.get(key) ?? 0)) < COOLDOWN_MS) {
+    return res.status(429).json({ error: 'Rate limited — wait 10 minutes between manual triggers' });
+  }
+  lastRun.set(key, now);
+  runAgentForAll('EnrichCompetitorUrls', enrichCompetitorUrlsScheduled).catch(err =>
+    console.error('[agentTrigger] enrichCompetitorUrlsScheduled failed:', err.message)
+  );
+  return res.json({ ok: true, message: 'EnrichCompetitorUrlsScheduled started for all businesses' });
 });
 
 // POST /api/agents/trigger/collect-reviews
