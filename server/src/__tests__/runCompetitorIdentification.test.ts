@@ -43,12 +43,17 @@ jest.mock('../lib/dataforseo', () => ({
   searchCompetitorsByKeyword: jest.fn(),
 }));
 
+jest.mock('../routes/functions/enrichCompetitorUrls', () => ({
+  enrichCompetitorUrls: jest.fn().mockResolvedValue({ enriched: 0, skipped: 0 }),
+}));
+
 import { runCompetitorIdentification } from '../routes/functions/runCompetitorIdentification';
 import { prisma }           from '../db';
 import { invokeLLM }        from '../lib/llm';
 import { publishEvent }     from '../lib/eventBus';
 import { writeAutomationLog } from '../lib/automationLog';
 import { searchCompetitorsByKeyword } from '../lib/dataforseo';
+import { enrichCompetitorUrls } from '../routes/functions/enrichCompetitorUrls';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -216,6 +221,42 @@ test('AC8b: does not overwrite existing website_url on update', async () => {
 
   const updateCall = (prisma.competitor.update as jest.Mock).mock.calls[0][0];
   expect(updateCall.data.website_url).toBeUndefined(); // must NOT overwrite
+});
+
+// ─── KAN-219 AC0 — enrichCompetitorUrls runs inline, same request ────────────
+
+test('AC0: enrichCompetitorUrls runs inline for the updated competitor id, not deferred', async () => {
+  (global as any).fetch = geoAndPlacesFetch([]);
+  (searchCompetitorsByKeyword as jest.Mock).mockResolvedValue({ candidates: [{
+    name: 'קפה C', place_id: 'p3', address: 'תל אביב', address_info: {},
+    latitude: 32.08, longitude: 34.78, rating: 4.0, votes_count: 5,
+    category: '', additional_categories: [],
+    url: 'https://newurl.co.il', domain: 'newurl.co.il',
+  }], costUsd: 0 });
+  const existingWithUrl = { id: 'comp_c', name: 'קפה C', address: 'תל אביב', website_url: 'https://existing.co.il', not_relevant: false };
+  (prisma.competitor.findMany as jest.Mock)
+    .mockResolvedValueOnce([existingWithUrl])
+    .mockResolvedValueOnce([existingWithUrl]);
+  (invokeLLM as jest.Mock)
+    .mockResolvedValueOnce({ business_type: 'בית קפה', search_terms: ['בית קפה'], nearby_cities: [] })
+    .mockResolvedValueOnce({ competitors: [{ name: 'קפה C', address: 'תל אביב', rating: 4.0, review_count: 5, strengths: '', weaknesses: '', price_range: '', source_urls: [] }] });
+
+  const res = makeRes();
+  await runCompetitorIdentification(makeReq(), res);
+
+  expect(enrichCompetitorUrls).toHaveBeenCalledWith(['comp_c'], { force: undefined });
+});
+
+test('does not call enrichCompetitorUrls when no competitor was created or updated', async () => {
+  // Empty search terms → soft-fails before any Maps/LLM-filter call (AC4 in KAN-211) —
+  // only the one context invokeLLM call happens.
+  (invokeLLM as jest.Mock)
+    .mockResolvedValueOnce({ business_type: 'בית קפה', search_terms: [], nearby_cities: [] });
+
+  const res = makeRes();
+  await runCompetitorIdentification(makeReq(), res);
+
+  expect(enrichCompetitorUrls).not.toHaveBeenCalled();
 });
 
 // ─── AC2 + AC4 — happy path: new competitor created, event fired ──────────────

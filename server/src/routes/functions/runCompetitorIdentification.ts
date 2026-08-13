@@ -6,6 +6,7 @@ import { publishEvent } from '../../lib/eventBus';
 import { buildCompetitorTerms, buildIdentityCompetitorTerms, buildAgentPromptContext, getSectorProfile } from '../../lib/businessProfile';
 import { getAgentMission } from '../../lib/missionPlanner';
 import { searchCompetitorsByKeyword, DataForSEOCandidate } from '../../lib/dataforseo';
+import { enrichCompetitorUrls } from './enrichCompetitorUrls';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
 
@@ -129,7 +130,7 @@ function mergeMapsCandidates(googlePlaces: any[], dataforseo: DataForSEOCandidat
 }
 
 export async function runCompetitorIdentification(req: Request, res: Response) {
-  const { businessProfileId } = req.body;
+  const { businessProfileId, force } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
   const startTime = new Date().toISOString();
@@ -329,6 +330,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
 
     let created = 0;
     let updated = 0;
+    const touchedIds: string[] = []; // KAN-219 AC0 — created/updated ids to enrich inline below
 
     // AC8b: derive website_url from DataForSEO url/domain; exclude social/maps links
     const SOCIAL_PATTERN = /instagram\.com|facebook\.com|tiktok\.com|google\.com\/maps/i;
@@ -378,9 +380,10 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
             },
           });
           updated++;
+          touchedIds.push(existing.id);
         }
       } else {
-        await prisma.competitor.create({
+        const createdRow = await prisma.competitor.create({
           data: {
             name: c.name,
             category: businessType,
@@ -403,6 +406,17 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
         });
         existingNames.add(nameKey);
         created++;
+        if (createdRow?.id) touchedIds.push(createdRow.id);
+      }
+    }
+
+    // KAN-219 AC0 — enrich the same batch inline, in this run, not on the next scheduler tick.
+    if (touchedIds.length) {
+      try {
+        const enrichResult = await enrichCompetitorUrls(touchedIds, { force });
+        console.log(`runCompetitorIdentification: enrichCompetitorUrls → ${enrichResult.enriched} enriched, ${enrichResult.skipped} skipped`);
+      } catch (e: any) {
+        console.warn('runCompetitorIdentification: enrichCompetitorUrls failed:', e.message);
       }
     }
 
