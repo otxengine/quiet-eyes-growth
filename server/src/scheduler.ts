@@ -80,6 +80,7 @@ import { runOTXSyncBridge } from './routes/functions/runOTXSyncBridge';
 import { runSectorTrendRadar } from './routes/functions/runSectorTrendRadar';
 import { runOTXIntentClassification } from './routes/functions/runOTXIntentClassification';
 import { collectCompetitorSocialPosts } from './routes/functions/collectCompetitorSocialPosts';
+import { reconcileDataForSeoReviewTasks } from './routes/functions/reconcileDataForSeoReviewTasks';
 
 const logger = createLogger('Scheduler');
 
@@ -359,6 +360,15 @@ export function startScheduler() {
     refreshExpiringTikTokTokens()
       .catch(err => logger.error('refreshExpiringTikTokTokens failed', { error: err.message }));
   });
+
+  // ── Every 15 min: DataForSEO review task reconciliation (missed postbacks) ───
+  // Kill switch: set DATAFORSEO_RECONCILE_DISABLED=true in Render env to disable.
+  if (process.env.DATAFORSEO_RECONCILE_DISABLED !== 'true') {
+    cron.schedule('*/15 * * * *', () => {
+      reconcileDataForSeoReviewTasks()
+        .catch(err => logger.error('reconcileDataForSeoReviewTasks failed', { error: err.message }));
+    });
+  }
 
   // ── Every 15 min: keep-alive log ─────────────────────────────────────────────
   cron.schedule('*/15 * * * *', () => {

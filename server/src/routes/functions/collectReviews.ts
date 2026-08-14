@@ -8,11 +8,18 @@ import { resolveTopicSet } from '../../lib/reviewTopicPacks';
 import { tavilySearch } from '../../lib/tavily';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { tryDecryptToken } from '../../lib/crypto';
-import { publishEvent } from '../../lib/eventBus';
 import { normReviewOrigin } from '../../lib/signalGuard';
 import { findPlaceId, getPlaceDetails } from '../../lib/googlePlaces';
 import { serpGoogleMapsReviews, hasSerpApiKey, firstValidDate } from '../../lib/serpapi';
+import { submitGoogleReviewsTask, hasDataForSeoCreds } from '../../lib/dataforseo';
+import {
+  detectCompetitorMentions, snapshotRatingHistory, createNegativeReviewAlerts,
+  publishNewReviewEvents, backfillTopicsFor,
+} from '../../lib/reviewPostProcessing';
 import { runCollectCompetitorReviews } from './collectCompetitorReviews';
+
+const DATAFORSEO_REVIEWS_ENABLED = process.env.DATAFORSEO_REVIEWS_ENABLED === 'true';
+const SERVER_BASE_URL = process.env.SERVER_BASE_URL || 'http://localhost:3007';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours — Google Places API quota
 
@@ -161,8 +168,40 @@ export async function collectReviews(req: Request, res: Response) {
       }
     }
 
-    // ── SerpAPI google_maps_reviews — depth backfill, priority 2 ─────────────
-    if (googleAdded === 0 && hasSerpApiKey()) {
+    // ── DataForSEO google/reviews task — depth backfill, priority 2 ──────────
+    // Async (task_post → postback), so it never adds to googleAdded/newReviews here —
+    // results arrive later via /api/webhooks/dataforseo and run through the same
+    // post-processing pipeline. Falls through to SerpAPI when disabled, to Places
+    // either way (see DATAFORSEO_REVIEWS_ENABLED rollout notes in dataforseo.ts).
+    let dataforseoTaskPending = false;
+    if (googleAdded === 0 && DATAFORSEO_REVIEWS_ENABLED && hasDataForSeoCreds()) {
+      try {
+        const dfsPlaceId: string | null = profile.google_place_id || await findPlaceId(name, city);
+        if (dfsPlaceId && !profile.google_place_id) {
+          await prisma.businessProfile.update({ where: { id: businessProfileId }, data: { google_place_id: dfsPlaceId, google_place_id_verified: true } });
+        }
+        if (dfsPlaceId) {
+          const { taskId, costUsd } = await submitGoogleReviewsTask({
+            placeId:     dfsPlaceId,
+            depth:       Number(process.env.DATAFORSEO_REVIEWS_DEPTH_OWN) || 100,
+            sortBy:      'newest',
+            postbackUrl: `${SERVER_BASE_URL}/api/webhooks/dataforseo?secret=${process.env.DATAFORSEO_WEBHOOK_SECRET || ''}`,
+            tag:         businessProfileId,
+          });
+          if (taskId) {
+            await prisma.dataForSeoReviewTask.create({
+              data: { task_id: taskId, task_type: 'own', business_profile_id: businessProfileId, cost_usd: costUsd },
+            });
+            dataforseoTaskPending = true;
+          }
+        }
+      } catch (err: any) {
+        console.warn('[collectReviews] DataForSEO reviews task_post failed, falling through to SerpAPI/Places:', err.message);
+      }
+    }
+
+    // ── SerpAPI google_maps_reviews — depth backfill, fallback when DataForSEO disabled ──
+    if (googleAdded === 0 && !DATAFORSEO_REVIEWS_ENABLED && hasSerpApiKey()) {
       try {
         const serpPlaceId: string | null = profile.google_place_id || await findPlaceId(name, city);
         if (serpPlaceId && !profile.google_place_id) {
@@ -487,57 +526,7 @@ export async function collectReviews(req: Request, res: Response) {
 
     // ── Competitor mention detection in new reviews ──────────────────────────
     if (newReviews > 0) {
-      try {
-        const knownCompetitors = await prisma.competitor.findMany({
-          where: { linked_business: businessProfileId },
-          select: { id: true, name: true },
-          take: 10,
-        });
-        if (knownCompetitors.length > 0) {
-          const freshReviews = await prisma.review.findMany({
-            where: { linked_business: businessProfileId, created_date: { gte: new Date(startTime) } },
-            select: { id: true, text: true, sentiment: true, rating: true, reviewer_name: true },
-          });
-          for (const rev of freshReviews) {
-            const textLower = (rev.text || '').toLowerCase();
-            for (const comp of knownCompetitors) {
-              if (!comp.name || !textLower.includes(comp.name.toLowerCase())) continue;
-              const sigTitle = `לקוח מזכיר "${comp.name}" בביקורת`;
-              const alreadyExists = await prisma.marketSignal.findFirst({
-                where: {
-                  linked_business: businessProfileId,
-                  category: 'competitor_mention',
-                  summary: { contains: comp.name },
-                  detected_at: { gte: new Date(Date.now() - 7 * 86400000).toISOString() },
-                },
-              });
-              if (alreadyExists) continue;
-              const isPositiveForUs = rev.sentiment === 'positive' || (rev.rating || 0) >= 4;
-              await prisma.marketSignal.create({
-                data: {
-                  linked_business: businessProfileId,
-                  summary: `${sigTitle} — ${isPositiveForUs ? 'בהשוואה לטובתנו' : 'השוואה שלילית — בדוק'}`,
-                  category: 'competitor_mention',
-                  impact_level: isPositiveForUs ? 'low' : 'high',
-                  confidence: 75,
-                  recommended_action: isPositiveForUs
-                    ? `השתמש בהשוואה כחומר שיווקי נגד ${comp.name}`
-                    : `בחן מה ${comp.name} מציע שאנו לא — ${(rev.text || '').slice(0, 80)}`,
-                  source_description: JSON.stringify({
-                    review_id: rev.id,
-                    reviewer: rev.reviewer_name,
-                    competitor_name: comp.name,
-                    review_snippet: (rev.text || '').slice(0, 200),
-                    sentiment: rev.sentiment,
-                  }),
-                  is_read: false,
-                  detected_at: new Date().toISOString(),
-                },
-              }).catch(() => {});
-            }
-          }
-        }
-      } catch (_) {}
+      await detectCompetitorMentions(businessProfileId, startTime);
     }
 
     setLastRun(businessProfileId, 'collectReviews');
@@ -545,114 +534,37 @@ export async function collectReviews(req: Request, res: Response) {
     console.log(`collectReviews done: ${newReviews} new reviews (${googleAdded} from Google, ${sourcesScanCount} from other sources)`);
 
     // ── Snapshot current avg rating → rating_history for trend graph ─────────
-    try {
-      const allRatings = await prisma.review.findMany({
-        where: { linked_business: businessProfileId },
-        select: { rating: true },
-      });
-      if (allRatings.length > 0) {
-        const avgRating = allRatings.reduce((s, r) => s + (r.rating || 0), 0) / allRatings.length;
-        await prisma.$executeRawUnsafe(
-          `INSERT INTO rating_history (business_id, avg_rating, review_count, new_reviews, source) VALUES ($1, $2::numeric, $3, $4, $5)`,
-          businessProfileId, parseFloat(avgRating.toFixed(2)), allRatings.length, newReviews, 'collectReviews'
-        );
-      }
-    } catch (_) {}
+    await snapshotRatingHistory(businessProfileId, newReviews, 'collectReviews');
 
     // ── Real-time alert: create ProactiveAlert for new negative reviews ───────
     if (newReviews > 0) {
-      try {
-        const recentNegatives = await prisma.review.findMany({
-          where: {
-            linked_business: businessProfileId,
-            sentiment: 'negative',
-            created_date: { gte: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() },
-          },
-          orderBy: { created_date: 'desc' },
-          take: 5,
-        });
-
-        for (const rev of recentNegatives) {
-          const alertTitle = `ביקורת שלילית חדשה: ${rev.reviewer_name || 'לקוח'} (${rev.rating || '?'}⭐)`;
-          const exists = await prisma.proactiveAlert.findFirst({
-            where: { linked_business: businessProfileId, title: alertTitle, is_dismissed: false },
-          });
-          if (exists) continue;
-          await prisma.proactiveAlert.create({
-            data: {
-              alert_type: 'negative_review',
-              title: alertTitle,
-              description: (rev.text || '').substring(0, 150),
-              suggested_action: `צור תגובה מקצועית ל${rev.reviewer_name || 'לקוח'}`,
-              priority: (rev.rating || 5) <= 2 ? 'high' : 'medium',
-              source_agent: JSON.stringify({
-                action_label: 'הגב עכשיו',
-                action_type: 'respond',
-                review_id: rev.id,
-                urgency_hours: 6,
-                impact_reason: 'תגובה תוך 6 שעות מגדילה שימור לקוחות ב-40%',
-              }),
-              is_dismissed: false,
-              is_acted_on: false,
-              created_at: new Date().toISOString(),
-              linked_business: businessProfileId,
-            },
-          }).catch(() => {});
-        }
-      } catch (_) {}
+      await createNegativeReviewAlerts(businessProfileId);
     }
+
     // Publish one new_review event per review — exactly once (KAN-18 AC4)
     if (newReviews > 0) {
-      try {
-        const freshReviews = await prisma.review.findMany({
-          where: { linked_business: businessProfileId, created_date: { gte: new Date(startTime) } },
-          select: { id: true },
-        });
-        for (const rev of freshReviews) {
-          publishEvent({
-            businessId: businessProfileId,
-            eventType:  'new_review',
-            source:     'collectReviews',
-            payload:    { review_id: rev.id, google_added: googleAdded },
-            contextAttrs: { impact: googleAdded > 0 ? 'medium' : 'low' },
-          }).catch(() => {});
-        }
-      } catch (_) {}
+      await publishNewReviewEvents(businessProfileId, startTime, {
+        source: 'collectReviews',
+        extraPayload: { google_added: googleAdded },
+        impact: googleAdded > 0 ? 'medium' : 'low',
+      });
     }
+
     // Backfill own reviews that lack topic_sentiment (pre-extraction era or truncated batch)
-    const ownUntopiced = await prisma.review.findMany({
-      where: {
-        linked_business: businessProfileId,
-        OR: [{ topic_sentiment: null }, { topic_sentiment: '{}' }],
-      },
-      select: { id: true, text: true },
-      take: 30,
-    }) as Array<{ id: string; text: string }>;
-    if (ownUntopiced.length > 0) {
-      const eligible = ownUntopiced.filter(r => ((r as any).text || '').length >= 5);
-      if (eligible.length > 0) {
-        const backfill = await batchExtractTopics(
-          eligible.map(r => ({ text: (r as any).text })),
-          undefined,
-          topicSet,
-        );
-        for (let i = 0; i < eligible.length; i++) {
-          const { topics, topic_sentiment } = backfill[i];
-          if (!topics) continue;
-          await prisma.review.update({
-            where: { id: eligible[i].id },
-            data: { topics, topic_sentiment },
-          }).catch(() => {});
-        }
-      }
-    }
+    await backfillTopicsFor({ linked_business: businessProfileId }, topicSet);
 
     // Auto-trigger competitor review collection in background (KAN-127)
     runCollectCompetitorReviews(businessProfileId).catch(e =>
       console.error('[collectReviews] background competitor ingest failed:', e.message)
     );
 
-    return res.json({ new_reviews: newReviews, google_reviews_added: googleAdded, sources_scanned: sourcesToScan.length + (googleAdded > 0 ? 1 : 0), gmb_path: gmbPathResult });
+    return res.json({
+      new_reviews: newReviews,
+      google_reviews_added: googleAdded,
+      sources_scanned: sourcesToScan.length + (googleAdded > 0 ? 1 : 0),
+      gmb_path: gmbPathResult,
+      dataforseo_task_pending: dataforseoTaskPending,
+    });
   } catch (err: any) {
     console.error('collectReviews error:', err.message);
     await writeAutomationLog('collectReviews', businessProfileId, startTime, 0, 'failed', err.message, popCost(businessProfileId));

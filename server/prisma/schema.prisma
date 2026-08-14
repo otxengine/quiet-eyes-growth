@@ -381,6 +381,23 @@ model AutomationLog {
   @@map("automation_logs")
 }
 
+model DataForSeoReviewTask {
+  id                   String    @id @default(cuid())
+  task_id              String    @unique
+  task_type            String    // 'own' | 'competitor'
+  business_profile_id  String
+  linked_competitor    String?
+  status               String    @default("pending") // 'pending' | 'complete' | 'error'
+  requested_at         DateTime  @default(now())
+  completed_at         DateTime?
+  error_message        String?
+  cost_usd             Float?
+  new_reviews_count    Int?
+
+  @@index([status, requested_at])
+  @@map("dataforseo_review_tasks")
+}
+
 model WeeklyReport {
   id              String   @id @default(cuid())
   created_date    DateTime @default(now())

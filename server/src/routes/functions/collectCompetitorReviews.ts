@@ -4,11 +4,15 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { findPlaceId, getPlaceDetails } from '../../lib/googlePlaces';
 import { normReviewOrigin } from '../../lib/signalGuard';
 import { serpGoogleMapsReviews, firstValidDate } from '../../lib/serpapi';
+import { submitGoogleReviewsTask, hasDataForSeoCreds } from '../../lib/dataforseo';
 import { batchExtractTopics } from '../../lib/reviewTaxonomy';
 import { getSectorProfile } from '../../lib/businessProfile';
 import { resolveTopicSet } from '../../lib/reviewTopicPacks';
+import { backfillTopicsFor } from '../../lib/reviewPostProcessing';
 
 const MAX_REVIEWS = 300;
+const DATAFORSEO_REVIEWS_ENABLED = process.env.DATAFORSEO_REVIEWS_ENABLED === 'true';
+const SERVER_BASE_URL = process.env.SERVER_BASE_URL || 'http://localhost:3007';
 
 /**
  * KAN-121 — Competitor Google review ingest.
@@ -34,6 +38,7 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
     });
 
     let totalNew = 0;
+    let tasksSubmitted = 0;
     const perCompetitor: Array<{ name: string; new: number }> = [];
 
     for (const comp of competitors) {
@@ -58,8 +63,33 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
       const existingIds  = new Set(existing.map(r => r.google_review_id).filter(Boolean));
       const existingKeys = new Set(existing.map(r => (r.text || '').substring(0, 50)));
 
-      // Path 1: SerpAPI (paginated, up to 300) — active when SERPAPI_KEY is set
-      let rawReviews: any[] = await serpGoogleMapsReviews(placeId, MAX_REVIEWS);
+      // Path 1a: DataForSEO reviews task — async (task_post → postback), never returns
+      // reviews inline; results are written by the postback handler when the task completes.
+      if (DATAFORSEO_REVIEWS_ENABLED && hasDataForSeoCreds()) {
+        try {
+          const { taskId, costUsd } = await submitGoogleReviewsTask({
+            placeId,
+            depth:       Number(process.env.DATAFORSEO_REVIEWS_DEPTH_COMPETITOR) || 300,
+            sortBy:      'newest',
+            postbackUrl: `${SERVER_BASE_URL}/api/webhooks/dataforseo?secret=${process.env.DATAFORSEO_WEBHOOK_SECRET || ''}`,
+            tag:         comp.id,
+          });
+          if (taskId) {
+            await prisma.dataForSeoReviewTask.create({
+              data: {
+                task_id: taskId, task_type: 'competitor', business_profile_id: businessProfileId,
+                linked_competitor: comp.id, cost_usd: costUsd,
+              },
+            });
+            tasksSubmitted++;
+          }
+        } catch (err: any) {
+          console.warn('[collectCompetitorReviews] DataForSEO reviews task_post failed:', err.message);
+        }
+      }
+
+      // Path 1b: SerpAPI (paginated, up to 300) — active when DataForSEO is disabled
+      let rawReviews: any[] = DATAFORSEO_REVIEWS_ENABLED ? [] : await serpGoogleMapsReviews(placeId, MAX_REVIEWS);
 
       // Path 2: Google Places API fallback (≤5 reviews, always available)
       if (rawReviews.length === 0) {
@@ -135,38 +165,12 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
       // Backfill: existing reviews that were stored before topic extraction was added.
       // Runs every pass regardless of `pending.length`, since collection is dedup'd and
       // most passes find zero new reviews once a competitor is fully synced.
-      const untopiced = await (prisma.review as any).findMany({
-        where: {
-          linked_competitor: comp.id,
-          OR: [{ topic_sentiment: null }, { topic_sentiment: '{}' }],
-        },
-        select: { id: true, text: true },
-        take: 30,
-      }) as Array<{ id: string; text: string }>;
-
-      if (untopiced.length > 0) {
-        const eligible = untopiced.filter((r: { text: string }) => (r.text || '').length >= 5);
-        if (eligible.length > 0) {
-          const backfillTopics = await batchExtractTopics(
-            eligible.map((r: { text: string }) => ({ text: r.text })),
-            undefined,
-            topicSet,
-          );
-          for (let i = 0; i < eligible.length; i++) {
-            const { topics, topic_sentiment } = backfillTopics[i];
-            if (!topics) continue;
-            await (prisma.review as any).update({
-              where: { id: eligible[i].id },
-              data: { topics, topic_sentiment },
-            }).catch(() => {});
-          }
-        }
-      }
+      await backfillTopicsFor({ linked_competitor: comp.id }, topicSet);
     }
 
     await writeAutomationLog('collectCompetitorReviews', businessProfileId, startTime, totalNew, 'success');
-    console.log(`collectCompetitorReviews done: ${totalNew} new reviews across ${competitors.length} competitors`);
-    return { total_new: totalNew, per_competitor: perCompetitor };
+    console.log(`collectCompetitorReviews done: ${totalNew} new reviews across ${competitors.length} competitors, ${tasksSubmitted} DataForSEO task(s) submitted`);
+    return { total_new: totalNew, per_competitor: perCompetitor, dataforseo_tasks_submitted: tasksSubmitted };
 }
 
 export async function collectCompetitorReviews(req: Request, res: Response) {

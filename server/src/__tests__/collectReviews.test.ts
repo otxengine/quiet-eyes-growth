@@ -13,6 +13,7 @@ import * as serpapi from '../lib/serpapi';
 jest.mock('../lib/serpapi', () => ({
   hasSerpApiKey:         jest.fn().mockReturnValue(false),
   serpGoogleMapsReviews: jest.fn().mockResolvedValue([]),
+  firstValidDate:        jest.fn((...c: any[]) => c.find((x: any) => x && !isNaN(new Date(x).getTime())) ?? null),
 }));
 
 jest.mock('../db', () => ({

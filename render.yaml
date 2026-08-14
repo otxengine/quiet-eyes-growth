@@ -64,6 +64,16 @@ services:
         sync: false
       - key: DATAFORSEO_PASSWORD
         sync: false
+      - key: DATAFORSEO_WEBHOOK_SECRET
+        sync: false
+      - key: DATAFORSEO_REVIEWS_ENABLED
+        value: "false"
+      - key: DATAFORSEO_REVIEWS_DEPTH_OWN
+        value: "100"
+      - key: DATAFORSEO_REVIEWS_DEPTH_COMPETITOR
+        value: "300"
+      - key: DATAFORSEO_RECONCILE_DISABLED
+        value: "false"
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY

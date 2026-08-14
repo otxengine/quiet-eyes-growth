@@ -36,6 +36,7 @@ jest.mock('../lib/googlePlaces', () => ({
 
 jest.mock('../lib/serpapi', () => ({
   serpGoogleMapsReviews: jest.fn(async () => []), // SERPAPI_KEY absent → returns []
+  firstValidDate: jest.fn((...c: any[]) => c.find((x: any) => x && !isNaN(new Date(x).getTime())) ?? null),
 }));
 
 jest.mock('../lib/llm', () => ({
