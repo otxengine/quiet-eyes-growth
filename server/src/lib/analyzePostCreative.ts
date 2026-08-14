@@ -10,7 +10,8 @@ export interface PostCreativeAnalysis {
   visual_hooks: string[];
   text_hooks: string[];
   style: string;
-  cta: string;
+  has_cta: boolean;
+  cta: string | null;
 }
 
 async function fetchImageBase64(url: string): Promise<{ data: string; mediaType: string } | null> {
@@ -45,7 +46,8 @@ export function normalizePostCreativeAnalysis(raw: any): PostCreativeAnalysis | 
     visual_hooks:  Array.isArray(raw.visual_hooks) ? raw.visual_hooks.filter((h: any) => typeof h === 'string') : [],
     text_hooks:    Array.isArray(raw.text_hooks) ? raw.text_hooks.filter((h: any) => typeof h === 'string') : [],
     style:         typeof raw.style === 'string' ? raw.style : '',
-    cta:           typeof raw.cta === 'string' ? raw.cta : '',
+    has_cta:       !!raw.has_cta,
+    cta:           typeof raw.cta === 'string' && raw.cta ? raw.cta : null,
   };
 }
 
@@ -86,7 +88,8 @@ Look at the attached image and the caption together. Return ONLY valid JSON. ALL
   "visual_hooks": ["visual elements that grab attention — colors, faces, product shots, text overlays"],
   "text_hooks": ["specific words/phrases in the caption or image text designed to grab attention"],
   "style": "overall creative style — e.g. 'מינימליסטי', 'צבעוני ואנרגטי', 'מקצועי'",
-  "cta": "the call to action — what the viewer is asked to do"
+  "has_cta": false,
+  "cta": "the call to action, ONLY if has_cta is true and it's a clear explicit instruction (e.g. 'הזמינו עכשיו', 'לפרטים בלינק בביו') — not just a vague sign-off. Otherwise null."
 }`,
     });
 

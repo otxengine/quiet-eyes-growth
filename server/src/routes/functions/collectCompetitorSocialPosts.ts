@@ -66,8 +66,10 @@ async function scrapeAndSave(
       const analysis = await analyzePostCreative({ caption, platform, mediaUrl });
       if (analysis) {
         await (prisma as any).$executeRawUnsafe(
-          `UPDATE competitor_posts SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW() WHERE id = $2`,
+          `UPDATE competitor_posts SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW(), has_offer = $2, has_cta = $3 WHERE id = $4`,
           pgHex(JSON.stringify(analysis)) ?? '',
+          analysis.has_offer,
+          analysis.has_cta,
           id,
         );
       }
@@ -293,7 +295,7 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
     const allCompetitors = await prisma.competitor.findMany({
       where: { linked_business: businessProfileId },
     });
-    const competitors = allCompetitors.filter((c: any) => !c.not_relevant);
+    const competitors = allCompetitors.filter((c: any) => !c.not_relevant && c.tracking_status === 'approved');
 
     // One-time backfill: repair posts missing linked_business
     for (const comp of competitors) {

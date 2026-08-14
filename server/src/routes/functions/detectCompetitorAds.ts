@@ -112,7 +112,7 @@ export async function detectCompetitorAds(req: Request, res: Response) {
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
     const competitors = await prisma.competitor.findMany({
-      where: { linked_business: businessProfileId },
+      where: { linked_business: businessProfileId, not_relevant: false, tracking_status: 'approved' },
       orderBy: { last_scanned: 'asc' },
       take: 6,
     });
@@ -205,8 +205,8 @@ export async function detectCompetitorAds(req: Request, res: Response) {
             });
             if (creative) {
               await (prisma as any).$executeRawUnsafe(
-                `UPDATE "competitor_ad_history" SET analysis=$1, analyzed_at=NOW() WHERE id=$2`,
-                JSON.stringify(creative), row.id,
+                `UPDATE "competitor_ad_history" SET analysis=$1, analyzed_at=NOW(), has_offer=$2, has_cta=$3 WHERE id=$4`,
+                JSON.stringify(creative), creative.has_offer, creative.has_cta, row.id,
               ).catch(() => {});
             }
           } catch (analysisErr: any) {

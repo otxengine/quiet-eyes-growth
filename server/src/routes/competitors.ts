@@ -38,7 +38,7 @@ router.get('/social/feed', async (req: Request, res: Response) => {
       const posts = await (prisma as any).$queryRawUnsafe(
         `SELECT id, competitor_id, platform, external_post_id, post_url, caption,
                 media_url, posted_at, likes, comments_count, first_seen_at, last_seen_at,
-                analysis, analyzed_at
+                analysis, analyzed_at, has_offer, has_cta
          FROM competitor_posts WHERE ${postWhereSql}
          ORDER BY "posted_at" DESC NULLS LAST LIMIT 50`,
         ...postParams,
@@ -167,7 +167,7 @@ router.get('/social/ads/history', async (req: Request, res: Response) => {
     const ads = await (prisma as any).$queryRawUnsafe(
       `SELECT id, competitor_id, platform, external_ad_id, content_hash,
               title, body, cta, link, media_url, video_url, page_name, start_date, end_date,
-              first_seen_at, last_seen_at, is_active, analysis, analyzed_at
+              first_seen_at, last_seen_at, is_active, analysis, analyzed_at, has_offer, has_cta
        FROM competitor_ad_history WHERE ${adWhereSql}
        ORDER BY ${orderByAd}`,
       ...adParams,

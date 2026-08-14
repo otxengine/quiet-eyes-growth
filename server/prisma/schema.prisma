@@ -239,6 +239,7 @@ model Competitor {
   opening_hours        String?
   recent_reviews_summary String?
   is_dismissed         Boolean? @default(false)
+  tracking_status      String?  @default("pending_review") // 'pending_review' | 'approved' | 'rejected' — onboarding review gate for deep research
   // ── Social page discovery & monitoring ──────────────────────────────────
   website_url              String?  // competitor website (populated by identification agent)
   instagram_url            String?  // discovered from website or Tavily
@@ -1002,8 +1003,10 @@ model CompetitorPost {
   comments_count    Int?
   first_seen_at     DateTime  @default(now())
   last_seen_at      DateTime  @default(now())
-  analysis          String?   // JSON: {topic, has_offer, offer_details, visual_hooks, text_hooks, style, cta}
+  analysis          String?   // JSON: {topic, has_offer, offer_details, visual_hooks, text_hooks, style, has_cta, cta}
   analyzed_at       DateTime?
+  has_offer         Boolean?  // null = not yet analyzed
+  has_cta           Boolean?
 
   @@index([linked_business, competitor_id, posted_at])
   @@unique([competitor_id, platform, external_post_id])
@@ -1030,8 +1033,10 @@ model CompetitorAdHistory {
   first_seen_at   DateTime  @default(now())
   last_seen_at    DateTime  @default(now())
   is_active       Boolean   @default(true)
-  analysis        String?   // JSON: {topic, has_offer, offer_details, visual_hooks, text_hooks, style, cta}
+  analysis        String?   // JSON: {topic, has_offer, offer_details, visual_hooks, text_hooks, style, has_cta, cta}
   analyzed_at     DateTime?
+  has_offer       Boolean?  // null = not yet analyzed
+  has_cta         Boolean?
 
   @@index([competitor_id, last_seen_at])
   @@unique([competitor_id, platform, external_ad_id])

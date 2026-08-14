@@ -21,6 +21,7 @@ describe('normalizePostCreativeAnalysis', () => {
       visual_hooks: ['צבעים בהירים', 'תמונת מוצר'],
       text_hooks: ['רק היום'],
       style: 'צבעוני',
+      has_cta: true,
       cta: 'הזמינו עכשיו',
     });
     expect(result).toEqual({
@@ -30,6 +31,7 @@ describe('normalizePostCreativeAnalysis', () => {
       visual_hooks: ['צבעים בהירים', 'תמונת מוצר'],
       text_hooks: ['רק היום'],
       style: 'צבעוני',
+      has_cta: true,
       cta: 'הזמינו עכשיו',
     });
   });
@@ -43,14 +45,17 @@ describe('normalizePostCreativeAnalysis', () => {
       visual_hooks: [],
       text_hooks: [],
       style: '',
-      cta: '',
+      has_cta: false,
+      cta: null,
     });
   });
 
-  it('coerces has_offer to a real boolean and drops empty offer_details', () => {
-    const result = normalizePostCreativeAnalysis({ has_offer: 'yes', offer_details: '' });
+  it('coerces has_offer/has_cta to real booleans and drops empty text fields', () => {
+    const result = normalizePostCreativeAnalysis({ has_offer: 'yes', offer_details: '', has_cta: 1, cta: '' });
     expect(result?.has_offer).toBe(true);
     expect(result?.offer_details).toBeNull();
+    expect(result?.has_cta).toBe(true);
+    expect(result?.cta).toBeNull();
   });
 
   it('filters non-string entries out of hook arrays', () => {
