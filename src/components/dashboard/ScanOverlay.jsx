@@ -41,6 +41,7 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
     alerts: 0, advisory: 0, predictions: 0, analyze: 0,
   });
   const [done, setDone]           = useState(false);
+  const [dataforseoPending, setDataforseoPending] = useState(false);
   const cancelledRef = useRef(false);
 
   useEffect(() => {
@@ -67,6 +68,7 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
             try {
               const res = await base44.functions.invoke(step.fn, step.force ? { ...params, force: true } : params);
               finalResults[step.key] = res.data?.[step.resultKey] || 0;
+              if (res.data?.dataforseo_task_pending) setDataforseoPending(true);
             } catch (e) {
               console.error(`${step.fn} failed:`, e);
               finalResults[step.key] = 0;
@@ -112,6 +114,7 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
             predictions:  r.runPredictions?.predictions_created || 0,
             analyze:      r.synthesizeMarketInsights?.insights_generated || 0,
           });
+          setDataforseoPending(!!r.collectReviews?.dataforseo_task_pending);
           setLabelIdx(SCAN_LABELS.length - 1);
           setCurrentStep(SCAN_LABELS.length - 1);
           setDone(true);
@@ -193,6 +196,12 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
               ? <p className="text-[11px] text-foreground-muted leading-relaxed">{summary}</p>
               : <p className="text-[11px] text-foreground-muted">הנתונים עודכנו</p>
             }
+            {dataforseoPending && (
+              <p className="text-[10px] text-primary flex items-center justify-center gap-1 mt-1.5">
+                <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                ביקורות גוגל נוספות עדיין נטענות ברקע — יופיעו תוך מספר דקות
+              </p>
+            )}
             <p className="text-[10px] text-foreground-muted opacity-40 mt-1">
               {new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
             </p>
