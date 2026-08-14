@@ -83,6 +83,11 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
   // concatenate all of them rather than only reading result[0].
   const items: any[] = (task?.result ?? []).flatMap((r: any) => r?.items ?? []);
   console.log(`[dataforseo webhook] task ${taskId} (${taskRow.task_type}): received ${items.length} raw items across ${task?.result?.length ?? 0} result chunk(s), cost=$${costUsd}`);
+  if (items[0]) {
+    // TEMP debug — confirm DataForSEO's actual review item field names, then remove.
+    console.log(`[dataforseo webhook] sample item keys: ${Object.keys(items[0]).join(', ')}`);
+    console.log(`[dataforseo webhook] sample item: ${JSON.stringify(items[0]).substring(0, 1500)}`);
+  }
   const startTime = taskRow.requested_at.toISOString();
 
   const profile = await prisma.businessProfile.findFirst({ where: { id: taskRow.business_profile_id } });
