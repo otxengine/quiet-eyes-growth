@@ -273,6 +273,9 @@ model Competitor {
   ad_spend_signal          String?  // 'low'|'medium'|'high' — based on platform count + ad count
   ad_gaps                  String?  // what they're NOT advertising = our opportunity
   ad_intel_updated_at      String?  // when Claude last analyzed their ads
+  // ── Deep social content analysis (grounded in per-post analysis JSON) ───
+  social_deep_analysis     String?  // JSON: {visual_identity, content_pillars, hook_patterns, cta_strategy, promotion_pattern, caption_patterns, ad_messaging, top_content_insight, our_opportunity}
+  social_deep_analysis_at  String?  // ISO timestamp
   not_relevant             Boolean? @default(false)
   not_relevant_reason      String?
   google_place_id          String?  // KAN-121: place_id used for review ingest

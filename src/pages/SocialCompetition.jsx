@@ -125,8 +125,13 @@ function AdCard({ ad, onSelect }) {
   );
 }
 
+function parseDeepAnalysis(raw) {
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
 function AnalysisTab({ competitor, posts, bpId }) {
-  const [analysis, setAnalysis] = useState(null);
+  const [analysis, setAnalysis] = useState(() => parseDeepAnalysis(competitor.social_deep_analysis));
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState(null);
 
@@ -155,7 +160,7 @@ function AnalysisTab({ competitor, posts, bpId }) {
     try {
       const result = await base44.functions.invoke(
         'analyzeSocialPosts',
-        { competitorId: competitor.id, businessProfileId: bpId },
+        { competitorId: competitor.id, businessProfileId: bpId, force: true },
         60000,
       );
       setAnalysis(result?.data || result);
@@ -250,7 +255,7 @@ function AnalysisTab({ competitor, posts, bpId }) {
             onClick={handleGenerate}
             className="w-full py-2 text-xs border border-dashed border-border rounded-lg hover:bg-muted/50 text-muted-foreground transition-colors"
           >
-            ✨ צור ניתוח AI ({posts.length} פוסטים, {competitor.active_ad_count || 0} מודעות)
+            ✨ עדיין לא נותח (ינותח אוטומטית) — לחץ לניתוח מיידי ({posts.length} פוסטים, {competitor.active_ad_count || 0} מודעות)
           </button>
         )}
         {loading && (
@@ -264,8 +269,11 @@ function AnalysisTab({ competitor, posts, bpId }) {
             {[
               { key: 'visual_identity',     label: '🎨 זהות ויזואלית' },
               { key: 'content_pillars',     label: '📌 נושאי תוכן' },
+              { key: 'hook_patterns',       label: '🪝 דפוסי הוקים' },
+              { key: 'cta_strategy',        label: '📣 אסטרטגיית CTA' },
+              { key: 'promotion_pattern',   label: '🏷️ דפוס מבצעים' },
               { key: 'caption_patterns',    label: '✍️ סגנון כיתוב' },
-              { key: 'ad_messaging',        label: '📣 מסרים במודעות' },
+              { key: 'ad_messaging',        label: '📢 מסרים במודעות' },
               { key: 'top_content_insight', label: '🏆 תוכן מוביל' },
               { key: 'our_opportunity',     label: '💡 ההזדמנות שלנו' },
             ].map(({ key, label }) => {
@@ -278,7 +286,14 @@ function AnalysisTab({ competitor, posts, bpId }) {
                 </div>
               );
             })}
-            <button onClick={handleGenerate} className="text-[10px] text-muted-foreground underline">רענן ניתוח</button>
+            <div className="flex items-center gap-2">
+              <button onClick={handleGenerate} className="text-[10px] text-muted-foreground underline">רענן ניתוח</button>
+              {(analysis.analyzed_at || competitor.social_deep_analysis_at) && (
+                <span className="text-[10px] text-muted-foreground">
+                  עודכן {timeAgo(analysis.analyzed_at || competitor.social_deep_analysis_at)}
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>

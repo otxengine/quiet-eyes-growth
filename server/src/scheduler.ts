@@ -37,6 +37,7 @@ import { enrichCompetitorUrlsScheduled } from './routes/functions/enrichCompetit
 import { detectCompetitorChanges } from './routes/functions/detectCompetitorChanges';
 import { analyzeCompetitorSocial } from './routes/functions/analyzeCompetitorSocial';
 import { detectCompetitorAds } from './routes/functions/detectCompetitorAds';
+import { scheduledAnalyzeSocialPosts } from './routes/functions/analyzeSocialPosts';
 import { competitorMoveTracker } from './routes/functions/competitorMoveTracker';
 import { tiktokSectorTrendAgent } from './routes/functions/tiktokSectorTrendAgent';
 import { tiktokAudienceAgent } from './routes/functions/tiktokAudienceAgent';
@@ -226,6 +227,7 @@ export function startScheduler() {
     runAgentForAll('DetectCompetitorChanges',  detectCompetitorChanges);  // prices/promos/posts → MarketSignals (48h dedup)
     runAgentForAll('AnalyzeCompetitorSocial',   analyzeCompetitorSocial);   // social enrichment + promo/ads/product detection → new fields + alerts
     runAgentForAll('DetectCompetitorAds',       detectCompetitorAds);       // Meta/TikTok/Google paid ad campaigns → ProactiveAlerts
+    runAgentForAll('AnalyzeSocialPosts', scheduledAnalyzeSocialPosts); // deep content-strategy analysis, grounded in per-post vision analysis (48h/competitor guard)
     runAgentForAll('CompetitorIntel',           competitorIntelAgent);      // OSINT × events → ProactiveAlerts
     runAgentForAll('CompetitorMoveTracker',     competitorMoveTracker);     // DB-level moves → ProactiveAlerts
     // ── Social agents ────────────────────────────────────────────────────────
