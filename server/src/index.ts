@@ -430,6 +430,14 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS ad_gaps TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS ad_intel_updated_at TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS active_ads_summary TEXT`);
+  // ── Onboarding competitor review gate: pending_review | approved | rejected ──
+  // Order matters: add column WITHOUT a default first, backfill existing rows to
+  // 'approved' (preserves current cron behavior), THEN set the default — Postgres
+  // fast-defaults would otherwise materialize the default on existing rows too,
+  // making the backfill's WHERE tracking_status IS NULL match nothing.
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS tracking_status TEXT`);
+  await sql(`UPDATE competitors SET tracking_status = 'approved' WHERE tracking_status IS NULL`);
+  await sql(`ALTER TABLE competitors ALTER COLUMN tracking_status SET DEFAULT 'pending_review'`);
   // KAN-169/173: ensure competitor social tables exist with all required columns
   await sql(`CREATE TABLE IF NOT EXISTS competitor_ad_history (
     id              TEXT PRIMARY KEY,

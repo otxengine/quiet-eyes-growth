@@ -17,7 +17,7 @@ export default function OnboardingApproveIdentity() {
 
   if (!businessProfile) { navigate('/onboarding'); return null; }
 
-  const continueOn = () => navigate('/onboarding/insights', { state });
+  const continueOn = () => navigate('/onboarding/discover-competitors', { state });
 
   return (
     <div dir="rtl" className="min-h-screen py-8 px-4" style={BG_STYLE}>

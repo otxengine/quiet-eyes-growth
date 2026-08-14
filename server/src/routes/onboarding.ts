@@ -16,9 +16,14 @@ import { fetchWebsiteSource } from '../lib/websiteFetch';
 import { getPlaceDetails } from '../lib/googlePlaces';
 import { autoConfigOsint } from './functions/stubs';
 import { fetchSocialPageAbout } from '../lib/fetchSocialPageAbout';
+import { getUserId } from '../middleware/auth';
+import { getOrCreateOrgForProfile } from '../lib/orgHelpers';
+import { collectCompetitorSocialPosts } from './functions/collectCompetitorSocialPosts';
+import { detectCompetitorAds } from './functions/detectCompetitorAds';
 
 const logger = createLogger('Onboarding');
 const router = Router();
+const PAID_PLANS = new Set(['starter', 'growth', 'pro']);
 
 // §5.0/§5.2 identity draft — 9 keys shared by generate-about + approve-about
 const ABOUT_KEYS = ['business_name','sector_key','sub_sector_key','business_type','service_model','target_audience','relevant_topics','content_tone','business_description'];
@@ -371,6 +376,76 @@ router.post('/reject-about', async (req: Request, res: Response) => {
     return res.json({ ok: true, about_status: 'rejected' });
   } catch (err: any) {
     logger.warn(`reject-about failed for ${businessProfileId}: ${err.message}`);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ── POST /api/onboarding/select-plan ───────────────────────────────────────────
+// Onboarding plan step. Free: just stamp subscription_plan on the profile — no
+// org needed. Paid: ensure an org exists (none does yet for a brand-new profile)
+// seeded with the chosen plan, so the frontend's subsequent stripe/checkout call
+// has an orgId to work with instead of 404ing.
+router.post('/select-plan', async (req: Request, res: Response) => {
+  const { businessProfileId, planId } = req.body;
+  if (!businessProfileId || !planId) {
+    return res.status(400).json({ error: 'businessProfileId and planId required' });
+  }
+
+  try {
+    const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
+    if (!profile) return res.status(404).json({ error: 'Business not found' });
+
+    if (!PAID_PLANS.has(planId)) {
+      await prisma.businessProfile.update({
+        where: { id: businessProfileId },
+        data: { subscription_plan: 'free_trial' },
+      });
+      return res.json({ ok: true, requiresCheckout: false });
+    }
+
+    const userId = getUserId(req) || profile.created_by || 'dev-user';
+    const orgId = await getOrCreateOrgForProfile(profile, userId, planId);
+    return res.json({ ok: true, requiresCheckout: true, orgId });
+  } catch (err: any) {
+    logger.warn(`select-plan failed for ${businessProfileId}: ${err.message}`);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ── POST /api/onboarding/confirm-competitors ───────────────────────────────────
+// Bulk-applies the user's tracking selections after the discover-competitors
+// step, then fires deep research (post/ad scrape + vision analysis) for
+// approved competitors only — same fire-and-forget noopRes pattern as the
+// autoConfigOsint refresh in approve-about above.
+router.post('/confirm-competitors', async (req: Request, res: Response) => {
+  const { businessProfileId, approvedIds = [], rejectedIds = [] } = req.body;
+  if (!businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
+
+  try {
+    if (approvedIds.length) {
+      await prisma.competitor.updateMany({
+        where: { id: { in: approvedIds }, linked_business: businessProfileId },
+        data: { tracking_status: 'approved' },
+      });
+    }
+    if (rejectedIds.length) {
+      await prisma.competitor.updateMany({
+        where: { id: { in: rejectedIds }, linked_business: businessProfileId },
+        data: { tracking_status: 'rejected', is_dismissed: true },
+      });
+    }
+
+    const noopRes = { json: () => noopRes, status: () => noopRes } as unknown as Response;
+    if (approvedIds.length) {
+      collectCompetitorSocialPosts({ body: { businessProfileId, force: true } } as Request, noopRes)
+        .catch((err: any) => logger.warn(`confirm-competitors: collectCompetitorSocialPosts failed: ${err.message}`));
+      detectCompetitorAds({ body: { businessProfileId, force: true } } as Request, noopRes)
+        .catch((err: any) => logger.warn(`confirm-competitors: detectCompetitorAds failed: ${err.message}`));
+    }
+
+    return res.json({ ok: true, approved: approvedIds.length, rejected: rejectedIds.length });
+  } catch (err: any) {
+    logger.warn(`confirm-competitors failed for ${businessProfileId}: ${err.message}`);
     return res.status(500).json({ ok: false, error: err.message });
   }
 });

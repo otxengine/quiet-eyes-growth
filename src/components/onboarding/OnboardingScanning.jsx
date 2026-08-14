@@ -3,6 +3,21 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Check } from 'lucide-react';
 import KoriAvatar from './KoriAvatar';
+import { ONBOARDING_STATE_KEY } from './OnboardingSelectPlan';
+
+// Stripe redirects (select-plan -> checkout -> back here) lose React Router
+// state, so fall back to the snapshot OnboardingSelectPlan stashed before redirecting.
+function useOnboardingState(location) {
+  if (location.state?.businessProfile) return location.state;
+  const isStripeReturn = new URLSearchParams(window.location.search).get('success') === 'true';
+  if (!isStripeReturn) return {};
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(ONBOARDING_STATE_KEY) || 'null');
+    return saved || {};
+  } catch {
+    return {};
+  }
+}
 
 const API_BASE = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3007/api';
 
@@ -15,7 +30,6 @@ const scanSteps = [
   { fn: 'collectSocialSignals',    text: 'אוסף אותות מרשתות חברתיות...',   narrative: 'מנתח טרנדים רלוונטיים לעסק שלך...' },
   { fn: 'synthesizeMarketInsights', text: 'מנתח תובנות שוק...',              narrative: 'מזהה הזדמנויות ספציפיות לתחום שלך...', delay: 8000 },
   { fn: 'detectTrends',            text: 'מזהה מגמות בסקטור שלך...',        narrative: 'מה עולה בתחום שלך עכשיו?' },
-  { fn: 'runCompetitorIdentification', text: 'מזהה מתחרים רלוונטיים...',   narrative: 'מוצא את המתחרים האמיתיים שלך בלבד...', timeoutMs: 180000 },
   { fn: 'runLeadGeneration',       text: 'מחפש לידים פוטנציאליים...',       narrative: 'מחפש אנשים שמחפשים בדיוק מה שאתה מציע...' },
   { fn: 'enrichLeads',             text: 'מדרג ומעשיר לידים...',            narrative: 'בודק כל ליד לפי קריטריונים של הסקטור שלך...' },
   { fn: 'updateSectorKnowledge',   text: 'בונה ידע על הסקטור שלך...',       narrative: 'לומד מכל העסקים בתחום דומה...' },
@@ -38,8 +52,9 @@ export default function OnboardingScanning() {
   const [currentStep, setCurrentStep] = useState(0);
   const [statusText, setStatusText] = useState('מתחיל ניתוח העסק שלך...');
   const [narrativeText, setNarrativeText] = useState('');
-  const businessProfile = location.state?.businessProfile;
-  const onboardingData = location.state?.onboardingData || {};
+  const onboardingState = useOnboardingState(location);
+  const businessProfile = onboardingState.businessProfile;
+  const onboardingData = onboardingState.onboardingData || {};
   const ranRef = useRef(false);
 
   useEffect(() => {
@@ -48,6 +63,7 @@ export default function OnboardingScanning() {
       return;
     }
     ranRef.current = true;
+    sessionStorage.removeItem(ONBOARDING_STATE_KEY);
 
     const run = async () => {
       const bp = businessProfile;

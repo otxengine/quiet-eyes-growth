@@ -19,6 +19,7 @@ import { prisma } from '../db';
 import { getUserId } from '../middleware/auth';
 import { stripe, stripeEnabled } from '../lib/stripe';
 import { sendEmail, buildInviteEmail, FRONTEND_URL } from '../lib/email';
+import { getOrCreateOrgForProfile } from '../lib/orgHelpers';
 import crypto from 'crypto';
 
 type Params = Record<string, string>;
@@ -95,47 +96,24 @@ router.get('/my', async (req: Request, res: Response) => {
       where: { created_by: userId },
     }).catch(() => []);
 
-    // Auto-create org for orphan profiles
+    // Auto-create org for orphan profiles — seed with the profile's real plan
+    // instead of a hardcoded default, so legacy accounts aren't mislabeled.
     for (const profile of orphanProfiles) {
-      // Check if profile already linked to an org
       const linked = await prisma.$queryRawUnsafe<any[]>(
         `SELECT 1 FROM business_profiles WHERE id = $1 AND organization_id IS NOT NULL LIMIT 1`,
         profile.id,
       ).catch(() => []);
       if (linked?.length > 0) continue;
 
-      // Check if user already has an org from memberRows
-      const existingOrg = memberRows[0];
-      let orgId: string;
+      const planId = (profile as any).subscription_plan || (profile as any).plan_id || 'free_trial';
+      const orgId = await getOrCreateOrgForProfile(profile, userId, planId);
 
-      if (existingOrg) {
-        orgId = existingOrg.id;
-      } else {
-        // Create org
-        const newOrg = await prisma.$queryRawUnsafe<any[]>(
-          `INSERT INTO organizations (id, name, owner_user_id, is_agency, plan_id, branch_count, subscription_status, created_at)
-           VALUES (gen_random_uuid()::text, $1, $2, false, 'starter', 1, 'active', NOW())
-           RETURNING *`,
-          profile.name, userId,
-        );
-        orgId = newOrg[0].id;
-
-        // Add owner membership
-        await prisma.$executeRawUnsafe(
-          `INSERT INTO organization_members (id, org_id, user_id, role, status, invited_at)
-           VALUES (gen_random_uuid()::text, $1, $2, 'owner', 'active', NOW())
-           ON CONFLICT (org_id, user_id) DO NOTHING`,
-          orgId, userId,
-        );
-
-        memberRows.push({ ...newOrg[0], role: 'owner', branch_ids: null });
+      if (!memberRows.some((o) => o.id === orgId)) {
+        const orgRows = await prisma.$queryRawUnsafe<any[]>(
+          `SELECT * FROM organizations WHERE id = $1 LIMIT 1`, orgId,
+        ).catch(() => []);
+        if (orgRows?.[0]) memberRows.push({ ...orgRows[0], role: 'owner', branch_ids: null });
       }
-
-      // Link profile to org
-      await prisma.$executeRawUnsafe(
-        `UPDATE business_profiles SET organization_id = $1, branch_role = 'standalone' WHERE id = $2`,
-        orgId, profile.id,
-      );
     }
 
     // 3. Fetch branches for each org

@@ -257,7 +257,7 @@ export default function OnboardingForm() {
         onboarding_completed: false,
         created_at:          new Date().toISOString(),
       });
-      navigate('/onboarding/scanning', {
+      navigate('/onboarding/select-plan', {
         state: {
           businessProfile: profile,
           onboardingData: {

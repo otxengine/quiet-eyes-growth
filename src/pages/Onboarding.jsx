@@ -2,8 +2,10 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import OnboardingForm from '@/components/onboarding/OnboardingForm';
+import OnboardingSelectPlan from '@/components/onboarding/OnboardingSelectPlan';
 import OnboardingScanning from '@/components/onboarding/OnboardingScanning';
 import OnboardingApproveIdentity from '@/components/onboarding/OnboardingApproveIdentity';
+import OnboardingDiscoverCompetitors from '@/components/onboarding/OnboardingDiscoverCompetitors';
 import OnboardingInsights from '@/components/onboarding/OnboardingInsights';
 
 export default function Onboarding() {
@@ -30,8 +32,10 @@ export default function Onboarding() {
       </div>
       <Routes>
         <Route index element={<OnboardingForm />} />
+        <Route path="select-plan" element={<OnboardingSelectPlan />} />
         <Route path="scanning" element={<OnboardingScanning />} />
         <Route path="approve-identity" element={<OnboardingApproveIdentity />} />
+        <Route path="discover-competitors" element={<OnboardingDiscoverCompetitors />} />
         <Route path="insights" element={<OnboardingInsights />} />
         <Route path="*" element={<Navigate to="/onboarding" replace />} />
       </Routes>
