@@ -2,8 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { getCompetitorReviewInsightsData } from './getCompetitorReviewInsights';
-
-const GOOGLE_SOURCES = ['google_business_api', 'google_places', 'serp_google_maps_reviews'];
+import { GOOGLE_REVIEW_SOURCES as GOOGLE_SOURCES } from '../../lib/signalGuard';
 
 function summarizeTopics(reviews: { topic_sentiment: string | null }[]): string {
   const counts: Record<string, { pos: number; neg: number }> = {};

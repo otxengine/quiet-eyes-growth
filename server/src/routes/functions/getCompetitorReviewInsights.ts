@@ -2,8 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { computeThemeRollup } from './computeThemeRollup';
-
-const GOOGLE_SOURCES = ['google_business_api', 'google_places', 'serp_google_maps_reviews'];
+import { GOOGLE_REVIEW_SOURCES as GOOGLE_SOURCES } from '../../lib/signalGuard';
 
 async function computeReviewTrend(competitorId: string): Promise<string | null> {
   const now = new Date();

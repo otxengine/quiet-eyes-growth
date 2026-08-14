@@ -1,4 +1,5 @@
 import { prisma } from '../../db';
+import { GOOGLE_REVIEW_SOURCES } from '../../lib/signalGuard';
 
 export interface ThemeCount {
   theme: string;
@@ -7,8 +8,6 @@ export interface ThemeCount {
   neutral: number;
   total: number;
 }
-
-const GOOGLE_SOURCES = ['google_business_api', 'google_places', 'serp_google_maps_reviews'];
 
 /**
  * Aggregates topic_sentiment JSON blobs from reviews into per-topic polarity counts.
@@ -32,7 +31,7 @@ export async function computeThemeRollup(
         : { linked_business: businessProfileId }),
       created_date: { gte: since.toISOString() },
       topic_sentiment: { not: null },
-      ...(platformFilter === 'google' && { source_origin: { in: GOOGLE_SOURCES } }),
+      ...(platformFilter === 'google' && { source_origin: { in: GOOGLE_REVIEW_SOURCES } }),
     },
     select: { topic_sentiment: true },
   });

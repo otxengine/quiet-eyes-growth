@@ -43,4 +43,11 @@ describe('computeThemeRollup — KAN-124 AC1', () => {
     const result = await computeThemeRollup('bp-3');
     expect(result).toEqual([]);
   });
+
+  test('platformFilter=google includes dataforseo_google_reviews in the source_origin filter', async () => {
+    mockFindMany.mockResolvedValue([]);
+    await computeThemeRollup('bp-4', 90, 'google');
+    const where = mockFindMany.mock.calls[0][0].where;
+    expect(where.source_origin.in).toContain('dataforseo_google_reviews');
+  });
 });

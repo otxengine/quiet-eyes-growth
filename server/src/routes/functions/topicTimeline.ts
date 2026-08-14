@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
-
-const GOOGLE_SOURCES = ['google_business_api', 'google_places', 'serp_google_maps_reviews'];
+import { GOOGLE_REVIEW_SOURCES as GOOGLE_SOURCES } from '../../lib/signalGuard';
 
 interface TopicBucket { period: string; positive: number; negative: number }
 interface TopicSeries { topic_id: string; buckets: TopicBucket[] }
