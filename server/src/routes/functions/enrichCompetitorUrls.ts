@@ -143,9 +143,11 @@ export async function enrichCompetitorUrlsScheduled(req: Request, res: Response)
     const candidates = await prisma.competitor.findMany({
       where: {
         linked_business: businessProfileId,
-        website_url: { not: null },
+        // No website_url requirement — a competitor whose first enrichment attempt
+        // found nothing shouldn't be permanently excluded from catch-up.
         ...(force ? {} : {
           OR: [
+            { website_url: null },
             { instagram_url: null },
             { facebook_url: null },
             { tiktok_url: null },
@@ -154,7 +156,9 @@ export async function enrichCompetitorUrlsScheduled(req: Request, res: Response)
           ],
         }),
       },
-      orderBy: { social_pages_crawled_at: 'asc' },
+      // Postgres sorts NULL last in ASC order by default — without `nulls: 'first'`,
+      // never-crawled competitors get starved out of the top-N by already-crawled ones.
+      orderBy: { social_pages_crawled_at: { sort: 'asc', nulls: 'first' } },
       take: CATCH_UP_CAP,
       select: { id: true },
     });

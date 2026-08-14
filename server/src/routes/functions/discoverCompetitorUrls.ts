@@ -102,7 +102,9 @@ export async function discoverCompetitorUrls(req: Request, res: Response) {
 
     const competitors = await prisma.competitor.findMany({
       where: { linked_business: businessProfileId },
-      orderBy: { social_pages_crawled_at: 'asc' }, // least-recently crawled first
+      // Postgres sorts NULL last in ASC order by default — without `nulls: 'first'`,
+      // never-crawled competitors get starved out of the top-10 by already-crawled ones.
+      orderBy: { social_pages_crawled_at: { sort: 'asc', nulls: 'first' } },
       take: 10,
     });
 
