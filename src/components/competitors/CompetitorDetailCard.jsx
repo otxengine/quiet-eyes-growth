@@ -76,11 +76,29 @@ export default function CompetitorDetailCard({
   intelChanges = [],
   onDelete,
   onDismissed,
+  onApproved,
   onDeepAnalysis,
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [approving, setApproving] = useState(false);
   const comp = competitor;
   const initials = (comp.name || '??').substring(0, 2);
+  const pendingReview = comp.tracking_status === 'pending_review';
+
+  const approve = async (e) => {
+    e.stopPropagation();
+    setApproving(true);
+    try {
+      await base44.raw.post('/onboarding/confirm-competitors', {
+        businessProfileId, approvedIds: [comp.id], rejectedIds: [],
+      });
+      toast.success('המתחרה אושר למעקב');
+      onApproved?.();
+    } catch {
+      toast.error('שגיאה באישור מעקב');
+    }
+    setApproving(false);
+  };
 
   const firstName = (comp.name || '').split(' ')[0].toLowerCase();
   const intelAlert = intelChanges.find(c =>
@@ -113,6 +131,11 @@ export default function CompetitorDetailCard({
               {comp.current_promotions && promoFresh && (
                 <span className="px-1.5 py-0.5 rounded-full text-[8px] font-bold bg-orange-50 border border-orange-200 text-orange-700 flex-shrink-0">
                   מבצע פעיל
+                </span>
+              )}
+              {pendingReview && (
+                <span className="px-1.5 py-0.5 rounded-full text-[8px] font-bold bg-amber-50 border border-amber-200 text-amber-700 flex-shrink-0">
+                  ממתין לאישור מעקב
                 </span>
               )}
             </div>
@@ -326,6 +349,15 @@ export default function CompetitorDetailCard({
               </a>
             )}
             <div className="flex-1" />
+            {pendingReview && (
+              <button
+                onClick={approve}
+                disabled={approving}
+                className="flex items-center gap-1 text-[10px] text-primary hover:opacity-75 transition-opacity disabled:opacity-40"
+              >
+                <Check className="w-3 h-3" /> {approving ? 'מאשר...' : 'אשר מעקב'}
+              </button>
+            )}
             <DismissMenu
               entityType="competitor"
               entityId={comp.id}

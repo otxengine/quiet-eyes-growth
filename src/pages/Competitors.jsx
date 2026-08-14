@@ -256,6 +256,7 @@ export default function Competitors() {
               intelChanges={changes}
               onDelete={handleDelete}
               onDismissed={() => queryClient.invalidateQueries({ queryKey: ['competitorsPage', bpId] })}
+              onApproved={() => queryClient.invalidateQueries({ queryKey: ['competitorsPage', bpId] })}
               onDeepAnalysis={id => setSelectedCompetitorId(v => v === id ? null : id)}
             />
           ))}
