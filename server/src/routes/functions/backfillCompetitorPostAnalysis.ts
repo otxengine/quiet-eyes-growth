@@ -16,17 +16,20 @@ function pgHex(s: string): string {
  * already in the DB (scraped before the creative-analysis feature existed,
  * or whose analysis call failed at scrape time) without re-scraping anything.
  *
- * Body: { businessProfileId }
+ * Body: { businessProfileId, force? }
+ * force: true re-analyzes rows that already have analyzed_at set too (e.g. after
+ * a prompt/schema change) instead of only ones that were never analyzed.
  */
 export async function backfillCompetitorPostAnalysis(req: Request, res: Response) {
-  const { businessProfileId } = req.body;
+  const { businessProfileId, force } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
   try {
     const posts = await (prisma as any).$queryRawUnsafe(
       `SELECT p.id, p.caption, p.media_url, p.platform FROM competitor_posts p
        JOIN competitors c ON c.id = p.competitor_id
-       WHERE p.linked_business = $1 AND p.analyzed_at IS NULL AND p.media_url IS NOT NULL
+       WHERE p.linked_business = $1 AND p.media_url IS NOT NULL
+         ${force ? '' : 'AND p.analyzed_at IS NULL'}
          AND c.tracking_status = 'approved'
        LIMIT ${BATCH_LIMIT}`,
       businessProfileId,
@@ -50,7 +53,8 @@ export async function backfillCompetitorPostAnalysis(req: Request, res: Response
     const ads = await (prisma as any).$queryRawUnsafe(
       `SELECT a.id, a.title, a.body, a.cta, a.media_url, a.platform FROM "competitor_ad_history" a
        JOIN competitors c ON c.id = a.competitor_id
-       WHERE a.linked_business = $1 AND a.analyzed_at IS NULL AND a.media_url IS NOT NULL
+       WHERE a.linked_business = $1 AND a.media_url IS NOT NULL
+         ${force ? '' : 'AND a.analyzed_at IS NULL'}
          AND c.tracking_status = 'approved'
        LIMIT ${BATCH_LIMIT}`,
       businessProfileId,
