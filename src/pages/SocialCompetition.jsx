@@ -51,6 +51,16 @@ function getDefaultSection(posts, ads) {
   return 'feed';
 }
 
+const ANALYSIS_FIELDS = [
+  { key: 'topic',         label: '📌 נושא' },
+  { key: 'has_offer',     label: '🏷️ מבצע/הנחה' },
+  { key: 'offer_details', label: '💰 פרטי המבצע' },
+  { key: 'style',         label: '🎨 סגנון' },
+  { key: 'cta',           label: '📣 קריאה לפעולה' },
+  { key: 'text_hooks',    label: '✍️ הוקים טקסטואליים' },
+  { key: 'visual_hooks',  label: '🖼️ הוקים ויזואליים' },
+];
+
 function AnalysisBlock({ raw }) {
   if (!raw) return null;
   let a;
@@ -59,28 +69,19 @@ function AnalysisBlock({ raw }) {
   return (
     <div className="border-t pt-3 space-y-2">
       <p className="text-[10px] font-semibold text-muted-foreground">ניתוח AI</p>
-      {a.topic && <p className="text-sm font-medium">{a.topic}</p>}
-      <div className="flex flex-wrap gap-1.5">
-        {a.has_offer && (
-          <span className="inline-block bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded">
-            🏷️ {a.offer_details || 'מבצע פעיל'}
-          </span>
-        )}
-        {a.cta && (
-          <span className="inline-block bg-primary/10 text-primary text-xs px-2 py-0.5 rounded">{a.cta}</span>
-        )}
-      </div>
-      {a.style && <p className="text-xs text-muted-foreground">סגנון: {a.style}</p>}
-      {(a.text_hooks?.length > 0 || a.visual_hooks?.length > 0) && (
-        <div className="flex flex-wrap gap-1">
-          {a.text_hooks?.map((h, i) => (
-            <span key={`t${i}`} className="bg-gray-100 text-gray-700 text-[11px] px-1.5 py-0.5 rounded">✍️ {h}</span>
-          ))}
-          {a.visual_hooks?.map((h, i) => (
-            <span key={`v${i}`} className="bg-gray-100 text-gray-700 text-[11px] px-1.5 py-0.5 rounded">🎨 {h}</span>
-          ))}
-        </div>
-      )}
+      {ANALYSIS_FIELDS.map(({ key, label }) => {
+        const val = a[key];
+        if (val == null || val === '' || (Array.isArray(val) && val.length === 0)) return null;
+        const display = key === 'has_offer' ? (val ? 'כן' : 'לא')
+          : Array.isArray(val) ? val.join(' • ')
+          : String(val);
+        return (
+          <div key={key} className="bg-muted/40 rounded-lg p-2.5 space-y-0.5">
+            <p className="text-[10px] font-semibold text-muted-foreground">{label}</p>
+            <p className="text-xs leading-relaxed">{display}</p>
+          </div>
+        );
+      })}
     </div>
   );
 }
