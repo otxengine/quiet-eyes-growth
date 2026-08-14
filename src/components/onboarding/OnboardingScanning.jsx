@@ -29,12 +29,9 @@ const scanSteps = [
   { fn: 'collectWebSignals',       text: 'סורק את השוק ברשת...',            narrative: 'מחפש מה לקוחות מדברים על הסקטור שלך...' },
   { fn: 'collectSocialSignals',    text: 'אוסף אותות מרשתות חברתיות...',   narrative: 'מנתח טרנדים רלוונטיים לעסק שלך...' },
   { fn: 'synthesizeMarketInsights', text: 'מנתח תובנות שוק...',              narrative: 'מזהה הזדמנויות ספציפיות לתחום שלך...', delay: 8000 },
-  { fn: 'detectTrends',            text: 'מזהה מגמות בסקטור שלך...',        narrative: 'מה עולה בתחום שלך עכשיו?' },
   { fn: 'runLeadGeneration',       text: 'מחפש לידים פוטנציאליים...',       narrative: 'מחפש אנשים שמחפשים בדיוק מה שאתה מציע...' },
   { fn: 'enrichLeads',             text: 'מדרג ומעשיר לידים...',            narrative: 'בודק כל ליד לפי קריטריונים של הסקטור שלך...' },
   { fn: 'updateSectorKnowledge',   text: 'בונה ידע על הסקטור שלך...',       narrative: 'לומד מכל העסקים בתחום דומה...' },
-  { fn: 'runPredictions',          text: 'מייצר תחזיות אישיות...',          narrative: 'צופה קדימה בהתאם לתחום ולעונה...', delay: 5000 },
-  { fn: 'calculateHealthScore',    text: 'מחשב אינדקס בריאות עסקית...',    narrative: 'מדד עולמי שבנוי בדיוק לתחום שלך...' },
   { fn: 'generateProactiveAlerts', text: 'מייצר המלצות ראשונות...',         narrative: 'רק תובנות שרלוונטיות לעסק שלך בדיוק...' },
 ];
 
