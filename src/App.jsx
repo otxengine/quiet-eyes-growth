@@ -54,6 +54,7 @@ import Approvals from '@/pages/Approvals.jsx';
 import EventBusDashboard from '@/pages/EventBusDashboard.jsx';
 import SocialComments from '@/pages/SocialComments.jsx';
 import SocialCompetition from '@/pages/SocialCompetition.jsx';
+import CompetitorsOffers from '@/pages/CompetitorsOffers.jsx';
 import DevUserSwitcher from '@/components/DevUserSwitcher';
 import OrganizationSettings from '@/pages/OrganizationSettings.jsx';
 import AgencyDashboard from '@/pages/AgencyDashboard.jsx';
@@ -162,6 +163,7 @@ const AuthenticatedApp = () => {
         <Route path="/reviews/compare" element={<ReviewsCompare />} />
         <Route path="/social-comments" element={<SocialComments />} />
         <Route path="/social-competition" element={<SocialCompetition />} />
+        <Route path="/competitors-offers" element={<CompetitorsOffers />} />
         <Route path="/leads" element={<Leads />} />
         <Route path="/retention" element={<Retention />} />
         <Route path="/reports" element={<Reports />} />

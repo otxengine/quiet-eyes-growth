@@ -5,7 +5,7 @@ import {
   ChevronRight, LogOut,
   Building2, GitBranch, User,
   Eye, Settings, Star, Users,
-  Calendar, Megaphone, Lightbulb, Home, CreditCard
+  Calendar, Megaphone, Lightbulb, Home, CreditCard, Percent
 } from 'lucide-react';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { cn } from '@/lib/utils';
@@ -19,6 +19,7 @@ const NAV_STRUCTURE = [
   { path: '/events',             label: 'אירועים',       icon: Calendar },
   { path: '/reviews',            label: 'מוניטין',        icon: Star, badgeKey: 'pendingReviews' },
   { path: '/social-competition', label: 'תחרות סושיאל',  icon: Users },
+  { path: '/competitors-offers', label: 'מבצעי מתחרים',  icon: Percent },
 ];
 
 export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, user }) {

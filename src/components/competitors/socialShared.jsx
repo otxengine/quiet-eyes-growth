@@ -1,0 +1,171 @@
+import { ExternalLink } from 'lucide-react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+
+export const PLATFORM_LABELS = { instagram: 'אינסטגרם', facebook: 'פייסבוק', tiktok: 'טיקטוק' };
+export const PLATFORM_COLORS = {
+  instagram: 'bg-pink-100 text-pink-700',
+  facebook:  'bg-blue-100 text-blue-700',
+  tiktok:    'bg-gray-100 text-gray-800',
+};
+
+export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+export async function apiFetch(path) {
+  const token = window.__clerk?.session ? await window.__clerk.session.getToken().catch(() => null) : null;
+  const headers = token
+    ? { Authorization: `Bearer ${token}` }
+    : { 'x-dev-user': localStorage.getItem('dev_user_id') || 'dev-user' };
+  const res = await fetch(`${API_BASE}${path}`, { headers });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export function timeAgo(dateStr) {
+  if (!dateStr) return '—';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const d = Math.floor(diff / 86400000);
+  if (d === 0) return 'היום';
+  if (d === 1) return 'אתמול';
+  if (d < 30)  return `לפני ${d} ימים`;
+  return `לפני ${Math.floor(d / 30)} חודשים`;
+}
+
+export function fmtDate(dateStr) {
+  if (!dateStr) return null;
+  return new Date(dateStr).toLocaleDateString('he-IL');
+}
+
+export const ANALYSIS_FIELDS = [
+  { key: 'topic',         label: '📌 נושא' },
+  { key: 'has_offer',     label: '🏷️ מבצע/הנחה' },
+  { key: 'offer_details', label: '💰 פרטי המבצע' },
+  { key: 'style',         label: '🎨 סגנון' },
+  { key: 'cta',           label: '📣 קריאה לפעולה' },
+  { key: 'text_hooks',    label: '✍️ הוקים טקסטואליים' },
+  { key: 'visual_hooks',  label: '🖼️ הוקים ויזואליים' },
+];
+
+export function AnalysisBlock({ raw }) {
+  if (!raw) return null;
+  let a;
+  try { a = JSON.parse(raw); } catch { return null; }
+  if (!a) return null;
+  return (
+    <div className="border-t pt-3 space-y-2">
+      <p className="text-[10px] font-semibold text-muted-foreground">ניתוח AI</p>
+      {ANALYSIS_FIELDS.map(({ key, label }) => {
+        const val = a[key];
+        if (val == null || val === '' || (Array.isArray(val) && val.length === 0)) return null;
+        const display = key === 'has_offer' ? (val ? 'כן' : 'לא')
+          : Array.isArray(val) ? val.join(' • ')
+          : String(val);
+        return (
+          <div key={key} className="bg-muted/40 rounded-lg p-2.5 space-y-0.5">
+            <p className="text-[10px] font-semibold text-muted-foreground">{label}</p>
+            <p className="text-xs leading-relaxed">{display}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function PostDetailModal({ post, onClose }) {
+  if (!post) return null;
+  return (
+    <Dialog open={!!post} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto p-0">
+        {post.media_url && (
+          <img
+            src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(post.media_url)}`}
+            alt=""
+            className="w-full max-h-64 object-cover"
+          />
+        )}
+        <div className="p-4 space-y-3">
+          <div className="flex items-center gap-2 text-xs flex-wrap">
+            <span className={`px-2 py-0.5 rounded ${PLATFORM_COLORS[post.platform] || 'bg-gray-100 text-gray-700'}`}>
+              {PLATFORM_LABELS[post.platform] || post.platform}
+            </span>
+            {post.posted_at && <span className="text-muted-foreground">{fmtDate(post.posted_at)}</span>}
+          </div>
+          {(post.likes != null || post.comments_count != null) && (
+            <div className="flex gap-3 text-sm">
+              {post.likes != null && <span>❤️ {post.likes.toLocaleString()}</span>}
+              {post.comments_count != null && <span>💬 {post.comments_count.toLocaleString()}</span>}
+            </div>
+          )}
+          {post.caption && (
+            <p className="text-sm leading-relaxed whitespace-pre-wrap">{post.caption}</p>
+          )}
+          <AnalysisBlock raw={post.analysis} />
+          <div className="text-[11px] text-muted-foreground space-y-0.5">
+            {post.first_seen_at && <p>נראה לראשונה: {timeAgo(post.first_seen_at)}</p>}
+            {post.last_seen_at  && <p>נראה לאחרונה: {timeAgo(post.last_seen_at)}</p>}
+          </div>
+          {post.post_url && (
+            <a
+              href={post.post_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs text-primary underline"
+            >
+              <ExternalLink className="w-3 h-3" /> פתח פוסט מקורי
+            </a>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function AdDetailModal({ ad, onClose }) {
+  if (!ad) return null;
+  const thumb = ad.media_url || ad.video_url;
+  return (
+    <Dialog open={!!ad} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto p-0">
+        {thumb && (
+          <img
+            src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(thumb)}`}
+            alt=""
+            className="w-full max-h-64 object-cover"
+          />
+        )}
+        <div className="p-4 space-y-3">
+          <div className="flex items-center gap-2 text-xs flex-wrap">
+            <span className={`px-2 py-0.5 rounded ${PLATFORM_COLORS[ad.platform] || 'bg-gray-100 text-gray-700'}`}>
+              {PLATFORM_LABELS[ad.platform] || ad.platform}
+            </span>
+            {ad.is_active
+              ? <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded">פעיל</span>
+              : <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded">לא פעיל</span>
+            }
+            {ad.page_name && <span className="text-muted-foreground">{ad.page_name}</span>}
+          </div>
+          {ad.title && <p className="font-semibold text-sm">{ad.title}</p>}
+          {ad.body  && <p className="text-sm leading-relaxed whitespace-pre-wrap">{ad.body}</p>}
+          {ad.cta   && (
+            <span className="inline-block bg-primary/10 text-primary text-xs px-2 py-0.5 rounded">{ad.cta}</span>
+          )}
+          <AnalysisBlock raw={ad.analysis} />
+          <div className="text-[11px] text-muted-foreground space-y-0.5">
+            {ad.start_date    && <p>תחילת קמפיין: {fmtDate(ad.start_date)}</p>}
+            {ad.end_date      && <p>סיום קמפיין: {fmtDate(ad.end_date)}</p>}
+            {ad.first_seen_at && <p>נראה לראשונה: {timeAgo(ad.first_seen_at)}</p>}
+            {ad.last_seen_at  && <p>נראה לאחרונה: {timeAgo(ad.last_seen_at)}</p>}
+          </div>
+          {ad.link && (
+            <a
+              href={ad.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs text-primary underline"
+            >
+              <ExternalLink className="w-3 h-3" /> פתח מודעה מקורית
+            </a>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
