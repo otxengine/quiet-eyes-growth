@@ -183,7 +183,7 @@ export async function collectReviews(req: Request, res: Response) {
         if (dfsPlaceId) {
           const { taskId, costUsd } = await submitGoogleReviewsTask({
             placeId:     dfsPlaceId,
-            depth:       Number(process.env.DATAFORSEO_REVIEWS_DEPTH_OWN) || 100,
+            depth:       Number(process.env.DATAFORSEO_REVIEWS_DEPTH_OWN) || 300,
             sortBy:      'newest',
             postbackUrl: `${SERVER_BASE_URL}/api/webhooks/dataforseo?secret=${process.env.DATAFORSEO_WEBHOOK_SECRET || ''}`,
             tag:         businessProfileId,

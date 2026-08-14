@@ -79,7 +79,9 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
     return;
   }
 
-  const items: any[] = task?.result?.[0]?.items ?? [];
+  // DataForSEO can chunk a large `depth` request across multiple result[] entries —
+  // concatenate all of them rather than only reading result[0].
+  const items: any[] = (task?.result ?? []).flatMap((r: any) => r?.items ?? []);
   const startTime = taskRow.requested_at.toISOString();
 
   const profile = await prisma.businessProfile.findFirst({ where: { id: taskRow.business_profile_id } });

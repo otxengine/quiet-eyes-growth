@@ -190,4 +190,22 @@ describe('processDataForSeoReviewsPostback', () => {
       data: expect.objectContaining({ new_reviews_count: 0 }),
     }));
   });
+
+  test('concatenates items across multiple result[] chunks instead of only reading result[0]', async () => {
+    taskFindUnique.mockResolvedValue(OWN_TASK_ROW);
+    await processDataForSeoReviewsPostback({
+      tasks: [{
+        id: 'task123', status_code: 20000, cost: 0.05,
+        result: [
+          { items: [{ review_text: 'ביקורת ראשונה בעברית', rating: { value: 5 }, review_id: 'rev1' }] },
+          { items: [{ review_text: 'ביקורת שנייה בעברית', rating: { value: 4 }, review_id: 'rev2' }] },
+        ],
+      }],
+    });
+
+    expect(reviewCreate).toHaveBeenCalledTimes(2);
+    expect(taskUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ new_reviews_count: 2 }),
+    }));
+  });
 });

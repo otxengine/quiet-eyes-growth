@@ -114,4 +114,24 @@ describe('getGoogleReviewsTaskResult', () => {
     const result = await getGoogleReviewsTaskResult('task123');
     expect(result).toEqual({ items: [], costUsd: 0, statusCode: null });
   });
+
+  test('concatenates items across multiple result[] chunks (deep-depth pagination)', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        tasks: [{
+          status_code: 20000,
+          cost: 0.5,
+          result: [
+            { items: [{ review_text: 'a' }, { review_text: 'b' }] },
+            { items: [{ review_text: 'c' }] },
+            { items: null },
+          ],
+        }],
+      }),
+    });
+    const { getGoogleReviewsTaskResult } = require('../lib/dataforseo');
+    const result = await getGoogleReviewsTaskResult('task123');
+    expect(result.items).toEqual([{ review_text: 'a' }, { review_text: 'b' }, { review_text: 'c' }]);
+  });
 });

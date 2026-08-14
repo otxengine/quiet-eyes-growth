@@ -69,7 +69,7 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
         try {
           const { taskId, costUsd } = await submitGoogleReviewsTask({
             placeId,
-            depth:       Number(process.env.DATAFORSEO_REVIEWS_DEPTH_COMPETITOR) || 300,
+            depth:       Number(process.env.DATAFORSEO_REVIEWS_DEPTH_COMPETITOR) || 500,
             sortBy:      'newest',
             postbackUrl: `${SERVER_BASE_URL}/api/webhooks/dataforseo?secret=${process.env.DATAFORSEO_WEBHOOK_SECRET || ''}`,
             tag:         comp.id,

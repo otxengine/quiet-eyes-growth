@@ -69,9 +69,9 @@ services:
       - key: DATAFORSEO_REVIEWS_ENABLED
         value: "false"
       - key: DATAFORSEO_REVIEWS_DEPTH_OWN
-        value: "100"
-      - key: DATAFORSEO_REVIEWS_DEPTH_COMPETITOR
         value: "300"
+      - key: DATAFORSEO_REVIEWS_DEPTH_COMPETITOR
+        value: "500"
       - key: DATAFORSEO_RECONCILE_DISABLED
         value: "false"
       - key: SUPABASE_URL

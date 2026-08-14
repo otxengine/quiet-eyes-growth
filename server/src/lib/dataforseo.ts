@@ -228,7 +228,9 @@ export async function getGoogleReviewsTaskResult(
   }
 
   const task = body?.tasks?.[0];
-  const items: any[] = task?.result?.[0]?.items ?? [];
+  // DataForSEO can chunk a large `depth` request across multiple result[] entries —
+  // concatenate all of them rather than only reading result[0] (KAN follow-up: only-10-reviews bug).
+  const items: any[] = (task?.result ?? []).flatMap((r: any) => r?.items ?? []);
   const costUsd = Number(task?.cost) || 0;
   return { items, costUsd, statusCode: task?.status_code ?? null };
 }
