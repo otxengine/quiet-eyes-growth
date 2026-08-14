@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Loader2, Users } from 'lucide-react';
+import { Loader2, Users, Plus } from 'lucide-react';
+import { getLimits } from '@/lib/planConfig';
+import { addCompetitorManually } from '@/lib/addCompetitorManually';
 import KoriAvatar from './KoriAvatar';
 import CompetitorSelectCard from './CompetitorSelectCard';
 
@@ -10,6 +12,74 @@ const BG_STYLE = {
   backgroundImage: 'radial-gradient(circle, #d1d1d1 1px, transparent 1px)',
   backgroundSize: '24px 24px',
 };
+
+const EMPTY_URLS = { website_url: '', instagram_url: '', facebook_url: '', tiktok_url: '' };
+const inputCls = 'w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-[12px] text-gray-800 placeholder-gray-400 focus:outline-none focus:border-gray-300';
+
+function AddCompetitorForm({ businessProfileId, onAdded }) {
+  const [open, setOpen] = useState(false);
+  const [showUrls, setShowUrls] = useState(false);
+  const [name, setName] = useState('');
+  const [urls, setUrls] = useState(EMPTY_URLS);
+  const [adding, setAdding] = useState(false);
+
+  const reset = () => { setName(''); setUrls(EMPTY_URLS); setShowUrls(false); setOpen(false); };
+
+  const handleAdd = async () => {
+    if (!name.trim() || adding) return;
+    setAdding(true);
+    try {
+      const providedUrls = Object.fromEntries(Object.entries(urls).filter(([, v]) => v.trim()));
+      const competitor = await addCompetitorManually({ businessProfileId, name: name.trim(), urls: providedUrls });
+      onAdded(competitor);
+      reset();
+    } catch (err) {
+      console.error('addCompetitorManually failed:', err);
+    }
+    setAdding(false);
+  };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-1 text-[12px] font-medium text-[#e8344d] hover:opacity-80 transition-opacity"
+      >
+        <Plus className="w-3.5 h-3.5" /> הוסף מתחרה ידנית
+      </button>
+    );
+  }
+
+  return (
+    <div className="p-3.5 rounded-xl border border-gray-200 bg-white space-y-2">
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="שם המתחרה *" className={inputCls} />
+      {showUrls ? (
+        <div className="space-y-2">
+          <input value={urls.website_url} onChange={(e) => setUrls({ ...urls, website_url: e.target.value })} placeholder="אתר (אופציונלי)" className={inputCls} />
+          <input value={urls.instagram_url} onChange={(e) => setUrls({ ...urls, instagram_url: e.target.value })} placeholder="Instagram (אופציונלי)" className={inputCls} />
+          <input value={urls.facebook_url} onChange={(e) => setUrls({ ...urls, facebook_url: e.target.value })} placeholder="Facebook (אופציונלי)" className={inputCls} />
+          <input value={urls.tiktok_url} onChange={(e) => setUrls({ ...urls, tiktok_url: e.target.value })} placeholder="TikTok (אופציונלי)" className={inputCls} />
+        </div>
+      ) : (
+        <button onClick={() => setShowUrls(true)} className="text-[11px] text-gray-500 underline">
+          יש לך קישורים? (אופציונלי — אם לא, נמצא אותם בעצמנו)
+        </button>
+      )}
+      <div className="flex gap-2 justify-end pt-1">
+        <button onClick={reset} className="px-3 py-1.5 text-[11px] text-gray-500 hover:text-gray-700 transition-colors">ביטול</button>
+        <button
+          onClick={handleAdd}
+          disabled={adding || !name.trim()}
+          className="px-3 py-1.5 text-[11px] font-medium text-white rounded-lg disabled:opacity-50 flex items-center gap-1.5"
+          style={{ background: 'linear-gradient(135deg, #9c27b0, #e8344d)' }}
+        >
+          {adding && <Loader2 className="w-3 h-3 animate-spin" />}
+          {adding ? 'מוסיף...' : 'הוסף'}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function OnboardingDiscoverCompetitors() {
   const location = useLocation();
@@ -77,6 +147,14 @@ export default function OnboardingDiscoverCompetitors() {
   const handleConfirm = () => confirm(Array.from(checkedIds));
   const handleSkip = () => confirm(competitors.map(c => c.id));
 
+  const handleManuallyAdded = (competitor) => {
+    setCompetitors(prev => [...prev, competitor]);
+    setCheckedIds(prev => new Set(prev).add(competitor.id));
+  };
+
+  const planLimits = getLimits(businessProfile.subscription_plan);
+  const atCap = planLimits.competitors_max !== Infinity && competitors.length >= planLimits.competitors_max;
+
   if (loading) {
     return (
       <div dir="rtl" className="min-h-screen flex items-center justify-center p-4" style={BG_STYLE}>
@@ -120,6 +198,14 @@ export default function OnboardingDiscoverCompetitors() {
               />
             ))}
           </div>
+        )}
+
+        {atCap ? (
+          <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            הגעת למכסת {planLimits.competitors_max} מתחרים בתוכנית שלך — שדרג כדי להוסיף עוד
+          </p>
+        ) : (
+          <AddCompetitorForm businessProfileId={businessProfile.id} onAdded={handleManuallyAdded} />
         )}
 
         <div className="flex items-center gap-3 pt-2">

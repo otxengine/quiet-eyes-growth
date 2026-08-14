@@ -5,6 +5,7 @@ import { base44 } from '@/api/base44Client';
 import { Loader2, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { getLimits } from '@/lib/planConfig';
+import { addCompetitorManually } from '@/lib/addCompetitorManually';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
 import StrategicAnalysisPanel from '@/components/competitors/StrategicAnalysisPanel';
@@ -43,7 +44,8 @@ export default function Competitors() {
   const [scanning, setScanning] = useState(false);
   const [selectedCompetitorId, setSelectedCompetitorId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [newComp, setNewComp] = useState({ name: '', category: '', address: '' });
+  const [showAddUrls, setShowAddUrls] = useState(false);
+  const [newComp, setNewComp] = useState({ name: '', website_url: '', instagram_url: '', facebook_url: '', tiktok_url: '' });
   const [adding, setAdding] = useState(false);
   const [selectedMove, setSelectedMove] = useState(null);
 
@@ -80,9 +82,12 @@ export default function Competitors() {
     if (atCap) { toast.error(`הגעת למכסת ${planLimits.competitors_max} מתחרים בתוכנית שלך`); return; }
     setAdding(true);
     try {
-      await base44.entities.Competitor.create({ ...newComp, linked_business: bpId });
+      const { name, ...urls } = newComp;
+      const providedUrls = Object.fromEntries(Object.entries(urls).filter(([, v]) => v.trim()));
+      await addCompetitorManually({ businessProfileId: bpId, name: name.trim(), urls: providedUrls });
       queryClient.invalidateQueries({ queryKey: ['competitorsPage', bpId] });
-      setNewComp({ name: '', category: '', address: '' });
+      setNewComp({ name: '', website_url: '', instagram_url: '', facebook_url: '', tiktok_url: '' });
+      setShowAddUrls(false);
       setShowAdd(false);
       toast.success('מתחרה נוסף');
     } catch { toast.error('שגיאה בהוספת מתחרה'); }
@@ -155,13 +160,21 @@ export default function Competitors() {
           </button>
           {showAdd && (
             <div className="p-4 rounded-xl bg-secondary/50 border border-border space-y-2">
-              <input value={newComp.name}     onChange={e => setNewComp({ ...newComp, name:     e.target.value })} placeholder="שם המתחרה *" className={inputCls} />
-              <div className="grid grid-cols-2 gap-2">
-                <input value={newComp.category} onChange={e => setNewComp({ ...newComp, category: e.target.value })} placeholder="קטגוריה"  className={inputCls} />
-                <input value={newComp.address}  onChange={e => setNewComp({ ...newComp, address:  e.target.value })} placeholder="כתובת"    className={inputCls} />
-              </div>
+              <input value={newComp.name} onChange={e => setNewComp({ ...newComp, name: e.target.value })} placeholder="שם המתחרה *" className={inputCls} />
+              {showAddUrls ? (
+                <div className="space-y-2">
+                  <input value={newComp.website_url}   onChange={e => setNewComp({ ...newComp, website_url:   e.target.value })} placeholder="אתר (אופציונלי)"      className={inputCls} />
+                  <input value={newComp.instagram_url} onChange={e => setNewComp({ ...newComp, instagram_url: e.target.value })} placeholder="Instagram (אופציונלי)" className={inputCls} />
+                  <input value={newComp.facebook_url}  onChange={e => setNewComp({ ...newComp, facebook_url:  e.target.value })} placeholder="Facebook (אופציונלי)"  className={inputCls} />
+                  <input value={newComp.tiktok_url}    onChange={e => setNewComp({ ...newComp, tiktok_url:    e.target.value })} placeholder="TikTok (אופציונלי)"    className={inputCls} />
+                </div>
+              ) : (
+                <button onClick={() => setShowAddUrls(true)} className="text-[11px] text-foreground-muted underline">
+                  יש לך קישורים? (אופציונלי — אם לא, נמצא אותם בעצמנו)
+                </button>
+              )}
               <div className="flex gap-2 justify-end">
-                <button onClick={() => setShowAdd(false)} className="px-3 py-1.5 text-[11px] text-foreground-muted hover:text-foreground transition-colors">ביטול</button>
+                <button onClick={() => { setShowAdd(false); setShowAddUrls(false); }} className="px-3 py-1.5 text-[11px] text-foreground-muted hover:text-foreground transition-colors">ביטול</button>
                 <button onClick={handleAdd} disabled={adding || !newComp.name.trim()} className="px-3 py-1.5 text-[11px] font-medium bg-primary text-white rounded-lg hover:opacity-90 disabled:opacity-50">
                   {adding ? 'מוסיף...' : 'הוסף'}
                 </button>

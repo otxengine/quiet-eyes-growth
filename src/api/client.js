@@ -207,7 +207,7 @@ const ENTITIES = [
 const raw = {
   async get(path) { return apiFetch(path); },
   async put(path, data) { return apiFetch(path, { method: 'PUT', body: JSON.stringify(data || {}) }); },
-  async post(path, data) { return apiFetch(path, { method: 'POST', body: JSON.stringify(data || {}) }); },
+  async post(path, data, timeoutMs) { return apiFetch(path, { method: 'POST', body: JSON.stringify(data || {}) }, timeoutMs); },
 };
 
 // ── createClient ──────────────────────────────────────────────────────────────

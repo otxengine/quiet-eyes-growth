@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
 import { isS3Url, downloadFromS3 } from '../lib/s3';
+import { findPlaceId } from '../lib/googlePlaces';
+import { enrichCompetitorUrls } from './functions/enrichCompetitorUrls';
 
 const router = Router();
 
@@ -276,6 +278,37 @@ router.get('/proxy-image', async (req: Request, res: Response) => {
     return res.end(Buffer.from(buf));
   } catch (e: any) {
     return res.status(502).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/competitors/:id/enrich-urls
+// Resolves a google_place_id from name+city if missing, then runs the same
+// site-extract -> Places -> SERP -> Tavily fallback chain used for
+// auto-discovered competitors. Fill-if-empty only — never touches a URL the
+// caller already set (manual_url_fields / non-null values are left alone).
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:id/enrich-urls', async (req: Request, res: Response) => {
+  const competitorId = String(req.params.id);
+  try {
+    const competitor = await prisma.competitor.findUnique({ where: { id: competitorId } });
+    if (!competitor) return res.status(404).json({ error: 'Competitor not found' });
+
+    if (!competitor.google_place_id && competitor.linked_business) {
+      const profile = await prisma.businessProfile.findUnique({
+        where: { id: competitor.linked_business }, select: { city: true },
+      });
+      const placeId = await findPlaceId(competitor.name, profile?.city || '');
+      if (placeId) {
+        await prisma.competitor.update({ where: { id: competitorId }, data: { google_place_id: placeId } });
+      }
+    }
+
+    await enrichCompetitorUrls([competitorId]);
+    const updated = await prisma.competitor.findUnique({ where: { id: competitorId } });
+    return res.json({ ok: true, competitor: updated });
+  } catch (err: any) {
+    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
