@@ -39,7 +39,7 @@ async function fetchCompetitorChanges(bpId) {
 export default function Competitors() {
   const { businessProfile } = useOutletContext();
   const bpId = businessProfile?.id;
-  const plan = businessProfile?.plan || 'free_trial';
+  const plan = businessProfile?.subscription_plan || businessProfile?.plan_id || 'free_trial';
   const queryClient = useQueryClient();
   const [scanning, setScanning] = useState(false);
   const [selectedCompetitorId, setSelectedCompetitorId] = useState(null);
