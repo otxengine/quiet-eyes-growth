@@ -18,7 +18,8 @@ async function fetchImageBase64(url: string): Promise<{ data: string; mediaType:
   try {
     if (isS3Url(url)) {
       const file = await downloadFromS3(url);
-      if (!file || file.body.length > MAX_IMAGE_BYTES) return null;
+      if (!file) { console.warn('[analyzePostCreative] S3 download failed:', url); return null; }
+      if (file.body.length > MAX_IMAGE_BYTES) { console.warn('[analyzePostCreative] image too large (S3):', url, file.body.length); return null; }
       return { data: file.body.toString('base64'), mediaType: file.contentType || 'image/jpeg' };
     }
 
@@ -26,12 +27,13 @@ async function fetchImageBase64(url: string): Promise<{ data: string; mediaType:
       headers: { Referer: new URL(url).origin },
       signal: AbortSignal.timeout(10_000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) { console.warn('[analyzePostCreative] image fetch non-OK:', res.status, url); return null; }
     const contentType = res.headers.get('content-type') || 'image/jpeg';
     const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length > MAX_IMAGE_BYTES) return null;
+    if (buf.length > MAX_IMAGE_BYTES) { console.warn('[analyzePostCreative] image too large:', url, buf.length); return null; }
     return { data: buf.toString('base64'), mediaType: contentType };
-  } catch {
+  } catch (err: any) {
+    console.warn('[analyzePostCreative] image fetch threw:', url, err.message);
     return null;
   }
 }

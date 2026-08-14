@@ -596,7 +596,10 @@ export default function SocialCompetition() {
       queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] });
       queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] });
       const total = (result?.posts_analyzed || 0) + (result?.ads_analyzed || 0);
-      if (total > 0) {
+      const remaining = (result?.posts_remaining || 0) + (result?.ads_remaining || 0);
+      if (total > 0 && remaining > 0) {
+        toast.success(`${total} פריטים נותחו — נשארו עוד ${remaining}, לחץ שוב כדי להמשיך`);
+      } else if (total > 0) {
         toast.success(`ניתוח AI הושלם — ${total} פריטים נותחו`);
       } else {
         toast.warning('לא נמצאו פוסטים/מודעות שטרם נותחו');
