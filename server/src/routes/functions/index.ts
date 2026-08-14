@@ -123,6 +123,7 @@ import { getCompetitorReviewInsights } from './getCompetitorReviewInsights';
 import { reputationAdvisorChat } from './reputationAdvisorChat';
 import { collectCompetitorSocialPosts } from './collectCompetitorSocialPosts';
 import { analyzeSocialPosts } from './analyzeSocialPosts';
+import { backfillCompetitorPostAnalysis } from './backfillCompetitorPostAnalysis';
 
 const router = Router();
 
@@ -261,6 +262,7 @@ const FUNCTION_MAP: Record<string, any> = {
   reputationAdvisorChat,
   collectCompetitorSocialPosts,
   analyzeSocialPosts,
+  backfillCompetitorPostAnalysis,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,

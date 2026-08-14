@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useOutletContext, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2, RefreshCw, ChevronDown, ExternalLink } from 'lucide-react';
+import { Loader2, RefreshCw, ChevronDown, ExternalLink, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -692,6 +692,7 @@ export default function SocialCompetition() {
   const queryClient = useQueryClient();
   const [refreshingFeed, setRefreshingFeed] = useState(false);
   const [refreshingAds,  setRefreshingAds]  = useState(false);
+  const [analyzingExisting, setAnalyzingExisting] = useState(false);
   const [filter,         setFilter]         = useState('all');
   const [platformFilter, setPlatformFilter] = useState(null);
   const cardRefs = useRef({});
@@ -750,6 +751,22 @@ export default function SocialCompetition() {
       toast.success('מודעות מתחרים עודכנו');
     } catch { toast.error('שגיאה בעדכון המודעות'); }
     setRefreshingAds(false);
+  };
+
+  const handleAnalyzeExisting = async () => {
+    setAnalyzingExisting(true);
+    try {
+      const result = await base44.functions.invoke('backfillCompetitorPostAnalysis', { businessProfileId: bpId }, 180000);
+      queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] });
+      queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] });
+      const total = (result?.posts_analyzed || 0) + (result?.ads_analyzed || 0);
+      if (total > 0) {
+        toast.success(`ניתוח AI הושלם — ${total} פריטים נותחו`);
+      } else {
+        toast.warning('לא נמצאו פוסטים/מודעות שטרם נותחו');
+      }
+    } catch (e) { toast.error(`שגיאה בניתוח: ${e.message}`); }
+    setAnalyzingExisting(false);
   };
 
   const loading = loadingComps || loadingPosts || loadingAds;
@@ -814,6 +831,14 @@ export default function SocialCompetition() {
         >
           <RefreshCw className={`w-3 h-3 ${refreshingAds ? 'animate-spin' : ''}`} />
           רענן מודעות
+        </button>
+        <button
+          onClick={handleAnalyzeExisting}
+          disabled={analyzingExisting}
+          className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-border rounded-lg hover:bg-muted disabled:opacity-50"
+        >
+          <Sparkles className={`w-3 h-3 ${analyzingExisting ? 'animate-pulse' : ''}`} />
+          נתח פוסטים קיימים
         </button>
       </div>
 
