@@ -16,9 +16,9 @@ function adContentHash(a: AdResult) {
 
 async function upsertAdHistory(competitorId: string, businessProfileId: string, ads: AdResult[]) {
   const s3 = isS3Configured();
-  // Newly-inserted rows only — used to trigger creative analysis without
-  // re-analyzing ads that are just having last_seen_at refreshed.
-  const newRows: Array<{ id: string; media_url: string | null; caption: string; cta: string | null; platform: string }> = [];
+  // Rows needing creative analysis — newly inserted, or existing-but-never-analyzed
+  // (backfills ads that were scraped before this feature existed).
+  const rowsNeedingAnalysis: Array<{ id: string; media_url: string | null; caption: string; cta: string | null; platform: string }> = [];
   for (const ad of ads) {
     const content_hash   = adContentHash(ad);
     const external_ad_id = ad.external_ad_id || null;
@@ -36,9 +36,11 @@ async function upsertAdHistory(competitorId: string, businessProfileId: string, 
       ? `"competitor_id"=$1 AND "platform"=$2 AND "external_ad_id"=$3`
       : `"competitor_id"=$1 AND "platform"=$2 AND "content_hash"=$3`;
     const existing = await (prisma as any).$queryRawUnsafe(
-      `SELECT id FROM "competitor_ad_history" WHERE ${lookup} LIMIT 1`,
+      `SELECT id, analyzed_at FROM "competitor_ad_history" WHERE ${lookup} LIMIT 1`,
       competitorId, ad.platform, external_ad_id ?? content_hash,
-    ).catch(() => []) as { id: string }[];
+    ).catch(() => []) as { id: string; analyzed_at: string | null }[];
+
+    const caption = [ad.title, ad.body].filter(Boolean).join(' — ');
 
     if (existing?.length > 0) {
       await (prisma as any).$executeRawUnsafe(
@@ -52,6 +54,9 @@ async function upsertAdHistory(competitorId: string, businessProfileId: string, 
         media_url, video_url, ad.page_name || null, ad.end_date || null,
         existing[0].id,
       ).catch(() => {});
+      if (!existing[0].analyzed_at && media_url) {
+        rowsNeedingAnalysis.push({ id: existing[0].id, media_url, caption, cta: ad.cta || null, platform: ad.platform });
+      }
     } else {
       const newId = randomUUID();
       await (prisma as any).$executeRawUnsafe(
@@ -66,16 +71,10 @@ async function upsertAdHistory(competitorId: string, businessProfileId: string, 
         media_url, video_url, ad.page_name || null,
         ad.start_date || null, ad.end_date || null,
       ).catch(() => {});
-      newRows.push({
-        id: newId,
-        media_url,
-        caption: [ad.title, ad.body].filter(Boolean).join(' — '),
-        cta: ad.cta || null,
-        platform: ad.platform,
-      });
+      rowsNeedingAnalysis.push({ id: newId, media_url, caption, cta: ad.cta || null, platform: ad.platform });
     }
   }
-  return newRows;
+  return rowsNeedingAnalysis;
 }
 
 const MIN_INTERVAL_MS     = 48 * 60 * 60 * 1000; // 48h between full runs (saves API credits)
@@ -194,11 +193,11 @@ export async function detectCompetitorAds(req: Request, res: Response) {
         }
 
         // Persist ad history (append-only upsert)
-        const newAdRows = await upsertAdHistory(comp.id, businessProfileId, ads);
+        const adRowsNeedingAnalysis = await upsertAdHistory(comp.id, businessProfileId, ads);
 
-        // Analyze new ad creatives (topic/offer/hooks/style/cta) — best-effort,
-        // never blocks the rest of the agent.
-        for (const row of newAdRows) {
+        // Analyze ad creatives (topic/offer/hooks/style/cta) — new ads, plus a
+        // backfill for existing ads never analyzed. Best-effort, never blocks the agent.
+        for (const row of adRowsNeedingAnalysis) {
           if (!row.media_url) continue;
           try {
             const creative = await analyzePostCreative({

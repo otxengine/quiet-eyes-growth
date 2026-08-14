@@ -50,11 +50,31 @@ async function scrapeAndSave(
 
   // Raw SQL to avoid P2023 on Render (TIMESTAMPTZ columns in competitor_posts)
   const existing = await (prisma as any).$queryRawUnsafe(
-    `SELECT external_post_id, post_url FROM competitor_posts WHERE competitor_id = $1 AND platform = $2`,
+    `SELECT id, external_post_id, post_url, media_url, analyzed_at FROM competitor_posts WHERE competitor_id = $1 AND platform = $2`,
     comp.id, platform,
-  ) as { external_post_id: string | null; post_url: string | null }[];
+  ) as { id: string; external_post_id: string | null; post_url: string | null; media_url: string | null; analyzed_at: string | null }[];
   const existingIds  = new Set<string>(existing.map(p => p.external_post_id).filter(Boolean) as string[]);
   const existingUrls = new Set<string>(existing.map(p => p.post_url).filter(Boolean) as string[]);
+  const existingById  = new Map(existing.filter(p => p.external_post_id).map(p => [p.external_post_id as string, p]));
+  const existingByUrl = new Map(existing.filter(p => p.post_url).map(p => [p.post_url as string, p]));
+
+  // Best-effort creative analysis for a row that was never analyzed — used both
+  // for brand-new posts and as a backfill for posts scraped before this feature existed.
+  async function analyzeAndSave(id: string, mediaUrl: string | null, caption: string | null) {
+    if (!mediaUrl) return;
+    try {
+      const analysis = await analyzePostCreative({ caption, platform, mediaUrl });
+      if (analysis) {
+        await (prisma as any).$executeRawUnsafe(
+          `UPDATE competitor_posts SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW() WHERE id = $2`,
+          pgHex(JSON.stringify(analysis)) ?? '',
+          id,
+        );
+      }
+    } catch (analysisErr: any) {
+      console.warn('[collectCompetitorSocialPosts] creative analysis failed:', analysisErr.message);
+    }
+  }
 
   let rawPosts: any[] = [];
   let apifyError: string | null = null;
@@ -160,6 +180,11 @@ async function scrapeAndSave(
         `UPDATE competitor_posts SET ${setClause} WHERE competitor_id = $1 AND platform = $2 AND external_post_id = $3`,
         comp.id, platform, externalId, ...(upgradedS3 ? [upgradedS3] : []),
       ).catch(() => {});
+      const row = existingById.get(externalId);
+      if (row && !row.analyzed_at) {
+        const caption = pgSafe((post.caption || post.text || post.message || post.description || '').substring(0, 1000));
+        await analyzeAndSave(row.id, upgradedS3 || row.media_url, caption);
+      }
       continue;
     }
     if (postUrl && existingUrls.has(postUrl)) {
@@ -170,6 +195,11 @@ async function scrapeAndSave(
         `UPDATE competitor_posts SET ${setClause} WHERE competitor_id = $1 AND platform = $2 AND post_url = $3`,
         comp.id, platform, postUrl, ...(upgradedS3 ? [upgradedS3] : []),
       ).catch(() => {});
+      const row = existingByUrl.get(postUrl);
+      if (row && !row.analyzed_at) {
+        const caption = pgSafe((post.caption || post.text || post.message || post.description || '').substring(0, 1000));
+        await analyzeAndSave(row.id, upgradedS3 || row.media_url, caption);
+      }
       continue;
     }
 
@@ -222,22 +252,8 @@ async function scrapeAndSave(
       if (postUrl)    existingUrls.add(postUrl);
       upserted++;
 
-      // Analyze the creative (topic/offer/hooks/style/cta) — best-effort, never
-      // blocks the scrape loop. Only newly-inserted posts with media get analyzed.
-      if (mediaUrl) {
-        try {
-          const analysis = await analyzePostCreative({ caption, platform, mediaUrl });
-          if (analysis) {
-            await (prisma as any).$executeRawUnsafe(
-              `UPDATE competitor_posts SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW() WHERE id = $2`,
-              pgHex(JSON.stringify(analysis)) ?? '',
-              newPostId,
-            );
-          }
-        } catch (analysisErr: any) {
-          console.warn('[collectCompetitorSocialPosts] creative analysis failed:', analysisErr.message);
-        }
-      }
+      // Analyze the creative (topic/offer/hooks/style/cta) — best-effort, never blocks the scrape loop.
+      await analyzeAndSave(newPostId, mediaUrl, caption);
     } catch (insertErr: any) {
       const errMsg = (insertErr.message ?? '').trim();
       // 23505 = unique constraint — row already exists, not a real failure
