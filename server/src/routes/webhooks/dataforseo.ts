@@ -82,6 +82,7 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
   // DataForSEO can chunk a large `depth` request across multiple result[] entries —
   // concatenate all of them rather than only reading result[0].
   const items: any[] = (task?.result ?? []).flatMap((r: any) => r?.items ?? []);
+  console.log(`[dataforseo webhook] task ${taskId} (${taskRow.task_type}): received ${items.length} raw items across ${task?.result?.length ?? 0} result chunk(s), cost=$${costUsd}`);
   const startTime = taskRow.requested_at.toISOString();
 
   const profile = await prisma.businessProfile.findFirst({ where: { id: taskRow.business_profile_id } });

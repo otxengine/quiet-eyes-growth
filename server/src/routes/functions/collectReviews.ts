@@ -193,6 +193,9 @@ export async function collectReviews(req: Request, res: Response) {
               data: { task_id: taskId, task_type: 'own', business_profile_id: businessProfileId, cost_usd: costUsd },
             });
             dataforseoTaskPending = true;
+            console.log(`[collectReviews] DataForSEO reviews task submitted: task_id=${taskId} businessProfileId=${businessProfileId} placeId=${dfsPlaceId} cost=$${costUsd}`);
+          } else {
+            console.warn(`[collectReviews] DataForSEO reviews task_post returned no taskId for businessProfileId=${businessProfileId} — see [dataforseo] warnings above for the reason`);
           }
         }
       } catch (err: any) {

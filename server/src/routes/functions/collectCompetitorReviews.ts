@@ -82,6 +82,9 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
               },
             });
             tasksSubmitted++;
+            console.log(`[collectCompetitorReviews] DataForSEO reviews task submitted: task_id=${taskId} competitor=${comp.name} (${comp.id}) placeId=${placeId} cost=$${costUsd}`);
+          } else {
+            console.warn(`[collectCompetitorReviews] DataForSEO reviews task_post returned no taskId for competitor=${comp.name} (${comp.id})`);
           }
         } catch (err: any) {
           console.warn('[collectCompetitorReviews] DataForSEO reviews task_post failed:', err.message);
