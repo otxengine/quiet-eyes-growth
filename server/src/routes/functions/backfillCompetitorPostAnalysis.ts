@@ -34,11 +34,15 @@ export async function backfillCompetitorPostAnalysis(req: Request, res: Response
     for (const post of posts) {
       const analysis = await analyzePostCreative({ caption: post.caption, platform: post.platform, mediaUrl: post.media_url });
       if (!analysis) continue;
-      await (prisma as any).$executeRawUnsafe(
-        `UPDATE competitor_posts SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW() WHERE id = $2`,
-        pgHex(JSON.stringify(analysis)), post.id,
-      ).catch(() => {});
-      postsAnalyzed++;
+      try {
+        await (prisma as any).$executeRawUnsafe(
+          `UPDATE competitor_posts SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW() WHERE id = $2`,
+          pgHex(JSON.stringify(analysis)), post.id,
+        );
+        postsAnalyzed++;
+      } catch (err: any) {
+        console.error('[backfillCompetitorPostAnalysis] post UPDATE failed:', post.id, err.message);
+      }
     }
 
     const ads = await (prisma as any).$queryRawUnsafe(
@@ -53,11 +57,15 @@ export async function backfillCompetitorPostAnalysis(req: Request, res: Response
       const caption = [ad.title, ad.body].filter(Boolean).join(' — ');
       const analysis = await analyzePostCreative({ caption, cta: ad.cta, platform: ad.platform, mediaUrl: ad.media_url });
       if (!analysis) continue;
-      await (prisma as any).$executeRawUnsafe(
-        `UPDATE "competitor_ad_history" SET analysis=$1, analyzed_at=NOW() WHERE id=$2`,
-        JSON.stringify(analysis), ad.id,
-      ).catch(() => {});
-      adsAnalyzed++;
+      try {
+        await (prisma as any).$executeRawUnsafe(
+          `UPDATE "competitor_ad_history" SET analysis=$1, analyzed_at=NOW() WHERE id=$2`,
+          JSON.stringify(analysis), ad.id,
+        );
+        adsAnalyzed++;
+      } catch (err: any) {
+        console.error('[backfillCompetitorPostAnalysis] ad UPDATE failed:', ad.id, err.message);
+      }
     }
 
     return res.json({
