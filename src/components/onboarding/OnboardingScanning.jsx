@@ -15,7 +15,7 @@ const scanSteps = [
   { fn: 'collectSocialSignals',    text: 'אוסף אותות מרשתות חברתיות...',   narrative: 'מנתח טרנדים רלוונטיים לעסק שלך...' },
   { fn: 'synthesizeMarketInsights', text: 'מנתח תובנות שוק...',              narrative: 'מזהה הזדמנויות ספציפיות לתחום שלך...', delay: 8000 },
   { fn: 'detectTrends',            text: 'מזהה מגמות בסקטור שלך...',        narrative: 'מה עולה בתחום שלך עכשיו?' },
-  { fn: 'runCompetitorIdentification', text: 'מזהה מתחרים רלוונטיים...',   narrative: 'מוצא את המתחרים האמיתיים שלך בלבד...' },
+  { fn: 'runCompetitorIdentification', text: 'מזהה מתחרים רלוונטיים...',   narrative: 'מוצא את המתחרים האמיתיים שלך בלבד...', timeoutMs: 180000 },
   { fn: 'runLeadGeneration',       text: 'מחפש לידים פוטנציאליים...',       narrative: 'מחפש אנשים שמחפשים בדיוק מה שאתה מציע...' },
   { fn: 'enrichLeads',             text: 'מדרג ומעשיר לידים...',            narrative: 'בודק כל ליד לפי קריטריונים של הסקטור שלך...' },
   { fn: 'updateSectorKnowledge',   text: 'בונה ידע על הסקטור שלך...',       narrative: 'לומד מכל העסקים בתחום דומה...' },

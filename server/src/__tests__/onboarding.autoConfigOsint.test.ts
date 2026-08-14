@@ -8,10 +8,6 @@ jest.mock('../db', () => ({
       findUnique: jest.fn(),
       update:     jest.fn(),
     },
-    competitor: {
-      findMany:   jest.fn(),
-      createMany: jest.fn(),
-    },
   },
 }));
 jest.mock('../lib/llm',    () => ({ invokeLLM: jest.fn() }));
@@ -22,8 +18,6 @@ jest.mock('../lib/tavily', () => ({
 
 const findUnique = prisma.businessProfile.findUnique as jest.Mock;
 const update     = prisma.businessProfile.update     as jest.Mock;
-const findMany   = prisma.competitor.findMany         as jest.Mock;
-const createMany = prisma.competitor.createMany       as jest.Mock;
 const llm        = invokeLLM                          as jest.Mock;
 
 const PROFILE = {
@@ -35,7 +29,6 @@ const PROFILE = {
 
 const LLM_OK = {
   keywords: ['פיצה תל אביב', 'מסעדה איטלקית', 'משלוח פיצה'],
-  competitors: [{ name: 'פיצה הוט', category: 'מסעדה', address: 'רוטשילד 1' }],
 };
 
 function call(body: Record<string, any>) {
@@ -54,24 +47,25 @@ beforeEach(() => {
   jest.clearAllMocks();
   findUnique.mockResolvedValue(PROFILE);
   update.mockResolvedValue({});
-  findMany.mockResolvedValue([]);
-  createMany.mockResolvedValue({ count: 1 });
   llm.mockResolvedValue(LLM_OK);
 });
 
 describe('autoConfigOsint', () => {
 
-  test('AC#1 happy path: persists keywords, curated URLs, and competitors', async () => {
+  test('AC#1 happy path: persists keywords and curated URLs, does not create competitors', async () => {
     const { statusCode, body } = await call({ businessProfileId: 'bp1' });
 
     expect(statusCode).toBe(200);
     expect(body.success).toBe(true);
     expect(body.keywords_count).toBe(3);
-    expect(body.competitors_created).toBe(1);
+    expect(body.competitors_created).toBeUndefined();
 
     const { data } = update.mock.calls[0][0];
     expect(data.custom_keywords).toBe('פיצה תל אביב, מסעדה איטלקית, משלוח פיצה');
     expect(data.custom_urls).toBeTruthy();
+
+    // No prisma.competitor.* calls at all — competitor discovery is runCompetitorIdentification's job.
+    expect((prisma as any).competitor).toBeUndefined();
   });
 
   test('AC#2 null LLM result: curated URLs still persisted, no crash, warns', async () => {
@@ -83,8 +77,6 @@ describe('autoConfigOsint', () => {
     expect(statusCode).toBe(200);
     expect(body.success).toBe(true);
     expect(body.keywords_count).toBe(0);
-    expect(body.competitors_created).toBe(0);
-    expect(createMany).not.toHaveBeenCalled();
 
     const { data } = update.mock.calls[0][0];
     expect(data.custom_keywords).toBe('');

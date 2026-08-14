@@ -51,6 +51,13 @@ export default function Competitors() {
     queryKey: ['competitorsPage', bpId],
     queryFn: () => base44.entities.Competitor.filter({ linked_business: bpId, is_dismissed: false, not_relevant: false }),
     enabled: !!bpId,
+    // URL enrichment can still be finishing server-side (e.g. right after onboarding) —
+    // poll while any competitor has a website but hasn't been enrichment-attempted yet
+    // (social_pages_crawled_at is stamped on every attempt, success or soft-empty), then stop.
+    refetchInterval: (query) => {
+      const data = query.state.data || [];
+      return data.some((c) => c.website_url && !c.social_pages_crawled_at) ? 8000 : false;
+    },
   });
 
   const planLimits = getLimits(plan);
@@ -92,7 +99,9 @@ export default function Competitors() {
     setScanning(true);
     toast.info('מתחיל סריקת מתחרים...');
     try {
-      await base44.functions.invoke('runCompetitorIdentification', { businessProfileId: bpId });
+      // Full pipeline (LLM calls + per-candidate Place Details + cleanup pass) can exceed
+      // the default 90s client timeout once candidate counts are large.
+      await base44.functions.invoke('runCompetitorIdentification', { businessProfileId: bpId }, 180000);
       queryClient.invalidateQueries({ queryKey: ['competitorsPage', bpId] });
       queryClient.invalidateQueries({ queryKey: ['competitorChanges', bpId] });
       toast.success('סריקת מתחרים הושלמה');

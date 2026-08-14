@@ -69,21 +69,23 @@ export async function autoConfigOsint(req: Request, res: Response) {
     const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
     if (!profile) return res.status(404).json({ error: 'Business profile not found' });
 
-    // ── Step 1: LLM → keywords + competitors (no URL guessing) ──────────────
+    // ── Step 1: LLM → keywords (no URL guessing) ─────────────────────────────
+    // Competitor invention was removed here — runCompetitorIdentification (a few steps
+    // later in the same onboarding flow) does real Maps-based discovery with working
+    // URL enrichment; LLM-guessed names never matched those real rows and were
+    // permanently stuck with no website_url/social fields.
     const llmPrompt = `Return a JSON object. No extra keys, no nesting.
 
 Business: ${profile.name} | Category: ${profile.category} | City: ${profile.city}
 Services: ${profile.relevant_services || profile.category}
 
 Return exactly:
-{"keywords":["kw1","kw2",...],"competitors":[{"name":"...","category":"...","address":"..."}]}
+{"keywords":["kw1","kw2",...]}
 
 Rules:
-- keywords: exactly 10 Hebrew search terms customers use to find this type of business in ${profile.city} (short phrases only)
-- competitors: exactly 3 realistic competitor business names in ${profile.city} or nearby cities`;
+- keywords: exactly 10 Hebrew search terms customers use to find this type of business in ${profile.city} (short phrases only)`;
 
     let keywords: string[] = [];
-    let competitors: Array<{ name: string; category?: string; address?: string; notes?: string }> = [];
 
     try {
       const llmResult = await invokeLLM({
@@ -92,14 +94,13 @@ Rules:
         skipCache: true,
         prompt: llmPrompt,
         response_json_schema: { type: 'object' },
-      }) as { keywords?: string[]; competitors?: Array<{ name: string; category?: string; address?: string }> } | null;
+      }) as { keywords?: string[] } | null;
 
       const unwrapped = (llmResult as any)?.osint_configuration || (llmResult as any)?.configuration || llmResult;
       if (!unwrapped) {
         console.warn('[autoConfigOsint] LLM returned null/invalid JSON — safe defaults: empty keywords, curated URLs will still persist');
       } else {
         keywords = Array.isArray(unwrapped.keywords) ? unwrapped.keywords : [];
-        competitors = Array.isArray(unwrapped.competitors) ? unwrapped.competitors : [];
       }
     } catch (llmErr: any) {
       console.warn('[autoConfigOsint] LLM call failed — safe defaults: empty keywords, curated URLs will still persist. Reason:', llmErr.message);
@@ -192,35 +193,10 @@ Rules:
       },
     });
 
-    // Create competitor entities (skip if name already exists for this business)
-    const existingComps = await prisma.competitor.findMany({
-      where: { linked_business: businessProfileId },
-      select: { name: true },
-    });
-    const existingNames = new Set(existingComps.map((c: { name: string }) => c.name.toLowerCase()));
-
-    const newComps = competitors.filter(
-      (c) => c.name && !existingNames.has(c.name.toLowerCase()),
-    );
-
-    if (newComps.length > 0) {
-      await prisma.competitor.createMany({
-        data: newComps.map((c) => ({
-          linked_business: businessProfileId,
-          created_by: profile.created_by ?? undefined,
-          name: c.name,
-          category: c.category ?? profile.category,
-          address: c.address ?? undefined,
-          notes: c.notes ?? undefined,
-        })),
-      });
-    }
-
     return res.json({
       success: true,
       keywords_count: keywords.length,
       urls_count: urls.length,
-      competitors_created: newComps.length,
     });
   } catch (err: any) {
     console.error('[autoConfigOsint] Error:', err.message);

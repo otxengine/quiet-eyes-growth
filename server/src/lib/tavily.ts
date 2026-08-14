@@ -53,9 +53,9 @@ async function _fetch(query: string, maxResults: number, depth: 'basic' | 'advan
       }),
     });
 
-    if (res.status === 433 || res.status === 429) {
+    if (res.status === 433 || res.status === 429 || res.status === 432) {
       rateLimitUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
-      console.error(`[Tavily] Rate limit hit (${res.status}) — pausing Tavily for 60 minutes (until ${new Date(rateLimitUntil).toISOString()})`);
+      console.error(`[Tavily] Rate/usage limit hit (${res.status}) — pausing Tavily for 60 minutes (until ${new Date(rateLimitUntil).toISOString()})`);
       return [];
     }
 
