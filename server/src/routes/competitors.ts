@@ -233,6 +233,55 @@ router.get('/social/board', async (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/competitors/social/leaderboard?businessProfileId=
+// Ranks tracked competitors by average post interactions (likes + comments)
+// per post over the last 30 days. Competitors with no posts in the window
+// are excluded rather than shown at 0 (no data isn't the same as no engagement).
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/social/leaderboard', async (req: Request, res: Response) => {
+  try {
+    const { businessProfileId } = req.query as Record<string, string>;
+    if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+    const competitors = await prisma.competitor.findMany({
+      where: { linked_business: businessProfileId, not_relevant: false },
+      select: { id: true, name: true },
+    });
+    const ids = competitors.map(c => c.id);
+    const nameById = Object.fromEntries(competitors.map(c => [c.id, c.name]));
+
+    const WINDOW_DAYS = 30;
+    const since = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000);
+
+    const rows = ids.length
+      ? await prisma.competitorPost.groupBy({
+          by: ['competitor_id'],
+          where: { competitor_id: { in: ids }, posted_at: { gte: since } },
+          _sum: { likes: true, comments_count: true },
+          _count: { id: true },
+        })
+      : [];
+
+    const leaderboard = rows
+      .map(r => {
+        const postCount = r._count.id;
+        const totalInteractions = (r._sum.likes ?? 0) + (r._sum.comments_count ?? 0);
+        return {
+          competitor_id: r.competitor_id,
+          competitor_name: nameById[r.competitor_id] ?? 'Unknown',
+          post_count: postCount,
+          avg_interactions: postCount > 0 ? Math.round(totalInteractions / postCount) : 0,
+        };
+      })
+      .sort((a, b) => b.avg_interactions - a.avg_interactions);
+
+    return res.json({ leaderboard, window_days: WINDOW_DAYS });
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/competitors/proxy-image?url=<encoded>
 // Server-side proxy to bypass CORS on Instagram/Facebook/TikTok CDN URLs.
 // Whitelisted to known CDN hostnames to prevent SSRF.

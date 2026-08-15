@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useOutletContext, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2, RefreshCw, ChevronDown, ExternalLink } from 'lucide-react';
+import { Loader2, RefreshCw, ChevronDown, ExternalLink, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -539,7 +539,7 @@ const FILTER_TABS = [
 export default function SocialCompetition() {
   const { businessProfile } = useOutletContext();
   const bpId = businessProfile?.id;
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [refreshingAll, setRefreshingAll] = useState(false);
   const [filter,         setFilter]         = useState('all');
@@ -570,6 +570,13 @@ export default function SocialCompetition() {
     enabled:  !!bpId && compIds.length > 0,
   });
   const allAds = allAdsRaw.filter(a => a.platform !== 'tiktok');
+
+  const { data: leaderboardData } = useQuery({
+    queryKey: ['socialLeaderboard', bpId],
+    queryFn:  () => apiFetch(`/competitors/social/leaderboard?businessProfileId=${bpId}`),
+    enabled:  !!bpId,
+  });
+  const leaderboard = leaderboardData?.leaderboard ?? [];
 
   useEffect(() => {
     if (!focusId || loadingComps || loadingPosts || loadingAds) return;
@@ -673,6 +680,31 @@ export default function SocialCompetition() {
           רענן ונתח הכל
         </button>
       </div>
+
+      {leaderboard.length > 0 && (
+        <div className="card-base p-4">
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5">
+            <Trophy className="w-3.5 h-3.5 text-amber-500" />
+            מובילי מעורבות — 30 יום אחרונים
+          </p>
+          <div className="space-y-1.5">
+            {leaderboard.slice(0, 10).map((row, i) => (
+              <button
+                key={row.competitor_id}
+                onClick={() => setSearchParams({ competitorId: row.competitor_id, section: 'feed' })}
+                className="w-full flex items-center gap-3 px-2.5 py-1.5 rounded-lg hover:bg-muted transition-colors text-right"
+              >
+                <span className={`w-5 text-xs font-bold flex-shrink-0 ${i === 0 ? 'text-amber-500' : 'text-muted-foreground'}`}>
+                  {i + 1}
+                </span>
+                <span className="flex-1 text-[12px] text-foreground truncate">{row.competitor_name}</span>
+                <span className="text-[11px] text-muted-foreground">{row.post_count} פוסטים</span>
+                <span className="text-[12px] font-semibold text-foreground w-16 text-left">{row.avg_interactions.toLocaleString()}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-12">
