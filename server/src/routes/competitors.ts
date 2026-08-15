@@ -253,26 +253,30 @@ router.get('/social/leaderboard', async (req: Request, res: Response) => {
     const WINDOW_DAYS = 30;
     const since = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
+    // Raw SQL: the typed prisma.competitorPost.groupBy() trips the same Prisma/Linux
+    // query-engine bug (Postgres 22021 "invalid byte sequence... 0x00") that every
+    // other read/write against this table already works around — see the pgHex
+    // workaround in collectCompetitorSocialPosts.ts.
     const rows = ids.length
-      ? await prisma.competitorPost.groupBy({
-          by: ['competitor_id'],
-          where: { competitor_id: { in: ids }, posted_at: { gte: since } },
-          _sum: { likes: true, comments_count: true },
-          _count: { id: true },
-        })
+      ? await (prisma as any).$queryRawUnsafe(
+          `SELECT competitor_id,
+                  COUNT(*)::int AS post_count,
+                  COALESCE(SUM(likes), 0)::int AS total_likes,
+                  COALESCE(SUM(comments_count), 0)::int AS total_comments
+           FROM competitor_posts
+           WHERE competitor_id = ANY($1::text[]) AND posted_at >= $2::timestamptz
+           GROUP BY competitor_id`,
+          ids, since.toISOString(),
+        ) as { competitor_id: string; post_count: number; total_likes: number; total_comments: number }[]
       : [];
 
     const leaderboard = rows
-      .map(r => {
-        const postCount = r._count.id;
-        const totalInteractions = (r._sum.likes ?? 0) + (r._sum.comments_count ?? 0);
-        return {
-          competitor_id: r.competitor_id,
-          competitor_name: nameById[r.competitor_id] ?? 'Unknown',
-          post_count: postCount,
-          avg_interactions: postCount > 0 ? Math.round(totalInteractions / postCount) : 0,
-        };
-      })
+      .map(r => ({
+        competitor_id: r.competitor_id,
+        competitor_name: nameById[r.competitor_id] ?? 'Unknown',
+        post_count: r.post_count,
+        avg_interactions: r.post_count > 0 ? Math.round((r.total_likes + r.total_comments) / r.post_count) : 0,
+      }))
       .sort((a, b) => b.avg_interactions - a.avg_interactions);
 
     return res.json({ leaderboard, window_days: WINDOW_DAYS });
