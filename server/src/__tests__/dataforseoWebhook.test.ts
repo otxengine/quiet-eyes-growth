@@ -129,6 +129,30 @@ describe('processDataForSeoReviewsPostback', () => {
     expect(taskUpdate).not.toHaveBeenCalled();
   });
 
+  test('normalizes DataForSEO\'s non-ISO timestamp format to real ISO on created_at', async () => {
+    taskFindUnique.mockResolvedValue(OWN_TASK_ROW);
+    await processDataForSeoReviewsPostback(taskPayload({
+      result: [{ items: [{
+        review_text: 'שירות מעולה, ממליץ בחום', rating: { value: 5 }, review_id: 'rev1',
+        profile_name: 'דני', timestamp: '2026-08-14 09:23:18 +00:00',
+      }] }],
+    }));
+
+    expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ created_at: '2026-08-14T09:23:18.000Z' }),
+    }));
+  });
+
+  test('falls back to now() when timestamp is missing or unparseable', async () => {
+    taskFindUnique.mockResolvedValue(OWN_TASK_ROW);
+    await processDataForSeoReviewsPostback(taskPayload({
+      result: [{ items: [{ review_text: 'שירות מעולה, ממליץ בחום', rating: { value: 5 }, review_id: 'rev1' }] }],
+    }));
+
+    const createdAt = reviewCreate.mock.calls[0][0].data.created_at;
+    expect(new Date(createdAt).getTime()).not.toBeNaN();
+  });
+
   test('marks the task errored on a failing status_code without writing reviews', async () => {
     taskFindUnique.mockResolvedValue(OWN_TASK_ROW);
     await processDataForSeoReviewsPostback(taskPayload({ status_code: 40000, status_message: 'Bad Request' }));

@@ -19,7 +19,7 @@ const TREND_ICON = {
 function ReviewSnippet({ review }) {
   const stars = Math.round(review.rating ?? 0);
   const date = (() => {
-    const d = new Date(review.created_date);
+    const d = new Date(review.created_at || review.created_date);
     return isNaN(d.getTime()) ? '' : d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' });
   })();
   return (

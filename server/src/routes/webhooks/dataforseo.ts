@@ -83,11 +83,6 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
   // concatenate all of them rather than only reading result[0].
   const items: any[] = (task?.result ?? []).flatMap((r: any) => r?.items ?? []);
   console.log(`[dataforseo webhook] task ${taskId} (${taskRow.task_type}): received ${items.length} raw items across ${task?.result?.length ?? 0} result chunk(s), cost=$${costUsd}`);
-  if (items[0]) {
-    // TEMP debug — confirm DataForSEO's actual review item field names, then remove.
-    console.log(`[dataforseo webhook] sample item keys: ${Object.keys(items[0]).join(', ')}`);
-    console.log(`[dataforseo webhook] sample item: ${JSON.stringify(items[0]).substring(0, 1500)}`);
-  }
   const startTime = taskRow.requested_at.toISOString();
 
   const profile = await prisma.businessProfile.findFirst({ where: { id: taskRow.business_profile_id } });
@@ -118,8 +113,7 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
   }> = [];
 
   for (const item of items) {
-    // Best-effort field mapping — DataForSEO's exact review item field names should be
-    // confirmed against a real payload in staging before this ships (KAN plan §5 note).
+    // Field mapping confirmed against a real payload (type: google_reviews_search).
     const text: string = item.review_text || item.text || item.snippet || '';
     if (!text || text.length < 5) continue;
     const reviewId: string = item.review_id || item.id || `dfs_${(item.profile_name || item.reviewer_name || '').replace(/[^a-z0-9]/gi, '_').substring(0, 40)}_${text.substring(0, 20).replace(/[^a-z0-9]/gi, '_')}`;
@@ -128,7 +122,10 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
 
     const rating: number = item.rating?.value ?? item.rating ?? 0;
     const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
-    const createdAt: string = item.timestamp || new Date().toISOString();
+    // item.timestamp is "YYYY-MM-DD HH:mm:ss +00:00" — normalize to real ISO so it sorts
+    // correctly alongside created_at strings from the other tiers (GMB/Places/SerpAPI).
+    const parsedDate = item.timestamp ? new Date(item.timestamp) : null;
+    const createdAt: string = parsedDate && !isNaN(parsedDate.getTime()) ? parsedDate.toISOString() : new Date().toISOString();
     pending.push({ reviewId, text, rating, sentiment, reviewerName: item.profile_name || item.reviewer_name || 'לקוח', createdAt });
     existingIds.add(reviewId);
     existingKeys.add(textKey);

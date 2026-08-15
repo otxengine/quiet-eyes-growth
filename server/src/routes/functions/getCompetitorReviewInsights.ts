@@ -11,12 +11,13 @@ async function computeReviewTrend(competitorId: string): Promise<string | null> 
 
   const reviews = await prisma.review.findMany({
     where: { linked_competitor: competitorId, source_origin: { in: GOOGLE_SOURCES }, rating: { not: null } },
-    select: { rating: true, created_date: true },
+    select: { rating: true, created_at: true, created_date: true },
     take: 200,
   });
 
-  const recent = reviews.filter(r => new Date(r.created_date) >= d30);
-  const prior  = reviews.filter(r => new Date(r.created_date) >= d60 && new Date(r.created_date) < d30);
+  const reviewDate = (r: { created_at: string | null; created_date: Date }) => new Date(r.created_at || r.created_date);
+  const recent = reviews.filter(r => reviewDate(r) >= d30);
+  const prior  = reviews.filter(r => reviewDate(r) >= d60 && reviewDate(r) < d30);
 
   // ponytail: omit rather than fabricate — AC2 explicitly requires this guard
   if (recent.length < 3 || prior.length < 3) return null;
@@ -29,7 +30,7 @@ async function computeReviewTrend(competitorId: string): Promise<string | null> 
 }
 
 export async function getCompetitorReviewInsightsData(businessProfileId: string, competitorId: string) {
-  const reviewSelect = { reviewer_name: true, rating: true, text: true, created_date: true, topic_sentiment: true } as const;
+  const reviewSelect = { reviewer_name: true, rating: true, text: true, created_at: true, created_date: true, topic_sentiment: true } as const;
 
   const [competitor, themes, trend, ownReviews, latestReviews] = await Promise.all([
     prisma.competitor.findUnique({
@@ -89,6 +90,7 @@ ${trend ? `מגמה: ${trend}` : ''}
     reviewer_name: r.reviewer_name || null,
     rating: r.rating,
     text: r.text || '',
+    created_at: r.created_at,
     created_date: r.created_date,
     // topic_sentiment not forwarded to FE
   });
