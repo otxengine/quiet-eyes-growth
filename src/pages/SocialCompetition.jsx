@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useOutletContext, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2, RefreshCw, ChevronDown, ExternalLink, Sparkles } from 'lucide-react';
+import { Loader2, RefreshCw, ChevronDown, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -541,9 +541,7 @@ export default function SocialCompetition() {
   const bpId = businessProfile?.id;
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const [refreshingFeed, setRefreshingFeed] = useState(false);
-  const [refreshingAds,  setRefreshingAds]  = useState(false);
-  const [analyzingExisting, setAnalyzingExisting] = useState(false);
+  const [refreshingAll, setRefreshingAll] = useState(false);
   const [filter,         setFilter]         = useState('all');
   const [platformFilter, setPlatformFilter] = useState(null);
   const cardRefs = useRef({});
@@ -579,48 +577,34 @@ export default function SocialCompetition() {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [focusId, loadingComps, loadingPosts, loadingAds]);
 
-  const handleRefreshFeed = async () => {
-    setRefreshingFeed(true);
-    try {
-      const result = await base44.functions.invoke('collectCompetitorSocialPosts', { businessProfileId: bpId, force: true }, 180000);
-      queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] });
-      if (result?.upserted > 0) {
-        toast.success(`פיד מתחרים עודכן — ${result.upserted} פוסטים חדשים`);
-      } else {
-        toast.warning('רענון הסתיים — לא נמצאו פוסטים חדשים (ראה רשת לפרטים)');
-        console.info('[refresh-feed] diagnostics:', result?.diagnostics);
-      }
-    } catch (e) { toast.error(`שגיאה בעדכון הפיד: ${e.message}`); }
-    setRefreshingFeed(false);
-  };
+  const handleRefreshAll = async () => {
+    setRefreshingAll(true);
+    const parts = [];
 
-  const handleRefreshAds = async () => {
-    setRefreshingAds(true);
+    try {
+      const feedResult = await base44.functions.invoke('collectCompetitorSocialPosts', { businessProfileId: bpId, force: true }, 180000);
+      queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] });
+      if (feedResult?.upserted > 0) parts.push(`${feedResult.upserted} פוסטים חדשים`);
+      else console.info('[refresh-all] feed diagnostics:', feedResult?.diagnostics);
+    } catch (e) { toast.error(`שגיאה בעדכון הפיד: ${e.message}`); }
+
     try {
       await base44.functions.invoke('detectCompetitorAds', { businessProfileId: bpId, force: true }, 120000);
       queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] });
-      toast.success('מודעות מתחרים עודכנו');
+      parts.push('מודעות עודכנו');
     } catch { toast.error('שגיאה בעדכון המודעות'); }
-    setRefreshingAds(false);
-  };
 
-  const handleAnalyzeExisting = async () => {
-    setAnalyzingExisting(true);
     try {
       const result = await base44.functions.invoke('backfillCompetitorPostAnalysis', { businessProfileId: bpId }, 180000);
       queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] });
       queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] });
       const total = (result?.posts_analyzed || 0) + (result?.ads_analyzed || 0);
       const remaining = (result?.posts_remaining || 0) + (result?.ads_remaining || 0);
-      if (total > 0 && remaining > 0) {
-        toast.success(`${total} פריטים נותחו — נשארו עוד ${remaining}, לחץ שוב כדי להמשיך`);
-      } else if (total > 0) {
-        toast.success(`ניתוח AI הושלם — ${total} פריטים נותחו`);
-      } else {
-        toast.warning('לא נמצאו פוסטים/מודעות שטרם נותחו');
-      }
+      if (total > 0) parts.push(remaining > 0 ? `${total} פריטים נותחו (נשארו עוד ${remaining})` : `${total} פריטים נותחו`);
     } catch (e) { toast.error(`שגיאה בניתוח: ${e.message}`); }
-    setAnalyzingExisting(false);
+
+    toast.success(parts.length ? `רענון הושלם — ${parts.join(' · ')}` : 'רענון הושלם — אין עדכונים חדשים');
+    setRefreshingAll(false);
   };
 
   const loading = loadingComps || loadingPosts || loadingAds;
@@ -637,6 +621,16 @@ export default function SocialCompetition() {
 
   return (
     <div className="p-4 space-y-4 max-w-5xl mx-auto">
+      {refreshingAll && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center" dir="rtl">
+          <div className="bg-background rounded-xl shadow-xl p-6 flex flex-col items-center gap-3 max-w-xs text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-sm font-semibold text-foreground">סורק את הסושיאל של המתחרים...</p>
+            <p className="text-xs text-muted-foreground">זה עשוי לקחת עד דקה-שתיים</p>
+          </div>
+        </div>
+      )}
+
       <PageHeader title="תחרות סושיאל" />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -671,28 +665,12 @@ export default function SocialCompetition() {
         <div className="flex-1" />
 
         <button
-          onClick={handleRefreshFeed}
-          disabled={refreshingFeed}
+          onClick={handleRefreshAll}
+          disabled={refreshingAll}
           className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-border rounded-lg hover:bg-muted disabled:opacity-50"
         >
-          <RefreshCw className={`w-3 h-3 ${refreshingFeed ? 'animate-spin' : ''}`} />
-          רענן פיד
-        </button>
-        <button
-          onClick={handleRefreshAds}
-          disabled={refreshingAds}
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-border rounded-lg hover:bg-muted disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3 h-3 ${refreshingAds ? 'animate-spin' : ''}`} />
-          רענן מודעות
-        </button>
-        <button
-          onClick={handleAnalyzeExisting}
-          disabled={analyzingExisting}
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-border rounded-lg hover:bg-muted disabled:opacity-50"
-        >
-          <Sparkles className={`w-3 h-3 ${analyzingExisting ? 'animate-pulse' : ''}`} />
-          נתח פוסטים קיימים
+          <RefreshCw className={`w-3 h-3 ${refreshingAll ? 'animate-spin' : ''}`} />
+          רענן ונתח הכל
         </button>
       </div>
 
