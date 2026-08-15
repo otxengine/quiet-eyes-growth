@@ -65,12 +65,22 @@ export function normalizePostCreativeAnalysis(raw: any): PostCreativeAnalysis | 
   };
 }
 
+// Coerces LLM drift like "relative (percent off)" down to the clean enum word.
+function normalizeValueFraming(v: string | null): string | null {
+  if (!v) return null;
+  const lower = v.toLowerCase();
+  if (lower.startsWith('relative')) return 'relative';
+  if (lower.startsWith('absolute')) return 'absolute';
+  if (lower.startsWith('both')) return 'both';
+  return v;
+}
+
 /** Normalize/guard raw offer-breakdown LLM output. Never throws. */
 function normalizeOfferBreakdown(raw: any) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   return {
     offer_mechanic:        str(raw.offer_mechanic),
-    offer_value_framing:   str(raw.offer_value_framing),
+    offer_value_framing:   normalizeValueFraming(str(raw.offer_value_framing)),
     offer_urgency:         str(raw.offer_urgency),
     offer_conditions:      str(raw.offer_conditions),
     offer_redemption:      str(raw.offer_redemption),
@@ -102,7 +112,7 @@ ${input.cta ? `CTA: ${input.cta}\n` : ''}Offer: ${input.offerDetails || '(see im
 Look at the attached image and caption together. Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "offer_mechanic": "one of: percent_discount, fixed_amount, bogo, free_shipping, bundle, gift_with_purchase, free_trial, giveaway, loyalty_perk, other",
-  "offer_value_framing": "one of: relative (percent off), absolute (fixed amount off), both",
+  "offer_value_framing": "one of exactly: relative, absolute, both — relative means percent off (e.g. 20%), absolute means a fixed amount off (e.g. 50 currency units off) — return ONLY the single word, not the explanation",
   "offer_urgency": "short phrase describing an urgency/scarcity cue if present (e.g. 'היום בלבד', 'מלאי מוגבל'), otherwise null",
   "offer_conditions": "short phrase for minimum spend / code required / exclusions if present, otherwise null",
   "offer_redemption": "short phrase for how to redeem — e.g. 'קישור בביו', 'קוד בקופה', 'הודעה פרטית', 'בחנות בלבד'",
