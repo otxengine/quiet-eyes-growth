@@ -122,16 +122,34 @@ async function analyzeCompetitorContent(competitor: CompetitorMeta): Promise<any
     }
     const urgencyCount    = offerAnalyzedAll.filter(o => o.a.offer_urgency).length;
     const conditionsCount = offerAnalyzedAll.filter(o => o.a.offer_conditions).length;
+    const inImageCount    = offerAnalyzedAll.filter(o => o.a.offer_in_image).length;
+
+    // Performance signal (dimension 9) — only posts carry engagement metrics (ads don't).
+    // Compares offer posts vs the competitor's regular posts to see if promotions actually land better.
+    const avg = (arr: any[], key: string) => arr.length ? Math.round(arr.reduce((s, x) => s + x[key], 0) / arr.length) : null;
+    const nonOfferPosts = analyzedPosts.filter(p => !p.a.has_offer);
+    const avgLikesOffer      = avg(offerAnalyzedPosts.filter(p => p.likes != null), 'likes');
+    const avgLikesRegular    = avg(nonOfferPosts.filter(p => p.likes != null), 'likes');
+    const avgCommentsOffer   = avg(offerAnalyzedPosts.filter(p => p.comments_count != null), 'comments_count');
+    const avgCommentsRegular = avg(nonOfferPosts.filter(p => p.comments_count != null), 'comments_count');
+    const performance = (avgLikesOffer != null || avgLikesRegular != null) ? {
+      avg_likes_offer_posts: avgLikesOffer, avg_likes_regular_posts: avgLikesRegular,
+      avg_comments_offer_posts: avgCommentsOffer, avg_comments_regular_posts: avgCommentsRegular,
+    } : null;
+
     offerStats = {
       total_offers: offerAnalyzedAll.length,
       peak_day: peakDay,
       peak_day_count: peakDayCount,
       avg_interval_days: avgIntervalDays,
       mechanic_breakdown: tally(offerAnalyzedAll, 'offer_mechanic'),
+      value_framing_breakdown: tally(offerAnalyzedAll, 'offer_value_framing'),
       audience_intent_breakdown: tally(offerAnalyzedAll, 'offer_audience_intent'),
       redemption_breakdown: tally(offerAnalyzedAll, 'offer_redemption').slice(0, 3),
       urgency_pct: Math.round((urgencyCount / offerAnalyzedAll.length) * 100),
       conditions_pct: Math.round((conditionsCount / offerAnalyzedAll.length) * 100),
+      in_image_pct: Math.round((inImageCount / offerAnalyzedAll.length) * 100),
+      performance,
     };
   }
 
@@ -139,7 +157,9 @@ async function analyzeCompetitorContent(competitor: CompetitorMeta): Promise<any
     ? `${offerStats.total_offers} promotions analyzed. Most common mechanic: ${offerStats.mechanic_breakdown[0]?.value || '—'} (${offerStats.mechanic_breakdown[0]?.count || 0}/${offerStats.total_offers}).`
       + (offerStats.peak_day ? ` Most common day: ${offerStats.peak_day} (${offerStats.peak_day_count}/${offerStats.total_offers}).` : '')
       + (offerStats.avg_interval_days != null ? ` Average interval between promotions: ~${offerStats.avg_interval_days} days.` : '')
-      + ` ${offerStats.urgency_pct}% use urgency/scarcity framing. ${offerStats.conditions_pct}% have conditions (min spend/code/exclusions). Main audience intent: ${offerStats.audience_intent_breakdown[0]?.value || '—'}.`
+      + ` ${offerStats.urgency_pct}% use urgency/scarcity framing. ${offerStats.conditions_pct}% have conditions (min spend/code/exclusions). ${offerStats.in_image_pct}% show the offer directly in the creative image (vs caption-only).`
+      + ` Value framing: mostly ${offerStats.value_framing_breakdown[0]?.value || '—'}. Top redemption path: ${offerStats.redemption_breakdown[0]?.value || '—'}. Main audience intent: ${offerStats.audience_intent_breakdown[0]?.value || '—'}.`
+      + (offerStats.performance ? ` Performance: offer posts avg ${offerStats.performance.avg_likes_offer_posts ?? '?'} likes / ${offerStats.performance.avg_comments_offer_posts ?? '?'} comments, vs their regular posts avg ${offerStats.performance.avg_likes_regular_posts ?? '?'} likes / ${offerStats.performance.avg_comments_regular_posts ?? '?'} comments.` : '')
     : 'No structured offer breakdown available yet.';
 
   const visualNote = styles.length || visualHooks.length
@@ -167,7 +187,7 @@ Ads (${ads.length} total):
 ${adSummary}
 
 Return ONLY this JSON object (start with { end with }). ALL string values MUST be in Hebrew:
-{"visual_identity":"2-3 sentences on visual style and aesthetic, grounded in the visual analysis above","content_pillars":["topic 1","topic 2","topic 3"],"hook_patterns":"1-2 sentences on which text/visual hooks they rely on to grab attention","cta_strategy":"1-2 sentences on how consistently and how they drive action","promotion_pattern":"1-2 sentences on the offer CADENCE and TIMING — which day(s) of week and roughly how often (every N days) — grounded in the offer breakdown stats above","caption_patterns":"1-2 sentences on caption style: hashtags, tone","ad_messaging":"1-2 sentences on ad angle and targeting","offer_recommendation":"1-2 sentences: a concrete, actionable suggestion for OUR business based on their offer mechanic/timing/audience-intent patterns above — e.g. when to run a competing offer, what mechanic or angle to try, or what gap to fill","top_content_insight":"1 sentence on best performing content type","our_opportunity":"1-2 sentences on what they are missing we could exploit"}`;
+{"visual_identity":"2-3 sentences on visual style and aesthetic, grounded in the visual analysis above","content_pillars":["topic 1","topic 2","topic 3"],"hook_patterns":"1-2 sentences on which text/visual hooks they rely on to grab attention","cta_strategy":"1-2 sentences on how consistently and how they drive action","promotion_pattern":"1-2 sentences on the offer CADENCE and TIMING — which day(s) of week and roughly how often (every N days) — grounded in the offer breakdown stats above","caption_patterns":"1-2 sentences on caption style: hashtags, tone","ad_messaging":"1-2 sentences on ad angle and targeting","offer_recommendation":"1-2 sentences: a concrete, actionable suggestion for OUR business based on their offer mechanic/timing/framing/audience-intent/performance patterns above — e.g. when to run a competing offer, what mechanic or angle to try, or what gap to fill","top_content_insight":"1 sentence on best performing content type","our_opportunity":"1-2 sentences on what they are missing we could exploit"}`;
 
   const raw = await invokeLLM({ prompt, model: 'sonnet', maxTokens: 1100, skipCache: true });
 

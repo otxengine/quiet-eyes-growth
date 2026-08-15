@@ -18,6 +18,12 @@ const AUDIENCE_INTENT_LABELS = {
   new_customer: 'לקוחות חדשים', retention: 'שימור לקוחות', reactivation: 'הפעלה מחדש',
   list_building: 'גיוס לרשימה', general: 'כללי',
 };
+const VALUE_FRAMING_LABELS = { relative: 'הנחה יחסית (%)', absolute: 'הנחה מוחלטת (₪)', both: 'יחסית ומוחלטת' };
+
+function pctDelta(offerVal, regularVal) {
+  if (offerVal == null || regularVal == null || regularVal === 0) return null;
+  return Math.round(((offerVal - regularVal) / regularVal) * 100);
+}
 
 function CompetitorOfferInsights({ competitor, bpId }) {
   const { analysis, loading, error, generate } = useDeepAnalysis(competitor, bpId);
@@ -63,11 +69,42 @@ function CompetitorOfferInsights({ competitor, bpId }) {
                   ⚡ {stats.urgency_pct}% דחיפות
                 </span>
               )}
+              {stats.conditions_pct > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
+                  ⚠️ {stats.conditions_pct}% עם תנאים
+                </span>
+              )}
+              {stats.value_framing_breakdown[0] && (
+                <span className="px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                  💰 {VALUE_FRAMING_LABELS[stats.value_framing_breakdown[0].value] || stats.value_framing_breakdown[0].value}
+                </span>
+              )}
+              {stats.in_image_pct > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                  🖼️ {stats.in_image_pct}% מוצג בתמונה
+                </span>
+              )}
+              {stats.redemption_breakdown[0] && (
+                <span className="px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                  📍 {stats.redemption_breakdown[0].value}
+                </span>
+              )}
               {stats.audience_intent_breakdown[0] && (
                 <span className="px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
                   🎯 {AUDIENCE_INTENT_LABELS[stats.audience_intent_breakdown[0].value] || stats.audience_intent_breakdown[0].value}
                 </span>
               )}
+            </div>
+          )}
+          {stats?.performance && (stats.performance.avg_likes_offer_posts != null || stats.performance.avg_likes_regular_posts != null) && (
+            <div className="bg-muted/40 rounded-lg p-2 space-y-0.5">
+              <p className="text-[10px] font-semibold text-muted-foreground">📈 ביצועי מבצעים לעומת פוסטים רגילים</p>
+              <p className="text-[11px] leading-relaxed">
+                ❤️ {stats.performance.avg_likes_offer_posts ?? '—'} לעומת {stats.performance.avg_likes_regular_posts ?? '—'} לייקים בממוצע
+                {(() => { const d = pctDelta(stats.performance.avg_likes_offer_posts, stats.performance.avg_likes_regular_posts); return d != null ? ` (${d > 0 ? '+' : ''}${d}%)` : ''; })()}
+                {' • '}
+                💬 {stats.performance.avg_comments_offer_posts ?? '—'} לעומת {stats.performance.avg_comments_regular_posts ?? '—'} תגובות בממוצע
+              </p>
             </div>
           )}
           {analysis.promotion_pattern && (
