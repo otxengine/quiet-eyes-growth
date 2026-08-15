@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { base44 } from '@/api/base44Client';
 
 export const PLATFORM_LABELS = { instagram: 'אינסטגרם', facebook: 'פייסבוק', tiktok: 'טיקטוק' };
 export const PLATFORM_COLORS = {
@@ -32,6 +34,33 @@ export function timeAgo(dateStr) {
 export function fmtDate(dateStr) {
   if (!dateStr) return null;
   return new Date(dateStr).toLocaleDateString('he-IL');
+}
+
+export function parseDeepAnalysis(raw) {
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+/** Shared "deep analysis" fetch/state logic used by both AnalysisTab and CompetitorOfferInsights. */
+export function useDeepAnalysis(competitor, bpId) {
+  const [analysis, setAnalysis] = useState(() => parseDeepAnalysis(competitor.social_deep_analysis));
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState(null);
+
+  const generate = async () => {
+    setLoading(true); setError(null);
+    try {
+      const result = await base44.functions.invoke(
+        'analyzeSocialPosts',
+        { competitorId: competitor.id, businessProfileId: bpId, force: true },
+        60000,
+      );
+      setAnalysis(result?.data || result);
+    } catch (e) { setError(e.message); }
+    setLoading(false);
+  };
+
+  return { analysis, loading, error, generate };
 }
 
 export const ANALYSIS_FIELDS = [

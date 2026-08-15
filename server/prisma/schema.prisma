@@ -274,7 +274,7 @@ model Competitor {
   ad_gaps                  String?  // what they're NOT advertising = our opportunity
   ad_intel_updated_at      String?  // when Claude last analyzed their ads
   // ── Deep social content analysis (grounded in per-post analysis JSON) ───
-  social_deep_analysis     String?  // JSON: {visual_identity, content_pillars, hook_patterns, cta_strategy, promotion_pattern, caption_patterns, ad_messaging, top_content_insight, our_opportunity}
+  social_deep_analysis     String?  // JSON: {visual_identity, content_pillars, hook_patterns, cta_strategy, promotion_pattern, caption_patterns, ad_messaging, offer_recommendation, top_content_insight, our_opportunity, offer_stats}. offer_stats (computed, not LLM): {total_offers, peak_day, peak_day_count, avg_interval_days, mechanic_breakdown, audience_intent_breakdown, redemption_breakdown, urgency_pct, conditions_pct}
   social_deep_analysis_at  String?  // ISO timestamp
   not_relevant             Boolean? @default(false)
   not_relevant_reason      String?
@@ -1024,7 +1024,7 @@ model CompetitorPost {
   comments_count    Int?
   first_seen_at     DateTime  @default(now())
   last_seen_at      DateTime  @default(now())
-  analysis          String?   // JSON: {topic, has_offer, offer_details, visual_hooks, text_hooks, style, has_cta, cta}
+  analysis          String?   // JSON: {topic, has_offer, offer_details, offer_mechanic, offer_value_framing, offer_urgency, offer_conditions, offer_redemption, offer_in_image, offer_audience_intent, visual_hooks, text_hooks, style, has_cta, cta} — offer_* fields populated only when has_offer=true
   analyzed_at       DateTime?
   has_offer         Boolean?  // null = not yet analyzed
   has_cta           Boolean?
@@ -1055,7 +1055,7 @@ model CompetitorAdHistory {
   first_seen_at   DateTime  @default(now())
   last_seen_at    DateTime  @default(now())
   is_active       Boolean   @default(true)
-  analysis        String?   // JSON: {topic, has_offer, offer_details, visual_hooks, text_hooks, style, has_cta, cta}
+  analysis        String?   // JSON: {topic, has_offer, offer_details, offer_mechanic, offer_value_framing, offer_urgency, offer_conditions, offer_redemption, offer_in_image, offer_audience_intent, visual_hooks, text_hooks, style, has_cta, cta} — offer_* fields populated only when has_offer=true
   analyzed_at     DateTime?
   has_offer       Boolean?  // null = not yet analyzed
   has_cta         Boolean?

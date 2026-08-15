@@ -6,8 +6,94 @@ import { Loader2 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import {
   PLATFORM_LABELS, PLATFORM_COLORS, API_BASE, timeAgo,
-  PostDetailModal, AdDetailModal,
+  PostDetailModal, AdDetailModal, useDeepAnalysis,
 } from '@/components/competitors/socialShared';
+
+const OFFER_MECHANIC_LABELS = {
+  percent_discount: '% הנחה', fixed_amount: 'הנחה קבועה', bogo: 'קנה קבל',
+  free_shipping: 'משלוח חינם', bundle: 'באנדל', gift_with_purchase: 'מתנה בקנייה',
+  free_trial: 'ניסיון חינם', giveaway: 'הגרלה', loyalty_perk: 'הטבת מועדון', other: 'אחר',
+};
+const AUDIENCE_INTENT_LABELS = {
+  new_customer: 'לקוחות חדשים', retention: 'שימור לקוחות', reactivation: 'הפעלה מחדש',
+  list_building: 'גיוס לרשימה', general: 'כללי',
+};
+
+function CompetitorOfferInsights({ competitor, bpId }) {
+  const { analysis, loading, error, generate } = useDeepAnalysis(competitor, bpId);
+  const stats = analysis?.offer_stats;
+
+  return (
+    <div className="border-t border-border pt-3 mt-1 space-y-2">
+      {!analysis && !loading && (
+        <button
+          onClick={generate}
+          className="w-full py-1.5 text-[11px] border border-dashed border-border rounded-lg hover:bg-muted/50 text-muted-foreground transition-colors"
+        >
+          ✨ נתח תזמון ומבצעים
+        </button>
+      )}
+      {loading && (
+        <div className="flex items-center gap-2 py-2 justify-center text-[11px] text-muted-foreground">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" /> מנתח...
+        </div>
+      )}
+      {error && <p className="text-[11px] text-destructive text-center py-1">{error}</p>}
+      {analysis && (
+        <div className="space-y-1.5">
+          {stats && (
+            <div className="flex flex-wrap gap-1.5 text-[10px]">
+              {stats.mechanic_breakdown[0] && (
+                <span className="px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                  🏷️ {OFFER_MECHANIC_LABELS[stats.mechanic_breakdown[0].value] || stats.mechanic_breakdown[0].value} ({stats.mechanic_breakdown[0].count}/{stats.total_offers})
+                </span>
+              )}
+              {stats.peak_day && (
+                <span className="px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                  📅 {stats.peak_day} ({stats.peak_day_count}/{stats.total_offers})
+                </span>
+              )}
+              {stats.avg_interval_days != null && (
+                <span className="px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                  ⏱️ כל ~{stats.avg_interval_days} ימים
+                </span>
+              )}
+              {stats.urgency_pct > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+                  ⚡ {stats.urgency_pct}% דחיפות
+                </span>
+              )}
+              {stats.audience_intent_breakdown[0] && (
+                <span className="px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                  🎯 {AUDIENCE_INTENT_LABELS[stats.audience_intent_breakdown[0].value] || stats.audience_intent_breakdown[0].value}
+                </span>
+              )}
+            </div>
+          )}
+          {analysis.promotion_pattern && (
+            <div className="bg-muted/40 rounded-lg p-2 space-y-0.5">
+              <p className="text-[10px] font-semibold text-muted-foreground">🏷️ תזמון ותדירות מבצעים</p>
+              <p className="text-[11px] leading-relaxed">{analysis.promotion_pattern}</p>
+            </div>
+          )}
+          {analysis.offer_recommendation && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-[11px] text-amber-900">
+              💡 {analysis.offer_recommendation}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <button onClick={generate} className="text-[10px] text-muted-foreground underline">רענן ניתוח</button>
+            {(analysis.analyzed_at || competitor.social_deep_analysis_at) && (
+              <span className="text-[10px] text-muted-foreground">
+                עודכן {timeAgo(analysis.analyzed_at || competitor.social_deep_analysis_at)}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function offerDate(item) {
   return item.source === 'post' ? (item.posted_at || item.first_seen_at) : item.last_seen_at;
@@ -59,7 +145,7 @@ function OfferCard({ item, onSelect }) {
   );
 }
 
-function CompetitorOffersSection({ competitor, offers, onSelectPost, onSelectAd }) {
+function CompetitorOffersSection({ competitor, offers, bpId, onSelectPost, onSelectAd }) {
   return (
     <div className="border border-border rounded-xl bg-card p-4 space-y-3">
       <div className="flex items-center gap-2">
@@ -75,6 +161,7 @@ function CompetitorOffersSection({ competitor, offers, onSelectPost, onSelectAd 
           />
         ))}
       </div>
+      <CompetitorOfferInsights competitor={competitor} bpId={bpId} />
     </div>
   );
 }
@@ -140,6 +227,7 @@ export default function CompetitorsOffers() {
               key={competitor.id}
               competitor={competitor}
               offers={offers}
+              bpId={bpId}
               onSelectPost={setSelectedPost}
               onSelectAd={setSelectedAd}
             />

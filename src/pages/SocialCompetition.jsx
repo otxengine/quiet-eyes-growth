@@ -8,7 +8,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   PLATFORM_LABELS, PLATFORM_COLORS, API_BASE, apiFetch, timeAgo,
-  PostDetailModal, AdDetailModal,
+  PostDetailModal, AdDetailModal, useDeepAnalysis,
 } from '@/components/competitors/socialShared';
 
 function resolveSection(param) {
@@ -125,15 +125,8 @@ function AdCard({ ad, onSelect }) {
   );
 }
 
-function parseDeepAnalysis(raw) {
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch { return null; }
-}
-
 function AnalysisTab({ competitor, posts, bpId }) {
-  const [analysis, setAnalysis] = useState(() => parseDeepAnalysis(competitor.social_deep_analysis));
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState(null);
+  const { analysis, loading, error, generate } = useDeepAnalysis(competitor, bpId);
 
   // Client-computed metrics
   const withLikes    = posts.filter(p => p.likes != null);
@@ -154,19 +147,6 @@ function AnalysisTab({ competitor, posts, bpId }) {
   const platformCounts = posts.reduce((acc, p) => { acc[p.platform] = (acc[p.platform] || 0) + 1; return acc; }, {});
   const themes = competitor.content_themes ? competitor.content_themes.split(',').map(t => t.trim()).filter(Boolean) : [];
   const spendIcon = { low: '🟢', medium: '🟡', high: '🔴' }[competitor.ad_spend_signal] || '';
-
-  const handleGenerate = async () => {
-    setLoading(true); setError(null);
-    try {
-      const result = await base44.functions.invoke(
-        'analyzeSocialPosts',
-        { competitorId: competitor.id, businessProfileId: bpId, force: true },
-        60000,
-      );
-      setAnalysis(result?.data || result);
-    } catch (e) { setError(e.message); }
-    setLoading(false);
-  };
 
   const noData = posts.length === 0 && !competitor.content_themes && !competitor.ad_strategy_summary;
 
@@ -252,7 +232,7 @@ function AnalysisTab({ competitor, posts, bpId }) {
         <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">ניתוח AI עמוק</p>
         {!analysis && !loading && (
           <button
-            onClick={handleGenerate}
+            onClick={generate}
             className="w-full py-2 text-xs border border-dashed border-border rounded-lg hover:bg-muted/50 text-muted-foreground transition-colors"
           >
             ✨ עדיין לא נותח (ינותח אוטומטית) — לחץ לניתוח מיידי ({posts.length} פוסטים, {competitor.active_ad_count || 0} מודעות)
@@ -274,6 +254,7 @@ function AnalysisTab({ competitor, posts, bpId }) {
               { key: 'promotion_pattern',   label: '🏷️ דפוס מבצעים' },
               { key: 'caption_patterns',    label: '✍️ סגנון כיתוב' },
               { key: 'ad_messaging',        label: '📢 מסרים במודעות' },
+              { key: 'offer_recommendation', label: '💡 המלצת פעולה למבצעים' },
               { key: 'top_content_insight', label: '🏆 תוכן מוביל' },
               { key: 'our_opportunity',     label: '💡 ההזדמנות שלנו' },
             ].map(({ key, label }) => {
@@ -287,7 +268,7 @@ function AnalysisTab({ competitor, posts, bpId }) {
               );
             })}
             <div className="flex items-center gap-2">
-              <button onClick={handleGenerate} className="text-[10px] text-muted-foreground underline">רענן ניתוח</button>
+              <button onClick={generate} className="text-[10px] text-muted-foreground underline">רענן ניתוח</button>
               {(analysis.analyzed_at || competitor.social_deep_analysis_at) && (
                 <span className="text-[10px] text-muted-foreground">
                   עודכן {timeAgo(analysis.analyzed_at || competitor.social_deep_analysis_at)}

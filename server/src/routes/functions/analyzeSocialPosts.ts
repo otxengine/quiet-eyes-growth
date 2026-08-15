@@ -23,7 +23,7 @@ interface PostRow {
 
 interface AdRow {
   title: string | null; body: string | null; cta: string | null; platform: string; is_active: boolean;
-  analysis: string | null; has_offer: boolean | null; has_cta: boolean | null;
+  analysis: string | null; has_offer: boolean | null; has_cta: boolean | null; first_seen_at: Date | null;
 }
 
 function parseAnalysis(raw: string | null): any {
@@ -47,7 +47,7 @@ async function analyzeCompetitorContent(competitor: CompetitorMeta): Promise<any
   ) as PostRow[];
 
   const ads = await (prisma as any).$queryRawUnsafe(
-    `SELECT title, body, cta, platform, is_active, analysis, has_offer, has_cta
+    `SELECT title, body, cta, platform, is_active, analysis, has_offer, has_cta, first_seen_at
      FROM competitor_ad_history WHERE competitor_id = $1
      ORDER BY last_seen_at DESC NULLS LAST LIMIT 10`,
     competitor.id,
@@ -85,6 +85,63 @@ async function analyzeCompetitorContent(competitor: CompetitorMeta): Promise<any
   const offerTotal = allAnalyzed.length;
   const offerCount = offerItems.length;
 
+  // Deterministic offer-breakdown stats — computed in JS from the structured
+  // per-item vision analysis (analyzePostCreative's offer_* fields), not guessed by the LLM.
+  const DAY_NAMES_HE = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+  const tally = (items: any[], key: string) => {
+    const counts: Record<string, number> = {};
+    for (const it of items) {
+      const v = it.a[key];
+      if (!v) continue;
+      counts[v] = (counts[v] || 0) + 1;
+    }
+    return Object.entries(counts).sort((x, y) => y[1] - x[1]).map(([value, count]) => ({ value, count }));
+  };
+
+  const offerAnalyzedPosts = analyzedPosts.filter(p => p.a.has_offer);
+  const offerAnalyzedAds   = analyzedAds.filter(a => a.a.has_offer);
+  const offerAnalyzedAll   = [...offerAnalyzedPosts, ...offerAnalyzedAds];
+
+  const offerDates = [
+    ...offerAnalyzedPosts.filter(p => p.posted_at).map(p => new Date(p.posted_at as Date)),
+    ...offerAnalyzedAds.filter(a => a.first_seen_at).map(a => new Date(a.first_seen_at as Date)),
+  ].sort((x, y) => x.getTime() - y.getTime());
+
+  let offerStats: any = null;
+  if (offerAnalyzedAll.length > 0) {
+    let peakDay: string | null = null, peakDayCount = 0, avgIntervalDays: number | null = null;
+    if (offerDates.length >= 2) {
+      const dayBuckets = new Array(7).fill(0);
+      offerDates.forEach(d => dayBuckets[d.getDay()]++);
+      const peakDayIdx = dayBuckets.indexOf(Math.max(...dayBuckets));
+      peakDay = DAY_NAMES_HE[peakDayIdx];
+      peakDayCount = dayBuckets[peakDayIdx];
+      const intervals: number[] = [];
+      for (let i = 1; i < offerDates.length; i++) intervals.push((offerDates[i].getTime() - offerDates[i - 1].getTime()) / 86400000);
+      avgIntervalDays = Math.round(intervals.reduce((s, v) => s + v, 0) / intervals.length);
+    }
+    const urgencyCount    = offerAnalyzedAll.filter(o => o.a.offer_urgency).length;
+    const conditionsCount = offerAnalyzedAll.filter(o => o.a.offer_conditions).length;
+    offerStats = {
+      total_offers: offerAnalyzedAll.length,
+      peak_day: peakDay,
+      peak_day_count: peakDayCount,
+      avg_interval_days: avgIntervalDays,
+      mechanic_breakdown: tally(offerAnalyzedAll, 'offer_mechanic'),
+      audience_intent_breakdown: tally(offerAnalyzedAll, 'offer_audience_intent'),
+      redemption_breakdown: tally(offerAnalyzedAll, 'offer_redemption').slice(0, 3),
+      urgency_pct: Math.round((urgencyCount / offerAnalyzedAll.length) * 100),
+      conditions_pct: Math.round((conditionsCount / offerAnalyzedAll.length) * 100),
+    };
+  }
+
+  const offerStatsNote = offerStats
+    ? `${offerStats.total_offers} promotions analyzed. Most common mechanic: ${offerStats.mechanic_breakdown[0]?.value || '—'} (${offerStats.mechanic_breakdown[0]?.count || 0}/${offerStats.total_offers}).`
+      + (offerStats.peak_day ? ` Most common day: ${offerStats.peak_day} (${offerStats.peak_day_count}/${offerStats.total_offers}).` : '')
+      + (offerStats.avg_interval_days != null ? ` Average interval between promotions: ~${offerStats.avg_interval_days} days.` : '')
+      + ` ${offerStats.urgency_pct}% use urgency/scarcity framing. ${offerStats.conditions_pct}% have conditions (min spend/code/exclusions). Main audience intent: ${offerStats.audience_intent_breakdown[0]?.value || '—'}.`
+    : 'No structured offer breakdown available yet.';
+
   const visualNote = styles.length || visualHooks.length
     ? `Recurring visual style: ${styles.join(', ') || '—'}. Recurring visual hooks: ${visualHooks.slice(0, 8).join(', ') || '—'}.`
     : 'No analyzed images yet.';
@@ -101,6 +158,7 @@ Visual analysis (from ${analyzedPosts.length} vision-analyzed posts): ${visualNo
 Recurring text hooks: ${hookNote}
 CTA usage: ${ctaNote}
 Promotion pattern: ${promoNote}
+Offer breakdown (computed — ground your promotion_pattern and offer_recommendation in these numbers, do not invent different ones): ${offerStatsNote}
 
 Recent posts (${posts.length} total):
 ${captionSummary || 'No captions available.'}
@@ -109,9 +167,9 @@ Ads (${ads.length} total):
 ${adSummary}
 
 Return ONLY this JSON object (start with { end with }). ALL string values MUST be in Hebrew:
-{"visual_identity":"2-3 sentences on visual style and aesthetic, grounded in the visual analysis above","content_pillars":["topic 1","topic 2","topic 3"],"hook_patterns":"1-2 sentences on which text/visual hooks they rely on to grab attention","cta_strategy":"1-2 sentences on how consistently and how they drive action","promotion_pattern":"1-2 sentences on how often and what kind of promotions they run","caption_patterns":"1-2 sentences on caption style: hashtags, tone","ad_messaging":"1-2 sentences on ad angle and targeting","top_content_insight":"1 sentence on best performing content type","our_opportunity":"1-2 sentences on what they are missing we could exploit"}`;
+{"visual_identity":"2-3 sentences on visual style and aesthetic, grounded in the visual analysis above","content_pillars":["topic 1","topic 2","topic 3"],"hook_patterns":"1-2 sentences on which text/visual hooks they rely on to grab attention","cta_strategy":"1-2 sentences on how consistently and how they drive action","promotion_pattern":"1-2 sentences on the offer CADENCE and TIMING — which day(s) of week and roughly how often (every N days) — grounded in the offer breakdown stats above","caption_patterns":"1-2 sentences on caption style: hashtags, tone","ad_messaging":"1-2 sentences on ad angle and targeting","offer_recommendation":"1-2 sentences: a concrete, actionable suggestion for OUR business based on their offer mechanic/timing/audience-intent patterns above — e.g. when to run a competing offer, what mechanic or angle to try, or what gap to fill","top_content_insight":"1 sentence on best performing content type","our_opportunity":"1-2 sentences on what they are missing we could exploit"}`;
 
-  const raw = await invokeLLM({ prompt, model: 'sonnet', maxTokens: 900, skipCache: true });
+  const raw = await invokeLLM({ prompt, model: 'sonnet', maxTokens: 1100, skipCache: true });
 
   // Parse: invokeLLM without response_json_schema returns raw text
   let analysis: any = null;
@@ -126,13 +184,14 @@ Return ONLY this JSON object (start with { end with }). ALL string values MUST b
   }
   if (!analysis) throw new Error('LLM returned unexpected format');
 
+  const finalAnalysis = { ...analysis, offer_stats: offerStats };
   const analyzedAt = new Date().toISOString();
   await prisma.competitor.update({
     where: { id: competitor.id },
-    data: { social_deep_analysis: JSON.stringify(analysis), social_deep_analysis_at: analyzedAt },
+    data: { social_deep_analysis: JSON.stringify(finalAnalysis), social_deep_analysis_at: analyzedAt },
   });
 
-  return { ...analysis, analyzed_at: analyzedAt, posts_analyzed: posts.length, ads_analyzed: ads.length };
+  return { ...finalAnalysis, analyzed_at: analyzedAt, posts_analyzed: posts.length, ads_analyzed: ads.length };
 }
 
 const COMPETITOR_SELECT = {
