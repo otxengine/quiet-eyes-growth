@@ -124,6 +124,7 @@ import { reputationAdvisorChat } from './reputationAdvisorChat';
 import { collectCompetitorSocialPosts } from './collectCompetitorSocialPosts';
 import { analyzeSocialPosts } from './analyzeSocialPosts';
 import { backfillCompetitorPostAnalysis } from './backfillCompetitorPostAnalysis';
+import { dedupeCompetitorPosts } from './dedupeCompetitorPosts';
 
 const router = Router();
 
@@ -263,6 +264,7 @@ const FUNCTION_MAP: Record<string, any> = {
   collectCompetitorSocialPosts,
   analyzeSocialPosts,
   backfillCompetitorPostAnalysis,
+  dedupeCompetitorPosts,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,

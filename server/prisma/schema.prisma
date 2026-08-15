@@ -1016,6 +1016,7 @@ model CompetitorPost {
   platform          String    // instagram|facebook|tiktok
   external_post_id  String?
   post_url          String?
+  content_hash      String?   // sha256 of normalized caption+posted_at(day) — dedup fallback when external_post_id/post_url are null or drift between scrapes
   caption           String?
   media_url         String?
   posted_at         DateTime?
@@ -1030,6 +1031,7 @@ model CompetitorPost {
 
   @@index([linked_business, competitor_id, posted_at])
   @@unique([competitor_id, platform, external_post_id])
+  @@unique([competitor_id, platform, content_hash])
   @@map("competitor_posts")
 }
 

@@ -462,6 +462,10 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`);
   await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS raw_json JSONB`);
   await sql(`ALTER TABLE competitor_posts ALTER COLUMN raw_json TYPE TEXT USING raw_json::TEXT`);
+  // KAN dedup fix: content-hash fallback for posts whose external_post_id/post_url
+  // are missing or drift between Apify scrapes (was letting duplicate rows through).
+  await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS content_hash TEXT`);
+  await sql(`CREATE UNIQUE INDEX IF NOT EXISTS competitor_posts_content_hash_key ON competitor_posts(competitor_id, platform, content_hash)`);
   await sql(`ALTER TABLE competitor_ad_history ALTER COLUMN raw_json TYPE TEXT USING raw_json::TEXT`);
   await sql(`ALTER TABLE competitor_ad_history ADD COLUMN IF NOT EXISTS linked_business TEXT`);
   await sql(`ALTER TABLE competitor_ad_history ADD COLUMN IF NOT EXISTS media_url TEXT`);

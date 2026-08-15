@@ -6,6 +6,7 @@ import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
+import { postContentHash } from '../../lib/postContentHash';
 
 const MIN_INTERVAL_MS = 20 * 60 * 60 * 1000; // 20h
 const POSTS_CAP = 15;
@@ -36,6 +37,18 @@ function pgHex(s: string | null | undefined): string | null {
   return Buffer.from(s.split(NULL_CHAR).join(''), 'utf8').toString('hex');
 }
 
+// Strips tracking query params / trailing slash so the same post scraped twice
+// with a slightly different URL string still matches on post_url.
+function normalizeUrl(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    return `${u.origin}${u.pathname.replace(/\/$/, '')}`.toLowerCase();
+  } catch {
+    return url;
+  }
+}
+
 async function scrapeAndSave(
   comp: any,
   platform: string,
@@ -50,13 +63,23 @@ async function scrapeAndSave(
 
   // Raw SQL to avoid P2023 on Render (TIMESTAMPTZ columns in competitor_posts)
   const existing = await (prisma as any).$queryRawUnsafe(
-    `SELECT id, external_post_id, post_url, media_url, analyzed_at FROM competitor_posts WHERE competitor_id = $1 AND platform = $2`,
+    `SELECT id, external_post_id, post_url, content_hash, media_url, analyzed_at, posted_at FROM competitor_posts WHERE competitor_id = $1 AND platform = $2`,
     comp.id, platform,
-  ) as { id: string; external_post_id: string | null; post_url: string | null; media_url: string | null; analyzed_at: string | null }[];
-  const existingIds  = new Set<string>(existing.map(p => p.external_post_id).filter(Boolean) as string[]);
-  const existingUrls = new Set<string>(existing.map(p => p.post_url).filter(Boolean) as string[]);
-  const existingById  = new Map(existing.filter(p => p.external_post_id).map(p => [p.external_post_id as string, p]));
-  const existingByUrl = new Map(existing.filter(p => p.post_url).map(p => [p.post_url as string, p]));
+  ) as { id: string; external_post_id: string | null; post_url: string | null; content_hash: string | null; media_url: string | null; analyzed_at: string | null; posted_at: string | null }[];
+  const existingIds   = new Set<string>(existing.map(p => p.external_post_id).filter(Boolean) as string[]);
+  const existingUrls  = new Set<string>(existing.map(p => normalizeUrl(p.post_url)).filter(Boolean) as string[]);
+  const existingHashes = new Set<string>(existing.map(p => p.content_hash).filter(Boolean) as string[]);
+  const existingById   = new Map(existing.filter(p => p.external_post_id).map(p => [p.external_post_id as string, p]));
+  const existingByUrl  = new Map(existing.filter(p => p.post_url).map(p => [normalizeUrl(p.post_url) as string, p]));
+  const existingByHash = new Map(existing.filter(p => p.content_hash).map(p => [p.content_hash as string, p]));
+  // Cost reduction: only ask Apify for posts newer than what we already have —
+  // skipped entirely on a competitor's first-ever scrape so its initial backlog still loads.
+  // Only counts rows that already have media_url: a null-media row gets deleted and
+  // retried every run (see DELETE above), so excluding it here keeps it within the
+  // "newer than" window instead of advancing the cursor past it and losing it forever.
+  const maxPostedAt = existing.reduce<string | null>(
+    (max, p) => (p.media_url && p.posted_at && (!max || p.posted_at > max)) ? p.posted_at : max, null,
+  );
 
   // Best-effort creative analysis for a row that was never analyzed — used both
   // for brand-new posts and as a backfill for posts scraped before this feature existed.
@@ -82,11 +105,16 @@ async function scrapeAndSave(
   let apifyError: string | null = null;
   const t0 = Date.now();
 
+  // Only set on repeat scrapes (maxPostedAt exists) — a competitor's first-ever
+  // scrape still pulls the full capped history with no since-date filter.
+  const onlyPostsNewerThan = maxPostedAt ? maxPostedAt.slice(0, 10) : null;
+
   if (platform === 'instagram') {
     rawPosts = await runApifyActor('apify~instagram-scraper', {
       directUrls: [url],
       resultsType: 'posts',
       resultsLimit: POSTS_CAP,
+      ...(onlyPostsNewerThan ? { onlyPostsNewerThan } : {}),
     }, 90_000, 50, (msg) => { apifyError = msg; });
   } else if (platform === 'facebook') {
     rawPosts = await runApifyActor('apify~facebook-posts-scraper', {
@@ -94,6 +122,7 @@ async function scrapeAndSave(
       maxPosts: 30,
       maxPostComments: 0,
       commentsMode: 'DISABLED',
+      ...(onlyPostsNewerThan ? { onlyPostsNewerThan } : {}),
     }, 120_000, 50, (msg) => { apifyError = msg; });
   } else if (platform === 'tiktok') {
     rawPosts = await runApifyActor('clockworks~tiktok-profile-scraper', {
@@ -134,6 +163,13 @@ async function scrapeAndSave(
       || (post.shortCode ? `https://www.instagram.com/p/${post.shortCode}/` : null)
       || null,
     );
+    const normalizedPostUrl = normalizeUrl(postUrl);
+    const caption = pgSafe((post.caption || post.text || post.message || post.description || '').substring(0, 1000));
+    const rawTs    = post.timestamp || post.takenAtTimestamp || post.createTime;
+    const postedAt = rawTs
+      ? new Date(rawTs < 1e12 ? rawTs * 1000 : rawTs).toISOString()
+      : pgSafe(post.date || post.postDate || post.createTimeISO || null);
+    const contentHash = postContentHash(platform, caption, postedAt);
 
     const rawMediaUrl = pgSafe(
       // Instagram (apify~instagram-scraper)
@@ -174,42 +210,35 @@ async function scrapeAndSave(
     const upgradedS3  = mediaUrl !== rawMediaUrl ? mediaUrl : null;
     if (upgradedS3) mediaUploaded++;
 
-    if (externalId && existingIds.has(externalId)) {
-      const setClause = upgradedS3
-        ? `"last_seen_at" = NOW(), "media_url" = $4`
-        : `"last_seen_at" = NOW()`;
+    // Dedup cascade: external_post_id -> normalized post_url -> content_hash.
+    // A hash/URL match "heals" a row that was missing external_post_id/post_url on
+    // a prior run instead of inserting yet another duplicate for the same post.
+    const matchedRow =
+      (externalId && existingById.get(externalId)) ||
+      (normalizedPostUrl && existingByUrl.get(normalizedPostUrl)) ||
+      (contentHash && existingByHash.get(contentHash)) ||
+      null;
+
+    if (matchedRow) {
       await (prisma as any).$executeRawUnsafe(
-        `UPDATE competitor_posts SET ${setClause} WHERE competitor_id = $1 AND platform = $2 AND external_post_id = $3`,
-        comp.id, platform, externalId, ...(upgradedS3 ? [upgradedS3] : []),
+        `UPDATE competitor_posts SET
+           last_seen_at = NOW(),
+           media_url = COALESCE($2, media_url),
+           external_post_id = COALESCE(external_post_id, $3),
+           post_url = COALESCE(post_url, $4),
+           content_hash = COALESCE($5, content_hash)
+         WHERE id = $1`,
+        matchedRow.id, upgradedS3, externalId, postUrl, contentHash,
       ).catch(() => {});
-      const row = existingById.get(externalId);
-      if (row && !row.analyzed_at) {
-        const caption = pgSafe((post.caption || post.text || post.message || post.description || '').substring(0, 1000));
-        await analyzeAndSave(row.id, upgradedS3 || row.media_url, caption);
+      if (!matchedRow.analyzed_at) {
+        await analyzeAndSave(matchedRow.id, upgradedS3 || matchedRow.media_url, caption);
       }
-      continue;
-    }
-    if (postUrl && existingUrls.has(postUrl)) {
-      const setClause = upgradedS3
-        ? `"last_seen_at" = NOW(), "media_url" = $4`
-        : `"last_seen_at" = NOW()`;
-      await (prisma as any).$executeRawUnsafe(
-        `UPDATE competitor_posts SET ${setClause} WHERE competitor_id = $1 AND platform = $2 AND post_url = $3`,
-        comp.id, platform, postUrl, ...(upgradedS3 ? [upgradedS3] : []),
-      ).catch(() => {});
-      const row = existingByUrl.get(postUrl);
-      if (row && !row.analyzed_at) {
-        const caption = pgSafe((post.caption || post.text || post.message || post.description || '').substring(0, 1000));
-        await analyzeAndSave(row.id, upgradedS3 || row.media_url, caption);
-      }
+      if (externalId)       existingIds.add(externalId);
+      if (normalizedPostUrl) existingUrls.add(normalizedPostUrl);
+      if (contentHash)      existingHashes.add(contentHash);
       continue;
     }
 
-    const caption = pgSafe((post.caption || post.text || post.message || post.description || '').substring(0, 1000));
-    const rawTs    = post.timestamp || post.takenAtTimestamp || post.createTime;
-    const postedAt = rawTs
-      ? new Date(rawTs < 1e12 ? rawTs * 1000 : rawTs).toISOString()
-      : pgSafe(post.date || post.postDate || post.createTimeISO || null);
     const likes    = typeof (post.likesCount    ?? post.diggCount  ?? post.likes)    === 'number' ? (post.likesCount    ?? post.diggCount  ?? post.likes)    : null;
     const comments = typeof (post.commentsCount ?? post.commentCount ?? post.comments) === 'number' ? (post.commentsCount ?? post.commentCount ?? post.comments) : null;
 
@@ -221,7 +250,7 @@ async function scrapeAndSave(
       await (prisma as any).$executeRawUnsafe(
         `INSERT INTO competitor_posts
            (id, linked_business, competitor_id, platform,
-            external_post_id, post_url, caption, media_url,
+            external_post_id, post_url, content_hash, caption, media_url,
             posted_at, likes, comments_count, last_seen_at)
          VALUES (
            $1,
@@ -230,6 +259,7 @@ async function scrapeAndSave(
            convert_from(decode($4, 'hex'), 'UTF8'),
            NULLIF(convert_from(decode($5, 'hex'), 'UTF8'), ''),
            NULLIF(convert_from(decode($6, 'hex'), 'UTF8'), ''),
+           $13,
            NULLIF(convert_from(decode($7, 'hex'), 'UTF8'), ''),
            NULLIF(convert_from(decode($8, 'hex'), 'UTF8'), ''),
            $9::timestamptz,
@@ -249,9 +279,11 @@ async function scrapeAndSave(
         likes,
         comments,
         new Date().toISOString(),
+        contentHash,
       );
-      if (externalId) existingIds.add(externalId);
-      if (postUrl)    existingUrls.add(postUrl);
+      if (externalId)       existingIds.add(externalId);
+      if (normalizedPostUrl) existingUrls.add(normalizedPostUrl);
+      if (contentHash)      existingHashes.add(contentHash);
       upserted++;
 
       // Analyze the creative (topic/offer/hooks/style/cta) — best-effort, never blocks the scrape loop.
