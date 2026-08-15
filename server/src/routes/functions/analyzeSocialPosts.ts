@@ -108,7 +108,7 @@ ${captionSummary || 'No captions available.'}
 Ads (${ads.length} total):
 ${adSummary}
 
-Return ONLY this JSON object (start with { end with }):
+Return ONLY this JSON object (start with { end with }). ALL string values MUST be in Hebrew:
 {"visual_identity":"2-3 sentences on visual style and aesthetic, grounded in the visual analysis above","content_pillars":["topic 1","topic 2","topic 3"],"hook_patterns":"1-2 sentences on which text/visual hooks they rely on to grab attention","cta_strategy":"1-2 sentences on how consistently and how they drive action","promotion_pattern":"1-2 sentences on how often and what kind of promotions they run","caption_patterns":"1-2 sentences on caption style: hashtags, tone","ad_messaging":"1-2 sentences on ad angle and targeting","top_content_insight":"1 sentence on best performing content type","our_opportunity":"1-2 sentences on what they are missing we could exploit"}`;
 
   const raw = await invokeLLM({ prompt, model: 'sonnet', maxTokens: 900, skipCache: true });
