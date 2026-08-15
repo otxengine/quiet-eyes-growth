@@ -264,7 +264,7 @@ router.get('/social/leaderboard', async (req: Request, res: Response) => {
                   COALESCE(SUM(likes), 0)::int AS total_likes,
                   COALESCE(SUM(comments_count), 0)::int AS total_comments
            FROM competitor_posts
-           WHERE competitor_id = ANY($1::text[]) AND posted_at >= $2::timestamptz
+           WHERE competitor_id = ANY($1::text[]) AND posted_at::timestamptz >= $2::timestamptz
            GROUP BY competitor_id`,
           ids, since.toISOString(),
         ) as { competitor_id: string; post_count: number; total_likes: number; total_comments: number }[]
