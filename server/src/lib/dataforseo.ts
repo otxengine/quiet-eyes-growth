@@ -129,7 +129,9 @@ export async function searchOrganic(keyword: string): Promise<{ urls: string[]; 
 // ── Business Data API: Google Reviews (task-based — no live/sync variant exists) ──
 
 const REVIEWS_TASK_POST_URL = 'https://api.dataforseo.com/v3/business_data/google/reviews/task_post';
-const REVIEWS_TASK_GET_URL  = 'https://api.dataforseo.com/v3/business_data/google/reviews/task_get/advanced';
+// Confirmed against a live tasks_ready response — no "/advanced" segment for this endpoint
+// (unlike the /live/advanced sync endpoints above), despite some docs suggesting otherwise.
+const REVIEWS_TASK_GET_URL  = 'https://api.dataforseo.com/v3/business_data/google/reviews/task_get';
 
 export interface SubmitGoogleReviewsTaskParams {
   placeId?:       string;

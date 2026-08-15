@@ -104,7 +104,7 @@ describe('getGoogleReviewsTaskResult', () => {
     const result = await getGoogleReviewsTaskResult('task123');
     expect(result).toEqual({ items: [{ review_text: 'hi' }], costUsd: 0.01, statusCode: 20000 });
     expect((global.fetch as jest.Mock).mock.calls[0][0]).toBe(
-      'https://api.dataforseo.com/v3/business_data/google/reviews/task_get/advanced/task123',
+      'https://api.dataforseo.com/v3/business_data/google/reviews/task_get/task123',
     );
   });
 
