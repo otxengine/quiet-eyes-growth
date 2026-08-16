@@ -137,7 +137,6 @@ function CityInput({ value, onChange, onSelect }) {
           value={value}
           onChange={e => { onChange(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
-          onKeyDown={e => { if (e.key === 'Enter' && value.trim()) { setOpen(false); onSelect(value.trim()); } }}
           placeholder="הקלד עיר או יישוב"
           className="flex-1 bg-transparent text-[13px] outline-none text-gray-700"
         />
@@ -285,7 +284,6 @@ export default function OnboardingForm() {
               ref={inputRef}
               value={textInput}
               onChange={e => setTextInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && textInput.trim() && advance('name', textInput.trim(), textInput.trim())}
               placeholder="שם העסק שלך"
               className="w-full bg-white border border-gray-200 rounded-full px-5 py-3 text-[14px] text-gray-700 outline-none focus:border-[#e8344d] transition-colors max-w-sm"
             />
@@ -321,6 +319,7 @@ export default function OnboardingForm() {
                 className="w-full bg-white border border-gray-200 rounded-full pr-10 pl-4 py-2 text-[13px] outline-none focus:border-[#e8344d] transition-colors"
                 onKeyDown={e => {
                   if (e.key === 'Enter') {
+                    e.preventDefault();
                     const v = e.target.value.trim();
                     if (v && !tempServices.includes(v)) setTempServices(prev => [...prev, v]);
                     setOtherService('');
@@ -442,6 +441,14 @@ export default function OnboardingForm() {
 
   const isAutoAdvanceStep = [6, 8].includes(step);
 
+  // Enter key in any single-line input submits the form (native behavior);
+  // textareas keep Enter as newline since browsers don't submit forms from them.
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    if (!canAdvance() || isSubmitting) return;
+    handlePrimaryAction();
+  };
+
   const handlePrimaryAction = () => {
     if (step === 9) {
       handleSubmit();
@@ -538,7 +545,7 @@ export default function OnboardingForm() {
   return (
     <div dir="rtl" className="min-h-screen flex" style={BG_STYLE}>
       {/* Right: Conversation area (flex-1) */}
-      <div className="flex-1 flex flex-col h-screen">
+      <form className="flex-1 flex flex-col h-screen" onSubmit={handleFormSubmit}>
         {/* Scrollable conversation history */}
         <div
           ref={scrollRef}
@@ -563,13 +570,14 @@ export default function OnboardingForm() {
         {!isAutoAdvanceStep && step >= 1 && step <= 9 && (
           <div className="border-t border-gray-200/60 bg-white/80 backdrop-blur-sm px-6 py-4 flex items-center justify-between gap-3">
             <button
+              type="button"
               onClick={skipStep}
               className="border border-gray-300 text-gray-500 rounded-full px-6 py-2.5 text-[13px] font-medium hover:border-gray-400 transition-colors"
             >
               מלאו אחר כך
             </button>
             <button
-              onClick={handlePrimaryAction}
+              type="submit"
               disabled={!canAdvance() || isSubmitting}
               className="bg-[#e8344d] text-white rounded-full px-8 py-2.5 text-[14px] font-semibold hover:bg-[#c92b40] transition-colors disabled:opacity-40 flex items-center gap-2 shadow-sm"
             >
@@ -579,7 +587,7 @@ export default function OnboardingForm() {
             </button>
           </div>
         )}
-      </div>
+      </form>
 
       {/* Left: Progress tracker */}
       <div className="w-56 border-r border-gray-200/70 bg-white/50 px-5 py-8 flex-shrink-0 hidden md:block">

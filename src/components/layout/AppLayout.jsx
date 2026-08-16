@@ -236,7 +236,7 @@ export default function AppLayout() {
     || (location.pathname.startsWith('/signals/')  ? 'פרטי סיגנל' : null)
     || 'Cortexi';
 
-  if (loadingProfiles) {
+  if (stillLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-border border-t-primary rounded-full animate-spin" />
