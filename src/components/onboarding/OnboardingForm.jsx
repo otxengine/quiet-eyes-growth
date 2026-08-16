@@ -137,6 +137,11 @@ function CityInput({ value, onChange, onSelect }) {
           value={value}
           onChange={e => { onChange(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
+          onKeyDown={e => {
+            if (e.key !== 'Enter') return;
+            e.preventDefault(); // don't let this bubble to the outer form's native submit
+            if (value.trim()) { setOpen(false); onSelect(value.trim()); }
+          }}
           placeholder="הקלד עיר או יישוב"
           className="flex-1 bg-transparent text-[13px] outline-none text-gray-700"
         />
@@ -171,6 +176,8 @@ export default function OnboardingForm() {
   const [tempSources, setTempSources] = useState([]);
   const [otherService, setOtherService] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingStep, setEditingStep] = useState(null); // step number of the answer bubble being edited, or null
+  const [editDraft, setEditDraft] = useState(null);
   const [formData, setFormData] = useState({
     name: '', city: '', category: '',
     relevant_services: [], description: '', price_tier: '',
@@ -212,7 +219,7 @@ export default function OnboardingForm() {
 
   const advance = (field, value, displayLabel) => {
     if (field) setFormData(prev => ({ ...prev, [field]: value }));
-    if (displayLabel) setMessages(prev => [...prev, { type: 'user', text: displayLabel }]);
+    if (displayLabel) setMessages(prev => [...prev, { type: 'user', text: displayLabel, step }]);
     setTextInput('');
     setCitySearch('');
     setTempServices([]);
@@ -233,6 +240,37 @@ export default function OnboardingForm() {
 
   const toggleSource = (val) => {
     setTempSources(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
+  };
+
+  // ── Editing a previously-submitted answer bubble ──────────────────────────
+  const EDIT_FIELD_BY_STEP = {
+    1: 'name', 2: 'city', 4: 'relevant_services', 5: 'description',
+    6: 'price_tier', 7: 'customer_sources', 8: 'business_goal',
+  };
+
+  const startEdit = (targetStep) => {
+    if (editingStep !== null || isSubmitting || targetStep == null) return;
+    setEditingStep(targetStep);
+    switch (targetStep) {
+      case 1: setEditDraft(formData.name); break;
+      case 2: setEditDraft(formData.city); break;
+      case 4: setEditDraft({ services: formData.relevant_services || [], other: '' }); break;
+      case 5: setEditDraft(formData.description || ''); break;
+      case 6: setEditDraft(formData.price_tier); break;
+      case 7: setEditDraft(formData.customer_sources || []); break;
+      case 8: setEditDraft(formData.business_goal); break;
+      default: setEditDraft(null);
+    }
+  };
+
+  const cancelEdit = () => { setEditingStep(null); setEditDraft(null); };
+
+  const commitEdit = (value, displayLabel) => {
+    const field = EDIT_FIELD_BY_STEP[editingStep];
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setMessages(prev => prev.map(m => (m.type === 'user' && m.step === editingStep) ? { ...m, text: displayLabel } : m));
+    setEditingStep(null);
+    setEditDraft(null);
   };
 
   const handleSubmit = async () => {
@@ -428,6 +466,183 @@ export default function OnboardingForm() {
     }
   };
 
+  // ── Inline editor for a past answer bubble (Save/Cancel, no form-submit) ─────
+  const renderEditInput = () => {
+    const cancelBtn = (
+      <button type="button" onClick={cancelEdit} className="text-gray-400 text-[12px] hover:text-gray-600 transition-colors">
+        ביטול
+      </button>
+    );
+
+    switch (editingStep) {
+      case 1:
+        return (
+          <div className="flex items-center gap-2 max-w-sm">
+            <input
+              autoFocus
+              value={editDraft}
+              onChange={e => setEditDraft(e.target.value)}
+              onKeyDown={e => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                if (editDraft.trim()) commitEdit(editDraft.trim(), editDraft.trim());
+              }}
+              className="flex-1 bg-white border border-gray-200 rounded-full px-4 py-2 text-[13px] outline-none focus:border-[#e8344d] transition-colors"
+            />
+            <button
+              type="button"
+              disabled={!editDraft.trim()}
+              onClick={() => commitEdit(editDraft.trim(), editDraft.trim())}
+              className="text-[#e8344d] text-[12px] font-semibold disabled:opacity-40"
+            >
+              שמור
+            </button>
+            {cancelBtn}
+          </div>
+        );
+
+      case 2:
+        return (
+          <div className="flex items-center gap-2 max-w-sm">
+            <div className="flex-1">
+              <CityInput value={editDraft} onChange={setEditDraft} onSelect={city => commitEdit(city, city)} />
+            </div>
+            {cancelBtn}
+          </div>
+        );
+
+      case 4: {
+        const allServices = editDraft.other.trim() ? [...editDraft.services, editDraft.other.trim()] : editDraft.services;
+        const save = () => {
+          const knownLabels = SERVICES.filter(s => allServices.includes(s.value)).map(s => s.label);
+          const customLabels = allServices.filter(v => !SERVICES.find(s => s.value === v));
+          commitEdit(allServices, [...knownLabels, ...customLabels].join(', '));
+        };
+        return (
+          <div className="space-y-3 max-w-md">
+            <PillSelector
+              options={SERVICES}
+              selected={editDraft.services}
+              multi
+              onSelect={val => setEditDraft(d => ({
+                ...d,
+                services: d.services.includes(val) ? d.services.filter(v => v !== val) : [...d.services, val],
+              }))}
+            />
+            <input
+              value={editDraft.other}
+              onChange={e => setEditDraft(d => ({ ...d, other: e.target.value }))}
+              placeholder='אחר — הקלד שירות וגש Enter'
+              className="w-full bg-white border border-gray-200 rounded-full px-4 py-2 text-[13px] outline-none focus:border-[#e8344d] transition-colors"
+              onKeyDown={e => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                const v = e.target.value.trim();
+                if (v && !editDraft.services.includes(v)) setEditDraft(d => ({ services: [...d.services, v], other: '' }));
+                else setEditDraft(d => ({ ...d, other: '' }));
+              }}
+            />
+            <div className="flex items-center gap-3">
+              <button type="button" disabled={allServices.length === 0} onClick={save} className="text-[#e8344d] text-[12px] font-semibold disabled:opacity-40">
+                שמור
+              </button>
+              {cancelBtn}
+            </div>
+          </div>
+        );
+      }
+
+      case 5:
+        return (
+          <div className="space-y-2 max-w-sm">
+            <textarea
+              autoFocus
+              value={editDraft}
+              onChange={e => setEditDraft(e.target.value)}
+              rows={3}
+              className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3 text-[13px] text-gray-700 outline-none focus:border-[#e8344d] transition-colors resize-none"
+            />
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const txt = editDraft.trim();
+                  commitEdit(txt, txt ? txt.slice(0, 30) + (txt.length > 30 ? '...' : '') : '(ריק)');
+                }}
+                className="text-[#e8344d] text-[12px] font-semibold"
+              >
+                שמור
+              </button>
+              {cancelBtn}
+            </div>
+          </div>
+        );
+
+      case 6:
+        return (
+          <div className="space-y-2 max-w-sm">
+            <div className="grid grid-cols-2 gap-2">
+              {PRICE_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => commitEdit(opt.value, opt.label)}
+                  className={`text-right p-3.5 rounded-2xl border transition-all ${
+                    editDraft === opt.value ? 'border-[#e8344d] bg-[#fce4ec]' : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <div className="font-semibold text-[13px] text-gray-800">{opt.label}</div>
+                  <div className="text-[11px] text-gray-500 mt-0.5">{opt.sub}</div>
+                </button>
+              ))}
+            </div>
+            {cancelBtn}
+          </div>
+        );
+
+      case 7: {
+        const save = () => {
+          const labels = SOURCE_OPTIONS.filter(s => editDraft.includes(s.value)).map(s => s.label);
+          commitEdit(editDraft, labels.join(', '));
+        };
+        return (
+          <div className="space-y-3 max-w-md">
+            <PillSelector
+              options={SOURCE_OPTIONS}
+              selected={editDraft}
+              multi
+              onSelect={val => setEditDraft(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val])}
+            />
+            <div className="flex items-center gap-3">
+              <button type="button" disabled={editDraft.length === 0} onClick={save} className="text-[#e8344d] text-[12px] font-semibold disabled:opacity-40">
+                שמור
+              </button>
+              {cancelBtn}
+            </div>
+          </div>
+        );
+      }
+
+      case 8:
+        return (
+          <div className="space-y-2 max-w-md">
+            <PillSelector
+              options={GOAL_OPTIONS}
+              selected={editDraft}
+              onSelect={val => {
+                const opt = GOAL_OPTIONS.find(g => g.value === val);
+                commitEdit(val, opt?.label || val);
+              }}
+            />
+            {cancelBtn}
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
   // Should the "בואו נתקדם" button be shown and enabled?
   const canAdvance = () => {
     if (step === 1) return textInput.trim().length > 0;
@@ -552,11 +767,25 @@ export default function OnboardingForm() {
           className="flex-1 overflow-y-auto px-6 pt-8 pb-4 space-y-4"
           style={{ scrollbarWidth: 'thin' }}
         >
-          {messages.map((msg, i) =>
-            msg.type === 'ai'
-              ? <AiBubble key={i}>{msg.text}</AiBubble>
-              : <UserBubble key={i}>{msg.text}</UserBubble>
-          )}
+          {messages.map((msg, i) => {
+            if (msg.type === 'ai') return <AiBubble key={i}>{msg.text}</AiBubble>;
+            if (editingStep === msg.step) {
+              return (
+                <div key={i} className="pt-1" style={{ paddingRight: '52px' }}>
+                  {renderEditInput()}
+                </div>
+              );
+            }
+            return (
+              <UserBubble
+                key={i}
+                editable={editingStep === null && !isSubmitting && msg.step != null}
+                onClick={() => startEdit(msg.step)}
+              >
+                {msg.text}
+              </UserBubble>
+            );
+          })}
 
           {/* Current step input area */}
           {step >= 1 && step <= 9 && (

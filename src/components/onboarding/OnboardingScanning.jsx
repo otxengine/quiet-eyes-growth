@@ -26,6 +26,7 @@ const scanSteps = [
   { fn: 'generateMissions',        text: 'מתכנן משימות לכל הסוכנים...',     narrative: 'Claude + GPT-4o בונים תוכנית עבודה מותאמת...' },
   { fn: 'generateAbout',           text: 'מכין טיוטת זהות עסקית...',        narrative: 'מנסח תיאור, קהל יעד וטון תוכן לאישורך...' },
   { fn: 'autoConfigOsint',         text: 'מגדיר מקורות מידע מותאמים...',    narrative: 'בוחר את המקורות הרלוונטיים לתחום שלך...' },
+  { fn: 'resolveGooglePlace',      text: 'מחפש את הדף העסקי שלך בגוגל...', narrative: 'מקשר את העסק שלך ל-Google...' },
   { fn: 'collectWebSignals',       text: 'סורק את השוק ברשת...',            narrative: 'מחפש מה לקוחות מדברים על הסקטור שלך...' },
   { fn: 'collectSocialSignals',    text: 'אוסף אותות מרשתות חברתיות...',   narrative: 'מנתח טרנדים רלוונטיים לעסק שלך...' },
   { fn: 'synthesizeMarketInsights', text: 'מנתח תובנות שוק...',              narrative: 'מזהה הזדמנויות ספציפיות לתחום שלך...', delay: 8000 },
