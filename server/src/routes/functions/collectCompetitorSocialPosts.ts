@@ -55,7 +55,6 @@ async function scrapeAndSave(
   platform: string,
   url: string,
   businessProfileId: string,
-  force: boolean,
 ): Promise<{ competitor: string; platform: string; url: string; upserted: number; apify_returned: number; media_found: number; media_uploaded: number; first_post_keys?: string[]; first_post_media_sample?: Record<string, any>; elapsed_ms: number; error: string | null; insert_errors?: any[] }> {
   // One-time backfill: delete posts with no media so they get re-inserted with correct field extraction
   await (prisma as any).$executeRawUnsafe(
@@ -88,9 +87,12 @@ async function scrapeAndSave(
   // Cross-business cache: another business may already have a fresh scrape of this
   // exact real-world competitor (same google_place_id or same platform URL). Clone
   // its posts (including analysis — this is what saves the vision-LLM cost, not just
-  // Apify) instead of paying for another scrape. Falls through to the normal Apify
-  // path below if no fresh donor exists.
-  const donors = force ? [] : await findDonorCandidates(comp.id, businessProfileId, {
+  // Apify) instead of paying for another scrape. Runs regardless of `force` — force
+  // only bypasses the per-business ran-recently throttle above; a fresh donor is
+  // just as valid as a fresh scrape of our own, including for onboarding's initial
+  // force:true population, which is exactly when this matters most. Falls through
+  // to the normal Apify path below if no fresh donor exists.
+  const donors = await findDonorCandidates(comp.id, businessProfileId, {
     googlePlaceId: comp.google_place_id ?? null,
     platform: platform as DonorPlatform,
     urlValue: url,
@@ -419,7 +421,7 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
     // Run all Apify scrapes in parallel
     const results = await Promise.allSettled(
       tasks.map(({ comp, platform, url }) =>
-        scrapeAndSave(comp, platform, url, businessProfileId, !!force),
+        scrapeAndSave(comp, platform, url, businessProfileId),
       ),
     );
 

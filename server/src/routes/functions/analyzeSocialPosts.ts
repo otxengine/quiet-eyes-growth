@@ -316,7 +316,8 @@ export async function scheduledAnalyzeSocialPosts(req: Request, res: Response) {
       const lastAt = competitor.social_deep_analysis_at ? new Date(competitor.social_deep_analysis_at).getTime() : 0;
       if (!force && Date.now() - lastAt < PER_COMP_INTERVAL_MS) continue;
       try {
-        if (!force && await tryCloneDeepAnalysisFromDonor(competitor)) {
+        // Runs regardless of force — see note in analyzeSocialPosts above.
+        if (await tryCloneDeepAnalysisFromDonor(competitor)) {
           processed++;
           continue;
         }

@@ -1,8 +1,10 @@
 /**
  * Unit tests — collectCompetitorSocialPosts cross-business donor cache.
  * Covers: fresh donor found -> clones posts, skips Apify entirely; no fresh
- * donor -> falls through to a normal Apify scrape; force=true -> always
- * scrapes fresh, never checks for a donor.
+ * donor -> falls through to a normal Apify scrape; force=true still checks
+ * for a donor (force only bypasses the per-business ran-recently throttle,
+ * not the donor cache — this matters for onboarding's initial force:true
+ * population, which is exactly when cross-business sharing helps most).
  */
 
 const queryRawUnsafe = jest.fn();
@@ -88,12 +90,27 @@ test('no fresh donor -> falls through to a normal Apify scrape', async () => {
   expect(runApifyActor).toHaveBeenCalled();
 });
 
-test('force=true skips the donor lookup entirely and always scrapes fresh', async () => {
-  queryRawUnsafe.mockResolvedValueOnce([]); // existing posts only — no freshness-check call expected
+test('force=true still checks for and uses a fresh donor (bypasses only the ran-recently throttle)', async () => {
+  queryRawUnsafe
+    .mockResolvedValueOnce([])                       // existing posts for this competitor: none yet
+    .mockResolvedValueOnce([{ competitor_id: 'donor-1' }]); // freshness check: donor has recent posts
+  (findDonorCandidates as jest.Mock).mockResolvedValueOnce([{ id: 'donor-1', linked_business: 'other-biz' }]);
 
   const req: any = { body: { businessProfileId: 'b1', force: true } };
   await collectCompetitorSocialPosts(req, mockRes());
 
-  expect(findDonorCandidates).not.toHaveBeenCalled();
+  expect(findDonorCandidates).toHaveBeenCalled();
+  expect(runApifyActor).not.toHaveBeenCalled();
+});
+
+test('force=true with no fresh donor still scrapes fresh via Apify', async () => {
+  queryRawUnsafe
+    .mockResolvedValueOnce([]) // existing posts
+    .mockResolvedValueOnce([]); // freshness check: no donor fresh enough
+  (findDonorCandidates as jest.Mock).mockResolvedValueOnce([{ id: 'donor-1', linked_business: 'other-biz' }]);
+
+  const req: any = { body: { businessProfileId: 'b1', force: true } };
+  await collectCompetitorSocialPosts(req, mockRes());
+
   expect(runApifyActor).toHaveBeenCalled();
 });

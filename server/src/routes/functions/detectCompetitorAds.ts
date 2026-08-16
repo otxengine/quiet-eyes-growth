@@ -207,14 +207,14 @@ export async function detectCompetitorAds(req: Request, res: Response) {
           continue;
         }
 
-        if (!req.body.force) {
-          const donor = await findAdsDonor(c, businessProfileId);
-          if (donor) {
-            const cloned = await cloneAdsFromDonor(comp.id, businessProfileId, donor.id);
-            console.log(`[detectCompetitorAds] cloned ${cloned} ads for ${comp.name} from donor ${donor.id} (business ${donor.linked_business}) — skipped SearchAPI/LLM`);
-            processed++;
-            continue;
-          }
+        // Runs regardless of force — a fresh donor is just as valid as a fresh scan
+        // of our own, including for onboarding's initial force:true population.
+        const donor = await findAdsDonor(c, businessProfileId);
+        if (donor) {
+          const cloned = await cloneAdsFromDonor(comp.id, businessProfileId, donor.id);
+          console.log(`[detectCompetitorAds] cloned ${cloned} ads for ${comp.name} from donor ${donor.id} (business ${donor.linked_business}) — skipped SearchAPI/LLM`);
+          processed++;
+          continue;
         }
 
         console.log(`[detectCompetitorAds] scanning ads for: ${comp.name}`);
