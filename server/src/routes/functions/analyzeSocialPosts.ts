@@ -1,11 +1,13 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
+import { findDonorCandidates, DonorCandidate, DonorPlatform } from '../../lib/competitorDonor';
 
 const PER_COMP_INTERVAL_MS = 48 * 60 * 60 * 1000; // 48h — matches detectCompetitorAds cadence
 
 interface CompetitorMeta {
   id: string;
+  linked_business: string;
   name: string;
   category: string | null;
   content_themes: string | null;
@@ -13,6 +15,44 @@ interface CompetitorMeta {
   strongest_channel: string | null;
   social_post_frequency: string | null;
   social_followers_est: string | null;
+  google_place_id: string | null;
+  instagram_url: string | null;
+  facebook_url: string | null;
+  tiktok_url: string | null;
+}
+
+// Cross-business cache: another business may already have a fresh deep analysis
+// of this exact real-world competitor — clone it instead of calling the LLM again.
+// Returns whether a fresh donor was found and applied.
+async function tryCloneDeepAnalysisFromDonor(competitor: CompetitorMeta): Promise<boolean> {
+  const platforms: DonorPlatform[] = ['instagram', 'facebook', 'tiktok'];
+  const byId = new Map<string, DonorCandidate>();
+  for (const platform of platforms) {
+    const urlValue = competitor[`${platform}_url`] ?? null;
+    if (!competitor.google_place_id && !urlValue) continue;
+    const found = await findDonorCandidates(competitor.id, competitor.linked_business, {
+      googlePlaceId: competitor.google_place_id ?? null, platform, urlValue,
+    });
+    for (const d of found) byId.set(d.id, d);
+  }
+  if (byId.size === 0) return false;
+
+  const rows = await (prisma as any).$queryRawUnsafe(
+    `SELECT id, social_deep_analysis, social_deep_analysis_at FROM competitors
+     WHERE id = ANY($1::text[]) AND social_deep_analysis_at IS NOT NULL
+     ORDER BY social_deep_analysis_at DESC LIMIT 1`,
+    Array.from(byId.keys()),
+  ) as { id: string; social_deep_analysis: string; social_deep_analysis_at: string }[];
+  if (rows.length === 0) return false;
+  if (Date.now() - new Date(rows[0].social_deep_analysis_at).getTime() >= PER_COMP_INTERVAL_MS) return false;
+
+  await prisma.competitor.update({
+    where: { id: competitor.id },
+    data: { social_deep_analysis: rows[0].social_deep_analysis, social_deep_analysis_at: new Date().toISOString() },
+  });
+  const donor = byId.get(rows[0].id)!;
+  console.log(`[analyzeSocialPosts] cloned deep analysis for ${competitor.name} from donor ${donor.id} (business ${donor.linked_business}) — skipped LLM`);
+  return true;
 }
 
 interface PostRow {
@@ -215,11 +255,12 @@ Return ONLY this JSON object (start with { end with }). ALL string values MUST b
 }
 
 const COMPETITOR_SELECT = {
-  id: true, name: true, category: true,
+  id: true, linked_business: true, name: true, category: true,
   content_themes: true, engagement_level: true,
   strongest_channel: true, social_post_frequency: true,
   social_followers_est: true,
   social_deep_analysis: true, social_deep_analysis_at: true,
+  google_place_id: true, instagram_url: true, facebook_url: true, tiktok_url: true,
 } as const;
 
 /** POST /api/functions/analyzeSocialPosts — manual "✨ צור ניתוח AI" button, one competitor. */
@@ -241,6 +282,14 @@ export async function analyzeSocialPosts(req: Request, res: Response) {
       if (age < PER_COMP_INTERVAL_MS) {
         return res.json({ ...JSON.parse(competitor.social_deep_analysis), cached: true, analyzed_at: competitor.social_deep_analysis_at });
       }
+    }
+
+    if (!force && await tryCloneDeepAnalysisFromDonor(competitor)) {
+      const fresh = await prisma.competitor.findUnique({
+        where: { id: competitor.id },
+        select: { social_deep_analysis: true, social_deep_analysis_at: true },
+      });
+      return res.json({ ...JSON.parse(fresh!.social_deep_analysis!), cloned: true, analyzed_at: fresh!.social_deep_analysis_at });
     }
 
     const result = await analyzeCompetitorContent(competitor);
@@ -267,6 +316,10 @@ export async function scheduledAnalyzeSocialPosts(req: Request, res: Response) {
       const lastAt = competitor.social_deep_analysis_at ? new Date(competitor.social_deep_analysis_at).getTime() : 0;
       if (!force && Date.now() - lastAt < PER_COMP_INTERVAL_MS) continue;
       try {
+        if (!force && await tryCloneDeepAnalysisFromDonor(competitor)) {
+          processed++;
+          continue;
+        }
         await analyzeCompetitorContent(competitor);
         processed++;
       } catch (err: any) {

@@ -7,6 +7,7 @@ import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { searchAllAds, hasSearchApiKey, AdResult } from '../../lib/searchapi';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
+import { findDonorCandidates, DonorCandidate, DonorPlatform } from '../../lib/competitorDonor';
 
 function adContentHash(a: AdResult) {
   return createHash('sha256')
@@ -80,6 +81,75 @@ async function upsertAdHistory(competitorId: string, businessProfileId: string, 
 const MIN_INTERVAL_MS     = 48 * 60 * 60 * 1000; // 48h between full runs (saves API credits)
 const PER_COMP_INTERVAL_MS = 48 * 60 * 60 * 1000; // skip individual competitor if scanned within 48h
 
+// Cross-business cache: another business may already have a fresh ad scan of this
+// exact real-world competitor. Checks google_place_id + each set social URL (ads
+// aren't tied to one platform the way posts are, so no single platform to match on).
+async function findAdsDonor(comp: any, businessProfileId: string): Promise<(DonorCandidate & { sponsored_ads_updated_at: string }) | null> {
+  const platforms: DonorPlatform[] = ['instagram', 'facebook', 'tiktok'];
+  const byId = new Map<string, DonorCandidate>();
+  for (const platform of platforms) {
+    const urlValue = comp[`${platform}_url`] ?? null;
+    if (!comp.google_place_id && !urlValue) continue;
+    const found = await findDonorCandidates(comp.id, businessProfileId, {
+      googlePlaceId: comp.google_place_id ?? null, platform, urlValue,
+    });
+    for (const d of found) byId.set(d.id, d);
+  }
+  if (byId.size === 0) return null;
+
+  const rows = await (prisma as any).$queryRawUnsafe(
+    `SELECT id, sponsored_ads_updated_at FROM competitors
+     WHERE id = ANY($1::text[]) AND sponsored_ads_updated_at IS NOT NULL
+     ORDER BY sponsored_ads_updated_at DESC LIMIT 1`,
+    Array.from(byId.keys()),
+  ) as { id: string; sponsored_ads_updated_at: string }[];
+  if (rows.length === 0) return null;
+  if (Date.now() - new Date(rows[0].sponsored_ads_updated_at).getTime() >= PER_COMP_INTERVAL_MS) return null;
+
+  return { ...byId.get(rows[0].id)!, sponsored_ads_updated_at: rows[0].sponsored_ads_updated_at };
+}
+
+async function cloneAdsFromDonor(competitorId: string, businessProfileId: string, donorCompetitorId: string) {
+  const clonedCount = await (prisma as any).$executeRawUnsafe(
+    `INSERT INTO "competitor_ad_history"
+       (id, competitor_id, linked_business, platform, external_ad_id, content_hash,
+        title, body, cta, link, media_url, video_url, page_name, start_date, end_date,
+        is_active, first_seen_at, last_seen_at, analysis, analyzed_at, has_offer, has_cta)
+     SELECT gen_random_uuid()::text, $1, $2, d.platform, d.external_ad_id, d.content_hash,
+            d.title, d.body, d.cta, d.link, d.media_url, d.video_url, d.page_name, d.start_date, d.end_date,
+            d.is_active, NOW(), NOW(), d.analysis, d.analyzed_at, d.has_offer, d.has_cta
+     FROM "competitor_ad_history" d
+     WHERE d.competitor_id = $3
+       AND NOT EXISTS (
+         SELECT 1 FROM "competitor_ad_history" o
+         WHERE o.competitor_id = $1 AND o.platform = d.platform
+           AND ( (d.external_ad_id IS NOT NULL AND o.external_ad_id = d.external_ad_id)
+              OR (d.content_hash IS NOT NULL AND o.content_hash = d.content_hash) )
+       )`,
+    competitorId, businessProfileId, donorCompetitorId,
+  );
+
+  const donorComp = await prisma.competitor.findUnique({ where: { id: donorCompetitorId } });
+  if (donorComp) {
+    await prisma.competitor.update({
+      where: { id: competitorId },
+      data: {
+        sponsored_ads_detected:   donorComp.sponsored_ads_detected,
+        sponsored_ads_updated_at: new Date().toISOString(),
+        active_ad_platforms:      donorComp.active_ad_platforms,
+        active_ad_count:          donorComp.active_ad_count,
+        active_ads_summary:       donorComp.active_ads_summary,
+        ad_target_audience:       donorComp.ad_target_audience,
+        ad_strategy_summary:      donorComp.ad_strategy_summary,
+        ad_spend_signal:          donorComp.ad_spend_signal,
+        ad_gaps:                  donorComp.ad_gaps,
+        ad_intel_updated_at:      donorComp.ad_intel_updated_at,
+      },
+    }).catch(() => {});
+  }
+  return clonedCount as number;
+}
+
 /**
  * detectCompetitorAds — scans Meta Ads Library, TikTok Ads Library and Google Ads
  * for every known competitor, then:
@@ -135,6 +205,16 @@ export async function detectCompetitorAds(req: Request, res: Response) {
         if (!req.body.force && Date.now() - lastScanned < PER_COMP_INTERVAL_MS) {
           console.log(`[detectCompetitorAds] skipping ${comp.name} — scanned recently`);
           continue;
+        }
+
+        if (!req.body.force) {
+          const donor = await findAdsDonor(c, businessProfileId);
+          if (donor) {
+            const cloned = await cloneAdsFromDonor(comp.id, businessProfileId, donor.id);
+            console.log(`[detectCompetitorAds] cloned ${cloned} ads for ${comp.name} from donor ${donor.id} (business ${donor.linked_business}) — skipped SearchAPI/LLM`);
+            processed++;
+            continue;
+          }
         }
 
         console.log(`[detectCompetitorAds] scanning ads for: ${comp.name}`);

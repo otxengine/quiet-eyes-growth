@@ -7,6 +7,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
 import { postContentHash } from '../../lib/postContentHash';
+import { findDonorCandidates, DonorPlatform } from '../../lib/competitorDonor';
 
 const MIN_INTERVAL_MS = 20 * 60 * 60 * 1000; // 20h
 const POSTS_CAP = 15;
@@ -54,6 +55,7 @@ async function scrapeAndSave(
   platform: string,
   url: string,
   businessProfileId: string,
+  force: boolean,
 ): Promise<{ competitor: string; platform: string; url: string; upserted: number; apify_returned: number; media_found: number; media_uploaded: number; first_post_keys?: string[]; first_post_media_sample?: Record<string, any>; elapsed_ms: number; error: string | null; insert_errors?: any[] }> {
   // One-time backfill: delete posts with no media so they get re-inserted with correct field extraction
   await (prisma as any).$executeRawUnsafe(
@@ -81,6 +83,65 @@ async function scrapeAndSave(
     (max, p) => (p.media_url && p.posted_at && (!max || p.posted_at > max)) ? p.posted_at : max, null,
   );
 
+  const t0 = Date.now();
+
+  // Cross-business cache: another business may already have a fresh scrape of this
+  // exact real-world competitor (same google_place_id or same platform URL). Clone
+  // its posts (including analysis — this is what saves the vision-LLM cost, not just
+  // Apify) instead of paying for another scrape. Falls through to the normal Apify
+  // path below if no fresh donor exists.
+  const donors = force ? [] : await findDonorCandidates(comp.id, businessProfileId, {
+    googlePlaceId: comp.google_place_id ?? null,
+    platform: platform as DonorPlatform,
+    urlValue: url,
+  });
+  if (donors.length > 0) {
+    const freshThreshold = new Date(Date.now() - MIN_INTERVAL_MS).toISOString();
+    const donorIds = donors.map(d => d.id);
+    const freshDonor = await (prisma as any).$queryRawUnsafe(
+      `SELECT competitor_id, MAX(last_seen_at) AS freshest
+       FROM competitor_posts
+       WHERE competitor_id = ANY($1::text[]) AND platform = $2
+       GROUP BY competitor_id
+       HAVING MAX(last_seen_at::timestamptz) >= $3::timestamptz
+       ORDER BY freshest DESC LIMIT 1`,
+      donorIds, platform, freshThreshold,
+    ) as { competitor_id: string }[];
+
+    if (freshDonor.length > 0) {
+      const donorCompetitorId = freshDonor[0].competitor_id;
+      // NOT EXISTS anti-join (rather than ON CONFLICT) so this is safe to run
+      // regardless of whether this competitor already has some of its own posts —
+      // never overwrites/duplicates anything this business already owns.
+      const cloned = await (prisma as any).$executeRawUnsafe(
+        `INSERT INTO competitor_posts
+           (id, linked_business, competitor_id, platform, external_post_id, post_url,
+            content_hash, caption, media_url, posted_at, likes, comments_count,
+            first_seen_at, last_seen_at, analysis, analyzed_at, has_offer, has_cta)
+         SELECT gen_random_uuid()::text, $1, $2, d.platform, d.external_post_id, d.post_url,
+                d.content_hash, d.caption, d.media_url, d.posted_at, d.likes, d.comments_count,
+                NOW(), NOW(), d.analysis, d.analyzed_at, d.has_offer, d.has_cta
+         FROM competitor_posts d
+         WHERE d.competitor_id = $3 AND d.platform = $4
+           AND NOT EXISTS (
+             SELECT 1 FROM competitor_posts o
+             WHERE o.competitor_id = $2 AND o.platform = $4
+               AND ( (d.external_post_id IS NOT NULL AND o.external_post_id = d.external_post_id)
+                  OR (d.content_hash IS NOT NULL AND o.content_hash = d.content_hash) )
+           )`,
+        businessProfileId, comp.id, donorCompetitorId, platform,
+      ) as number;
+
+      const donorBusiness = donors.find(d => d.id === donorCompetitorId)?.linked_business;
+      console.log(`[collectCompetitorSocialPosts] cloned ${cloned} posts for ${platform} from donor ${donorCompetitorId} (business ${donorBusiness}) — skipped Apify`);
+      return {
+        competitor: comp.name, platform, url,
+        upserted: Number(cloned) || 0, apify_returned: 0, media_found: 0, media_uploaded: 0,
+        elapsed_ms: Date.now() - t0, error: null,
+      };
+    }
+  }
+
   // Best-effort creative analysis for a row that was never analyzed — used both
   // for brand-new posts and as a backfill for posts scraped before this feature existed.
   async function analyzeAndSave(id: string, mediaUrl: string | null, caption: string | null) {
@@ -103,7 +164,6 @@ async function scrapeAndSave(
 
   let rawPosts: any[] = [];
   let apifyError: string | null = null;
-  const t0 = Date.now();
 
   // Only set on repeat scrapes (maxPostedAt exists) — a competitor's first-ever
   // scrape still pulls the full capped history with no since-date filter.
@@ -359,7 +419,7 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
     // Run all Apify scrapes in parallel
     const results = await Promise.allSettled(
       tasks.map(({ comp, platform, url }) =>
-        scrapeAndSave(comp, platform, url, businessProfileId),
+        scrapeAndSave(comp, platform, url, businessProfileId, !!force),
       ),
     );
 

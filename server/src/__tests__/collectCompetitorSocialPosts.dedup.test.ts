@@ -37,6 +37,10 @@ jest.mock('../lib/agentCache', () => ({
 
 jest.mock('../lib/automationLog', () => ({ writeAutomationLog: jest.fn(async () => {}) }));
 
+// Cross-business donor cache is covered separately in collectCompetitorSocialPosts.donor.test.ts —
+// force it to "no donor" here so these tests only exercise the own-business dedup cascade.
+jest.mock('../lib/competitorDonor', () => ({ findDonorCandidates: jest.fn(async () => []) }));
+
 import { prisma } from '../db';
 import { runApifyActor } from '../lib/apify';
 import { collectCompetitorSocialPosts } from '../routes/functions/collectCompetitorSocialPosts';
