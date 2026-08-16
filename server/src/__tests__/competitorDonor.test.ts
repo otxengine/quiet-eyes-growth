@@ -44,3 +44,21 @@ test('uses the correct URL column per platform', async () => {
   await findDonorCandidates('c1', 'b1', { platform: 'instagram', googlePlaceId: null, urlValue: 'https://instagram.com/x' });
   expect(queryRawUnsafe.mock.calls[1][0]).toContain('instagram_url');
 });
+
+test('with no platform (e.g. reviews), matches purely on google_place_id — no URL column, 3 params', async () => {
+  queryRawUnsafe.mockResolvedValueOnce([{ id: 'donor-2', linked_business: 'other-biz' }]);
+
+  const result = await findDonorCandidates('c1', 'b1', { googlePlaceId: 'place-999' });
+
+  expect(result).toEqual([{ id: 'donor-2', linked_business: 'other-biz' }]);
+  const [sql, ...params] = queryRawUnsafe.mock.calls[0];
+  expect(sql).not.toMatch(/instagram_url|facebook_url|tiktok_url/);
+  expect(sql).toContain('google_place_id = $3');
+  expect(params).toEqual(['c1', 'b1', 'place-999']);
+});
+
+test('with no platform and no google_place_id, returns [] without querying', async () => {
+  const result = await findDonorCandidates('c1', 'b1', {});
+  expect(result).toEqual([]);
+  expect(queryRawUnsafe).not.toHaveBeenCalled();
+});

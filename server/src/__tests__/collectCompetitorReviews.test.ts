@@ -51,6 +51,10 @@ jest.mock('../lib/signalGuard', () => ({
   normReviewOrigin: jest.fn((v: string) => v),
 }));
 
+// Cross-business donor cache is covered separately in collectCompetitorReviews.donor.test.ts —
+// force it to "no donor" here so these tests only exercise the own-business scrape/insert contract.
+jest.mock('../lib/competitorDonor', () => ({ findDonorCandidates: jest.fn(async () => []) }));
+
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
 function makeReq(body: object) { return { body } as any; }
