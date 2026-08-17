@@ -94,11 +94,11 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
       const cloned = await (prisma as any).$executeRawUnsafe(
         `INSERT INTO competitor_stories
            (id, linked_business, competitor_id, platform, external_story_id,
-            media_url, media_type, posted_at, expires_at, first_seen_at, last_seen_at,
-            analysis, analyzed_at, has_offer, has_cta)
+            media_url, media_type, video_url, posted_at, expires_at, first_seen_at, last_seen_at,
+            analysis, analyzed_at, video_analyzed_at, has_offer, has_cta)
          SELECT gen_random_uuid()::text, $1, $2, d.platform, d.external_story_id,
-                d.media_url, d.media_type, d.posted_at, d.expires_at, d.first_seen_at, d.last_seen_at,
-                d.analysis, d.analyzed_at, d.has_offer, d.has_cta
+                d.media_url, d.media_type, d.video_url, d.posted_at, d.expires_at, d.first_seen_at, d.last_seen_at,
+                d.analysis, d.analyzed_at, d.video_analyzed_at, d.has_offer, d.has_cta
          FROM competitor_stories d
          WHERE d.competitor_id = ANY($3::text[]) AND d.platform = 'instagram'
            AND NOT EXISTS (
@@ -110,14 +110,16 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
       donorCloned += Number(cloned) || 0;
     }
 
-    // Pre-fetch which existing rows already have AI analysis, so a re-scrape of a
-    // story we've already seen doesn't re-pay for a vision-LLM call on it.
+    // Pre-fetch existing rows' analysis state, so a re-scrape of a story we've already
+    // seen doesn't re-pay for a vision-LLM call on it — separately tracks video analysis
+    // (video_analyzed_at) from general analysis (analyzed_at), since a story analyzed
+    // before video support existed still needs its one real video pass.
     const existingRows = await (prisma as any).$queryRawUnsafe(
-      `SELECT competitor_id, external_story_id FROM competitor_stories
-       WHERE competitor_id = ANY($1::text[]) AND analyzed_at IS NOT NULL`,
+      `SELECT competitor_id, external_story_id, analyzed_at, video_analyzed_at FROM competitor_stories
+       WHERE competitor_id = ANY($1::text[])`,
       competitors.map((c: any) => c.id),
-    ) as { competitor_id: string; external_story_id: string }[];
-    const alreadyAnalyzed = new Set(existingRows.map(r => `${r.competitor_id}:${r.external_story_id}`));
+    ) as { competitor_id: string; external_story_id: string; analyzed_at: string | null; video_analyzed_at: string | null }[];
+    const existingByKey = new Map(existingRows.map(r => [`${r.competitor_id}:${r.external_story_id}`, r]));
 
     const t0 = Date.now();
     let apifyError: string | null = null;
@@ -148,11 +150,10 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
 
       const isVideo = rawItem.media_type === 2 || (Array.isArray(rawItem.video_versions) && rawItem.video_versions.length > 0);
       const mediaType = isVideo ? 'video' : 'image';
-      const rawMediaUrl = pgSafe(
-        (isVideo ? rawItem.video_versions?.[0]?.url : null) ||
-        rawItem.image_versions2?.candidates?.[0]?.url ||
-        null,
-      );
+      // media_url is always the cover-frame thumbnail (never the raw video — a
+      // vision-only LLM can't digest that); the raw video file goes in video_url.
+      const rawMediaUrl = pgSafe(rawItem.image_versions2?.candidates?.[0]?.url || null);
+      const rawVideoUrl = pgSafe(isVideo ? (rawItem.video_versions?.[0]?.url || null) : null);
       const mediaUrl = rawMediaUrl && isS3Configured()
         ? (await uploadImageFromUrl(rawMediaUrl, 'competitor-stories') ?? rawMediaUrl)
         : rawMediaUrl;
@@ -164,7 +165,7 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
         const rows = await (prisma as any).$queryRawUnsafe(
           `INSERT INTO competitor_stories
              (id, linked_business, competitor_id, platform, external_story_id,
-              media_url, media_type, posted_at, expires_at, last_seen_at)
+              media_url, media_type, video_url, posted_at, expires_at, last_seen_at)
            VALUES (
              $1,
              convert_from(decode($2, 'hex'), 'UTF8'),
@@ -173,13 +174,15 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
              convert_from(decode($4, 'hex'), 'UTF8'),
              NULLIF(convert_from(decode($5, 'hex'), 'UTF8'), ''),
              $6,
+             NULLIF(convert_from(decode($9, 'hex'), 'UTF8'), ''),
              $7::timestamptz,
              $8::timestamptz,
              NOW()
            )
            ON CONFLICT (competitor_id, external_story_id) DO UPDATE SET
              last_seen_at = NOW(),
-             media_url = COALESCE(EXCLUDED.media_url, competitor_stories.media_url)
+             media_url = COALESCE(EXCLUDED.media_url, competitor_stories.media_url),
+             video_url = COALESCE(EXCLUDED.video_url, competitor_stories.video_url)
            RETURNING id`,
           randomUUID(),
           pgHex(businessProfileId) ?? '',
@@ -189,18 +192,26 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
           mediaType,
           postedAt,
           expiresAt,
+          pgHex(rawVideoUrl) ?? '',
         ) as { id: string }[];
         const rowId = rows[0]?.id;
         if (rowId) upserted++;
 
-        // Best-effort creative analysis (topic/offer/hooks/style/cta) — only for
-        // stories not already analyzed on a prior scrape; never blocks the loop.
-        if (rowId && mediaUrl && !alreadyAnalyzed.has(`${comp.id}:${externalStoryId}`)) {
+        // Best-effort creative analysis (topic/offer/hooks/style/cta, plus real video
+        // understanding when this is a video story) — skips stories already fully
+        // analyzed on a prior scrape; never blocks the loop.
+        const existingRow = existingByKey.get(`${comp.id}:${externalStoryId}`);
+        const needsAnalysis = rowId && (mediaUrl || rawVideoUrl) &&
+          (!existingRow?.analyzed_at || (rawVideoUrl && !existingRow?.video_analyzed_at));
+        if (needsAnalysis) {
+          const useVideoUrl = existingRow?.video_analyzed_at ? null : rawVideoUrl;
           try {
-            const analysis = await analyzePostCreative({ caption: null, platform: 'instagram', mediaUrl });
+            const analysis = await analyzePostCreative({ caption: null, platform: 'instagram', mediaUrl, videoUrl: useVideoUrl });
             if (analysis) {
               await (prisma as any).$executeRawUnsafe(
-                `UPDATE competitor_stories SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW(), has_offer = $2, has_cta = $3 WHERE id = $4`,
+                `UPDATE competitor_stories SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW(), has_offer = $2, has_cta = $3
+                 ${useVideoUrl && analysis.video_description != null ? ', video_analyzed_at = NOW()' : ''}
+                 WHERE id = $4`,
                 pgHex(JSON.stringify(analysis)) ?? '',
                 analysis.has_offer,
                 analysis.has_cta,

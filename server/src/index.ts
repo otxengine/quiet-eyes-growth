@@ -477,6 +477,10 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE competitor_ad_history ADD COLUMN IF NOT EXISTS page_name TEXT`);
   await sql(`ALTER TABLE competitor_ad_history ADD COLUMN IF NOT EXISTS start_date TEXT`);
   await sql(`ALTER TABLE competitor_ad_history ADD COLUMN IF NOT EXISTS end_date TEXT`);
+  // Real video understanding (Gemini) for video stories — video_url is the raw file,
+  // separate from media_url (cover-frame thumbnail); video_analyzed_at gates one-time analysis.
+  await sql(`ALTER TABLE competitor_stories ADD COLUMN IF NOT EXISTS video_url TEXT`);
+  await sql(`ALTER TABLE competitor_stories ADD COLUMN IF NOT EXISTS video_analyzed_at TIMESTAMPTZ`);
   // Normalize historical NULL → false so {is_dismissed:false} queries work correctly
   await sql(`UPDATE proactive_alerts SET is_dismissed = false WHERE is_dismissed IS NULL`);
   await sql(`UPDATE market_signals SET is_dismissed = false WHERE is_dismissed IS NULL`);

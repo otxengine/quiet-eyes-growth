@@ -1048,12 +1048,14 @@ model CompetitorStory {
   external_story_id  String
   media_url          String?
   media_type         String?   // image|video
+  video_url          String?   // raw video file, when media_type=video — separate from media_url (cover-frame thumbnail)
   posted_at          DateTime?
   expires_at         DateTime?
   first_seen_at      DateTime  @default(now())
   last_seen_at       DateTime  @default(now())
   analysis           String?   // JSON: same shape as CompetitorPost.analysis
   analyzed_at        DateTime?
+  video_analyzed_at  DateTime? // set once the video (not just the cover frame) has been analyzed — never re-analyzed via video after this
   has_offer          Boolean?  // null = not yet analyzed
   has_cta            Boolean?
 
