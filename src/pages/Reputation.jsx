@@ -13,6 +13,7 @@ import TopThemesChart from '@/components/reputation/TopThemesChart';
 import ReviewsFilterBar from '@/components/reputation/ReviewsFilterBar';
 import StatCards from '@/components/shared/StatCards';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from '@/components/ui/dropdown-menu';
 
 const PLATFORM_ICONS = {
   google:    { icon: '🔍', label: 'Google',    color: '#4285f4' },
@@ -37,6 +38,33 @@ const CHIP_COLOR = {
   neutral:  'bg-amber-100 text-amber-600',
 };
 const CHIP_PREFIX = { positive: '+', negative: '−', neutral: '' };
+
+const reviewDateMs = r => new Date(r.created_at || r.created_date || 0).getTime() || 0;
+
+const SORT_OPTIONS = [
+  { value: 'priority', label: 'עדיפות (דורש מענה קודם)' },
+  { value: 'newest', label: 'החדשות ביותר' },
+  { value: 'oldest', label: 'הישנות ביותר' },
+  { value: 'rating_desc', label: 'דירוג: גבוה לנמוך' },
+  { value: 'rating_asc', label: 'דירוג: נמוך לגבוה' },
+];
+
+const SORT_COMPARATORS = {
+  priority: (a, b) => {
+    const aP = a.response_status === 'pending' ? 1 : 0;
+    const bP = b.response_status === 'pending' ? 1 : 0;
+    if (aP !== bP) return bP - aP;
+    if (aP && bP) {
+      const order = { negative: 0, neutral: 1, positive: 2 };
+      return (order[a.sentiment] ?? 1) - (order[b.sentiment] ?? 1);
+    }
+    return reviewDateMs(b) - reviewDateMs(a);
+  },
+  newest: (a, b) => reviewDateMs(b) - reviewDateMs(a),
+  oldest: (a, b) => reviewDateMs(a) - reviewDateMs(b),
+  rating_desc: (a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0),
+  rating_asc: (a, b) => (Number(a.rating) || 0) - (Number(b.rating) || 0),
+};
 
 function ReviewRow({ review, onApprove, labelById = {} }) {
   const sentDot = SENTIMENT_DOT[review.sentiment] || 'bg-gray-400';
@@ -340,17 +368,8 @@ export default function Reputation() {
     : null;
   const pendingCount = reviews.filter(r => r.response_status === 'pending').length;
 
-  // Sort: pending negative first, then pending positive, then pending neutral, then responded
-  const sortedReviews = [...reviews].sort((a, b) => {
-    const aP = a.response_status === 'pending' ? 1 : 0;
-    const bP = b.response_status === 'pending' ? 1 : 0;
-    if (aP !== bP) return bP - aP;
-    if (aP && bP) {
-      const order = { negative: 0, neutral: 1, positive: 2 };
-      return (order[a.sentiment] ?? 1) - (order[b.sentiment] ?? 1);
-    }
-    return (new Date(b.created_at || b.created_date || 0).getTime() || 0) - (new Date(a.created_at || a.created_date || 0).getTime() || 0);
-  });
+  const [sortBy, setSortBy] = useState('priority');
+  const sortedReviews = [...reviews].sort(SORT_COMPARATORS[sortBy] || SORT_COMPARATORS.priority);
 
   const respondedCount = reviews.filter(r => ['responded', 'auto_responded', 'suggested', 'published'].includes(r.response_status)).length;
   const responseRate = reviews.length > 0 ? Math.round((respondedCount / reviews.length) * 100) : 0;
@@ -527,7 +546,23 @@ export default function Reputation() {
         <div className="flex items-center justify-between mb-3" dir="rtl">
           <h2 className="text-[15px] font-bold text-foreground">ביקורות <span className="text-foreground-muted font-normal">({reviews.length})</span></h2>
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Filters first in DOM = appear on RIGHT within the group in RTL */}
+            {/* Sort + filters first in DOM = appear on RIGHT within the group in RTL */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-1 text-[11px] text-foreground-muted border border-border rounded-lg px-2.5 py-1.5 hover:bg-secondary transition-colors">
+                  מיין לפי <ChevronDown className="w-3 h-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" dir="rtl">
+                <DropdownMenuRadioGroup value={sortBy} onValueChange={setSortBy}>
+                  {SORT_OPTIONS.map(opt => (
+                    <DropdownMenuRadioItem key={opt.value} value={opt.value} className="text-[12px]">
+                      {opt.label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
               <PopoverTrigger asChild>
                 <button className={`flex items-center gap-1 text-[11px] border rounded-lg px-2.5 py-1.5 transition-colors ${
