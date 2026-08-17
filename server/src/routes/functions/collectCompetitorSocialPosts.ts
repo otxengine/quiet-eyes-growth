@@ -64,9 +64,9 @@ async function scrapeAndSave(
 
   // Raw SQL to avoid P2023 on Render (TIMESTAMPTZ columns in competitor_posts)
   const existing = await (prisma as any).$queryRawUnsafe(
-    `SELECT id, external_post_id, post_url, content_hash, media_url, analyzed_at, posted_at FROM competitor_posts WHERE competitor_id = $1 AND platform = $2`,
+    `SELECT id, external_post_id, post_url, content_hash, media_url, video_url, analyzed_at, video_analyzed_at, posted_at FROM competitor_posts WHERE competitor_id = $1 AND platform = $2`,
     comp.id, platform,
-  ) as { id: string; external_post_id: string | null; post_url: string | null; content_hash: string | null; media_url: string | null; analyzed_at: string | null; posted_at: string | null }[];
+  ) as { id: string; external_post_id: string | null; post_url: string | null; content_hash: string | null; media_url: string | null; video_url: string | null; analyzed_at: string | null; video_analyzed_at: string | null; posted_at: string | null }[];
   const existingIds   = new Set<string>(existing.map(p => p.external_post_id).filter(Boolean) as string[]);
   const existingUrls  = new Set<string>(existing.map(p => normalizeUrl(p.post_url)).filter(Boolean) as string[]);
   const existingHashes = new Set<string>(existing.map(p => p.content_hash).filter(Boolean) as string[]);
@@ -118,11 +118,11 @@ async function scrapeAndSave(
       const cloned = await (prisma as any).$executeRawUnsafe(
         `INSERT INTO competitor_posts
            (id, linked_business, competitor_id, platform, external_post_id, post_url,
-            content_hash, caption, media_url, posted_at, likes, comments_count,
-            first_seen_at, last_seen_at, analysis, analyzed_at, has_offer, has_cta)
+            content_hash, caption, media_url, video_url, posted_at, likes, comments_count,
+            first_seen_at, last_seen_at, analysis, analyzed_at, video_analyzed_at, has_offer, has_cta)
          SELECT gen_random_uuid()::text, $1, $2, d.platform, d.external_post_id, d.post_url,
-                d.content_hash, d.caption, d.media_url, d.posted_at, d.likes, d.comments_count,
-                NOW(), NOW(), d.analysis, d.analyzed_at, d.has_offer, d.has_cta
+                d.content_hash, d.caption, d.media_url, d.video_url, d.posted_at, d.likes, d.comments_count,
+                NOW(), NOW(), d.analysis, d.analyzed_at, d.video_analyzed_at, d.has_offer, d.has_cta
          FROM competitor_posts d
          WHERE d.competitor_id = $3 AND d.platform = $4
            AND NOT EXISTS (
@@ -146,13 +146,18 @@ async function scrapeAndSave(
 
   // Best-effort creative analysis for a row that was never analyzed — used both
   // for brand-new posts and as a backfill for posts scraped before this feature existed.
-  async function analyzeAndSave(id: string, mediaUrl: string | null, caption: string | null) {
-    if (!mediaUrl) return;
+  async function analyzeAndSave(id: string, mediaUrl: string | null, caption: string | null, videoUrl: string | null, alreadyVideoAnalyzed: boolean) {
+    if (!mediaUrl && !videoUrl) return;
+    // videoUrl only passed through when this row hasn't been video-analyzed yet —
+    // once video_analyzed_at is set, never re-run video analysis (cost control).
+    const useVideoUrl = alreadyVideoAnalyzed ? null : videoUrl;
     try {
-      const analysis = await analyzePostCreative({ caption, platform, mediaUrl });
+      const analysis = await analyzePostCreative({ caption, platform, mediaUrl, videoUrl: useVideoUrl });
       if (analysis) {
         await (prisma as any).$executeRawUnsafe(
-          `UPDATE competitor_posts SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW(), has_offer = $2, has_cta = $3 WHERE id = $4`,
+          `UPDATE competitor_posts SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW(), has_offer = $2, has_cta = $3
+           ${useVideoUrl && analysis.video_description != null ? ', video_analyzed_at = NOW()' : ''}
+           WHERE id = $4`,
           pgHex(JSON.stringify(analysis)) ?? '',
           analysis.has_offer,
           analysis.has_cta,
@@ -239,7 +244,6 @@ async function scrapeAndSave(
       post.images?.[0]?.url ||
       post.thumbnailSrc ||
       post.thumbnail_src ||
-      post.videoUrl ||
       post.thumbnailUrl ||
       // Facebook (apify~facebook-posts-scraper) — multiple actor output formats
       post.full_picture ||
@@ -259,10 +263,19 @@ async function scrapeAndSave(
       // TikTok (clockworks~tiktok-profile-scraper)
       post.videoMeta?.coverUrl ||
       post.covers?.[0] ||
-      post.webVideoUrl ||
       null,
     );
     if (rawMediaUrl) mediaFound++;
+
+    // Raw playable video file — separate from the thumbnail above. videoUrl/webVideoUrl
+    // were previously (wrongly) mixed into rawMediaUrl: Instagram's videoUrl is the raw
+    // .mp4, and TikTok's webVideoUrl is the HTML watch page, not media at all — neither
+    // is a valid thumbnail image, so they're only ever used here now.
+    const rawVideoUrl = pgSafe(
+      post.videoUrl ||               // Instagram Reel .mp4
+      post.videoMeta?.downloadAddr || // TikTok raw video file
+      null,
+    );
 
     // Upload to S3 for permanent storage; fall back to CDN URL if S3 not configured or upload fails
     const mediaUrl    = rawMediaUrl && isS3Configured()
@@ -286,14 +299,19 @@ async function scrapeAndSave(
         `UPDATE competitor_posts SET
            last_seen_at = NOW(),
            media_url = COALESCE($2, media_url),
+           video_url = COALESCE($6, video_url),
            external_post_id = COALESCE(external_post_id, $3),
            post_url = COALESCE(post_url, $4),
            content_hash = COALESCE($5, content_hash)
          WHERE id = $1`,
-        matchedRow.id, upgradedS3, externalId, postUrl, contentHash,
+        matchedRow.id, upgradedS3, externalId, postUrl, contentHash, rawVideoUrl,
       ).catch(() => {});
-      if (!matchedRow.analyzed_at) {
-        await analyzeAndSave(matchedRow.id, upgradedS3 || matchedRow.media_url, caption);
+      const rowVideoUrl = rawVideoUrl || matchedRow.video_url;
+      if (!matchedRow.analyzed_at || (!matchedRow.video_analyzed_at && rowVideoUrl)) {
+        await analyzeAndSave(
+          matchedRow.id, upgradedS3 || matchedRow.media_url, caption,
+          rowVideoUrl, !!matchedRow.video_analyzed_at,
+        );
       }
       if (externalId)       existingIds.add(externalId);
       if (normalizedPostUrl) existingUrls.add(normalizedPostUrl);
@@ -313,7 +331,7 @@ async function scrapeAndSave(
         `INSERT INTO competitor_posts
            (id, linked_business, competitor_id, platform,
             external_post_id, post_url, content_hash, caption, media_url,
-            posted_at, likes, comments_count, last_seen_at)
+            posted_at, likes, comments_count, last_seen_at, video_url)
          VALUES (
            $1,
            convert_from(decode($2, 'hex'), 'UTF8'),
@@ -327,7 +345,8 @@ async function scrapeAndSave(
            $9::timestamptz,
            $10::int,
            $11::int,
-           $12::timestamptz
+           $12::timestamptz,
+           NULLIF(convert_from(decode($14, 'hex'), 'UTF8'), '')
          )`,
         newPostId,
         pgHex(businessProfileId) ?? '',
@@ -342,6 +361,7 @@ async function scrapeAndSave(
         comments,
         new Date().toISOString(),
         contentHash,
+        pgHex(rawVideoUrl) ?? '',
       );
       if (externalId)       existingIds.add(externalId);
       if (normalizedPostUrl) existingUrls.add(normalizedPostUrl);
@@ -349,7 +369,7 @@ async function scrapeAndSave(
       upserted++;
 
       // Analyze the creative (topic/offer/hooks/style/cta) — best-effort, never blocks the scrape loop.
-      await analyzeAndSave(newPostId, mediaUrl, caption);
+      await analyzeAndSave(newPostId, mediaUrl, caption, rawVideoUrl, false);
     } catch (insertErr: any) {
       const errMsg = (insertErr.message ?? '').trim();
       // 23505 = unique constraint — row already exists, not a real failure

@@ -29,7 +29,7 @@ function normalizeUrl(url: string | null): string | null {
 async function scrapeAndSave(businessProfileId: string, platform: string, url: string) {
   const existing = await prisma.businessPost.findMany({
     where: { linked_business: businessProfileId, platform },
-    select: { id: true, external_post_id: true, post_url: true, content_hash: true, media_url: true, analyzed_at: true, posted_at: true },
+    select: { id: true, external_post_id: true, post_url: true, content_hash: true, media_url: true, video_url: true, analyzed_at: true, video_analyzed_at: true, posted_at: true },
   });
   const existingById   = new Map(existing.filter(p => p.external_post_id).map(p => [p.external_post_id as string, p]));
   const existingByUrl  = new Map(existing.filter(p => p.post_url).map(p => [normalizeUrl(p.post_url) as string, p]));
@@ -43,14 +43,21 @@ async function scrapeAndSave(businessProfileId: string, platform: string, url: s
 
   const t0 = Date.now();
 
-  async function analyzeAndSave(id: string, mediaUrl: string | null, caption: string | null) {
-    if (!mediaUrl) return;
+  async function analyzeAndSave(id: string, mediaUrl: string | null, caption: string | null, videoUrl: string | null, alreadyVideoAnalyzed: boolean) {
+    if (!mediaUrl && !videoUrl) return;
+    // videoUrl only passed through when this row hasn't been video-analyzed yet —
+    // once video_analyzed_at is set, never re-run video analysis (cost control).
+    const useVideoUrl = alreadyVideoAnalyzed ? null : videoUrl;
     try {
-      const analysis = await analyzePostCreative({ caption, platform, mediaUrl });
+      const analysis = await analyzePostCreative({ caption, platform, mediaUrl, videoUrl: useVideoUrl });
       if (analysis) {
         await prisma.businessPost.update({
           where: { id },
-          data: { analysis: JSON.stringify(analysis), analyzed_at: new Date(), has_offer: analysis.has_offer, has_cta: analysis.has_cta },
+          data: {
+            analysis: JSON.stringify(analysis), analyzed_at: new Date(),
+            has_offer: analysis.has_offer, has_cta: analysis.has_cta,
+            ...(useVideoUrl && analysis.video_description != null ? { video_analyzed_at: new Date() } : {}),
+          },
         });
       }
     } catch (analysisErr: any) {
@@ -106,7 +113,6 @@ async function scrapeAndSave(businessProfileId: string, platform: string, url: s
       post.images?.[0]?.url ||
       post.thumbnailSrc ||
       post.thumbnail_src ||
-      post.videoUrl ||
       post.thumbnailUrl ||
       // Facebook (apify~facebook-posts-scraper) — multiple actor output formats
       post.full_picture ||
@@ -126,7 +132,15 @@ async function scrapeAndSave(businessProfileId: string, platform: string, url: s
       // TikTok (clockworks~tiktok-profile-scraper)
       post.videoMeta?.coverUrl ||
       post.covers?.[0] ||
-      post.webVideoUrl ||
+      null;
+
+    // Raw playable video file — separate from the thumbnail above. videoUrl/webVideoUrl
+    // were previously (wrongly) mixed into rawMediaUrl: Instagram's videoUrl is the raw
+    // .mp4, and TikTok's webVideoUrl is the HTML watch page, not media at all — neither
+    // is a valid thumbnail image, so they're only ever used here now.
+    const rawVideoUrl =
+      post.videoUrl ||               // Instagram Reel .mp4
+      post.videoMeta?.downloadAddr || // TikTok raw video file
       null;
 
     const mediaUrl = rawMediaUrl && isS3Configured()
@@ -146,13 +160,17 @@ async function scrapeAndSave(businessProfileId: string, platform: string, url: s
         data: {
           last_seen_at: new Date(),
           media_url: mediaUrl ?? matchedRow.media_url,
+          video_url: rawVideoUrl ?? matchedRow.video_url,
           external_post_id: matchedRow.external_post_id ?? externalId,
           post_url: matchedRow.post_url ?? postUrl,
           content_hash: contentHash ?? matchedRow.content_hash,
         },
       }).catch(() => {});
-      if (!matchedRow.analyzed_at) {
-        await analyzeAndSave(matchedRow.id, mediaUrl || matchedRow.media_url, caption);
+      if (!matchedRow.analyzed_at || (!matchedRow.video_analyzed_at && (rawVideoUrl || matchedRow.video_url))) {
+        await analyzeAndSave(
+          matchedRow.id, mediaUrl || matchedRow.media_url, caption,
+          rawVideoUrl || matchedRow.video_url, !!matchedRow.video_analyzed_at,
+        );
       }
       continue;
     }
@@ -170,13 +188,14 @@ async function scrapeAndSave(businessProfileId: string, platform: string, url: s
           content_hash: contentHash,
           caption,
           media_url: mediaUrl,
+          video_url: rawVideoUrl,
           posted_at: postedAt,
           likes,
           comments_count: comments,
         },
       });
       upserted++;
-      await analyzeAndSave(created.id, mediaUrl, caption);
+      await analyzeAndSave(created.id, mediaUrl, caption, rawVideoUrl, false);
     } catch (insertErr: any) {
       // P2002 = unique constraint — row already landed via a concurrent run, not a real failure
       if (insertErr.code === 'P2002') continue;

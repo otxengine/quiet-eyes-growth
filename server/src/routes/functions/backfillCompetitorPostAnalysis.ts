@@ -35,25 +35,31 @@ export async function backfillCompetitorPostAnalysis(req: Request, res: Response
     // so this naturally works through the full backlog in one call instead of
     // capping at BATCH_LIMIT like a single query would.
     while (timeLeft() > 0) {
+      // Selects rows never analyzed at all, OR rows with a video_url that hasn't
+      // been video-analyzed yet — including ones already image-analyzed before
+      // this feature existed, so they get upgraded to real video understanding.
       const posts = await (prisma as any).$queryRawUnsafe(
-        `SELECT p.id, p.caption, p.media_url, p.platform FROM competitor_posts p
+        `SELECT p.id, p.caption, p.media_url, p.video_url, p.platform, p.video_analyzed_at FROM competitor_posts p
          JOIN competitors c ON c.id = p.competitor_id
-         WHERE p.linked_business = $1 AND p.media_url IS NOT NULL
-           ${force ? '' : 'AND p.analyzed_at IS NULL'}
+         WHERE p.linked_business = $1 AND (p.media_url IS NOT NULL OR p.video_url IS NOT NULL)
+           ${force ? '' : "AND (p.analyzed_at IS NULL OR (p.video_url IS NOT NULL AND p.video_analyzed_at IS NULL))"}
            AND c.tracking_status = 'approved'
          LIMIT ${BATCH_LIMIT}`,
         businessProfileId,
-      ) as { id: string; caption: string | null; media_url: string; platform: string }[];
+      ) as { id: string; caption: string | null; media_url: string | null; video_url: string | null; platform: string; video_analyzed_at: string | null }[];
       if (posts.length === 0) break;
       postsFound += posts.length;
 
       for (const post of posts) {
         if (timeLeft() <= 0) break;
-        const analysis = await analyzePostCreative({ caption: post.caption, platform: post.platform, mediaUrl: post.media_url });
+        const useVideoUrl = post.video_analyzed_at ? null : post.video_url;
+        const analysis = await analyzePostCreative({ caption: post.caption, platform: post.platform, mediaUrl: post.media_url, videoUrl: useVideoUrl });
         if (!analysis) continue;
         try {
           await (prisma as any).$executeRawUnsafe(
-            `UPDATE competitor_posts SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW(), has_offer = $2, has_cta = $3 WHERE id = $4`,
+            `UPDATE competitor_posts SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW(), has_offer = $2, has_cta = $3
+             ${useVideoUrl && analysis.video_description != null ? ', video_analyzed_at = NOW()' : ''}
+             WHERE id = $4`,
             pgHex(JSON.stringify(analysis)), analysis.has_offer, analysis.has_cta, post.id,
           );
           postsAnalyzed++;
@@ -101,7 +107,9 @@ export async function backfillCompetitorPostAnalysis(req: Request, res: Response
     const remaining = await (prisma as any).$queryRawUnsafe(
       `SELECT
          (SELECT COUNT(*) FROM competitor_posts p JOIN competitors c ON c.id = p.competitor_id
-           WHERE p.linked_business = $1 AND p.media_url IS NOT NULL AND p.analyzed_at IS NULL AND c.tracking_status = 'approved') AS posts,
+           WHERE p.linked_business = $1 AND (p.media_url IS NOT NULL OR p.video_url IS NOT NULL)
+             AND (p.analyzed_at IS NULL OR (p.video_url IS NOT NULL AND p.video_analyzed_at IS NULL))
+             AND c.tracking_status = 'approved') AS posts,
          (SELECT COUNT(*) FROM "competitor_ad_history" a JOIN competitors c ON c.id = a.competitor_id
            WHERE a.linked_business = $1 AND a.media_url IS NOT NULL AND a.analyzed_at IS NULL AND c.tracking_status = 'approved') AS ads`,
       businessProfileId,

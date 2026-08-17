@@ -25,6 +25,7 @@ export async function callGemini(
     jsonMode?: boolean;
     systemPrompt?: string;
     imageBase64?: string;
+    mediaMimeType?: string; // e.g. 'image/jpeg' (default) or 'video/mp4' for video understanding
   } = {},
 ): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY || '';
@@ -32,12 +33,12 @@ export async function callGemini(
 
   const modelId = GEMINI_MODEL_MAP[modelKey] || 'gemini-3.5-flash';
   const isProImage = modelKey === 'gemini-pro';
-  const { jsonMode, systemPrompt, imageBase64 } = options;
+  const { jsonMode, systemPrompt, imageBase64, mediaMimeType } = options;
 
   // Build parts array
   const parts: any[] = [];
   if (imageBase64) {
-    parts.push({ inlineData: { mimeType: 'image/jpeg', data: imageBase64 } });
+    parts.push({ inlineData: { mimeType: mediaMimeType || 'image/jpeg', data: imageBase64 } });
   }
   parts.push({ text: prompt });
 

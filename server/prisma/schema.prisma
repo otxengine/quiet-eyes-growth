@@ -1021,13 +1021,15 @@ model CompetitorPost {
   content_hash      String?   // sha256 of normalized caption+posted_at(day) — dedup fallback when external_post_id/post_url are null or drift between scrapes
   caption           String?
   media_url         String?
+  video_url         String?   // raw video file, when the post is a video — separate from media_url (thumbnail)
   posted_at         DateTime?
   likes             Int?
   comments_count    Int?
   first_seen_at     DateTime  @default(now())
   last_seen_at      DateTime  @default(now())
-  analysis          String?   // JSON: {topic, has_offer, offer_details, offer_mechanic, offer_value_framing, offer_urgency, offer_conditions, offer_redemption, offer_in_image, offer_audience_intent, visual_hooks, text_hooks, style, has_cta, cta} — offer_* fields populated only when has_offer=true
+  analysis          String?   // JSON: {topic, has_offer, offer_details, offer_mechanic, offer_value_framing, offer_urgency, offer_conditions, offer_redemption, offer_in_image, offer_audience_intent, visual_hooks, text_hooks, style, has_cta, cta, video_description, video_script} — offer_* fields populated only when has_offer=true; video_* only when analyzed via video_url
   analyzed_at       DateTime?
+  video_analyzed_at DateTime? // set once the video (not just the thumbnail) has been analyzed — never re-analyzed via video after this
   has_offer         Boolean?  // null = not yet analyzed
   has_cta           Boolean?
 
@@ -1100,13 +1102,15 @@ model BusinessPost {
   content_hash      String?   // sha256 of normalized caption+posted_at(day) — dedup fallback when external_post_id/post_url are null or drift between scrapes
   caption           String?
   media_url         String?
+  video_url         String?   // raw video file, when the post is a video — separate from media_url (thumbnail)
   posted_at         DateTime?
   likes             Int?
   comments_count    Int?
   first_seen_at     DateTime  @default(now())
   last_seen_at      DateTime  @default(now())
-  analysis          String?   // JSON: {topic, has_offer, offer_details, ..., visual_hooks, text_hooks, style, has_cta, cta} — see CompetitorPost.analysis for full shape
+  analysis          String?   // JSON: {topic, has_offer, offer_details, ..., visual_hooks, text_hooks, style, has_cta, cta, video_description, video_script} — see CompetitorPost.analysis for full shape
   analyzed_at       DateTime?
+  video_analyzed_at DateTime? // set once the video (not just the thumbnail) has been analyzed — never re-analyzed via video after this
   has_offer         Boolean?  // null = not yet analyzed
   has_cta           Boolean?
 

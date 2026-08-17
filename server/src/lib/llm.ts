@@ -131,7 +131,7 @@ async function _invokeLLMRaw(
   // Gemini models — route directly without trying Anthropic first
   if (modelId.startsWith('gemini')) {
     try {
-      return await _callGemini(prompt, modelId, maxTokens, response_json_schema, imageBase64);
+      return await _callGemini(prompt, modelId, maxTokens, response_json_schema, imageBase64, imageMediaType);
     } catch (err: any) {
       console.warn('[invokeLLM] Gemini failed, trying OpenAI fallback:', err.message);
       if (process.env.OPENAI_API_KEY) {
@@ -157,7 +157,7 @@ async function _invokeLLMRaw(
       if (process.env.GEMINI_API_KEY) {
         try {
           const geminiPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
-          return await _callGemini(geminiPrompt, 'gemini-3.5-flash', maxTokens, response_json_schema, imageBase64);
+          return await _callGemini(geminiPrompt, 'gemini-3.5-flash', maxTokens, response_json_schema, imageBase64, imageMediaType);
         } catch (geminiErr: any) {
           console.warn('[invokeLLM] Gemini Flash fallback failed:', geminiErr.message);
         }
@@ -183,6 +183,7 @@ async function _callGemini(
   maxTokens: number,
   response_json_schema: any,
   imageBase64?: string,
+  imageMediaType?: string,
 ): Promise<any> {
   // Map full model IDs back to keys for callGemini
   const modelKey = modelId === 'gemini-3-pro-image' ? 'gemini-pro' : 'gemini-flash';
@@ -195,6 +196,7 @@ async function _callGemini(
     jsonMode: !!response_json_schema,
     systemPrompt,
     imageBase64,
+    mediaMimeType: imageMediaType,
   });
 
   if (response_json_schema) {

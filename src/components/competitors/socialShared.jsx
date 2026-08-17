@@ -71,6 +71,8 @@ export const ANALYSIS_FIELDS = [
   { key: 'cta',           label: '📣 קריאה לפעולה' },
   { key: 'text_hooks',    label: '✍️ הוקים טקסטואליים' },
   { key: 'visual_hooks',  label: '🖼️ הוקים ויזואליים' },
+  { key: 'video_description', label: '🎬 תיאור הסרטון' },
+  { key: 'video_script',      label: '🗣️ תמלול/דיבור' },
 ];
 
 export const TOP_PERFORMER_FIELDS = [
