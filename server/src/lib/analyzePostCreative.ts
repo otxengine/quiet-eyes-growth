@@ -3,6 +3,11 @@ import { isS3Url, downloadFromS3 } from './s3';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // Anthropic's per-image limit
 const MAX_VIDEO_BYTES = 12 * 1024 * 1024; // stay safely under Gemini's ~20MB inline-request ceiling after base64 overhead
+// Video analysis (Gemini) is meaningfully more expensive than image analysis and is
+// still being validated — dev-only until proven out. Every caller passing videoUrl
+// (posts, stories, backfill, outlier re-analysis) is gated here in one place rather
+// than at each call site, so this can't accidentally leak into production.
+const VIDEO_ANALYSIS_ENABLED = process.env.NODE_ENV !== 'production';
 
 export interface PostCreativeAnalysis {
   topic: string;
@@ -194,7 +199,7 @@ export async function analyzePostCreative(input: {
   if (!input.mediaUrl && !input.videoUrl) return null;
 
   try {
-    let media = input.videoUrl ? await fetchVideoBase64(input.videoUrl) : null;
+    let media = (input.videoUrl && VIDEO_ANALYSIS_ENABLED) ? await fetchVideoBase64(input.videoUrl) : null;
     const isVideo = !!media;
     if (!media && input.mediaUrl) media = await fetchImageBase64(input.mediaUrl);
     if (!media) return null;
