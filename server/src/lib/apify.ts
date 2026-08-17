@@ -49,7 +49,8 @@ export async function runApifyActor(
     );
 
     if (!startRes.ok) {
-      const msg = `[Apify] ${actorId} start failed: HTTP ${startRes.status}`;
+      const body = await startRes.text().catch(() => '');
+      const msg = `[Apify] ${actorId} start failed: HTTP ${startRes.status} — ${body.slice(0, 500)}`;
       console.warn(msg);
       onError?.(msg);
       return [];
@@ -84,7 +85,8 @@ export async function runApifyActor(
       }
 
       if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
-        const msg = `[Apify] ${actorId} run ${runId} ended with status: ${status}`;
+        const reason = statusData?.data?.statusMessage ? ` — ${statusData.data.statusMessage}` : '';
+        const msg = `[Apify] ${actorId} run ${runId} ended with status: ${status}${reason}`;
         console.warn(msg);
         onError?.(msg);
         return [];
