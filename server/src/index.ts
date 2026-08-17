@@ -466,6 +466,10 @@ app.listen(PORT, async () => {
   // are missing or drift between Apify scrapes (was letting duplicate rows through).
   await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS content_hash TEXT`);
   await sql(`CREATE UNIQUE INDEX IF NOT EXISTS competitor_posts_content_hash_key ON competitor_posts(competitor_id, platform, content_hash)`);
+  // Real video understanding (Gemini) for video posts — video_url is the raw file,
+  // separate from media_url (thumbnail); video_analyzed_at gates one-time video analysis.
+  await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS video_url TEXT`);
+  await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS video_analyzed_at TIMESTAMPTZ`);
   await sql(`ALTER TABLE competitor_ad_history ALTER COLUMN raw_json TYPE TEXT USING raw_json::TEXT`);
   await sql(`ALTER TABLE competitor_ad_history ADD COLUMN IF NOT EXISTS linked_business TEXT`);
   await sql(`ALTER TABLE competitor_ad_history ADD COLUMN IF NOT EXISTS media_url TEXT`);
@@ -556,6 +560,10 @@ app.listen(PORT, async () => {
   await sql(`CREATE UNIQUE INDEX IF NOT EXISTS business_posts_ext_id_key ON business_posts(linked_business, platform, external_post_id)`);
   await sql(`CREATE UNIQUE INDEX IF NOT EXISTS business_posts_content_hash_key ON business_posts(linked_business, platform, content_hash)`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_business_posts_biz_posted ON business_posts(linked_business, posted_at)`);
+  // Real video understanding (Gemini) for video posts — video_url is the raw file,
+  // separate from media_url (thumbnail); video_analyzed_at gates one-time video analysis.
+  await sql(`ALTER TABLE business_posts ADD COLUMN IF NOT EXISTS video_url TEXT`);
+  await sql(`ALTER TABLE business_posts ADD COLUMN IF NOT EXISTS video_analyzed_at TIMESTAMP(3)`);
   await sql(`CREATE TABLE IF NOT EXISTS business_ad_history (
     id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     linked_business TEXT NOT NULL,
