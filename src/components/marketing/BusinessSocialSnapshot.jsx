@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   PLATFORM_LABELS, PLATFORM_COLORS, apiFetch, timeAgo,
-  PostCard, AdCard, PostDetailModal, AdDetailModal, ProfileHeader,
+  PostCard, AdCard, PostDetailModal, AdDetailModal, ProfileHeader, computeOutlierPosts,
 } from '@/components/competitors/socialShared';
 
 // Single-entity twin of SocialCompetition.jsx's RivalCard — same feed/ads
@@ -41,6 +41,7 @@ export default function BusinessSocialSnapshot({ businessProfile }) {
   const ads = adsData?.ads ?? [];
   const profiles = profileData?.profiles ?? [];
   const activeAdCount = ads.filter(a => a.is_active).length;
+  const outlierPosts = useMemo(() => computeOutlierPosts(posts), [posts]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -128,11 +129,23 @@ export default function BusinessSocialSnapshot({ businessProfile }) {
 
         {!loading && section === 'feed' && (
           posts.length > 0 ? (
-            <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
-              {posts.map(post => (
-                <PostCard key={post.id} post={post} onSelect={setSelectedPost} />
-              ))}
-            </div>
+            <>
+              {outlierPosts.length > 0 && (
+                <>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">🔥 פוסטים מצטיינים</p>
+                  <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+                    {outlierPosts.slice(0, 10).map(post => (
+                      <PostCard key={post.id} post={post} onSelect={setSelectedPost} />
+                    ))}
+                  </div>
+                </>
+              )}
+              <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+                {posts.map(post => (
+                  <PostCard key={post.id} post={post} onSelect={setSelectedPost} />
+                ))}
+              </div>
+            </>
           ) : (
             <p className="text-xs text-muted-foreground text-center py-6">אין עדיין פוסטים — לחצו רענון כדי לסרוק</p>
           )
