@@ -10,7 +10,9 @@ import RequestReviewModal from '@/components/reputation/RequestReviewModal';
 import ScheduledReviewRequests from '@/components/reputation/ScheduledReviewRequests';
 import RatingTrendChart from '@/components/reputation/RatingTrendChart';
 import TopThemesChart from '@/components/reputation/TopThemesChart';
+import ReviewsFilterBar from '@/components/reputation/ReviewsFilterBar';
 import StatCards from '@/components/shared/StatCards';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 
 const PLATFORM_ICONS = {
   google:    { icon: '🔍', label: 'Google',    color: '#4285f4' },
@@ -385,10 +387,39 @@ export default function Reputation() {
   ];
 
   const [reviewSearch, setReviewSearch] = useState('');
+  const [advFilters, setAdvFilters] = useState({
+    topics: [],
+    dateFrom: '',
+    dateTo: '',
+    ratingMin: 1,
+    ratingMax: 5,
+    replyStatuses: [],
+  });
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const isAdvActive = advFilters.topics.length > 0 || !!advFilters.dateFrom || !!advFilters.dateTo ||
+    advFilters.ratingMin > 1 || advFilters.ratingMax < 5 || advFilters.replyStatuses.length > 0;
+
+  const fromMs = advFilters.dateFrom ? new Date(advFilters.dateFrom).getTime() : null;
+  const toMs = advFilters.dateTo ? new Date(advFilters.dateTo + 'T23:59:59').getTime() : null;
 
   const filteredTable = sortedReviews.filter(r => {
     if (reviewSearch && !(r.text || '').toLowerCase().includes(reviewSearch.toLowerCase()) &&
         !(r.reviewer_name || '').toLowerCase().includes(reviewSearch.toLowerCase())) return false;
+
+    if (advFilters.topics.length > 0) {
+      const rTopics = r.topics ? r.topics.split(',').map(t => t.trim()) : [];
+      if (!advFilters.topics.some(t => rTopics.includes(t))) return false;
+    }
+
+    const rDate = new Date(r.created_at || r.created_date || '').getTime();
+    if (fromMs != null && (!rDate || rDate < fromMs)) return false;
+    if (toMs != null && (!rDate || rDate > toMs)) return false;
+
+    const rating = Number(r.rating) || 0;
+    if (rating < advFilters.ratingMin || rating > advFilters.ratingMax) return false;
+
+    if (advFilters.replyStatuses.length > 0 && !advFilters.replyStatuses.includes(r.response_status)) return false;
+
     return true;
   });
 
@@ -497,11 +528,23 @@ export default function Reputation() {
           <h2 className="text-[15px] font-bold text-foreground">ביקורות <span className="text-foreground-muted font-normal">({reviews.length})</span></h2>
           <div className="flex items-center gap-2 flex-wrap">
             {/* Filters first in DOM = appear on RIGHT within the group in RTL */}
-            <button className="flex items-center gap-1 text-[11px] text-foreground-muted border border-border rounded-lg px-2.5 py-1.5 hover:bg-secondary transition-colors">
-              פילטרים מתקדמים <ChevronDown className="w-3 h-3" />
-            </button>
-            {reviewSearch && (
-              <button onClick={() => setReviewSearch('')} className="text-[11px] text-foreground-muted hover:text-foreground transition-colors">
+            <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+              <PopoverTrigger asChild>
+                <button className={`flex items-center gap-1 text-[11px] border rounded-lg px-2.5 py-1.5 transition-colors ${
+                  isAdvActive ? 'border-foreground text-foreground bg-secondary' : 'text-foreground-muted border-border hover:bg-secondary'
+                }`}>
+                  פילטרים מתקדמים <ChevronDown className="w-3 h-3" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-72">
+                <ReviewsFilterBar topicSet={topicSet} labelById={labelById} filters={advFilters} onChange={setAdvFilters} />
+              </PopoverContent>
+            </Popover>
+            {(reviewSearch || isAdvActive) && (
+              <button onClick={() => {
+                setReviewSearch('');
+                setAdvFilters({ topics: [], dateFrom: '', dateTo: '', ratingMin: 1, ratingMax: 5, replyStatuses: [] });
+              }} className="text-[11px] text-foreground-muted hover:text-foreground transition-colors">
                 נקה פילטרים
               </button>
             )}
