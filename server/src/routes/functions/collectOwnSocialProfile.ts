@@ -30,6 +30,12 @@ function boolOrNull(v: any): boolean | null {
   return typeof v === 'boolean' ? v : null;
 }
 
+// The actor sometimes returns the literal string "None" instead of omitting
+// businessCategoryName when a business account hasn't set a category.
+function strOrNull(v: any): string | null {
+  return v && v !== 'None' ? v : null;
+}
+
 type ProfileFields = {
   profile_picture_url: string | null;
   cover_photo_url: string | null;
@@ -61,7 +67,7 @@ async function scrapeInstagram(url: string): Promise<ProfileFields | null> {
     post_count: numOrNull(item.postsCount),
     is_verified: boolOrNull(item.verified),
     is_business_account: boolOrNull(item.isBusinessAccount),
-    category: item.businessCategoryName || null,
+    category: strOrNull(item.businessCategoryName),
     contact_phone: item.publicPhoneNumber || item.businessPhoneNumber || null,
     contact_email: item.publicEmail || item.businessEmail || null,
     contact_address: item.publicAddress || item.businessAddress || null,
