@@ -123,6 +123,7 @@ import { topicTimeline } from './topicTimeline';
 import { getCompetitorReviewInsights } from './getCompetitorReviewInsights';
 import { reputationAdvisorChat } from './reputationAdvisorChat';
 import { collectCompetitorSocialPosts } from './collectCompetitorSocialPosts';
+import { collectCompetitorSocialStories } from './collectCompetitorSocialStories';
 import { collectOwnSocialPosts } from './collectOwnSocialPosts';
 import { collectOwnSocialProfile } from './collectOwnSocialProfile';
 import { detectOwnAds } from './detectOwnAds';
@@ -267,6 +268,7 @@ const FUNCTION_MAP: Record<string, any> = {
   getCompetitorReviewInsights,
   reputationAdvisorChat,
   collectCompetitorSocialPosts,
+  collectCompetitorSocialStories,
   collectOwnSocialPosts,
   collectOwnSocialProfile,
   detectOwnAds,

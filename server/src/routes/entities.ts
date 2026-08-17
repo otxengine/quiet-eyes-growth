@@ -102,6 +102,7 @@ const ENTITY_MAP: Record<string, string> = {
   SupportTicket: 'supportTicket',
   CompetitorPost: 'competitorPost',
   CompetitorAdHistory: 'competitorAdHistory',
+  CompetitorStory: 'competitorStory',
   BusinessPost: 'businessPost',
   BusinessAdHistory: 'businessAdHistory',
   BusinessSocialProfile: 'businessSocialProfile',
@@ -153,6 +154,7 @@ const REVIEW_ORDER_BY = { created_at: { sort: 'desc' as const, nulls: 'last' as 
 const ENTITY_DEFAULT_ORDER: Record<string, any> = {
   CompetitorPost: { first_seen_at: 'desc' },
   CompetitorAdHistory: { first_seen_at: 'desc' },
+  CompetitorStory: { posted_at: 'desc' },
   BusinessPost: { first_seen_at: 'desc' },
   BusinessAdHistory: { first_seen_at: 'desc' },
   BusinessSocialProfile: { fetched_at: 'desc' },
@@ -166,6 +168,7 @@ const ENTITY_DEFAULT_ORDER: Record<string, any> = {
 const RAW_SQL_TABLES: Record<string, string> = {
   CompetitorPost: 'competitor_posts',
   CompetitorAdHistory: 'competitor_ad_history',
+  CompetitorStory: 'competitor_stories',
 };
 
 async function rawEntityQuery(

@@ -282,6 +282,7 @@ model Competitor {
   discovery_sources        String?  // KAN-216: JSON array — which APIs surfaced this row ('google_places'|'dataforseo_maps')
   posts                    CompetitorPost[]
   ad_history               CompetitorAdHistory[]
+  stories                  CompetitorStory[]
 
   @@map("competitors")
 }
@@ -1033,6 +1034,25 @@ model CompetitorPost {
   @@unique([competitor_id, platform, external_post_id])
   @@unique([competitor_id, platform, content_hash])
   @@map("competitor_posts")
+}
+
+model CompetitorStory {
+  id                 String    @id @default(cuid())
+  linked_business    String
+  competitor_id      String
+  competitor         Competitor @relation(fields: [competitor_id], references: [id], onDelete: Cascade)
+  platform           String    @default("instagram")
+  external_story_id  String
+  media_url          String?
+  media_type         String?   // image|video
+  posted_at          DateTime?
+  expires_at         DateTime?
+  first_seen_at      DateTime  @default(now())
+  last_seen_at       DateTime  @default(now())
+
+  @@index([linked_business, competitor_id, posted_at])
+  @@unique([competitor_id, external_story_id])
+  @@map("competitor_stories")
 }
 
 model CompetitorAdHistory {

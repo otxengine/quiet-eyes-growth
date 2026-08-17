@@ -151,6 +151,42 @@ export function PostCard({ post, onSelect }) {
   );
 }
 
+export function StoryCard({ story }) {
+  const expired = story.expires_at && new Date(story.expires_at).getTime() < Date.now();
+  return (
+    <div
+      className="shrink-0 w-36 rounded-xl border border-border bg-background overflow-hidden relative"
+    >
+      {story.media_url ? (
+        story.media_type === 'video' ? (
+          <video
+            src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(story.media_url)}`}
+            className="w-full h-52 object-cover"
+            muted loop playsInline
+          />
+        ) : (
+          <img
+            src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(story.media_url)}`}
+            alt=""
+            className="w-full h-52 object-cover"
+            loading="lazy"
+            onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
+          />
+        )
+      ) : null}
+      <div className={`w-full h-52 bg-muted items-center justify-center text-muted-foreground text-xs ${story.media_url ? 'hidden' : 'flex'}`}>
+        סטורי
+      </div>
+      {expired && (
+        <span className="absolute top-1.5 right-1.5 text-[9px] bg-black/60 text-white px-1.5 py-0.5 rounded-full">פג תוקף</span>
+      )}
+      <div className="p-2">
+        <span className="text-[10px] text-muted-foreground">{timeAgo(story.posted_at || story.first_seen_at)}</span>
+      </div>
+    </div>
+  );
+}
+
 export function AdCard({ ad, onSelect }) {
   const thumb = ad.media_url || ad.video_url || null;
 

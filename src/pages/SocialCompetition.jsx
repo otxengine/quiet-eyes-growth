@@ -8,7 +8,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   PLATFORM_LABELS, PLATFORM_COLORS, apiFetch, timeAgo,
-  PostCard, AdCard, PostDetailModal, AdDetailModal, useDeepAnalysis,
+  PostCard, AdCard, StoryCard, PostDetailModal, AdDetailModal, useDeepAnalysis,
 } from '@/components/competitors/socialShared';
 
 function resolveSection(param) {
@@ -235,7 +235,7 @@ function AnalysisTab({ competitor, posts, bpId }) {
   );
 }
 
-function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, defaultExpanded }) {
+function RivalCard({ competitor, posts, ads, stories, defaultSec, bpId, autoOpenHistory, defaultExpanded }) {
   const [expanded,    setExpanded]    = useState(defaultExpanded || false);
   const [section,     setSection]     = useState(() => defaultSec || getDefaultSection(posts, ads));
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -293,8 +293,9 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, 
 
         <div className="flex gap-2">
           {[
-            { key: 'feed', label: `פיד (${posts.length})` },
-            { key: 'ads',  label: `מודעות (${competitor.active_ad_count || ads.length})` },
+            { key: 'feed',    label: `פיד (${posts.length})` },
+            { key: 'stories', label: `סטוריז (${stories.length})` },
+            { key: 'ads',     label: `מודעות (${competitor.active_ad_count || ads.length})` },
           ].map(({ key, label }) => (
             <button
               key={key}
@@ -324,6 +325,23 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, 
                   ))}
                 </div>
               </>
+            )}
+          </div>
+        )}
+
+        {/* Stories section */}
+        {section === 'stories' && (
+          <div className="space-y-3">
+            {stories.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-6">
+                {!competitor.instagram_url ? 'חסר לינק לאינסטגרם' : 'לא נמצאו סטוריז שמורים'}
+              </p>
+            ) : (
+              <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+                {stories.map(story => (
+                  <StoryCard key={story.id} story={story} />
+                ))}
+              </div>
             )}
           </div>
         )}
@@ -453,6 +471,12 @@ export default function SocialCompetition() {
   });
   const allAds = allAdsRaw.filter(a => a.platform !== 'tiktok');
 
+  const { data: allStories = [], isLoading: loadingStories } = useQuery({
+    queryKey: ['socialStories', bpId, compIds],
+    queryFn:  () => base44.entities.CompetitorStory.filter({ competitor_id: { in: compIds } }, '-posted_at', 300),
+    enabled:  !!bpId && compIds.length > 0,
+  });
+
   const { data: leaderboardData } = useQuery({
     queryKey: ['socialLeaderboard', bpId],
     queryFn:  () => apiFetch(`/competitors/social/leaderboard?businessProfileId=${bpId}`),
@@ -484,6 +508,12 @@ export default function SocialCompetition() {
     } catch { toast.error('שגיאה בעדכון המודעות'); }
 
     try {
+      const storiesResult = await base44.functions.invoke('collectCompetitorSocialStories', { businessProfileId: bpId, force: true }, 120000);
+      queryClient.invalidateQueries({ queryKey: ['socialStories', bpId] });
+      if (storiesResult?.upserted > 0) parts.push(`${storiesResult.upserted} סטוריז חדשים`);
+    } catch (e) { toast.error(`שגיאה בעדכון הסטוריז: ${e.message}`); }
+
+    try {
       const result = await base44.functions.invoke('backfillCompetitorPostAnalysis', { businessProfileId: bpId }, 180000);
       queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] });
       queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] });
@@ -496,7 +526,7 @@ export default function SocialCompetition() {
     setRefreshingAll(false);
   };
 
-  const loading = loadingComps || loadingPosts || loadingAds;
+  const loading = loadingComps || loadingPosts || loadingAds || loadingStories;
 
   let visible = competitors;
   if (filter === 'with_posts') visible = visible.filter(c => allPosts.some(p => p.competitor_id === c.id));
@@ -579,6 +609,7 @@ export default function SocialCompetition() {
                 competitor={comp}
                 posts={allPosts.filter(p => p.competitor_id === comp.id)}
                 ads={allAds.filter(a => a.competitor_id === comp.id)}
+                stories={allStories.filter(s => s.competitor_id === comp.id)}
                 defaultSec={comp.id === focusId ? focusSection : null}
                 defaultExpanded={comp.id === focusId}
                 bpId={bpId}
