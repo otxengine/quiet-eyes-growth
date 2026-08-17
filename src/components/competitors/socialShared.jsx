@@ -71,9 +71,20 @@ export const ANALYSIS_FIELDS = [
   { key: 'cta',           label: '📣 קריאה לפעולה' },
   { key: 'text_hooks',    label: '✍️ הוקים טקסטואליים' },
   { key: 'visual_hooks',  label: '🖼️ הוקים ויזואליים' },
-  { key: 'video_description', label: '🎬 תיאור הסרטון' },
-  { key: 'video_script',      label: '🗣️ תמלול/דיבור' },
+  { key: 'video_description',  label: '🎬 תיאור הסרטון' },
+  { key: 'video_script',       label: '🗣️ תמלול/דיבור' },
+  { key: 'video_content_type', label: '🎥 סוג תוכן' },
 ];
+
+export const VIDEO_CONTENT_TYPE_LABELS = {
+  ugc: 'תוכן גולשים (UGC)',
+  animated: 'אנימציה',
+  produced: 'הפקה מקצועית',
+  talking_head: 'דיבור מול מצלמה',
+  slideshow: 'מצגת תמונות',
+  screen_recording: 'הקלטת מסך',
+  other: 'אחר',
+};
 
 export const TOP_PERFORMER_FIELDS = [
   { key: 'hook',                   label: '🪝 למה זה עבד' },
@@ -118,6 +129,7 @@ export function AnalysisBlock({ raw }) {
         const val = a[key];
         if (val == null || val === '' || (Array.isArray(val) && val.length === 0)) return null;
         const display = key === 'has_offer' ? (val ? 'כן' : 'לא')
+          : key === 'video_content_type' ? (VIDEO_CONTENT_TYPE_LABELS[val] || val)
           : Array.isArray(val) ? val.join(' • ')
           : String(val);
         return (

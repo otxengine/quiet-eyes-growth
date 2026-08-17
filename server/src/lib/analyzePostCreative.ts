@@ -29,6 +29,7 @@ export interface PostCreativeAnalysis {
   // Only populated when analyzed via videoUrl (real video understanding) — null for image-only analysis.
   video_description: string | null;
   video_script: string | null;
+  video_content_type: string | null; // 'ugc'|'animated'|'produced'|'talking_head'|'slideshow'|'screen_recording'|'other'
 }
 
 async function fetchImageBase64(url: string): Promise<{ data: string; mediaType: string } | null> {
@@ -104,6 +105,7 @@ export function normalizePostCreativeAnalysis(raw: any): PostCreativeAnalysis | 
     audience_action_driver:  str(raw.audience_action_driver),
     video_description:       str(raw.video_description),
     video_script:            str(raw.video_script),
+    video_content_type:      str(raw.video_content_type),
   };
 }
 
@@ -206,7 +208,8 @@ export async function analyzePostCreative(input: {
 
     const videoFields = isVideo ? `,
   "video_description": "1-3 sentences: what actually happens in the video — actions, scenes, pacing, what's shown",
-  "video_script": "the spoken narration or on-screen text/dialogue, transcribed/summarized — or null if there's no speech/narration"` : '';
+  "video_script": "the spoken narration or on-screen text/dialogue, transcribed/summarized — or null if there's no speech/narration",
+  "video_content_type": "one of exactly: ugc, animated, produced, talking_head, slideshow, screen_recording, other — return ONLY the single word. ugc = handheld/organic customer-style footage, animated = motion graphics/text animation/no live footage, produced = polished professional/studio shoot, talking_head = someone speaking to camera, slideshow = static images/photos in sequence, screen_recording = captured screen content"` : '';
 
     const analysis = await invokeLLM({
       model,
