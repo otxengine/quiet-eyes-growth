@@ -200,6 +200,7 @@ const ENTITIES = [
   'PendingAlert', 'ReviewRequest', 'CustomerSurvey', 'BusinessLocation',
   'MetricsSnapshot', 'SocialAccount', 'SocialSignal', 'AutoAction', 'Campaign',
   'MediaAsset', 'OrganicPost', 'CompetitorPost', 'CompetitorAdHistory', 'CompetitorStory',
+  'CompetitorSocialProfile',
 ];
 
 // ── raw API access ────────────────────────────────────────────────────────────
