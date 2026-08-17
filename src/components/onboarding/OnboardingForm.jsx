@@ -356,11 +356,15 @@ export default function OnboardingForm() {
                 placeholder='אחר — הקלד שירות וגש Enter'
                 className="w-full bg-white border border-gray-200 rounded-full pr-10 pl-4 py-2 text-[13px] outline-none focus:border-[#e8344d] transition-colors"
                 onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const v = e.target.value.trim();
-                    if (v && !tempServices.includes(v)) setTempServices(prev => [...prev, v]);
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  const v = e.target.value.trim();
+                  if (v) {
+                    if (!tempServices.includes(v)) setTempServices(prev => [...prev, v]);
                     setOtherService('');
+                  } else if (tempServices.length > 0) {
+                    // nothing typed but at least one service already picked — Enter advances
+                    handlePrimaryAction();
                   }
                 }}
               />
@@ -405,7 +409,14 @@ export default function OnboardingForm() {
 
       case 7:
         return (
-          <div className="space-y-3 max-w-md">
+          <div
+            className="space-y-3 max-w-md"
+            onKeyDown={e => {
+              if (e.key !== 'Enter') return;
+              e.preventDefault(); // also blocks the native Enter-toggles-focused-pill behavior
+              if (tempSources.length > 0) handlePrimaryAction();
+            }}
+          >
             <PillSelector
               options={SOURCE_OPTIONS}
               selected={tempSources}
