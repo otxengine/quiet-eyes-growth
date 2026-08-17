@@ -15,86 +15,85 @@ function fmtCount(n) {
   return String(n);
 }
 
-function ProfileCard({ profile }) {
+function ProfileHeader({ profile }) {
   let highlights = [];
   try { highlights = profile.highlights ? JSON.parse(profile.highlights) : []; } catch { /* ignore malformed */ }
 
   return (
-    <div className="shrink-0 w-64 rounded-xl border border-border bg-background overflow-hidden">
+    <div className="rounded-xl border border-border bg-background overflow-hidden">
       {profile.cover_photo_url && (
         <img
           src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(profile.cover_photo_url)}`}
           alt=""
-          className="w-full h-16 object-cover"
+          className="w-full h-24 object-cover"
           loading="lazy"
         />
       )}
-      <div className="p-3 space-y-2">
-        <div className="flex items-center gap-2">
-          {profile.profile_picture_url ? (
-            <img
-              src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(profile.profile_picture_url)}`}
-              alt=""
-              className="w-10 h-10 rounded-full object-cover shrink-0 border border-border"
-              loading="lazy"
-            />
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-muted shrink-0" />
-          )}
-          <div className="min-w-0">
-            <div className="flex items-center gap-1">
-              <span className={`text-[10px] px-1.5 py-0.5 rounded ${PLATFORM_COLORS[profile.platform] || 'bg-gray-100 text-gray-700'}`}>
-                {PLATFORM_LABELS[profile.platform] || profile.platform}
-              </span>
-              {profile.is_verified && <BadgeCheck className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
+      <div className="p-4 flex items-start gap-4">
+        {profile.profile_picture_url ? (
+          <img
+            src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(profile.profile_picture_url)}`}
+            alt=""
+            className="w-20 h-20 rounded-full object-cover shrink-0 border border-border"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-20 h-20 rounded-full bg-muted shrink-0" />
+        )}
+
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-xs px-2 py-0.5 rounded ${PLATFORM_COLORS[profile.platform] || 'bg-gray-100 text-gray-700'}`}>
+              {PLATFORM_LABELS[profile.platform] || profile.platform}
+            </span>
+            {profile.is_verified && <BadgeCheck className="w-4 h-4 text-blue-500 shrink-0" />}
+            {profile.category && <span className="text-xs text-muted-foreground">{profile.category}</span>}
+          </div>
+
+          {(profile.follower_count != null || profile.following_count != null || profile.post_count != null) && (
+            <div className="flex gap-5 text-sm">
+              {profile.follower_count != null && <span><b className="text-base">{fmtCount(profile.follower_count)}</b> עוקבים</span>}
+              {profile.following_count != null && <span><b className="text-base">{fmtCount(profile.following_count)}</b> נעקבים</span>}
+              {profile.post_count != null && <span><b className="text-base">{fmtCount(profile.post_count)}</b> פוסטים</span>}
             </div>
-            {profile.category && <p className="text-[10px] text-muted-foreground truncate">{profile.category}</p>}
-          </div>
+          )}
+
+          {profile.bio && <p className="text-sm leading-relaxed whitespace-pre-line">{profile.bio}</p>}
+
+          {(profile.contact_phone || profile.contact_email || profile.contact_address || profile.external_url) && (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground pt-1">
+              {profile.contact_phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 shrink-0" />{profile.contact_phone}</span>}
+              {profile.contact_email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5 shrink-0" />{profile.contact_email}</span>}
+              {profile.contact_address && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 shrink-0" />{profile.contact_address}</span>}
+              {profile.external_url && (
+                <a href={profile.external_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline">
+                  <LinkIcon className="w-3.5 h-3.5 shrink-0" />{profile.external_url}
+                </a>
+              )}
+            </div>
+          )}
         </div>
-
-        {(profile.follower_count != null || profile.following_count != null || profile.post_count != null) && (
-          <div className="flex gap-3 text-[11px]">
-            {profile.follower_count != null && <span><b>{fmtCount(profile.follower_count)}</b> עוקבים</span>}
-            {profile.following_count != null && <span><b>{fmtCount(profile.following_count)}</b> נעקבים</span>}
-            {profile.post_count != null && <span><b>{fmtCount(profile.post_count)}</b> פוסטים</span>}
-          </div>
-        )}
-
-        {profile.bio && <p className="text-[11px] leading-relaxed line-clamp-3">{profile.bio}</p>}
-
-        {highlights.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {highlights.slice(0, 8).map((h, idx) => (
-              <div key={idx} className="flex flex-col items-center gap-0.5 shrink-0 w-10">
-                {h.cover_url ? (
-                  <img
-                    src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(h.cover_url)}`}
-                    alt=""
-                    className="w-8 h-8 rounded-full object-cover border border-border"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-muted" />
-                )}
-                {h.title && <span className="text-[9px] text-muted-foreground truncate w-10 text-center">{h.title}</span>}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {(profile.contact_phone || profile.contact_email || profile.contact_address || profile.external_url) && (
-          <div className="space-y-0.5 text-[10px] text-muted-foreground border-t border-border pt-1.5">
-            {profile.contact_phone && <p className="flex items-center gap-1"><Phone className="w-3 h-3 shrink-0" />{profile.contact_phone}</p>}
-            {profile.contact_email && <p className="flex items-center gap-1"><Mail className="w-3 h-3 shrink-0" />{profile.contact_email}</p>}
-            {profile.contact_address && <p className="flex items-center gap-1"><MapPin className="w-3 h-3 shrink-0" />{profile.contact_address}</p>}
-            {profile.external_url && (
-              <a href={profile.external_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline">
-                <LinkIcon className="w-3 h-3 shrink-0" />{profile.external_url}
-              </a>
-            )}
-          </div>
-        )}
       </div>
+
+      {highlights.length > 0 && (
+        <div className="flex gap-3 overflow-x-auto px-4 pb-4">
+          {highlights.slice(0, 10).map((h, idx) => (
+            <div key={idx} className="flex flex-col items-center gap-1 shrink-0 w-14">
+              {h.cover_url ? (
+                <img
+                  src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(h.cover_url)}`}
+                  alt=""
+                  className="w-14 h-14 rounded-full object-cover border border-border"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="w-14 h-14 rounded-full bg-muted" />
+              )}
+              {h.title && <span className="text-[10px] text-muted-foreground truncate w-14 text-center">{h.title}</span>}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -187,9 +186,9 @@ export default function BusinessSocialSnapshot({ businessProfile }) {
 
       <div className="px-4 pb-4 space-y-3 border-t border-border pt-3">
         {profiles.length > 0 && (
-          <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+          <div className="space-y-3">
             {profiles.map(profile => (
-              <ProfileCard key={profile.id} profile={profile} />
+              <ProfileHeader key={profile.id} profile={profile} />
             ))}
           </div>
         )}
