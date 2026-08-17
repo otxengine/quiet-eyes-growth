@@ -71,10 +71,38 @@ export const ANALYSIS_FIELDS = [
   { key: 'cta',           label: '📣 קריאה לפעולה' },
   { key: 'text_hooks',    label: '✍️ הוקים טקסטואליים' },
   { key: 'visual_hooks',  label: '🖼️ הוקים ויזואליים' },
+];
+
+export const TOP_PERFORMER_FIELDS = [
   { key: 'hook',                   label: '🪝 למה זה עבד' },
   { key: 'content_pillar',         label: '📌 פילר תוכן' },
   { key: 'audience_action_driver', label: '📣 מה גרם לקהל לפעול' },
 ];
+
+// Separate, visually distinct block for the outlier-only fields (hook/content_pillar/
+// audience_action_driver) — kept apart from the regular per-post AnalysisBlock below
+// so "why this post outperformed" doesn't get lost inside the general AI analysis.
+export function TopPerformerAnalysisBlock({ raw }) {
+  if (!raw) return null;
+  let a;
+  try { a = JSON.parse(raw); } catch { return null; }
+  if (!a || !TOP_PERFORMER_FIELDS.some(({ key }) => a[key])) return null;
+  return (
+    <div className="border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3 space-y-2">
+      <p className="text-[10px] font-semibold text-amber-800 dark:text-amber-300">🔥 ניתוח פוסט מצטיין</p>
+      {TOP_PERFORMER_FIELDS.map(({ key, label }) => {
+        const val = a[key];
+        if (val == null || val === '') return null;
+        return (
+          <div key={key} className="space-y-0.5">
+            <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">{label}</p>
+            <p className="text-xs leading-relaxed text-amber-950 dark:text-amber-100">{val}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export function AnalysisBlock({ raw }) {
   if (!raw) return null;
@@ -270,6 +298,7 @@ export function PostDetailModal({ post, onClose }) {
           {post.caption && (
             <p className="text-sm leading-relaxed whitespace-pre-wrap">{post.caption}</p>
           )}
+          <TopPerformerAnalysisBlock raw={post.analysis} />
           <AnalysisBlock raw={post.analysis} />
           <div className="text-[11px] text-muted-foreground space-y-0.5">
             {post.first_seen_at && <p>נראה לראשונה: {timeAgo(post.first_seen_at)}</p>}
