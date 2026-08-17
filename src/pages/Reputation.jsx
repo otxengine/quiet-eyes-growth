@@ -470,6 +470,10 @@ export default function Reputation() {
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between mb-6">
+        <div className="text-right">
+          <span className="text-lg font-semibold text-foreground">מוניטין/נראות עסקית</span>
+          <p className="text-xs text-foreground-muted mt-0.5">מעקב אחר ביקורות, דירוג העסק והמלצות לשיפור המוניטין</p>
+        </div>
         <div className="flex items-center gap-2 mt-1">
           <button
             onClick={() => setShowAddModal(true)}
@@ -484,10 +488,6 @@ export default function Reputation() {
           >
             השוואת Google
           </Link>
-        </div>
-        <div className="text-right">
-          <span className="text-lg font-semibold text-foreground">מוניטין/נראות עסקית</span>
-          <p className="text-xs text-foreground-muted mt-0.5">מעקב אחר ביקורות, דירוג העסק והמלצות לשיפור המוניטין</p>
         </div>
       </div>
 
@@ -520,10 +520,10 @@ export default function Reputation() {
 
           <div className="md:col-span-3 bg-gradient-to-l from-pink-50 via-purple-50 to-blue-50 border border-gray-200 rounded-2xl p-4">
             <div className="flex items-center justify-between mb-3" dir="rtl">
+              <span className="text-[14px] font-bold text-foreground">מבט על</span>
               <button className="flex items-center gap-1.5 text-[11px] text-foreground-muted border border-gray-200 bg-white/60 rounded-lg px-2.5 py-1.5 hover:bg-white transition-colors">
                 לכל התובנות וההמלצות
               </button>
-              <span className="text-[14px] font-bold text-foreground">מבט על</span>
             </div>
             <div className="space-y-2.5">
               {insights.length === 0 ? (
