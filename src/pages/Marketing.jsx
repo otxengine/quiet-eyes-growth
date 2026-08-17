@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
 import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
+import BusinessSocialSnapshot from '@/components/marketing/BusinessSocialSnapshot';
 const PLATFORM_CONFIG = {
   meta:      { label: 'Facebook',   icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
   instagram: { label: 'Instagram',  icon: '📸', color: '#e1306c', bg: '#fde8f0' },
@@ -1133,6 +1134,8 @@ ${audienceCtx}
       {urgentActions.length > 0 && (
         <UrgentActionsSection actions={urgentActions} />
       )}
+
+      <BusinessSocialSnapshot businessProfile={businessProfile} />
 
       {/* Secondary tab bar */}
       <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit">

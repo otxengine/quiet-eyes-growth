@@ -1065,3 +1065,57 @@ model CompetitorAdHistory {
   @@unique([competitor_id, platform, content_hash])
   @@map("competitor_ad_history")
 }
+
+model BusinessPost {
+  id                String    @id @default(cuid())
+  linked_business   String
+  platform          String    // instagram|facebook|tiktok
+  external_post_id  String?
+  post_url          String?
+  content_hash      String?   // sha256 of normalized caption+posted_at(day) — dedup fallback when external_post_id/post_url are null or drift between scrapes
+  caption           String?
+  media_url         String?
+  posted_at         DateTime?
+  likes             Int?
+  comments_count    Int?
+  first_seen_at     DateTime  @default(now())
+  last_seen_at      DateTime  @default(now())
+  analysis          String?   // JSON: {topic, has_offer, offer_details, ..., visual_hooks, text_hooks, style, has_cta, cta} — see CompetitorPost.analysis for full shape
+  analyzed_at       DateTime?
+  has_offer         Boolean?  // null = not yet analyzed
+  has_cta           Boolean?
+
+  @@index([linked_business, posted_at])
+  @@unique([linked_business, platform, external_post_id])
+  @@unique([linked_business, platform, content_hash])
+  @@map("business_posts")
+}
+
+model BusinessAdHistory {
+  id              String    @id @default(cuid())
+  linked_business String
+  platform        String    // facebook|instagram|tiktok|google
+  external_ad_id  String?
+  content_hash    String?   // sha of title+body+cta+platform for dedup fallback
+  title           String?
+  body            String?
+  cta             String?
+  link            String?
+  media_url       String?
+  video_url       String?
+  page_name       String?
+  start_date      String?
+  end_date        String?
+  first_seen_at   DateTime  @default(now())
+  last_seen_at    DateTime  @default(now())
+  is_active       Boolean   @default(true)
+  analysis        String?   // JSON: same shape as CompetitorAdHistory.analysis
+  analyzed_at     DateTime?
+  has_offer       Boolean?  // null = not yet analyzed
+  has_cta         Boolean?
+
+  @@index([linked_business, last_seen_at])
+  @@unique([linked_business, platform, external_ad_id])
+  @@unique([linked_business, platform, content_hash])
+  @@map("business_ad_history")
+}

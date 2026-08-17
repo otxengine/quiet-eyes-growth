@@ -202,6 +202,103 @@ router.post('/publish-organic', async (req: Request, res: Response) => {
   }
 });
 
+function hasOwnSocialUrl(profile: any): boolean {
+  return !!(profile?.instagram_url || profile?.facebook_url || profile?.tiktok_url);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/social/snapshot/feed?businessProfileId=&platform=
+// Own-business twin of GET /api/competitors/social/feed — real posts scraped
+// from the business's own pages via collectOwnSocialPosts.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/snapshot/feed', async (req: Request, res: Response) => {
+  try {
+    const { businessProfileId, platform } = req.query as Record<string, string>;
+    if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+    const profile = await prisma.businessProfile.findUnique({
+      where: { id: businessProfileId },
+      select: { instagram_url: true, facebook_url: true, tiktok_url: true },
+    });
+    if (!profile) return res.status(404).json({ error: 'Business not found' });
+
+    const posts = await prisma.businessPost.findMany({
+      where: { linked_business: businessProfileId, ...(platform ? { platform } : {}) },
+      orderBy: { posted_at: 'desc' },
+      take: 50,
+    });
+
+    const emptyState = !hasOwnSocialUrl(profile) ? 'no_url' : posts.length === 0 ? 'no_data' : 'ok';
+    return res.json({ posts, emptyState });
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/social/snapshot/ads/current?businessProfileId=
+// Own-business twin of GET /api/competitors/social/ads/current. There's no
+// denormalized summary row (like Competitor.active_ad_count) for the business
+// itself, so this computes the current-state snapshot on the fly from
+// business_ad_history — simpler than the competitor path, no extra columns needed.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/snapshot/ads/current', async (req: Request, res: Response) => {
+  try {
+    const { businessProfileId } = req.query as Record<string, string>;
+    if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+    const profile = await prisma.businessProfile.findUnique({
+      where: { id: businessProfileId },
+      select: { instagram_url: true, facebook_url: true, tiktok_url: true },
+    });
+    if (!profile) return res.status(404).json({ error: 'Business not found' });
+
+    const activeAds = await prisma.businessAdHistory.findMany({
+      where: { linked_business: businessProfileId, is_active: true },
+      select: { platform: true, last_seen_at: true },
+    });
+    const platforms = [...new Set(activeAds.map(a => a.platform))];
+    const lastSeenAt = activeAds.reduce<Date | null>((max, a) => (!max || a.last_seen_at > max) ? a.last_seen_at : max, null);
+
+    const emptyState = !hasOwnSocialUrl(profile) ? 'no_url' : activeAds.length === 0 ? 'no_data' : 'ok';
+    return res.json({
+      active_ad_count: activeAds.length,
+      active_ad_platforms: platforms,
+      last_seen_at: lastSeenAt,
+      emptyState,
+    });
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/social/snapshot/ads/history?businessProfileId=&sort=last_seen|first_seen&platform=
+// Own-business twin of GET /api/competitors/social/ads/history.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/snapshot/ads/history', async (req: Request, res: Response) => {
+  try {
+    const { businessProfileId, sort = 'last_seen', platform } = req.query as Record<string, string>;
+    if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+    const profile = await prisma.businessProfile.findUnique({
+      where: { id: businessProfileId },
+      select: { instagram_url: true, facebook_url: true, tiktok_url: true },
+    });
+    if (!profile) return res.status(404).json({ error: 'Business not found' });
+
+    const ads = await prisma.businessAdHistory.findMany({
+      where: { linked_business: businessProfileId, ...(platform ? { platform } : {}) },
+      orderBy: sort === 'first_seen' ? { first_seen_at: 'asc' } : { last_seen_at: 'desc' },
+    });
+
+    const emptyState = !hasOwnSocialUrl(profile) ? 'no_url' : ads.length === 0 ? 'no_data' : 'ok';
+    return res.json({ ads, emptyState });
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 const GRAPH = 'https://graph.facebook.com/v19.0';
 
 // ─────────────────────────────────────────────────────────────────────────────

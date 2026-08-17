@@ -2,13 +2,13 @@ import { useState, useEffect, useRef } from 'react';
 import { useOutletContext, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2, RefreshCw, ChevronDown, ExternalLink, Trophy } from 'lucide-react';
+import { Loader2, RefreshCw, ChevronDown, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  PLATFORM_LABELS, PLATFORM_COLORS, API_BASE, apiFetch, timeAgo,
-  PostDetailModal, AdDetailModal, useDeepAnalysis,
+  PLATFORM_LABELS, PLATFORM_COLORS, apiFetch, timeAgo,
+  PostCard, AdCard, PostDetailModal, AdDetailModal, useDeepAnalysis,
 } from '@/components/competitors/socialShared';
 
 function resolveSection(param) {
@@ -71,57 +71,6 @@ function AdHistoryModal({ open, onClose, competitorId, competitorName, bpId }) {
       </DialogContent>
       <AdDetailModal ad={selectedAd} onClose={() => setSelectedAd(null)} />
     </Dialog>
-  );
-}
-
-function AdCard({ ad, onSelect }) {
-  const thumb = ad.media_url || ad.video_url || null;
-
-  return (
-    <div
-      onClick={() => onSelect?.(ad)}
-      className="shrink-0 w-36 rounded-xl border border-border bg-background overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
-    >
-      {thumb ? (
-        <img
-          src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(thumb)}`}
-          alt=""
-          className="w-full h-36 object-cover"
-          loading="lazy"
-          onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
-        />
-      ) : null}
-      <div className={`w-full h-36 bg-muted items-center justify-center text-muted-foreground text-xs ${thumb ? 'hidden' : 'flex'}`}>
-        {ad.is_active ? '📣 מודעה' : PLATFORM_LABELS[ad.platform] || ad.platform}
-      </div>
-
-      <div className="p-2 space-y-1">
-        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-          <span className={`px-1 py-0.5 rounded ${PLATFORM_COLORS[ad.platform] || 'bg-gray-100 text-gray-700'}`}>
-            {PLATFORM_LABELS[ad.platform] || ad.platform}
-          </span>
-          {ad.is_active
-            ? <span className="bg-green-100 text-green-700 px-1 py-0.5 rounded mr-auto">פעיל</span>
-            : <span className="mr-auto">{timeAgo(ad.last_seen_at)}</span>
-          }
-          {ad.link && (
-            <a
-              href={ad.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={e => e.stopPropagation()}
-              className="text-muted-foreground hover:text-foreground shrink-0"
-            >
-              <ExternalLink className="w-3 h-3" />
-            </a>
-          )}
-        </div>
-        {ad.cta && <p className="text-[11px] font-medium text-primary">{ad.cta}</p>}
-        {(ad.title || ad.body) && (
-          <p className="text-[11px] line-clamp-2 text-foreground leading-snug">{ad.title || ad.body}</p>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -371,55 +320,7 @@ function RivalCard({ competitor, posts, ads, defaultSec, bpId, autoOpenHistory, 
                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">פוסטים אחרונים</p>
                 <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
                   {posts.slice(0, 20).map(post => (
-                    <div
-                      key={post.id}
-                      onClick={() => setSelectedPost(post)}
-                      className="shrink-0 w-36 rounded-xl border border-border bg-background overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
-                    >
-                      {post.media_url ? (
-                        <img
-                          src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(post.media_url)}`}
-                          alt=""
-                          className="w-full h-36 object-cover"
-                          loading="lazy"
-                          onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
-                        />
-                      ) : null}
-                      <div
-                        className={`w-full h-36 bg-muted items-center justify-center text-muted-foreground text-xs ${post.media_url ? 'hidden' : 'flex'}`}
-                      >
-                        {PLATFORM_LABELS[post.platform] || post.platform}
-                      </div>
-
-                      <div className="p-2 space-y-1">
-                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                          <span className={`px-1 py-0.5 rounded ${PLATFORM_COLORS[post.platform] || 'bg-gray-100 text-gray-700'}`}>
-                            {PLATFORM_LABELS[post.platform] || post.platform}
-                          </span>
-                          <span className="mr-auto">{timeAgo(post.posted_at || post.first_seen_at)}</span>
-                          {post.post_url && (
-                            <a
-                              href={post.post_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={e => e.stopPropagation()}
-                              className="text-muted-foreground hover:text-foreground shrink-0"
-                            >
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          )}
-                        </div>
-                        {(post.likes != null || post.comments_count != null) && (
-                          <div className="flex gap-2 text-[11px]">
-                            {post.likes != null && <span>❤️ {post.likes.toLocaleString()}</span>}
-                            {post.comments_count != null && <span>💬 {post.comments_count.toLocaleString()}</span>}
-                          </div>
-                        )}
-                        {post.caption && (
-                          <p className="text-[11px] line-clamp-2 text-foreground leading-snug">{post.caption}</p>
-                        )}
-                      </div>
-                    </div>
+                    <PostCard key={post.id} post={post} onSelect={setSelectedPost} />
                   ))}
                 </div>
               </>

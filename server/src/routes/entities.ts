@@ -102,6 +102,8 @@ const ENTITY_MAP: Record<string, string> = {
   SupportTicket: 'supportTicket',
   CompetitorPost: 'competitorPost',
   CompetitorAdHistory: 'competitorAdHistory',
+  BusinessPost: 'businessPost',
+  BusinessAdHistory: 'businessAdHistory',
 };
 
 function getModel(entity: string): any {
@@ -150,6 +152,8 @@ const REVIEW_ORDER_BY = { created_at: { sort: 'desc' as const, nulls: 'last' as 
 const ENTITY_DEFAULT_ORDER: Record<string, any> = {
   CompetitorPost: { first_seen_at: 'desc' },
   CompetitorAdHistory: { first_seen_at: 'desc' },
+  BusinessPost: { first_seen_at: 'desc' },
+  BusinessAdHistory: { first_seen_at: 'desc' },
 };
 
 // Prisma's Linux query-engine binary (Render) has stricter OID matching:

@@ -531,6 +531,57 @@ app.listen(PORT, async () => {
     actual_leads     INT,
     actual_spend_ils NUMERIC
   )`);
+  // ── Business social snapshot: own posts/ads scraped the same way competitor ──
+  // ones are, but TIMESTAMP(3) (not TIMESTAMPTZ) so it matches Prisma's DateTime
+  // and avoids the pgHex/raw-SQL workarounds the competitor tables need.
+  await sql(`CREATE TABLE IF NOT EXISTS business_posts (
+    id                TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    linked_business   TEXT NOT NULL,
+    platform          TEXT NOT NULL,
+    external_post_id  TEXT,
+    post_url          TEXT,
+    content_hash      TEXT,
+    caption           TEXT,
+    media_url         TEXT,
+    posted_at         TIMESTAMP(3),
+    likes             INT,
+    comments_count    INT,
+    first_seen_at     TIMESTAMP(3) NOT NULL DEFAULT NOW(),
+    last_seen_at      TIMESTAMP(3) NOT NULL DEFAULT NOW(),
+    analysis          TEXT,
+    analyzed_at       TIMESTAMP(3),
+    has_offer         BOOLEAN,
+    has_cta           BOOLEAN
+  )`);
+  await sql(`CREATE UNIQUE INDEX IF NOT EXISTS business_posts_ext_id_key ON business_posts(linked_business, platform, external_post_id)`);
+  await sql(`CREATE UNIQUE INDEX IF NOT EXISTS business_posts_content_hash_key ON business_posts(linked_business, platform, content_hash)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_business_posts_biz_posted ON business_posts(linked_business, posted_at)`);
+  await sql(`CREATE TABLE IF NOT EXISTS business_ad_history (
+    id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    linked_business TEXT NOT NULL,
+    platform        TEXT NOT NULL,
+    external_ad_id  TEXT,
+    content_hash    TEXT,
+    title           TEXT,
+    body            TEXT,
+    cta             TEXT,
+    link            TEXT,
+    media_url       TEXT,
+    video_url       TEXT,
+    page_name       TEXT,
+    start_date      TEXT,
+    end_date        TEXT,
+    first_seen_at   TIMESTAMP(3) NOT NULL DEFAULT NOW(),
+    last_seen_at    TIMESTAMP(3) NOT NULL DEFAULT NOW(),
+    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+    analysis        TEXT,
+    analyzed_at     TIMESTAMP(3),
+    has_offer       BOOLEAN,
+    has_cta         BOOLEAN
+  )`);
+  await sql(`CREATE UNIQUE INDEX IF NOT EXISTS business_ad_history_ext_id_key ON business_ad_history(linked_business, platform, external_ad_id)`);
+  await sql(`CREATE UNIQUE INDEX IF NOT EXISTS business_ad_history_content_hash_key ON business_ad_history(linked_business, platform, content_hash)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_business_ad_history_biz_seen ON business_ad_history(linked_business, last_seen_at)`);
   // Note: ALTER TABLE for otx_recommendations/pipeline_runs/policy_weights/outcome_events/execution_tasks
   // are intentionally placed AFTER their CREATE TABLE statements below (lines ~767+).
 
