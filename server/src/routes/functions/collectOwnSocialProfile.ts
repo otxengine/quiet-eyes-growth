@@ -202,10 +202,10 @@ export async function collectOwnSocialProfile(req: Request, res: Response) {
 
     setLastRun(businessProfileId, 'collectOwnSocialProfile');
     await writeAutomationLog('collectOwnSocialProfile', businessProfileId, startTime, saved, 'success');
-    const debug_raw_keys = Object.fromEntries(
-      Object.entries(lastRawByPlatform).map(([platform, item]) => [platform, Object.keys(item || {})]),
+    const debug_raw = Object.fromEntries(
+      Object.entries(lastRawByPlatform).map(([platform, item]) => [platform, item]),
     );
-    return res.json({ saved, diagnostics, debug_raw_keys });
+    return res.json({ saved, diagnostics, debug_raw });
   } catch (err: any) {
     await writeAutomationLog('collectOwnSocialProfile', businessProfileId, startTime, 0, 'failed', err.message);
     return res.status(500).json({ error: err.message });
