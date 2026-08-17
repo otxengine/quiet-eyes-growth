@@ -66,6 +66,12 @@ const SORT_COMPARATORS = {
   rating_asc: (a, b) => (Number(a.rating) || 0) - (Number(b.rating) || 0),
 };
 
+const RATING_SPAN_OPTIONS = [
+  { weeks: 12, label: '12 שבועות' },
+  { weeks: 26, label: 'חצי שנתי' },
+  { weeks: 52, label: 'שנתי' },
+];
+
 function ReviewRow({ review, onApprove, labelById = {} }) {
   const sentDot = SENTIMENT_DOT[review.sentiment] || 'bg-gray-400';
   const relDate = (() => {
@@ -369,6 +375,7 @@ export default function Reputation() {
   const pendingCount = reviews.filter(r => r.response_status === 'pending').length;
 
   const [sortBy, setSortBy] = useState('priority');
+  const [ratingSpanWeeks, setRatingSpanWeeks] = useState(12);
   const sortedReviews = [...reviews].sort(SORT_COMPARATORS[sortBy] || SORT_COMPARATORS.priority);
 
   const respondedCount = reviews.filter(r => ['responded', 'auto_responded', 'suggested', 'published'].includes(r.response_status)).length;
@@ -490,12 +497,25 @@ export default function Reputation() {
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="md:col-span-2 bg-white rounded-xl border border-gray-200 p-4">
             <div className="flex items-center justify-between mb-3" dir="rtl">
-              <button className="flex items-center gap-1 text-[11px] text-foreground-muted border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-secondary transition-colors">
-                חצי שנתי <ChevronDown className="w-3 h-3" />
-              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-1 text-[11px] text-foreground-muted border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-secondary transition-colors">
+                    {RATING_SPAN_OPTIONS.find(o => o.weeks === ratingSpanWeeks)?.label} <ChevronDown className="w-3 h-3" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" dir="rtl">
+                  <DropdownMenuRadioGroup value={String(ratingSpanWeeks)} onValueChange={v => setRatingSpanWeeks(Number(v))}>
+                    {RATING_SPAN_OPTIONS.map(opt => (
+                      <DropdownMenuRadioItem key={opt.weeks} value={String(opt.weeks)} className="text-[12px]">
+                        {opt.label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <span className="text-[13px] font-semibold text-foreground">דירוג לאורך זמן</span>
             </div>
-            <RatingTrendChart reviews={reviews} />
+            <RatingTrendChart reviews={reviews} weeks={ratingSpanWeeks} />
           </div>
 
           <div className="md:col-span-3 bg-gradient-to-l from-pink-50 via-purple-50 to-blue-50 border border-gray-200 rounded-2xl p-4">

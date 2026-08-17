@@ -2,17 +2,16 @@ import React, { useMemo } from 'react';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 /**
- * RatingTrendChart — shows average rating per week over the last 12 weeks.
+ * RatingTrendChart — shows average rating per week over the last `weeks` weeks.
  * Uses only the reviews already loaded on the page (no extra API call).
  */
-export default function RatingTrendChart({ reviews = [] }) {
+export default function RatingTrendChart({ reviews = [], weeks = 12 }) {
   const { points, trend, delta, minY, maxY } = useMemo(() => {
     if (reviews.length === 0) return { points: [], trend: 'stable', delta: 0, minY: 1, maxY: 5 };
 
-    // Group by ISO week (Mon-based), last 12 weeks
+    // Group by ISO week (Mon-based), last `weeks` weeks
     const now = Date.now();
     const WEEK = 7 * 24 * 3600 * 1000;
-    const weeks = 12;
     const buckets = Array.from({ length: weeks }, (_, i) => ({
       label: i,
       ratings: [],
@@ -55,7 +54,7 @@ export default function RatingTrendChart({ reviews = [] }) {
     const maxY = Math.min(5, Math.max(...ys) + 0.3);
 
     return { points: validPts, trend, delta, minY, maxY };
-  }, [reviews]);
+  }, [reviews, weeks]);
 
   if (points.length < 2) return null;
 
@@ -84,7 +83,7 @@ export default function RatingTrendChart({ reviews = [] }) {
     <div className="card-base p-5">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h3 className="text-[13px] font-semibold text-foreground">מגמת דירוג — 12 שבועות</h3>
+          <h3 className="text-[13px] font-semibold text-foreground">מגמת דירוג — {weeks} שבועות</h3>
           <p className="text-[10px] text-foreground-muted mt-0.5">ממוצע ביקורות לפי שבוע</p>
         </div>
         <div className="flex items-center gap-2">
