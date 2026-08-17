@@ -77,6 +77,14 @@ export default function Competitors() {
     enabled: !!bpId,
   });
 
+  const compIds = competitors.map(c => c.id);
+  const { data: socialProfiles = [] } = useQuery({
+    queryKey: ['competitorsPageProfiles', bpId, compIds],
+    queryFn: () => base44.entities.CompetitorSocialProfile.filter({ competitor_id: { in: compIds } }, '-fetched_at', 300),
+    enabled: !!bpId && compIds.length > 0,
+  });
+  const profilePicByCompId = Object.fromEntries(socialProfiles.map(p => [p.competitor_id, p.profile_picture_url]));
+
   const handleAdd = async () => {
     if (!newComp.name.trim()) return;
     if (atCap) { toast.error(`הגעת למכסת ${planLimits.competitors_max} מתחרים בתוכנית שלך`); return; }
@@ -250,6 +258,7 @@ export default function Competitors() {
             <CompetitorDetailCard
               key={comp.id}
               competitor={comp}
+              profilePictureUrl={profilePicByCompId[comp.id]}
               businessName={businessProfile?.name}
               businessProfileId={bpId}
               otxBizId={bpId}

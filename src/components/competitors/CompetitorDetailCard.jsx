@@ -9,6 +9,7 @@ class SilentBoundary extends Component {
 import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, MapPin, ArrowLeft, Clock, Instagram, Globe, X, Trash2, Check } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
+import { API_BASE } from '@/components/competitors/socialShared';
 const CompetitorSwotCard = lazy(() => import('@/components/competitors/CompetitorSwotCard'));
 import CompetitorStrategyCard from '@/components/competitors/CompetitorStrategyCard';
 import DismissMenu from '@/components/ui/DismissMenu';
@@ -78,6 +79,7 @@ export default function CompetitorDetailCard({
   onDismissed,
   onApproved,
   onDeepAnalysis,
+  profilePictureUrl,
 }) {
   const [expanded, setExpanded] = useState(false);
   const [approving, setApproving] = useState(false);
@@ -121,9 +123,18 @@ export default function CompetitorDetailCard({
       {/* ── Header (always visible) ───────────────────────────────────── */}
       <div className="px-5 py-4 cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center text-foreground-muted text-[10px] font-bold flex-shrink-0">
-            {initials}
-          </div>
+          {profilePictureUrl ? (
+            <img
+              src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(profilePictureUrl)}`}
+              alt=""
+              className="w-9 h-9 rounded-lg object-cover flex-shrink-0"
+              loading="lazy"
+            />
+          ) : (
+            <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center text-foreground-muted text-[10px] font-bold flex-shrink-0">
+              {initials}
+            </div>
+          )}
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
