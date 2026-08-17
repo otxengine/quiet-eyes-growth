@@ -5,20 +5,18 @@ import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 
-// Profile-level twin of collectOwnSocialPosts.ts — same Apify actors as
-// fetchSocialPageAbout.ts (proven working for onboarding's bio scrape), but
-// called directly here (not via that helper) because fetchSocialPageAbout
-// discards the whole scrape when bio text is empty, which would also throw
-// away avatar/follower/contact data we want even when there's no bio set.
-// Extraction is best-effort/defensive: these actors' schemas aren't pinned
-// down anywhere in this repo, so unknown/missing fields just come back null
-// rather than throwing.
+// Instagram-only for now (per product decision) — profile picture, bio, follower/
+// following/post counts, verified/business flags, category, external URL, and
+// highlight count. Uses apify/instagram-profile-scraper (not apify~instagram-scraper,
+// which is used elsewhere in this codebase for the post feed) — its documented
+// output fields: profilePicUrl(HD), biography, externalUrl, followersCount,
+// followsCount, postsCount, verified, isBusinessAccount, businessCategoryName,
+// highlightReelCount. No cover-photo or actual highlight-item fields are documented
+// for this actor — highlights stays count-only, contact_* fields aren't in its
+// schema either but are extracted defensively in case a future actor version adds them.
 
 const MIN_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h — profile metadata changes rarely
-
-const FACEBOOK_ACTOR  = 'apify~facebook-pages-scraper';
-const INSTAGRAM_ACTOR = 'apify~instagram-scraper';
-const TIKTOK_ACTOR    = 'clockworks~tiktok-profile-scraper';
+const INSTAGRAM_PROFILE_ACTOR = 'apify~instagram-profile-scraper';
 
 function usernameFromUrl(url: string): string {
   return url.replace(/\/+$/, '').split('/').pop() || url;
@@ -30,21 +28,6 @@ function numOrNull(v: any): number | null {
 
 function boolOrNull(v: any): boolean | null {
   return typeof v === 'boolean' ? v : null;
-}
-
-// Best-effort — these actors' highlight support (if any) isn't documented in
-// this repo; if the raw item doesn't carry a recognizable highlights array,
-// this returns null and only highlight_count survives (from a separate field).
-function extractHighlights(raw: any): string | null {
-  const arr = raw?.highlights || raw?.highlightItems;
-  if (!Array.isArray(arr) || arr.length === 0) return null;
-  const items = arr
-    .map((h: any) => ({
-      title: h?.title || h?.name || null,
-      cover_url: h?.coverUrl || h?.cover || h?.thumbnail || h?.imageUrl || null,
-    }))
-    .filter((h: { title: string | null; cover_url: string | null }) => h.title || h.cover_url);
-  return items.length ? JSON.stringify(items) : null;
 }
 
 type ProfileFields = {
@@ -66,11 +49,7 @@ type ProfileFields = {
 };
 
 async function scrapeInstagram(url: string): Promise<ProfileFields | null> {
-  // directUrls + resultsType:'details' (not the `usernames`-only mode fetchSocialPageAbout.ts
-  // uses) — the usernames-only call returns an actor error item ("Empty or private data")
-  // for this actor version; directUrls is the same input style collectOwnSocialPosts.ts
-  // already uses successfully for the posts feed, just requesting the profile instead.
-  const [item] = await runApifyActor(INSTAGRAM_ACTOR, { directUrls: [url], resultsType: 'details', resultsLimit: 1 });
+  const [item] = await runApifyActor(INSTAGRAM_PROFILE_ACTOR, { usernames: [usernameFromUrl(url)] });
   if (!item || item.error) return null;
   return {
     profile_picture_url: item.profilePicUrlHD || item.profilePicUrl || null,
@@ -87,80 +66,25 @@ async function scrapeInstagram(url: string): Promise<ProfileFields | null> {
     contact_email: item.publicEmail || item.businessEmail || null,
     contact_address: item.publicAddress || item.businessAddress || null,
     highlight_count: numOrNull(item.highlightReelCount),
-    highlights: extractHighlights(item),
-  };
-}
-
-async function scrapeFacebook(url: string): Promise<ProfileFields | null> {
-  const [item] = await runApifyActor(FACEBOOK_ACTOR, { startUrls: [{ url }] });
-  if (!item || item.error) return null;
-  return {
-    profile_picture_url: item.profilePictureUrl || item.profilePhoto || item.profile_picture || null,
-    cover_photo_url: item.coverPhotoUrl || item.coverPhoto || item.cover || null,
-    bio: item.about || item.info?.[0] || null,
-    external_url: item.website || null,
-    follower_count: numOrNull(item.followers ?? item.likes),
-    following_count: null,
-    post_count: null,
-    is_verified: boolOrNull(item.verified),
-    is_business_account: null,
-    category: Array.isArray(item.categories) ? (item.categories[0] || null) : (item.category || null),
-    contact_phone: item.phone || null,
-    contact_email: item.email || null,
-    contact_address: item.address || null,
-    highlight_count: null,
     highlights: null,
   };
 }
 
-async function scrapeTikTok(url: string): Promise<ProfileFields | null> {
-  const [item] = await runApifyActor(TIKTOK_ACTOR, { profiles: [usernameFromUrl(url)] });
-  const meta = item?.authorMeta;
-  if (!meta) return null;
-  return {
-    profile_picture_url: meta.avatarLarger || meta.avatarMedium || meta.avatar || null,
-    cover_photo_url: null,
-    bio: meta.signature || null,
-    external_url: null,
-    follower_count: numOrNull(meta.fans),
-    following_count: numOrNull(meta.following),
-    post_count: numOrNull(meta.video),
-    is_verified: boolOrNull(meta.verified),
-    is_business_account: null,
-    category: null,
-    contact_phone: null,
-    contact_email: null,
-    contact_address: null,
-    highlight_count: null,
-    highlights: null,
-  };
-}
+async function scrapeAndSave(businessProfileId: string, url: string) {
+  const fields = await scrapeInstagram(url);
+  if (!fields) return { platform: 'instagram', url, saved: false };
 
-const SCRAPERS: Record<string, (url: string) => Promise<ProfileFields | null>> = {
-  instagram: scrapeInstagram,
-  facebook: scrapeFacebook,
-  tiktok: scrapeTikTok,
-};
-
-async function scrapeAndSave(businessProfileId: string, platform: string, url: string) {
-  const fields = await SCRAPERS[platform](url);
-  if (!fields) return { platform, url, saved: false };
-
-  const s3 = isS3Configured();
-  const profile_picture_url = fields.profile_picture_url && s3
+  const profile_picture_url = fields.profile_picture_url && isS3Configured()
     ? (await uploadImageFromUrl(fields.profile_picture_url, 'business-profile') ?? fields.profile_picture_url)
     : fields.profile_picture_url;
-  const cover_photo_url = fields.cover_photo_url && s3
-    ? (await uploadImageFromUrl(fields.cover_photo_url, 'business-profile') ?? fields.cover_photo_url)
-    : fields.cover_photo_url;
 
   await prisma.businessSocialProfile.upsert({
-    where: { linked_business_platform: { linked_business: businessProfileId, platform } },
-    create: { linked_business: businessProfileId, platform, ...fields, profile_picture_url, cover_photo_url },
-    update: { ...fields, profile_picture_url, cover_photo_url, fetched_at: new Date() },
+    where: { linked_business_platform: { linked_business: businessProfileId, platform: 'instagram' } },
+    create: { linked_business: businessProfileId, platform: 'instagram', ...fields, profile_picture_url },
+    update: { ...fields, profile_picture_url, fetched_at: new Date() },
   });
 
-  return { platform, url, saved: true };
+  return { platform: 'instagram', url, saved: true };
 }
 
 export async function collectOwnSocialProfile(req: Request, res: Response) {
@@ -180,25 +104,16 @@ export async function collectOwnSocialProfile(req: Request, res: Response) {
 
     const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
     if (!profile) return res.status(404).json({ error: 'Business not found' });
+    if (!profile.instagram_url) {
+      await writeAutomationLog('collectOwnSocialProfile', businessProfileId, startTime, 0, 'success', 'no_instagram_url');
+      return res.json({ saved: 0, skipped: true, reason: 'no_instagram_url' });
+    }
 
-    const urls: Record<string, string | null> = {
-      instagram: profile.instagram_url,
-      facebook: profile.facebook_url,
-      tiktok: profile.tiktok_url,
-    };
-    const tasks = Object.entries(urls).filter(([, url]) => !!url) as [string, string][];
-
-    const results = await Promise.allSettled(
-      tasks.map(([platform, url]) => scrapeAndSave(businessProfileId, platform, url)),
-    );
-    const diagnostics = results.map((r, i) =>
-      r.status === 'fulfilled' ? r.value : { platform: tasks[i][0], url: tasks[i][1], error: (r as any).reason?.message },
-    );
-    const saved = results.filter(r => r.status === 'fulfilled' && (r as any).value.saved).length;
+    const result = await scrapeAndSave(businessProfileId, profile.instagram_url);
 
     setLastRun(businessProfileId, 'collectOwnSocialProfile');
-    await writeAutomationLog('collectOwnSocialProfile', businessProfileId, startTime, saved, 'success');
-    return res.json({ saved, diagnostics });
+    await writeAutomationLog('collectOwnSocialProfile', businessProfileId, startTime, result.saved ? 1 : 0, 'success');
+    return res.json({ saved: result.saved ? 1 : 0, diagnostics: [result] });
   } catch (err: any) {
     await writeAutomationLog('collectOwnSocialProfile', businessProfileId, startTime, 0, 'failed', err.message);
     return res.status(500).json({ error: err.message });
