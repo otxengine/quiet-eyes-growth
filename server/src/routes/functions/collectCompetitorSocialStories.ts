@@ -6,6 +6,7 @@ import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
+import { findDonorCandidates } from '../../lib/competitorDonor';
 
 // Stories expire ~24h after posting on Instagram, so this needs to run far more
 // often than the 20h post scraper to actually catch them before they vanish.
@@ -72,6 +73,41 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
       setLastRun(businessProfileId, 'collectCompetitorSocialStories');
       await writeAutomationLog('collectCompetitorSocialStories', businessProfileId, startTime, 0, 'success', 'no_instagram_urls');
       return res.json({ upserted: 0, competitors: competitors.length, diagnostics: skipped });
+    }
+
+    // Cross-business archive backfill — unlike collectCompetitorSocialPosts.ts's donor
+    // cache, this isn't primarily a cost optimization: once a story expires on
+    // Instagram, Apify can never scrape it again, so cloning another business's
+    // already-archived rows for the SAME real-world competitor is the only way a
+    // newly-tracking business recovers that history. Runs every scrape (not just
+    // once) — cheap (NOT EXISTS anti-join, no Apify cost) and self-converges as more
+    // businesses' scrapes add to the shared pool. Not freshness-gated on purpose:
+    // old rows are exactly what a fresh Apify call can't get back.
+    let donorCloned = 0;
+    for (const comp of byUsername.values()) {
+      const donors = await findDonorCandidates(comp.id, businessProfileId, {
+        googlePlaceId: comp.google_place_id ?? null,
+        platform: 'instagram',
+        urlValue: comp.instagram_url,
+      });
+      if (donors.length === 0) continue;
+      const cloned = await (prisma as any).$executeRawUnsafe(
+        `INSERT INTO competitor_stories
+           (id, linked_business, competitor_id, platform, external_story_id,
+            media_url, media_type, posted_at, expires_at, first_seen_at, last_seen_at,
+            analysis, analyzed_at, has_offer, has_cta)
+         SELECT gen_random_uuid()::text, $1, $2, d.platform, d.external_story_id,
+                d.media_url, d.media_type, d.posted_at, d.expires_at, d.first_seen_at, d.last_seen_at,
+                d.analysis, d.analyzed_at, d.has_offer, d.has_cta
+         FROM competitor_stories d
+         WHERE d.competitor_id = ANY($3::text[]) AND d.platform = 'instagram'
+           AND NOT EXISTS (
+             SELECT 1 FROM competitor_stories o
+             WHERE o.competitor_id = $2 AND o.external_story_id = d.external_story_id
+           )`,
+        businessProfileId, comp.id, donors.map(d => d.id),
+      ) as number;
+      donorCloned += Number(cloned) || 0;
     }
 
     // Pre-fetch which existing rows already have AI analysis, so a re-scrape of a
@@ -189,6 +225,7 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
         apify_returned: rawItems.length,
         matched,
         upserted,
+        donor_cloned: donorCloned,
         analyzed,
         elapsed_ms: Date.now() - t0,
         error: apifyError,
@@ -197,9 +234,10 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
       },
     ];
 
+    const totalUpserted = upserted + donorCloned;
     setLastRun(businessProfileId, 'collectCompetitorSocialStories');
-    await writeAutomationLog('collectCompetitorSocialStories', businessProfileId, startTime, upserted, 'success');
-    return res.json({ upserted, competitors: competitors.length, diagnostics });
+    await writeAutomationLog('collectCompetitorSocialStories', businessProfileId, startTime, totalUpserted, 'success');
+    return res.json({ upserted: totalUpserted, competitors: competitors.length, diagnostics });
   } catch (err: any) {
     await writeAutomationLog('collectCompetitorSocialStories', businessProfileId, startTime, 0, 'failed', err.message);
     return res.status(500).json({ error: err.message });
