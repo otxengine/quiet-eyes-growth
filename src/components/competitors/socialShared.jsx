@@ -391,17 +391,25 @@ export function fmtCount(n) {
 const OUTLIER_MULTIPLIER = 2;
 const OUTLIER_MIN_SAMPLE = 3;
 
-// Posts whose engagement (likes + comments) is >=2x that competitor's own average.
+// Posts whose engagement (likes + comments) is >=2x that competitor's own
+// average *for the same platform* — TikTok/Instagram/Facebook baselines
+// differ too much to average together.
 export function computeOutlierPosts(posts) {
-  const scored = posts
-    .filter(p => p.likes != null || p.comments_count != null)
-    .map(p => ({ ...p, engagement: (p.likes ?? 0) + (p.comments_count ?? 0) }));
-  if (scored.length < OUTLIER_MIN_SAMPLE) return [];
-  const avg = scored.reduce((s, p) => s + p.engagement, 0) / scored.length;
-  if (avg <= 0) return [];
-  return scored
-    .filter(p => p.engagement >= avg * OUTLIER_MULTIPLIER)
-    .sort((a, b) => b.engagement - a.engagement);
+  const byPlatform = {};
+  for (const p of posts) {
+    if (p.likes == null && p.comments_count == null) continue;
+    const list = byPlatform[p.platform] || (byPlatform[p.platform] = []);
+    list.push({ ...p, engagement: (p.likes ?? 0) + (p.comments_count ?? 0) });
+  }
+
+  const outliers = [];
+  for (const scored of Object.values(byPlatform)) {
+    if (scored.length < OUTLIER_MIN_SAMPLE) continue;
+    const avg = scored.reduce((s, p) => s + p.engagement, 0) / scored.length;
+    if (avg <= 0) continue;
+    outliers.push(...scored.filter(p => p.engagement >= avg * OUTLIER_MULTIPLIER));
+  }
+  return outliers.sort((a, b) => b.engagement - a.engagement);
 }
 
 export function ProfileHeader({ profile }) {
