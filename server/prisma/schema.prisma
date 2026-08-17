@@ -1119,3 +1119,28 @@ model BusinessAdHistory {
   @@unique([linked_business, platform, content_hash])
   @@map("business_ad_history")
 }
+
+model BusinessSocialProfile {
+  id                  String    @id @default(cuid())
+  linked_business     String
+  platform            String    // instagram|facebook|tiktok
+  profile_picture_url String?
+  cover_photo_url     String?
+  bio                 String?
+  external_url        String?
+  follower_count      Int?
+  following_count     Int?
+  post_count          Int?
+  is_verified         Boolean?
+  is_business_account Boolean?
+  category            String?
+  contact_phone       String?
+  contact_email       String?
+  contact_address     String?
+  highlight_count     Int?
+  highlights          String?   // JSON array of {title, cover_url} — best-effort, actor may not return actual highlight content beyond the count
+  fetched_at          DateTime  @default(now())
+
+  @@unique([linked_business, platform])
+  @@map("business_social_profiles")
+}

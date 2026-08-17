@@ -207,6 +207,33 @@ function hasOwnSocialUrl(profile: any): boolean {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/social/snapshot/profile?businessProfileId=
+// Profile-level data (avatar, cover, bio, follower/contact info, highlights)
+// per connected platform, scraped via collectOwnSocialProfile.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/snapshot/profile', async (req: Request, res: Response) => {
+  try {
+    const { businessProfileId } = req.query as Record<string, string>;
+    if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+    const profile = await prisma.businessProfile.findUnique({
+      where: { id: businessProfileId },
+      select: { instagram_url: true, facebook_url: true, tiktok_url: true },
+    });
+    if (!profile) return res.status(404).json({ error: 'Business not found' });
+
+    const profiles = await prisma.businessSocialProfile.findMany({
+      where: { linked_business: businessProfileId },
+    });
+
+    const emptyState = !hasOwnSocialUrl(profile) ? 'no_url' : profiles.length === 0 ? 'no_data' : 'ok';
+    return res.json({ profiles, emptyState });
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/social/snapshot/feed?businessProfileId=&platform=
 // Own-business twin of GET /api/competitors/social/feed — real posts scraped
 // from the business's own pages via collectOwnSocialPosts.

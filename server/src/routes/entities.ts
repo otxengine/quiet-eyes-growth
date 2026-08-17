@@ -104,6 +104,7 @@ const ENTITY_MAP: Record<string, string> = {
   CompetitorAdHistory: 'competitorAdHistory',
   BusinessPost: 'businessPost',
   BusinessAdHistory: 'businessAdHistory',
+  BusinessSocialProfile: 'businessSocialProfile',
 };
 
 function getModel(entity: string): any {
@@ -154,6 +155,7 @@ const ENTITY_DEFAULT_ORDER: Record<string, any> = {
   CompetitorAdHistory: { first_seen_at: 'desc' },
   BusinessPost: { first_seen_at: 'desc' },
   BusinessAdHistory: { first_seen_at: 'desc' },
+  BusinessSocialProfile: { fetched_at: 'desc' },
 };
 
 // Prisma's Linux query-engine binary (Render) has stricter OID matching:

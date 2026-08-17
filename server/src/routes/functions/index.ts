@@ -124,6 +124,7 @@ import { getCompetitorReviewInsights } from './getCompetitorReviewInsights';
 import { reputationAdvisorChat } from './reputationAdvisorChat';
 import { collectCompetitorSocialPosts } from './collectCompetitorSocialPosts';
 import { collectOwnSocialPosts } from './collectOwnSocialPosts';
+import { collectOwnSocialProfile } from './collectOwnSocialProfile';
 import { detectOwnAds } from './detectOwnAds';
 import { analyzeSocialPosts } from './analyzeSocialPosts';
 import { backfillCompetitorPostAnalysis } from './backfillCompetitorPostAnalysis';
@@ -267,6 +268,7 @@ const FUNCTION_MAP: Record<string, any> = {
   reputationAdvisorChat,
   collectCompetitorSocialPosts,
   collectOwnSocialPosts,
+  collectOwnSocialProfile,
   detectOwnAds,
   analyzeSocialPosts,
   backfillCompetitorPostAnalysis,
