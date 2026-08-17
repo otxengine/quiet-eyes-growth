@@ -5,6 +5,7 @@ import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
+import { analyzePostCreative } from '../../lib/analyzePostCreative';
 
 // Stories expire ~24h after posting on Instagram, so this needs to run far more
 // often than the 20h post scraper to actually catch them before they vanish.
@@ -73,6 +74,15 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
       return res.json({ upserted: 0, competitors: competitors.length, diagnostics: skipped });
     }
 
+    // Pre-fetch which existing rows already have AI analysis, so a re-scrape of a
+    // story we've already seen doesn't re-pay for a vision-LLM call on it.
+    const existingRows = await (prisma as any).$queryRawUnsafe(
+      `SELECT competitor_id, external_story_id FROM competitor_stories
+       WHERE competitor_id = ANY($1::text[]) AND analyzed_at IS NOT NULL`,
+      competitors.map((c: any) => c.id),
+    ) as { competitor_id: string; external_story_id: string }[];
+    const alreadyAnalyzed = new Set(existingRows.map(r => `${r.competitor_id}:${r.external_story_id}`));
+
     const t0 = Date.now();
     let apifyError: string | null = null;
     const rawItems = await runApifyActor(
@@ -86,6 +96,7 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
     let firstItemKeys: string[] = [];
     let upserted = 0;
     let matched = 0;
+    let analyzed = 0;
     const insertErrors: any[] = [];
 
     for (const rawItem of rawItems) {
@@ -114,7 +125,7 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
       const expiresAt = rawItem.expiring_at ? new Date(rawItem.expiring_at * 1000).toISOString() : null;
 
       try {
-        const result: number = await (prisma as any).$executeRawUnsafe(
+        const rows = await (prisma as any).$queryRawUnsafe(
           `INSERT INTO competitor_stories
              (id, linked_business, competitor_id, platform, external_story_id,
               media_url, media_type, posted_at, expires_at, last_seen_at)
@@ -132,7 +143,8 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
            )
            ON CONFLICT (competitor_id, external_story_id) DO UPDATE SET
              last_seen_at = NOW(),
-             media_url = COALESCE(EXCLUDED.media_url, competitor_stories.media_url)`,
+             media_url = COALESCE(EXCLUDED.media_url, competitor_stories.media_url)
+           RETURNING id`,
           randomUUID(),
           pgHex(businessProfileId) ?? '',
           pgHex(comp.id) ?? '',
@@ -141,8 +153,29 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
           mediaType,
           postedAt,
           expiresAt,
-        );
-        upserted += result;
+        ) as { id: string }[];
+        const rowId = rows[0]?.id;
+        if (rowId) upserted++;
+
+        // Best-effort creative analysis (topic/offer/hooks/style/cta) — only for
+        // stories not already analyzed on a prior scrape; never blocks the loop.
+        if (rowId && mediaUrl && !alreadyAnalyzed.has(`${comp.id}:${externalStoryId}`)) {
+          try {
+            const analysis = await analyzePostCreative({ caption: null, platform: 'instagram', mediaUrl });
+            if (analysis) {
+              await (prisma as any).$executeRawUnsafe(
+                `UPDATE competitor_stories SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW(), has_offer = $2, has_cta = $3 WHERE id = $4`,
+                pgHex(JSON.stringify(analysis)) ?? '',
+                analysis.has_offer,
+                analysis.has_cta,
+                rowId,
+              );
+              analyzed++;
+            }
+          } catch (analysisErr: any) {
+            console.warn('[collectCompetitorSocialStories] creative analysis failed:', analysisErr.message);
+          }
+        }
       } catch (insertErr: any) {
         const errMsg = (insertErr.message ?? '').trim();
         insertErrors.push({ competitor: comp.name, externalStoryId, code: insertErr.code ?? null, error: errMsg.substring(0, 500) });
@@ -156,6 +189,7 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
         apify_returned: rawItems.length,
         matched,
         upserted,
+        analyzed,
         elapsed_ms: Date.now() - t0,
         error: apifyError,
         ...(firstItemKeys.length ? { first_item_keys: firstItemKeys } : {}),

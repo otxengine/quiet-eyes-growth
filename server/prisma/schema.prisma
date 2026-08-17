@@ -1050,6 +1050,10 @@ model CompetitorStory {
   expires_at         DateTime?
   first_seen_at      DateTime  @default(now())
   last_seen_at       DateTime  @default(now())
+  analysis           String?   // JSON: same shape as CompetitorPost.analysis
+  analyzed_at        DateTime?
+  has_offer          Boolean?  // null = not yet analyzed
+  has_cta            Boolean?
 
   @@index([linked_business, competitor_id, posted_at])
   @@unique([competitor_id, external_story_id])

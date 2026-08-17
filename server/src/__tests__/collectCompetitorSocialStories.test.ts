@@ -4,12 +4,20 @@
  * and the no-instagram-url skip path.
  */
 
-const executeRawUnsafe = jest.fn().mockResolvedValue(1);
+const executeRawUnsafe = jest.fn().mockResolvedValue(undefined);
+// Pre-fetch (SELECT analyzed_at) returns no rows by default (nothing analyzed yet);
+// the upsert (INSERT ... RETURNING id) returns a fresh row id — override per-test as needed.
+const queryRawUnsafe = jest.fn(async (sql: string) => {
+  if (String(sql).includes('SELECT competitor_id, external_story_id')) return [];
+  if (String(sql).includes('INSERT INTO competitor_stories')) return [{ id: `row-${queryRawUnsafe.mock.calls.length}` }];
+  return [];
+});
 
 jest.mock('../db', () => ({
   prisma: {
     competitor: { findMany: jest.fn() },
     $executeRawUnsafe: (...args: any[]) => executeRawUnsafe(...args),
+    $queryRawUnsafe: (...args: any[]) => queryRawUnsafe(...args),
   },
 }));
 
@@ -30,6 +38,10 @@ jest.mock('../lib/agentCache', () => ({
 
 jest.mock('../lib/automationLog', () => ({ writeAutomationLog: jest.fn(async () => {}) }));
 
+jest.mock('../lib/analyzePostCreative', () => ({
+  analyzePostCreative: jest.fn(async () => null),
+}));
+
 import { prisma } from '../db';
 import { runApifyActor } from '../lib/apify';
 import { collectCompetitorSocialStories, extractInstagramUsername } from '../routes/functions/collectCompetitorSocialStories';
@@ -44,12 +56,12 @@ function mockRes() {
 }
 
 function insertCalls() {
-  return executeRawUnsafe.mock.calls.filter(([sql]) => String(sql).includes('INSERT INTO competitor_stories'));
+  return queryRawUnsafe.mock.calls.filter(([sql]) => String(sql).includes('INSERT INTO competitor_stories'));
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
-  executeRawUnsafe.mockResolvedValue(1);
+  executeRawUnsafe.mockResolvedValue(undefined);
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([COMP]);
 });
 
@@ -94,6 +106,29 @@ test('a story from an unrecognized username is skipped, not inserted', async () 
   await collectCompetitorSocialStories(req, mockRes());
 
   expect(insertCalls()).toHaveLength(0);
+});
+
+test('a story already analyzed on a prior scrape is not re-analyzed', async () => {
+  const { analyzePostCreative } = require('../lib/analyzePostCreative');
+  queryRawUnsafe.mockImplementationOnce(async (sql: string) =>
+    String(sql).includes('SELECT competitor_id, external_story_id')
+      ? [{ competitor_id: 'c1', external_story_id: 'story-1' }]
+      : [],
+  );
+  (runApifyActor as jest.Mock).mockResolvedValueOnce([
+    {
+      pk: 'story-1',
+      user: { username: 'perdrier' },
+      media_type: 1,
+      image_versions2: { candidates: [{ url: 'https://cdn.example/img.jpg' }] },
+      taken_at: 1700000000,
+    },
+  ]);
+
+  const req: any = { body: { businessProfileId: 'b1' } };
+  await collectCompetitorSocialStories(req, mockRes());
+
+  expect(analyzePostCreative).not.toHaveBeenCalled();
 });
 
 test('competitor with no instagram_url is skipped before ever calling Apify', async () => {

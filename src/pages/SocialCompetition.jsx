@@ -8,7 +8,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   PLATFORM_LABELS, PLATFORM_COLORS, apiFetch, timeAgo,
-  PostCard, AdCard, StoryCard, PostDetailModal, AdDetailModal, useDeepAnalysis, ProfileHeader,
+  PostCard, AdCard, StoryCard, PostDetailModal, AdDetailModal, StoryDetailModal, useDeepAnalysis, ProfileHeader,
 } from '@/components/competitors/socialShared';
 
 function resolveSection(param) {
@@ -70,6 +70,64 @@ function AdHistoryModal({ open, onClose, competitorId, competitorName, bpId }) {
         </div>
       </DialogContent>
       <AdDetailModal ad={selectedAd} onClose={() => setSelectedAd(null)} />
+    </Dialog>
+  );
+}
+
+function StoryHistoryModal({ open, onClose, competitorId, competitorName }) {
+  const [sort, setSort] = useState('newest');
+  const [selectedStory, setSelectedStory] = useState(null);
+
+  const { data: stories = [], isLoading, error } = useQuery({
+    queryKey: ['storyHistory', competitorId, sort],
+    queryFn:  () => base44.entities.CompetitorStory.filter(
+      { competitor_id: competitorId },
+      sort === 'newest' ? '-posted_at' : 'posted_at',
+      1000,
+    ),
+    enabled: open && !!competitorId,
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-lg max-h-[80vh] flex flex-col gap-0 p-0">
+        <DialogHeader className="px-4 pt-4 pb-3 border-b border-border">
+          <DialogTitle className="text-sm">ארכיון סטוריז — {competitorName}</DialogTitle>
+          <div className="flex gap-1.5 mt-2">
+            {[['newest', 'החדשים ביותר'], ['oldest', 'הישנים ביותר']].map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setSort(k)}
+                className={`text-xs px-2.5 py-0.5 rounded-full transition-colors ${
+                  sort === k ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </DialogHeader>
+
+        <div className="overflow-y-auto flex-1 p-4">
+          {isLoading && (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {error && (
+            <p className="text-xs text-destructive text-center py-4">שגיאה בטעינת הארכיון</p>
+          )}
+          {!isLoading && !error && stories.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">אין סטוריז בארכיון</p>
+          )}
+          <div className="flex flex-wrap gap-3">
+            {stories.map(story => (
+              <StoryCard key={story.id} story={story} onSelect={setSelectedStory} />
+            ))}
+          </div>
+        </div>
+      </DialogContent>
+      <StoryDetailModal story={selectedStory} onClose={() => setSelectedStory(null)} />
     </Dialog>
   );
 }
@@ -239,8 +297,10 @@ function RivalCard({ competitor, posts, ads, stories, profile, defaultSec, bpId,
   const [expanded,    setExpanded]    = useState(defaultExpanded || false);
   const [section,     setSection]     = useState(() => defaultSec || getDefaultSection(posts, ads));
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [storyHistoryOpen, setStoryHistoryOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
   const [selectedAd,   setSelectedAd]   = useState(null);
+  const [selectedStory, setSelectedStory] = useState(null);
 
   useEffect(() => {
     if (autoOpenHistory) { setExpanded(true); setHistoryOpen(true); }
@@ -339,11 +399,19 @@ function RivalCard({ competitor, posts, ads, stories, profile, defaultSec, bpId,
                 {!competitor.instagram_url ? 'חסר לינק לאינסטגרם' : 'לא נמצאו סטוריז שמורים'}
               </p>
             ) : (
-              <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
-                {stories.map(story => (
-                  <StoryCard key={story.id} story={story} />
-                ))}
-              </div>
+              <>
+                <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+                  {stories.slice(0, 12).map(story => (
+                    <StoryCard key={story.id} story={story} onSelect={setSelectedStory} />
+                  ))}
+                </div>
+                <button
+                  onClick={() => setStoryHistoryOpen(true)}
+                  className="text-[10px] text-muted-foreground underline"
+                >
+                  ▼ ארכיון סטוריז מלא
+                </button>
+              </>
             )}
           </div>
         )}
@@ -426,8 +494,15 @@ function RivalCard({ competitor, posts, ads, stories, profile, defaultSec, bpId,
         competitorName={competitor.name}
         bpId={bpId}
       />
-      <PostDetailModal post={selectedPost} onClose={() => setSelectedPost(null)} />
-      <AdDetailModal   ad={selectedAd}    onClose={() => setSelectedAd(null)} />
+      <StoryHistoryModal
+        open={storyHistoryOpen}
+        onClose={() => setStoryHistoryOpen(false)}
+        competitorId={competitor.id}
+        competitorName={competitor.name}
+      />
+      <PostDetailModal  post={selectedPost}   onClose={() => setSelectedPost(null)} />
+      <AdDetailModal    ad={selectedAd}       onClose={() => setSelectedAd(null)} />
+      <StoryDetailModal story={selectedStory} onClose={() => setSelectedStory(null)} />
     </div>
   );
 }
@@ -548,7 +623,8 @@ export default function SocialCompetition() {
   if (platformFilter) {
     visible = visible.filter(c =>
       allPosts.some(p => p.competitor_id === c.id && p.platform === platformFilter) ||
-      allAds.some(a   => a.competitor_id === c.id && a.platform === platformFilter)
+      allAds.some(a   => a.competitor_id === c.id && a.platform === platformFilter) ||
+      allStories.some(s => s.competitor_id === c.id && s.platform === platformFilter)
     );
   }
 
