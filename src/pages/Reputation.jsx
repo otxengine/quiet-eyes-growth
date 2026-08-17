@@ -497,6 +497,7 @@ export default function Reputation() {
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="md:col-span-2 bg-white rounded-xl border border-gray-200 p-4">
             <div className="flex items-center justify-between mb-3" dir="rtl">
+              <span className="text-[13px] font-semibold text-foreground">דירוג לאורך זמן</span>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="flex items-center gap-1 text-[11px] text-foreground-muted border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-secondary transition-colors">
@@ -513,7 +514,6 @@ export default function Reputation() {
                   </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <span className="text-[13px] font-semibold text-foreground">דירוג לאורך זמן</span>
             </div>
             <RatingTrendChart reviews={reviews} weeks={ratingSpanWeeks} />
           </div>
