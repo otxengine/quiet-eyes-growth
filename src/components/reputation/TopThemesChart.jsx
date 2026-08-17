@@ -1,6 +1,13 @@
 import { BarChart, Bar, XAxis, YAxis, ReferenceLine, Tooltip, ResponsiveContainer } from 'recharts';
 
 const COLORS = { positive: '#4ade80', neutral: '#fcd34d', negative: '#fb7185' };
+const Y_AXIS_WIDTH = 80;
+
+// recharts doesn't shrink the cursor rect for a right-oriented YAxis, so it
+// bleeds into the label column (width=Y_AXIS_WIDTH) and covers the text — clip it.
+function RowCursor({ x = 0, y = 0, width = 0, height = 0 }) {
+  return <rect x={x} y={y} width={Math.max(width - Y_AXIS_WIDTH, 0)} height={height} fill="#f9fafb" />;
+}
 
 function CustomTooltip(props) {
   const { active, payload } = props || {};
@@ -47,11 +54,11 @@ export default function TopThemesChart({ topThemes = [], labelById = {} }) {
             orientation="right"
             axisLine={false}
             tickLine={false}
-            width={80}
+            width={Y_AXIS_WIDTH}
             tick={{ fontSize: 12, fill: '#222' }}
           />
           <ReferenceLine x={0} stroke="#e5e7eb" />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f9fafb' }} />
+          <Tooltip content={<CustomTooltip />} cursor={<RowCursor />} />
           <Bar dataKey="neg" stackId="s" fill={COLORS.negative} radius={[4, 0, 0, 4]} />
           <Bar dataKey="neuLeft" stackId="s" fill={COLORS.neutral} />
           <Bar dataKey="neuRight" stackId="s" fill={COLORS.neutral} />
