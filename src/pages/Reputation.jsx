@@ -374,7 +374,7 @@ export default function Reputation() {
     : null;
   const pendingCount = reviews.filter(r => r.response_status === 'pending').length;
 
-  const [sortBy, setSortBy] = useState('priority');
+  const [sortBy, setSortBy] = useState('newest');
   const [ratingSpanWeeks, setRatingSpanWeeks] = useState(12);
   const sortedReviews = [...reviews].sort(SORT_COMPARATORS[sortBy] || SORT_COMPARATORS.priority);
 
@@ -532,13 +532,13 @@ export default function Reputation() {
                 </div>
               ) : insights.map((ins, i) => (
                 <div key={i} dir="rtl" className={`flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-gray-100 border-r-4 ${ins.border}`}>
-                  <button className="flex-shrink-0 text-[11px] border border-rose-300 text-rose-600 px-3 py-1.5 rounded-full hover:bg-rose-50 transition-colors font-medium">
-                    קרא והגב
-                  </button>
                   <div className="flex items-center gap-2 min-w-0">
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${ins.dot}`} />
                     <span className="text-[12px] font-semibold text-foreground truncate">{ins.text}</span>
                   </div>
+                  <button className="flex-shrink-0 text-[11px] border border-rose-300 text-rose-600 px-3 py-1.5 rounded-full hover:bg-rose-50 transition-colors font-medium">
+                    קרא והגב
+                  </button>
                 </div>
               ))}
             </div>
