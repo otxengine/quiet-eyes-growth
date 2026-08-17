@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useOutletContext, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   PLATFORM_LABELS, PLATFORM_COLORS, apiFetch, timeAgo,
   PostCard, AdCard, StoryCard, PostDetailModal, AdDetailModal, StoryDetailModal, useDeepAnalysis, ProfileHeader,
+  computeOutlierPosts,
 } from '@/components/competitors/socialShared';
 
 function resolveSection(param) {
@@ -307,6 +308,7 @@ function RivalCard({ competitor, posts, ads, stories, profile, defaultSec, bpId,
   }, [autoOpenHistory]);
 
   const hasGoogle = competitor.active_ad_platforms?.includes('google');
+  const outlierPosts = useMemo(() => computeOutlierPosts(posts), [posts]);
 
   return (
     <div className="border border-border rounded-xl bg-card overflow-hidden">
@@ -377,6 +379,17 @@ function RivalCard({ competitor, posts, ads, stories, profile, defaultSec, bpId,
         {section === 'feed' && (
           <div className="space-y-4">
             <AnalysisTab competitor={competitor} posts={posts} bpId={bpId} />
+
+            {outlierPosts.length > 0 && (
+              <>
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">🔥 פוסטים מצטיינים</p>
+                <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+                  {outlierPosts.slice(0, 10).map(post => (
+                    <PostCard key={post.id} post={post} onSelect={setSelectedPost} />
+                  ))}
+                </div>
+              </>
+            )}
 
             {posts.length > 0 && (
               <>
