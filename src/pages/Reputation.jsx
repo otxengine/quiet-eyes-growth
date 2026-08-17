@@ -3,9 +3,8 @@ import { useOutletContext } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Star, Plus, Search, Loader2, Bot, Send, X, ChevronDown, MoreVertical, Copy, CheckCheck } from 'lucide-react';
+import { Star, Search, Loader2, Bot, Send, X, ChevronDown, MoreVertical, Copy, CheckCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import AddReviewModal from '@/components/reputation/AddReviewModal';
 import RequestReviewModal from '@/components/reputation/RequestReviewModal';
 import ScheduledReviewRequests from '@/components/reputation/ScheduledReviewRequests';
 import RatingTrendChart from '@/components/reputation/RatingTrendChart';
@@ -289,7 +288,6 @@ export default function Reputation() {
   const { businessProfile } = useOutletContext();
   const bpId = businessProfile?.id;
   const queryClient = useQueryClient();
-  const [showAddModal, setShowAddModal] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [_scanning, setScanning] = useState(false);
   const [selectedReview, setSelectedReview] = useState(null);
@@ -475,13 +473,6 @@ export default function Reputation() {
           <p className="text-xs text-foreground-muted mt-0.5">מעקב אחר ביקורות, דירוג העסק והמלצות לשיפור המוניטין</p>
         </div>
         <div className="flex items-center gap-2 mt-1">
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-1.5 bg-foreground text-background px-4 py-2 rounded-full text-sm font-semibold hover:opacity-85 transition-opacity shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            הוספת ביקורת
-          </button>
           <Link
             to="/reviews/compare"
             className="flex items-center gap-1.5 border border-border px-4 py-2 rounded-full text-sm font-semibold text-foreground hover:bg-secondary transition-colors shadow-sm"
@@ -616,9 +607,6 @@ export default function Reputation() {
           <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
             <Star className="w-8 h-8 text-foreground-muted opacity-30 mx-auto mb-3" />
             <p className="text-[13px] text-foreground-muted mb-4">לא נמצאו ביקורות</p>
-            <button onClick={() => setShowAddModal(true)} className="inline-flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-full text-[12px] font-semibold hover:opacity-90">
-              <Plus className="w-4 h-4" /> הוסף ביקורת ראשונה
-            </button>
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -644,7 +632,6 @@ export default function Reputation() {
 
       <ScheduledReviewRequests bpId={bpId} />
 
-      {showAddModal && <AddReviewModal bpId={bpId} onClose={() => setShowAddModal(false)} onAdded={() => { queryClient.invalidateQueries({ queryKey: ['reviewsPage'] }); queryClient.invalidateQueries({ queryKey: ['topThemes', bpId] }); setShowAddModal(false); }} />}
       {showRequestModal && <RequestReviewModal businessProfile={businessProfile} onClose={() => setShowRequestModal(false)} onSent={() => { queryClient.invalidateQueries({ queryKey: ['reviewRequests'] }); setShowRequestModal(false); }} />}
       {selectedReview && (
         <ReviewReplyPanel
