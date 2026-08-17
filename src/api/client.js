@@ -199,7 +199,7 @@ const ENTITIES = [
   'OutcomeLog', 'SectorKnowledge', 'Action', 'Prediction', 'ProactiveAlert',
   'PendingAlert', 'ReviewRequest', 'CustomerSurvey', 'BusinessLocation',
   'MetricsSnapshot', 'SocialAccount', 'SocialSignal', 'AutoAction', 'Campaign',
-  'MediaAsset', 'OrganicPost', 'CompetitorPost', 'CompetitorAdHistory',
+  'MediaAsset', 'OrganicPost', 'CompetitorPost', 'CompetitorAdHistory', 'CompetitorStory',
 ];
 
 // ── raw API access ────────────────────────────────────────────────────────────
