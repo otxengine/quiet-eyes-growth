@@ -71,8 +71,12 @@ type ProfileFields = {
 };
 
 async function scrapeInstagram(url: string): Promise<ProfileFields | null> {
-  const [item] = await runApifyActor(INSTAGRAM_ACTOR, { usernames: [usernameFromUrl(url)] });
-  if (!item) return null;
+  // directUrls + resultsType:'details' (not the `usernames`-only mode fetchSocialPageAbout.ts
+  // uses) — the usernames-only call returns an actor error item ("Empty or private data")
+  // for this actor version; directUrls is the same input style collectOwnSocialPosts.ts
+  // already uses successfully for the posts feed, just requesting the profile instead.
+  const [item] = await runApifyActor(INSTAGRAM_ACTOR, { directUrls: [url], resultsType: 'details', resultsLimit: 1 });
+  if (!item || item.error) return null;
   lastRawByPlatform.instagram = item;
   return {
     profile_picture_url: item.profilePicUrlHD || item.profilePicUrl || null,
@@ -95,7 +99,7 @@ async function scrapeInstagram(url: string): Promise<ProfileFields | null> {
 
 async function scrapeFacebook(url: string): Promise<ProfileFields | null> {
   const [item] = await runApifyActor(FACEBOOK_ACTOR, { startUrls: [{ url }] });
-  if (!item) return null;
+  if (!item || item.error) return null;
   lastRawByPlatform.facebook = item;
   return {
     profile_picture_url: item.profilePictureUrl || item.profilePhoto || item.profile_picture || null,
