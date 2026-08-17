@@ -7,7 +7,7 @@
  *  - 04:00 daily:  competitor snapshot diff
  *  - 05:30 daily:  data ingestion (reviews, web signals, lead gen, social leads)
  *  - 07:00 daily:  full intelligence pipeline + competitors + social + insight generators
- *  - Mon+Thu 07:00: local events + calendar events sync
+ *                  (includes local events + calendar events — each self-throttles to a 3-day cadence)
  *  - Sunday 20:00: content calendar + sector benchmark + weekly email digest
  *  - Every 30min:  execute queued semi_auto actions
  *  - Every 15min:  keep-alive heartbeat
@@ -235,6 +235,9 @@ export function startScheduler() {
     runAgentForAll('FetchSocialInsights', fetchSocialInsights);
     runAgentForAll('SchedulePostPublisher', schedulePostPublisher);
     runAgentForAll('AnalyzeInstagramComments', analyzeInstagramComments);
+    // ── Events (checked daily, self-throttle to 3 days via agentCache) ───────
+    runAgentForAll('FindLocalEvents', findLocalEvents); // Tavily + LLM — 3-day guard
+    runAgentForAll('DetectEvents', detectEvents);        // calendar-based — 3-day guard
     // ── TikTok (internal cooldown guards prevent double-running) ─────────────
     runAgentForAll('TikTokSectorTrendAgent', tiktokSectorTrendAgent); // 8h guard
     runAgentForAll('TikTokAudienceAgent', tiktokAudienceAgent);       // 24h guard
@@ -251,15 +254,6 @@ export function startScheduler() {
       runAgentForAll('DemandGapEngine', demandGapEngine);
       runAgentForAll('MicroMomentDetector', microMomentDetector);
     }, 15 * 60 * 1000); // 15 min
-  });
-
-  // ── Twice a week (Mon + Thu, 07:00 UTC = 10:00 Israel): events online sync ──
-  // findLocalEvents: Tavily + LLM — expensive; twice a week is sufficient for
-  // concerts/festivals/TV listings that typically update Mon & Thu.
-  // detectEvents: calendar-based; re-runs to catch new sports matchups revealed weekly.
-  cron.schedule('0 7 * * 1,4', () => {
-    runAgentForAll('FindLocalEvents', findLocalEvents);
-    runAgentForAll('DetectEvents', detectEvents);
   });
 
   // ── Every 24 hours at 03:00 UTC: cleanup + learning + forecasting ────────────

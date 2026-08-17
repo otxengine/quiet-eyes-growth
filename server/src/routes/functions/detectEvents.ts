@@ -6,6 +6,9 @@ import { loadBusinessContext } from '../../lib/businessContext';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
 import { publishEvent } from '../../lib/eventBus';
 import { loadDismissedTitles } from '../../lib/insightDedup';
+import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+
+const MIN_INTERVAL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days — same cadence as findLocalEvents
 
 // ── Sector opportunity entry ───────────────────────────────────────────────────
 // Each event can have multiple sector entries. The first matching entry wins.
@@ -488,8 +491,13 @@ export async function fetchHebCalHolidays(start: Date, end: Date): Promise<Calen
 
 // ── Core agent ────────────────────────────────────────────────────────────────
 export async function detectEvents(req: Request, res: Response) {
-  const { businessProfileId } = req.body;
+  const { businessProfileId, force } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+  // Scheduler uses the 3-day guard; manual scan from the UI passes force:true to bypass it
+  if (!force && shouldSkipAgent(businessProfileId, 'detectEvents', MIN_INTERVAL_MS)) {
+    return res.json({ signals_created: 0, skipped: true, reason: 'ran_recently' });
+  }
 
   const startTime = new Date().toISOString();
   try {
@@ -892,6 +900,7 @@ Structure: Hook + specific value + CTA. Tone: ${toneInstruction}. Write only the
       }).catch(() => {});
     }
 
+    setLastRun(businessProfileId, 'detectEvents');
     await writeAutomationLog('detectEvents', businessProfileId, startTime, created);
     console.log(`detectEvents done: ${created} alerts | sector: ${category} | calendar: ${upcomingEvents.length} | tavily: ${extraEvents.length}`);
     return res.json({

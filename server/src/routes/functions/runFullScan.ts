@@ -10,6 +10,7 @@ import { runCompetitorIdentification } from './runCompetitorIdentification';
 import { runLeadGeneration } from './runLeadGeneration';
 import { findSocialLeads } from './findSocialLeads';
 import { findLocalEvents } from './findLocalEvents';
+import { detectEvents } from './detectEvents';
 import { detectTrends } from './detectTrends';
 import { detectEarlyTrends } from './detectEarlyTrends';
 import { detectViralSignals } from './detectViralSignals';
@@ -175,6 +176,7 @@ export async function runFullScan(req: Request, res: Response) {
     ['runLeadGeneration',           runLeadGeneration],
     ['findSocialLeads',             findSocialLeads],
     ['findLocalEvents',             findLocalEvents],
+    ['detectEvents',                detectEvents],
     // ── Trend Intelligence ───────────────────────────────────────
     ['tiktokSectorTrendAgent',      tiktokSectorHandler],
     ['detectTrends',                detectTrends],
