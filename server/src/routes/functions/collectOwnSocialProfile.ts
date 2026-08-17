@@ -16,6 +16,11 @@ import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 
 const MIN_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h — profile metadata changes rarely
 
+// ponytail: temporary debug capture so a live run's diagnostics can show the
+// actor's actual top-level field names — delete once extraction is confirmed
+// against real Apify output (field names aren't documented anywhere in this repo).
+const lastRawByPlatform: Record<string, any> = {};
+
 const FACEBOOK_ACTOR  = 'apify~facebook-pages-scraper';
 const INSTAGRAM_ACTOR = 'apify~instagram-scraper';
 const TIKTOK_ACTOR    = 'clockworks~tiktok-profile-scraper';
@@ -68,6 +73,7 @@ type ProfileFields = {
 async function scrapeInstagram(url: string): Promise<ProfileFields | null> {
   const [item] = await runApifyActor(INSTAGRAM_ACTOR, { usernames: [usernameFromUrl(url)] });
   if (!item) return null;
+  lastRawByPlatform.instagram = item;
   return {
     profile_picture_url: item.profilePicUrlHD || item.profilePicUrl || null,
     cover_photo_url: null,
@@ -90,6 +96,7 @@ async function scrapeInstagram(url: string): Promise<ProfileFields | null> {
 async function scrapeFacebook(url: string): Promise<ProfileFields | null> {
   const [item] = await runApifyActor(FACEBOOK_ACTOR, { startUrls: [{ url }] });
   if (!item) return null;
+  lastRawByPlatform.facebook = item;
   return {
     profile_picture_url: item.profilePictureUrl || item.profilePhoto || item.profile_picture || null,
     cover_photo_url: item.coverPhotoUrl || item.coverPhoto || item.cover || null,
@@ -113,6 +120,7 @@ async function scrapeTikTok(url: string): Promise<ProfileFields | null> {
   const [item] = await runApifyActor(TIKTOK_ACTOR, { profiles: [usernameFromUrl(url)] });
   const meta = item?.authorMeta;
   if (!meta) return null;
+  lastRawByPlatform.tiktok = item;
   return {
     profile_picture_url: meta.avatarLarger || meta.avatarMedium || meta.avatar || null,
     cover_photo_url: null,
@@ -194,7 +202,10 @@ export async function collectOwnSocialProfile(req: Request, res: Response) {
 
     setLastRun(businessProfileId, 'collectOwnSocialProfile');
     await writeAutomationLog('collectOwnSocialProfile', businessProfileId, startTime, saved, 'success');
-    return res.json({ saved, diagnostics });
+    const debug_raw_keys = Object.fromEntries(
+      Object.entries(lastRawByPlatform).map(([platform, item]) => [platform, Object.keys(item || {})]),
+    );
+    return res.json({ saved, diagnostics, debug_raw_keys });
   } catch (err: any) {
     await writeAutomationLog('collectOwnSocialProfile', businessProfileId, startTime, 0, 'failed', err.message);
     return res.status(500).json({ error: err.message });
