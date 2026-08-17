@@ -1,102 +1,12 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2, RefreshCw, BadgeCheck, Phone, Mail, MapPin, Link as LinkIcon } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  PLATFORM_LABELS, PLATFORM_COLORS, API_BASE, apiFetch, timeAgo,
-  PostCard, AdCard, PostDetailModal, AdDetailModal,
+  PLATFORM_LABELS, PLATFORM_COLORS, apiFetch, timeAgo,
+  PostCard, AdCard, PostDetailModal, AdDetailModal, ProfileHeader,
 } from '@/components/competitors/socialShared';
-
-function fmtCount(n) {
-  if (n == null) return null;
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
-
-function ProfileHeader({ profile }) {
-  let highlights = [];
-  try { highlights = profile.highlights ? JSON.parse(profile.highlights) : []; } catch { /* ignore malformed */ }
-
-  return (
-    <div className="rounded-xl border border-border bg-background overflow-hidden">
-      {profile.cover_photo_url && (
-        <img
-          src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(profile.cover_photo_url)}`}
-          alt=""
-          className="w-full h-24 object-cover"
-          loading="lazy"
-        />
-      )}
-      <div className="p-4 flex items-start gap-4">
-        {profile.profile_picture_url ? (
-          <img
-            src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(profile.profile_picture_url)}`}
-            alt=""
-            className="w-20 h-20 rounded-full object-cover shrink-0 border border-border"
-            loading="lazy"
-          />
-        ) : (
-          <div className="w-20 h-20 rounded-full bg-muted shrink-0" />
-        )}
-
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-xs px-2 py-0.5 rounded ${PLATFORM_COLORS[profile.platform] || 'bg-gray-100 text-gray-700'}`}>
-              {PLATFORM_LABELS[profile.platform] || profile.platform}
-            </span>
-            {profile.is_verified && <BadgeCheck className="w-4 h-4 text-blue-500 shrink-0" />}
-            {profile.category && <span className="text-xs text-muted-foreground">{profile.category}</span>}
-          </div>
-
-          {(profile.follower_count != null || profile.following_count != null || profile.post_count != null) && (
-            <div className="flex gap-5 text-sm">
-              {profile.follower_count != null && <span><b className="text-base">{fmtCount(profile.follower_count)}</b> עוקבים</span>}
-              {profile.following_count != null && <span><b className="text-base">{fmtCount(profile.following_count)}</b> נעקבים</span>}
-              {profile.post_count != null && <span><b className="text-base">{fmtCount(profile.post_count)}</b> פוסטים</span>}
-            </div>
-          )}
-
-          {profile.bio && <p className="text-sm leading-relaxed whitespace-pre-line">{profile.bio}</p>}
-
-          {(profile.contact_phone || profile.contact_email || profile.contact_address || profile.external_url) && (
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground pt-1">
-              {profile.contact_phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 shrink-0" />{profile.contact_phone}</span>}
-              {profile.contact_email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5 shrink-0" />{profile.contact_email}</span>}
-              {profile.contact_address && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 shrink-0" />{profile.contact_address}</span>}
-              {profile.external_url && (
-                <a href={profile.external_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline">
-                  <LinkIcon className="w-3.5 h-3.5 shrink-0" />{profile.external_url}
-                </a>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {highlights.length > 0 && (
-        <div className="flex gap-3 overflow-x-auto px-4 pb-4">
-          {highlights.slice(0, 10).map((h, idx) => (
-            <div key={idx} className="flex flex-col items-center gap-1 shrink-0 w-14">
-              {h.cover_url ? (
-                <img
-                  src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(h.cover_url)}`}
-                  alt=""
-                  className="w-14 h-14 rounded-full object-cover border border-border"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="w-14 h-14 rounded-full bg-muted" />
-              )}
-              {h.title && <span className="text-[10px] text-muted-foreground truncate w-14 text-center">{h.title}</span>}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // Single-entity twin of SocialCompetition.jsx's RivalCard — same feed/ads
 // sub-tabs and card components, but for the business's own accounts instead

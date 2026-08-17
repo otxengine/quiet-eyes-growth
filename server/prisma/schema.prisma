@@ -283,6 +283,7 @@ model Competitor {
   posts                    CompetitorPost[]
   ad_history               CompetitorAdHistory[]
   stories                  CompetitorStory[]
+  social_profiles          CompetitorSocialProfile[]
 
   @@map("competitors")
 }
@@ -1163,4 +1164,31 @@ model BusinessSocialProfile {
 
   @@unique([linked_business, platform])
   @@map("business_social_profiles")
+}
+
+model CompetitorSocialProfile {
+  id                  String    @id @default(cuid())
+  linked_business     String
+  competitor_id       String
+  competitor          Competitor @relation(fields: [competitor_id], references: [id], onDelete: Cascade)
+  platform            String    // instagram only for now
+  profile_picture_url String?
+  cover_photo_url     String?
+  bio                 String?
+  external_url        String?
+  follower_count      Int?
+  following_count     Int?
+  post_count          Int?
+  is_verified         Boolean?
+  is_business_account Boolean?
+  category            String?
+  contact_phone       String?
+  contact_email       String?
+  contact_address     String?
+  highlight_count     Int?
+  highlights          String?   // JSON array of {title, cover_url} — best-effort, actor may not return actual highlight content beyond the count
+  fetched_at          DateTime  @default(now())
+
+  @@unique([competitor_id, platform])
+  @@map("competitor_social_profiles")
 }

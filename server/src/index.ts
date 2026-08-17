@@ -604,6 +604,29 @@ app.listen(PORT, async () => {
     fetched_at           TIMESTAMP(3) NOT NULL DEFAULT NOW()
   )`);
   await sql(`CREATE UNIQUE INDEX IF NOT EXISTS business_social_profiles_biz_platform_key ON business_social_profiles(linked_business, platform)`);
+  await sql(`CREATE TABLE IF NOT EXISTS competitor_social_profiles (
+    id                   TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    linked_business      TEXT NOT NULL,
+    competitor_id        TEXT REFERENCES competitors(id) ON DELETE CASCADE,
+    platform             TEXT NOT NULL,
+    profile_picture_url  TEXT,
+    cover_photo_url      TEXT,
+    bio                  TEXT,
+    external_url         TEXT,
+    follower_count       INT,
+    following_count      INT,
+    post_count           INT,
+    is_verified          BOOLEAN,
+    is_business_account  BOOLEAN,
+    category             TEXT,
+    contact_phone        TEXT,
+    contact_email        TEXT,
+    contact_address      TEXT,
+    highlight_count      INT,
+    highlights           TEXT,
+    fetched_at           TIMESTAMP(3) NOT NULL DEFAULT NOW()
+  )`);
+  await sql(`CREATE UNIQUE INDEX IF NOT EXISTS competitor_social_profiles_comp_platform_key ON competitor_social_profiles(competitor_id, platform)`);
   // Note: ALTER TABLE for otx_recommendations/pipeline_runs/policy_weights/outcome_events/execution_tasks
   // are intentionally placed AFTER their CREATE TABLE statements below (lines ~767+).
 

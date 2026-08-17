@@ -8,7 +8,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   PLATFORM_LABELS, PLATFORM_COLORS, apiFetch, timeAgo,
-  PostCard, AdCard, StoryCard, PostDetailModal, AdDetailModal, useDeepAnalysis,
+  PostCard, AdCard, StoryCard, PostDetailModal, AdDetailModal, useDeepAnalysis, ProfileHeader,
 } from '@/components/competitors/socialShared';
 
 function resolveSection(param) {
@@ -235,7 +235,7 @@ function AnalysisTab({ competitor, posts, bpId }) {
   );
 }
 
-function RivalCard({ competitor, posts, ads, stories, defaultSec, bpId, autoOpenHistory, defaultExpanded }) {
+function RivalCard({ competitor, posts, ads, stories, profile, defaultSec, bpId, autoOpenHistory, defaultExpanded }) {
   const [expanded,    setExpanded]    = useState(defaultExpanded || false);
   const [section,     setSection]     = useState(() => defaultSec || getDefaultSection(posts, ads));
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -290,6 +290,8 @@ function RivalCard({ competitor, posts, ads, stories, defaultSec, bpId, autoOpen
                className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 hover:opacity-80">TikTok ↗</a>
           )}
         </div>
+
+        {profile && <ProfileHeader profile={profile} />}
 
         <div className="flex gap-2">
           {[
@@ -477,6 +479,12 @@ export default function SocialCompetition() {
     enabled:  !!bpId && compIds.length > 0,
   });
 
+  const { data: allProfiles = [] } = useQuery({
+    queryKey: ['socialProfiles', bpId, compIds],
+    queryFn:  () => base44.entities.CompetitorSocialProfile.filter({ competitor_id: { in: compIds } }, '-fetched_at', 300),
+    enabled:  !!bpId && compIds.length > 0,
+  });
+
   const { data: leaderboardData } = useQuery({
     queryKey: ['socialLeaderboard', bpId],
     queryFn:  () => apiFetch(`/competitors/social/leaderboard?businessProfileId=${bpId}`),
@@ -506,6 +514,12 @@ export default function SocialCompetition() {
       queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] });
       parts.push('מודעות עודכנו');
     } catch { toast.error('שגיאה בעדכון המודעות'); }
+
+    try {
+      await base44.functions.invoke('collectCompetitorSocialProfile', { businessProfileId: bpId, force: true }, 120000);
+      queryClient.invalidateQueries({ queryKey: ['socialProfiles', bpId] });
+      parts.push('פרופילים עודכנו');
+    } catch (e) { toast.error(`שגיאה בעדכון הפרופילים: ${e.message}`); }
 
     try {
       const storiesResult = await base44.functions.invoke('collectCompetitorSocialStories', { businessProfileId: bpId, force: true }, 120000);
@@ -610,6 +624,7 @@ export default function SocialCompetition() {
                 posts={allPosts.filter(p => p.competitor_id === comp.id)}
                 ads={allAds.filter(a => a.competitor_id === comp.id)}
                 stories={allStories.filter(s => s.competitor_id === comp.id)}
+                profile={allProfiles.find(p => p.competitor_id === comp.id) ?? null}
                 defaultSec={comp.id === focusId ? focusSection : null}
                 defaultExpanded={comp.id === focusId}
                 bpId={bpId}
