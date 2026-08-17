@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   PLATFORM_LABELS, PLATFORM_COLORS, apiFetch, timeAgo,
   PostCard, AdCard, StoryCard, PostDetailModal, AdDetailModal, StoryDetailModal, useDeepAnalysis, ProfileHeader,
-  computeOutlierPosts,
+  computeOutlierPosts, useAnalyzeTopPerformers,
 } from '@/components/competitors/socialShared';
 
 function resolveSection(param) {
@@ -309,6 +309,12 @@ function RivalCard({ competitor, posts, ads, stories, profile, defaultSec, bpId,
 
   const hasGoogle = competitor.active_ad_platforms?.includes('google');
   const outlierPosts = useMemo(() => computeOutlierPosts(posts), [posts]);
+  const queryClient = useQueryClient();
+  const { analyzing, analyzeNow } = useAnalyzeTopPerformers(outlierPosts, {
+    businessProfileId: bpId,
+    postType: 'competitor',
+    onDone: () => queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] }),
+  });
 
   return (
     <div className="border border-border rounded-xl bg-card overflow-hidden">
@@ -382,7 +388,16 @@ function RivalCard({ competitor, posts, ads, stories, profile, defaultSec, bpId,
 
             {outlierPosts.length > 0 && (
               <>
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">🔥 פוסטים מצטיינים</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex-1">🔥 פוסטים מצטיינים</p>
+                  <button
+                    onClick={analyzeNow}
+                    disabled={analyzing}
+                    className="text-[10px] text-primary underline disabled:opacity-50"
+                  >
+                    {analyzing ? 'מנתח...' : '🔍 נתחו מה גרם להצלחה'}
+                  </button>
+                </div>
                 <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
                   {outlierPosts.slice(0, 10).map(post => (
                     <PostCard key={post.id} post={post} onSelect={setSelectedPost} />

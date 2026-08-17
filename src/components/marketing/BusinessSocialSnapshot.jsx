@@ -5,7 +5,7 @@ import { Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   PLATFORM_LABELS, PLATFORM_COLORS, apiFetch, timeAgo,
-  PostCard, AdCard, PostDetailModal, AdDetailModal, ProfileHeader, computeOutlierPosts,
+  PostCard, AdCard, PostDetailModal, AdDetailModal, ProfileHeader, computeOutlierPosts, useAnalyzeTopPerformers,
 } from '@/components/competitors/socialShared';
 
 // Single-entity twin of SocialCompetition.jsx's RivalCard — same feed/ads
@@ -42,6 +42,11 @@ export default function BusinessSocialSnapshot({ businessProfile }) {
   const profiles = profileData?.profiles ?? [];
   const activeAdCount = ads.filter(a => a.is_active).length;
   const outlierPosts = useMemo(() => computeOutlierPosts(posts), [posts]);
+  const { analyzing, analyzeNow } = useAnalyzeTopPerformers(outlierPosts, {
+    businessProfileId: bpId,
+    postType: 'own',
+    onDone: () => queryClient.invalidateQueries({ queryKey: ['businessSnapshotFeed', bpId] }),
+  });
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -132,7 +137,16 @@ export default function BusinessSocialSnapshot({ businessProfile }) {
             <>
               {outlierPosts.length > 0 && (
                 <>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">🔥 פוסטים מצטיינים</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex-1">🔥 פוסטים מצטיינים</p>
+                    <button
+                      onClick={analyzeNow}
+                      disabled={analyzing}
+                      className="text-[10px] text-primary underline disabled:opacity-50"
+                    >
+                      {analyzing ? 'מנתח...' : '🔍 נתחו מה גרם להצלחה'}
+                    </button>
+                  </div>
                   <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
                     {outlierPosts.slice(0, 10).map(post => (
                       <PostCard key={post.id} post={post} onSelect={setSelectedPost} />

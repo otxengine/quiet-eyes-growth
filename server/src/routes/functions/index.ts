@@ -131,6 +131,8 @@ import { detectOwnAds } from './detectOwnAds';
 import { analyzeSocialPosts } from './analyzeSocialPosts';
 import { backfillCompetitorPostAnalysis } from './backfillCompetitorPostAnalysis';
 import { dedupeCompetitorPosts } from './dedupeCompetitorPosts';
+import { analyzeTopCompetitorPosts } from './analyzeTopCompetitorPosts';
+import { analyzeTopOwnPosts } from './analyzeTopOwnPosts';
 
 const router = Router();
 
@@ -277,6 +279,8 @@ const FUNCTION_MAP: Record<string, any> = {
   analyzeSocialPosts,
   backfillCompetitorPostAnalysis,
   dedupeCompetitorPosts,
+  analyzeTopCompetitorPosts,
+  analyzeTopOwnPosts,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,

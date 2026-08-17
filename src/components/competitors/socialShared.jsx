@@ -71,6 +71,9 @@ export const ANALYSIS_FIELDS = [
   { key: 'cta',           label: '📣 קריאה לפעולה' },
   { key: 'text_hooks',    label: '✍️ הוקים טקסטואליים' },
   { key: 'visual_hooks',  label: '🖼️ הוקים ויזואליים' },
+  { key: 'hook',                   label: '🪝 למה זה עבד' },
+  { key: 'content_pillar',         label: '📌 פילר תוכן' },
+  { key: 'audience_action_driver', label: '📣 מה גרם לקהל לפעול' },
 ];
 
 export function AnalysisBlock({ raw }) {
@@ -407,9 +410,42 @@ export function computeOutlierPosts(posts) {
     if (scored.length < OUTLIER_MIN_SAMPLE) continue;
     const avg = scored.reduce((s, p) => s + p.engagement, 0) / scored.length;
     if (avg <= 0) continue;
-    outliers.push(...scored.filter(p => p.engagement >= avg * OUTLIER_MULTIPLIER));
+    outliers.push(
+      ...scored
+        .filter(p => p.engagement >= avg * OUTLIER_MULTIPLIER)
+        .map(p => ({ ...p, engagementMultiple: p.engagement / avg })),
+    );
   }
   return outliers.sort((a, b) => b.engagement - a.engagement);
+}
+
+/**
+ * Shared "analyze top performers" trigger — batch-runs the hook/content-pillar/
+ * audience-action-driver analysis for a set of already-detected outlier posts.
+ * Manual-trigger for now (see caller); a future auto-trigger just needs to call
+ * analyzeNow() from a useEffect instead of a button, no other changes needed.
+ */
+export function useAnalyzeTopPerformers(outlierPosts, { businessProfileId, postType, onDone }) {
+  const [analyzing, setAnalyzing] = useState(false);
+
+  const analyzeNow = async () => {
+    if (!outlierPosts.length || analyzing) return;
+    setAnalyzing(true);
+    try {
+      const fnName = postType === 'own' ? 'analyzeTopOwnPosts' : 'analyzeTopCompetitorPosts';
+      await base44.functions.invoke(
+        fnName,
+        { businessProfileId, posts: outlierPosts.map(p => ({ id: p.id, engagementMultiple: p.engagementMultiple })) },
+        120000,
+      );
+      onDone?.();
+    } catch (e) {
+      console.warn('[useAnalyzeTopPerformers] failed:', e.message);
+    }
+    setAnalyzing(false);
+  };
+
+  return { analyzing, analyzeNow };
 }
 
 export function ProfileHeader({ profile }) {

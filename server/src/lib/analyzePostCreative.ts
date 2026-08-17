@@ -20,6 +20,11 @@ export interface PostCreativeAnalysis {
   style: string;
   has_cta: boolean;
   cta: string | null;
+  // Only populated when analyzePostCreative is called with a performanceContext
+  // (i.e. for a detected outlier post) — otherwise all null.
+  hook: string | null;
+  content_pillar: string | null;
+  audience_action_driver: string | null;
 }
 
 async function fetchImageBase64(url: string): Promise<{ data: string; mediaType: string } | null> {
@@ -62,6 +67,9 @@ export function normalizePostCreativeAnalysis(raw: any): PostCreativeAnalysis | 
     style:         typeof raw.style === 'string' ? raw.style : '',
     has_cta:       !!raw.has_cta,
     cta:           str(raw.cta),
+    hook:                    str(raw.hook),
+    content_pillar:          str(raw.content_pillar),
+    audience_action_driver:  str(raw.audience_action_driver),
   };
 }
 
@@ -138,12 +146,20 @@ export async function analyzePostCreative(input: {
   platform: string;
   mediaUrl: string | null;
   profile?: { name: string; category: string; city: string };
+  // Present only when this post is a detected engagement outlier — grounds the
+  // "hook"/"content_pillar"/"audience_action_driver" fields in the schema below.
+  performanceContext?: { engagementMultiple: number };
 }): Promise<PostCreativeAnalysis | null> {
   if (!input.mediaUrl) return null;
 
   try {
     const image = await fetchImageBase64(input.mediaUrl);
     if (!image) return null;
+
+    const outlierFields = input.performanceContext ? `,
+  "hook": "1-2 sentences: based on the caption/image AND that this post got ${input.performanceContext.engagementMultiple.toFixed(1)}x this account's average engagement on ${input.platform}, why did it likely stand out and drive people to stop scrolling and engage",
+  "content_pillar": "a short recurring content theme/category label for this post, e.g. 'מבצעים', 'מאחורי הקלעים', 'לקוחות מרוצים', 'מוצר חדש', 'טיפים/חינוך', 'הומור/בידור'",
+  "audience_action_driver": "what specifically the caption asked the audience to do to engage — e.g. 'ביקש לתייג חבר/ה', 'ביקש תגובות/דעות', 'ביקש לשתף', 'ביקש לייק/שמירה' — or null if there was no explicit ask"` : '';
 
     const analysis = await invokeLLM({
       model: 'sonnet',
@@ -165,7 +181,7 @@ Look at the attached image and the caption together. Return ONLY valid JSON. ALL
   "text_hooks": ["specific words/phrases in the caption or image text designed to grab attention"],
   "style": "overall creative style — e.g. 'מינימליסטי', 'צבעוני ואנרגטי', 'מקצועי'",
   "has_cta": false,
-  "cta": "the call to action, ONLY if has_cta is true and it's a clear explicit instruction (e.g. 'הזמינו עכשיו', 'לפרטים בלינק בביו') — not just a vague sign-off. Otherwise null."
+  "cta": "the call to action, ONLY if has_cta is true and it's a clear explicit instruction (e.g. 'הזמינו עכשיו', 'לפרטים בלינק בביו') — not just a vague sign-off. Otherwise null."${outlierFields}
 }`,
     });
 
