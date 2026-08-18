@@ -194,6 +194,44 @@ router.post('/collector-metrics/check', async (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
+// GET /api/admin/review-pipeline-status?competitorId=...|businessProfileId=...
+// Tracks the async DataForSEO fetch + LLM topic-extraction pipeline for a
+// competitor's (or own-business's) reviews — the gap between "task submitted"
+// and "reviews visible with topics" that isn't observable from the entities API.
+router.get('/review-pipeline-status', async (req: Request, res: Response) => {
+  if (!isAdminKeyRequest(req)) return res.status(403).json({ error: 'Admin access required' });
+  const { competitorId, businessProfileId } = req.query as { competitorId?: string; businessProfileId?: string };
+  if (!competitorId && !businessProfileId) {
+    return res.status(400).json({ error: 'competitorId or businessProfileId required' });
+  }
+
+  const taskWhere = competitorId
+    ? { task_type: 'competitor', linked_competitor: competitorId }
+    : { task_type: 'own', business_profile_id: businessProfileId };
+  const reviewWhere = competitorId
+    ? { linked_competitor: competitorId }
+    : { linked_business: businessProfileId, linked_competitor: null };
+
+  const [tasks, reviews] = await Promise.all([
+    prisma.dataForSeoReviewTask.findMany({ where: taskWhere, orderBy: { requested_at: 'desc' }, take: 10 }),
+    prisma.review.findMany({ where: reviewWhere, select: { topics: true } }),
+  ]);
+
+  const reviews_total = reviews.length;
+  const reviews_analyzed = reviews.filter(r => r.topics != null).length;
+
+  res.json({
+    dataforseo_tasks: tasks.map(t => ({
+      task_id: t.task_id, status: t.status, requested_at: t.requested_at,
+      completed_at: t.completed_at, error_message: t.error_message,
+      cost_usd: t.cost_usd, new_reviews_count: t.new_reviews_count,
+    })),
+    reviews_total,
+    reviews_analyzed,
+    reviews_pending_llm: reviews_total - reviews_analyzed,
+  });
+});
+
 // ponytail: temp test endpoint — remove after KAN-210 is verified
 router.get('/test-dataforseo', async (req: Request, res: Response) => {
   if (!isAdminKeyRequest(req)) return res.status(403).json({ error: 'Admin access required' });
