@@ -125,6 +125,10 @@ model BusinessProfile {
   about_source_excerpts       String?  // JSON: {source_type: {url?, excerpt}} raw provenance (KAN-202)
   about_generated_at          String?  // ISO timestamp of last generate/regenerate
   about_approved_at           String?  // ISO timestamp of last Approve
+  // Synthesized explanation of the common pattern(s) across this business's
+  // own current outlier/top-performing posts.
+  outlier_insight              String?  // 2-4 sentences (Hebrew)
+  outlier_insight_at           String?  // ISO timestamp
 
   @@map("business_profiles")
 }
@@ -276,6 +280,11 @@ model Competitor {
   // ── Deep social content analysis (grounded in per-post analysis JSON) ───
   social_deep_analysis     String?  // JSON: {visual_identity, content_pillars, hook_patterns, cta_strategy, promotion_pattern, caption_patterns, ad_messaging, offer_recommendation, top_content_insight, our_opportunity, offer_stats}. offer_stats (computed, not LLM): {total_offers, peak_day, peak_day_count, avg_interval_days, mechanic_breakdown, value_framing_breakdown, audience_intent_breakdown, redemption_breakdown, urgency_pct, conditions_pct, in_image_pct, performance: {avg_likes_offer_posts, avg_likes_regular_posts, avg_comments_offer_posts, avg_comments_regular_posts}}
   social_deep_analysis_at  String?  // ISO timestamp
+  // Synthesized explanation of the common pattern(s) across this competitor's
+  // current outlier/top-performing posts — separate from social_deep_analysis
+  // above, which summarizes ALL recent posts, not just the outliers.
+  outlier_insight          String?  // 2-4 sentences (Hebrew)
+  outlier_insight_at       String?  // ISO timestamp
   not_relevant             Boolean? @default(false)
   not_relevant_reason      String?
   google_place_id          String?  // KAN-121: place_id used for review ingest

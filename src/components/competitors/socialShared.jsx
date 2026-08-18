@@ -468,19 +468,22 @@ export function computeOutlierPosts(posts) {
  * Manual-trigger for now (see caller); a future auto-trigger just needs to call
  * analyzeNow() from a useEffect instead of a button, no other changes needed.
  */
-export function useAnalyzeTopPerformers(outlierPosts, { businessProfileId, postType, onDone }) {
+export function useAnalyzeTopPerformers(outlierPosts, { businessProfileId, postType, onDone, initialInsight }) {
   const [analyzing, setAnalyzing] = useState(false);
+  const [insight, setInsight] = useState(initialInsight ?? null);
 
   const analyzeNow = async () => {
     if (!outlierPosts.length || analyzing) return;
     setAnalyzing(true);
     try {
       const fnName = postType === 'own' ? 'analyzeTopOwnPosts' : 'analyzeTopCompetitorPosts';
-      await base44.functions.invoke(
+      const result = await base44.functions.invoke(
         fnName,
         { businessProfileId, posts: outlierPosts.map(p => ({ id: p.id, engagementMultiple: p.engagementMultiple })) },
         120000,
       );
+      const newInsight = (result?.data ?? result)?.outlier_insight;
+      if (newInsight) setInsight(newInsight);
       onDone?.();
     } catch (e) {
       console.warn('[useAnalyzeTopPerformers] failed:', e.message);
@@ -488,7 +491,7 @@ export function useAnalyzeTopPerformers(outlierPosts, { businessProfileId, postT
     setAnalyzing(false);
   };
 
-  return { analyzing, analyzeNow };
+  return { analyzing, analyzeNow, insight };
 }
 
 export function ProfileHeader({ profile }) {

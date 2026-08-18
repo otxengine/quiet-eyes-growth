@@ -1175,6 +1175,8 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS about_approved_at TEXT`);
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS owner_name TEXT`);
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS phone TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS outlier_insight TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS outlier_insight_at TEXT`);
   await sql(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS discovered_at TEXT`);
   await sql(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS freshness_score DOUBLE PRECISION DEFAULT 100`);
   await sql(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_contact_at TEXT`);
@@ -1191,6 +1193,8 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT false`);
   await sql(`ALTER TABLE reviews     ADD COLUMN IF NOT EXISTS linked_competitor TEXT`);
   await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS google_place_id   TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS outlier_insight TEXT`);
+  await sql(`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS outlier_insight_at TEXT`);
   await sql(`ALTER TABLE health_scores ADD COLUMN IF NOT EXISTS seo_score DOUBLE PRECISION`);
   await sql(`ALTER TABLE health_scores ADD COLUMN IF NOT EXISTS google_rank_estimate TEXT`);
   await sql(`ALTER TABLE health_scores ADD COLUMN IF NOT EXISTS reviews_needed_for_top3 DOUBLE PRECISION`);

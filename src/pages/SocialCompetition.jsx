@@ -310,9 +310,10 @@ function RivalCard({ competitor, posts, ads, stories, profile, defaultSec, bpId,
   const hasGoogle = competitor.active_ad_platforms?.includes('google');
   const outlierPosts = useMemo(() => computeOutlierPosts(posts), [posts]);
   const queryClient = useQueryClient();
-  const { analyzing, analyzeNow } = useAnalyzeTopPerformers(outlierPosts, {
+  const { analyzing, analyzeNow, insight } = useAnalyzeTopPerformers(outlierPosts, {
     businessProfileId: bpId,
     postType: 'competitor',
+    initialInsight: competitor.outlier_insight,
     onDone: () => queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] }),
   });
 
@@ -398,6 +399,12 @@ function RivalCard({ competitor, posts, ads, stories, profile, defaultSec, bpId,
                     {analyzing ? 'מנתח...' : '🔍 נתחו מה גרם להצלחה'}
                   </button>
                 </div>
+                {insight && (
+                  <div className="border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3 space-y-1">
+                    <p className="text-[10px] font-semibold text-amber-800 dark:text-amber-300">🧠 למה הפוסטים האלה מצליחים</p>
+                    <p className="text-xs leading-relaxed text-amber-950 dark:text-amber-100">{insight}</p>
+                  </div>
+                )}
                 <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
                   {outlierPosts.slice(0, 10).map(post => (
                     <PostCard key={post.id} post={post} onSelect={setSelectedPost} />
