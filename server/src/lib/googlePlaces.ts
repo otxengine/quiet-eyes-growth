@@ -14,10 +14,12 @@ export interface PlaceDetails {
   servesBeer: boolean;
   servesVegetarianFood: boolean;
   websiteUri: string;
+  rating: number | null;
+  reviewCount: number | null;
 }
 
 export const EMPTY_PLACE: PlaceDetails = {
-  reviews: [], editorialSummary: '', types: [], priceLevel: null,
+  reviews: [], editorialSummary: '', types: [], priceLevel: null, rating: null, reviewCount: null,
   servesWine: false, servesBeer: false, servesVegetarianFood: false, websiteUri: '',
 };
 
@@ -61,6 +63,8 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
       servesBeer:           data.servesBeer           || false,
       servesVegetarianFood: data.servesVegetarianFood || false,
       websiteUri:           data.websiteUri           || '',
+      rating:               data.rating               ?? null,
+      reviewCount:          data.userRatingCount      ?? null,
     };
   } catch (e: any) { console.warn('[googlePlaces] getPlaceDetails error:', e.message); return EMPTY_PLACE; }
 }

@@ -97,6 +97,15 @@ export async function enrichCompetitorUrls(
       if (found) { update.website_url = found.url; update.website_url_source = found.source; attempted = true; }
     }
 
+    // Google rating/review_count — independent of website_url, so a competitor that
+    // already has its website filled (and so never hits enrichWebsite's Places call
+    // above) still gets these backfilled once it has a place_id.
+    if (comp.google_place_id && (comp.rating == null || comp.review_count == null)) {
+      const details = await getPlaceDetails(comp.google_place_id);
+      if (comp.rating == null && details.rating != null) { update.rating = details.rating; attempted = true; }
+      if (comp.review_count == null && details.reviewCount != null) { update.review_count = details.reviewCount; attempted = true; }
+    }
+
     const websiteForExtract = update.website_url || comp.website_url;
     const anySocialEmpty = !comp.instagram_url || !comp.facebook_url || !comp.tiktok_url;
 
@@ -151,6 +160,8 @@ export async function enrichCompetitorUrlsScheduled(req: Request, res: Response)
             { instagram_url: null },
             { facebook_url: null },
             { tiktok_url: null },
+            { rating: null },
+            { review_count: null },
             { social_pages_crawled_at: null },
             { social_pages_crawled_at: { lt: staleCutoff } },
           ],

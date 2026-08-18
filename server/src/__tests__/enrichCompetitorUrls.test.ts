@@ -229,7 +229,7 @@ test('AC6: site-extract already found a social field — organic SERP not spent 
 test('AC5: paid-tier website fallback is skipped entirely once website_url is already set', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([
     { id: 'c1', name: 'Comp', google_place_id: 'place123', website_url: 'https://existing.co.il',
-      instagram_url: 'a', facebook_url: 'b', tiktok_url: 'c' },
+      instagram_url: 'a', facebook_url: 'b', tiktok_url: 'c', rating: 4.5, review_count: 100 },
   ]);
 
   const result = await enrichCompetitorUrls(['c1']);
@@ -237,6 +237,23 @@ test('AC5: paid-tier website fallback is skipped entirely once website_url is al
   expect(getPlaceDetails).not.toHaveBeenCalled();
   expect(searchOrganic).not.toHaveBeenCalled();
   expect(result).toEqual({ enriched: 0, skipped: 1 }); // nothing empty, nothing to do
+});
+
+test('rating/review_count backfill: fetched independently of website_url and fill-if-empty only', async () => {
+  (prisma.competitor.findMany as jest.Mock).mockResolvedValue([
+    { id: 'c1', name: 'Comp', google_place_id: 'place123', website_url: 'https://existing.co.il',
+      instagram_url: 'a', facebook_url: 'b', tiktok_url: 'c', rating: null, review_count: null },
+  ]);
+  (getPlaceDetails as jest.Mock).mockResolvedValue({ websiteUri: '', rating: 4.2, reviewCount: 250 });
+
+  const result = await enrichCompetitorUrls(['c1']);
+
+  expect(getPlaceDetails).toHaveBeenCalledWith('place123');
+  expect(prisma.competitor.update).toHaveBeenCalledWith({
+    where: { id: 'c1' },
+    data: expect.objectContaining({ rating: 4.2, review_count: 250 }),
+  });
+  expect(result).toEqual({ enriched: 1, skipped: 0 });
 });
 
 test('host validation rejects a malformed Places Details website', async () => {

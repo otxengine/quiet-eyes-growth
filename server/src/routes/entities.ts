@@ -7,6 +7,7 @@ import { collectCompetitorSocialProfile } from './functions/collectCompetitorSoc
 import { collectCompetitorSocialStories } from './functions/collectCompetitorSocialStories';
 import { detectCompetitorAds } from './functions/detectCompetitorAds';
 import { runCollectCompetitorReviews } from './functions/collectCompetitorReviews';
+import { enrichCompetitorUrls } from './functions/enrichCompetitorUrls';
 
 // ── Clerk email lookup cache ───────────────────────────────────────────────────
 // Maps userId → email, TTL 10 minutes. Avoids repeated Clerk API calls.
@@ -376,6 +377,9 @@ router.post('/:entity', async (req: Request, res: Response) => {
         .catch((err: any) => console.warn(`manual competitor add: detectCompetitorAds failed: ${err.message}`));
       runCollectCompetitorReviews(data.linked_business)
         .catch((err: any) => console.warn(`manual competitor add: collectCompetitorReviews failed: ${err.message}`));
+      // Google rating/review_count for the list badge — nothing else populates these on manual add.
+      enrichCompetitorUrls([record.id])
+        .catch((err: any) => console.warn(`manual competitor add: enrichCompetitorUrls failed: ${err.message}`));
     }
 
     res.status(201).json(record);
