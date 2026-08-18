@@ -286,6 +286,16 @@ export default function Competitors() {
         );
       })()}
 
+      {adding && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-lg px-6 py-8 flex flex-col items-center gap-3 max-w-xs text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-sm font-medium text-foreground">מחפש פרטי מתחרה...</p>
+            <p className="text-xs text-foreground-muted">מאתר אתר ורשתות חברתיות, זה עשוי לקחת עד 30 שניות</p>
+          </div>
+        </div>
+      )}
+
       {selectedMove && (
         <ActionPopup
           signal={{
