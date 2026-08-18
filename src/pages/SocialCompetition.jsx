@@ -651,6 +651,19 @@ export default function SocialCompetition() {
     setRefreshingAll(false);
   };
 
+  const handleScanAdsOnly = async () => {
+    setScanningAds(true);
+    try {
+      const result = await base44.functions.invoke('detectCompetitorAds', { businessProfileId: bpId, force: true }, 120000);
+      queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] });
+      toast.success(result?.alerts_created > 0 ? `מודעות עודכנו — ${result.alerts_created} התראות חדשות` : 'מודעות עודכנו');
+    } catch (e) {
+      toast.error(`שגיאה בעדכון המודעות: ${e.message}`);
+    } finally {
+      setScanningAds(false);
+    }
+  };
+
   const loading = loadingComps || loadingPosts || loadingAds || loadingStories;
 
   let visible = competitors;
@@ -710,8 +723,17 @@ export default function SocialCompetition() {
         <div className="flex-1" />
 
         <button
+          onClick={handleScanAdsOnly}
+          disabled={refreshingAll || scanningAds}
+          className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-border rounded-lg hover:bg-muted disabled:opacity-50"
+        >
+          <Megaphone className={`w-3 h-3 ${scanningAds ? 'animate-pulse' : ''}`} />
+          {scanningAds ? 'מחפש מודעות...' : 'חפש מודעות בלבד'}
+        </button>
+
+        <button
           onClick={handleRefreshAll}
-          disabled={refreshingAll}
+          disabled={refreshingAll || scanningAds}
           className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-border rounded-lg hover:bg-muted disabled:opacity-50"
         >
           <RefreshCw className={`w-3 h-3 ${refreshingAll ? 'animate-spin' : ''}`} />
