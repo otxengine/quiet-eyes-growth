@@ -66,7 +66,13 @@ export async function uploadImageFromUrl(sourceUrl: string, folder = 'competitor
     if (!res.ok) return null;
 
     const contentType = res.headers.get('content-type') || 'image/jpeg';
-    const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
+    const ext = contentType.includes('png')       ? 'png'
+      : contentType.includes('webp')      ? 'webp'
+      : contentType.includes('gif')       ? 'gif'
+      : contentType.includes('mp4')       ? 'mp4'
+      : contentType.includes('webm')      ? 'webm'
+      : contentType.includes('quicktime') ? 'mov'
+      : 'jpg';
     const key = `${folder}/${randomUUID()}.${ext}`;
 
     await client.send(new PutObjectCommand({
