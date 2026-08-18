@@ -531,3 +531,117 @@ test('AC3+AC4 (KAN-212): merges candidates sharing a place_id and tags discovery
 
   logSpy.mockRestore();
 });
+
+// ─── Candidate enrichment: types + editorialSummary for the selection LLM ────
+
+test('types appear in the LLM prompt when Google returns place types', async () => {
+  (global as any).fetch = geoAndPlacesFetch([
+    { name: 'קפה סושי', place_id: 'pt1', rating: 4.2, user_ratings_total: 15, formatted_address: 'תל אביב',
+      types: ['sushi_restaurant', 'restaurant', 'food', 'point_of_interest', 'establishment'] },
+  ]);
+  (searchCompetitorsByKeyword as jest.Mock).mockResolvedValue({ candidates: [], costUsd: 0 });
+  (invokeLLM as jest.Mock)
+    .mockResolvedValueOnce({ business_type: 'בית קפה', search_terms: ['בית קפה'], nearby_cities: [] })
+    .mockResolvedValueOnce({ competitors: [] });
+
+  const res = makeRes();
+  await runCompetitorIdentification(makeReq(), res);
+
+  const sonnetCall = (invokeLLM as jest.Mock).mock.calls[1][0];
+  expect(sonnetCall.prompt).toContain('[sushi_restaurant, restaurant, food, point_of_interest, establishment]');
+});
+
+test('editorialSummary appears in the LLM prompt when Place Details returns one', async () => {
+  (global as any).fetch = geoAndPlacesFetch([
+    { name: 'קפה טעים', place_id: 'pe1', rating: 4.5, user_ratings_total: 30, formatted_address: 'תל אביב' },
+  ]);
+  (searchCompetitorsByKeyword as jest.Mock).mockResolvedValue({ candidates: [], costUsd: 0 });
+  (getPlaceDetails as jest.Mock).mockResolvedValueOnce({
+    reviews: [], editorialSummary: 'בית קפה בוטיק המתמחה בקפה מקומי', types: [],
+    priceLevel: null, servesWine: false, servesBeer: false, servesVegetarianFood: false, websiteUri: '',
+  });
+  (invokeLLM as jest.Mock)
+    .mockResolvedValueOnce({ business_type: 'בית קפה', search_terms: ['בית קפה'], nearby_cities: [] })
+    .mockResolvedValueOnce({ competitors: [] });
+
+  const res = makeRes();
+  await runCompetitorIdentification(makeReq(), res);
+
+  expect(getPlaceDetails).toHaveBeenCalledWith('pe1');
+  const sonnetCall = (invokeLLM as jest.Mock).mock.calls[1][0];
+  expect(sonnetCall.prompt).toContain('— "בית קפה בוטיק המתמחה בקפה מקומי"');
+});
+
+test('does not call getPlaceDetails for a candidate without place_id', async () => {
+  (global as any).fetch = geoAndPlacesFetch([]);
+  (searchCompetitorsByKeyword as jest.Mock).mockResolvedValue({ candidates: [{
+    name: 'קפה ללא מזהה', place_id: undefined, address: 'תל אביב', address_info: {},
+    latitude: 32.08, longitude: 34.78, rating: 4.0, votes_count: 5,
+    category: '', additional_categories: [],
+  }], costUsd: 0 });
+  (invokeLLM as jest.Mock)
+    .mockResolvedValueOnce({ business_type: 'בית קפה', search_terms: ['בית קפה'], nearby_cities: [] })
+    .mockResolvedValueOnce({ competitors: [] });
+
+  const res = makeRes();
+  await runCompetitorIdentification(makeReq(), res);
+
+  expect(getPlaceDetails).not.toHaveBeenCalled();
+  expect(res.status).not.toHaveBeenCalledWith(500);
+});
+
+test('prompt line has no trailing description segment when editorialSummary is empty', async () => {
+  (global as any).fetch = geoAndPlacesFetch([
+    { name: 'קפה רגיל', place_id: 'pn1', rating: 4.0, user_ratings_total: 5, formatted_address: 'תל אביב' },
+  ]);
+  (searchCompetitorsByKeyword as jest.Mock).mockResolvedValue({ candidates: [], costUsd: 0 });
+  (invokeLLM as jest.Mock)
+    .mockResolvedValueOnce({ business_type: 'בית קפה', search_terms: ['בית קפה'], nearby_cities: [] })
+    .mockResolvedValueOnce({ competitors: [] });
+
+  const res = makeRes();
+  await runCompetitorIdentification(makeReq(), res);
+
+  const sonnetCall = (invokeLLM as jest.Mock).mock.calls[1][0];
+  expect(sonnetCall.prompt).toContain('- קפה רגיל: 4★ (5 ביקורות) — תל אביב');
+  expect(sonnetCall.prompt).not.toContain(' — "');
+});
+
+test('caps editorialSummary enrichment to the top PLACE_DETAILS_ENRICH_CAP candidates by review_count', async () => {
+  (global as any).fetch = geoAndPlacesFetch([]);
+  // Zero-padded index avoids the merge's substring-based fuzzy name match (e.g. "קפה1"
+  // is a substring of "קפה10") from collapsing distinct candidates into one.
+  const candidates = Array.from({ length: 30 }, (_, i) => ({
+    name: `קפה ${String(i).padStart(2, '0')}`, place_id: `cap_${i}`, address: 'תל אביב', address_info: {},
+    latitude: 32.08, longitude: 34.78, rating: 4.0, votes_count: 30 - i, // descending review_count
+    category: '', additional_categories: [],
+  }));
+  (searchCompetitorsByKeyword as jest.Mock).mockResolvedValue({ candidates, costUsd: 0 });
+  (invokeLLM as jest.Mock)
+    .mockResolvedValueOnce({ business_type: 'בית קפה', search_terms: ['בית קפה'], nearby_cities: [] })
+    .mockResolvedValueOnce({ competitors: [] });
+
+  const res = makeRes();
+  await runCompetitorIdentification(makeReq(), res);
+
+  expect(getPlaceDetails).toHaveBeenCalledTimes(25);
+});
+
+test('reuses the enrichment cache in deriveUrls instead of a second getPlaceDetails call', async () => {
+  (global as any).fetch = geoAndPlacesFetch([]);
+  (searchCompetitorsByKeyword as jest.Mock).mockResolvedValue({ candidates: [{
+    name: 'קפה קאש', place_id: 'cache1', address: 'תל אביב', address_info: {},
+    latitude: 32.08, longitude: 34.78, rating: 4.6, votes_count: 40,
+    category: '', additional_categories: [],
+    // no url/domain — forces deriveUrls to fall back to Place Details
+  }], costUsd: 0 });
+  (invokeLLM as jest.Mock)
+    .mockResolvedValueOnce({ business_type: 'בית קפה', search_terms: ['בית קפה'], nearby_cities: [] })
+    .mockResolvedValueOnce({ competitors: [{ name: 'קפה קאש', address: 'תל אביב', rating: 4.6, review_count: 40, strengths: '', weaknesses: '', price_range: '', source_urls: [] }] });
+
+  const res = makeRes();
+  await runCompetitorIdentification(makeReq(), res);
+
+  const calls = (getPlaceDetails as jest.Mock).mock.calls.filter(c => c[0] === 'cache1');
+  expect(calls).toHaveLength(1);
+});

@@ -7,7 +7,7 @@ import { buildCompetitorTerms, buildIdentityCompetitorTerms, buildAgentPromptCon
 import { getAgentMission } from '../../lib/missionPlanner';
 import { searchCompetitorsByKeyword, DataForSEOCandidate } from '../../lib/dataforseo';
 import { enrichCompetitorUrls } from './enrichCompetitorUrls';
-import { getPlaceDetails } from '../../lib/googlePlaces';
+import { getPlaceDetails, PlaceDetails } from '../../lib/googlePlaces';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
 
@@ -15,6 +15,12 @@ const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
 const PLAN_COMPETITOR_LIMITS: Record<string, number> = {
   free_trial: 3, free: 3, starter: 5, growth: 10, pro: Infinity, enterprise: Infinity,
 };
+
+const PLACE_DETAILS_CONCURRENCY = 5;
+// ponytail: cap enrichment volume — editorialSummary is a paid Place Details call;
+// cap to the most-established candidates by review_count rather than fetching for
+// every merged candidate (can run 20-40+ per identify run with 6 search terms).
+const PLACE_DETAILS_ENRICH_CAP = 25;
 
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -79,6 +85,7 @@ interface MapsCandidate {
   url?: string;
   domain?: string;
   phone?: string;
+  types?: string[];
   discovery_sources: string[];
 }
 
@@ -94,6 +101,7 @@ function mergeMapsCandidates(googlePlaces: any[], dataforseo: DataForSEOCandidat
     rating: p.rating ?? null, review_count: p.user_ratings_total ?? null,
     address: p.formatted_address || p.vicinity || '',
     lat: p.geometry?.location?.lat ?? null, lng: p.geometry?.location?.lng ?? null,
+    types: p.types || [],
     discovery_sources: ['google_places'],
   }));
 
@@ -123,11 +131,33 @@ function mergeMapsCandidates(googlePlaces: any[], dataforseo: DataForSEOCandidat
         url: d.url ?? g.url,
         domain: d.domain ?? g.domain,
         phone: d.phone ?? g.phone,
+        types: g.types, // Google types only — DataForSEO has no comparable taxonomy
         discovery_sources: [...new Set([...g.discovery_sources, 'dataforseo_maps'])],
       };
     }
   }
   return merged;
+}
+
+/** Fetch editorialSummary (+ cache the full PlaceDetails) for merged Maps candidates,
+ *  bounded to PLACE_DETAILS_ENRICH_CAP candidates ranked by review_count. Skips
+ *  candidates without place_id. getPlaceDetails already soft-fails internally to
+ *  EMPTY_PLACE on any error/missing key, so failures degrade to "no description"
+ *  rather than blocking discovery. */
+async function enrichPlaceDetails(candidates: MapsCandidate[]): Promise<Map<string, PlaceDetails>> {
+  const cache = new Map<string, PlaceDetails>();
+  if (!GOOGLE_API_KEY) return cache;
+  const targets = candidates
+    .filter(c => c.place_id)
+    .sort((a, b) => (b.review_count ?? 0) - (a.review_count ?? 0))
+    .slice(0, PLACE_DETAILS_ENRICH_CAP);
+
+  for (let i = 0; i < targets.length; i += PLACE_DETAILS_CONCURRENCY) {
+    const chunk = targets.slice(i, i + PLACE_DETAILS_CONCURRENCY);
+    const results = await Promise.all(chunk.map(c => getPlaceDetails(c.place_id)));
+    chunk.forEach((c, j) => cache.set(c.place_id, results[j]));
+  }
+  return cache;
 }
 
 export async function runCompetitorIdentification(req: Request, res: Response) {
@@ -237,6 +267,10 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
 
     console.log(`runCompetitorIdentification: ${googleResults.length} Google, ${dataForSeoResults.length} DataForSEO, ${mapsCandidates.length} merged Maps candidates`);
 
+    // KAN-XXX: enrich the deduped candidate list (not raw per-term results) with a short
+    // Google-written business description, bounded/cached — see enrichPlaceDetails above.
+    const placeDetailsCache = await enrichPlaceDetails(mapsCandidates);
+
     // ── Step 3: LLM identifies DIRECT competitors only ───────────────────────
     const existingCompetitors = await (prisma as any).competitor.findMany({ where: { linked_business: businessProfileId } });
     const existingNames = new Set(existingCompetitors.map((c: any) => c.name.toLowerCase()));
@@ -246,9 +280,12 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     );
 
     const googleBlock = mapsCandidates.length > 0
-      ? `Google/DataForSEO Maps:\n${mapsCandidates.map(c =>
-          `- ${c.name}: ${c.rating ?? '?'}★ (${c.review_count || 0} ביקורות) — ${c.address || city}`
-        ).join('\n')}`
+      ? `Google/DataForSEO Maps:\n${mapsCandidates.map(c => {
+          const typesStr = c.types?.length ? ` [${c.types.slice(0, 5).join(', ')}]` : '';
+          const summary = c.place_id ? placeDetailsCache.get(c.place_id)?.editorialSummary : undefined;
+          const summaryStr = summary ? ` — "${summary}"` : '';
+          return `- ${c.name}: ${c.rating ?? '?'}★ (${c.review_count || 0} ביקורות) — ${c.address || city}${typesStr}${summaryStr}`;
+        }).join('\n')}`
       : '';
 
     const contextBlock = googleBlock;
@@ -354,8 +391,9 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
       classifyUrl(m.url, out);
       if (m.domain) classifyUrl(`https://${m.domain}`, out);
       // Fallback: DataForSEO had no usable website — try Google's own Place Details data.
+      // Reuse the enrichment cache when this candidate was already fetched above.
       if (!out.website && m.place_id) {
-        const details = await getPlaceDetails(m.place_id);
+        const details = placeDetailsCache.get(m.place_id) ?? await getPlaceDetails(m.place_id);
         classifyUrl(details.websiteUri, out);
       }
       return out;
