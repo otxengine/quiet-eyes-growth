@@ -19,8 +19,18 @@ jest.mock('../lib/competitorRadiusCleanup', () => ({
   cleanupCompetitorsByRadius: jest.fn(),
 }));
 
+jest.mock('../routes/functions/collectCompetitorSocialPosts', () => ({
+  collectCompetitorSocialPosts: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('../routes/functions/detectCompetitorAds', () => ({
+  detectCompetitorAds: jest.fn().mockResolvedValue(undefined),
+}));
+
 import router from '../routes/entities';
 import { prisma } from '../db';
+import { collectCompetitorSocialPosts } from '../routes/functions/collectCompetitorSocialPosts';
+import { detectCompetitorAds } from '../routes/functions/detectCompetitorAds';
 
 function getPostHandler() {
   const layer = (router as any).stack.find(
@@ -77,5 +87,52 @@ describe('POST /entities/Competitor — plan limit counts active rows only', () 
 
     expect(res.status).toHaveBeenCalledWith(403);
     expect(prisma.competitor.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /entities/Competitor — manual add is auto-approved and scanned', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (prisma.businessProfile.findUnique as jest.Mock).mockResolvedValue({ subscription_plan: 'growth' });
+    (prisma.competitor.count as jest.Mock).mockResolvedValue(0);
+    (prisma.competitor.create as jest.Mock).mockResolvedValue({ id: 'new_comp' });
+  });
+
+  it('sets tracking_status to approved when the caller does not specify one', async () => {
+    const req = { params: { entity: 'Competitor' }, body: { linked_business: 'biz_1', name: 'New Competitor' } } as any;
+    const res = makeRes();
+
+    await getPostHandler()(req, res);
+
+    expect(prisma.competitor.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tracking_status: 'approved' }),
+    });
+  });
+
+  it('does not override an explicitly provided tracking_status', async () => {
+    const req = { params: { entity: 'Competitor' }, body: { linked_business: 'biz_1', name: 'New Competitor', tracking_status: 'rejected' } } as any;
+    const res = makeRes();
+
+    await getPostHandler()(req, res);
+
+    expect(prisma.competitor.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tracking_status: 'rejected' }),
+    });
+  });
+
+  it('fires an immediate posts + ads scan for the business instead of waiting for the next cron', async () => {
+    const req = { params: { entity: 'Competitor' }, body: { linked_business: 'biz_1', name: 'New Competitor' } } as any;
+    const res = makeRes();
+
+    await getPostHandler()(req, res);
+
+    expect(collectCompetitorSocialPosts).toHaveBeenCalledWith(
+      expect.objectContaining({ body: { businessProfileId: 'biz_1', force: true } }),
+      expect.anything()
+    );
+    expect(detectCompetitorAds).toHaveBeenCalledWith(
+      expect.objectContaining({ body: { businessProfileId: 'biz_1', force: true } }),
+      expect.anything()
+    );
   });
 });

@@ -82,6 +82,7 @@ import { runOTXIntentClassification } from './routes/functions/runOTXIntentClass
 import { collectCompetitorSocialPosts } from './routes/functions/collectCompetitorSocialPosts';
 import { collectOwnSocialPosts } from './routes/functions/collectOwnSocialPosts';
 import { collectCompetitorSocialProfile } from './routes/functions/collectCompetitorSocialProfile';
+import { collectCompetitorSocialStories } from './routes/functions/collectCompetitorSocialStories';
 import { reconcileDataForSeoReviewTasks } from './routes/functions/reconcileDataForSeoReviewTasks';
 
 const logger = createLogger('Scheduler');
@@ -209,6 +210,7 @@ export function startScheduler() {
     runAgentForAll('FindSocialLeads', findSocialLeads);
     runAgentForAll('CollectCompetitorSocialPosts', collectCompetitorSocialPosts);
     runAgentForAll('CollectCompetitorSocialProfile', collectCompetitorSocialProfile);
+    runAgentForAll('CollectCompetitorSocialStories', collectCompetitorSocialStories);
     runAgentForAll('CollectOwnSocialPosts', collectOwnSocialPosts);
     // Enrich newly created leads with Haiku intent classification (5min after lead gen)
     setTimeout(() => enrichNewLeadsWithIntent()

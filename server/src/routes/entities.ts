@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
 import { getUserId, isAdminKeyRequest } from '../middleware/auth';
 import { cleanupCompetitorsByRadius } from '../lib/competitorRadiusCleanup';
+import { collectCompetitorSocialPosts } from './functions/collectCompetitorSocialPosts';
+import { detectCompetitorAds } from './functions/detectCompetitorAds';
 
 // ── Clerk email lookup cache ───────────────────────────────────────────────────
 // Maps userId → email, TTL 10 minutes. Avoids repeated Clerk API calls.
@@ -325,6 +327,12 @@ router.post('/:entity', async (req: Request, res: Response) => {
     const data = { ...req.body };
     if (userId && !data.created_by) data.created_by = userId;
 
+    // Manually-added competitors need no review gate — the user typed the name themselves —
+    // so auto-approve them (auto-discovery creates rows via Prisma directly, bypassing this route).
+    if (req.params.entity === 'Competitor' && data.linked_business && !data.tracking_status) {
+      data.tracking_status = 'approved';
+    }
+
     // competitors_max plan guard for manual add
     if (req.params.entity === 'Competitor' && data.linked_business) {
       const biz = await prisma.businessProfile.findUnique({
@@ -350,6 +358,17 @@ router.post('/:entity', async (req: Request, res: Response) => {
     }
 
     const record = await model.create({ data });
+
+    // Kick off an immediate scan rather than waiting for tomorrow's cron — same
+    // fire-and-forget pattern onboarding's confirm-competitors uses.
+    if (req.params.entity === 'Competitor' && data.linked_business) {
+      const noopRes = { json: () => noopRes, status: () => noopRes } as unknown as Response;
+      collectCompetitorSocialPosts({ body: { businessProfileId: data.linked_business, force: true } } as Request, noopRes)
+        .catch((err: any) => console.warn(`manual competitor add: collectCompetitorSocialPosts failed: ${err.message}`));
+      detectCompetitorAds({ body: { businessProfileId: data.linked_business, force: true } } as Request, noopRes)
+        .catch((err: any) => console.warn(`manual competitor add: detectCompetitorAds failed: ${err.message}`));
+    }
+
     res.status(201).json(record);
   } catch (err: any) {
     console.error(`POST /entities/${req.params.entity}:`, err.message);
