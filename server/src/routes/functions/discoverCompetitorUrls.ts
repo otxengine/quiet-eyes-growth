@@ -10,12 +10,21 @@ export const SITE_BLACKLIST = ['instagram.com', 'facebook.com', 'tiktok.com', 'g
 // Non-profile path segments for each platform — filter these out so we only keep main pages.
 export const IG_NON_PROFILE  = ['p/', 'reel/', 'stories/', 'explore/', 'tv/', 'reels/'];
 export const FB_NON_PROFILE  = ['posts/', 'photos/', 'videos/', 'events/', 'photo/', 'video/'];
-export const TIK_NON_PROFILE = ['video/', 'discover', 'tag/'];
+export const TIK_NON_PROFILE = ['video/', 'discover', 'tag/', 'content/'];
 
 export function isProfileUrl(url: string, domain: string, nonProfile: string[]): boolean {
   if (!url?.includes(domain)) return false;
   const path = (url.split(domain)[1] ?? '').replace(/^\/+/, '').split('?')[0];
   return path.length > 0 && !nonProfile.some(seg => path.includes(seg));
+}
+
+// Strips query string/fragment so a raw search-result URL (which may carry
+// tracking params etc.) never gets stored as-is — downstream social-media
+// scraping tools reject a profile URL with anything after the username
+// that isn't a literal "/", so "?hl=en" breaks it even though it's a
+// cosmetically valid profile link.
+function cleanUrl(url: string): string {
+  return url.split('?')[0].split('#')[0];
 }
 
 // Returns the handle/username portion of a social URL (strips @ and trailing path).
@@ -150,9 +159,9 @@ export async function discoverCompetitorUrls(req: Request, res: Response) {
         const canOverwrite = (field: string) => force || !manualFields.includes(field);
         const update: Record<string, any> = { social_pages_crawled_at: new Date().toISOString() };
 
-        if (ig.url   && ((ig.high   && canOverwrite('instagram_url')) || !c.instagram_url)) update.instagram_url = ig.url;
-        if (fb.url   && ((fb.high   && canOverwrite('facebook_url'))  || !c.facebook_url))  update.facebook_url  = fb.url;
-        if (tik.url  && ((tik.high  && canOverwrite('tiktok_url'))    || !c.tiktok_url))    update.tiktok_url    = tik.url;
+        if (ig.url   && ((ig.high   && canOverwrite('instagram_url')) || !c.instagram_url)) update.instagram_url = cleanUrl(ig.url);
+        if (fb.url   && ((fb.high   && canOverwrite('facebook_url'))  || !c.facebook_url))  update.facebook_url  = cleanUrl(fb.url);
+        if (tik.url  && ((tik.high  && canOverwrite('tiktok_url'))    || !c.tiktok_url))    update.tiktok_url    = cleanUrl(tik.url);
         if (site.url && ((site.high && canOverwrite('website_url'))   || !c.website_url))   update.website_url   = site.url;
 
         await prisma.competitor.update({ where: { id: comp.id }, data: update }).catch(() => {});
