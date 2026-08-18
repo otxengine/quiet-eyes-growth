@@ -92,5 +92,5 @@ test('repeat scrape (cursor exists) uses the steady-state cap, not the backfill 
   await collectOwnSocialPosts({ body: { businessProfileId: 'b1', force: true } } as any, mockRes());
 
   const tiktokCall = mockRunApifyActor.mock.calls.find(([actorId]) => actorId === 'clockworks~tiktok-profile-scraper');
-  expect(tiktokCall![1]).toMatchObject({ resultsPerPage: 50 });
+  expect(tiktokCall![1]).toMatchObject({ resultsPerPage: 5 });
 });

@@ -1,6 +1,7 @@
 // OTX CompetitorSnapshot — Node.js port of agents/competitor_snapshot.ts
 // Wired into the Express scheduler's 0 */6 cron. Writes to Supabase OTX schema.
 
+import { SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseOTX } from '../../lib/supabaseOTX';
 import { createLogger } from '../../infra/logger';
 
@@ -201,6 +202,111 @@ function detectWebChanges(
   return changes;
 }
 
+// ─── Auto-discover competitors via SerpAPI ────────────────────────────────────
+// Ported from agents/competitor_snapshot.ts (Deno) — the Deno cron leg was removed
+// (see agents/main.ts) in favor of this file, so this fallback tier must live here too,
+// otherwise a business with 0 competitor_config rows would be silently skipped forever.
+
+const CITY_HEBREW: Record<string, string> = {
+  tel_aviv: 'תל אביב', bnei_brak: 'בני ברק', jerusalem: 'ירושלים', haifa: 'חיפה',
+  beer_sheva: 'באר שבע', ramat_gan: 'רמת גן', petah_tikva: 'פתח תקווה',
+  herzliya: 'הרצליה', raanana: 'רעננה', netanya: 'נתניה',
+};
+const SECTOR_HEBREW: Record<string, string> = {
+  fitness: 'חדר כושר', restaurant: 'מסעדה', beauty: 'מספרה סלון יופי', local: 'עסק מקומי',
+};
+
+async function autoDiscoverCompetitors(
+  supabase: SupabaseClient, businessId: string, sector: string, geoCity: string, serpKey: string,
+): Promise<void> {
+  const cityName = CITY_HEBREW[geoCity] ?? geoCity.replace(/_/g, ' ');
+  const sectorName = SECTOR_HEBREW[sector] ?? sector;
+  const query = encodeURIComponent(`${sectorName} ${cityName}`);
+  const url = `https://serpapi.com/search.json?engine=google_maps&q=${query}&hl=iw&gl=il&api_key=${serpKey}`;
+
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+    if (!res.ok) { logger.warn(`SerpAPI auto-discover HTTP ${res.status}`); return; }
+    const data = (await res.json()) as { local_results?: Array<{ title?: string; place_id?: string; website?: string }> };
+    const results = (data.local_results ?? []).slice(0, 5);
+    if (results.length === 0) return;
+
+    const rows = results
+      .filter((r) => r.title)
+      .map((r) => ({
+        business_id: businessId, competitor_name: r.title!,
+        website_url: r.website ?? null, google_place_id: r.place_id ?? null,
+        is_active: true, discovered_by: 'serp_auto',
+      }));
+
+    await supabase.from('competitor_config').upsert(rows, { onConflict: 'business_id,competitor_name', ignoreDuplicates: true });
+    logger.info(`Auto-discovered ${rows.length} competitors for ${sector}:${geoCity}`);
+  } catch (e: any) {
+    logger.warn(`Auto-discover failed: ${e.message}`);
+  }
+}
+
+// ─── Load competitor configs (3-tier fallback) ────────────────────────────────
+
+async function loadCompetitorConfigs(
+  supabase: SupabaseClient, businessId: string, sector: string, geoCity: string, serpKey?: string,
+): Promise<CompetitorConfig[]> {
+  // 1) competitor_config table (v4 schema)
+  const { data: configRows } = await supabase
+    .from('competitor_config')
+    .select('id, competitor_name, website_url, google_place_id, instagram_handle, facebook_page_id, tiktok_handle')
+    .eq('business_id', businessId)
+    .eq('is_active', true);
+
+  if (configRows && configRows.length > 0) {
+    return configRows.map((r: any) => ({
+      id: r.id, name: r.competitor_name, website_url: r.website_url ?? undefined,
+      google_place_id: r.google_place_id ?? undefined, instagram_handle: r.instagram_handle ?? undefined,
+      facebook_page_id: r.facebook_page_id ?? undefined, tiktok_handle: r.tiktok_handle ?? undefined,
+    }));
+  }
+
+  // 2) Legacy keyword-encoded competitors in otx_business_profiles
+  const { data: profileData } = await supabase
+    .from('otx_business_profiles')
+    .select('keywords')
+    .eq('business_id', businessId)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const legacyConfigs: CompetitorConfig[] = (profileData?.keywords ?? [])
+    .filter((k: string) => k.startsWith('competitor::'))
+    .map((k: string): CompetitorConfig | null => {
+      const parts = k.split('::');
+      if (parts.length < 3) return null;
+      return { name: parts[1], website_url: parts[2], google_place_id: parts[3] };
+    })
+    .filter((c: CompetitorConfig | null): c is CompetitorConfig => c !== null);
+
+  if (legacyConfigs.length > 0) return legacyConfigs;
+
+  // 3) Auto-discover via SerpAPI if a key is configured
+  if (serpKey) {
+    await autoDiscoverCompetitors(supabase, businessId, sector, geoCity, serpKey);
+    const { data: fresh } = await supabase
+      .from('competitor_config')
+      .select('id, competitor_name, website_url, google_place_id, instagram_handle, facebook_page_id, tiktok_handle')
+      .eq('business_id', businessId)
+      .eq('is_active', true);
+
+    if (fresh && fresh.length > 0) {
+      return fresh.map((r: any) => ({
+        id: r.id, name: r.competitor_name, website_url: r.website_url ?? undefined,
+        google_place_id: r.google_place_id ?? undefined,
+      }));
+    }
+  }
+
+  logger.info(`No competitors found for business ${businessId} (${sector}:${geoCity})`);
+  return [];
+}
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export async function collectOTXCompetitorChanges(): Promise<void> {
@@ -218,26 +324,13 @@ export async function collectOTXCompetitorChanges(): Promise<void> {
 
   const googleKey  = process.env.GOOGLE_PLACES_API_KEY;
   const apifyToken = process.env.APIFY_API_KEY;
+  const serpKey    = process.env.SERPAPI_KEY;
 
   let totalChanges = 0;
   let errorCount   = 0;
 
   for (const biz of (businesses as Business[])) {
-    // Load competitor configs
-    const { data: configRows } = await supabase
-      .from('competitor_config')
-      .select('id, competitor_name, website_url, google_place_id, instagram_handle, facebook_page_id, tiktok_handle')
-      .eq('business_id', biz.id)
-      .eq('is_active', true);
-
-    const competitors: CompetitorConfig[] = configRows && configRows.length > 0
-      ? configRows.map((r: any) => ({
-          id: r.id, name: r.competitor_name, website_url: r.website_url ?? undefined,
-          google_place_id: r.google_place_id ?? undefined, instagram_handle: r.instagram_handle ?? undefined,
-          facebook_page_id: r.facebook_page_id ?? undefined, tiktok_handle: r.tiktok_handle ?? undefined,
-        }))
-      : [];
-
+    const competitors = await loadCompetitorConfigs(supabase, biz.id, biz.sector, biz.geo_city, serpKey);
     if (competitors.length === 0) continue;
 
     for (const comp of competitors) {

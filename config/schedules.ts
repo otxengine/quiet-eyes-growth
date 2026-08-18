@@ -36,13 +36,11 @@ export const AGENT_SCHEDULES: Record<string, AgentScheduleConfig> = {
     entrypoint: "agents/sector_trend_radar.ts",
   },
 
-  CompetitorSnapshot: {
-    cron: "0 */6 * * *",
-    priority: "MEDIUM",
-    maxLagSec: 900,
-    description: "Diffs competitor website/reviews/social every 6 hours",
-    entrypoint: "agents/competitor_snapshot.ts",
-  },
+  // CompetitorSnapshot's cron leg was removed from agents/main.ts's cronAgents map —
+  // server/src/routes/functions/collectOTXCompetitorChanges.ts (Express) is the canonical
+  // version on this same schedule now. The entry below is kept only for reference by the
+  // event-driven config_updated bus trigger (agents/orchestration/bus_listener.ts), which
+  // still imports agents/competitor_snapshot.ts directly and doesn't read this schedule.
 
   ProfileIntelligence: {
     cron: "0 3 * * *",

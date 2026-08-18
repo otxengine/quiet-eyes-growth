@@ -94,22 +94,22 @@ describe('KAN-24: scheduler cron + runAgentForAll', () => {
   });
 
   // ── AC3 ─────────────────────────────────────────────────────────────────────
-  it('AC3: never runs more than 2 businesses concurrently', async () => {
+  it('AC3: never runs more than CONCURRENCY (4) businesses concurrently', async () => {
     bpFindMany.mockResolvedValue(
-      ['b1', 'b2', 'b3', 'b4', 'b5'].map(id => ({ id, name: id })),
+      ['b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7'].map(id => ({ id, name: id })),
     );
     let inFlight = 0;
     let peak = 0;
     const agentFn = jest.fn().mockImplementation(async () => {
       inFlight++;
       peak = Math.max(peak, inFlight);
-      await Promise.resolve(); // yield to let peer in the same batch start
+      await Promise.resolve(); // yield to let peers in the same batch start
       inFlight--;
     });
 
     await runAgentForAll('Test', agentFn);
 
-    expect(agentFn).toHaveBeenCalledTimes(5);
-    expect(peak).toBeLessThanOrEqual(2);
+    expect(agentFn).toHaveBeenCalledTimes(7);
+    expect(peak).toBeLessThanOrEqual(4);
   });
 });

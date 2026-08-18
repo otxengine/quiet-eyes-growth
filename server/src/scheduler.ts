@@ -87,8 +87,10 @@ import { reconcileDataForSeoReviewTasks } from './routes/functions/reconcileData
 
 const logger = createLogger('Scheduler');
 
-// How many businesses to process concurrently (avoid hammering external APIs)
-const CONCURRENCY = 2;
+// How many businesses to process concurrently.
+// ponytail: paired with connection_limit in db.ts — raise/lower together, not independently.
+// Watch Render logs for pool_timeout / Prisma P2024 after changing; back off to 2 if seen.
+const CONCURRENCY = 4;
 
 async function getActiveProfiles(): Promise<string[]> {
   try {

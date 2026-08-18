@@ -10,7 +10,10 @@ import { postContentHash } from '../../lib/postContentHash';
 import { findDonorCandidates, DonorPlatform } from '../../lib/competitorDonor';
 
 const MIN_INTERVAL_MS = 20 * 60 * 60 * 1000; // 20h
-const POSTS_CAP = 50;      // steady-state cap per platform per run
+// ponytail: steady-state cap sized for the actual delta (a few posts/day), not the backfill.
+// If an account posts >5x between two ~20-24h scans, the overflow is silently missed next
+// run too (cursor advances past it) — raise this if a specific account looks incomplete.
+const POSTS_CAP = 5;       // steady-state cap per platform per run
 const BACKFILL_CAP = 150;  // one-time deeper pull on a competitor's first-ever scrape (no cursor yet)
 
 const NULL_CHAR = String.fromCharCode(0);
