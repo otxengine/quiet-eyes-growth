@@ -3,7 +3,10 @@ import { prisma } from '../db';
 import { getUserId, isAdminKeyRequest } from '../middleware/auth';
 import { cleanupCompetitorsByRadius } from '../lib/competitorRadiusCleanup';
 import { collectCompetitorSocialPosts } from './functions/collectCompetitorSocialPosts';
+import { collectCompetitorSocialProfile } from './functions/collectCompetitorSocialProfile';
+import { collectCompetitorSocialStories } from './functions/collectCompetitorSocialStories';
 import { detectCompetitorAds } from './functions/detectCompetitorAds';
+import { runCollectCompetitorReviews } from './functions/collectCompetitorReviews';
 
 // ── Clerk email lookup cache ───────────────────────────────────────────────────
 // Maps userId → email, TTL 10 minutes. Avoids repeated Clerk API calls.
@@ -365,8 +368,14 @@ router.post('/:entity', async (req: Request, res: Response) => {
       const noopRes = { json: () => noopRes, status: () => noopRes } as unknown as Response;
       collectCompetitorSocialPosts({ body: { businessProfileId: data.linked_business, force: true } } as Request, noopRes)
         .catch((err: any) => console.warn(`manual competitor add: collectCompetitorSocialPosts failed: ${err.message}`));
+      collectCompetitorSocialProfile({ body: { businessProfileId: data.linked_business, force: true } } as Request, noopRes)
+        .catch((err: any) => console.warn(`manual competitor add: collectCompetitorSocialProfile failed: ${err.message}`));
+      collectCompetitorSocialStories({ body: { businessProfileId: data.linked_business, force: true } } as Request, noopRes)
+        .catch((err: any) => console.warn(`manual competitor add: collectCompetitorSocialStories failed: ${err.message}`));
       detectCompetitorAds({ body: { businessProfileId: data.linked_business, force: true } } as Request, noopRes)
         .catch((err: any) => console.warn(`manual competitor add: detectCompetitorAds failed: ${err.message}`));
+      runCollectCompetitorReviews(data.linked_business)
+        .catch((err: any) => console.warn(`manual competitor add: collectCompetitorReviews failed: ${err.message}`));
     }
 
     res.status(201).json(record);
