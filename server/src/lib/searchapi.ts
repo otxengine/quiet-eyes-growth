@@ -104,10 +104,12 @@ export async function searchMetaAdsViaApify(pageUrl: string): Promise<AdResult[]
     return isNaN(d.getTime()) ? null : d.toISOString();
   };
 
-  // When a page has no active ads, the actor returns a single error placeholder
-  // (e.g. { url, error: "no_items", errorDescription: "..." }) instead of an ad —
-  // confirmed against live runs (a page with active ads has no `error` key).
-  return items.filter((ad: any) => !ad.error).slice(0, 10).map((ad: any) => {
+  // When a page has no active ads, the actor returns a placeholder instead of an ad —
+  // confirmed against live runs to take multiple shapes ({ error: "no_items", ... }
+  // for some pages, { results: [], totalCount: 0, ... } for others). Rather than
+  // blacklist every "no ads" shape Apify might return, positively require the one
+  // field every real ad has: adArchiveID.
+  return items.filter((ad: any) => ad.adArchiveID ?? ad.ad_archive_id).slice(0, 10).map((ad: any) => {
     const snap = ad.snapshot || {};
     const bodyText: string =
       (snap.cards?.[0]?.body as string) ||

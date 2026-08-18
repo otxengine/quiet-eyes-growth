@@ -65,6 +65,22 @@ describe('searchMetaAdsViaApify', () => {
     (runApifyActor as jest.Mock).mockResolvedValue([]);
     expect(await searchMetaAdsViaApify('https://facebook.com/acmeco')).toEqual([]);
   });
+
+  it('filters out the "no ads" error-placeholder shape instead of mapping it into a fake ad', async () => {
+    (runApifyActor as jest.Mock).mockResolvedValue([
+      { url: 'https://facebook.com/acmeco', error: 'no_items', errorDescription: 'Empty or private data for provided input' },
+    ]);
+    expect(await searchMetaAdsViaApify('https://facebook.com/acmeco')).toEqual([]);
+  });
+
+  it('filters out the empty-results-wrapper "no ads" shape instead of mapping it into a fake ad', async () => {
+    // Confirmed live: some pages return this shape (no `error` key) instead of the
+    // error-placeholder above when they have zero active ads.
+    (runApifyActor as jest.Mock).mockResolvedValue([
+      { inputUrl: 'https://facebook.com/acmeco', pageInfo: {}, isResultComplete: true, results: [], totalCount: 0 },
+    ]);
+    expect(await searchMetaAdsViaApify('https://facebook.com/acmeco')).toEqual([]);
+  });
 });
 
 describe('searchAllAds priority', () => {

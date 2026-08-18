@@ -454,7 +454,7 @@ function RivalCard({ competitor, posts, ads, stories, profile, defaultSec, bpId,
         {/* Ads section */}
         {section === 'ads' && (
           <div className="space-y-3">
-            {!competitor.ad_intel_updated_at ? (
+            {!(competitor.active_ad_count > 0 || ads.length > 0) ? (
               <p className="text-xs text-muted-foreground text-center py-6">
                 {!competitor.facebook_url ? 'חסר לינק לפייסבוק' : 'לא זוהו מודעות פעילות'}
               </p>
@@ -469,7 +469,7 @@ function RivalCard({ competitor, posts, ads, stories, profile, defaultSec, bpId,
                   {(competitor.active_ad_count > 0) && (
                     <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">{competitor.active_ad_count} מודעות</span>
                   )}
-                  <span className="text-muted-foreground mr-auto">עודכן {timeAgo(competitor.ad_intel_updated_at)}</span>
+                  <span className="text-muted-foreground mr-auto">עודכן {timeAgo(competitor.ad_intel_updated_at || competitor.sponsored_ads_updated_at)}</span>
                 </div>
 
                 {competitor.last_promo_detected && (
