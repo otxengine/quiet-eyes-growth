@@ -2,14 +2,14 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useOutletContext, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2, RefreshCw, ChevronDown, Trophy } from 'lucide-react';
+import { Loader2, RefreshCw, ChevronDown, Trophy, Megaphone } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   PLATFORM_LABELS, PLATFORM_COLORS, apiFetch, timeAgo,
   PostCard, AdCard, StoryCard, PostDetailModal, AdDetailModal, StoryDetailModal, useDeepAnalysis, ProfileHeader,
-  computeOutlierPosts, useAnalyzeTopPerformers,
+  computeOutlierPosts, useAnalyzeTopPerformers, CollapsibleSection,
 } from '@/components/competitors/socialShared';
 
 function resolveSection(param) {
@@ -236,8 +236,7 @@ function AnalysisTab({ competitor, posts, bpId }) {
       )}
 
       {/* AI Deep Analysis */}
-      <div className="space-y-2">
-        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">ניתוח AI עמוק</p>
+      <CollapsibleSection title="ניתוח AI עמוק">
         {!analysis && !loading && (
           <button
             onClick={generate}
@@ -285,7 +284,7 @@ function AnalysisTab({ competitor, posts, bpId }) {
             </div>
           </div>
         )}
-      </div>
+      </CollapsibleSection>
 
       {noData && (
         <p className="text-xs text-muted-foreground text-center py-6">אין מספיק נתונים — נסה לרענן את הפיד</p>
@@ -400,10 +399,11 @@ function RivalCard({ competitor, posts, ads, stories, profile, defaultSec, bpId,
                   </button>
                 </div>
                 {insight && (
-                  <div className="border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3 space-y-1">
-                    <p className="text-[10px] font-semibold text-amber-800 dark:text-amber-300">🧠 למה הפוסטים האלה מצליחים</p>
-                    <p className="text-xs leading-relaxed text-amber-950 dark:text-amber-100">{insight}</p>
-                  </div>
+                  <CollapsibleSection title="🧠 למה הפוסטים האלה מצליחים">
+                    <div className="border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3">
+                      <p className="text-xs leading-relaxed text-amber-950 dark:text-amber-100">{insight}</p>
+                    </div>
+                  </CollapsibleSection>
                 )}
                 <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
                   {outlierPosts.slice(0, 10).map(post => (
@@ -554,6 +554,7 @@ export default function SocialCompetition() {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [refreshingAll, setRefreshingAll] = useState(false);
+  const [scanningAds,   setScanningAds]   = useState(false);
   const [filter,         setFilter]         = useState('all');
   const [platformFilter, setPlatformFilter] = useState(null);
   const cardRefs = useRef({});

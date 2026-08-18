@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ExternalLink, BadgeCheck, Phone, Mail, MapPin, Link as LinkIcon } from 'lucide-react';
+import { ExternalLink, BadgeCheck, Phone, Mail, MapPin, Link as LinkIcon, ChevronDown } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { base44 } from '@/api/base44Client';
 
@@ -113,6 +113,27 @@ export function TopPerformerAnalysisBlock({ raw }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// Generic expand/collapse wrapper for a titled section — used to keep long AI
+// analysis blocks out of the way until the user actually wants to read them.
+export function CollapsibleSection({ title, defaultOpen = false, action = null, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex-1 hover:text-foreground transition-colors"
+        >
+          <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+          {title}
+        </button>
+        {action}
+      </div>
+      {open && children}
     </div>
   );
 }

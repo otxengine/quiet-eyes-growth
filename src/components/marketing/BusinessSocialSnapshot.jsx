@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import {
   PLATFORM_LABELS, PLATFORM_COLORS, apiFetch, timeAgo,
   PostCard, AdCard, PostDetailModal, AdDetailModal, ProfileHeader, computeOutlierPosts, useAnalyzeTopPerformers,
+  CollapsibleSection,
 } from '@/components/competitors/socialShared';
 
 // Single-entity twin of SocialCompetition.jsx's RivalCard — same feed/ads
@@ -149,10 +150,11 @@ export default function BusinessSocialSnapshot({ businessProfile }) {
                     </button>
                   </div>
                   {insight && (
-                    <div className="border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3 space-y-1">
-                      <p className="text-[10px] font-semibold text-amber-800 dark:text-amber-300">🧠 למה הפוסטים האלה מצליחים</p>
-                      <p className="text-xs leading-relaxed text-amber-950 dark:text-amber-100">{insight}</p>
-                    </div>
+                    <CollapsibleSection title="🧠 למה הפוסטים האלה מצליחים">
+                      <div className="border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3">
+                        <p className="text-xs leading-relaxed text-amber-950 dark:text-amber-100">{insight}</p>
+                      </div>
+                    </CollapsibleSection>
                   )}
                   <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
                     {outlierPosts.slice(0, 10).map(post => (
