@@ -334,7 +334,11 @@ router.post('/:entity', async (req: Request, res: Response) => {
       const maxCompetitors = PLAN_COMPETITOR_LIMITS[planId] ?? 3;
       if (maxCompetitors !== Infinity) {
         const activeCount = await (prisma as any).competitor.count({
-          where: { linked_business: data.linked_business, not_relevant: { not: true } },
+          where: {
+            linked_business: data.linked_business,
+            not_relevant: { not: true },
+            is_dismissed: { not: true },
+          },
         });
         if (activeCount >= maxCompetitors) {
           return res.status(403).json({

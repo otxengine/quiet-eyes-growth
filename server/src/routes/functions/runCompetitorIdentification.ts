@@ -324,7 +324,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
     const planId: string = (profile as any).subscription_plan || 'free_trial';
     const maxCompetitors = PLAN_COMPETITOR_LIMITS[planId] ?? 3;
     if (maxCompetitors !== Infinity) {
-      const activeCount = existingCompetitors.filter((c: any) => !c.not_relevant).length;
+      const activeCount = existingCompetitors.filter((c: any) => !c.not_relevant && !c.is_dismissed).length;
       const headroom = Math.max(0, maxCompetitors - activeCount);
       const updates = competitors.filter(c => existingNames.has((c.name || '').toLowerCase()));
       const creates = competitors.filter(c => !existingNames.has((c.name || '').toLowerCase()));
