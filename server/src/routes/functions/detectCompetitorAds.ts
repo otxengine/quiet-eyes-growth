@@ -5,6 +5,7 @@ import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { searchAllAds, hasSearchApiKey, AdResult } from '../../lib/searchapi';
+import { hasApifyKey } from '../../lib/apify';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
 import { findDonorCandidates, DonorCandidate, DonorPlatform } from '../../lib/competitorDonor';
@@ -168,9 +169,9 @@ export async function detectCompetitorAds(req: Request, res: Response) {
 
   const startTime = new Date().toISOString();
 
-  if (!hasSearchApiKey()) {
+  if (!hasSearchApiKey() && !hasApifyKey()) {
     await writeAutomationLog('detectCompetitorAds', businessProfileId, startTime, 0);
-    return res.json({ processed: 0, skipped: true, reason: 'SEARCHAPI_API_KEY not set' });
+    return res.json({ processed: 0, skipped: true, reason: 'no ad search provider configured' });
   }
 
   if (!req.body.force && shouldSkipAgent(businessProfileId, 'detectCompetitorAds', MIN_INTERVAL_MS)) {
@@ -226,7 +227,7 @@ export async function detectCompetitorAds(req: Request, res: Response) {
           ? c.tiktok_url.replace(/^https?:\/\/(www\.)?tiktok\.com\//, '').split(/[/?#]/)[0].replace(/^@/, '') || null
           : null;
 
-        const ads = await searchAllAds(comp.name, profile.category || '', profile.city || '', fbHandle, tikHandle);
+        const ads = await searchAllAds(comp.name, profile.category || '', profile.city || '', fbHandle, tikHandle, c.facebook_url || null);
 
         // ── Update competitor record ─────────────────────────────────────────
         const platforms = [...new Set(ads.map(a => a.platform))];

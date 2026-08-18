@@ -2,7 +2,12 @@
  * SearchAPI wrapper — competitor ad intelligence
  * Covers: Meta Ads Library, TikTok Ads Library, Google Ads
  * Docs: https://www.searchapi.io
+ *
+ * Meta ads prefer the Apify actor (searchMetaAdsViaApify) when configured —
+ * SearchAPI's meta_ad_library engine is the fallback, same priority already
+ * used elsewhere in this file for Instagram/TikTok profile scraping.
  */
+import { runApifyActor, hasApifyKey } from './apify';
 
 const SEARCHAPI_KEY = () => process.env.SEARCHAPI_API_KEY || '';
 const BASE = 'https://www.searchapi.io/api/v1/search';
@@ -78,6 +83,57 @@ export async function searchMetaAds(query: string, country = 'IL'): Promise<AdRe
       video_url:      snap.videos?.[0]?.video_hd_url || snap.videos?.[0]?.video_sd_url || null,
     } as AdResult;
   }).filter(a => a.is_active);
+}
+
+// ── Meta Ads Library (Apify) ──────────────────────────────────────────────────
+// Primary Meta-ads source when APIFY_API_KEY is set — richer than SearchAPI's
+// meta_ad_library engine and takes the competitor's full page URL directly,
+// no handle-regex needed.
+export async function searchMetaAdsViaApify(pageUrl: string): Promise<AdResult[]> {
+  const items = await runApifyActor(
+    'apify~facebook-ads-scraper',
+    { startUrls: [{ url: pageUrl }], activeStatus: 'active', resultsLimit: 10 },
+    90_000, 10,
+    (msg) => console.warn(`[searchMetaAdsViaApify] ${msg}`),
+  );
+  if (!items?.length) return [];
+
+  const toIso = (v: any): string | null => {
+    if (!v) return null;
+    const d = typeof v === 'number' ? new Date(v * 1000) : new Date(v);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  };
+
+  // When a page has no active ads, the actor returns a single error placeholder
+  // (e.g. { url, error: "no_items", errorDescription: "..." }) instead of an ad —
+  // confirmed against live runs (a page with active ads has no `error` key).
+  return items.filter((ad: any) => !ad.error).slice(0, 10).map((ad: any) => {
+    const snap = ad.snapshot || {};
+    const bodyText: string =
+      (snap.cards?.[0]?.body as string) ||
+      (typeof snap.body === 'object' ? snap.body?.text : snap.body) ||
+      snap.link_description || '';
+    const platforms: string[] = (ad.publisherPlatform || ad.publisher_platform || [])
+      .map((p: string) => String(p).toUpperCase());
+    return {
+      platform:       platforms.includes('INSTAGRAM') ? 'instagram' : 'facebook',
+      title:          snap.title || snap.cards?.[0]?.title || '',
+      body:           bodyText,
+      cta:            snap.ctaText || snap.cta_text || snap.ctaType || snap.cta_type || '',
+      link:           snap.linkUrl || snap.link_url || snap.page_profile_uri || '',
+      page_name:      ad.pageName || ad.page_name || snap.page_name || '',
+      is_active:      ad.isActive !== false && ad.is_active !== false,
+      start_date:     toIso(ad.startDate ?? ad.start_date),
+      end_date:       toIso(ad.endDate ?? ad.end_date),
+      audience_est:   null,
+      external_ad_id: (ad.adArchiveID ?? ad.ad_archive_id) ? String(ad.adArchiveID ?? ad.ad_archive_id) : null,
+      media_url:      snap.images?.[0]?.resized_image_url || snap.images?.[0]?.url ||
+                       snap.cards?.[0]?.originalImageUrl || snap.cards?.[0]?.resizedImageUrl ||
+                       snap.videos?.[0]?.thumbnail || null,
+      video_url:      snap.videos?.[0]?.video_hd_url || snap.videos?.[0]?.videoHdUrl ||
+                       snap.cards?.[0]?.videoHdUrl || null,
+    } as AdResult;
+  });
 }
 
 // ── TikTok Ads Library ────────────────────────────────────────────────────────
@@ -220,15 +276,22 @@ export async function searchGoogleNews(query: string, lang = 'he'): Promise<stri
   return (data.news_results as any[]).slice(0, 8).map((n: any) => n.title || '').filter(Boolean);
 }
 
-// ── Combined: search all three platforms ──────────────────────────────────────
+// ── Combined: search all platforms ──────────────────────────────────────────
 export async function searchAllAds(
   competitorName: string,
   category: string,
   city: string,
   facebookHandle?: string | null,
-  _tiktokHandle?: string | null,
+  tiktokHandle?: string | null,
+  facebookUrl?: string | null,
 ): Promise<AdResult[]> {
-  const metaAds = facebookHandle ? await searchMetaAds(facebookHandle, 'IL') : [];
-  // ponytail: Google only when library empty — saves credits (KAN-172)
-  return metaAds.length > 0 ? metaAds : searchGoogleAds(`${competitorName} ${category} ${city}`);
+  let metaAds: AdResult[] = [];
+  if (facebookUrl && hasApifyKey()) metaAds = await searchMetaAdsViaApify(facebookUrl);
+  if (metaAds.length === 0 && facebookHandle) metaAds = await searchMetaAds(facebookHandle, 'IL');
+
+  const tiktokAds = tiktokHandle ? await searchTikTokAds(tiktokHandle) : [];
+  const combined = [...metaAds, ...tiktokAds];
+
+  // ponytail: Google only when both libraries are empty — saves credits (KAN-172)
+  return combined.length > 0 ? combined : searchGoogleAds(`${competitorName} ${category} ${city}`);
 }
