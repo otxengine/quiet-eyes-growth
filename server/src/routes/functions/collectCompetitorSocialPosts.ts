@@ -10,7 +10,8 @@ import { postContentHash } from '../../lib/postContentHash';
 import { findDonorCandidates, DonorPlatform } from '../../lib/competitorDonor';
 
 const MIN_INTERVAL_MS = 20 * 60 * 60 * 1000; // 20h
-const POSTS_CAP = 15;
+const POSTS_CAP = 50;      // steady-state cap per platform per run
+const BACKFILL_CAP = 150;  // one-time deeper pull on a competitor's first-ever scrape (no cursor yet)
 
 const NULL_CHAR = String.fromCharCode(0);
 
@@ -78,8 +79,11 @@ async function scrapeAndSave(
   // Only counts rows that already have media_url: a null-media row gets deleted and
   // retried every run (see DELETE above), so excluding it here keeps it within the
   // "newer than" window instead of advancing the cursor past it and losing it forever.
+  // Future-dated posted_at values are ignored so one bad timestamp can't push the
+  // cursor past real new posts and silently freeze collection.
+  const nowIso = new Date().toISOString();
   const maxPostedAt = existing.reduce<string | null>(
-    (max, p) => (p.media_url && p.posted_at && (!max || p.posted_at > max)) ? p.posted_at : max, null,
+    (max, p) => (p.media_url && p.posted_at && p.posted_at <= nowIso && (!max || p.posted_at > max)) ? p.posted_at : max, null,
   );
 
   const t0 = Date.now();
@@ -176,26 +180,31 @@ async function scrapeAndSave(
   // scrape still pulls the full capped history with no since-date filter.
   const onlyPostsNewerThan = maxPostedAt ? maxPostedAt.slice(0, 10) : null;
 
+  // First-ever scrape (no cursor yet) pulls a deeper one-time backfill; repeat
+  // scrapes stay at the steady-state cap since onlyPostsNewerThan already scopes them.
+  const platformCap = onlyPostsNewerThan ? POSTS_CAP : BACKFILL_CAP;
+
   if (platform === 'instagram') {
     rawPosts = await runApifyActor('apify~instagram-scraper', {
       directUrls: [url],
       resultsType: 'posts',
-      resultsLimit: POSTS_CAP,
+      resultsLimit: platformCap,
       ...(onlyPostsNewerThan ? { onlyPostsNewerThan } : {}),
-    }, 90_000, 50, (msg) => { apifyError = msg; });
+    }, 90_000, 160, (msg) => { apifyError = msg; });
   } else if (platform === 'facebook') {
     rawPosts = await runApifyActor('apify~facebook-posts-scraper', {
       startUrls: [{ url }],
-      maxPosts: 30,
+      maxPosts: platformCap,
       maxPostComments: 0,
       commentsMode: 'DISABLED',
       ...(onlyPostsNewerThan ? { onlyPostsNewerThan } : {}),
-    }, 120_000, 50, (msg) => { apifyError = msg; });
+    }, 120_000, 160, (msg) => { apifyError = msg; });
   } else if (platform === 'tiktok') {
     rawPosts = await runApifyActor('clockworks~tiktok-profile-scraper', {
       profiles: [url],
-      resultsPerPage: POSTS_CAP,
-    }, 90_000, 50, (msg) => { apifyError = msg; });
+      resultsPerPage: platformCap,
+      ...(onlyPostsNewerThan ? { oldestPostDateUnified: onlyPostsNewerThan } : {}),
+    }, 90_000, 160, (msg) => { apifyError = msg; });
   }
 
   const insertErrors: any[] = [];

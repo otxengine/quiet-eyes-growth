@@ -14,7 +14,8 @@ import { postContentHash } from '../../lib/postContentHash';
 // version — this can use plain typed Prisma calls with no pgHex/raw-SQL workarounds.
 
 const MIN_INTERVAL_MS = 20 * 60 * 60 * 1000; // 20h
-const POSTS_CAP = 15;
+const POSTS_CAP = 50;      // steady-state cap per platform per run
+const BACKFILL_CAP = 150;  // one-time deeper pull on a business's first-ever scrape (no cursor yet)
 
 function normalizeUrl(url: string | null): string | null {
   if (!url) return null;
@@ -37,8 +38,11 @@ async function scrapeAndSave(businessProfileId: string, platform: string, url: s
 
   // Cost reduction: only ask Apify for posts newer than what we already have —
   // skipped on the first-ever scrape so the initial backlog still loads.
+  // Future-dated posted_at values are ignored so one bad timestamp can't push the
+  // cursor past real new posts and silently freeze collection.
+  const now = new Date();
   const maxPostedAt = existing.reduce<Date | null>(
-    (max, p) => (p.media_url && p.posted_at && (!max || p.posted_at > max)) ? p.posted_at : max, null,
+    (max, p) => (p.media_url && p.posted_at && p.posted_at <= now && (!max || p.posted_at > max)) ? p.posted_at : max, null,
   );
 
   const t0 = Date.now();
@@ -69,26 +73,31 @@ async function scrapeAndSave(businessProfileId: string, platform: string, url: s
   let apifyError: string | null = null;
   const onlyPostsNewerThan = maxPostedAt ? maxPostedAt.toISOString().slice(0, 10) : null;
 
+  // First-ever scrape (no cursor yet) pulls a deeper one-time backfill; repeat
+  // scrapes stay at the steady-state cap since onlyPostsNewerThan already scopes them.
+  const platformCap = onlyPostsNewerThan ? POSTS_CAP : BACKFILL_CAP;
+
   if (platform === 'instagram') {
     rawPosts = await runApifyActor('apify~instagram-scraper', {
       directUrls: [url],
       resultsType: 'posts',
-      resultsLimit: POSTS_CAP,
+      resultsLimit: platformCap,
       ...(onlyPostsNewerThan ? { onlyPostsNewerThan } : {}),
-    }, 90_000, 50, (msg) => { apifyError = msg; });
+    }, 90_000, 160, (msg) => { apifyError = msg; });
   } else if (platform === 'facebook') {
     rawPosts = await runApifyActor('apify~facebook-posts-scraper', {
       startUrls: [{ url }],
-      maxPosts: 30,
+      maxPosts: platformCap,
       maxPostComments: 0,
       commentsMode: 'DISABLED',
       ...(onlyPostsNewerThan ? { onlyPostsNewerThan } : {}),
-    }, 120_000, 50, (msg) => { apifyError = msg; });
+    }, 120_000, 160, (msg) => { apifyError = msg; });
   } else if (platform === 'tiktok') {
     rawPosts = await runApifyActor('clockworks~tiktok-profile-scraper', {
       profiles: [url],
-      resultsPerPage: POSTS_CAP,
-    }, 90_000, 50, (msg) => { apifyError = msg; });
+      resultsPerPage: platformCap,
+      ...(onlyPostsNewerThan ? { oldestPostDateUnified: onlyPostsNewerThan } : {}),
+    }, 90_000, 160, (msg) => { apifyError = msg; });
   }
 
   let upserted = 0;
