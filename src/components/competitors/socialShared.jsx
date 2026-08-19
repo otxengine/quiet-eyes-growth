@@ -527,19 +527,20 @@ export function ProfileHeader({ profile }) {
           alt=""
           className="w-full h-24 object-cover"
           loading="lazy"
+          onError={e => { e.currentTarget.style.display = 'none'; }}
         />
       )}
       <div className="p-4 flex items-start gap-4">
-        {profile.profile_picture_url ? (
+        {profile.profile_picture_url && (
           <img
             src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(profile.profile_picture_url)}`}
             alt=""
             className="w-20 h-20 rounded-full object-cover shrink-0 border border-border"
             loading="lazy"
+            onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'block'; }}
           />
-        ) : (
-          <div className="w-20 h-20 rounded-full bg-muted shrink-0" />
         )}
+        <div className={`w-20 h-20 rounded-full bg-muted shrink-0 ${profile.profile_picture_url ? 'hidden' : 'block'}`} />
 
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex items-center gap-2 flex-wrap">

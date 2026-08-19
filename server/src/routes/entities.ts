@@ -367,19 +367,25 @@ router.post('/:entity', async (req: Request, res: Response) => {
     // fire-and-forget pattern onboarding's confirm-competitors uses.
     if (req.params.entity === 'Competitor' && data.linked_business) {
       const noopRes = { json: () => noopRes, status: () => noopRes } as unknown as Response;
-      collectCompetitorSocialPosts({ body: { businessProfileId: data.linked_business, force: true } } as Request, noopRes)
-        .catch((err: any) => console.warn(`manual competitor add: collectCompetitorSocialPosts failed: ${err.message}`));
-      collectCompetitorSocialProfile({ body: { businessProfileId: data.linked_business, force: true } } as Request, noopRes)
-        .catch((err: any) => console.warn(`manual competitor add: collectCompetitorSocialProfile failed: ${err.message}`));
-      collectCompetitorSocialStories({ body: { businessProfileId: data.linked_business, force: true } } as Request, noopRes)
-        .catch((err: any) => console.warn(`manual competitor add: collectCompetitorSocialStories failed: ${err.message}`));
-      detectCompetitorAds({ body: { businessProfileId: data.linked_business, force: true } } as Request, noopRes)
-        .catch((err: any) => console.warn(`manual competitor add: detectCompetitorAds failed: ${err.message}`));
+      (async () => {
+        // Google rating/review_count + instagram_url/etc (if not already user-supplied) — must
+        // resolve before the Instagram-dependent scrapers below query the DB, else a same-tick
+        // race can exclude this competitor from its own first scan entirely.
+        await enrichCompetitorUrls([record.id]).catch((err: any) =>
+          console.warn(`manual competitor add: enrichCompetitorUrls failed: ${err.message}`));
+
+        collectCompetitorSocialPosts({ body: { businessProfileId: data.linked_business, force: true } } as Request, noopRes)
+          .catch((err: any) => console.warn(`manual competitor add: collectCompetitorSocialPosts failed: ${err.message}`));
+        collectCompetitorSocialProfile({ body: { businessProfileId: data.linked_business, force: true } } as Request, noopRes)
+          .catch((err: any) => console.warn(`manual competitor add: collectCompetitorSocialProfile failed: ${err.message}`));
+        collectCompetitorSocialStories({ body: { businessProfileId: data.linked_business, force: true } } as Request, noopRes)
+          .catch((err: any) => console.warn(`manual competitor add: collectCompetitorSocialStories failed: ${err.message}`));
+        detectCompetitorAds({ body: { businessProfileId: data.linked_business, force: true } } as Request, noopRes)
+          .catch((err: any) => console.warn(`manual competitor add: detectCompetitorAds failed: ${err.message}`));
+      })();
+      // Doesn't depend on instagram_url — no need to sequence after enrichment.
       runCollectCompetitorReviews(data.linked_business)
         .catch((err: any) => console.warn(`manual competitor add: collectCompetitorReviews failed: ${err.message}`));
-      // Google rating/review_count for the list badge — nothing else populates these on manual add.
-      enrichCompetitorUrls([record.id])
-        .catch((err: any) => console.warn(`manual competitor add: enrichCompetitorUrls failed: ${err.message}`));
     }
 
     res.status(201).json(record);

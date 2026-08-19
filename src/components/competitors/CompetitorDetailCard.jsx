@@ -123,18 +123,18 @@ export default function CompetitorDetailCard({
       {/* ── Header (always visible) ───────────────────────────────────── */}
       <div className="px-5 py-4 cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
         <div className="flex items-center gap-3">
-          {profilePictureUrl ? (
+          {profilePictureUrl && (
             <img
               src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(profilePictureUrl)}`}
               alt=""
               className="w-9 h-9 rounded-lg object-cover flex-shrink-0"
               loading="lazy"
+              onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
             />
-          ) : (
-            <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center text-foreground-muted text-[10px] font-bold flex-shrink-0">
-              {initials}
-            </div>
           )}
+          <div className={`w-9 h-9 rounded-lg bg-secondary items-center justify-center text-foreground-muted text-[10px] font-bold flex-shrink-0 ${profilePictureUrl ? 'hidden' : 'flex'}`}>
+            {initials}
+          </div>
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
