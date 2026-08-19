@@ -1480,6 +1480,26 @@ ${audienceCtx}
           </div>
         </div>
       )}
+
+      {showOrgCreate && (
+        <OrganicCreateDrawer
+          businessProfile={businessProfile}
+          signalContext={organicCtx}
+          audienceData={latestAudience}
+          recentSignals={marketSignals}
+          onClose={() => setShowOrgCreate(false)}
+          onSaved={() => queryClient.invalidateQueries({ queryKey: ['organicPosts', bpId] })}
+        />
+      )}
+
+      {showWaBlast && (
+        <WhatsAppBlastDrawer
+          businessProfile={businessProfile}
+          signalContext={waBlastCtx}
+          audienceData={latestAudience}
+          onClose={() => setShowWaBlast(false)}
+        />
+      )}
     </div>
   );
 }
