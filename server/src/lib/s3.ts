@@ -52,6 +52,38 @@ export async function downloadFromS3(url: string): Promise<{ body: Buffer; conte
   }
 }
 
+function extForContentType(contentType: string): string {
+  return contentType.includes('png')       ? 'png'
+    : contentType.includes('webp')      ? 'webp'
+    : contentType.includes('gif')       ? 'gif'
+    : contentType.includes('mp4')       ? 'mp4'
+    : contentType.includes('webm')      ? 'webm'
+    : contentType.includes('quicktime') ? 'mov'
+    : 'jpg';
+}
+
+/**
+ * Uploads a raw buffer to S3. Returns the permanent S3 (or CloudFront) URL, or null on failure.
+ */
+export async function uploadBufferToS3(buffer: Buffer, contentType: string, folder = 'business-media'): Promise<string | null> {
+  if (!isS3Configured()) return null;
+  try {
+    const key = `${folder}/${randomUUID()}.${extForContentType(contentType)}`;
+
+    await client.send(new PutObjectCommand({
+      Bucket:       BUCKET,
+      Key:          key,
+      Body:         buffer,
+      ContentType:  contentType,
+      CacheControl: 'public, max-age=31536000',
+    }));
+
+    return `${CDN_BASE}/${key}`;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Downloads an image from a CDN URL and uploads it to S3.
  * Returns the permanent S3 (or CloudFront) URL, or null on failure.
@@ -66,24 +98,7 @@ export async function uploadImageFromUrl(sourceUrl: string, folder = 'competitor
     if (!res.ok) return null;
 
     const contentType = res.headers.get('content-type') || 'image/jpeg';
-    const ext = contentType.includes('png')       ? 'png'
-      : contentType.includes('webp')      ? 'webp'
-      : contentType.includes('gif')       ? 'gif'
-      : contentType.includes('mp4')       ? 'mp4'
-      : contentType.includes('webm')      ? 'webm'
-      : contentType.includes('quicktime') ? 'mov'
-      : 'jpg';
-    const key = `${folder}/${randomUUID()}.${ext}`;
-
-    await client.send(new PutObjectCommand({
-      Bucket:       BUCKET,
-      Key:          key,
-      Body:         Buffer.from(await res.arrayBuffer()),
-      ContentType:  contentType,
-      CacheControl: 'public, max-age=31536000',
-    }));
-
-    return `${CDN_BASE}/${key}`;
+    return uploadBufferToS3(Buffer.from(await res.arrayBuffer()), contentType, folder);
   } catch {
     return null;
   }

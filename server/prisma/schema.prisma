@@ -950,10 +950,12 @@ model MediaAsset {
   created_date    DateTime @default(now())
   created_by      String?
   linked_business String?
-  image_base64    String?  // base64-encoded image data
+  media_type      String?  @default("image") // 'image' | 'video'
+  url             String?  // S3/CDN URL — set when the asset is S3-backed
+  image_base64    String?  // base64-encoded image data — fallback when no S3
   mime_type       String?  @default("image/jpeg")
   source          String?  @default("uploaded") // 'uploaded' | 'ai_generated'
-  description     String?  // AI-generated description of the image
+  description     String?  // description of what the media shows (AI-guessed or user-authored)
   used_in         String?  // 'post' | 'campaign' | 'story'
 
   @@map("media_assets")
@@ -1191,6 +1193,7 @@ model BusinessSocialProfile {
   contact_address     String?
   highlight_count     Int?
   highlights          String?   // JSON array of {title, cover_url} — best-effort, actor may not return actual highlight content beyond the count
+  raw_data            String?   // JSON: full unprocessed Apify dataset item, so nothing is lost regardless of scalar field mapping
   fetched_at          DateTime  @default(now())
 
   @@unique([linked_business, platform])
@@ -1202,7 +1205,7 @@ model CompetitorSocialProfile {
   linked_business     String
   competitor_id       String
   competitor          Competitor @relation(fields: [competitor_id], references: [id], onDelete: Cascade)
-  platform            String    // instagram only for now
+  platform            String    // 'instagram' | 'facebook'
   profile_picture_url String?
   cover_photo_url     String?
   bio                 String?

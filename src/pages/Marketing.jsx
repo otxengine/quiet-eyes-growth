@@ -2,12 +2,13 @@
 import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Plus, Loader2, ChevronDown, Search, MoreVertical, Radio } from 'lucide-react';
+import { Plus, Loader2, ChevronDown, Search, MoreVertical, Radio, Upload, Sparkles, RefreshCw, Send, Image as ImageIcon, ExternalLink, TrendingUp, X, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
 import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
 import BusinessSocialSnapshot from '@/components/marketing/BusinessSocialSnapshot';
+import MediaLibrary from '@/components/marketing/MediaLibrary';
 const PLATFORM_CONFIG = {
   meta:      { label: 'Facebook',   icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
   instagram: { label: 'Instagram',  icon: '📸', color: '#e1306c', bg: '#fde8f0' },
@@ -30,6 +31,24 @@ function fmtDate(d) {
   if (!d) return '';
   return new Date(d).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' });
 }
+
+function fmtNum(n) {
+  if (n == null || n === 0) return '0';
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+  if (n >= 1000)    return `${(n / 1000).toFixed(0)}K`;
+  return String(Math.round(n));
+}
+
+const ORGANIC_PLATFORMS = [
+  { id: 'instagram', ...PLATFORM_CONFIG.instagram },
+  { id: 'facebook',  ...PLATFORM_CONFIG.facebook },
+  { id: 'tiktok',    ...PLATFORM_CONFIG.tiktok },
+];
+
+const ORGANIC_STATUS = {
+  draft:     { label: 'טיוטה', cls: 'bg-gray-100 text-gray-500' },
+  published: { label: 'פורסם', cls: 'bg-green-50 text-green-700' },
+};
 
 // ── Paid Campaign Card ────────────────────────────────────────────────────────
 
@@ -323,8 +342,18 @@ function OrganicCreateDrawer({ businessProfile, signalContext, audienceData, rec
   const [analyzing,   setAnalyzing]   = useState(false);
   const [saving,      setSaving]      = useState(false);
   const [imgPreview,  setImgPreview]  = useState(false);
+  const [showPicker,  setShowPicker]  = useState(false);
 
   const fileRef = useRef(null);
+
+  const handlePickFromLibrary = (asset) => {
+    const src = asset.url || (asset.image_base64 ? `data:${asset.mime_type || 'image/jpeg'};base64,${asset.image_base64}` : '');
+    if (!src) return;
+    setImageUrl(src);
+    setMediaId(asset.id);
+    setImageDesc(asset.description || '');
+    setShowPicker(false);
+  };
 
   const platCfg = ORGANIC_PLATFORMS.find(p => p.id === platform) || ORGANIC_PLATFORMS[0];
 
@@ -365,6 +394,7 @@ function OrganicCreateDrawer({ businessProfile, signalContext, audienceData, rec
 עסק: "${businessProfile.name}" | תחום: ${businessProfile.category} | עיר: ${businessProfile.city || ''}
 ${businessProfile.description ? `תיאור: ${businessProfile.description}` : ''}
 ${signalContext?.summary ? `הקשר / תובנה: "${signalContext.summary}"` : ''}
+${imageDesc ? `תמונת הפוסט מציגה: ${imageDesc}` : ''}
 ${audienceCtx ? `\n${audienceCtx}` : ''}
 ${signalBlock ? `\n${signalBlock}` : ''}
 
@@ -378,7 +408,7 @@ ${formatInstr}
       setContent(typeof result === 'string' ? result.trim() : (result?.content || ''));
     } catch { toast.error('שגיאה ביצירת תוכן'); }
     setGenContent(false);
-  }, [businessProfile, postType, platCfg.label, platform, signalContext, audienceData, recentSignals]);
+  }, [businessProfile, postType, platCfg.label, platform, signalContext, audienceData, recentSignals, imageDesc]);
 
   // Generate AI image
   const handleGenImage = async () => {
@@ -514,6 +544,22 @@ ${formatInstr}
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40" dir="rtl" onClick={onClose}>
 
+      {/* Media library picker — z-[60] to appear above the drawer */}
+      {showPicker && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setShowPicker(false)}
+        >
+          <div className="relative max-w-lg w-full max-h-[80vh] overflow-y-auto bg-card rounded-2xl shadow-2xl p-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[13px] font-bold text-foreground">בחר מהספרייה</h3>
+              <button onClick={() => setShowPicker(false)} className="text-foreground-muted hover:text-foreground"><X className="w-5 h-5" /></button>
+            </div>
+            <MediaLibrary businessProfileId={businessProfile.id} onSelect={handlePickFromLibrary} />
+          </div>
+        </div>
+      )}
+
       {/* Image lightbox — z-[60] to appear above the drawer */}
       {imgPreview && imageUrl && (
         <div
@@ -622,6 +668,10 @@ ${formatInstr}
                 <button onClick={() => fileRef.current?.click()}
                   className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-border rounded-xl text-[12px] text-foreground-muted hover:bg-secondary transition-colors">
                   <Upload className="w-4 h-4" /> העלה תמונה
+                </button>
+                <button onClick={() => setShowPicker(true)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-border rounded-xl text-[12px] text-foreground-muted hover:bg-secondary transition-colors">
+                  <ImageIcon className="w-4 h-4" /> מהספרייה
                 </button>
                 <input ref={fileRef} type="file" accept="image/*" className="hidden"
                   onChange={e => handleUpload(e.target.files?.[0])} />
@@ -923,6 +973,7 @@ const STATUS_FILTER_TABS = [
 const TABS = [
   { id: 'paid',      label: 'ממומן',     icon: '💰' },
   { id: 'organic',   label: 'אורגני',    icon: '🌱' },
+  { id: 'media',     label: 'מדיה',      icon: '🖼️' },
   { id: 'audiences', label: 'קהל יעד',   icon: '🎯' },
   { id: 'calendar',  label: 'לוח שנה',   icon: '📅' },
 ];
@@ -1249,6 +1300,11 @@ ${audienceCtx}
             </div>
           )}
         </>
+      )}
+
+      {/* Media library tab */}
+      {activeTab === 'media' && (
+        <MediaLibrary businessProfileId={bpId} />
       )}
 
       {/* Audiences tab */}

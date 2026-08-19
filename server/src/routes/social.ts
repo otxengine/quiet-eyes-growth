@@ -12,15 +12,17 @@ const router = Router();
 /**
  * GET /api/social/media/:assetId
  *
- * Serves a MediaAsset (stored as base64) as a binary image.
- * This gives Instagram a public https:// URL to fetch the image from.
+ * Serves a MediaAsset as a public https:// URL — either by redirecting to its
+ * S3/CDN url, or by streaming its base64 fallback as binary.
  */
 router.get('/media/:assetId', async (req: Request, res: Response) => {
   const assetId = req.params.assetId as string;
   const asset = await prisma.mediaAsset.findUnique({ where: { id: assetId } });
-  if (!asset || !asset.image_base64) {
-    return res.status(404).json({ error: 'Media not found' });
-  }
+  if (!asset) return res.status(404).json({ error: 'Media not found' });
+
+  if (asset.url) return res.redirect(asset.url);
+  if (!asset.image_base64) return res.status(404).json({ error: 'Media not found' });
+
   const mimeType = asset.mime_type || 'image/jpeg';
   const buffer   = Buffer.from(asset.image_base64, 'base64');
   res.set('Content-Type', mimeType);

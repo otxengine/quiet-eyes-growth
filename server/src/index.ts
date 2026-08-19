@@ -117,6 +117,11 @@ app.get('/api/admin-verify', (req: any, res: any) => {
 // Stripe webhook — needs raw body before express.json() parses it
 app.use('/api/stripe/webhooks', stripeRouter);
 
+// Media library uploads (images/video as base64) need a higher body limit than
+// the rest of the API — mounted before the global express.json() below so only
+// this path gets the larger limit; express.json() no-ops once req.body is parsed.
+app.use('/api/functions/uploadBusinessMedia', express.json({ limit: '50mb' }));
+
 // Capture raw body for Meta webhook signature verification.
 // Must be registered BEFORE express.json() so we get the unmodified Buffer.
 app.use(express.json({
@@ -616,6 +621,7 @@ app.listen(PORT, async () => {
     fetched_at           TIMESTAMP(3) NOT NULL DEFAULT NOW()
   )`);
   await sql(`CREATE UNIQUE INDEX IF NOT EXISTS business_social_profiles_biz_platform_key ON business_social_profiles(linked_business, platform)`);
+  await sql(`ALTER TABLE business_social_profiles ADD COLUMN IF NOT EXISTS raw_data TEXT`);
   await sql(`CREATE TABLE IF NOT EXISTS competitor_social_profiles (
     id                   TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     linked_business      TEXT NOT NULL,
@@ -639,6 +645,7 @@ app.listen(PORT, async () => {
     fetched_at           TIMESTAMP(3) NOT NULL DEFAULT NOW()
   )`);
   await sql(`CREATE UNIQUE INDEX IF NOT EXISTS competitor_social_profiles_comp_platform_key ON competitor_social_profiles(competitor_id, platform)`);
+  await sql(`ALTER TABLE competitor_social_profiles ADD COLUMN IF NOT EXISTS raw_data TEXT`);
   // Note: ALTER TABLE for otx_recommendations/pipeline_runs/policy_weights/outcome_events/execution_tasks
   // are intentionally placed AFTER their CREATE TABLE statements below (lines ~767+).
 
