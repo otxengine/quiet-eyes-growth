@@ -133,6 +133,7 @@ model BusinessProfile {
   // pooled from ALL of this business's tracked competitors (not one competitor),
   // split into copy (caption/CTA/text hooks) vs visual (creative/style/visual hooks).
   content_trends_copy_insight    String?  // 2-4 sentences (Hebrew)
+  content_trends_copy_examples   String?  // JSON array of {competitorName, text} — real verbatim quotes exemplifying content_trends_copy_insight
   content_trends_visual_insight  String?  // 2-4 sentences (Hebrew)
   content_trends_insight_at      String?  // ISO timestamp
 

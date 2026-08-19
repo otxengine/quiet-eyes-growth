@@ -619,9 +619,19 @@ export default function SocialCompetition() {
       .slice(0, CONTENT_TRENDS_POOL_CAP);
   }, [allPosts, competitors]);
 
-  const { analyzing: analyzingTrends, analyzeNow: analyzeTrendsNow, copyInsight: contentTrendsCopyInsight, visualInsight: contentTrendsVisualInsight } = useAnalyzeContentTrends(pooledOutlierPosts, {
+  const initialCopyExamples = useMemo(() => {
+    try { return businessProfile?.content_trends_copy_examples ? JSON.parse(businessProfile.content_trends_copy_examples) : []; }
+    catch { return []; }
+  }, [businessProfile?.content_trends_copy_examples]);
+
+  const {
+    analyzing: analyzingTrends, analyzeNow: analyzeTrendsNow,
+    copyInsight: contentTrendsCopyInsight, copyExamples: contentTrendsCopyExamples,
+    visualInsight: contentTrendsVisualInsight,
+  } = useAnalyzeContentTrends(pooledOutlierPosts, {
     businessProfileId: bpId,
     initialCopyInsight: businessProfile?.content_trends_copy_insight,
+    initialCopyExamples,
     initialVisualInsight: businessProfile?.content_trends_visual_insight,
     onDone: () => queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] }),
   });
@@ -732,6 +742,15 @@ export default function SocialCompetition() {
             <div className="border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3">
               <p className="text-[10px] font-semibold text-amber-800 dark:text-amber-300 mb-1">📝 מגמות בקופי</p>
               <p className="text-xs leading-relaxed text-amber-950 dark:text-amber-100">{contentTrendsCopyInsight}</p>
+              {contentTrendsCopyExamples?.length > 0 && (
+                <ul className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800 space-y-1">
+                  {contentTrendsCopyExamples.map((ex, i) => (
+                    <li key={i} className="text-[11px] text-amber-900 dark:text-amber-200">
+                      <span className="text-amber-600 dark:text-amber-400">{ex.competitorName}:</span> "{ex.text}"
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
           {contentTrendsVisualInsight && (

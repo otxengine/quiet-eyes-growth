@@ -522,9 +522,10 @@ export function useAnalyzeTopPerformers(outlierPosts, { businessProfileId, postT
  * kept separate so a text-vs-image trend doesn't get blurred into one
  * merged paragraph.
  */
-export function useAnalyzeContentTrends(pooledOutlierPosts, { businessProfileId, onDone, initialCopyInsight, initialVisualInsight }) {
+export function useAnalyzeContentTrends(pooledOutlierPosts, { businessProfileId, onDone, initialCopyInsight, initialCopyExamples, initialVisualInsight }) {
   const [analyzing, setAnalyzing] = useState(false);
   const [copyInsight, setCopyInsight] = useState(initialCopyInsight ?? null);
+  const [copyExamples, setCopyExamples] = useState(initialCopyExamples ?? []);
   const [visualInsight, setVisualInsight] = useState(initialVisualInsight ?? null);
 
   const analyzeNow = async () => {
@@ -541,6 +542,7 @@ export function useAnalyzeContentTrends(pooledOutlierPosts, { businessProfileId,
       );
       const data = result?.data ?? result;
       if (data?.content_trends_copy_insight) setCopyInsight(data.content_trends_copy_insight);
+      if (data?.content_trends_copy_examples?.length) setCopyExamples(data.content_trends_copy_examples);
       if (data?.content_trends_visual_insight) setVisualInsight(data.content_trends_visual_insight);
       onDone?.();
     } catch (e) {
@@ -549,7 +551,7 @@ export function useAnalyzeContentTrends(pooledOutlierPosts, { businessProfileId,
     setAnalyzing(false);
   };
 
-  return { analyzing, analyzeNow, copyInsight, visualInsight };
+  return { analyzing, analyzeNow, copyInsight, copyExamples, visualInsight };
 }
 
 export function ProfileHeader({ profile }) {

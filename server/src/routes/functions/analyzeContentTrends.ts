@@ -42,6 +42,7 @@ export async function analyzeContentTrends(req: Request, res: Response) {
 
     let copyInsight: string | null = null;
     let visualInsight: string | null = null;
+    let copyExamples: { competitorName: string; text: string }[] = [];
     if (ownedIds.size) {
       const rows = await (prisma as any).$queryRawUnsafe(
         `SELECT p.id, p.platform, p.analysis, c.name AS competitor_name
@@ -73,11 +74,13 @@ export async function analyzeContentTrends(req: Request, res: Response) {
         const trends = await synthesizeContentTrends(summaries);
         copyInsight = trends.copy_insight;
         visualInsight = trends.visual_insight;
+        copyExamples = trends.copy_examples;
         if (copyInsight || visualInsight) {
           await prisma.businessProfile.update({
             where: { id: businessProfileId },
             data: {
               content_trends_copy_insight: copyInsight,
+              content_trends_copy_examples: copyExamples.length ? JSON.stringify(copyExamples) : null,
               content_trends_visual_insight: visualInsight,
               content_trends_insight_at: new Date().toISOString(),
             },
@@ -89,6 +92,7 @@ export async function analyzeContentTrends(req: Request, res: Response) {
     return res.json({
       analyzed, skipped, requested: posts.length,
       content_trends_copy_insight: copyInsight,
+      content_trends_copy_examples: copyExamples,
       content_trends_visual_insight: visualInsight,
     });
   } catch (err: any) {
