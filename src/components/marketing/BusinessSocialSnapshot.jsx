@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { LONG_SCAN_TIMEOUT_MS } from '@/api/client';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -54,13 +55,13 @@ export default function BusinessSocialSnapshot({ businessProfile }) {
     setRefreshing(true);
     const parts = [];
     try {
-      const result = await base44.functions.invoke('collectOwnSocialPosts', { businessProfileId: bpId, force: true }, 180000);
+      const result = await base44.functions.invoke('collectOwnSocialPosts', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
       queryClient.invalidateQueries({ queryKey: ['businessSnapshotFeed', bpId] });
       if (result?.upserted > 0) parts.push(`${result.upserted} פוסטים חדשים`);
     } catch (e) { toast.error(`שגיאה בעדכון הפיד: ${e.message}`); }
 
     try {
-      await base44.functions.invoke('detectOwnAds', { businessProfileId: bpId, force: true }, 120000);
+      await base44.functions.invoke('detectOwnAds', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
       queryClient.invalidateQueries({ queryKey: ['businessSnapshotAdsHistory', bpId] });
       parts.push('מודעות עודכנו');
     } catch (e) { toast.error(`שגיאה בעדכון המודעות: ${e.message}`); }

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
+import { LONG_SCAN_TIMEOUT_MS } from '@/api/client';
 import { Loader2, Users, Plus } from 'lucide-react';
 import { getLimits } from '@/lib/planConfig';
 import { addCompetitorManually } from '@/lib/addCompetitorManually';
@@ -153,11 +154,11 @@ export default function OnboardingDiscoverCompetitors() {
     const invoke = (fn, params, timeoutMs) =>
       base44.functions.invoke(fn, params, timeoutMs).catch((err) => console.error(`${fn} failed:`, err));
 
-    invoke('collectCompetitorSocialPosts', { businessProfileId: bp, force: true }, 150000);
-    invoke('collectCompetitorSocialStories', { businessProfileId: bp, force: true }, 180000);
-    invoke('detectCompetitorAds', { businessProfileId: bp, force: true, allCompetitors: true }, 240000);
-    invoke('collectReviews', { businessProfileId: bp, force: true, skipCompetitorTrigger: true }, 180000);
-    invoke('collectCompetitorReviews', { businessProfileId: bp }, 240000);
+    invoke('collectCompetitorSocialPosts', { businessProfileId: bp, force: true }, LONG_SCAN_TIMEOUT_MS);
+    invoke('collectCompetitorSocialStories', { businessProfileId: bp, force: true }, LONG_SCAN_TIMEOUT_MS);
+    invoke('detectCompetitorAds', { businessProfileId: bp, force: true, allCompetitors: true }, LONG_SCAN_TIMEOUT_MS);
+    invoke('collectReviews', { businessProfileId: bp, force: true, skipCompetitorTrigger: true }, LONG_SCAN_TIMEOUT_MS);
+    invoke('collectCompetitorReviews', { businessProfileId: bp }, LONG_SCAN_TIMEOUT_MS);
 
     navigate('/onboarding/insights', { state });
   };

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useOutletContext, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { LONG_SCAN_TIMEOUT_MS } from '@/api/client';
 import { Loader2, RefreshCw, ChevronDown, Trophy, Megaphone } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
@@ -614,32 +615,32 @@ export default function SocialCompetition() {
     const parts = [];
 
     try {
-      const feedResult = await base44.functions.invoke('collectCompetitorSocialPosts', { businessProfileId: bpId, force: true }, 180000);
+      const feedResult = await base44.functions.invoke('collectCompetitorSocialPosts', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
       queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] });
       if (feedResult?.upserted > 0) parts.push(`${feedResult.upserted} פוסטים חדשים`);
       else console.info('[refresh-all] feed diagnostics:', feedResult?.diagnostics);
     } catch (e) { toast.error(`שגיאה בעדכון הפיד: ${e.message}`); }
 
     try {
-      await base44.functions.invoke('detectCompetitorAds', { businessProfileId: bpId, force: true }, 120000);
+      await base44.functions.invoke('detectCompetitorAds', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
       queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] });
       parts.push('מודעות עודכנו');
     } catch { toast.error('שגיאה בעדכון המודעות'); }
 
     try {
-      await base44.functions.invoke('collectCompetitorSocialProfile', { businessProfileId: bpId, force: true }, 120000);
+      await base44.functions.invoke('collectCompetitorSocialProfile', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
       queryClient.invalidateQueries({ queryKey: ['socialProfiles', bpId] });
       parts.push('פרופילים עודכנו');
     } catch (e) { toast.error(`שגיאה בעדכון הפרופילים: ${e.message}`); }
 
     try {
-      const storiesResult = await base44.functions.invoke('collectCompetitorSocialStories', { businessProfileId: bpId, force: true }, 120000);
+      const storiesResult = await base44.functions.invoke('collectCompetitorSocialStories', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
       queryClient.invalidateQueries({ queryKey: ['socialStories', bpId] });
       if (storiesResult?.upserted > 0) parts.push(`${storiesResult.upserted} סטוריז חדשים`);
     } catch (e) { toast.error(`שגיאה בעדכון הסטוריז: ${e.message}`); }
 
     try {
-      const result = await base44.functions.invoke('backfillCompetitorPostAnalysis', { businessProfileId: bpId }, 180000);
+      const result = await base44.functions.invoke('backfillCompetitorPostAnalysis', { businessProfileId: bpId }, LONG_SCAN_TIMEOUT_MS);
       queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] });
       queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] });
       const total = (result?.posts_analyzed || 0) + (result?.ads_analyzed || 0);
@@ -654,7 +655,7 @@ export default function SocialCompetition() {
   const handleScanAdsOnly = async () => {
     setScanningAds(true);
     try {
-      const result = await base44.functions.invoke('detectCompetitorAds', { businessProfileId: bpId, force: true }, 120000);
+      const result = await base44.functions.invoke('detectCompetitorAds', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
       queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] });
       toast.success(result?.alerts_created > 0 ? `מודעות עודכנו — ${result.alerts_created} התראות חדשות` : 'מודעות עודכנו');
     } catch (e) {

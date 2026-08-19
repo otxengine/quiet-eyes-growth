@@ -9,6 +9,13 @@
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+// Timeout for social/competitor scan functions (Apify scrape + per-item AI analysis
+// across multiple competitors) — a first-ever backfill has been observed taking up
+// to ~10 minutes; the previous 120-180s timeouts were sized for the old, silently
+// under-scraping behavior and self-abort client-side well before the (now-correct,
+// slower) scan actually finishes.
+export const LONG_SCAN_TIMEOUT_MS = 900000; // 15 min
+
 // Keep backend alive on Render free plan (ping every 10 minutes)
 if (import.meta.env.VITE_API_URL) {
   setInterval(() => {
