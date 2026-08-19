@@ -30,7 +30,7 @@ function normalizeUrl(url: string | null): string | null {
   }
 }
 
-async function scrapeAndSave(businessProfileId: string, platform: string, url: string) {
+async function scrapeAndSave(businessProfileId: string, platform: string, url: string, fullBackfill = false) {
   const existing = await prisma.businessPost.findMany({
     where: { linked_business: businessProfileId, platform },
     select: { id: true, external_post_id: true, post_url: true, content_hash: true, media_url: true, video_url: true, analyzed_at: true, video_analyzed_at: true, posted_at: true },
@@ -74,7 +74,7 @@ async function scrapeAndSave(businessProfileId: string, platform: string, url: s
 
   let rawPosts: any[] = [];
   let apifyError: string | null = null;
-  const onlyPostsNewerThan = maxPostedAt ? maxPostedAt.toISOString().slice(0, 10) : null;
+  const onlyPostsNewerThan = (!fullBackfill && maxPostedAt) ? maxPostedAt.toISOString().slice(0, 10) : null;
 
   // First-ever scrape (no cursor yet) pulls a deeper one-time backfill; repeat
   // scrapes stay at the steady-state cap since onlyPostsNewerThan already scopes them.
@@ -90,9 +90,7 @@ async function scrapeAndSave(businessProfileId: string, platform: string, url: s
   } else if (platform === 'facebook') {
     rawPosts = await runApifyActor('apify~facebook-posts-scraper', {
       startUrls: [{ url }],
-      maxPosts: platformCap,
-      maxPostComments: 0,
-      commentsMode: 'DISABLED',
+      resultsLimit: platformCap,
       ...(onlyPostsNewerThan ? { onlyPostsNewerThan } : {}),
     }, 120_000, 160, (msg) => { apifyError = msg; });
   } else if (platform === 'tiktok') {
@@ -219,7 +217,7 @@ async function scrapeAndSave(businessProfileId: string, platform: string, url: s
 }
 
 export async function collectOwnSocialPosts(req: Request, res: Response) {
-  const { businessProfileId, force } = req.body;
+  const { businessProfileId, force, fullBackfill } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
   if (!force && shouldSkipAgent(businessProfileId, 'collectOwnSocialPosts', MIN_INTERVAL_MS)) {
@@ -244,7 +242,7 @@ export async function collectOwnSocialPosts(req: Request, res: Response) {
     const tasks = Object.entries(urls).filter(([, url]) => !!url) as [string, string][];
 
     const results = await Promise.allSettled(
-      tasks.map(([platform, url]) => scrapeAndSave(businessProfileId, platform, url)),
+      tasks.map(([platform, url]) => scrapeAndSave(businessProfileId, platform, url, platform === 'facebook' && !!fullBackfill)),
     );
 
     const diagnostics = results.map((r, i) =>

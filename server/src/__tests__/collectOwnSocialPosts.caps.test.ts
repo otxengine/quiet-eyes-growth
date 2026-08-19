@@ -94,3 +94,32 @@ test('repeat scrape (cursor exists) uses the steady-state cap, not the backfill 
   const tiktokCall = mockRunApifyActor.mock.calls.find(([actorId]) => actorId === 'clockworks~tiktok-profile-scraper');
   expect(tiktokCall![1]).toMatchObject({ resultsPerPage: 5 });
 });
+
+test('Facebook call uses resultsLimit, not the unrecognized maxPosts param', async () => {
+  (prisma.businessProfile.findUnique as jest.Mock).mockResolvedValue({
+    id: 'b1', instagram_url: null, facebook_url: 'https://facebook.com/biz', tiktok_url: null,
+  });
+  businessPostFindMany.mockResolvedValue([]); // first-ever scrape
+
+  await collectOwnSocialPosts({ body: { businessProfileId: 'b1', force: true } } as any, mockRes());
+
+  const fbCall = mockRunApifyActor.mock.calls.find(([actorId]) => actorId === 'apify~facebook-posts-scraper');
+  expect(fbCall).toBeTruthy();
+  expect(fbCall![1]).toMatchObject({ resultsLimit: 150 });
+  expect(fbCall![1]).not.toHaveProperty('maxPosts');
+});
+
+test('fullBackfill bypasses an existing Facebook cursor and re-requests the backfill cap', async () => {
+  (prisma.businessProfile.findUnique as jest.Mock).mockResolvedValue({
+    id: 'b1', instagram_url: null, facebook_url: 'https://facebook.com/biz', tiktok_url: null,
+  });
+  businessPostFindMany.mockResolvedValue([
+    { id: 'p1', external_post_id: 'x1', post_url: null, content_hash: null, media_url: 'http://img', video_url: null, analyzed_at: new Date(), video_analyzed_at: null, posted_at: new Date('2026-01-01T00:00:00Z') },
+  ]);
+
+  await collectOwnSocialPosts({ body: { businessProfileId: 'b1', force: true, fullBackfill: true } } as any, mockRes());
+
+  const fbCall = mockRunApifyActor.mock.calls.find(([actorId]) => actorId === 'apify~facebook-posts-scraper');
+  expect(fbCall![1]).toMatchObject({ resultsLimit: 150 });
+  expect(fbCall![1]).not.toHaveProperty('onlyPostsNewerThan');
+});
