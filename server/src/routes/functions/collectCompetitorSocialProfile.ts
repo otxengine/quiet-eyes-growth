@@ -76,25 +76,31 @@ async function scrapeInstagram(url: string): Promise<ProfileFields | null> {
   };
 }
 
-// Field names are best-guess (apivault_labs/facebook-profile-scraper doesn't publish a formal
-// output schema) — several candidate keys are tried per field. raw_data below is the safety
-// net: the full unprocessed item is always persisted regardless of whether these guesses hold.
+// Field names confirmed from live output (apivault_labs/facebook-profile-scraper's README only
+// describes categories in prose, no formal schema — verified instead against real saved raw_data).
+// coverPhoto comes back as an object (or null) rather than a plain URL string, hence the helper.
+function coverPhotoUrl(coverPhoto: any): string | null {
+  if (!coverPhoto) return null;
+  if (typeof coverPhoto === 'string') return coverPhoto;
+  return coverPhoto.url || coverPhoto.source || coverPhoto.link || coverPhoto.src || null;
+}
+
 async function scrapeFacebook(url: string): Promise<ProfileFields | null> {
   const [item] = await runApifyActor(FACEBOOK_PROFILE_ACTOR, { profileUrls: [url] });
   if (!item || item.error) return null;
   return {
-    profile_picture_url: item.profilePictureUrl || item.avatar || item.profilePicUrl || null,
-    cover_photo_url: item.coverPhotoUrl || item.coverPhoto || null,
-    bio: item.bio || item.about || item.description || null,
-    external_url: item.website || item.websites?.[0] || null,
-    follower_count: numOrNull(item.followers ?? item.followersCount),
-    following_count: numOrNull(item.following ?? item.followingCount),
-    post_count: numOrNull(item.postCount ?? item.postsCount),
-    is_verified: boolOrNull(item.verified ?? item.isVerified),
+    profile_picture_url: item.avatarUrl || null,
+    cover_photo_url: coverPhotoUrl(item.coverPhoto),
+    bio: item.bio || null,
+    external_url: item.primaryWebsite || item.websites?.[0] || null,
+    follower_count: numOrNull(item.followerCount),
+    following_count: null,
+    post_count: null,
+    is_verified: boolOrNull(item.verified),
     is_business_account: null,
-    category: strOrNull(item.category ?? item.categories?.[0]),
-    contact_phone: item.phone || item.phones?.[0] || null,
-    contact_email: item.email || item.emails?.[0] || null,
+    category: strOrNull(item.category),
+    contact_phone: item.primaryPhone || item.phones?.[0] || null,
+    contact_email: item.primaryEmail || item.emails?.[0] || null,
     contact_address: item.address || null,
     highlight_count: null,
     highlights: null,
