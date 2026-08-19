@@ -65,7 +65,7 @@ ${summary}
 Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "copy_insight": "2-4 sentences synthesizing the COMMON pattern(s) in the COPY/TEXT ONLY (text hooks, CTAs, what these posts ask the audience to do) that recur across MULTIPLE competitors. If there's no obvious cross-competitor copy pattern, say so honestly instead of forcing one.",
-  "copy_example_indices": [an array of up to 3 post numbers (the "N." at the start of each entry above) whose text hooks/CTA best exemplify the copy_insight pattern you just described — pick real posts, do not invent],
+  "copy_example_indices": [an array of up to 6 post numbers (the "N." at the start of each entry above) whose text hooks/CTA best exemplify the copy_insight pattern you just described, ordered from strongest to weakest example — prefer spreading picks across DIFFERENT competitors rather than several from the same one, so the examples show the pattern is real across the market, not just one account's style. Pick real posts, do not invent],
   "visual_insight": "2-4 sentences synthesizing the COMMON pattern(s) in the VISUAL/CREATIVE ONLY (visual hooks, style, imagery) that recur across MULTIPLE competitors. If there's no obvious cross-competitor visual pattern, say so honestly instead of forcing one."
 }`,
     });
@@ -74,12 +74,18 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       ? result.copy_example_indices.filter((n: any) => Number.isInteger(n) && n >= 1 && n <= posts.length)
       : [];
 
+    // Dedup by competitor — even if the LLM leans on one account's posts, the
+    // examples shown should demonstrate the pattern holds across the market.
     const copyExamples: CopyExample[] = [];
+    const usedCompetitors = new Set<string>();
     for (const i of indices) {
       if (copyExamples.length >= 3) break;
       const post = posts[i - 1];
+      if (usedCompetitors.has(post.competitorName)) continue;
       const text = representativeText(post);
-      if (text) copyExamples.push({ competitorName: post.competitorName, text });
+      if (!text) continue;
+      copyExamples.push({ competitorName: post.competitorName, text });
+      usedCompetitors.add(post.competitorName);
     }
 
     return {
