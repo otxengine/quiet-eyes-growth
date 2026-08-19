@@ -247,3 +247,24 @@ describe('POST /api/onboarding/generate-about — KAN-203 social sources', () =>
     expect(JSON.parse(data.about_sources)).not.toContain('social');
   });
 });
+
+// Regression guard: the LLM truncates its JSON output when it runs out of tokens, and the
+// truncation-recovery logic in lib/llm.ts drops any bare string field that comes after the
+// last fully-closed array/object. business_description must be ordered before the
+// relevant_topics array, and given enough token budget, so it doesn't come back empty.
+describe('POST /api/onboarding/generate-about — truncation regression guard', () => {
+  it('orders business_description before relevant_topics in the schema, to survive output truncation', async () => {
+    findUnique.mockResolvedValue(BASE_PROFILE);
+    llm.mockResolvedValue(JSON.stringify(VALID_DRAFT));
+    await post({ businessProfileId: 'bp1' });
+    const prompt = llm.mock.calls[0][0].prompt;
+    expect(prompt.indexOf('"business_description"')).toBeLessThan(prompt.indexOf('"relevant_topics"'));
+  });
+
+  it('requests enough token budget for Hebrew output to avoid truncation', async () => {
+    findUnique.mockResolvedValue(BASE_PROFILE);
+    llm.mockResolvedValue(JSON.stringify(VALID_DRAFT));
+    await post({ businessProfileId: 'bp1' });
+    expect(llm.mock.calls[0][0].maxTokens).toBeGreaterThanOrEqual(1500);
+  });
+});

@@ -243,12 +243,15 @@ Respond ONLY with valid JSON matching this exact schema (no markdown):
   "business_type": "<${BUSINESS_TYPES}>",
   "service_model": ["<one or more of: ${SERVICE_MODELS}>"],
   "target_audience": "<1-2 sentences describing the target customer>",
-  "relevant_topics": ["<5-8 topics this business cares about>"],
   "content_tone": "<${TONES}>",
-  "business_description": "<2-5 sentence business description, written in Hebrew>"
+  "business_description": "<2-5 sentence business description, written in Hebrew>",
+  "relevant_topics": ["<5-8 topics this business cares about>"]
 }`;
 
-    const raw = await invokeLLM({ prompt, model: 'haiku', maxTokens: 600, skipCache: true, response_json_schema: { type: 'object' } });
+    // maxTokens raised + business_description ordered before relevant_topics: Hebrew output is
+    // token-expensive, and if the model still truncates, the description is written before the
+    // large trailing array instead of being the field most likely to get cut off.
+    const raw = await invokeLLM({ prompt, model: 'haiku', maxTokens: 1500, skipCache: true, response_json_schema: { type: 'object' } });
     const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
     // Providers occasionally return a bare array (e.g. just relevant_topics) instead of
     // the object schema — JSON.stringify would silently drop it down to that array.

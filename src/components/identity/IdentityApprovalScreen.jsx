@@ -213,6 +213,7 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
             </Field>
             <Field label="סקטור" old={diffMap?.sector_key}>
               <select value={draft.sector_key} onChange={(e) => set('sector_key', e.target.value)} className={inputCls}>
+                <option value="">—</option>
                 {SECTOR_KEYS.map((k) => <option key={k} value={k}>{k}</option>)}
               </select>
             </Field>
@@ -221,6 +222,7 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
             </Field>
             <Field label="סוג עסק" old={diffMap?.business_type}>
               <select value={draft.business_type} onChange={(e) => set('business_type', e.target.value)} className={inputCls}>
+                <option value="">—</option>
                 {BUSINESS_TYPES.map((k) => <option key={k} value={k}>{k}</option>)}
               </select>
             </Field>
@@ -239,6 +241,7 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
             </Field>
             <Field label="טון תוכן" old={diffMap?.content_tone}>
               <select value={draft.content_tone} onChange={(e) => set('content_tone', e.target.value)} className={inputCls}>
+                <option value="">—</option>
                 {TONES.map((k) => <option key={k} value={k}>{k}</option>)}
               </select>
             </Field>
