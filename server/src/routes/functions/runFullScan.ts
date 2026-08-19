@@ -7,7 +7,6 @@ import { collectReviews } from './collectReviews';
 import { synthesizeMarketInsights } from './synthesizeMarketInsights';
 import { runIntelligenceEngines } from './runIntelligenceEngines';
 import { runCompetitorIdentification } from './runCompetitorIdentification';
-import { runLeadGeneration } from './runLeadGeneration';
 import { findSocialLeads } from './findSocialLeads';
 import { findLocalEvents } from './findLocalEvents';
 import { detectEvents } from './detectEvents';
@@ -173,7 +172,6 @@ export async function runFullScan(req: Request, res: Response) {
     ['synthesizeMarketInsights',    synthesizeMarketInsights],
     ['runIntelligenceEngines',      runIntelligenceEngines],
     ['runCompetitorIdentification', runCompetitorIdentification],
-    ['runLeadGeneration',           runLeadGeneration],
     ['findSocialLeads',             findSocialLeads],
     ['findLocalEvents',             findLocalEvents],
     ['detectEvents',                detectEvents],

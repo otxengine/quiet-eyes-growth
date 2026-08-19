@@ -5,6 +5,26 @@ import { callGemini } from './gemini';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' });
 
+// ── Surrogate sanitizer — prevents Anthropic 400 "no low surrogate in string" ──
+// Scraped social/review text can carry a truncated 4-byte emoji (a lone UTF-16
+// surrogate), which breaks JSON serialization before Anthropic even sees it.
+export function sanitizeSurrogates(s: string): string {
+  if (!s) return s;
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c >= 0xD800 && c <= 0xDBFF) {
+      const next = s.charCodeAt(i + 1);
+      if (next >= 0xDC00 && next <= 0xDFFF) { out += s[i] + s[i + 1]; i++; }
+    } else if (c >= 0xDC00 && c <= 0xDFFF) {
+      // lone low surrogate → drop
+    } else {
+      out += s[i];
+    }
+  }
+  return out;
+}
+
 // ── LLM cost tracking (per-business accumulator, keyed by businessId) ─────────
 const _costAccumulator = new Map<string, number>();
 // Pricing per 1M tokens (input / output)
@@ -95,9 +115,10 @@ export async function invokeLLM(options: { prompt: string } & LLMOptions): Promi
   const maxTokens = maxTokensOverride ?? MAX_TOKENS_DEFAULT[modelKey] ?? 350;
 
   // Auto-inject sector + mission context block when profile is provided
-  const finalPrompt = profile
+  const finalPrompt = sanitizeSurrogates(profile
     ? `${buildAgentPromptContext(profile)}\n\n${prompt}`
-    : prompt;
+    : prompt);
+  const finalSystemPrompt = systemPrompt ? sanitizeSurrogates(systemPrompt) : systemPrompt;
 
   // ── LLM response cache (4h TTL) ───────────────────────────────────────────
   // Images bypass the cache — the prompt text alone doesn't uniquely identify them.
@@ -108,12 +129,12 @@ export async function invokeLLM(options: { prompt: string } & LLMOptions): Promi
       return cached;
     }
 
-    const result = await _invokeLLMRaw(finalPrompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache, costTrackingId, imageBase64, imageMediaType);
+    const result = await _invokeLLMRaw(finalPrompt, modelId, maxTokens, response_json_schema, finalSystemPrompt, usePromptCache, costTrackingId, imageBase64, imageMediaType);
     cacheSet(cacheKey, result, TTL.LLM_RESPONSE);
     return result;
   }
 
-  return _invokeLLMRaw(finalPrompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache, costTrackingId, imageBase64, imageMediaType);
+  return _invokeLLMRaw(finalPrompt, modelId, maxTokens, response_json_schema, finalSystemPrompt, usePromptCache, costTrackingId, imageBase64, imageMediaType);
 }
 
 async function _invokeLLMRaw(

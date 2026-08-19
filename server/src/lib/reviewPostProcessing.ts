@@ -118,6 +118,13 @@ export async function createNegativeReviewAlerts(businessProfileId: string): Pro
   } catch (_) {}
 }
 
+// ponytail: 3-wide batches, not full concurrency — server/src/db.ts caps the
+// Postgres pool at 8 connections (10s pool_timeout); this can fire alongside
+// 4 other DB-heavy onboarding scans for the same business, and freshReviews
+// can be ~300 rows on a first-time backfill. Back off to 2 if Render logs
+// show pool_timeout/P2024.
+const EVENTS_BATCH_CONCURRENCY = 3;
+
 export async function publishNewReviewEvents(
   businessProfileId: string,
   sinceTimestamp: string,
@@ -128,14 +135,18 @@ export async function publishNewReviewEvents(
       where: { linked_business: businessProfileId, created_date: { gte: new Date(sinceTimestamp) } },
       select: { id: true },
     });
-    for (const rev of freshReviews) {
-      publishEvent({
-        businessId: businessProfileId,
-        eventType: 'new_review',
-        source: opts.source ?? 'collectReviews',
-        payload: { review_id: rev.id, ...opts.extraPayload },
-        contextAttrs: { impact: opts.impact ?? 'low' },
-      }).catch(() => {});
+    for (let i = 0; i < freshReviews.length; i += EVENTS_BATCH_CONCURRENCY) {
+      await Promise.allSettled(
+        freshReviews.slice(i, i + EVENTS_BATCH_CONCURRENCY).map(rev =>
+          publishEvent({
+            businessId: businessProfileId,
+            eventType: 'new_review',
+            source: opts.source ?? 'collectReviews',
+            payload: { review_id: rev.id, ...opts.extraPayload },
+            contextAttrs: { impact: opts.impact ?? 'low' },
+          })
+        )
+      );
     }
   } catch (_) {}
 }

@@ -63,7 +63,6 @@ import { runMLLearning as learnFromClosedDeals } from './routes/functions/learnF
 import { updateLeadFreshness } from './routes/functions/updateLeadFreshness';
 import { collectReviews } from './routes/functions/collectReviews';
 import { collectWebSignals } from './routes/functions/collectWebSignals';
-import { runLeadGeneration } from './routes/functions/runLeadGeneration';
 import { findSocialLeads } from './routes/functions/findSocialLeads';
 import { sentimentVelocityMonitor } from './routes/functions/sentimentVelocityMonitor';
 import { pricingIntelligence } from './routes/functions/pricingIntelligence';
@@ -74,11 +73,8 @@ import { demandGapEngine } from './routes/functions/demandGapEngine';
 import { microMomentDetector } from './routes/functions/microMomentDetector';
 import { sectorBenchmark } from './routes/functions/sectorBenchmark';
 import { intentClassification } from './routes/functions/intentClassification';
-import { collectOTXSignals } from './routes/functions/collectOTXSignals';
 import { collectOTXCompetitorChanges } from './routes/functions/collectOTXCompetitorChanges';
 import { runOTXSyncBridge } from './routes/functions/runOTXSyncBridge';
-import { runSectorTrendRadar } from './routes/functions/runSectorTrendRadar';
-import { runOTXIntentClassification } from './routes/functions/runOTXIntentClassification';
 import { collectCompetitorSocialPosts } from './routes/functions/collectCompetitorSocialPosts';
 import { collectOwnSocialPosts } from './routes/functions/collectOwnSocialPosts';
 import { collectCompetitorSocialProfile } from './routes/functions/collectCompetitorSocialProfile';
@@ -208,7 +204,6 @@ export function startScheduler() {
   cron.schedule('30 5 * * *', () => {
     runAgentForAll('CollectReviews', collectReviews);
     runAgentForAll('CollectWebSignals', collectWebSignals);
-    runAgentForAll('RunLeadGeneration', runLeadGeneration);
     runAgentForAll('FindSocialLeads', findSocialLeads);
     runAgentForAll('CollectCompetitorSocialPosts', collectCompetitorSocialPosts);
     runAgentForAll('CollectCompetitorSocialProfile', collectCompetitorSocialProfile);
@@ -326,15 +321,6 @@ export function startScheduler() {
     });
   }
 
-  // ── Every hour: OTX sector trend radar — z-score spike detection (KAN-48) ─────
-  // Kill switch: set OTX_SECTOR_TREND_DISABLED=true in Render env to disable without redeploy.
-  if (process.env.OTX_SECTOR_TREND_DISABLED !== 'true') {
-    cron.schedule('0 * * * *', () => {
-      runSectorTrendRadar()
-        .catch(err => logger.error('runSectorTrendRadar failed', { error: err.message }));
-    });
-  }
-
   // ── Every 10 min: OTX sync bridge — OTX tables → QE Prisma entities (KAN-46) ─
   // Kill switch: set OTX_SYNC_BRIDGE_DISABLED=true in Render env to disable without redeploy.
   if (process.env.OTX_SYNC_BRIDGE_DISABLED !== 'true') {
@@ -344,19 +330,8 @@ export function startScheduler() {
     });
   }
 
-  // ── Every 5 min: OTX IntentClassification polling fallback (KAN-47 AC1) ──────
-  // Kill switch: set OTX_INTENT_CLASSIFICATION_DISABLED=true in Render env to disable.
-  if (process.env.OTX_INTENT_CLASSIFICATION_DISABLED !== 'true') {
-    cron.schedule('*/5 * * * *', () => {
-      runOTXIntentClassification()
-        .catch(err => logger.error('runOTXIntentClassification failed', { error: err.message }));
-    });
-  }
-
-  // ── Every 30 min: OTX signal collection + semi_auto actions + token refresh ──
+  // ── Every 30 min: semi_auto actions + token refresh ───────────────────────────
   cron.schedule('*/30 * * * *', () => {
-    collectOTXSignals()
-      .catch(err => logger.error('collectOTXSignals failed', { error: err.message }));
     processScheduledAutoActions()
       .catch(err => logger.error('processScheduledAutoActions failed', { error: err.message }));
     refreshExpiringTikTokTokens()

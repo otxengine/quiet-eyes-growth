@@ -29,7 +29,6 @@ jest.mock('../routes/functions/collectReviews',              () => ({ collectRev
 jest.mock('../routes/functions/synthesizeMarketInsights',    () => ({ synthesizeMarketInsights:   jest.fn((_r: any, res: any) => res.json({ ok: true })), runMarketIntelligence: jest.fn((_r: any, res: any) => res.json({ ok: true })) }));
 jest.mock('../routes/functions/runIntelligenceEngines',      () => ({ runIntelligenceEngines:     jest.fn((_r: any, res: any) => res.json({ ok: true })) }));
 jest.mock('../routes/functions/runCompetitorIdentification', () => ({ runCompetitorIdentification: jest.fn((_r: any, res: any) => res.json({ ok: true })) }));
-jest.mock('../routes/functions/runLeadGeneration',           () => ({ runLeadGeneration:          jest.fn((_r: any, res: any) => res.json({ ok: true })) }));
 jest.mock('../routes/functions/findSocialLeads',             () => ({ findSocialLeads:            jest.fn((_r: any, res: any) => res.json({ ok: true })) }));
 jest.mock('../routes/functions/findLocalEvents',             () => ({ findLocalEvents:            jest.fn((_r: any, res: any) => res.json({ ok: true })) }));
 jest.mock('../routes/functions/tiktokSectorTrendAgent',      () => ({ tiktokSectorTrendAgent:     jest.fn((_r: any, res: any) => res.json({ ok: true })) }));

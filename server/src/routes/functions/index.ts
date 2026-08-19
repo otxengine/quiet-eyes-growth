@@ -5,7 +5,6 @@ import { generateLeadFirstContact } from './generateLeadFirstContact';
 import { generateBattlecard } from './generateBattlecard';
 import { logOutcome } from './logOutcome';
 import { calculateHealthScore } from './calculateHealthScore';
-import { runLeadGeneration } from './runLeadGeneration';
 import { collectWebSignals } from './collectWebSignals';
 import { synthesizeMarketInsights, runMarketIntelligence } from './synthesizeMarketInsights';
 import { runIntelligenceEngines } from './runIntelligenceEngines';
@@ -155,7 +154,6 @@ const FUNCTION_MAP: Record<string, any> = {
   generateBattlecard,
   logOutcome,
   calculateHealthScore,
-  runLeadGeneration,
   collectWebSignals,
   synthesizeMarketInsights,
   'synthesize-market-insights': synthesizeMarketInsights,

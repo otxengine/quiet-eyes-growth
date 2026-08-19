@@ -7,7 +7,6 @@ import { runCompetitorIdentification } from './functions/runCompetitorIdentifica
 import { generateProactiveAlerts } from './functions/generateProactiveAlerts';
 import { runPredictions } from './functions/runPredictions';
 import { updateSectorKnowledge } from './functions/updateSectorKnowledge';
-import { runLeadGeneration } from './functions/runLeadGeneration';
 import { calculateHealthScore } from './functions/calculateHealthScore';
 import { findSocialLeads } from './functions/findSocialLeads';
 import { detectTrends } from './functions/detectTrends';
@@ -38,7 +37,6 @@ import {
 } from './functions/layer7Agents';
 import { collectOTXCompetitorChanges } from './functions/collectOTXCompetitorChanges';
 import { runOTXSyncBridge } from './functions/runOTXSyncBridge';
-import { runSectorTrendRadar } from './functions/runSectorTrendRadar';
 import { runAgentForAll } from '../scheduler';
 import { collectReviews } from './functions/collectReviews';
 import { discoverCompetitorUrls } from './functions/discoverCompetitorUrls';
@@ -60,7 +58,6 @@ const AGENT_HANDLERS: Record<string, (req: Request, res: Response) => any> = {
   generateProactiveAlerts,
   runPredictions,
   updateSectorKnowledge,
-  runLeadGeneration,
   calculateHealthScore,
   findSocialLeads,
   detectTrends,
@@ -76,7 +73,6 @@ const AGENT_HANDLERS: Record<string, (req: Request, res: Response) => any> = {
   Supervisor: generateProactiveAlerts,
   Predictor:  runPredictions,
   Memory:     updateSectorKnowledge,
-  Filter:     runLeadGeneration,
   Hunter:     findSocialLeads,
   Trends:     detectTrends,
   Cleaner:    updateLeadFreshness,
@@ -194,21 +190,6 @@ router.post('/otx-sync-bridge', async (_req: Request, res: Response) => {
     console.error('[agentTrigger] runOTXSyncBridge failed:', err.message)
   );
   return res.json({ ok: true, message: 'OTXSyncBridge started — check /api/agents/status for heartbeat' });
-});
-
-// POST /api/agents/trigger/otx-sector-trend-radar
-// Global OTX agent — reads signals_raw, writes sector_trends + agent_data_bus.
-router.post('/otx-sector-trend-radar', async (_req: Request, res: Response) => {
-  const key = 'global:runSectorTrendRadar';
-  const now = Date.now();
-  if ((now - (lastRun.get(key) ?? 0)) < COOLDOWN_MS) {
-    return res.status(429).json({ error: 'Rate limited — wait 10 minutes between manual triggers' });
-  }
-  lastRun.set(key, now);
-  runSectorTrendRadar().catch(err =>
-    console.error('[agentTrigger] runSectorTrendRadar failed:', err.message)
-  );
-  return res.json({ ok: true, message: 'SectorTrendRadar started — check /api/agents/status for heartbeat' });
 });
 
 // POST /api/agents/trigger/otx-competitor-snapshot

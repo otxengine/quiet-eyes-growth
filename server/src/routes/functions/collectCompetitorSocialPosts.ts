@@ -15,6 +15,11 @@ const MIN_INTERVAL_MS = 20 * 60 * 60 * 1000; // 20h
 // run too (cursor advances past it) — raise this if a specific account looks incomplete.
 const POSTS_CAP = 5;       // steady-state cap per platform per run
 const BACKFILL_CAP = 150;  // one-time deeper pull on a competitor's first-ever scrape (no cursor yet)
+// ponytail: 3-wide batches, not full concurrency — server/src/db.ts caps the
+// Postgres pool at 8 connections (10s pool_timeout); this runs alongside 4 other
+// DB-heavy onboarding scans for the same business. Back off to 2 if Render logs
+// show pool_timeout/P2024.
+const POSTS_BATCH_CONCURRENCY = 3;
 
 const NULL_CHAR = String.fromCharCode(0);
 
@@ -469,12 +474,16 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
       }
     }
 
-    // Run all Apify scrapes in parallel
-    const results = await Promise.allSettled(
-      tasks.map(({ comp, platform, url }) =>
-        scrapeAndSave(comp, platform, url, businessProfileId),
-      ),
-    );
+    // Run Apify scrapes in small batches (see POSTS_BATCH_CONCURRENCY above)
+    const results: PromiseSettledResult<Awaited<ReturnType<typeof scrapeAndSave>>>[] = [];
+    for (let i = 0; i < tasks.length; i += POSTS_BATCH_CONCURRENCY) {
+      const batch = await Promise.allSettled(
+        tasks.slice(i, i + POSTS_BATCH_CONCURRENCY).map(({ comp, platform, url }) =>
+          scrapeAndSave(comp, platform, url, businessProfileId),
+        ),
+      );
+      results.push(...batch);
+    }
 
     const diagnostics = [
       ...skipped,
