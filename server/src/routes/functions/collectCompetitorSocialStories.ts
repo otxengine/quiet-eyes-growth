@@ -12,6 +12,10 @@ import { findDonorCandidates } from '../../lib/competitorDonor';
 // often than the 20h post scraper to actually catch them before they vanish.
 const MIN_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6h
 const STORIES_ACTOR = 'dLL7b34nRrgN6ZV24'; // datavoyantlab~advanced-instagram-stories-scraper
+// ponytail: caps how many analyzeCreative calls run at once — shares the same 8-connection
+// Postgres pool budget as the other onboarding scans; see collectCompetitorSocialPosts.ts's
+// POSTS_BATCH_CONCURRENCY comment. Back off to 1 if Render logs show pool_timeout/P2024.
+const ANALYSIS_CONCURRENCY = 2;
 
 const NULL_CHAR = String.fromCharCode(0);
 
@@ -136,6 +140,9 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
     let matched = 0;
     let analyzed = 0;
     const insertErrors: any[] = [];
+    // Rows needing creative analysis, collected during the (cheap, sequential) insert
+    // loop below and drained afterward in ANALYSIS_CONCURRENCY-wide batches.
+    const toAnalyze: Array<{ rowId: string; mediaUrl: string | null; videoUrl: string | null }> = [];
 
     for (const rawItem of rawItems) {
       if (firstItemKeys.length === 0) firstItemKeys = Object.keys(rawItem);
@@ -205,27 +212,33 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
           (!existingRow?.analyzed_at || (rawVideoUrl && !existingRow?.video_analyzed_at));
         if (needsAnalysis) {
           const useVideoUrl = existingRow?.video_analyzed_at ? null : rawVideoUrl;
-          try {
-            const analysis = await analyzePostCreative({ caption: null, platform: 'instagram', mediaUrl, videoUrl: useVideoUrl });
-            if (analysis) {
-              await (prisma as any).$executeRawUnsafe(
-                `UPDATE competitor_stories SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW(), has_offer = $2, has_cta = $3
-                 ${useVideoUrl && analysis.video_description != null ? ', video_analyzed_at = NOW()' : ''}
-                 WHERE id = $4`,
-                pgHex(JSON.stringify(analysis)) ?? '',
-                analysis.has_offer,
-                analysis.has_cta,
-                rowId,
-              );
-              analyzed++;
-            }
-          } catch (analysisErr: any) {
-            console.warn('[collectCompetitorSocialStories] creative analysis failed:', analysisErr.message);
-          }
+          toAnalyze.push({ rowId, mediaUrl, videoUrl: useVideoUrl });
         }
       } catch (insertErr: any) {
         const errMsg = (insertErr.message ?? '').trim();
         insertErrors.push({ competitor: comp.name, externalStoryId, code: insertErr.code ?? null, error: errMsg.substring(0, 500) });
+      }
+    }
+
+    for (let i = 0; i < toAnalyze.length; i += ANALYSIS_CONCURRENCY) {
+      const results = await Promise.allSettled(
+        toAnalyze.slice(i, i + ANALYSIS_CONCURRENCY).map(async ({ rowId, mediaUrl, videoUrl }) => {
+          const analysis = await analyzePostCreative({ caption: null, platform: 'instagram', mediaUrl, videoUrl });
+          if (!analysis) return;
+          await (prisma as any).$executeRawUnsafe(
+            `UPDATE competitor_stories SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW(), has_offer = $2, has_cta = $3
+             ${videoUrl && analysis.video_description != null ? ', video_analyzed_at = NOW()' : ''}
+             WHERE id = $4`,
+            pgHex(JSON.stringify(analysis)) ?? '',
+            analysis.has_offer,
+            analysis.has_cta,
+            rowId,
+          );
+          analyzed++;
+        }),
+      );
+      for (const r of results) {
+        if (r.status === 'rejected') console.warn('[collectCompetitorSocialStories] creative analysis failed:', r.reason?.message);
       }
     }
 

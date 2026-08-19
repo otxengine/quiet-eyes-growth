@@ -167,7 +167,13 @@ async function cloneAdsFromDonor(competitorId: string, businessProfileId: string
 // daily cron's top-6 — this soft ceiling (not the plan's competitor cap, which
 // is Infinity on Pro/Enterprise) bounds worst-case cost/duration for outliers.
 const MAX_ADS_COMPETITORS_ALL = parseInt(process.env.MAX_ADS_COMPETITORS_ALL || '20', 10);
-const ADS_BATCH_CONCURRENCY = 3;
+// ponytail: 2-wide, not 3 — server/src/db.ts caps the Postgres pool at 8 connections,
+// shared with 4 other DB-heavy onboarding scans, and each competitor batch now also
+// runs ANALYSIS_CONCURRENCY ad-analysis calls in parallel internally, so total
+// concurrent DB ops is ADS_BATCH_CONCURRENCY x ANALYSIS_CONCURRENCY. Watch Render
+// logs for pool_timeout/P2024 after deploy; back off either constant to 1 if seen.
+const ADS_BATCH_CONCURRENCY = 2;
+const ANALYSIS_CONCURRENCY = 2;
 
 export async function detectCompetitorAds(req: Request, res: Response) {
   const { businessProfileId, allCompetitors } = req.body;
@@ -283,22 +289,27 @@ export async function detectCompetitorAds(req: Request, res: Response) {
         const adRowsNeedingAnalysis = await upsertAdHistory(comp.id, businessProfileId, ads);
 
         // Analyze ad creatives (topic/offer/hooks/style/cta) — new ads, plus a
-        // backfill for existing ads never analyzed. Best-effort, never blocks the agent.
-        for (const row of adRowsNeedingAnalysis) {
-          if (!row.media_url) continue;
-          try {
-            const creative = await analyzePostCreative({
-              caption: row.caption, cta: row.cta, platform: row.platform, mediaUrl: row.media_url,
-            });
-            if (creative) {
-              await (prisma as any).$executeRawUnsafe(
-                `UPDATE "competitor_ad_history" SET analysis=$1, analyzed_at=NOW(), has_offer=$2, has_cta=$3 WHERE id=$4`,
-                JSON.stringify(creative), creative.has_offer, creative.has_cta, row.id,
-              ).catch(() => {});
-            }
-          } catch (analysisErr: any) {
-            console.warn('[detectCompetitorAds] creative analysis failed:', analysisErr.message);
-          }
+        // backfill for existing ads never analyzed. Best-effort, never blocks the agent,
+        // batched ANALYSIS_CONCURRENCY-wide (see constant comment above for pool budget).
+        const rowsNeedingMedia = adRowsNeedingAnalysis.filter(row => row.media_url);
+        for (let i = 0; i < rowsNeedingMedia.length; i += ANALYSIS_CONCURRENCY) {
+          await Promise.allSettled(
+            rowsNeedingMedia.slice(i, i + ANALYSIS_CONCURRENCY).map(async row => {
+              try {
+                const creative = await analyzePostCreative({
+                  caption: row.caption, cta: row.cta, platform: row.platform, mediaUrl: row.media_url,
+                });
+                if (creative) {
+                  await (prisma as any).$executeRawUnsafe(
+                    `UPDATE "competitor_ad_history" SET analysis=$1, analyzed_at=NOW(), has_offer=$2, has_cta=$3 WHERE id=$4`,
+                    JSON.stringify(creative), creative.has_offer, creative.has_cta, row.id,
+                  ).catch(() => {});
+                }
+              } catch (analysisErr: any) {
+                console.warn('[detectCompetitorAds] creative analysis failed:', analysisErr.message);
+              }
+            }),
+          );
         }
 
         // ── LLM analysis ─────────────────────────────────────────────────────

@@ -14,12 +14,17 @@ const MIN_INTERVAL_MS = 20 * 60 * 60 * 1000; // 20h
 // If an account posts >5x between two ~20-24h scans, the overflow is silently missed next
 // run too (cursor advances past it) — raise this if a specific account looks incomplete.
 const POSTS_CAP = 5;       // steady-state cap per platform per run
-const BACKFILL_CAP = 150;  // one-time deeper pull on a competitor's first-ever scrape (no cursor yet)
-// ponytail: 3-wide batches, not full concurrency — server/src/db.ts caps the
+const BACKFILL_CAP = 75;   // one-time deeper pull on a competitor's first-ever scrape (no cursor yet)
+// ponytail: 2-wide batches, not full concurrency — server/src/db.ts caps the
 // Postgres pool at 8 connections (10s pool_timeout); this runs alongside 4 other
-// DB-heavy onboarding scans for the same business. Back off to 2 if Render logs
-// show pool_timeout/P2024.
-const POSTS_BATCH_CONCURRENCY = 3;
+// DB-heavy onboarding scans for the same business, and each scrape batch now also
+// runs ANALYSIS_CONCURRENCY analysis calls in parallel internally (see below), so
+// total concurrent DB ops is POSTS_BATCH_CONCURRENCY x ANALYSIS_CONCURRENCY. Watch
+// Render logs for pool_timeout/P2024 after deploy; back off either constant to 1 if seen.
+const POSTS_BATCH_CONCURRENCY = 2;
+// ponytail: caps how many analyzeAndSave() calls run at once per scrape batch —
+// see POSTS_BATCH_CONCURRENCY comment above for the shared pool budget this shares.
+const ANALYSIS_CONCURRENCY = 2;
 
 const NULL_CHAR = String.fromCharCode(0);
 
@@ -64,6 +69,7 @@ async function scrapeAndSave(
   platform: string,
   url: string | null,
   businessProfileId: string,
+  fullBackfill = false,
 ): Promise<{ competitor: string; platform: string; url: string; upserted: number; apify_returned: number; media_found: number; media_uploaded: number; first_post_keys?: string[]; first_post_media_sample?: Record<string, any>; elapsed_ms: number; error: string | null; insert_errors?: any[] }> {
   // One-time backfill: delete posts with no media so they get re-inserted with correct field extraction
   await (prisma as any).$executeRawUnsafe(
@@ -199,7 +205,7 @@ async function scrapeAndSave(
 
   // Only set on repeat scrapes (maxPostedAt exists) — a competitor's first-ever
   // scrape still pulls the full capped history with no since-date filter.
-  const onlyPostsNewerThan = maxPostedAt ? maxPostedAt.slice(0, 10) : null;
+  const onlyPostsNewerThan = (!fullBackfill && maxPostedAt) ? maxPostedAt.slice(0, 10) : null;
 
   // First-ever scrape (no cursor yet) pulls a deeper one-time backfill; repeat
   // scrapes stay at the steady-state cap since onlyPostsNewerThan already scopes them.
@@ -215,9 +221,7 @@ async function scrapeAndSave(
   } else if (platform === 'facebook') {
     rawPosts = await runApifyActor('apify~facebook-posts-scraper', {
       startUrls: [{ url }],
-      maxPosts: platformCap,
-      maxPostComments: 0,
-      commentsMode: 'DISABLED',
+      resultsLimit: platformCap,
       ...(onlyPostsNewerThan ? { onlyPostsNewerThan } : {}),
     }, 120_000, 160, (msg) => { apifyError = msg; });
   } else if (platform === 'tiktok') {
@@ -232,6 +236,11 @@ async function scrapeAndSave(
   let upserted = 0;
   let mediaFound = 0;
   let mediaUploaded = 0;
+  // Rows needing creative analysis, collected during the (cheap, sequential) insert
+  // loop below and drained afterward in ANALYSIS_CONCURRENCY-wide batches — keeps
+  // dedup bookkeeping (existingIds/existingUrls/existingHashes) strictly in-order
+  // while letting the slow part (LLM calls) run in parallel.
+  const toAnalyze: Array<{ id: string; mediaUrl: string | null; caption: string | null; videoUrl: string | null; alreadyVideoAnalyzed: boolean }> = [];
   let firstPostKeys: string[] = [];
   let firstPostMediaSample: Record<string, any> | null = null;
 
@@ -338,10 +347,10 @@ async function scrapeAndSave(
       ).catch(() => {});
       const rowVideoUrl = rawVideoUrl || matchedRow.video_url;
       if (!matchedRow.analyzed_at || (!matchedRow.video_analyzed_at && rowVideoUrl)) {
-        await analyzeAndSave(
-          matchedRow.id, upgradedS3 || matchedRow.media_url, caption,
-          rowVideoUrl, !!matchedRow.video_analyzed_at,
-        );
+        toAnalyze.push({
+          id: matchedRow.id, mediaUrl: upgradedS3 || matchedRow.media_url, caption,
+          videoUrl: rowVideoUrl, alreadyVideoAnalyzed: !!matchedRow.video_analyzed_at,
+        });
       }
       if (externalId)       existingIds.add(externalId);
       if (normalizedPostUrl) existingUrls.add(normalizedPostUrl);
@@ -398,8 +407,8 @@ async function scrapeAndSave(
       if (contentHash)      existingHashes.add(contentHash);
       upserted++;
 
-      // Analyze the creative (topic/offer/hooks/style/cta) — best-effort, never blocks the scrape loop.
-      await analyzeAndSave(newPostId, mediaUrl, caption, rawVideoUrl, false);
+      // Analyze the creative (topic/offer/hooks/style/cta) — best-effort, batched after the loop (see ANALYSIS_CONCURRENCY).
+      toAnalyze.push({ id: newPostId, mediaUrl, caption, videoUrl: rawVideoUrl, alreadyVideoAnalyzed: false });
     } catch (insertErr: any) {
       const errMsg = (insertErr.message ?? '').trim();
       // 23505 = unique constraint — row already exists, not a real failure
@@ -407,6 +416,13 @@ async function scrapeAndSave(
       console.error('[collectCompetitorSocialPosts] insert failed:', errMsg.substring(0, 300), { competitor: comp.name, platform, externalId });
       insertErrors.push({ externalId, postUrl, code: insertErr.code ?? null, error: errMsg.substring(0, 500) });
     }
+  }
+
+  for (let i = 0; i < toAnalyze.length; i += ANALYSIS_CONCURRENCY) {
+    await Promise.allSettled(
+      toAnalyze.slice(i, i + ANALYSIS_CONCURRENCY).map(t =>
+        analyzeAndSave(t.id, t.mediaUrl, t.caption, t.videoUrl, t.alreadyVideoAnalyzed)),
+    );
   }
 
   return {
@@ -422,7 +438,7 @@ async function scrapeAndSave(
 }
 
 export async function collectCompetitorSocialPosts(req: Request, res: Response) {
-  const { businessProfileId, force } = req.body;
+  const { businessProfileId, force, fullBackfill } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
   if (!force && shouldSkipAgent(businessProfileId, 'collectCompetitorSocialPosts', MIN_INTERVAL_MS)) {
@@ -479,7 +495,7 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
     for (let i = 0; i < tasks.length; i += POSTS_BATCH_CONCURRENCY) {
       const batch = await Promise.allSettled(
         tasks.slice(i, i + POSTS_BATCH_CONCURRENCY).map(({ comp, platform, url }) =>
-          scrapeAndSave(comp, platform, url, businessProfileId),
+          scrapeAndSave(comp, platform, url, businessProfileId, platform === 'facebook' && !!fullBackfill),
         ),
       );
       results.push(...batch);
