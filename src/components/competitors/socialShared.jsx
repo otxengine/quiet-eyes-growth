@@ -598,3 +598,36 @@ export function ProfileHeader({ profile }) {
     </div>
   );
 }
+
+// Toggle between platforms when a competitor has more than one profile overview
+// (e.g. both Instagram and Facebook) instead of silently picking just one.
+export function ProfileHeaderWithToggle({ profiles }) {
+  const available = (profiles || []).filter(Boolean);
+  const [platform, setPlatform] = useState(() => (available.find(p => p.platform === 'instagram') || available[0])?.platform);
+  if (available.length === 0) return null;
+  const active = available.find(p => p.platform === platform) || available[0];
+
+  return (
+    <div className="space-y-2">
+      {available.length > 1 && (
+        <div className="flex gap-1">
+          {available.map(p => (
+            <button
+              key={p.platform}
+              type="button"
+              onClick={() => setPlatform(p.platform)}
+              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                active.platform === p.platform
+                  ? `${PLATFORM_COLORS[p.platform] || 'bg-gray-100 text-gray-700'} border-transparent`
+                  : 'text-muted-foreground border-border hover:bg-muted'
+              }`}
+            >
+              {PLATFORM_LABELS[p.platform] || p.platform}
+            </button>
+          ))}
+        </div>
+      )}
+      <ProfileHeader profile={active} />
+    </div>
+  );
+}

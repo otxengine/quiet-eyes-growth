@@ -8,7 +8,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   PLATFORM_LABELS, PLATFORM_COLORS, apiFetch, timeAgo,
-  PostCard, AdCard, StoryCard, PostDetailModal, AdDetailModal, StoryDetailModal, useDeepAnalysis, ProfileHeader,
+  PostCard, AdCard, StoryCard, PostDetailModal, AdDetailModal, StoryDetailModal, useDeepAnalysis, ProfileHeaderWithToggle,
   computeOutlierPosts, useAnalyzeTopPerformers, CollapsibleSection,
 } from '@/components/competitors/socialShared';
 
@@ -293,7 +293,7 @@ function AnalysisTab({ competitor, posts, bpId }) {
   );
 }
 
-function RivalCard({ competitor, posts, ads, stories, profile, defaultSec, bpId, autoOpenHistory, defaultExpanded }) {
+function RivalCard({ competitor, posts, ads, stories, profiles, defaultSec, bpId, autoOpenHistory, defaultExpanded }) {
   const [expanded,    setExpanded]    = useState(defaultExpanded || false);
   const [section,     setSection]     = useState(() => defaultSec || getDefaultSection(posts, ads));
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -359,7 +359,7 @@ function RivalCard({ competitor, posts, ads, stories, profile, defaultSec, bpId,
           )}
         </div>
 
-        {profile && <ProfileHeader profile={profile} />}
+        {profiles?.length > 0 && <ProfileHeaderWithToggle profiles={profiles} />}
 
         <div className="flex gap-2">
           {[
@@ -758,7 +758,7 @@ export default function SocialCompetition() {
                 posts={allPosts.filter(p => p.competitor_id === comp.id)}
                 ads={allAds.filter(a => a.competitor_id === comp.id)}
                 stories={allStories.filter(s => s.competitor_id === comp.id)}
-                profile={allProfiles.find(p => p.competitor_id === comp.id) ?? null}
+                profiles={allProfiles.filter(p => p.competitor_id === comp.id)}
                 defaultSec={comp.id === focusId ? focusSection : null}
                 defaultExpanded={comp.id === focusId}
                 bpId={bpId}

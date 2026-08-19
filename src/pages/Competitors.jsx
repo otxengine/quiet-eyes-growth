@@ -83,7 +83,13 @@ export default function Competitors() {
     queryFn: () => base44.entities.CompetitorSocialProfile.filter({ competitor_id: { in: compIds } }, '-fetched_at', 300),
     enabled: !!bpId && compIds.length > 0,
   });
-  const profilePicByCompId = Object.fromEntries(socialProfiles.map(p => [p.competitor_id, p.profile_picture_url]));
+  // fromEntries keeps the last duplicate key, so sort Instagram last: it wins when a competitor
+  // has both platforms scraped, and Facebook still fills the gap when Instagram has none.
+  const profilePicByCompId = Object.fromEntries(
+    [...socialProfiles]
+      .sort((a, b) => (a.platform === 'instagram' ? 1 : 0) - (b.platform === 'instagram' ? 1 : 0))
+      .map(p => [p.competitor_id, p.profile_picture_url])
+  );
 
   const handleAdd = async () => {
     if (!newComp.name.trim()) return;
