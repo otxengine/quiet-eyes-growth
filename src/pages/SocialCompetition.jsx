@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   PLATFORM_LABELS, PLATFORM_COLORS, apiFetch, timeAgo,
   PostCard, AdCard, StoryCard, PostDetailModal, AdDetailModal, StoryDetailModal, useDeepAnalysis, ProfileHeaderWithToggle,
-  computeOutlierPosts, useAnalyzeTopPerformers, useAnalyzeContentTrends, CollapsibleSection,
+  computeOutlierPosts, useAnalyzeTopPerformers, useAnalyzeContentTrends, useAnalyzeBioTrends, CollapsibleSection,
 } from '@/components/competitors/socialShared';
 
 const CONTENT_TRENDS_POOL_CAP = 20; // mirrors MAX_POSTS_PER_CALL in analyzeContentTrends.ts
@@ -636,6 +636,23 @@ export default function SocialCompetition() {
     onDone: () => queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] }),
   });
 
+  const initialBioExamples = useMemo(() => {
+    try { return businessProfile?.content_trends_bio_examples ? JSON.parse(businessProfile.content_trends_bio_examples) : []; }
+    catch { return []; }
+  }, [businessProfile?.content_trends_bio_examples]);
+
+  const hasProfilesWithBio = allProfiles.some(p => p.bio?.trim());
+
+  const {
+    analyzing: analyzingBioTrends, analyzeNow: analyzeBioTrendsNow,
+    bioInsight: contentTrendsBioInsight, bioExamples: contentTrendsBioExamples,
+  } = useAnalyzeBioTrends(hasProfilesWithBio, {
+    businessProfileId: bpId,
+    initialBioInsight: businessProfile?.content_trends_bio_insight,
+    initialBioExamples,
+    onDone: () => queryClient.invalidateQueries({ queryKey: ['socialProfiles', bpId] }),
+  });
+
   useEffect(() => {
     if (!focusId || loadingComps || loadingPosts || loadingAds) return;
     const el = cardRefs.current[focusId];
@@ -757,6 +774,37 @@ export default function SocialCompetition() {
             <div className="border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/30 rounded-lg p-3">
               <p className="text-[10px] font-semibold text-sky-800 dark:text-sky-300 mb-1">🎨 מגמות ויזואליות</p>
               <p className="text-xs leading-relaxed text-sky-950 dark:text-sky-100">{contentTrendsVisualInsight}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {hasProfilesWithBio && (
+        <div className="border border-border rounded-xl bg-card p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex-1">
+              📇 מבנה ביו של מתחרים
+            </p>
+            <button
+              onClick={analyzeBioTrendsNow}
+              disabled={analyzingBioTrends}
+              className="text-[10px] text-primary underline disabled:opacity-50"
+            >
+              {analyzingBioTrends ? 'מנתח...' : '🔍 נתחו ביו מתחרים'}
+            </button>
+          </div>
+          {contentTrendsBioInsight && (
+            <div className="border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg p-3">
+              <p className="text-xs leading-relaxed text-emerald-950 dark:text-emerald-100">{contentTrendsBioInsight}</p>
+              {contentTrendsBioExamples?.length > 0 && (
+                <ul className="mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-800 space-y-1">
+                  {contentTrendsBioExamples.map((ex, i) => (
+                    <li key={i} className="text-[11px] text-emerald-900 dark:text-emerald-200">
+                      <span className="text-emerald-600 dark:text-emerald-400">{ex.competitorName}:</span> "{ex.text}"
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
         </div>

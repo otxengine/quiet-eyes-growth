@@ -136,6 +136,11 @@ model BusinessProfile {
   content_trends_copy_examples   String?  // JSON array of {competitorName, text} — real verbatim quotes exemplifying content_trends_copy_insight
   content_trends_visual_insight  String?  // 2-4 sentences (Hebrew)
   content_trends_insight_at      String?  // ISO timestamp
+  // Synthesized explanation of what competitors' social bios commonly contain
+  // and how they're structured, pooled from ALL tracked competitors' profiles.
+  content_trends_bio_insight     String?  // 3-5 sentences (Hebrew)
+  content_trends_bio_examples    String?  // JSON array of {competitorName, text} — real verbatim bios exemplifying content_trends_bio_insight
+  content_trends_bio_insight_at  String?  // ISO timestamp
 
   @@map("business_profiles")
 }

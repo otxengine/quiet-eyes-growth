@@ -554,6 +554,37 @@ export function useAnalyzeContentTrends(pooledOutlierPosts, { businessProfileId,
   return { analyzing, analyzeNow, copyInsight, copyExamples, visualInsight };
 }
 
+/**
+ * Analyzes what competitors' social bios commonly contain and how they're
+ * structured, pooled across ALL tracked competitors' profiles via
+ * analyzeBioProfiles — same real-verbatim-example approach as
+ * useAnalyzeContentTrends, but there's nothing to rank/select here (one bio
+ * per competitor+platform), so it takes no post/profile list, just the
+ * business id.
+ */
+export function useAnalyzeBioTrends(hasProfiles, { businessProfileId, onDone, initialBioInsight, initialBioExamples }) {
+  const [analyzing, setAnalyzing] = useState(false);
+  const [bioInsight, setBioInsight] = useState(initialBioInsight ?? null);
+  const [bioExamples, setBioExamples] = useState(initialBioExamples ?? []);
+
+  const analyzeNow = async () => {
+    if (!hasProfiles || analyzing) return;
+    setAnalyzing(true);
+    try {
+      const result = await base44.functions.invoke('analyzeBioProfiles', { businessProfileId }, 60000);
+      const data = result?.data ?? result;
+      if (data?.content_trends_bio_insight) setBioInsight(data.content_trends_bio_insight);
+      if (data?.content_trends_bio_examples?.length) setBioExamples(data.content_trends_bio_examples);
+      onDone?.();
+    } catch (e) {
+      console.warn('[useAnalyzeBioTrends] failed:', e.message);
+    }
+    setAnalyzing(false);
+  };
+
+  return { analyzing, analyzeNow, bioInsight, bioExamples };
+}
+
 export function ProfileHeader({ profile }) {
   let highlights = [];
   try { highlights = profile.highlights ? JSON.parse(profile.highlights) : []; } catch { /* ignore malformed */ }
