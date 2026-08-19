@@ -10,24 +10,21 @@ const AGENT_NAME = 'OTXSyncBridge';
 interface QEProfile { id: string; created_by: string; sector: string }
 type Supa = ReturnType<typeof getSupabaseOTX>;
 
-const CATEGORY_TO_SECTOR: Record<string, string> = {
-  'מסעדה': 'restaurant', 'בית קפה': 'restaurant', 'פיצרייה': 'restaurant',
-  'פלאפל': 'restaurant', 'שווארמה': 'restaurant', 'קייטרינג': 'restaurant',
-  'מכון כושר': 'fitness', 'סטודיו ליוגה': 'fitness', 'סטודיו לפילאטיס': 'fitness',
-  'חנות ספורט': 'fitness',
-  'מספרה': 'beauty', 'מכון יופי': 'beauty', 'אופטיקה': 'beauty',
-};
-
-export function categoryToSector(cat: string): string { return CATEGORY_TO_SECTOR[cat] ?? 'local'; }
+// sector_key taxonomy set on BusinessProfile.sector_profile at approve-about
+// (server/src/routes/onboarding.ts) — matches what syncBusinessToOTX writes to
+// businesses.sector, so QE profiles and OTX businesses compare on the same space.
+export function sectorKeyOf(sectorProfileJson: string | null): string {
+  try { return JSON.parse(sectorProfileJson ?? '{}')?.sector_key || 'other'; } catch { return 'other'; }
+}
 
 function profilesForSector(profiles: QEProfile[], otxSector: string): QEProfile[] {
-  return profiles.filter(p => p.sector === otxSector || p.sector === 'local');
+  return profiles.filter(p => p.sector === otxSector || p.sector === 'other');
 }
 
 async function fetchQEProfiles(s: Supa): Promise<QEProfile[]> {
-  const { data, error } = await s.from('business_profiles').select('id, created_by, category').not('created_by', 'is', null);
+  const { data, error } = await s.from('business_profiles').select('id, created_by, sector_profile').not('created_by', 'is', null);
   if (error) throw error;
-  return (data ?? []).map((r: any) => ({ id: r.id, created_by: r.created_by, sector: categoryToSector(r.category ?? '') }));
+  return (data ?? []).map((r: any) => ({ id: r.id, created_by: r.created_by, sector: sectorKeyOf(r.sector_profile) }));
 }
 
 async function fetchOTXBusinessSectors(s: Supa): Promise<Map<string, string>> {
@@ -40,8 +37,8 @@ async function fetchOTXBusinessSectors(s: Supa): Promise<Map<string, string>> {
 
 // AC4: cleans leads, raw_signals, AND market_signals (trends + comp_changes)
 export async function cleanContaminatedData(s: Supa, profiles: QEProfile[], bizSectors: Map<string, string>): Promise<void> {
-  const nonLocal = profiles.filter(p => p.sector !== 'local');
-  if (nonLocal.length === 0) return;
+  const classified = profiles.filter(p => p.sector !== 'other');
+  if (classified.length === 0) return;
 
   const [{ data: clSigs }, { data: rawSigs }, { data: compChanges }, { data: sectorTrends }] = await Promise.all([
     s.from('classified_signals').select('id, business_id'),
@@ -65,7 +62,7 @@ export async function cleanContaminatedData(s: Supa, profiles: QEProfile[], bizS
   const trendSector = new Map<string, string>();
   for (const r of (sectorTrends ?? []) as { id: string; sector: string }[]) trendSector.set(r.id, r.sector);
 
-  for (const profile of nonLocal) {
+  for (const profile of classified) {
     // leads
     const { data: leads } = await s.from('leads').select('id, source_description')
       .eq('linked_business', profile.id).eq('source_origin', 'otx_engine').like('source_description', 'otx_sig:%');
@@ -129,7 +126,7 @@ async function syncLeads(s: Supa, profiles: QEProfile[], bizSectors: Map<string,
 
   const leads: any[] = [];
   for (const r of data as any[]) {
-    for (const profile of profilesForSector(profiles, bizSectors.get(r.business_id) ?? 'local')) {
+    for (const profile of profilesForSector(profiles, bizSectors.get(r.business_id) ?? 'other')) {
       const key = `otx_sig:${r.id}:${profile.id}`;
       if (synced.has(key)) continue;
       const score = Math.round((0.5 * r.intent_score + 0.3 * r.sector_match_score + 0.2 * r.geo_match_score) * 100);
@@ -173,7 +170,7 @@ async function syncRawSignals(s: Supa, profiles: QEProfile[], bizSectors: Map<st
   const typeMap: Record<string, string> = { social: 'social_mention', forum: 'social_mention', trend: 'social_trend' };
   const rawSignals: any[] = [];
   for (const r of data as any[]) {
-    for (const profile of profilesForSector(profiles, bizSectors.get(r.business_id) ?? 'local')) {
+    for (const profile of profilesForSector(profiles, bizSectors.get(r.business_id) ?? 'other')) {
       const key = `otx:${r.signal_id}:${profile.id}`;
       if (synced.has(key)) continue;
       rawSignals.push({
@@ -210,7 +207,7 @@ async function syncSectorTrends(s: Supa, profiles: QEProfile[]): Promise<{ count
 
   const signals: any[] = [];
   for (const r of data as any[]) {
-    for (const profile of profiles.filter(p => p.sector === r.sector || p.sector === 'local')) {
+    for (const profile of profiles.filter(p => p.sector === r.sector || p.sector === 'other')) {
       const key = `otx_trend:${r.id}:${profile.id}`;
       if (synced.has(key)) continue;
       const impact = r.z_score >= 3 ? 'high' : r.z_score >= 2 ? 'medium' : 'low';
@@ -249,7 +246,7 @@ async function syncCompetitorChanges(s: Supa, profiles: QEProfile[], bizSectors:
   const typeHeb: Record<string, string> = { price: 'שינוי מחיר', website: 'שינוי אתר', social: 'פוסט חדש', reviews: 'שינוי ביקורות' };
   const signals: any[] = [];
   for (const r of data as any[]) {
-    for (const profile of profilesForSector(profiles, bizSectors.get(r.business_id) ?? 'local')) {
+    for (const profile of profilesForSector(profiles, bizSectors.get(r.business_id) ?? 'other')) {
       const key = `otx_comp:${r.id}:${profile.id}`;
       if (synced.has(key)) continue;
       signals.push({
@@ -343,7 +340,7 @@ async function syncActions(s: Supa, profiles: QEProfile[], bizSectors: Map<strin
   const priorityMap: Record<string, string> = { promote: 'high', respond: 'high', alert: 'critical', hold: 'low' };
   const alerts: any[] = [];
   for (const r of data as any[]) {
-    for (const profile of profilesForSector(profiles, bizSectors.get(r.business_id) ?? 'local')) {
+    for (const profile of profilesForSector(profiles, bizSectors.get(r.business_id) ?? 'other')) {
       const descKey = `otx_action_id:${r.id}:${profile.id}`;
       if (synced.has(descKey)) continue;
       alerts.push({

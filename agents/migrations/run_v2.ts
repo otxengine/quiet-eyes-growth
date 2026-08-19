@@ -2,13 +2,14 @@
  * OTXEngine v2 Migration Runner — Deno
  * Creates the 6 missing tables via Supabase JS client (uses REST API, not direct PG)
  *
- * Run: deno run --allow-net --allow-env --allow-read agents/migrations/run_v2.ts
+ * Run: SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... SUPABASE_DB_URL=... \
+ *   deno run --allow-net --allow-env --allow-read agents/migrations/run_v2.ts
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const SUPABASE_URL = "https://mvywtnjptbpxvmoldrxe.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im12eXd0bmpwdGJweHZtb2xkcnhlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTQwNDQzNCwiZXhwIjoyMDg2OTgwNDM0fQ.Ajc4YSEEKabgVDj8KDO69kPmGHUwYfjeOd-99Ftpots";
+const SUPABASE_URL: string = Deno.env.get("SUPABASE_URL") ?? (() => { throw new Error("SUPABASE_URL not set"); })();
+const SUPABASE_KEY: string = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? (() => { throw new Error("SUPABASE_SERVICE_ROLE_KEY not set"); })();
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -131,7 +132,7 @@ const SQL_STATEMENTS = [
 // ── Alternative: use Deno's built-in PostgreSQL driver ──────────────────────
 import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 
-const DB_URL = "postgresql://postgres:sTBQ92DfuGzvCLaD@db.mvywtnjptbpxvmoldrxe.supabase.co:5432/postgres";
+const DB_URL: string = Deno.env.get("SUPABASE_DB_URL") ?? (() => { throw new Error("SUPABASE_DB_URL not set"); })();
 
 async function runMigration() {
   console.log("🔄 OTXEngine v2 Migration — connecting to Supabase...");

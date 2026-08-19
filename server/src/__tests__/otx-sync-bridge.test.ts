@@ -2,11 +2,11 @@
  * AC3 — Bridge happy path: N entities created per matching profile
  * AC4 — Bridge dedup: no duplicate on re-sync
  * AC5 — Contamination: cleanContaminatedData removes cross-sector rows
- * AC6 — Category mapping: Hebrew → sector
+ * AC6 — sector_profile mapping: sector_key JSON → sector
  * AC7 — SLA/lag: lag computed correctly from oldest signal timestamp
  */
 
-import { runOTXSyncBridge, categoryToSector, cleanContaminatedData } from '../routes/functions/runOTXSyncBridge';
+import { runOTXSyncBridge, sectorKeyOf, cleanContaminatedData } from '../routes/functions/runOTXSyncBridge';
 import { getSupabaseOTX } from '../lib/supabaseOTX';
 
 jest.mock('../lib/supabaseOTX');
@@ -29,14 +29,16 @@ function makeChain(data: any[] = [], opts: { insertSpy?: jest.Mock; deleteInSpy?
   return q;
 }
 
-// ── AC6 — Category mapping ─────────────────────────────────────────────────────
+// ── AC6 — sector_profile mapping ───────────────────────────────────────────────
 
-describe('categoryToSector — AC6', () => {
-  test('מסעדה → restaurant', () => expect(categoryToSector('מסעדה')).toBe('restaurant'));
-  test('מכון כושר → fitness',  () => expect(categoryToSector('מכון כושר')).toBe('fitness'));
-  test('מספרה → beauty',       () => expect(categoryToSector('מספרה')).toBe('beauty'));
-  test('unknown → local',      () => expect(categoryToSector('unknown')).toBe('local'));
-  test('empty string → local', () => expect(categoryToSector('')).toBe('local'));
+describe('sectorKeyOf — AC6', () => {
+  test('parses sector_key out of the JSON blob', () =>
+    expect(sectorKeyOf(JSON.stringify({ sector_key: 'restaurant' }))).toBe('restaurant'));
+  test('preserves any sector_key value (not just a fixed 4-value set)', () =>
+    expect(sectorKeyOf(JSON.stringify({ sector_key: 'legal' }))).toBe('legal'));
+  test('missing sector_key → other', () => expect(sectorKeyOf(JSON.stringify({}))).toBe('other'));
+  test('null → other', () => expect(sectorKeyOf(null)).toBe('other'));
+  test('malformed JSON → other', () => expect(sectorKeyOf('not json')).toBe('other'));
 });
 
 // ── AC7 — SLA/lag (inline calculation test) ────────────────────────────────────
@@ -56,8 +58,8 @@ describe('SLA/lag — AC7', () => {
 
     // 2 local profiles → cleanContaminatedData short-circuits
     const profiles = [
-      { id: 'p1', created_by: 'u1', category: 'local' },
-      { id: 'p2', created_by: 'u2', category: 'local' },
+      { id: 'p1', created_by: 'u1', sector_profile: JSON.stringify({ sector_key: 'other' }) },
+      { id: 'p2', created_by: 'u2', sector_profile: JSON.stringify({ sector_key: 'other' }) },
     ];
     const bizSectors = [{ id: 'biz1', sector: 'restaurant' }];
     const signal = {
@@ -94,8 +96,8 @@ describe('runOTXSyncBridge — AC3 happy path', () => {
 
     // 2 local-sector profiles — cleanContaminatedData short-circuits for local profiles
     const profiles = [
-      { id: 'p1', created_by: 'u1', category: 'local' },
-      { id: 'p2', created_by: 'u2', category: 'local' },
+      { id: 'p1', created_by: 'u1', sector_profile: JSON.stringify({ sector_key: 'other' }) },
+      { id: 'p2', created_by: 'u2', sector_profile: JSON.stringify({ sector_key: 'other' }) },
     ];
     const bizSectors = [{ id: 'biz1', sector: 'restaurant' }];
     const signal = {
@@ -136,8 +138,8 @@ describe('runOTXSyncBridge — AC4 dedup', () => {
     const leadsInsertSpy = jest.fn(() => Promise.resolve({ error: null }));
 
     const profiles = [
-      { id: 'p1', created_by: 'u1', category: 'local' },
-      { id: 'p2', created_by: 'u2', category: 'local' },
+      { id: 'p1', created_by: 'u1', sector_profile: JSON.stringify({ sector_key: 'other' }) },
+      { id: 'p2', created_by: 'u2', sector_profile: JSON.stringify({ sector_key: 'other' }) },
     ];
     const bizSectors = [{ id: 'biz1', sector: 'restaurant' }];
     const signal = {
@@ -231,10 +233,10 @@ describe('cleanContaminatedData — AC5', () => {
     expect(deleteInSpy).not.toHaveBeenCalled();
   });
 
-  test('short-circuits when all profiles are local', async () => {
+  test('short-circuits when all profiles are unclassified (other)', async () => {
     const deleteInSpy = jest.fn(() => Promise.resolve({ error: null }));
 
-    const profiles   = [{ id: 'p1', created_by: 'u1', sector: 'local' }];
+    const profiles   = [{ id: 'p1', created_by: 'u1', sector: 'other' }];
     const bizSectors = new Map([['biz1', 'fitness']]);
     const mockSupa   = { from: jest.fn(() => makeChain([], { deleteInSpy })) };
 

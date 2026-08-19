@@ -26,11 +26,15 @@ const update     = prisma.businessProfile.update     as jest.Mock;
 const llm        = invokeLLM        as jest.Mock;
 const autoLog    = writeAutomationLog as jest.Mock;
 
-// createLogger is called at module-load time (once), so capture the instance
-// in beforeAll — before clearMocks wipes mock.results between tests.
+// createLogger is called at module-load time by onboarding.ts AND by modules it
+// imports (e.g. syncBusinessToOTX), so find the 'Onboarding' call by name rather
+// than assuming it's the first — capture in beforeAll, before clearMocks wipes
+// mock.results between tests.
 let logWarn: jest.Mock;
 beforeAll(() => {
-  const inst = (createLogger as jest.Mock).mock.results[0]?.value;
+  const mock = createLogger as jest.Mock;
+  const idx = mock.mock.calls.findIndex((call: any[]) => call[0] === 'Onboarding');
+  const inst = mock.mock.results[idx]?.value;
   logWarn = inst?.warn;
 });
 

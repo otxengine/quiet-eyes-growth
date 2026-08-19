@@ -252,11 +252,12 @@ async function loadCompetitorConfigs(
   supabase: SupabaseClient, businessId: string, sector: string, geoCity: string, serpKey?: string,
 ): Promise<CompetitorConfig[]> {
   // 1) competitor_config table (v4 schema)
-  const { data: configRows } = await supabase
+  const { data: configRows, error: configErr } = await supabase
     .from('competitor_config')
     .select('id, competitor_name, website_url, google_place_id, instagram_handle, facebook_page_id, tiktok_handle')
     .eq('business_id', businessId)
     .eq('is_active', true);
+  if (configErr) logger.error(`competitor_config fetch failed for business ${businessId}: ${configErr.message}`);
 
   if (configRows && configRows.length > 0) {
     return configRows.map((r: any) => ({
@@ -267,13 +268,14 @@ async function loadCompetitorConfigs(
   }
 
   // 2) Legacy keyword-encoded competitors in otx_business_profiles
-  const { data: profileData } = await supabase
+  const { data: profileData, error: profileErr } = await supabase
     .from('otx_business_profiles')
     .select('keywords')
     .eq('business_id', businessId)
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (profileErr) logger.error(`otx_business_profiles fetch failed for business ${businessId}: ${profileErr.message}`);
 
   const legacyConfigs: CompetitorConfig[] = (profileData?.keywords ?? [])
     .filter((k: string) => k.startsWith('competitor::'))
@@ -289,11 +291,12 @@ async function loadCompetitorConfigs(
   // 3) Auto-discover via SerpAPI if a key is configured
   if (serpKey) {
     await autoDiscoverCompetitors(supabase, businessId, sector, geoCity, serpKey);
-    const { data: fresh } = await supabase
+    const { data: fresh, error: freshErr } = await supabase
       .from('competitor_config')
       .select('id, competitor_name, website_url, google_place_id, instagram_handle, facebook_page_id, tiktok_handle')
       .eq('business_id', businessId)
       .eq('is_active', true);
+    if (freshErr) logger.error(`competitor_config re-fetch failed for business ${businessId}: ${freshErr.message}`);
 
     if (fresh && fresh.length > 0) {
       return fresh.map((r: any) => ({
@@ -393,18 +396,17 @@ export async function collectOTXCompetitorChanges(): Promise<void> {
         totalChanges += allChanges.length;
         logger.info(`${comp.name}: ${allChanges.length} change(s) written`);
 
-        // Publish to agent_data_bus for internal orchestration
+        // Publish to agent_data_bus for internal orchestration. The production
+        // table only has id/event_type/source_agent/payload/status/created_at —
+        // no business_id/priority/target_agents/consumed_by/expires_at/processed —
+        // so business_id travels inside payload instead of as its own column.
         const { error: busErr } = await supabase.from('agent_data_bus').insert({
-          business_id: biz.id, source_agent: AGENT_NAME,
-          source_record_id: crypto.randomUUID(), source_table: 'competitor_changes',
-          event_type: 'competitor_change',
+          event_type: 'competitor_change', source_agent: AGENT_NAME,
           payload: {
-            competitor_name: comp.name, change_count: allChanges.length,
+            business_id: biz.id, competitor_name: comp.name, change_count: allChanges.length,
             change_types: [...new Set(allChanges.map(c => c.change_type))],
             platforms: [...new Set(allChanges.map(c => c.social_platform).filter(Boolean))],
           },
-          priority: 2, target_agents: ['ActionScoringService', 'CrossSectorBridgeAgent'],
-          consumed_by: [], expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), processed: false,
         });
         if (busErr) logger.warn(`agent_data_bus publish failed for ${comp.name}: ${busErr.message}`);
       }
