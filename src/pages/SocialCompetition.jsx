@@ -619,9 +619,10 @@ export default function SocialCompetition() {
       .slice(0, CONTENT_TRENDS_POOL_CAP);
   }, [allPosts, competitors]);
 
-  const { analyzing: analyzingTrends, analyzeNow: analyzeTrendsNow, insight: contentTrendsInsight } = useAnalyzeContentTrends(pooledOutlierPosts, {
+  const { analyzing: analyzingTrends, analyzeNow: analyzeTrendsNow, copyInsight: contentTrendsCopyInsight, visualInsight: contentTrendsVisualInsight } = useAnalyzeContentTrends(pooledOutlierPosts, {
     businessProfileId: bpId,
-    initialInsight: businessProfile?.content_trends_insight,
+    initialCopyInsight: businessProfile?.content_trends_copy_insight,
+    initialVisualInsight: businessProfile?.content_trends_visual_insight,
     onDone: () => queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] }),
   });
 
@@ -727,9 +728,16 @@ export default function SocialCompetition() {
               {analyzingTrends ? 'מנתח...' : '🔍 נתחו מגמות תוכן'}
             </button>
           </div>
-          {contentTrendsInsight && (
+          {contentTrendsCopyInsight && (
             <div className="border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3">
-              <p className="text-xs leading-relaxed text-amber-950 dark:text-amber-100">{contentTrendsInsight}</p>
+              <p className="text-[10px] font-semibold text-amber-800 dark:text-amber-300 mb-1">📝 מגמות בקופי</p>
+              <p className="text-xs leading-relaxed text-amber-950 dark:text-amber-100">{contentTrendsCopyInsight}</p>
+            </div>
+          )}
+          {contentTrendsVisualInsight && (
+            <div className="border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/30 rounded-lg p-3">
+              <p className="text-[10px] font-semibold text-sky-800 dark:text-sky-300 mb-1">🎨 מגמות ויזואליות</p>
+              <p className="text-xs leading-relaxed text-sky-950 dark:text-sky-100">{contentTrendsVisualInsight}</p>
             </div>
           )}
         </div>

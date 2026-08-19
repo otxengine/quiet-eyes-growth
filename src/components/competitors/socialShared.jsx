@@ -518,12 +518,14 @@ export function useAnalyzeTopPerformers(outlierPosts, { businessProfileId, postT
 /**
  * Cross-competitor variant of useAnalyzeTopPerformers — pools outlier posts
  * from ALL tracked competitors (each item carries its own competitorId) and
- * synthesizes ONE combined insight via analyzeContentTrends instead of one
- * insight per competitor.
+ * synthesizes a copy insight + a visual insight via analyzeContentTrends,
+ * kept separate so a text-vs-image trend doesn't get blurred into one
+ * merged paragraph.
  */
-export function useAnalyzeContentTrends(pooledOutlierPosts, { businessProfileId, onDone, initialInsight }) {
+export function useAnalyzeContentTrends(pooledOutlierPosts, { businessProfileId, onDone, initialCopyInsight, initialVisualInsight }) {
   const [analyzing, setAnalyzing] = useState(false);
-  const [insight, setInsight] = useState(initialInsight ?? null);
+  const [copyInsight, setCopyInsight] = useState(initialCopyInsight ?? null);
+  const [visualInsight, setVisualInsight] = useState(initialVisualInsight ?? null);
 
   const analyzeNow = async () => {
     if (!pooledOutlierPosts.length || analyzing) return;
@@ -537,8 +539,9 @@ export function useAnalyzeContentTrends(pooledOutlierPosts, { businessProfileId,
         },
         120000,
       );
-      const newInsight = (result?.data ?? result)?.content_trends_insight;
-      if (newInsight) setInsight(newInsight);
+      const data = result?.data ?? result;
+      if (data?.content_trends_copy_insight) setCopyInsight(data.content_trends_copy_insight);
+      if (data?.content_trends_visual_insight) setVisualInsight(data.content_trends_visual_insight);
       onDone?.();
     } catch (e) {
       console.warn('[useAnalyzeContentTrends] failed:', e.message);
@@ -546,7 +549,7 @@ export function useAnalyzeContentTrends(pooledOutlierPosts, { businessProfileId,
     setAnalyzing(false);
   };
 
-  return { analyzing, analyzeNow, insight };
+  return { analyzing, analyzeNow, copyInsight, visualInsight };
 }
 
 export function ProfileHeader({ profile }) {

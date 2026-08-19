@@ -8,8 +8,9 @@ const MAX_POSTS_PER_CALL = 20; // pooled across all competitors, so a bit higher
 /**
  * analyzeContentTrends — like analyzeTopCompetitorPosts, but pools engagement-
  * outlier posts from ALL of a business's tracked competitors and synthesizes
- * ONE combined insight (BusinessProfile.content_trends_insight) describing the
- * pattern(s) recurring across the whole competitive set, not one competitor.
+ * a copy insight + a visual insight (BusinessProfile.content_trends_copy_insight /
+ * content_trends_visual_insight) describing the pattern(s) recurring across the
+ * whole competitive set, not one competitor.
  *
  * Body: { businessProfileId, posts: [{ id, competitorId, engagementMultiple }], force? }
  */
@@ -39,7 +40,8 @@ export async function analyzeContentTrends(req: Request, res: Response) {
       if (result.skipped) skipped++;
     }
 
-    let contentTrendsInsight: string | null = null;
+    let copyInsight: string | null = null;
+    let visualInsight: string | null = null;
     if (ownedIds.size) {
       const rows = await (prisma as any).$queryRawUnsafe(
         `SELECT p.id, p.platform, p.analysis, c.name AS competitor_name
@@ -60,21 +62,35 @@ export async function analyzeContentTrends(req: Request, res: Response) {
           hook: a.hook,
           content_pillar: a.content_pillar ?? null,
           audience_action_driver: a.audience_action_driver ?? null,
+          text_hooks: Array.isArray(a.text_hooks) ? a.text_hooks : [],
+          cta: a.cta ?? null,
+          visual_hooks: Array.isArray(a.visual_hooks) ? a.visual_hooks : [],
+          style: a.style ?? null,
         }];
       });
 
       if (summaries.length) {
-        contentTrendsInsight = await synthesizeContentTrends(summaries);
-        if (contentTrendsInsight) {
+        const trends = await synthesizeContentTrends(summaries);
+        copyInsight = trends.copy_insight;
+        visualInsight = trends.visual_insight;
+        if (copyInsight || visualInsight) {
           await prisma.businessProfile.update({
             where: { id: businessProfileId },
-            data: { content_trends_insight: contentTrendsInsight, content_trends_insight_at: new Date().toISOString() },
+            data: {
+              content_trends_copy_insight: copyInsight,
+              content_trends_visual_insight: visualInsight,
+              content_trends_insight_at: new Date().toISOString(),
+            },
           }).catch(() => {});
         }
       }
     }
 
-    return res.json({ analyzed, skipped, requested: posts.length, content_trends_insight: contentTrendsInsight });
+    return res.json({
+      analyzed, skipped, requested: posts.length,
+      content_trends_copy_insight: copyInsight,
+      content_trends_visual_insight: visualInsight,
+    });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
