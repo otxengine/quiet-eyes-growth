@@ -129,6 +129,10 @@ model BusinessProfile {
   // own current outlier/top-performing posts.
   outlier_insight              String?  // 2-4 sentences (Hebrew)
   outlier_insight_at           String?  // ISO timestamp
+  // Synthesized explanation of the pattern(s) recurring across the top posts
+  // pooled from ALL of this business's tracked competitors (not one competitor).
+  content_trends_insight       String?  // 2-4 sentences (Hebrew)
+  content_trends_insight_at    String?  // ISO timestamp
 
   @@map("business_profiles")
 }

@@ -10,8 +10,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   PLATFORM_LABELS, PLATFORM_COLORS, apiFetch, timeAgo,
   PostCard, AdCard, StoryCard, PostDetailModal, AdDetailModal, StoryDetailModal, useDeepAnalysis, ProfileHeaderWithToggle,
-  computeOutlierPosts, useAnalyzeTopPerformers, CollapsibleSection,
+  computeOutlierPosts, useAnalyzeTopPerformers, useAnalyzeContentTrends, CollapsibleSection,
 } from '@/components/competitors/socialShared';
+
+const CONTENT_TRENDS_POOL_CAP = 20; // mirrors MAX_POSTS_PER_CALL in analyzeContentTrends.ts
 
 function resolveSection(param) {
   if (!param) return null;
@@ -604,6 +606,25 @@ export default function SocialCompetition() {
   });
   const leaderboard = leaderboardData?.leaderboard ?? [];
 
+  // Pools each competitor's own outlier posts (same detection as RivalCard) into
+  // one cross-competitor set, for the "content trends across competitors" report.
+  const pooledOutlierPosts = useMemo(() => {
+    const byCompetitor = {};
+    for (const p of allPosts) (byCompetitor[p.competitor_id] ||= []).push(p);
+    const compNameById = Object.fromEntries(competitors.map(c => [c.id, c.name]));
+    return Object.entries(byCompetitor)
+      .flatMap(([competitorId, posts]) =>
+        computeOutlierPosts(posts).map(p => ({ ...p, competitor_id: competitorId, competitor_name: compNameById[competitorId] })))
+      .sort((a, b) => b.engagementMultiple - a.engagementMultiple)
+      .slice(0, CONTENT_TRENDS_POOL_CAP);
+  }, [allPosts, competitors]);
+
+  const { analyzing: analyzingTrends, analyzeNow: analyzeTrendsNow, insight: contentTrendsInsight } = useAnalyzeContentTrends(pooledOutlierPosts, {
+    businessProfileId: bpId,
+    initialInsight: businessProfile?.content_trends_insight,
+    onDone: () => queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] }),
+  });
+
   useEffect(() => {
     if (!focusId || loadingComps || loadingPosts || loadingAds) return;
     const el = cardRefs.current[focusId];
@@ -691,6 +712,28 @@ export default function SocialCompetition() {
       )}
 
       <PageHeader title="תחרות סושיאל" />
+
+      {pooledOutlierPosts.length > 0 && (
+        <div className="border border-border rounded-xl bg-card p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex-1">
+              🌐 מגמות תוכן בין כל המתחרים ({pooledOutlierPosts.length} פוסטים מצטיינים)
+            </p>
+            <button
+              onClick={analyzeTrendsNow}
+              disabled={analyzingTrends}
+              className="text-[10px] text-primary underline disabled:opacity-50"
+            >
+              {analyzingTrends ? 'מנתח...' : '🔍 נתחו מגמות תוכן'}
+            </button>
+          </div>
+          {contentTrendsInsight && (
+            <div className="border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3">
+              <p className="text-xs leading-relaxed text-amber-950 dark:text-amber-100">{contentTrendsInsight}</p>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         {FILTER_TABS.map(f => (

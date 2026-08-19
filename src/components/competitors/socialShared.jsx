@@ -515,6 +515,40 @@ export function useAnalyzeTopPerformers(outlierPosts, { businessProfileId, postT
   return { analyzing, analyzeNow, insight };
 }
 
+/**
+ * Cross-competitor variant of useAnalyzeTopPerformers — pools outlier posts
+ * from ALL tracked competitors (each item carries its own competitorId) and
+ * synthesizes ONE combined insight via analyzeContentTrends instead of one
+ * insight per competitor.
+ */
+export function useAnalyzeContentTrends(pooledOutlierPosts, { businessProfileId, onDone, initialInsight }) {
+  const [analyzing, setAnalyzing] = useState(false);
+  const [insight, setInsight] = useState(initialInsight ?? null);
+
+  const analyzeNow = async () => {
+    if (!pooledOutlierPosts.length || analyzing) return;
+    setAnalyzing(true);
+    try {
+      const result = await base44.functions.invoke(
+        'analyzeContentTrends',
+        {
+          businessProfileId,
+          posts: pooledOutlierPosts.map(p => ({ id: p.id, competitorId: p.competitor_id, engagementMultiple: p.engagementMultiple })),
+        },
+        120000,
+      );
+      const newInsight = (result?.data ?? result)?.content_trends_insight;
+      if (newInsight) setInsight(newInsight);
+      onDone?.();
+    } catch (e) {
+      console.warn('[useAnalyzeContentTrends] failed:', e.message);
+    }
+    setAnalyzing(false);
+  };
+
+  return { analyzing, analyzeNow, insight };
+}
+
 export function ProfileHeader({ profile }) {
   let highlights = [];
   try { highlights = profile.highlights ? JSON.parse(profile.highlights) : []; } catch { /* ignore malformed */ }
