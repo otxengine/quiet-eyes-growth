@@ -22,6 +22,11 @@ router.get('/media/:assetId', async (req: Request, res: Response) => {
   const asset = await prisma.mediaAsset.findUnique({ where: { id: assetId } });
   if (!asset) return res.status(404).json({ error: 'Media not found' });
 
+  // Helmet's default CORP is same-origin, which blocks <img>/<video> loads from
+  // the frontend's separate origin — relax it here like /competitors/proxy-image does.
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
   if (asset.url) {
     const obj = await downloadFromS3(asset.url);
     if (!obj) return res.status(404).json({ error: 'Media not found' });
