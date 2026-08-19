@@ -8,6 +8,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
 import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
 import BusinessSocialSnapshot from '@/components/marketing/BusinessSocialSnapshot';
+import CompetitorContentTrends from '@/components/marketing/CompetitorContentTrends';
 import MediaLibrary from '@/components/marketing/MediaLibrary';
 const PLATFORM_CONFIG = {
   meta:      { label: 'Facebook',   icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
@@ -1187,6 +1188,8 @@ ${audienceCtx}
       )}
 
       <BusinessSocialSnapshot businessProfile={businessProfile} />
+
+      <CompetitorContentTrends businessProfile={businessProfile} />
 
       {/* Secondary tab bar */}
       <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit">
