@@ -18,8 +18,6 @@ import { autoConfigOsint } from './functions/stubs';
 import { fetchSocialPageAbout } from '../lib/fetchSocialPageAbout';
 import { getUserId } from '../middleware/auth';
 import { getOrCreateOrgForProfile } from '../lib/orgHelpers';
-import { collectCompetitorSocialPosts } from './functions/collectCompetitorSocialPosts';
-import { detectCompetitorAds } from './functions/detectCompetitorAds';
 import { syncBusinessToOTX } from '../lib/syncBusinessToOTX';
 
 const logger = createLogger('Onboarding');
@@ -420,9 +418,10 @@ router.post('/select-plan', async (req: Request, res: Response) => {
 
 // ── POST /api/onboarding/confirm-competitors ───────────────────────────────────
 // Bulk-applies the user's tracking selections after the discover-competitors
-// step, then fires deep research (post/ad scrape + vision analysis) for
-// approved competitors only — same fire-and-forget noopRes pattern as the
-// autoConfigOsint refresh in approve-about above.
+// step. Pure DB-status update, responds fast — the deep-research scans (posts,
+// stories, ads, reviews) for approved competitors are triggered explicitly by
+// the frontend afterward, in parallel, so it can hold the loading screen until
+// they've all finished instead of navigating away while they're still running.
 router.post('/confirm-competitors', async (req: Request, res: Response) => {
   const { businessProfileId, approvedIds = [], rejectedIds = [] } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
@@ -439,14 +438,6 @@ router.post('/confirm-competitors', async (req: Request, res: Response) => {
         where: { id: { in: rejectedIds }, linked_business: businessProfileId },
         data: { tracking_status: 'rejected', is_dismissed: true },
       });
-    }
-
-    const noopRes = { json: () => noopRes, status: () => noopRes } as unknown as Response;
-    if (approvedIds.length) {
-      collectCompetitorSocialPosts({ body: { businessProfileId, force: true } } as Request, noopRes)
-        .catch((err: any) => logger.warn(`confirm-competitors: collectCompetitorSocialPosts failed: ${err.message}`));
-      detectCompetitorAds({ body: { businessProfileId, force: true } } as Request, noopRes)
-        .catch((err: any) => logger.warn(`confirm-competitors: detectCompetitorAds failed: ${err.message}`));
     }
 
     return res.json({ ok: true, approved: approvedIds.length, rejected: rejectedIds.length });

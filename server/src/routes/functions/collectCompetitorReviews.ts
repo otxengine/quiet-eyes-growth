@@ -37,7 +37,7 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
     const topicSet = resolveTopicSet(sp?.sector_key ?? 'other', sp?.onboarding_review_extras ?? []);
 
     const competitors = await (prisma.competitor as any).findMany({
-      where: { linked_business: businessProfileId },
+      where: { linked_business: businessProfileId, tracking_status: 'approved', not_relevant: false },
       select: { id: true, name: true, google_place_id: true },
     });
 

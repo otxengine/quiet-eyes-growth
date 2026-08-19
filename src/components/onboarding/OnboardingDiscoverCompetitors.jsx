@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Loader2, Users, Plus } from 'lucide-react';
+import { Loader2, Users, Plus, Check } from 'lucide-react';
 import { getLimits } from '@/lib/planConfig';
 import { addCompetitorManually } from '@/lib/addCompetitorManually';
 import KoriAvatar from './KoriAvatar';
@@ -14,6 +14,17 @@ const BG_STYLE = {
 };
 
 const EMPTY_URLS = { website_url: '', instagram_url: '', facebook_url: '', tiktok_url: '' };
+
+// Run after confirm-competitors, in parallel, before Insights is shown — see
+// OnboardingDiscoverCompetitors.confirm(). Each entry's `invoke` runs concurrently
+// with the others; the UI lights up each row in real completion order.
+const FINALIZE_STEPS = [
+  { key: 'posts', label: 'אוסף פוסטים של מתחרים...' },
+  { key: 'stories', label: 'אוסף סטוריז של מתחרים...' },
+  { key: 'ads', label: 'סורק מודעות ממומנות של מתחרים...' },
+  { key: 'ownReviews', label: 'אוסף ביקורות על העסק שלך...' },
+  { key: 'competitorReviews', label: 'אוסף ביקורות על מתחרים...' },
+];
 const inputCls = 'w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-[12px] text-gray-800 placeholder-gray-400 focus:outline-none focus:border-gray-300';
 
 function AddCompetitorForm({ businessProfileId, onAdded }) {
@@ -92,6 +103,8 @@ export default function OnboardingDiscoverCompetitors() {
   const [competitors, setCompetitors] = useState([]);
   const [checkedIds, setCheckedIds] = useState(new Set());
   const [submitting, setSubmitting] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
+  const [completedFinalizeKeys, setCompletedFinalizeKeys] = useState([]);
 
   if (!businessProfile) { navigate('/onboarding'); return null; }
 
@@ -141,6 +154,26 @@ export default function OnboardingDiscoverCompetitors() {
     } catch (err) {
       console.error('confirm-competitors failed:', err);
     }
+
+    // Deep-research scans for the just-approved competitors + the business's own
+    // reviews — run in parallel and awaited so Insights only opens once every scan
+    // has settled (success or failure never blocks the user forever).
+    setFinalizing(true);
+    const bp = businessProfile.id;
+    const markDone = (key) => setCompletedFinalizeKeys(prev => [...prev, key]);
+    const invoke = (fn, params, timeoutMs, key) =>
+      base44.functions.invoke(fn, params, timeoutMs)
+        .catch((err) => console.error(`${fn} failed:`, err))
+        .finally(() => markDone(key));
+
+    await Promise.allSettled([
+      invoke('collectCompetitorSocialPosts', { businessProfileId: bp, force: true }, 150000, 'posts'),
+      invoke('collectCompetitorSocialStories', { businessProfileId: bp, force: true }, 180000, 'stories'),
+      invoke('detectCompetitorAds', { businessProfileId: bp, force: true, allCompetitors: true }, 240000, 'ads'),
+      invoke('collectReviews', { businessProfileId: bp, force: true, skipCompetitorTrigger: true }, 180000, 'ownReviews'),
+      invoke('collectCompetitorReviews', { businessProfileId: bp }, 240000, 'competitorReviews'),
+    ]);
+
     navigate('/onboarding/insights', { state });
   };
 
@@ -168,6 +201,53 @@ export default function OnboardingDiscoverCompetitors() {
           </div>
           <h2 className="text-[16px] font-bold text-gray-800 mb-1">מזהה מתחרים רלוונטיים...</h2>
           <p className="text-[12px] text-gray-500">מוצא את המתחרים האמיתיים שלך בלבד</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (finalizing) {
+    const progress = Math.round((completedFinalizeKeys.length / FINALIZE_STEPS.length) * 100);
+    return (
+      <div dir="rtl" className="min-h-screen flex items-center justify-center p-4" style={BG_STYLE}>
+        <div className="text-center max-w-sm w-full">
+          <div className="relative w-28 h-28 mx-auto mb-6 flex items-center justify-center">
+            <div
+              className="absolute inset-0 rounded-full opacity-20 animate-ping"
+              style={{ background: 'linear-gradient(135deg, #9c27b0 0%, #e8344d 60%, #ff9800 100%)' }}
+            />
+            <KoriAvatar size="md" className="relative z-10 shadow-lg" />
+          </div>
+
+          <h2 className="text-[16px] font-bold text-gray-800 mb-1">אוסף מידע על המתחרים שלך...</h2>
+          <p className="text-[12px] text-gray-500 mb-5">הפוסטים, הסטוריז, המודעות והביקורות נאספים ברקע</p>
+
+          <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden mb-6 max-w-[200px] mx-auto">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${progress}%`, background: 'linear-gradient(90deg, #9c27b0, #e8344d)' }}
+            />
+          </div>
+
+          <div className="space-y-2.5 text-right max-w-xs mx-auto">
+            {FINALIZE_STEPS.map((step) => {
+              const done = completedFinalizeKeys.includes(step.key);
+              return (
+                <div key={step.key} className="flex items-center gap-3">
+                  <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center">
+                    {done ? (
+                      <div className="w-5 h-5 rounded-full bg-[#fce4ec] flex items-center justify-center">
+                        <Check className="w-3 h-3 text-[#e8344d]" />
+                      </div>
+                    ) : (
+                      <Loader2 className="w-3.5 h-3.5 text-gray-300 animate-spin" />
+                    )}
+                  </div>
+                  <span className={`text-[12px] ${done ? 'text-[#e8344d]' : 'text-gray-500'}`}>{step.label}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     );

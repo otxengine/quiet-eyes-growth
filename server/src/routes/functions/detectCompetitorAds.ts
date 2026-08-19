@@ -163,8 +163,14 @@ async function cloneAdsFromDonor(competitorId: string, businessProfileId: string
  *
  * Requires: SEARCHAPI_API_KEY env var
  */
+// ponytail: onboarding needs every approved competitor scanned, not just the
+// daily cron's top-6 — this soft ceiling (not the plan's competitor cap, which
+// is Infinity on Pro/Enterprise) bounds worst-case cost/duration for outliers.
+const MAX_ADS_COMPETITORS_ALL = parseInt(process.env.MAX_ADS_COMPETITORS_ALL || '20', 10);
+const ADS_BATCH_CONCURRENCY = 3;
+
 export async function detectCompetitorAds(req: Request, res: Response) {
-  const { businessProfileId } = req.body;
+  const { businessProfileId, allCompetitors } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
   const startTime = new Date().toISOString();
@@ -185,7 +191,7 @@ export async function detectCompetitorAds(req: Request, res: Response) {
     const competitors = await prisma.competitor.findMany({
       where: { linked_business: businessProfileId, not_relevant: false, tracking_status: 'approved' },
       orderBy: { last_scanned: 'asc' },
-      take: 6,
+      take: allCompetitors ? MAX_ADS_COMPETITORS_ALL : 6,
     });
 
     if (competitors.length === 0) {
@@ -197,7 +203,7 @@ export async function detectCompetitorAds(req: Request, res: Response) {
     let processed = 0;
     let alertsCreated = 0;
 
-    for (const comp of competitors) {
+    async function processOne(comp: any): Promise<void> {
       try {
         // Per-competitor 48h guard — skip if scanned recently
         const c = comp as any;
@@ -205,7 +211,7 @@ export async function detectCompetitorAds(req: Request, res: Response) {
           ? new Date(c.sponsored_ads_updated_at).getTime() : 0;
         if (!req.body.force && Date.now() - lastScanned < PER_COMP_INTERVAL_MS) {
           console.log(`[detectCompetitorAds] skipping ${comp.name} — scanned recently`);
-          continue;
+          return;
         }
 
         // Runs regardless of force — a fresh donor is just as valid as a fresh scan
@@ -215,7 +221,7 @@ export async function detectCompetitorAds(req: Request, res: Response) {
           const cloned = await cloneAdsFromDonor(comp.id, businessProfileId, donor.id);
           console.log(`[detectCompetitorAds] cloned ${cloned} ads for ${comp.name} from donor ${donor.id} (business ${donor.linked_business}) — skipped SearchAPI/LLM`);
           processed++;
-          continue;
+          return;
         }
 
         console.log(`[detectCompetitorAds] scanning ads for: ${comp.name}`);
@@ -270,7 +276,7 @@ export async function detectCompetitorAds(req: Request, res: Response) {
             data:  { is_active: false },
           }).catch(() => {});
           processed++;
-          continue;
+          return;
         }
 
         // Persist ad history (append-only upsert)
@@ -327,7 +333,7 @@ Analyze and return ONLY valid JSON. ALL string values MUST be in Hebrew:
           response_json_schema: { type: 'object' },
         }) as any;
 
-        if (!analysis) { processed++; continue; }
+        if (!analysis) { processed++; return; }
 
         // Save promo description to competitor
         if (analysis.promoted_product) {
@@ -450,6 +456,20 @@ Return ONLY valid JSON. ALL string values MUST be in Hebrew:
         processed++;
       } catch (e: any) {
         console.warn(`[detectCompetitorAds] ${comp.name}:`, e.message);
+      }
+    }
+
+    // ponytail: 3-wide batches, not full concurrency — server/src/db.ts caps
+    // the Postgres pool at 8 connections (10s pool_timeout); this runs alongside
+    // 4 other DB-heavy onboarding scans for the same business. Back off to 2 if
+    // Render logs show pool_timeout/P2024.
+    if (allCompetitors) {
+      for (let i = 0; i < competitors.length; i += ADS_BATCH_CONCURRENCY) {
+        await Promise.allSettled(competitors.slice(i, i + ADS_BATCH_CONCURRENCY).map(processOne));
+      }
+    } else {
+      for (const comp of competitors) {
+        await processOne(comp);
       }
     }
 

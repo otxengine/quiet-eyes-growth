@@ -556,10 +556,14 @@ export async function collectReviews(req: Request, res: Response) {
     // Backfill own reviews that lack topic_sentiment (pre-extraction era or truncated batch)
     await backfillTopicsFor({ linked_business: businessProfileId }, topicSet);
 
-    // Auto-trigger competitor review collection in background (KAN-127)
-    runCollectCompetitorReviews(businessProfileId).catch(e =>
-      console.error('[collectReviews] background competitor ingest failed:', e.message)
-    );
+    // Auto-trigger competitor review collection in background (KAN-127) — unless
+    // the caller (e.g. onboarding) is already triggering it explicitly itself,
+    // to avoid a duplicate concurrent SerpAPI/DataForSEO run.
+    if (!req.body.skipCompetitorTrigger) {
+      runCollectCompetitorReviews(businessProfileId).catch(e =>
+        console.error('[collectReviews] background competitor ingest failed:', e.message)
+      );
+    }
 
     return res.json({
       new_reviews: newReviews,
