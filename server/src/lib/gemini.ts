@@ -9,6 +9,19 @@ const GEMINI_MODEL_MAP: Record<string, string> = {
   'gemini-pro':   'gemini-3-pro-image',
 };
 
+// Rate-limit cooldown: on 429, pause Gemini for a short window then retry automatically.
+// Short (not Tavily's 60min) because Gemini is the primary LLM and its quota resets per-minute.
+let rateLimitUntil = 0; // epoch ms — 0 means not limited
+const RATE_LIMIT_COOLDOWN_MS = 75 * 1000;
+
+export function isGeminiRateLimited(): boolean {
+  return Date.now() < rateLimitUntil;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 /**
  * Call Gemini generative model.
  * @param prompt       User prompt text
@@ -30,6 +43,11 @@ export async function callGemini(
 ): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY || '';
   if (!apiKey) throw new Error('GEMINI_API_KEY not set');
+
+  if (isGeminiRateLimited()) {
+    const secsLeft = Math.ceil((rateLimitUntil - Date.now()) / 1000);
+    throw new Error(`[Gemini] rate-limited — cooling down for ${secsLeft}s`);
+  }
 
   const modelId = GEMINI_MODEL_MAP[modelKey] || 'gemini-3.5-flash';
   const isProImage = modelKey === 'gemini-pro';
@@ -64,15 +82,32 @@ export async function callGemini(
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`;
-
-  const res = await fetch(url, {
+  const fetchOpts = {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify(body),
-  });
+  };
+
+  let res = await fetch(url, fetchOpts);
+
+  if (res.status === 429) {
+    // One bounded retry — Gemini is the primary provider, so don't give up on the first 429.
+    const retryAfterHeader = Number(res.headers.get('retry-after'));
+    const retryAfterMs = (Number.isFinite(retryAfterHeader) && retryAfterHeader > 0)
+      ? Math.min(retryAfterHeader, 20) * 1000
+      : 15000;
+    const jitterMs = Math.floor(Math.random() * 3000);
+    console.warn(`[Gemini] ${modelId} 429 — retrying once in ${Math.round((retryAfterMs + jitterMs) / 1000)}s`);
+    await sleep(retryAfterMs + jitterMs);
+    res = await fetch(url, fetchOpts);
+  }
 
   if (!res.ok) {
     const err = await res.text();
+    if (res.status === 429) {
+      rateLimitUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
+      console.error(`[Gemini] ${modelId} still 429 after retry — cooling down until ${new Date(rateLimitUntil).toISOString()}`);
+    }
     throw new Error(`[Gemini] ${modelId} ${res.status}: ${err.slice(0, 300)}`);
   }
 

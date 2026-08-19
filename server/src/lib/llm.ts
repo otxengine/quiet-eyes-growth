@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { cacheGet, cacheSet, TTL, hashPrompt } from './agentCache';
 import { buildAgentPromptContext } from './businessProfile';
-import { callGemini } from './gemini';
+import { callGemini, isGeminiRateLimited } from './gemini';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' });
 
@@ -175,13 +175,15 @@ async function _invokeLLMRaw(
       }
       // Fallback chain: Claude → Gemini Flash → OpenAI
       // Prepend systemPrompt so Gemini gets the full business context
-      if (process.env.GEMINI_API_KEY) {
+      if (process.env.GEMINI_API_KEY && !isGeminiRateLimited()) {
         try {
           const geminiPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
           return await _callGemini(geminiPrompt, 'gemini-3.5-flash', maxTokens, response_json_schema, imageBase64, imageMediaType);
         } catch (geminiErr: any) {
           console.warn('[invokeLLM] Gemini Flash fallback failed:', geminiErr.message);
         }
+      } else if (isGeminiRateLimited()) {
+        console.warn('[invokeLLM] Gemini already rate-limited — skipping straight to OpenAI');
       }
     }
   }

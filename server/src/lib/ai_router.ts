@@ -11,7 +11,7 @@
  *   Gemini Pro        → multimodal, advanced vision
  */
 
-import { callGemini } from './gemini';
+import { callGemini, isGeminiRateLimited } from './gemini';
 
 export type AITask =
   | 'analyze_market'
@@ -232,7 +232,7 @@ async function callFallback(
     }
   } else if (config.provider === 'openai') {
     // OpenAI failed → Gemini Flash → Claude Haiku
-    if (GEMINI_KEY()) {
+    if (GEMINI_KEY() && !isGeminiRateLimited()) {
       console.warn(`[AI_ROUTER] fallback: openai→gemini(flash) for task=${task}`);
       try {
         return await callGeminiProvider(prompt, { ...config, provider: 'gemini', model: 'gemini-3.5-flash' }, options);
@@ -246,7 +246,7 @@ async function callFallback(
     }
   } else if (config.provider === 'anthropic') {
     // Claude failed → Gemini Flash → GPT-4o-mini
-    if (GEMINI_KEY()) {
+    if (GEMINI_KEY() && !isGeminiRateLimited()) {
       console.warn(`[AI_ROUTER] fallback: anthropic→gemini(flash) for task=${task}`);
       try {
         return await callGeminiProvider(prompt, { ...config, provider: 'gemini', model: 'gemini-3.5-flash' }, options);
