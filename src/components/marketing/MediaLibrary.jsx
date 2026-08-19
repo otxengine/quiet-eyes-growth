@@ -5,9 +5,12 @@ import { toast } from 'sonner';
 import { Upload, Loader2, Trash2, Video } from 'lucide-react';
 
 const MAX_FILE_BYTES = 35 * 1024 * 1024; // raw ceiling matching the server's 50MB base64-JSON body limit
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api').replace(/\/$/, '');
 
 function assetSrc(asset) {
-  if (asset.url) return asset.url;
+  // The S3 bucket is private, so S3-backed assets are served through our proxy
+  // (which does an authenticated download) rather than the raw S3 URL.
+  if (asset.url) return `${API_BASE}/social/media/${asset.id}`;
   if (asset.image_base64) return `data:${asset.mime_type || 'image/jpeg'};base64,${asset.image_base64}`;
   return null;
 }

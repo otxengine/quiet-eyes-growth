@@ -3,6 +3,7 @@ import { prisma } from '../db';
 import { invokeLLM } from '../lib/llm';
 import { getSectorProfile } from '../lib/businessProfile';
 import { resolveTopicSet } from '../lib/reviewTopicPacks';
+import { downloadFromS3 } from '../lib/s3';
 import FormData from 'form-data';
 import fetch from 'node-fetch';
 import { randomUUID } from 'crypto';
@@ -12,15 +13,22 @@ const router = Router();
 /**
  * GET /api/social/media/:assetId
  *
- * Serves a MediaAsset as a public https:// URL — either by redirecting to its
- * S3/CDN url, or by streaming its base64 fallback as binary.
+ * Serves a MediaAsset as a public https:// URL — the bucket is private, so
+ * S3-backed assets are streamed through an authenticated download rather
+ * than redirected; base64 fallback assets are served directly.
  */
 router.get('/media/:assetId', async (req: Request, res: Response) => {
   const assetId = req.params.assetId as string;
   const asset = await prisma.mediaAsset.findUnique({ where: { id: assetId } });
   if (!asset) return res.status(404).json({ error: 'Media not found' });
 
-  if (asset.url) return res.redirect(asset.url);
+  if (asset.url) {
+    const obj = await downloadFromS3(asset.url);
+    if (!obj) return res.status(404).json({ error: 'Media not found' });
+    res.set('Content-Type', obj.contentType);
+    res.set('Cache-Control', 'public, max-age=86400');
+    return res.send(obj.body);
+  }
   if (!asset.image_base64) return res.status(404).json({ error: 'Media not found' });
 
   const mimeType = asset.mime_type || 'image/jpeg';
