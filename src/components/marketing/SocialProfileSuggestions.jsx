@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import {
@@ -95,6 +95,13 @@ export function buildSuggestions({ ownProfiles, competitorProfiles, ownWeeklyRat
 export default function SocialProfileSuggestions({ businessProfile, platform, onCreatePost }) {
   const bpId = businessProfile?.id;
   const [bioFixState, setBioFixState] = useState({ loading: false, suggestions: [] });
+
+  // Clear any bio-fix result left over from the previous platform when the
+  // toggle switches — this component is no longer remounted via `key` (that
+  // caused stray duplicate renders), so this is the reset mechanism instead.
+  useEffect(() => {
+    setBioFixState({ loading: false, suggestions: [] });
+  }, [platform]);
 
   const { data: competitors = [] } = useQuery({
     queryKey: ['socialCompetitors', bpId],

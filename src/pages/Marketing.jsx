@@ -1516,13 +1516,12 @@ ${audienceCtx}
       )}
 
       <SocialProfileSuggestions
-        key={currentSocialPlatform}
         businessProfile={businessProfile}
         platform={currentSocialPlatform}
         onCreatePost={() => { setActiveTab('organic'); setShowOrgCreate(true); }}
       />
 
-      <BusinessSocialSnapshot key={currentSocialPlatform} businessProfile={businessProfile} platform={currentSocialPlatform} />
+      <BusinessSocialSnapshot businessProfile={businessProfile} platform={currentSocialPlatform} />
 
       <CompetitorContentTrends businessProfile={businessProfile} />
 
