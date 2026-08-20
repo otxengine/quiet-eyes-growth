@@ -36,6 +36,16 @@ export function fmtDate(dateStr) {
   return new Date(dateStr).toLocaleDateString('he-IL');
 }
 
+// Only worth flagging once a page has clearly gone quiet — recent activity needs no badge.
+const STALE_PAGE_THRESHOLD_DAYS = 180;
+export function stalenessNote(lastPostAt) {
+  if (!lastPostAt) return null;
+  const days = Math.floor((Date.now() - new Date(lastPostAt).getTime()) / 86400000);
+  if (days < STALE_PAGE_THRESHOLD_DAYS) return null;
+  const unit = days >= 365 ? `${Math.floor(days / 365)} שנים` : `${Math.floor(days / 30)} חודשים`;
+  return `⚠️ הפוסט האחרון בעמוד פורסם לפני ${unit}`;
+}
+
 export function parseDeepAnalysis(raw) {
   if (!raw) return null;
   try { return JSON.parse(raw); } catch { return null; }
@@ -621,15 +631,24 @@ export function ProfileHeader({ profile }) {
             {profile.category && <span className="text-xs text-muted-foreground">{profile.category}</span>}
           </div>
 
-          {(profile.follower_count != null || profile.following_count != null || profile.post_count != null) && (
+          {(profile.follower_count != null || profile.following_count != null || profile.post_count != null || profile.checkin_count != null) && (
             <div className="flex gap-5 text-sm">
               {profile.follower_count != null && <span><b className="text-base">{fmtCount(profile.follower_count)}</b> עוקבים</span>}
               {profile.following_count != null && <span><b className="text-base">{fmtCount(profile.following_count)}</b> נעקבים</span>}
               {profile.post_count != null && <span><b className="text-base">{fmtCount(profile.post_count)}</b> פוסטים</span>}
+              {profile.checkin_count != null && <span><b className="text-base">{fmtCount(profile.checkin_count)}</b> ביקרו כאן</span>}
             </div>
           )}
 
-          {profile.bio && <p className="text-sm leading-relaxed whitespace-pre-line">{profile.bio}</p>}
+          {/* Facebook's "bio" is usually just its own auto-generated summary restating the
+              stats already shown above (likes/checkins/category) — showing it as prose is
+              noisy and often reads as garbled mixed-language text. Instagram's bio is a real
+              free-text field, so it's still shown there. */}
+          {profile.bio && profile.platform !== 'facebook' && <p className="text-sm leading-relaxed whitespace-pre-line">{profile.bio}</p>}
+
+          {stalenessNote(profile.last_post_at) && (
+            <p className="text-xs text-amber-600 dark:text-amber-500">{stalenessNote(profile.last_post_at)}</p>
+          )}
 
           {(profile.contact_phone || profile.contact_email || profile.contact_address || profile.external_url) && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground pt-1">

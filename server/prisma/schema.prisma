@@ -1193,6 +1193,8 @@ model BusinessSocialProfile {
   contact_address     String?
   highlight_count     Int?
   highlights          String?   // JSON array of {title, cover_url} — best-effort, actor may not return actual highlight content beyond the count
+  checkin_count       Int?      // Facebook "were here" count — null for Instagram/TikTok
+  last_post_at        DateTime? // Facebook last-post date — null for Instagram/TikTok
   raw_data            String?   // JSON: full unprocessed Apify dataset item, so nothing is lost regardless of scalar field mapping
   fetched_at          DateTime  @default(now())
 
@@ -1221,6 +1223,8 @@ model CompetitorSocialProfile {
   contact_address     String?
   highlight_count     Int?
   highlights          String?   // JSON array of {title, cover_url} — best-effort, actor may not return actual highlight content beyond the count
+  checkin_count       Int?      // Facebook "were here" count — null for Instagram/TikTok
+  last_post_at        DateTime? // Facebook last-post date — null for Instagram/TikTok
   raw_data            String?   // JSON: full unprocessed Apify dataset item, so nothing is lost regardless of scalar field mapping
   fetched_at          DateTime  @default(now())
 

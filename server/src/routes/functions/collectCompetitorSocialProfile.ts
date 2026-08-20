@@ -50,6 +50,8 @@ type ProfileFields = {
   contact_address: string | null;
   highlight_count: number | null;
   highlights: string | null;
+  checkin_count: number | null;
+  last_post_at: Date | null;
   raw_data: string | null;
 };
 
@@ -72,6 +74,8 @@ async function scrapeInstagram(url: string): Promise<ProfileFields | null> {
     contact_address: item.publicAddress || item.businessAddress || null,
     highlight_count: numOrNull(item.highlightReelCount),
     highlights: null,
+    checkin_count: null,
+    last_post_at: null,
     raw_data: JSON.stringify(item),
   };
 }
@@ -83,6 +87,22 @@ function coverPhotoUrl(coverPhoto: any): string | null {
   if (!coverPhoto) return null;
   if (typeof coverPhoto === 'string') return coverPhoto;
   return coverPhoto.url || coverPhoto.source || coverPhoto.link || coverPhoto.src || null;
+}
+
+// The "bio" field is usually just Facebook's own auto-generated page summary
+// ("{name}, {city}. {N} likes · {M} were here. {category}"), not real About text —
+// it duplicates follower_count/category we already store elsewhere. The one piece
+// of unique info in it is the check-in count, so pull that out; best-effort against
+// the English-locale phrasing, degrades to null on other locales/formats.
+function parseCheckinCount(bio: string | null | undefined): number | null {
+  const match = bio?.match(/([\d,]+)\s*were here/i);
+  return match ? numOrNull(Number(match[1].replace(/,/g, ''))) : null;
+}
+
+function dateOrNull(v: any): Date | null {
+  if (!v) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 async function scrapeFacebook(url: string): Promise<ProfileFields | null> {
@@ -104,6 +124,8 @@ async function scrapeFacebook(url: string): Promise<ProfileFields | null> {
     contact_address: item.address || null,
     highlight_count: null,
     highlights: null,
+    checkin_count: parseCheckinCount(item.bio),
+    last_post_at: dateOrNull(item.engagement?.lastPostDate),
     raw_data: JSON.stringify(item),
   };
 }
