@@ -2,6 +2,7 @@
 import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { LONG_SCAN_TIMEOUT_MS } from '@/api/client';
 import { Plus, Loader2, ChevronDown, Search, MoreVertical, Radio, Upload, Sparkles, RefreshCw, Send, Image as ImageIcon, ExternalLink, TrendingUp, X, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
@@ -1049,6 +1050,22 @@ export default function Marketing() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['organicPosts', bpId] }); toast.success('נמחק'); },
   });
 
+  const [bulkCount, setBulkCount] = useState(3);
+  const [bulkGenerating, setBulkGenerating] = useState(false);
+
+  const handleBulkGenerate = async () => {
+    setBulkGenerating(true);
+    try {
+      const res = await base44.functions.invoke('generateBulkPosts', { businessProfileId: bpId, count: bulkCount }, LONG_SCAN_TIMEOUT_MS);
+      const data = res?.data || res;
+      await queryClient.invalidateQueries({ queryKey: ['organicPosts', bpId] });
+      toast.success(`נוצרו ${data?.created ?? 0} מתוך ${data?.requested ?? bulkCount} פוסטים`);
+    } catch (err) {
+      toast.error('שגיאה ביצירת פוסטים: ' + (err?.message || 'נסה שוב'));
+    }
+    setBulkGenerating(false);
+  };
+
   // ── Audience intelligence ──
   const [audienceLoading, setAudienceLoading] = useState(false);
   const [audiencePlan, setAudiencePlan] = useState(null);
@@ -1283,17 +1300,38 @@ ${audienceCtx}
 
       {/* Organic tab */}
       {activeTab === 'organic' && (
-        <>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <p className="text-[12px] text-foreground-muted">
+              {organicPosts.length} פוסטים
+              {!(businessProfile.content_trends_copy_insight || businessProfile.outlier_insight) && (
+                <span className="text-foreground-muted/60"> · 💡 הריצו ניתוח מגמות תוכן מתחרים לתוצאות טובות יותר ביצירה עם AI</span>
+              )}
+            </p>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowOrgCreate(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[11px] font-medium text-foreground-muted hover:text-foreground hover:bg-secondary transition-all">
+                <Plus className="w-3.5 h-3.5" /> פוסט חדש
+              </button>
+              <input
+                type="number" min={1} max={10} value={bulkCount}
+                onChange={e => setBulkCount(Math.max(1, Math.min(10, parseInt(e.target.value, 10) || 1)))}
+                className="w-14 text-[13px] font-bold text-foreground bg-secondary border border-border rounded-lg px-2 py-1.5 text-center focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <button onClick={handleBulkGenerate} disabled={bulkGenerating || !bpId}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-foreground text-background rounded-lg text-[11px] font-semibold hover:opacity-90 disabled:opacity-60">
+                {bulkGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                {bulkGenerating ? 'יוצר...' : `צור ${bulkCount} פוסטים`}
+              </button>
+            </div>
+          </div>
+
           {loadingOrganic ? (
             <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-foreground-muted" /></div>
           ) : organicPosts.length === 0 ? (
-            <div className="text-center py-20">
+            <div className="text-center py-16">
               <ImageIcon className="w-10 h-10 text-foreground-muted opacity-30 mx-auto mb-3" />
-              <p className="text-[13px] text-foreground-muted mb-4">אין פוסטים עדיין</p>
-              <button onClick={() => setShowOrgCreate(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-lg text-[13px] font-semibold hover:opacity-90">
-                <Plus className="w-4 h-4" /> צור פוסט ראשון
-              </button>
+              <p className="text-[13px] text-foreground-muted">אין פוסטים עדיין</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1302,7 +1340,7 @@ ${audienceCtx}
               ))}
             </div>
           )}
-        </>
+        </div>
       )}
 
       {/* Media library tab */}
