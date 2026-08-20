@@ -1051,12 +1051,13 @@ export default function Marketing() {
   });
 
   const [bulkCount, setBulkCount] = useState(3);
+  const [bulkPlatform, setBulkPlatform] = useState('both'); // 'both' | 'facebook' | 'instagram'
   const [bulkGenerating, setBulkGenerating] = useState(false);
 
   const handleBulkGenerate = async () => {
     setBulkGenerating(true);
     try {
-      const res = await base44.functions.invoke('generateBulkPosts', { businessProfileId: bpId, count: bulkCount }, LONG_SCAN_TIMEOUT_MS);
+      const res = await base44.functions.invoke('generateBulkPosts', { businessProfileId: bpId, count: bulkCount, platform: bulkPlatform }, LONG_SCAN_TIMEOUT_MS);
       const data = res?.data || res;
       await queryClient.invalidateQueries({ queryKey: ['organicPosts', bpId] });
       toast.success(`נוצרו ${data?.created ?? 0} מתוך ${data?.requested ?? bulkCount} פוסטים`);
@@ -1313,6 +1314,20 @@ ${audienceCtx}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[11px] font-medium text-foreground-muted hover:text-foreground hover:bg-secondary transition-all">
                 <Plus className="w-3.5 h-3.5" /> פוסט חדש
               </button>
+              <div className="flex items-center gap-1 p-1 bg-secondary rounded-lg">
+                {[
+                  { id: 'both', label: 'שניהם' },
+                  { id: 'facebook', label: '📘 פייסבוק' },
+                  { id: 'instagram', label: '📸 אינסטגרם' },
+                ].map(p => (
+                  <button key={p.id} onClick={() => setBulkPlatform(p.id)}
+                    className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
+                      bulkPlatform === p.id ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
+                    }`}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
               <input
                 type="number" min={1} max={10} value={bulkCount}
                 onChange={e => setBulkCount(Math.max(1, Math.min(10, parseInt(e.target.value, 10) || 1)))}

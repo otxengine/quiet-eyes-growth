@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 
-const ALLOWED_PLATFORMS = new Set(['instagram', 'facebook', 'tiktok']);
+const SUPPORTED_PLATFORMS = ['facebook', 'instagram']; // tiktok not supported for this feature yet
 
 /**
  * generateBulkPosts
@@ -13,12 +13,15 @@ const ALLOWED_PLATFORMS = new Set(['instagram', 'facebook', 'tiktok']);
  * elsewhere) and the business's own media library. Each post gets a matching
  * media asset only when one genuinely fits; otherwise no image.
  *
- * Body: { businessProfileId, count }
+ * Body: { businessProfileId, count, platform? } — platform: 'facebook' | 'instagram' | 'both' (default 'both')
  * Returns: { created, requested, posts }
  */
 export async function generateBulkPosts(req: Request, res: Response) {
   const { businessProfileId } = req.body;
   const count = Math.max(1, Math.min(10, parseInt(req.body.count, 10) || 0));
+  const allowedPlatforms = SUPPORTED_PLATFORMS.includes(req.body.platform)
+    ? [req.body.platform]
+    : SUPPORTED_PLATFORMS; // 'both' or anything else/unset → either platform
 
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
   if (!count) return res.status(400).json({ error: 'count must be between 1 and 10' });
@@ -83,14 +86,14 @@ ${mediaBlock}
 כללי כתיבה:
 1. כל פוסט בנושא/זווית/Hook שונה לגמרי מהאחרים — אסור פוסטים דומים.
 2. כל פוסט: Hook פותח חזק, גוף עם ערך אמיתי (60-100 מילה), CTA ברור בסוף, 3-6 האשטאגים רלוונטיים.
-3. platform לכל פוסט: בחר instagram/facebook/tiktok לפי מה שהכי מתאים לתוכן, תוך גיוון בין הפוסטים.
+3. platform לכל פוסט: ${allowedPlatforms.length > 1 ? `בחר ${allowedPlatforms.join('/')} לפי מה שהכי מתאים לתוכן, תוך גיוון בין הפוסטים` : `כל הפוסטים עבור ${allowedPlatforms[0]} בלבד`}.
 4. media_asset_id: אך ורק id מדויק מהרשימה למעלה, או null. לעולם אל תמציא id.
 
 Return ONLY valid JSON. ALL string values in Hebrew (except platform/media_asset_id):
 {
   "posts": [
     {
-      "platform": "instagram|facebook|tiktok",
+      "platform": "${allowedPlatforms.join('|')}",
       "topic": "תווית פנימית קצרה",
       "hook": "...",
       "body": "...",
@@ -125,7 +128,7 @@ Return ONLY valid JSON. ALL string values in Hebrew (except platform/media_asset
         mediaAssetId = p.media_asset_id;
         usedAssetIds.add(mediaAssetId);
       }
-      const platform = ALLOWED_PLATFORMS.has(p?.platform) ? p.platform : 'instagram';
+      const platform = allowedPlatforms.includes(p?.platform) ? p.platform : allowedPlatforms[0];
 
       const row = await prisma.organicPost.create({
         data: {
