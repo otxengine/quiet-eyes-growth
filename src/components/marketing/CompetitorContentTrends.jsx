@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import {
-  computeOutlierPosts, useAnalyzeContentTrends, useAnalyzeBioTrends,
+  computeOutlierPosts, useAnalyzeContentTrends, useAnalyzeBioTrends, CollapsibleSection,
 } from '@/components/competitors/socialShared';
 
 const CONTENT_TRENDS_POOL_CAP = 20; // mirrors MAX_POSTS_PER_CALL in analyzeContentTrends.ts
@@ -89,77 +89,77 @@ export default function CompetitorContentTrends({ businessProfile }) {
   if (!pooledOutlierPosts.length && !hasProfilesWithBio) return null;
 
   return (
-    <div className="space-y-3">
-      <p className="text-sm font-semibold text-foreground">ניתוח תוכן מתחרים</p>
-
-      {pooledOutlierPosts.length > 0 && (
-        <div className="border border-border rounded-xl bg-card p-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex-1">
-              🌐 מגמות תוכן בין כל המתחרים ({pooledOutlierPosts.length} פוסטים מצטיינים)
-            </p>
-            <button
-              onClick={analyzeTrendsNow}
-              disabled={analyzingTrends}
-              className="text-[10px] text-primary underline disabled:opacity-50"
-            >
-              {analyzingTrends ? 'מנתח...' : '🔍 נתחו מגמות תוכן'}
-            </button>
+    <CollapsibleSection title="🔎 מחקר סושיאל מתחרים">
+      <div className="space-y-3">
+        {pooledOutlierPosts.length > 0 && (
+          <div className="border border-border rounded-xl bg-card p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex-1">
+                🌐 מגמות תוכן בין כל המתחרים ({pooledOutlierPosts.length} פוסטים מצטיינים)
+              </p>
+              <button
+                onClick={analyzeTrendsNow}
+                disabled={analyzingTrends}
+                className="text-[10px] text-primary underline disabled:opacity-50"
+              >
+                {analyzingTrends ? 'מנתח...' : '🔍 נתחו מגמות תוכן'}
+              </button>
+            </div>
+            {contentTrendsCopyInsight && (
+              <div className="border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3">
+                <p className="text-[10px] font-semibold text-amber-800 dark:text-amber-300 mb-1">📝 מגמות בקופי</p>
+                <p className="text-xs leading-relaxed text-amber-950 dark:text-amber-100">{contentTrendsCopyInsight}</p>
+                {contentTrendsCopyExamples?.length > 0 && (
+                  <ul className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800 space-y-1">
+                    {contentTrendsCopyExamples.map((ex, i) => (
+                      <li key={i} className="text-[11px] text-amber-900 dark:text-amber-200">
+                        <span className="text-amber-600 dark:text-amber-400">{ex.competitorName}:</span> "{ex.text}"
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            {contentTrendsVisualInsight && (
+              <div className="border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/30 rounded-lg p-3">
+                <p className="text-[10px] font-semibold text-sky-800 dark:text-sky-300 mb-1">🎨 מגמות ויזואליות</p>
+                <p className="text-xs leading-relaxed text-sky-950 dark:text-sky-100">{contentTrendsVisualInsight}</p>
+              </div>
+            )}
           </div>
-          {contentTrendsCopyInsight && (
-            <div className="border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3">
-              <p className="text-[10px] font-semibold text-amber-800 dark:text-amber-300 mb-1">📝 מגמות בקופי</p>
-              <p className="text-xs leading-relaxed text-amber-950 dark:text-amber-100">{contentTrendsCopyInsight}</p>
-              {contentTrendsCopyExamples?.length > 0 && (
-                <ul className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800 space-y-1">
-                  {contentTrendsCopyExamples.map((ex, i) => (
-                    <li key={i} className="text-[11px] text-amber-900 dark:text-amber-200">
-                      <span className="text-amber-600 dark:text-amber-400">{ex.competitorName}:</span> "{ex.text}"
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-          {contentTrendsVisualInsight && (
-            <div className="border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/30 rounded-lg p-3">
-              <p className="text-[10px] font-semibold text-sky-800 dark:text-sky-300 mb-1">🎨 מגמות ויזואליות</p>
-              <p className="text-xs leading-relaxed text-sky-950 dark:text-sky-100">{contentTrendsVisualInsight}</p>
-            </div>
-          )}
-        </div>
-      )}
+        )}
 
-      {hasProfilesWithBio && (
-        <div className="border border-border rounded-xl bg-card p-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex-1">
-              📇 מבנה ביו של מתחרים
-            </p>
-            <button
-              onClick={analyzeBioTrendsNow}
-              disabled={analyzingBioTrends}
-              className="text-[10px] text-primary underline disabled:opacity-50"
-            >
-              {analyzingBioTrends ? 'מנתח...' : '🔍 נתחו ביו מתחרים'}
-            </button>
-          </div>
-          {contentTrendsBioInsight && (
-            <div className="border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg p-3">
-              <p className="text-xs leading-relaxed text-emerald-950 dark:text-emerald-100">{contentTrendsBioInsight}</p>
-              {contentTrendsBioExamples?.length > 0 && (
-                <ul className="mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-800 space-y-1">
-                  {contentTrendsBioExamples.map((ex, i) => (
-                    <li key={i} className="text-[11px] text-emerald-900 dark:text-emerald-200">
-                      <span className="text-emerald-600 dark:text-emerald-400">{ex.competitorName}:</span> "{ex.text}"
-                    </li>
-                  ))}
-                </ul>
-              )}
+        {hasProfilesWithBio && (
+          <div className="border border-border rounded-xl bg-card p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex-1">
+                📇 מבנה ביו של מתחרים
+              </p>
+              <button
+                onClick={analyzeBioTrendsNow}
+                disabled={analyzingBioTrends}
+                className="text-[10px] text-primary underline disabled:opacity-50"
+              >
+                {analyzingBioTrends ? 'מנתח...' : '🔍 נתחו ביו מתחרים'}
+              </button>
             </div>
-          )}
-        </div>
-      )}
-    </div>
+            {contentTrendsBioInsight && (
+              <div className="border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg p-3">
+                <p className="text-xs leading-relaxed text-emerald-950 dark:text-emerald-100">{contentTrendsBioInsight}</p>
+                {contentTrendsBioExamples?.length > 0 && (
+                  <ul className="mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-800 space-y-1">
+                    {contentTrendsBioExamples.map((ex, i) => (
+                      <li key={i} className="text-[11px] text-emerald-900 dark:text-emerald-200">
+                        <span className="text-emerald-600 dark:text-emerald-400">{ex.competitorName}:</span> "{ex.text}"
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </CollapsibleSection>
   );
 }
