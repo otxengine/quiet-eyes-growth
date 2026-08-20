@@ -1197,6 +1197,11 @@ model BusinessSocialProfile {
   last_post_at        DateTime? // Facebook last-post date — null for Instagram/TikTok
   raw_data            String?   // JSON: full unprocessed Apify dataset item, so nothing is lost regardless of scalar field mapping
   fetched_at          DateTime  @default(now())
+  // AI-suggested rewrite of this platform's bio, grounded in the winning-bio
+  // pattern synthesized across tracked competitors (BusinessProfile.content_trends_bio_insight).
+  suggested_bio           String?  // proposed rewritten bio (Hebrew)
+  suggested_bio_rationale String?  // 1-3 sentences: what changed and why (Hebrew)
+  suggested_bio_at        String?  // ISO timestamp
 
   @@unique([linked_business, platform])
   @@map("business_social_profiles")

@@ -136,6 +136,7 @@ import { analyzeTopCompetitorPosts } from './analyzeTopCompetitorPosts';
 import { analyzeTopOwnPosts } from './analyzeTopOwnPosts';
 import { analyzeContentTrends } from './analyzeContentTrends';
 import { analyzeBioProfiles } from './analyzeBioProfiles';
+import { suggestBioFix } from './suggestBioFix';
 
 const router = Router();
 
@@ -287,6 +288,7 @@ const FUNCTION_MAP: Record<string, any> = {
   analyzeTopOwnPosts,
   analyzeContentTrends,
   analyzeBioProfiles,
+  suggestBioFix,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,

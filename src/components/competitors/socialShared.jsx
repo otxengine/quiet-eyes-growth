@@ -595,6 +595,33 @@ export function useAnalyzeBioTrends(hasProfiles, { businessProfileId, onDone, in
   return { analyzing, analyzeNow, bioInsight, bioExamples };
 }
 
+/**
+ * Suggests a rewritten version of the business's OWN bio per platform,
+ * grounded in the winning-bio pattern already synthesized across
+ * competitors (useAnalyzeBioTrends must have run first — the backend
+ * 400s otherwise). Returns an array of {platform, suggested_bio, rationale}.
+ */
+export function useSuggestBioFix(canSuggest, { businessProfileId, onDone, initialSuggestions }) {
+  const [analyzing, setAnalyzing] = useState(false);
+  const [suggestions, setSuggestions] = useState(initialSuggestions ?? []);
+
+  const analyzeNow = async () => {
+    if (!canSuggest || analyzing) return;
+    setAnalyzing(true);
+    try {
+      const result = await base44.functions.invoke('suggestBioFix', { businessProfileId }, 60000);
+      const data = result?.data ?? result;
+      if (data?.suggestions?.length) setSuggestions(data.suggestions);
+      onDone?.();
+    } catch (e) {
+      console.warn('[useSuggestBioFix] failed:', e.message);
+    }
+    setAnalyzing(false);
+  };
+
+  return { analyzing, analyzeNow, suggestions };
+}
+
 export function ProfileHeader({ profile }) {
   let highlights = [];
   try { highlights = profile.highlights ? JSON.parse(profile.highlights) : []; } catch { /* ignore malformed */ }

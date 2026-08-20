@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import {
-  computeOutlierPosts, useAnalyzeContentTrends, useAnalyzeBioTrends, CollapsibleSection,
+  apiFetch, computeOutlierPosts, useAnalyzeContentTrends, useAnalyzeBioTrends, useSuggestBioFix, CollapsibleSection,
 } from '@/components/competitors/socialShared';
 
 const CONTENT_TRENDS_POOL_CAP = 20; // mirrors MAX_POSTS_PER_CALL in analyzeContentTrends.ts
@@ -38,6 +38,15 @@ export default function CompetitorContentTrends({ businessProfile }) {
     queryFn:  () => base44.entities.CompetitorSocialProfile.filter({ competitor_id: { in: compIds } }, '-fetched_at', 300),
     enabled:  !!bpId && compIds.length > 0,
   });
+
+  // Own business's bio(s), same source BusinessSocialSnapshot uses — needed as
+  // the "before" text for suggestBioFix's rewrite.
+  const { data: ownProfileData } = useQuery({
+    queryKey: ['businessSnapshotProfile', bpId],
+    queryFn:  () => apiFetch(`/social/snapshot/profile?businessProfileId=${bpId}`),
+    enabled:  !!bpId,
+  });
+  const ownProfilesWithBio = (ownProfileData?.profiles ?? []).filter(p => p.bio?.trim());
 
   // Average weekly posting cadence: per competitor, posts / (span between their
   // first and last tracked post in weeks), then averaged across competitors —
@@ -101,6 +110,21 @@ export default function CompetitorContentTrends({ businessProfile }) {
     initialBioInsight: businessProfile?.content_trends_bio_insight,
     initialBioExamples,
     onDone: () => queryClient.invalidateQueries({ queryKey: ['socialProfiles', bpId] }),
+  });
+
+  const initialBioFixSuggestions = useMemo(() => ownProfilesWithBio
+    .filter(p => p.suggested_bio)
+    .map(p => ({ platform: p.platform, suggested_bio: p.suggested_bio, rationale: p.suggested_bio_rationale })),
+    [ownProfilesWithBio]);
+
+  const canSuggestBioFix = !!contentTrendsBioInsight && ownProfilesWithBio.length > 0;
+
+  const {
+    analyzing: analyzingBioFix, analyzeNow: analyzeBioFixNow, suggestions: bioFixSuggestions,
+  } = useSuggestBioFix(canSuggestBioFix, {
+    businessProfileId: bpId,
+    initialSuggestions: initialBioFixSuggestions,
+    onDone: () => queryClient.invalidateQueries({ queryKey: ['businessSnapshotProfile', bpId] }),
   });
 
   if (!pooledOutlierPosts.length && !hasProfilesWithBio && avgPostsPerWeek == null) return null;
@@ -181,6 +205,34 @@ export default function CompetitorContentTrends({ businessProfile }) {
                     ))}
                   </ul>
                 )}
+              </div>
+            )}
+
+            {canSuggestBioFix && (
+              <div className="border-t border-border pt-2 space-y-2">
+                <div className="flex items-center gap-2">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex-1">
+                    💡 שיפור לביו שלי
+                  </p>
+                  <button
+                    onClick={analyzeBioFixNow}
+                    disabled={analyzingBioFix}
+                    className="text-[10px] text-primary underline disabled:opacity-50"
+                  >
+                    {analyzingBioFix ? 'מנתח...' : '🔍 הצע שיפור לביו שלי'}
+                  </button>
+                </div>
+                {bioFixSuggestions.map((s, i) => (
+                  <div key={i} className="border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 rounded-lg p-3 space-y-1.5">
+                    <p className="text-[10px] font-semibold text-violet-800 dark:text-violet-300">{s.platform}</p>
+                    {s.suggested_bio && (
+                      <p className="text-xs leading-relaxed text-violet-950 dark:text-violet-100 whitespace-pre-line">{s.suggested_bio}</p>
+                    )}
+                    {s.rationale && (
+                      <p className="text-[11px] text-violet-700 dark:text-violet-400 border-t border-violet-200 dark:border-violet-800 pt-1.5">{s.rationale}</p>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
