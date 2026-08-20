@@ -39,6 +39,23 @@ export default function CompetitorContentTrends({ businessProfile }) {
     enabled:  !!bpId && compIds.length > 0,
   });
 
+  // Average weekly posting cadence: per competitor, posts / (span between their
+  // first and last tracked post in weeks), then averaged across competitors —
+  // avoids skewing toward whichever competitor has the most total posts tracked.
+  const avgPostsPerWeek = useMemo(() => {
+    const byCompetitor = {};
+    for (const p of allPosts) { if (!p.posted_at) continue; (byCompetitor[p.competitor_id] ||= []).push(p); }
+    const weeklyRates = Object.values(byCompetitor)
+      .filter(posts => posts.length >= 2)
+      .map(posts => {
+        const times = posts.map(p => new Date(p.posted_at).getTime()).sort((a, b) => a - b);
+        const spanWeeks = Math.max((times[times.length - 1] - times[0]) / (7 * 24 * 3600 * 1000), 1);
+        return posts.length / spanWeeks;
+      });
+    if (!weeklyRates.length) return null;
+    return weeklyRates.reduce((s, v) => s + v, 0) / weeklyRates.length;
+  }, [allPosts]);
+
   // Pools each competitor's own outlier posts (same detection as SocialCompetition's
   // RivalCard) into one cross-competitor set.
   const pooledOutlierPosts = useMemo(() => {
@@ -86,11 +103,20 @@ export default function CompetitorContentTrends({ businessProfile }) {
     onDone: () => queryClient.invalidateQueries({ queryKey: ['socialProfiles', bpId] }),
   });
 
-  if (!pooledOutlierPosts.length && !hasProfilesWithBio) return null;
+  if (!pooledOutlierPosts.length && !hasProfilesWithBio && avgPostsPerWeek == null) return null;
 
   return (
     <CollapsibleSection title="🔎 מחקר סושיאל מתחרים">
       <div className="space-y-3">
+        {avgPostsPerWeek != null && (
+          <div className="border border-border rounded-xl bg-card p-3 flex items-center gap-2">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex-1">
+              📊 ממוצע פוסטים שבועי למתחרה
+            </p>
+            <p className="text-sm font-bold text-foreground">{avgPostsPerWeek.toFixed(1)}</p>
+          </div>
+        )}
+
         {pooledOutlierPosts.length > 0 && (
           <div className="border border-border rounded-xl bg-card p-3 space-y-2">
             <div className="flex items-center gap-2">
