@@ -3,7 +3,7 @@ import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { LONG_SCAN_TIMEOUT_MS } from '@/api/client';
-import { Plus, Loader2, ChevronDown, Search, MoreVertical, Radio, Upload, Sparkles, RefreshCw, Send, Image as ImageIcon, ExternalLink, TrendingUp, X, Trash2 } from 'lucide-react';
+import { Plus, Loader2, ChevronDown, Search, MoreVertical, Radio, Upload, Sparkles, RefreshCw, Send, Image as ImageIcon, ExternalLink, TrendingUp, X, Trash2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
@@ -289,7 +289,7 @@ function CampaignCard({ campaign, onDelete, bpId, onPublished }) {
 
 // ── Organic Post Card ─────────────────────────────────────────────────────────
 
-function OrganicCard({ post, onDelete }) {
+function OrganicCard({ post, onDelete, onOpen }) {
   const platCfg = ORGANIC_PLATFORMS.find(p => p.id === post.platform) || ORGANIC_PLATFORMS[0];
   const status  = ORGANIC_STATUS[post.status] || ORGANIC_STATUS.draft;
 
@@ -301,9 +301,14 @@ function OrganicCard({ post, onDelete }) {
         <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-foreground-muted">
           {post.post_type === 'story' ? '📱 סטורי' : '📄 פוסט'}
         </span>
-        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full mr-auto ${status.cls}`}>{status.label}</span>
+        {post.approved_at && (
+          <span className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700">
+            <CheckCircle2 className="w-3 h-3" /> מאושר
+          </span>
+        )}
+        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${post.approved_at ? '' : 'mr-auto'} ${status.cls}`}>{status.label}</span>
       </div>
-      <div className="flex gap-3 p-4">
+      <button onClick={() => onOpen(post)} className="flex gap-3 p-4 w-full text-right hover:bg-secondary/30 transition-colors">
         {post.image_url && (
           <img
             src={post.image_url.startsWith('data:') ? post.image_url : post.image_url}
@@ -317,12 +322,60 @@ function OrganicCard({ post, onDelete }) {
           )}
           <p className="text-[12px] text-foreground leading-relaxed line-clamp-3">{post.content || '(אין תוכן)'}</p>
         </div>
-      </div>
+      </button>
       <div className="flex items-center gap-2 px-4 py-2 border-t border-border bg-secondary/30">
         <span className="text-[10px] text-foreground-muted mr-auto">{fmtDate(post.published_at || post.created_date)}</span>
         <button onClick={() => onDelete(post.id)} className="text-[11px] text-foreground-muted hover:text-red-500 transition-colors">
           <Trash2 className="w-3 h-3" />
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Organic Post Detail / Approve Modal ───────────────────────────────────────
+
+function OrganicPostDetailModal({ post, onClose, onToggleApprove, toggling }) {
+  const platCfg = ORGANIC_PLATFORMS.find(p => p.id === post.platform) || ORGANIC_PLATFORMS[0];
+  const status  = ORGANIC_STATUS[post.status] || ORGANIC_STATUS.draft;
+  const approved = !!post.approved_at;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40" dir="rtl" onClick={onClose}>
+      <div className="w-full max-w-lg bg-card rounded-t-2xl md:rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-border sticky top-0 bg-card z-10">
+          <span className="text-[14px]">{platCfg.icon}</span>
+          <span className="text-[13px] font-semibold text-foreground">{platCfg.label}</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-foreground-muted">
+            {post.post_type === 'story' ? '📱 סטורי' : '📄 פוסט'}
+          </span>
+          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${status.cls}`}>{status.label}</span>
+          <button onClick={onClose} className="mr-auto text-foreground-muted hover:text-foreground"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {post.signal_summary && (
+            <p className="text-[11px] text-foreground-muted opacity-70">💡 {post.signal_summary}</p>
+          )}
+          {post.image_url && (
+            <img src={post.image_url} alt="" className="w-full max-h-96 object-cover rounded-xl border border-border" />
+          )}
+          <p className="text-[13px] text-foreground leading-relaxed whitespace-pre-wrap">{post.content || '(אין תוכן)'}</p>
+        </div>
+
+        <div className="flex gap-2 px-5 py-4 border-t border-border">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 border border-border rounded-xl text-[13px] text-foreground-muted hover:text-foreground transition-colors">
+            סגור
+          </button>
+          <button onClick={() => onToggleApprove(post)} disabled={toggling}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-bold transition-all disabled:opacity-60 ${
+              approved ? 'border border-green-300 text-green-700 hover:bg-green-50' : 'bg-green-600 text-white hover:opacity-90'
+            }`}>
+            {toggling ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+            {approved ? 'בטל אישור' : 'אשר פוסט'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1050,6 +1103,18 @@ export default function Marketing() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['organicPosts', bpId] }); toast.success('נמחק'); },
   });
 
+  const [detailPost, setDetailPost] = useState(null);
+
+  const approveOrganic = useMutation({
+    mutationFn: ({ id, approve }) => base44.entities.OrganicPost.update(id, { approved_at: approve ? new Date().toISOString() : null }),
+    onSuccess: (_data, { approve }) => {
+      queryClient.invalidateQueries({ queryKey: ['organicPosts', bpId] });
+      setDetailPost(null);
+      toast.success(approve ? 'הפוסט אושר' : 'האישור בוטל');
+    },
+    onError: (err) => toast.error('שגיאה: ' + (err?.message || 'נסה שוב')),
+  });
+
   const [bulkCount, setBulkCount] = useState(3);
   const [bulkPlatform, setBulkPlatform] = useState('both'); // 'both' | 'facebook' | 'instagram'
   const [bulkGenerating, setBulkGenerating] = useState(false);
@@ -1351,7 +1416,7 @@ ${audienceCtx}
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {organicPosts.map(p => (
-                <OrganicCard key={p.id} post={p} onDelete={(id) => deleteOrganic.mutate(id)} />
+                <OrganicCard key={p.id} post={p} onDelete={(id) => deleteOrganic.mutate(id)} onOpen={(post) => setDetailPost(post)} />
               ))}
             </div>
           )}
@@ -1551,6 +1616,15 @@ ${audienceCtx}
           signalContext={waBlastCtx}
           audienceData={latestAudience}
           onClose={() => setShowWaBlast(false)}
+        />
+      )}
+
+      {detailPost && (
+        <OrganicPostDetailModal
+          post={detailPost}
+          onClose={() => setDetailPost(null)}
+          onToggleApprove={(post) => approveOrganic.mutate({ id: post.id, approve: !post.approved_at })}
+          toggling={approveOrganic.isPending}
         />
       )}
     </div>

@@ -975,6 +975,7 @@ model OrganicPost {
   image_url       String?   // external URL or data URL
   status          String    @default("draft") // 'draft' | 'published'
   published_at    DateTime?
+  approved_at     DateTime? // set when the business owner approves the draft; null = not yet approved
 
   @@map("organic_posts")
 }
