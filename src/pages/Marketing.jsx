@@ -12,6 +12,7 @@ import BusinessSocialSnapshot from '@/components/marketing/BusinessSocialSnapsho
 import CompetitorContentTrends from '@/components/marketing/CompetitorContentTrends';
 import SocialProfileSuggestions from '@/components/marketing/SocialProfileSuggestions';
 import MediaLibrary from '@/components/marketing/MediaLibrary';
+import { PLATFORM_LABELS } from '@/components/competitors/socialShared';
 const PLATFORM_CONFIG = {
   meta:      { label: 'Facebook',   icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
   instagram: { label: 'Instagram',  icon: '📸', color: '#e1306c', bg: '#fde8f0' },
@@ -377,6 +378,179 @@ function OrganicPostDetailModal({ post, onClose, onToggleApprove, toggling }) {
             {approved ? 'בטל אישור' : 'אשר פוסט'}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Bulk Generate Setup Modal ──────────────────────────────────────────────────
+
+function BulkGenerateSetupModal({ onClose, onGenerate, generating }) {
+  const [count, setCount] = useState(3);
+  const [platform, setPlatform] = useState('both');
+  const [specialRequest, setSpecialRequest] = useState('');
+  const [scheduledAt, setScheduledAt] = useState('');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40" dir="rtl" onClick={onClose}>
+      <div className="w-full max-w-lg bg-card rounded-t-2xl md:rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border sticky top-0 bg-card z-10">
+          <h2 className="text-[15px] font-bold text-foreground">✨ צור פוסטים חדשים</h2>
+          <button onClick={onClose} className="text-foreground-muted hover:text-foreground"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <div>
+              <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">כמות</p>
+              <input
+                type="number" min={1} max={10} value={count}
+                onChange={e => setCount(Math.max(1, Math.min(10, parseInt(e.target.value, 10) || 1)))}
+                className="w-16 text-[13px] font-bold text-foreground bg-secondary border border-border rounded-lg px-2 py-1.5 text-center focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <div className="flex-1">
+              <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">פלטפורמה</p>
+              <div className="flex items-center gap-1 p-1 bg-secondary rounded-lg w-fit">
+                {[
+                  { id: 'both', label: 'שניהם' },
+                  { id: 'facebook', label: '📘 פייסבוק' },
+                  { id: 'instagram', label: '📸 אינסטגרם' },
+                ].map(p => (
+                  <button key={p.id} onClick={() => setPlatform(p.id)}
+                    className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
+                      platform === p.id ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
+                    }`}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">משהו ספציפי שתרצו שיופיע בפוסטים? (אופציונלי)</p>
+            <textarea
+              value={specialRequest}
+              onChange={e => setSpecialRequest(e.target.value)}
+              placeholder="לדוגמה: מבצע 20% לרגל יום האהבה, השקת מוצר חדש..."
+              rows={3}
+              className="w-full text-[13px] text-foreground bg-secondary border border-border rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed"
+            />
+          </div>
+
+          <div>
+            <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">מתי תרצו לפרסם? (אופציונלי)</p>
+            <input
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={e => setScheduledAt(e.target.value)}
+              className="w-full text-[13px] text-foreground bg-secondary border border-border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-2 px-5 py-4 border-t border-border">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 border border-border rounded-xl text-[13px] text-foreground-muted hover:text-foreground transition-colors">
+            ביטול
+          </button>
+          <button
+            onClick={() => onGenerate({
+              count,
+              platform,
+              special_request: specialRequest.trim() || undefined,
+              scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
+            })}
+            disabled={generating}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-foreground text-background rounded-xl text-[13px] font-bold hover:opacity-90 disabled:opacity-60">
+            {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            {generating ? 'יוצר...' : 'צור פוסטים'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Bulk Review Queue Modal ─────────────────────────────────────────────────────
+
+function BulkReviewQueueModal({ posts, index, onClose, onApprove, onDisapprove, onRevise, busy }) {
+  const [feedbackMode, setFeedbackMode] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const [revising, setRevising] = useState(false);
+  const post = posts[index];
+  if (!post) return null;
+
+  const platCfg = ORGANIC_PLATFORMS.find(p => p.id === post.platform) || ORGANIC_PLATFORMS[0];
+
+  const submitFeedback = async () => {
+    if (!feedback.trim()) return;
+    setRevising(true);
+    await onRevise(post, feedback.trim());
+    setRevising(false);
+    setFeedback('');
+    setFeedbackMode(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40" dir="rtl">
+      <div className="w-full max-w-lg bg-card rounded-t-2xl md:rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-border sticky top-0 bg-card z-10">
+          <span className="text-[14px]">{platCfg.icon}</span>
+          <span className="text-[13px] font-semibold text-foreground">{platCfg.label}</span>
+          <span className="text-[11px] text-foreground-muted mr-auto">פוסט {index + 1} מתוך {posts.length}</span>
+          <button onClick={onClose} className="text-foreground-muted hover:text-foreground"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {post.image_url && (
+            <img src={post.image_url} alt="" className="w-full max-h-80 object-cover rounded-xl border border-border" />
+          )}
+          <p className="text-[13px] text-foreground leading-relaxed whitespace-pre-wrap">{post.content || '(אין תוכן)'}</p>
+
+          {feedbackMode && (
+            <div className="space-y-2">
+              <textarea
+                value={feedback}
+                onChange={e => setFeedback(e.target.value)}
+                placeholder="מה תרצו לשנות?"
+                rows={3}
+                autoFocus
+                className="w-full text-[13px] text-foreground bg-secondary border border-border rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed"
+              />
+              <div className="flex gap-2">
+                <button onClick={() => { setFeedbackMode(false); setFeedback(''); }}
+                  className="flex-1 py-2 text-[12px] border border-border rounded-lg text-foreground-muted hover:text-foreground transition-colors">
+                  ביטול
+                </button>
+                <button onClick={submitFeedback} disabled={revising || !feedback.trim()}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[12px] font-medium bg-foreground text-background rounded-lg disabled:opacity-60">
+                  {revising && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  שלח בקשה
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {!feedbackMode && (
+          <div className="flex gap-2 px-5 py-4 border-t border-border">
+            <button onClick={() => onDisapprove(post)} disabled={busy}
+              className="flex-1 py-2.5 border border-red-200 text-red-600 rounded-xl text-[13px] font-medium hover:bg-red-50 transition-colors disabled:opacity-60">
+              דחה
+            </button>
+            <button onClick={() => setFeedbackMode(true)} disabled={busy}
+              className="flex-1 py-2.5 border border-border rounded-xl text-[13px] text-foreground-muted hover:text-foreground transition-colors disabled:opacity-60">
+              בקש שינוי
+            </button>
+            <button onClick={() => onApprove(post)} disabled={busy}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-green-600 text-white rounded-xl text-[13px] font-bold hover:opacity-90 disabled:opacity-60">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              אשר
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -906,7 +1080,7 @@ function CalendarView({ posts }) {
 
   const postsByDay = {};
   posts.forEach(post => {
-    const dateStr = (post.published_at || post.created_date || '').slice(0, 10);
+    const dateStr = (post.scheduled_at || post.published_at || post.created_date || '').slice(0, 10);
     if (!dateStr) return;
     if (!postsByDay[dateStr]) postsByDay[dateStr] = [];
     postsByDay[dateStr].push(post);
@@ -1042,6 +1216,12 @@ export default function Marketing() {
   const [searchParams] = useSearchParams();
 
   const bpId = businessProfile?.id;
+  const availableSocialPlatforms = [
+    (businessProfile?.facebook_url || businessProfile?.facebook_page_id) ? 'facebook' : null,
+    businessProfile?.instagram_url ? 'instagram' : null,
+  ].filter(Boolean);
+  const [activeSocialPlatform, setActiveSocialPlatform] = useState(null);
+  const currentSocialPlatform = activeSocialPlatform || availableSocialPlatforms[0] || 'facebook';
   const [activeTab,       setActiveTab]       = useState('paid');
   const [showOrgCreate,   setShowOrgCreate]   = useState(false);
   const [organicCtx,      setOrganicCtx]      = useState(null);
@@ -1116,21 +1296,69 @@ export default function Marketing() {
     onError: (err) => toast.error('שגיאה: ' + (err?.message || 'נסה שוב')),
   });
 
-  const [bulkCount, setBulkCount] = useState(3);
-  const [bulkPlatform, setBulkPlatform] = useState('both'); // 'both' | 'facebook' | 'instagram'
+  const [showBulkSetup, setShowBulkSetup] = useState(false);
   const [bulkGenerating, setBulkGenerating] = useState(false);
+  const [reviewQueue, setReviewQueue] = useState(null); // array of posts, or null when closed
+  const [reviewIndex, setReviewIndex] = useState(0);
+  const [reviewBusy, setReviewBusy] = useState(false);
 
-  const handleBulkGenerate = async () => {
+  const handleBulkGenerate = async ({ count, platform, special_request, scheduled_at }) => {
     setBulkGenerating(true);
     try {
-      const res = await base44.functions.invoke('generateBulkPosts', { businessProfileId: bpId, count: bulkCount, platform: bulkPlatform }, LONG_SCAN_TIMEOUT_MS);
+      const res = await base44.functions.invoke('generateBulkPosts', { businessProfileId: bpId, count, platform, special_request, scheduled_at }, LONG_SCAN_TIMEOUT_MS);
       const data = res?.data || res;
       await queryClient.invalidateQueries({ queryKey: ['organicPosts', bpId] });
-      toast.success(`נוצרו ${data?.created ?? 0} מתוך ${data?.requested ?? bulkCount} פוסטים`);
+      toast.success(`נוצרו ${data?.created ?? 0} מתוך ${data?.requested ?? count} פוסטים`);
+      setShowBulkSetup(false);
+      if (data?.posts?.length) {
+        setReviewQueue(data.posts);
+        setReviewIndex(0);
+      }
     } catch (err) {
       toast.error('שגיאה ביצירת פוסטים: ' + (err?.message || 'נסה שוב'));
     }
     setBulkGenerating(false);
+  };
+
+  const advanceReview = () => {
+    setReviewIndex(i => {
+      const next = i + 1;
+      if (!reviewQueue || next >= reviewQueue.length) {
+        setReviewQueue(null);
+        return 0;
+      }
+      return next;
+    });
+  };
+
+  const handleReviewApprove = async (post) => {
+    setReviewBusy(true);
+    try {
+      await approveOrganic.mutateAsync({ id: post.id, approve: true });
+      advanceReview();
+    } catch {}
+    setReviewBusy(false);
+  };
+
+  const handleReviewDisapprove = async (post) => {
+    setReviewBusy(true);
+    try {
+      await deleteOrganic.mutateAsync(post.id);
+      advanceReview();
+    } catch {}
+    setReviewBusy(false);
+  };
+
+  const handleReviewRevise = async (post, feedback) => {
+    try {
+      const res = await base44.functions.invoke('revisePost', { postId: post.id, feedback }, LONG_SCAN_TIMEOUT_MS);
+      const data = res?.data || res;
+      if (data?.content) {
+        setReviewQueue(q => q.map(p => p.id === post.id ? { ...p, content: data.content } : p));
+      }
+    } catch (err) {
+      toast.error('שגיאה בעדכון הפוסט: ' + (err?.message || 'נסה שוב'));
+    }
   };
 
   // ── Audience intelligence ──
@@ -1271,12 +1499,30 @@ ${audienceCtx}
         <UrgentActionsSection actions={urgentActions} />
       )}
 
+      {availableSocialPlatforms.length > 1 && (
+        <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-xl w-fit">
+          {availableSocialPlatforms.map(p => (
+            <button
+              key={p}
+              onClick={() => setActiveSocialPlatform(p)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                currentSocialPlatform === p ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
+              }`}
+            >
+              {PLATFORM_LABELS[p]}
+            </button>
+          ))}
+        </div>
+      )}
+
       <SocialProfileSuggestions
+        key={currentSocialPlatform}
         businessProfile={businessProfile}
+        platform={currentSocialPlatform}
         onCreatePost={() => { setActiveTab('organic'); setShowOrgCreate(true); }}
       />
 
-      <BusinessSocialSnapshot businessProfile={businessProfile} />
+      <BusinessSocialSnapshot key={currentSocialPlatform} businessProfile={businessProfile} platform={currentSocialPlatform} />
 
       <CompetitorContentTrends businessProfile={businessProfile} />
 
@@ -1385,29 +1631,9 @@ ${audienceCtx}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[11px] font-medium text-foreground-muted hover:text-foreground hover:bg-secondary transition-all">
                 <Plus className="w-3.5 h-3.5" /> פוסט חדש
               </button>
-              <div className="flex items-center gap-1 p-1 bg-secondary rounded-lg">
-                {[
-                  { id: 'both', label: 'שניהם' },
-                  { id: 'facebook', label: '📘 פייסבוק' },
-                  { id: 'instagram', label: '📸 אינסטגרם' },
-                ].map(p => (
-                  <button key={p.id} onClick={() => setBulkPlatform(p.id)}
-                    className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
-                      bulkPlatform === p.id ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
-                    }`}>
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-              <input
-                type="number" min={1} max={10} value={bulkCount}
-                onChange={e => setBulkCount(Math.max(1, Math.min(10, parseInt(e.target.value, 10) || 1)))}
-                className="w-14 text-[13px] font-bold text-foreground bg-secondary border border-border rounded-lg px-2 py-1.5 text-center focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-              <button onClick={handleBulkGenerate} disabled={bulkGenerating || !bpId}
+              <button onClick={() => setShowBulkSetup(true)} disabled={!bpId}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-foreground text-background rounded-lg text-[11px] font-semibold hover:opacity-90 disabled:opacity-60">
-                {bulkGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                {bulkGenerating ? 'יוצר...' : `צור ${bulkCount} פוסטים`}
+                <Sparkles className="w-3.5 h-3.5" /> צור פוסטים חדשים
               </button>
             </div>
           </div>
@@ -1631,6 +1857,26 @@ ${audienceCtx}
           onClose={() => setDetailPost(null)}
           onToggleApprove={(post) => approveOrganic.mutate({ id: post.id, approve: !post.approved_at })}
           toggling={approveOrganic.isPending}
+        />
+      )}
+
+      {showBulkSetup && (
+        <BulkGenerateSetupModal
+          onClose={() => setShowBulkSetup(false)}
+          onGenerate={handleBulkGenerate}
+          generating={bulkGenerating}
+        />
+      )}
+
+      {reviewQueue && (
+        <BulkReviewQueueModal
+          posts={reviewQueue}
+          index={reviewIndex}
+          onClose={() => setReviewQueue(null)}
+          onApprove={handleReviewApprove}
+          onDisapprove={handleReviewDisapprove}
+          onRevise={handleReviewRevise}
+          busy={reviewBusy}
         />
       )}
     </div>
