@@ -31,15 +31,14 @@ function bioIssue(profile) {
 export function buildSuggestions({ ownProfiles, competitorProfiles, ownWeeklyRate, competitorAvgWeeklyRate }) {
   const suggestions = [];
 
-  const bioIssues = ownProfiles.map(p => ({ platform: p.platform, issue: bioIssue(p) })).filter(p => p.issue);
+  const bioIssues = ownProfiles.map(p => bioIssue(p)).filter(Boolean);
   if (bioIssues.length) {
-    const platforms = bioIssues.map(b => b.platform).join(', ');
-    const reason = bioIssues.some(b => b.issue === 'missing') ? 'לא הוגדר ביו'
-      : bioIssues.some(b => b.issue === 'auto') ? 'הביו הוא טקסט אוטומטי של הפלטפורמה'
+    const reason = bioIssues.includes('missing') ? 'לא הוגדר ביו'
+      : bioIssues.includes('auto') ? 'הביו הוא טקסט אוטומטי של הפלטפורמה'
       : 'הביו קצר מדי ולא אומר הרבה';
     suggestions.push({
       id: 'bio',
-      title: `הביו שלכם ב-${platforms} דורש שיפור`,
+      title: 'הביו שלכם דורש שיפור',
       description: reason,
       kind: 'bio-fix',
     });
@@ -89,8 +88,11 @@ export function buildSuggestions({ ownProfiles, competitorProfiles, ownWeeklyRat
  * cheap deterministic heuristic (see thresholds above); the LLM is only
  * invoked when the user acts on the bio suggestion (same suggestBioFix/
  * analyzeBioProfiles endpoints already used by CompetitorContentTrends).
+ * `platform` scopes both the own data and the competitor comparison to one
+ * platform, so e.g. Instagram gaps are only compared against competitors'
+ * Instagram profiles, not pooled with Facebook.
  */
-export default function SocialProfileSuggestions({ businessProfile, onCreatePost }) {
+export default function SocialProfileSuggestions({ businessProfile, platform, onCreatePost }) {
   const bpId = businessProfile?.id;
   const [bioFixState, setBioFixState] = useState({ loading: false, suggestions: [] });
 
@@ -101,31 +103,33 @@ export default function SocialProfileSuggestions({ businessProfile, onCreatePost
   });
   const compIds = competitors.map(c => c.id);
 
-  const { data: competitorPosts = [] } = useQuery({
+  const { data: allCompetitorPosts = [] } = useQuery({
     queryKey: ['socialPosts', bpId, compIds],
     queryFn:  () => base44.entities.CompetitorPost.filter({ competitor_id: { in: compIds } }, '-posted_at', 300),
     enabled:  !!bpId && compIds.length > 0,
   });
+  const competitorPosts = allCompetitorPosts.filter(p => p.platform === platform);
 
-  const { data: competitorProfiles = [] } = useQuery({
+  const { data: allCompetitorProfiles = [] } = useQuery({
     queryKey: ['socialProfiles', bpId, compIds],
     queryFn:  () => base44.entities.CompetitorSocialProfile.filter({ competitor_id: { in: compIds } }, '-fetched_at', 300),
     enabled:  !!bpId && compIds.length > 0,
   });
+  const competitorProfiles = allCompetitorProfiles.filter(p => p.platform === platform);
 
   const { data: ownProfileData } = useQuery({
     queryKey: ['businessSnapshotProfile', bpId],
     queryFn:  () => apiFetch(`/social/snapshot/profile?businessProfileId=${bpId}`),
     enabled:  !!bpId,
   });
-  const ownProfiles = ownProfileData?.profiles ?? [];
+  const ownProfiles = (ownProfileData?.profiles ?? []).filter(p => p.platform === platform);
 
   const { data: ownFeedData } = useQuery({
     queryKey: ['businessSnapshotFeed', bpId],
     queryFn:  () => apiFetch(`/social/snapshot/feed?businessProfileId=${bpId}`),
     enabled:  !!bpId,
   });
-  const ownPosts = ownFeedData?.posts ?? [];
+  const ownPosts = (ownFeedData?.posts ?? []).filter(p => p.platform === platform);
 
   const ownWeeklyRate = useMemo(() => weeklyPostingRate(ownPosts), [ownPosts]);
   const competitorAvgWeeklyRate = useMemo(() => {
@@ -145,7 +149,7 @@ export default function SocialProfileSuggestions({ businessProfile, onCreatePost
       if (!businessProfile?.content_trends_bio_insight) {
         await base44.functions.invoke('analyzeBioProfiles', { businessProfileId: bpId }, 60000);
       }
-      const result = await base44.functions.invoke('suggestBioFix', { businessProfileId: bpId }, 60000);
+      const result = await base44.functions.invoke('suggestBioFix', { businessProfileId: bpId, platform }, 60000);
       const data = result?.data ?? result;
       setBioFixState({ loading: false, suggestions: data?.suggestions ?? [] });
     } catch (e) {
@@ -154,7 +158,7 @@ export default function SocialProfileSuggestions({ businessProfile, onCreatePost
     }
   };
 
-  const ownProfileUrl = businessProfile?.instagram_url || businessProfile?.facebook_url;
+  const ownProfileUrl = platform === 'instagram' ? businessProfile?.instagram_url : businessProfile?.facebook_url;
 
   if (!suggestions.length) return null;
 

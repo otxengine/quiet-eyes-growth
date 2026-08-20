@@ -13,11 +13,14 @@ const SUPPORTED_PLATFORMS = ['facebook', 'instagram']; // tiktok not supported f
  * elsewhere) and the business's own media library. Each post gets a matching
  * media asset only when one genuinely fits; otherwise no image.
  *
- * Body: { businessProfileId, count, platform? } — platform: 'facebook' | 'instagram' | 'both' (default 'both')
+ * Body: { businessProfileId, count, platform?, special_request?, scheduled_at? }
+ *   platform: 'facebook' | 'instagram' | 'both' (default 'both')
+ *   special_request: optional free text the business owner wants reflected in the batch (an offer, event, announcement)
+ *   scheduled_at: optional ISO datetime — stored on the created posts, informational only (no auto-publish)
  * Returns: { created, requested, posts }
  */
 export async function generateBulkPosts(req: Request, res: Response) {
-  const { businessProfileId } = req.body;
+  const { businessProfileId, special_request, scheduled_at } = req.body;
   const count = Math.max(1, Math.min(10, parseInt(req.body.count, 10) || 0));
   const allowedPlatforms = SUPPORTED_PLATFORMS.includes(req.body.platform)
     ? [req.body.platform]
@@ -72,10 +75,15 @@ export async function generateBulkPosts(req: Request, res: Response) {
 
     const descriptionLine = profile.description ? `תיאור העסק: ${profile.description}\n` : '';
 
+    const specialRequestBlock = special_request?.trim()
+      ? `=== בקשה ספציפית מבעל העסק — חובה לשלב בפוסטים (בכולם או בחלקם, לפי מה שהכי טבעי) ===\n${special_request.trim()}`
+      : '';
+
     const prompt = `אתה קופירייטר בכיר לרשתות חברתיות עבור עסקים קטנים בישראל. המשימה: כתוב בדיוק ${count} טיוטות פוסטים שונות ומגוונות — מוכנות לפרסום ישיר, ללא עריכה.
 
 עסק: "${profile.name}" (${profile.category}, ${profile.city})
 ${descriptionLine}
+${specialRequestBlock ? `\n${specialRequestBlock}` : ''}
 ${competitorCopyBlock ? `\n${competitorCopyBlock}` : ''}
 ${competitorVisualBlock ? `\n${competitorVisualBlock}` : ''}
 ${ownOutlierBlock ? `\n${ownOutlierBlock}` : ''}
@@ -117,6 +125,7 @@ Return ONLY valid JSON. ALL string values in Hebrew (except platform/media_asset
     const validAssetIds = new Set(mediaAssets.map(a => a.id));
     const usedAssetIds = new Set<string>();
     const serverBase = process.env.SERVER_BASE_URL || 'http://localhost:3007';
+    const scheduledAt = scheduled_at ? new Date(scheduled_at) : null;
 
     const created: any[] = [];
     for (const p of generated) {
@@ -140,6 +149,7 @@ Return ONLY valid JSON. ALL string values in Hebrew (except platform/media_asset
           media_asset_id: mediaAssetId,
           image_url: mediaAssetId ? `${serverBase}/api/social/media/${mediaAssetId}` : null,
           status: 'draft',
+          scheduled_at: scheduledAt,
         },
       });
       created.push(row);

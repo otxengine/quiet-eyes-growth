@@ -8,10 +8,13 @@ import { suggestOwnBioFix } from '../../lib/suggestOwnBioFix';
  * synthesized across tracked competitors (content_trends_bio_insight/
  * _examples). Requires that bio-trends analysis has already run.
  *
- * Body: { businessProfileId }
+ * Body: { businessProfileId, platform? } — platform restricts the fix to one
+ * own platform (e.g. only Instagram) instead of every platform with a bio;
+ * used by the per-platform suggestions UI so switching platforms doesn't
+ * pay for/return a fix for the platform not currently being viewed.
  */
 export async function suggestBioFix(req: Request, res: Response) {
-  const { businessProfileId } = req.body;
+  const { businessProfileId, platform } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
   try {
@@ -22,7 +25,7 @@ export async function suggestBioFix(req: Request, res: Response) {
     }
 
     const ownProfiles = await prisma.businessSocialProfile.findMany({
-      where: { linked_business: businessProfileId, bio: { not: null } },
+      where: { linked_business: businessProfileId, bio: { not: null }, ...(platform ? { platform } : {}) },
     });
     const withBio = ownProfiles.filter(p => p.bio?.trim());
     if (!withBio.length) return res.status(400).json({ error: 'No own bio found to suggest a fix for' });

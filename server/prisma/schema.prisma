@@ -976,6 +976,7 @@ model OrganicPost {
   status          String    @default("draft") // 'draft' | 'published'
   published_at    DateTime?
   approved_at     DateTime? // set when the business owner approves the draft; null = not yet approved
+  scheduled_at    DateTime? // desired posting time from the bulk-generate setup — informational only, doesn't trigger auto-publish
 
   @@map("organic_posts")
 }

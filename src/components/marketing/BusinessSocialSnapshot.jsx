@@ -13,9 +13,15 @@ import {
 // Single-entity twin of SocialCompetition.jsx's RivalCard — same feed/ads
 // sub-tabs and card components, but for the business's own accounts instead
 // of a list of competitors, since there's only one "entity" to show here.
-export default function BusinessSocialSnapshot({ businessProfile }) {
+// `platform` scopes everything shown (feed/ads/profile) to one connected
+// platform — the parent renders one instance per platform via a toggle.
+export default function BusinessSocialSnapshot({ businessProfile, platform }) {
   const bpId = businessProfile?.id;
-  const hasSocialUrl = !!(businessProfile?.instagram_url || businessProfile?.facebook_url || businessProfile?.tiktok_url || businessProfile?.facebook_page_id);
+  const hasPlatformUrl = platform === 'instagram'
+    ? !!businessProfile?.instagram_url
+    : platform === 'facebook'
+    ? !!(businessProfile?.facebook_url || businessProfile?.facebook_page_id)
+    : !!businessProfile?.tiktok_url;
 
   const [section, setSection] = useState('feed');
   const [selectedPost, setSelectedPost] = useState(null);
@@ -26,22 +32,22 @@ export default function BusinessSocialSnapshot({ businessProfile }) {
   const { data: feedData, isLoading: loadingFeed } = useQuery({
     queryKey: ['businessSnapshotFeed', bpId],
     queryFn: () => apiFetch(`/social/snapshot/feed?businessProfileId=${bpId}`),
-    enabled: !!bpId && hasSocialUrl,
+    enabled: !!bpId && hasPlatformUrl,
   });
   const { data: adsData, isLoading: loadingAds } = useQuery({
     queryKey: ['businessSnapshotAdsHistory', bpId],
     queryFn: () => apiFetch(`/social/snapshot/ads/history?businessProfileId=${bpId}`),
-    enabled: !!bpId && hasSocialUrl,
+    enabled: !!bpId && hasPlatformUrl,
   });
   const { data: profileData, isLoading: loadingProfile } = useQuery({
     queryKey: ['businessSnapshotProfile', bpId],
     queryFn: () => apiFetch(`/social/snapshot/profile?businessProfileId=${bpId}`),
-    enabled: !!bpId && hasSocialUrl,
+    enabled: !!bpId && hasPlatformUrl,
   });
 
-  const posts = feedData?.posts ?? [];
-  const ads = adsData?.ads ?? [];
-  const profiles = profileData?.profiles ?? [];
+  const posts = (feedData?.posts ?? []).filter(p => p.platform === platform);
+  const ads = (adsData?.ads ?? []).filter(a => a.platform === platform);
+  const profiles = (profileData?.profiles ?? []).filter(p => p.platform === platform);
   const activeAdCount = ads.filter(a => a.is_active).length;
   const outlierPosts = useMemo(() => computeOutlierPosts(posts), [posts]);
   const { analyzing, analyzeNow, insight } = useAnalyzeTopPerformers(outlierPosts, {
@@ -76,11 +82,11 @@ export default function BusinessSocialSnapshot({ businessProfile }) {
     setRefreshing(false);
   };
 
-  if (!hasSocialUrl) {
+  if (!hasPlatformUrl) {
     return (
       <div className="border border-border rounded-xl bg-card p-4 text-center space-y-1">
-        <p className="text-sm font-semibold text-foreground">תמונת מצב עסקית</p>
-        <p className="text-xs text-muted-foreground">חברו את עמודי הסושיאל שלכם בהגדרות כדי לראות כאן פוסטים ומודעות בזמן אמת</p>
+        <p className="text-sm font-semibold text-foreground">תמונת מצב עסקית — {PLATFORM_LABELS[platform] || platform}</p>
+        <p className="text-xs text-muted-foreground">חברו את עמוד ה{PLATFORM_LABELS[platform] || platform} שלכם בהגדרות כדי לראות כאן פוסטים ומודעות בזמן אמת</p>
       </div>
     );
   }
@@ -90,7 +96,7 @@ export default function BusinessSocialSnapshot({ businessProfile }) {
   return (
     <div className="border border-border rounded-xl bg-card overflow-hidden">
       <div className="flex items-center gap-2 p-3">
-        <span className="font-semibold text-sm flex-1">תמונת מצב עסקית</span>
+        <span className="font-semibold text-sm flex-1">תמונת מצב עסקית — {PLATFORM_LABELS[platform] || platform}</span>
         {posts.length > 0 && <span className="text-[10px] text-muted-foreground">{posts.length} פוסטים</span>}
         {activeAdCount > 0 && <span className="text-[10px] text-orange-600">{activeAdCount} מודעות</span>}
         <button
