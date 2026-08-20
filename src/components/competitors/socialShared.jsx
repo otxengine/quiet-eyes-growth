@@ -46,6 +46,20 @@ export function stalenessNote(lastPostAt) {
   return `⚠️ הפוסט האחרון בעמוד פורסם לפני ${unit}`;
 }
 
+// When a Facebook page has no custom Intro text, Facebook substitutes an auto-generated
+// summary built from the same stats we already show ("{name}, {city}. {N} likes · {M} were
+// here. {category}"). Detect that fallback by checking whether the bio is literally built
+// from the follower/checkin counts we already have — locale-independent since it compares
+// the numbers themselves, not English wording — and only suppress it when it matches; a
+// real custom Intro (whatever language it's in) won't happen to contain those exact numbers.
+export function isFacebookAutoBio(profile) {
+  if (!profile.bio) return false;
+  const markers = [];
+  if (profile.follower_count != null) markers.push(String(profile.follower_count));
+  if (profile.checkin_count != null) markers.push(String(profile.checkin_count));
+  return markers.length > 0 && markers.every(m => profile.bio.includes(m));
+}
+
 export function parseDeepAnalysis(raw) {
   if (!raw) return null;
   try { return JSON.parse(raw); } catch { return null; }
@@ -667,11 +681,12 @@ export function ProfileHeader({ profile }) {
             </div>
           )}
 
-          {/* Facebook's "bio" is usually just its own auto-generated summary restating the
-              stats already shown above (likes/checkins/category) — showing it as prose is
-              noisy and often reads as garbled mixed-language text. Instagram's bio is a real
-              free-text field, so it's still shown there. */}
-          {profile.bio && profile.platform !== 'facebook' && <p className="text-sm leading-relaxed whitespace-pre-line">{profile.bio}</p>}
+          {/* Facebook falls back to an auto-generated summary restating the stats already
+              shown above when the page has no custom Intro text — only suppress that case
+              (see isFacebookAutoBio); a real Intro is shown just like Instagram's bio. */}
+          {profile.bio && !(profile.platform === 'facebook' && isFacebookAutoBio(profile)) && (
+            <p className="text-sm leading-relaxed whitespace-pre-line">{profile.bio}</p>
+          )}
 
           {stalenessNote(profile.last_post_at) && (
             <p className="text-xs text-amber-600 dark:text-amber-500">{stalenessNote(profile.last_post_at)}</p>
