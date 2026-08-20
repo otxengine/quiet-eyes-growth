@@ -507,6 +507,17 @@ export function computeOutlierPosts(posts) {
   return outliers.sort((a, b) => b.engagement - a.engagement);
 }
 
+// Posts-per-week for one entity (a competitor, or the business itself): count
+// over the span between its earliest and latest tracked post. Needs >=2 dated
+// posts to establish a span; returns null otherwise (nothing to compute a rate from).
+export function weeklyPostingRate(posts) {
+  const withDates = posts.filter(p => p.posted_at);
+  if (withDates.length < 2) return null;
+  const times = withDates.map(p => new Date(p.posted_at).getTime()).sort((a, b) => a - b);
+  const spanWeeks = Math.max((times[times.length - 1] - times[0]) / (7 * 24 * 3600 * 1000), 1);
+  return withDates.length / spanWeeks;
+}
+
 /**
  * Shared "analyze top performers" trigger — batch-runs the hook/content-pillar/
  * audience-action-driver analysis for a set of already-detected outlier posts.

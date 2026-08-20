@@ -1,0 +1,216 @@
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
+import {
+  apiFetch, isFacebookAutoBio, weeklyPostingRate,
+} from '@/components/competitors/socialShared';
+
+// ponytail: starting heuristics, not tuned values — revisit once we have real usage data.
+const BIO_MIN_LENGTH = 30; // chars below this = effectively no real bio content
+const MIN_COMPETITOR_SAMPLE = 3; // need at least this many competitor profiles with data before comparing presence rates
+const COMPETITOR_HAVE_RATE_THRESHOLD = 0.5; // flag a missing attribute once >=50% of sampled competitors have it
+const POSTING_RATE_DEFICIT_RATIO = 0.5; // flag if own weekly rate is under 50% of the competitor average
+
+function competitorHaveRate(competitorProfiles, field) {
+  if (competitorProfiles.length < MIN_COMPETITOR_SAMPLE) return null;
+  return competitorProfiles.filter(p => p[field]).length / competitorProfiles.length;
+}
+
+function bioIssue(profile) {
+  if (!profile.bio?.trim()) return 'missing';
+  if (isFacebookAutoBio(profile)) return 'auto';
+  if (profile.bio.trim().length < BIO_MIN_LENGTH) return 'short';
+  return null;
+}
+
+/**
+ * Pure — applies the thresholds above to build the flagged-suggestion list.
+ * Kept separate from the component so the trigger logic is easy to read/tune
+ * in one place, independent of rendering/data-fetching concerns.
+ */
+export function buildSuggestions({ ownProfiles, competitorProfiles, ownWeeklyRate, competitorAvgWeeklyRate }) {
+  const suggestions = [];
+
+  const bioIssues = ownProfiles.map(p => ({ platform: p.platform, issue: bioIssue(p) })).filter(p => p.issue);
+  if (bioIssues.length) {
+    const platforms = bioIssues.map(b => b.platform).join(', ');
+    const reason = bioIssues.some(b => b.issue === 'missing') ? 'לא הוגדר ביו'
+      : bioIssues.some(b => b.issue === 'auto') ? 'הביו הוא טקסט אוטומטי של הפלטפורמה'
+      : 'הביו קצר מדי ולא אומר הרבה';
+    suggestions.push({
+      id: 'bio',
+      title: `הביו שלכם ב-${platforms} דורש שיפור`,
+      description: reason,
+      kind: 'bio-fix',
+    });
+  }
+
+  for (const [field, label] of [
+    ['profile_picture_url', 'תמונת פרופיל'],
+    ['cover_photo_url', 'תמונת קאבר'],
+    ['external_url', 'קישור בביו'],
+    ['highlight_count', 'היילייטס'],
+  ]) {
+    const ownHasIt = ownProfiles.some(p => (field === 'highlight_count' ? p[field] > 0 : !!p[field]));
+    if (ownHasIt) continue;
+    const rate = competitorHaveRate(competitorProfiles, field);
+    if (rate == null || rate < COMPETITOR_HAVE_RATE_THRESHOLD) continue;
+    suggestions.push({
+      id: field,
+      title: `חסר לכם ${label}`,
+      description: `${Math.round(rate * 100)}% מהמתחרים שאתם עוקבים אחריהם הגדירו ${label}`,
+      kind: 'open-profile',
+    });
+  }
+
+  if (ownWeeklyRate == null) {
+    suggestions.push({
+      id: 'posting-rate',
+      title: 'קצב פרסום נמוך מאוד',
+      description: 'לא זוהו מספיק פוסטים כדי לקבוע קצב פרסום קבוע',
+      kind: 'create-post',
+    });
+  } else if (competitorAvgWeeklyRate != null && ownWeeklyRate < competitorAvgWeeklyRate * POSTING_RATE_DEFICIT_RATIO) {
+    suggestions.push({
+      id: 'posting-rate',
+      title: 'אתם מפרסמים פחות מהמתחרים',
+      description: `כ-${ownWeeklyRate.toFixed(1)} פוסטים בשבוע, לעומת ממוצע מתחרים של ${competitorAvgWeeklyRate.toFixed(1)}`,
+      kind: 'create-post',
+    });
+  }
+
+  return suggestions;
+}
+
+/**
+ * Proactive, always-visible suggestions comparing the business's own social
+ * profile(s) against its tracked competitors — bio quality, profile/cover
+ * picture, external link/highlights, posting frequency. Every trigger is a
+ * cheap deterministic heuristic (see thresholds above); the LLM is only
+ * invoked when the user acts on the bio suggestion (same suggestBioFix/
+ * analyzeBioProfiles endpoints already used by CompetitorContentTrends).
+ */
+export default function SocialProfileSuggestions({ businessProfile, onCreatePost }) {
+  const bpId = businessProfile?.id;
+  const [bioFixState, setBioFixState] = useState({ loading: false, suggestions: [] });
+
+  const { data: competitors = [] } = useQuery({
+    queryKey: ['socialCompetitors', bpId],
+    queryFn:  () => base44.entities.Competitor.filter({ linked_business: bpId, is_dismissed: { not: true }, not_relevant: { not: true } }),
+    enabled:  !!bpId,
+  });
+  const compIds = competitors.map(c => c.id);
+
+  const { data: competitorPosts = [] } = useQuery({
+    queryKey: ['socialPosts', bpId, compIds],
+    queryFn:  () => base44.entities.CompetitorPost.filter({ competitor_id: { in: compIds } }, '-posted_at', 300),
+    enabled:  !!bpId && compIds.length > 0,
+  });
+
+  const { data: competitorProfiles = [] } = useQuery({
+    queryKey: ['socialProfiles', bpId, compIds],
+    queryFn:  () => base44.entities.CompetitorSocialProfile.filter({ competitor_id: { in: compIds } }, '-fetched_at', 300),
+    enabled:  !!bpId && compIds.length > 0,
+  });
+
+  const { data: ownProfileData } = useQuery({
+    queryKey: ['businessSnapshotProfile', bpId],
+    queryFn:  () => apiFetch(`/social/snapshot/profile?businessProfileId=${bpId}`),
+    enabled:  !!bpId,
+  });
+  const ownProfiles = ownProfileData?.profiles ?? [];
+
+  const { data: ownFeedData } = useQuery({
+    queryKey: ['businessSnapshotFeed', bpId],
+    queryFn:  () => apiFetch(`/social/snapshot/feed?businessProfileId=${bpId}`),
+    enabled:  !!bpId,
+  });
+  const ownPosts = ownFeedData?.posts ?? [];
+
+  const ownWeeklyRate = useMemo(() => weeklyPostingRate(ownPosts), [ownPosts]);
+  const competitorAvgWeeklyRate = useMemo(() => {
+    const byCompetitor = {};
+    for (const p of competitorPosts) (byCompetitor[p.competitor_id] ||= []).push(p);
+    const rates = Object.values(byCompetitor).map(weeklyPostingRate).filter(r => r != null);
+    return rates.length ? rates.reduce((s, v) => s + v, 0) / rates.length : null;
+  }, [competitorPosts]);
+
+  const suggestions = useMemo(() => (ownProfiles.length ? buildSuggestions({
+    ownProfiles, competitorProfiles, ownWeeklyRate, competitorAvgWeeklyRate,
+  }) : []), [ownProfiles, competitorProfiles, ownWeeklyRate, competitorAvgWeeklyRate]);
+
+  const fixBioNow = async () => {
+    setBioFixState({ loading: true, suggestions: [] });
+    try {
+      if (!businessProfile?.content_trends_bio_insight) {
+        await base44.functions.invoke('analyzeBioProfiles', { businessProfileId: bpId }, 60000);
+      }
+      const result = await base44.functions.invoke('suggestBioFix', { businessProfileId: bpId }, 60000);
+      const data = result?.data ?? result;
+      setBioFixState({ loading: false, suggestions: data?.suggestions ?? [] });
+    } catch (e) {
+      console.warn('[SocialProfileSuggestions] fixBioNow failed:', e.message);
+      setBioFixState({ loading: false, suggestions: [] });
+    }
+  };
+
+  const ownProfileUrl = businessProfile?.instagram_url || businessProfile?.facebook_url;
+
+  if (!suggestions.length) return null;
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-sm font-bold text-foreground-secondary flex items-center gap-2">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#e8344d] inline-block" />
+        שיפורי עמוד סושיאל
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {suggestions.map(s => (
+          <div key={s.id} className="border border-border rounded-xl bg-card p-3 space-y-2">
+            <div>
+              <p className="font-semibold text-sm text-foreground">{s.title}</p>
+              <p className="text-xs text-muted-foreground mt-1">{s.description}</p>
+            </div>
+            {s.kind === 'bio-fix' && (
+              <button
+                onClick={fixBioNow}
+                disabled={bioFixState.loading}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-border hover:bg-muted disabled:opacity-50"
+              >
+                {bioFixState.loading ? 'מנתח...' : '🔧 תקנו לי את הביו'}
+              </button>
+            )}
+            {s.kind === 'open-profile' && ownProfileUrl && (
+              <button
+                onClick={() => window.open(ownProfileUrl, '_blank', 'noopener,noreferrer')}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-border hover:bg-muted"
+              >
+                פתחו את הפרופיל
+              </button>
+            )}
+            {s.kind === 'create-post' && onCreatePost && (
+              <button
+                onClick={onCreatePost}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-border hover:bg-muted"
+              >
+                צרו פוסט
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {bioFixState.suggestions.map((s, i) => (
+        <div key={i} className="border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 rounded-lg p-3 space-y-1.5">
+          <p className="text-[10px] font-semibold text-violet-800 dark:text-violet-300">{s.platform}</p>
+          {s.suggested_bio && (
+            <p className="text-xs leading-relaxed text-violet-950 dark:text-violet-100 whitespace-pre-line">{s.suggested_bio}</p>
+          )}
+          {s.rationale && (
+            <p className="text-[11px] text-violet-700 dark:text-violet-400 border-t border-violet-200 dark:border-violet-800 pt-1.5">{s.rationale}</p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}

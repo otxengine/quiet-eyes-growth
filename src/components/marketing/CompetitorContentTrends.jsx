@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import {
-  apiFetch, computeOutlierPosts, useAnalyzeContentTrends, useAnalyzeBioTrends, useSuggestBioFix, CollapsibleSection,
+  apiFetch, computeOutlierPosts, weeklyPostingRate, useAnalyzeContentTrends, useAnalyzeBioTrends, useSuggestBioFix, CollapsibleSection,
 } from '@/components/competitors/socialShared';
 
 const CONTENT_TRENDS_POOL_CAP = 20; // mirrors MAX_POSTS_PER_CALL in analyzeContentTrends.ts
@@ -53,14 +53,8 @@ export default function CompetitorContentTrends({ businessProfile }) {
   // avoids skewing toward whichever competitor has the most total posts tracked.
   const avgPostsPerWeek = useMemo(() => {
     const byCompetitor = {};
-    for (const p of allPosts) { if (!p.posted_at) continue; (byCompetitor[p.competitor_id] ||= []).push(p); }
-    const weeklyRates = Object.values(byCompetitor)
-      .filter(posts => posts.length >= 2)
-      .map(posts => {
-        const times = posts.map(p => new Date(p.posted_at).getTime()).sort((a, b) => a - b);
-        const spanWeeks = Math.max((times[times.length - 1] - times[0]) / (7 * 24 * 3600 * 1000), 1);
-        return posts.length / spanWeeks;
-      });
+    for (const p of allPosts) (byCompetitor[p.competitor_id] ||= []).push(p);
+    const weeklyRates = Object.values(byCompetitor).map(weeklyPostingRate).filter(r => r != null);
     if (!weeklyRates.length) return null;
     return weeklyRates.reduce((s, v) => s + v, 0) / weeklyRates.length;
   }, [allPosts]);
