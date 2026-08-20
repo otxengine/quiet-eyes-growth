@@ -52,3 +52,12 @@ test.each([
   expect(putInput.Key.endsWith(`.${expectedExt}`)).toBe(true);
   expect(putInput.ContentType).toBe(contentType);
 });
+
+test('an HTML redirect stub (e.g. Facebook lookaside crawler URLs) is rejected, not re-hosted as media', async () => {
+  mockFetch.mockResolvedValue(fetchOk('text/html; charset="utf-8"'));
+
+  const url = await uploadImageFromUrl('https://lookaside.fbsbx.com/lookaside/crawler/media/?media_id=1', 'business-profile');
+
+  expect(url).toBeNull();
+  expect(send).not.toHaveBeenCalled();
+});

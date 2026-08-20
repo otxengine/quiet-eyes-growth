@@ -97,7 +97,13 @@ export async function uploadImageFromUrl(sourceUrl: string, folder = 'competitor
     });
     if (!res.ok) return null;
 
+    // Some scraped "image"/"video" URLs (e.g. Facebook's lookaside.fbsbx.com crawler stubs)
+    // 200 into an HTML redirect page instead of raw media bytes when fetched without crawler
+    // headers — reject those instead of silently re-hosting HTML into S3 as if it were media.
+    // Not narrowed to image/* — this helper also re-hosts video ads (video/mp4 etc.) and a
+    // generic application/octet-stream fallback, so only text/* is unambiguously not media.
     const contentType = res.headers.get('content-type') || 'image/jpeg';
+    if (contentType.startsWith('text/')) return null;
     return uploadBufferToS3(Buffer.from(await res.arrayBuffer()), contentType, folder);
   } catch {
     return null;
