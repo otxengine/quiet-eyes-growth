@@ -26,6 +26,7 @@ export default function MediaLibrary({ businessProfileId, onSelect }) {
   const [pending, setPending]     = useState(null); // { dataUrl, mimeType, mediaType }
   const [description, setDescription] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [describing, setDescribing] = useState(false);
 
   const { data: assets = [], isLoading } = useQuery({
     queryKey: ['mediaLibrary', businessProfileId],
@@ -45,10 +46,21 @@ export default function MediaLibrary({ businessProfileId, onSelect }) {
     if (!file) return;
     if (file.size > MAX_FILE_BYTES) { toast.error('הקובץ גדול מדי (עד 35MB)'); return; }
     const mediaType = file.type.startsWith('video') ? 'video' : 'image';
+    const mimeType = file.type || (mediaType === 'video' ? 'video/mp4' : 'image/jpeg');
     const reader = new FileReader();
-    reader.onload = (e) => {
-      setPending({ dataUrl: e.target.result, mimeType: file.type || (mediaType === 'video' ? 'video/mp4' : 'image/jpeg'), mediaType });
+    reader.onload = async (e) => {
+      const dataUrl = e.target.result;
+      setPending({ dataUrl, mimeType, mediaType });
       setDescription('');
+      // Video has no vision-captioning pipeline here — description stays manual for it.
+      if (mediaType !== 'image') return;
+      setDescribing(true);
+      try {
+        const res = await base44.functions.invoke('describeBusinessMedia', { imageBase64: dataUrl, mimeType });
+        const data = res?.data || res;
+        if (data?.description) setDescription(data.description);
+      } catch { /* AI description failed — user can still type one manually */ }
+      setDescribing(false);
     };
     reader.readAsDataURL(file);
   };
@@ -94,19 +106,26 @@ export default function MediaLibrary({ businessProfileId, onSelect }) {
           ) : (
             <img src={pending.dataUrl} alt="" className="w-full max-h-48 object-cover rounded-lg" />
           )}
-          <textarea
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            placeholder="מה רואים במדיה הזו? (חובה — כדי שה-AI ידע להשתמש בה בפוסטים)"
-            rows={2}
-            className="w-full text-[12px] bg-card border border-border rounded-lg px-2.5 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary"
-          />
+          <div className="relative">
+            <textarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder={describing ? 'ה-AI מתאר את התמונה...' : 'מה רואים במדיה הזו? (חובה — כדי שה-AI ידע להשתמש בה בפוסטים)'}
+              disabled={describing}
+              rows={2}
+              className="w-full text-[12px] bg-card border border-border rounded-lg px-2.5 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
+            />
+            {describing && <Loader2 className="w-3.5 h-3.5 animate-spin text-foreground-muted absolute top-2 left-2" />}
+          </div>
+          {!describing && description && pending.mediaType === 'image' && (
+            <p className="text-[10px] text-foreground-muted">✨ תיאור אוטומטי מה-AI — ניתן לערוך</p>
+          )}
           <div className="flex gap-2">
             <button onClick={() => { setPending(null); setDescription(''); }}
               className="flex-1 py-2 text-[12px] border border-border rounded-lg text-foreground-muted hover:text-foreground transition-colors">
               ביטול
             </button>
-            <button onClick={handleSubmit} disabled={uploading}
+            <button onClick={handleSubmit} disabled={uploading || describing}
               className="flex-1 py-2 text-[12px] font-medium bg-foreground text-background rounded-lg flex items-center justify-center gap-1.5 disabled:opacity-60">
               {uploading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               שמור בספרייה

@@ -71,6 +71,7 @@ import { publishPost } from './publishPost';
 import { estimateCampaignMetrics } from './estimateCampaignMetrics';
 import { analyzeImageForPost } from './analyzeImageForPost';
 import { uploadBusinessMedia } from './uploadBusinessMedia';
+import { describeBusinessMedia } from './describeBusinessMedia';
 import { scanServicesAndPrices } from './scanServicesAndPrices';
 import { snapshotCompetitor } from './snapshotCompetitor';
 import { diffCompetitorSnapshot } from './diffCompetitorSnapshot';
@@ -218,6 +219,7 @@ const FUNCTION_MAP: Record<string, any> = {
   estimateCampaignMetrics,
   analyzeImageForPost,
   uploadBusinessMedia,
+  describeBusinessMedia,
   scanServicesAndPrices,
   snapshotCompetitor,
   diffCompetitorSnapshot,
