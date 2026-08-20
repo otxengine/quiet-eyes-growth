@@ -15,7 +15,7 @@ import {
 // of a list of competitors, since there's only one "entity" to show here.
 export default function BusinessSocialSnapshot({ businessProfile }) {
   const bpId = businessProfile?.id;
-  const hasSocialUrl = !!(businessProfile?.instagram_url || businessProfile?.facebook_url || businessProfile?.tiktok_url);
+  const hasSocialUrl = !!(businessProfile?.instagram_url || businessProfile?.facebook_url || businessProfile?.tiktok_url || businessProfile?.facebook_page_id);
 
   const [section, setSection] = useState('feed');
   const [selectedPost, setSelectedPost] = useState(null);

@@ -218,7 +218,7 @@ router.post('/publish-organic', async (req: Request, res: Response) => {
 });
 
 function hasOwnSocialUrl(profile: any): boolean {
-  return !!(profile?.instagram_url || profile?.facebook_url || profile?.tiktok_url);
+  return !!(profile?.instagram_url || profile?.facebook_url || profile?.tiktok_url || profile?.facebook_page_id);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -233,7 +233,7 @@ router.get('/snapshot/profile', async (req: Request, res: Response) => {
 
     const profile = await prisma.businessProfile.findUnique({
       where: { id: businessProfileId },
-      select: { instagram_url: true, facebook_url: true, tiktok_url: true },
+      select: { instagram_url: true, facebook_url: true, tiktok_url: true, facebook_page_id: true },
     });
     if (!profile) return res.status(404).json({ error: 'Business not found' });
 
@@ -260,7 +260,7 @@ router.get('/snapshot/feed', async (req: Request, res: Response) => {
 
     const profile = await prisma.businessProfile.findUnique({
       where: { id: businessProfileId },
-      select: { instagram_url: true, facebook_url: true, tiktok_url: true },
+      select: { instagram_url: true, facebook_url: true, tiktok_url: true, facebook_page_id: true },
     });
     if (!profile) return res.status(404).json({ error: 'Business not found' });
 
@@ -291,7 +291,7 @@ router.get('/snapshot/ads/current', async (req: Request, res: Response) => {
 
     const profile = await prisma.businessProfile.findUnique({
       where: { id: businessProfileId },
-      select: { instagram_url: true, facebook_url: true, tiktok_url: true },
+      select: { instagram_url: true, facebook_url: true, tiktok_url: true, facebook_page_id: true },
     });
     if (!profile) return res.status(404).json({ error: 'Business not found' });
 
@@ -325,7 +325,7 @@ router.get('/snapshot/ads/history', async (req: Request, res: Response) => {
 
     const profile = await prisma.businessProfile.findUnique({
       where: { id: businessProfileId },
-      select: { instagram_url: true, facebook_url: true, tiktok_url: true },
+      select: { instagram_url: true, facebook_url: true, tiktok_url: true, facebook_page_id: true },
     });
     if (!profile) return res.status(404).json({ error: 'Business not found' });
 
