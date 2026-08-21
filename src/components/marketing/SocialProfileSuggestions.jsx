@@ -107,6 +107,9 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
   const bpId = businessProfile?.id;
   const [bioFixState, setBioFixState] = useState({ loading: false, suggestions: [] });
   const [logoFixState, setLogoFixState] = useState({ loading: false, critiques: [] });
+  // Keyed by platform — holds the generated-logo result/loading state for the
+  // "🎨 צרו לי לוגו חדש" CTA, independent per platform toggle.
+  const [logoGenState, setLogoGenState] = useState({});
 
   // Clear any bio-fix/logo-critique result left over from the previous
   // platform when the toggle switches — this component is no longer
@@ -115,6 +118,7 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
   useEffect(() => {
     setBioFixState({ loading: false, suggestions: [] });
     setLogoFixState({ loading: false, critiques: [] });
+    setLogoGenState({});
   }, [platform]);
 
   const { data: competitors = [] } = useQuery({
@@ -194,6 +198,18 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
     }
   };
 
+  const generateLogoNow = async (critiquePlatform) => {
+    setLogoGenState(prev => ({ ...prev, [critiquePlatform]: { loading: true } }));
+    try {
+      const result = await base44.functions.invoke('generateLogo', { businessProfileId: bpId, platform: critiquePlatform }, 60000);
+      const data = result?.data ?? result;
+      setLogoGenState(prev => ({ ...prev, [critiquePlatform]: { loading: false, url: data?.suggested_logo_url ?? null } }));
+    } catch (e) {
+      console.warn('[SocialProfileSuggestions] generateLogoNow failed:', e.message);
+      setLogoGenState(prev => ({ ...prev, [critiquePlatform]: { loading: false, error: true } }));
+    }
+  };
+
   const ownProfileUrl = platform === 'instagram' ? businessProfile?.instagram_url : businessProfile?.facebook_url;
 
   if (!suggestions.length) return null;
@@ -261,14 +277,37 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
         </div>
       ))}
 
-      {logoFixState.critiques.map((c, i) => (
-        <div key={i} className="border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30 rounded-lg p-3 space-y-1.5">
-          <p className="text-[10px] font-semibold text-indigo-800 dark:text-indigo-300">{c.platform}</p>
-          {c.critique && (
-            <p className="text-xs leading-relaxed text-indigo-950 dark:text-indigo-100">{c.critique}</p>
-          )}
-        </div>
-      ))}
+      {logoFixState.critiques.map((c, i) => {
+        const genState = logoGenState[c.platform] ?? {};
+        return (
+          <div key={i} className="border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30 rounded-lg p-3 space-y-1.5">
+            <p className="text-[10px] font-semibold text-indigo-800 dark:text-indigo-300">{c.platform}</p>
+            {c.critique && (
+              <p className="text-xs leading-relaxed text-indigo-950 dark:text-indigo-100">{c.critique}</p>
+            )}
+            {c.needs_redesign && !genState.url && (
+              <button
+                onClick={() => generateLogoNow(c.platform)}
+                disabled={genState.loading}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-indigo-300 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 disabled:opacity-50"
+              >
+                {genState.loading ? 'יוצר לוגו...' : '🎨 צרו לי לוגו חדש'}
+              </button>
+            )}
+            {genState.error && (
+              <p className="text-[11px] text-red-600 dark:text-red-400">יצירת הלוגו נכשלה, נסו שוב</p>
+            )}
+            {genState.url && (
+              <div className="space-y-1">
+                <img src={genState.url} alt="הצעת לוגו חדש" className="rounded-lg border border-indigo-200 dark:border-indigo-800 w-24 h-24 object-cover" />
+                <p className="text-[11px] text-indigo-700 dark:text-indigo-400">
+                  הצעה ראשונית שנוצרה על ידי AI — הורידו ותעלו ידנית לפרופיל ב{c.platform === 'instagram' ? 'אינסטגרם' : 'פייסבוק'}
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

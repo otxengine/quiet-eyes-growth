@@ -27,20 +27,24 @@ export async function critiqueLogo(req: Request, res: Response) {
     });
     if (!ownProfiles.length) return res.status(400).json({ error: 'No own logo found to critique' });
 
-    const critiques: { platform: string; critique: string | null }[] = [];
+    const critiques: { platform: string; critique: string | null; needs_redesign: boolean }[] = [];
     for (const p of ownProfiles) {
-      const critique = await critiqueOwnLogo({
+      const result = await critiqueOwnLogo({
         businessName: profile.name,
         category: profile.category,
         platform: p.platform,
         logoUrl: p.profile_picture_url as string,
         competitorLogoInsight: profile.content_trends_logo_insight,
       });
-      critiques.push({ platform: p.platform, critique });
-      if (critique) {
+      critiques.push({ platform: p.platform, critique: result.critique, needs_redesign: result.needs_redesign });
+      if (result.critique) {
         await prisma.businessSocialProfile.updateMany({
           where: { linked_business: businessProfileId, platform: p.platform },
-          data: { logo_critique: critique, logo_critique_at: new Date().toISOString() },
+          data: {
+            logo_critique: result.critique,
+            logo_critique_at: new Date().toISOString(),
+            logo_needs_redesign: result.needs_redesign,
+          },
         }).catch(() => {});
       }
     }

@@ -1212,8 +1212,14 @@ model BusinessSocialProfile {
   // AI vision critique of this platform's profile picture/logo, grounded in
   // the visual pattern synthesized across tracked competitors' logos
   // (BusinessProfile.content_trends_logo_insight).
-  logo_critique    String?  // 2-4 sentences (Hebrew) with concrete suggestions
-  logo_critique_at String?  // ISO timestamp
+  logo_critique       String?  // 2-4 sentences (Hebrew) with concrete suggestions
+  logo_critique_at    String?  // ISO timestamp
+  logo_needs_redesign Boolean? // set alongside logo_critique — gates the "generate a new logo" CTA
+  // AI-generated candidate replacement logo (own S3, permanent URL), grounded
+  // in logo_critique + the competitor visual pattern — a first-draft concept,
+  // not auto-applied anywhere (no platform API exists to push a profile picture live).
+  suggested_logo_url  String?
+  suggested_logo_at   String?  // ISO timestamp
 
   @@unique([linked_business, platform])
   @@map("business_social_profiles")
