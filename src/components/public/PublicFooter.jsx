@@ -41,6 +41,7 @@ export default function PublicFooter() {
             <div className="flex flex-col gap-2.5">
               <Link to="/terms" className="text-[13px] text-[#777] hover:text-[#111] transition-colors">תנאי שימוש</Link>
               <Link to="/privacy" className="text-[13px] text-[#777] hover:text-[#111] transition-colors">מדיניות פרטיות</Link>
+              <Link to="/data-deletion" className="text-[13px] text-[#777] hover:text-[#111] transition-colors">מחיקת מידע</Link>
             </div>
           </div>
         </div>

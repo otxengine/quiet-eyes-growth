@@ -20,6 +20,7 @@ import AboutPage from '@/pages/public/About.jsx';
 import ContactPage from '@/pages/public/Contact.jsx';
 import TermsPage from '@/pages/public/Terms.jsx';
 import PrivacyPage from '@/pages/public/Privacy.jsx';
+import DataDeletionPage from '@/pages/public/DataDeletion.jsx';
 
 // App layout
 import AppLayout from '@/components/layout/AppLayout';
@@ -92,6 +93,7 @@ const AuthenticatedApp = () => {
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/data-deletion" element={<DataDeletionPage />} />
           </Route>
           <Route path="*" element={<PageNotFound />} />
         </Routes>
@@ -123,6 +125,7 @@ const AuthenticatedApp = () => {
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/data-deletion" element={<DataDeletionPage />} />
         </Route>
         <Route path="/join" element={<JoinPage />} />
         <Route path="*" element={<PageNotFound />} />
@@ -143,6 +146,7 @@ const AuthenticatedApp = () => {
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/data-deletion" element={<DataDeletionPage />} />
       </Route>
 
       {/* Invite join — accessible without app layout */}
