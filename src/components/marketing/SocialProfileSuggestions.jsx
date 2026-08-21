@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import {
-  apiFetch, isFacebookAutoBio, weeklyPostingRate,
+  API_BASE, apiFetch, isFacebookAutoBio, weeklyPostingRate,
 } from '@/components/competitors/socialShared';
 
 // ponytail: starting heuristics, not tuned values — revisit once we have real usage data.
@@ -299,7 +299,11 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
             )}
             {genState.url && (
               <div className="space-y-1">
-                <img src={genState.url} alt="הצעת לוגו חדש" className="rounded-lg border border-indigo-200 dark:border-indigo-800 w-24 h-24 object-cover" />
+                <img
+                  src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(genState.url)}`}
+                  alt="הצעת לוגו חדש"
+                  className="rounded-lg border border-indigo-200 dark:border-indigo-800 w-24 h-24 object-cover"
+                />
                 <p className="text-[11px] text-indigo-700 dark:text-indigo-400">
                   הצעה ראשונית שנוצרה על ידי AI — הורידו ותעלו ידנית לפרופיל ב{c.platform === 'instagram' ? 'אינסטגרם' : 'פייסבוק'}
                 </p>
