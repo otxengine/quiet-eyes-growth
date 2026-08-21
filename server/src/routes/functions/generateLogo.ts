@@ -1,8 +1,20 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { buildLogoDesignBrief } from '../../lib/buildLogoDesignBrief';
-import { generateLogoImage, LogoStyle } from '../../lib/generateLogoImage';
+import { generateLogoImage, GeneratedLogo, LogoStyle } from '../../lib/generateLogoImage';
 import { uploadBufferToS3, uploadImageFromUrl } from '../../lib/s3';
+import { fetchImageBase64 } from '../../lib/fetchImageBase64';
+import { verifyLogoSpelling } from '../../lib/verifyLogoSpelling';
+
+const MAX_WORDMARK_ATTEMPTS = 3;
+
+async function toBase64(url: string): Promise<{ data: string; mediaType: string } | null> {
+  if (url.startsWith('data:')) {
+    const [, mediaType, data] = url.match(/^data:(.+?);base64,(.+)$/) || [];
+    return data ? { data, mediaType: mediaType || 'image/png' } : null;
+  }
+  return fetchImageBase64(url);
+}
 
 /**
  * generateLogo — generates an AI candidate replacement logo for one own
@@ -45,8 +57,28 @@ export async function generateLogo(req: Request, res: Response) {
       style: logoStyle,
     });
 
-    const generated = await generateLogoImage(brief, logoStyle);
-    if (!generated) return res.status(502).json({ error: 'Logo generation failed on all providers' });
+    let generated: GeneratedLogo | null = null;
+    if (logoStyle === 'wordmark') {
+      // The business name IS the design here — a misspelled wordmark is worse
+      // than none, so each attempt is vision-verified against the real name
+      // before it's accepted; wrong spellings are discarded and retried.
+      for (let attempt = 1; attempt <= MAX_WORDMARK_ATTEMPTS; attempt++) {
+        const candidate = await generateLogoImage(brief, logoStyle);
+        if (!candidate) continue;
+        const img = await toBase64(candidate.url);
+        if (img && await verifyLogoSpelling(img.data, img.mediaType, profile.name)) {
+          generated = candidate;
+          break;
+        }
+        console.warn(`[generateLogo] wordmark attempt ${attempt}/${MAX_WORDMARK_ATTEMPTS} failed spelling verification`);
+      }
+      if (!generated) {
+        return res.status(502).json({ error: 'לא הצלחנו ליצור לוגו עם איות נכון של שם העסק — נסו שוב או בחרו בסגנון היצירתי' });
+      }
+    } else {
+      generated = await generateLogoImage(brief, logoStyle);
+      if (!generated) return res.status(502).json({ error: 'Logo generation failed on all providers' });
+    }
 
     let permanentUrl: string | null;
     if (generated.url.startsWith('data:')) {
