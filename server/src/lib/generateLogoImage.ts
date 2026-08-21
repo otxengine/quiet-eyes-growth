@@ -7,6 +7,7 @@
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const FAL_API_KEY = process.env.FAL_API_KEY || '';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 
 export type LogoStyle = 'creative' | 'wordmark';
 
@@ -25,7 +26,32 @@ const STYLE_SUFFIX: Record<LogoStyle, string> = {
 
 export interface GeneratedLogo {
   url: string; // either a fal.ai-hosted URL or a data:image/... base64 string
-  provider: 'flux1' | 'imagen_ultra';
+  provider: 'flux1' | 'imagen_ultra' | 'gpt_image';
+}
+
+/**
+ * gpt-image-1 renders in-image text (including non-Latin script) noticeably
+ * better than Flux/Imagen — used as the first attempt for wordmark logos
+ * specifically, where the business name IS the design. Not tried for
+ * 'creative' icons (no text to render, and Flux is cheaper/faster for that).
+ */
+async function generateWithGptImage(englishBrief: string, style: LogoStyle): Promise<string | null> {
+  if (!OPENAI_API_KEY) return null;
+  const res = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'gpt-image-1',
+      prompt: `${englishBrief}, ${STYLE_SUFFIX[style]}`,
+      size: '1024x1024',
+      n: 1,
+    }),
+  });
+  if (!res.ok) throw new Error(`gpt-image-1 ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const data: any = await res.json();
+  const b64 = data.data?.[0]?.b64_json;
+  if (!b64) throw new Error('gpt-image-1 returned no image data');
+  return `data:image/png;base64,${b64}`;
 }
 
 async function generateWithFlux(englishBrief: string, style: LogoStyle): Promise<string | null> {
@@ -68,8 +94,22 @@ async function generateWithImagen(englishBrief: string, style: LogoStyle): Promi
   return `data:image/png;base64,${b64}`;
 }
 
-/** Tries Flux.1-schnell first (fast, cheap), falls back to Imagen Ultra. Never throws — returns null on total failure. */
+/**
+ * Wordmark logos try gpt-image-1 first (best odds on rendering the business
+ * name as legible text), then fall back to the cheaper Flux/Imagen tier.
+ * Creative icons skip straight to Flux/Imagen — no text to render, so the
+ * extra cost buys nothing. Never throws — returns null on total failure.
+ */
 export async function generateLogoImage(englishBrief: string, style: LogoStyle = 'creative'): Promise<GeneratedLogo | null> {
+  if (style === 'wordmark') {
+    try {
+      const url = await generateWithGptImage(englishBrief, style);
+      if (url) return { url, provider: 'gpt_image' };
+    } catch (err: any) {
+      console.warn('[generateLogoImage] gpt-image-1 failed:', err.message);
+    }
+  }
+
   try {
     const url = await generateWithFlux(englishBrief, style);
     if (url) return { url, provider: 'flux1' };
