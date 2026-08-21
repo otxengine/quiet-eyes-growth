@@ -298,6 +298,7 @@ const FUNCTION_MAP: Record<string, any> = {
   suggestBioFix,
   analyzeLogoTrends,
   critiqueLogo,
+  generateLogo,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,
