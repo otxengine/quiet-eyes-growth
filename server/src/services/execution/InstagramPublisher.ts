@@ -13,6 +13,7 @@
 
 import { prisma } from '../../db';
 import { createLogger } from '../../infra/logger';
+import { tryDecryptToken } from '../../lib/crypto';
 
 const logger = createLogger('InstagramPublisher');
 
@@ -54,7 +55,7 @@ export async function publishPost(
       profile?.instagram_access_token && profile?.instagram_page_id) {
     try {
       const igUserId = profile.instagram_page_id;
-      const token = profile.instagram_access_token;
+      const token = tryDecryptToken(profile.instagram_access_token);
 
       // Step 1: Create container
       const containerBody: Record<string, string> = { caption: payload.caption, access_token: token };
@@ -104,7 +105,7 @@ export async function publishPost(
     try {
       const fbBody: Record<string, string> = {
         message: payload.caption,
-        access_token: profile.facebook_page_token,
+        access_token: tryDecryptToken(profile.facebook_page_token),
       };
       if (payload.imageUrl) fbBody.url = payload.imageUrl;
 

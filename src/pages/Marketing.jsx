@@ -337,10 +337,11 @@ function OrganicCard({ post, onDelete, onOpen }) {
 
 // ── Organic Post Detail / Approve Modal ───────────────────────────────────────
 
-function OrganicPostDetailModal({ post, onClose, onToggleApprove, toggling }) {
+function OrganicPostDetailModal({ post, onClose, onToggleApprove, toggling, onPublish, publishing }) {
   const platCfg = ORGANIC_PLATFORMS.find(p => p.id === post.platform) || ORGANIC_PLATFORMS[0];
   const status  = ORGANIC_STATUS[post.status] || ORGANIC_STATUS.draft;
   const approved = !!post.approved_at;
+  const published = post.status === 'published';
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40" dir="rtl" onClick={onClose}>
@@ -377,6 +378,13 @@ function OrganicPostDetailModal({ post, onClose, onToggleApprove, toggling }) {
             {toggling ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
             {approved ? 'בטל אישור' : 'אשר פוסט'}
           </button>
+          {approved && !published && (
+            <button onClick={() => onPublish(post)} disabled={publishing}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-foreground text-background rounded-xl text-[13px] font-bold hover:opacity-90 transition-all disabled:opacity-60">
+              {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {publishing ? 'מפרסם...' : 'פרסם עכשיו'}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -1296,6 +1304,34 @@ export default function Marketing() {
     onError: (err) => toast.error('שגיאה: ' + (err?.message || 'נסה שוב')),
   });
 
+  const [publishingId, setPublishingId] = useState(null);
+
+  const handlePublish = async (post) => {
+    setPublishingId(post.id);
+    try {
+      const res = await fetch(`${_apiBase}/social/publish-organic`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-dev-user': 'dev-user' },
+        body: JSON.stringify({
+          businessProfileId: bpId,
+          postId: post.id,
+          content: post.content,
+          imageUrl: post.image_url || null,
+          mediaAssetId: post.media_asset_id || null,
+          platform: post.platform,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'שגיאת פרסום');
+      queryClient.invalidateQueries({ queryKey: ['organicPosts', bpId] });
+      setDetailPost(null);
+      toast.success('פורסם בהצלחה! 🎉');
+    } catch (err) {
+      toast.error('שגיאה בפרסום: ' + (err?.message || 'נסה שוב'));
+    }
+    setPublishingId(null);
+  };
+
   const [showBulkSetup, setShowBulkSetup] = useState(false);
   const [bulkGenerating, setBulkGenerating] = useState(false);
   const [reviewQueue, setReviewQueue] = useState(null); // array of posts, or null when closed
@@ -1856,6 +1892,8 @@ ${audienceCtx}
           onClose={() => setDetailPost(null)}
           onToggleApprove={(post) => approveOrganic.mutate({ id: post.id, approve: !post.approved_at })}
           toggling={approveOrganic.isPending}
+          onPublish={handlePublish}
+          publishing={publishingId === detailPost.id}
         />
       )}
 

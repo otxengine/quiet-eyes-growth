@@ -325,7 +325,7 @@ async function saveFacebookPage(businessId: string, platform: string, page: any)
     await prisma.businessProfile.updateMany({
       where: { id: businessId },
       data: {
-        instagram_access_token: pageToken,
+        instagram_access_token: tryEncryptToken(pageToken),
         instagram_page_id: igId,
       },
     });
@@ -339,7 +339,7 @@ async function saveFacebookPage(businessId: string, platform: string, page: any)
     await prisma.businessProfile.updateMany({
       where: { id: businessId },
       data: {
-        facebook_page_token: pageToken,
+        facebook_page_token: tryEncryptToken(pageToken),
         facebook_page_id: pageId,
       },
     });

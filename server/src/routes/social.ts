@@ -4,6 +4,7 @@ import { invokeLLM } from '../lib/llm';
 import { getSectorProfile } from '../lib/businessProfile';
 import { resolveTopicSet } from '../lib/reviewTopicPacks';
 import { downloadFromS3 } from '../lib/s3';
+import { tryDecryptToken } from '../lib/crypto';
 import FormData from 'form-data';
 import fetch from 'node-fetch';
 import { randomUUID } from 'crypto';
@@ -80,7 +81,7 @@ router.post('/publish-organic', async (req: Request, res: Response) => {
         return res.status(400).json({ error: 'Facebook not connected — go to Integrations and connect your Page' });
       }
 
-      const token  = profile.facebook_page_token;
+      const token  = tryDecryptToken(profile.facebook_page_token);
       const pageId = profile.facebook_page_id;
 
       let fbResult: any;
@@ -162,7 +163,7 @@ router.post('/publish-organic', async (req: Request, res: Response) => {
         });
       }
 
-      const token   = profile.instagram_access_token;
+      const token   = tryDecryptToken(profile.instagram_access_token);
       const igId    = profile.instagram_page_id;
 
       // Step 1: create container
@@ -377,7 +378,7 @@ router.get('/comments', async (req: Request, res: Response) => {
   // ── Fetch Facebook comments ──────────────────────────────────────────────
   if ((platform === 'all' || platform === 'facebook') && profile.facebook_page_token && profile.facebook_page_id) {
     try {
-      const token  = profile.facebook_page_token;
+      const token  = tryDecryptToken(profile.facebook_page_token);
       const pageId = profile.facebook_page_id;
 
       const postsRes = await fetch(
@@ -436,7 +437,7 @@ router.get('/comments', async (req: Request, res: Response) => {
   // ── Fetch Instagram comments ─────────────────────────────────────────────
   if ((platform === 'all' || platform === 'instagram') && profile.instagram_access_token && profile.instagram_page_id) {
     try {
-      const token = profile.instagram_access_token;
+      const token = tryDecryptToken(profile.instagram_access_token);
       const igId  = profile.instagram_page_id;
 
       const mediaRes = await fetch(
@@ -627,7 +628,7 @@ router.post('/comments/:id/reply', async (req: Request, res: Response) => {
 
   try {
     if (comment.platform === 'facebook') {
-      const token = profile?.facebook_page_token;
+      const token = profile?.facebook_page_token ? tryDecryptToken(profile.facebook_page_token) : undefined;
       if (!token) return res.status(400).json({ error: 'Facebook not connected' });
 
       const fbRes = await fetch(`${GRAPH}/${comment.platform_comment_id}/comments`, {
@@ -640,7 +641,7 @@ router.post('/comments/:id/reply', async (req: Request, res: Response) => {
         throw new Error(fbData?.error?.message || `Facebook reply error ${fbRes.status}`);
       }
     } else if (comment.platform === 'instagram') {
-      const token = profile?.instagram_access_token;
+      const token = profile?.instagram_access_token ? tryDecryptToken(profile.instagram_access_token) : undefined;
       if (!token) return res.status(400).json({ error: 'Instagram not connected' });
 
       const igRes = await fetch(`${GRAPH}/${comment.platform_comment_id}/replies`, {
@@ -705,9 +706,10 @@ router.delete('/comments/:id', async (req: Request, res: Response) => {
   });
 
   try {
-    const token = comment.platform === 'facebook'
+    const rawToken = comment.platform === 'facebook'
       ? profile?.facebook_page_token
       : profile?.instagram_access_token;
+    const token = rawToken ? tryDecryptToken(rawToken) : undefined;
 
     if (!token) {
       return res.status(400).json({ error: `${comment.platform} not connected` });
