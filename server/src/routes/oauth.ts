@@ -161,11 +161,12 @@ router.get('/initiate/:platform', async (req: Request, res: Response) => {
       return res.status(503).json({ error: 'Facebook app not configured', demo: true });
     }
 
-    // instagram_manage_comments is required to read comment usernames + reply to comments
     // pages_manage_posts is required for Facebook feed/photos
+    // instagram_manage_comments / pages_manage_engagement dropped — no reply/moderate feature
+    // uses them yet (only read-only comment analysis exists); re-add once that ships.
     const scope = platform === 'instagram_business'
-      ? 'pages_show_list,pages_read_engagement,instagram_content_publish,instagram_basic,instagram_manage_comments'
-      : 'pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_engagement';
+      ? 'pages_show_list,pages_read_engagement,instagram_content_publish,instagram_basic'
+      : 'pages_show_list,pages_read_engagement,pages_manage_posts';
 
     authUrl =
       `https://www.facebook.com/v19.0/dialog/oauth?` +
