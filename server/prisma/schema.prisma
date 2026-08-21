@@ -1209,6 +1209,7 @@ model BusinessSocialProfile {
   suggested_bio           String?  // proposed rewritten bio (Hebrew)
   suggested_bio_rationale String?  // 1-3 sentences: what changed and why (Hebrew)
   suggested_bio_at        String?  // ISO timestamp
+  suggested_bio_accepted  Boolean? // set true when the owner accepts the candidate via the review popup; cleared on reject
   // AI vision critique of this platform's profile picture/logo, grounded in
   // the visual pattern synthesized across tracked competitors' logos
   // (BusinessProfile.content_trends_logo_insight).

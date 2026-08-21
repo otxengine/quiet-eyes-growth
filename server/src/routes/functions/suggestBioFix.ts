@@ -8,13 +8,15 @@ import { suggestOwnBioFix } from '../../lib/suggestOwnBioFix';
  * synthesized across tracked competitors (content_trends_bio_insight/
  * _examples). Requires that bio-trends analysis has already run.
  *
- * Body: { businessProfileId, platform? } — platform restricts the fix to one
- * own platform (e.g. only Instagram) instead of every platform with a bio;
- * used by the per-platform suggestions UI so switching platforms doesn't
- * pay for/return a fix for the platform not currently being viewed.
+ * Body: { businessProfileId, platform?, feedback? } — platform restricts the
+ * fix to one own platform (e.g. only Instagram) instead of every platform
+ * with a bio; used by the per-platform suggestions UI so switching platforms
+ * doesn't pay for/return a fix for the platform not currently being viewed.
+ * feedback is the owner's requested change to a previous suggestion (from
+ * the "request change" action in the review popup).
  */
 export async function suggestBioFix(req: Request, res: Response) {
-  const { businessProfileId, platform } = req.body;
+  const { businessProfileId, platform, feedback } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
   try {
@@ -45,6 +47,7 @@ export async function suggestBioFix(req: Request, res: Response) {
         ownBio: p.bio as string,
         competitorBioInsight: profile.content_trends_bio_insight,
         competitorBioExamples,
+        changeFeedback: typeof feedback === 'string' && feedback.trim() ? feedback.trim() : undefined,
       });
       suggestions.push({ platform: p.platform, suggested_bio: fix.suggested_bio, rationale: fix.rationale });
       if (fix.suggested_bio) {
@@ -54,6 +57,7 @@ export async function suggestBioFix(req: Request, res: Response) {
             suggested_bio: fix.suggested_bio,
             suggested_bio_rationale: fix.rationale,
             suggested_bio_at: new Date().toISOString(),
+            suggested_bio_accepted: false,
           },
         }).catch(() => {});
       }

@@ -9,6 +9,7 @@ export interface OwnBioFixInput {
   ownBio: string;
   competitorBioInsight: string;
   competitorBioExamples: { competitorName: string; text: string }[];
+  changeFeedback?: string; // owner's requested change to a previous AI-suggested rewrite, if this is a revision
 }
 
 export interface OwnBioFix {
@@ -45,7 +46,7 @@ ${examplesBlock}
 
 The business's CURRENT bio on ${input.platform}:
 ${input.ownBio}
-
+${input.changeFeedback ? `\nThe owner reviewed a previous AI-suggested rewrite and asked for this specific change: "${input.changeFeedback}". The new suggestion must incorporate this.\n` : ''}
 Rewrite this business's bio to apply the winning pattern, while staying true to THIS business (its real name, sector, city, services — never invent details not given above, never copy a competitor's specific offer/contact info). Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
   "suggested_bio": "the rewritten bio, ready to copy-paste as-is, using line breaks (\\n) the same way the winning examples do",

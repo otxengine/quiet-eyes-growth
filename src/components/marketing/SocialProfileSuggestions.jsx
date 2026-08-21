@@ -183,6 +183,155 @@ function LogoReviewModal({ platform, imageUrl, style, loading, busy, onAccept, o
 }
 
 /**
+ * Popup for reviewing the AI-suggested bio rewrite — accept / reject /
+ * request change, same pattern and chrome as LogoReviewModal above.
+ */
+function BioReviewModal({ platform, suggestion, loading, busy, onAccept, onReject, onRequestChange, onClose }) {
+  const [feedbackMode, setFeedbackMode] = useState(false);
+  const [feedback, setFeedback] = useState('');
+
+  const submitFeedback = async () => {
+    if (!feedback.trim()) return;
+    await onRequestChange(feedback.trim());
+    setFeedback('');
+    setFeedbackMode(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40" dir="rtl">
+      <div className="w-full max-w-lg bg-card rounded-t-2xl md:rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-border sticky top-0 bg-card z-10">
+          <span className="text-[13px] font-semibold text-foreground">הצעת ביו חדש — {platform === 'instagram' ? 'אינסטגרם' : 'פייסבוק'}</span>
+          <button onClick={onClose} className="text-foreground-muted hover:text-foreground mr-auto"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {loading ? (
+            <div className="flex items-center justify-center h-32">
+              <Loader2 className="w-6 h-6 animate-spin text-foreground-muted" />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {suggestion?.suggested_bio && (
+                <p className="text-[13px] leading-relaxed text-foreground whitespace-pre-line bg-secondary border border-border rounded-xl px-3 py-2.5">
+                  {suggestion.suggested_bio}
+                </p>
+              )}
+              {suggestion?.rationale && (
+                <p className="text-[11px] text-foreground-muted">{suggestion.rationale}</p>
+              )}
+              {!suggestion?.suggested_bio && (
+                <p className="text-[13px] text-red-600 dark:text-red-400">לא הצלחנו להציע ביו חדש, נסו שוב</p>
+              )}
+            </div>
+          )}
+
+          {feedbackMode && (
+            <div className="space-y-2">
+              <textarea
+                value={feedback}
+                onChange={e => setFeedback(e.target.value)}
+                placeholder="מה תרצו לשנות בביו?"
+                rows={3}
+                autoFocus
+                className="w-full text-[13px] text-foreground bg-secondary border border-border rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed"
+              />
+              <div className="flex gap-2">
+                <button onClick={() => { setFeedbackMode(false); setFeedback(''); }}
+                  className="flex-1 py-2 text-[12px] border border-border rounded-lg text-foreground-muted hover:text-foreground transition-colors">
+                  ביטול
+                </button>
+                <button onClick={submitFeedback} disabled={busy || !feedback.trim()}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[12px] font-medium bg-foreground text-background rounded-lg disabled:opacity-60">
+                  {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  שלח בקשה
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {!feedbackMode && (
+          <div className="flex gap-2 px-5 py-4 border-t border-border">
+            <button onClick={onReject} disabled={loading || busy}
+              className="flex-1 py-2.5 border border-red-200 text-red-600 rounded-xl text-[13px] font-medium hover:bg-red-50 transition-colors disabled:opacity-60">
+              דחה
+            </button>
+            <button onClick={() => setFeedbackMode(true)} disabled={loading || busy}
+              className="flex-1 py-2.5 border border-border rounded-xl text-[13px] text-foreground-muted hover:text-foreground transition-colors disabled:opacity-60">
+              בקש שינוי
+            </button>
+            <button onClick={onAccept} disabled={loading || busy}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-green-600 text-white rounded-xl text-[13px] font-bold hover:opacity-90 disabled:opacity-60">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              אשר
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Popup for the own-logo critique — informational (no candidate to accept),
+ * so its only always-present action is closing; when the critique flags a
+ * redesign it also offers the two generate-logo entry points, which hand off
+ * to LogoReviewModal for the actual accept/reject/request-change cycle.
+ */
+function LogoCritiqueModal({ platform, critique, loading, onGenerate, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40" dir="rtl">
+      <div className="w-full max-w-lg bg-card rounded-t-2xl md:rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-border sticky top-0 bg-card z-10">
+          <span className="text-[13px] font-semibold text-foreground">ניתוח הלוגו שלכם — {platform === 'instagram' ? 'אינסטגרם' : 'פייסבוק'}</span>
+          <button onClick={onClose} className="text-foreground-muted hover:text-foreground mr-auto"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {loading ? (
+            <div className="flex items-center justify-center h-32">
+              <Loader2 className="w-6 h-6 animate-spin text-foreground-muted" />
+            </div>
+          ) : (
+            <>
+              {critique?.critique ? (
+                <p className="text-[13px] leading-relaxed text-foreground">{critique.critique}</p>
+              ) : (
+                <p className="text-[13px] text-red-600 dark:text-red-400">לא הצלחנו לנתח את הלוגו, נסו שוב</p>
+              )}
+              {critique?.needs_redesign && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onGenerate('creative')}
+                    className="flex-1 text-xs font-semibold px-3 py-2 rounded-lg border border-indigo-300 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/40"
+                  >
+                    🎨 לוגו יצירתי
+                  </button>
+                  <button
+                    onClick={() => onGenerate('wordmark')}
+                    className="flex-1 text-xs font-semibold px-3 py-2 rounded-lg border border-indigo-300 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/40"
+                  >
+                    🔤 שם העסק כלוגו
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="flex gap-2 px-5 py-4 border-t border-border">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 border border-border rounded-xl text-[13px] text-foreground-muted hover:text-foreground transition-colors">
+            סגור
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Proactive, always-visible suggestions comparing the business's own social
  * profile(s) against its tracked competitors — bio quality, profile/cover
  * picture, external link/highlights, posting frequency. Every trigger is a
@@ -195,8 +344,13 @@ function LogoReviewModal({ platform, imageUrl, style, loading, busy, onAccept, o
  */
 export default function SocialProfileSuggestions({ businessProfile, platform, onCreatePost }) {
   const bpId = businessProfile?.id;
-  const [bioFixState, setBioFixState] = useState({ loading: false, suggestions: [] });
-  const [logoFixState, setLogoFixState] = useState({ loading: false, critiques: [] });
+  // Single object, not an array — this component is already scoped to one
+  // `platform`, so suggestBioFix/critiqueLogo only ever return one entry.
+  const [bioState, setBioState] = useState({ loading: false, suggestion: null, accepted: false });
+  const [bioReviewOpen, setBioReviewOpen] = useState(false);
+  const [bioReviewBusy, setBioReviewBusy] = useState(false);
+  const [logoCritique, setLogoCritique] = useState({ loading: false, critique: null });
+  const [logoCritiqueOpen, setLogoCritiqueOpen] = useState(false);
   // Keyed by platform — holds the generated-logo result/loading state for the
   // "🎨 צרו לי לוגו חדש" CTA, independent per platform toggle.
   const [logoGenState, setLogoGenState] = useState({});
@@ -209,8 +363,10 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
   // remounted via `key` (that caused stray duplicate renders), so this is
   // the reset mechanism instead.
   useEffect(() => {
-    setBioFixState({ loading: false, suggestions: [] });
-    setLogoFixState({ loading: false, critiques: [] });
+    setBioState({ loading: false, suggestion: null, accepted: false });
+    setBioReviewOpen(false);
+    setLogoCritique({ loading: false, critique: null });
+    setLogoCritiqueOpen(false);
     setLogoGenState({});
     setLogoReviewPlatform(null);
   }, [platform]);
@@ -262,33 +418,59 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
     ownProfiles, competitorProfiles, ownWeeklyRate, competitorAvgWeeklyRate,
   }) : []), [ownProfiles, competitorProfiles, ownWeeklyRate, competitorAvgWeeklyRate]);
 
-  const fixBioNow = async () => {
-    setBioFixState({ loading: true, suggestions: [] });
+  const fixBioNow = async (feedback) => {
+    setBioReviewOpen(true);
+    setBioState(prev => ({ ...prev, loading: true }));
     try {
       if (!businessProfile?.content_trends_bio_insight) {
         await base44.functions.invoke('analyzeBioProfiles', { businessProfileId: bpId }, 60000);
       }
-      const result = await base44.functions.invoke('suggestBioFix', { businessProfileId: bpId, platform }, 60000);
+      const result = await base44.functions.invoke('suggestBioFix', { businessProfileId: bpId, platform, feedback }, 60000);
       const data = result?.data ?? result;
-      setBioFixState({ loading: false, suggestions: data?.suggestions ?? [] });
+      setBioState({ loading: false, suggestion: data?.suggestions?.[0] ?? null, accepted: false });
     } catch (e) {
       console.warn('[SocialProfileSuggestions] fixBioNow failed:', e.message);
-      setBioFixState({ loading: false, suggestions: [] });
+      setBioState({ loading: false, suggestion: null, accepted: false });
     }
   };
 
+  const acceptBioNow = async () => {
+    setBioReviewBusy(true);
+    try {
+      await base44.functions.invoke('reviewSuggestedBio', { businessProfileId: bpId, platform, action: 'accept' }, 30000);
+      setBioState(prev => ({ ...prev, accepted: true }));
+      setBioReviewOpen(false);
+    } catch (e) {
+      console.warn('[SocialProfileSuggestions] acceptBioNow failed:', e.message);
+    }
+    setBioReviewBusy(false);
+  };
+
+  const rejectBioNow = async () => {
+    setBioReviewBusy(true);
+    try {
+      await base44.functions.invoke('reviewSuggestedBio', { businessProfileId: bpId, platform, action: 'reject' }, 30000);
+      setBioState({ loading: false, suggestion: null, accepted: false });
+      setBioReviewOpen(false);
+    } catch (e) {
+      console.warn('[SocialProfileSuggestions] rejectBioNow failed:', e.message);
+    }
+    setBioReviewBusy(false);
+  };
+
   const critiqueLogoNow = async () => {
-    setLogoFixState({ loading: true, critiques: [] });
+    setLogoCritiqueOpen(true);
+    setLogoCritique(prev => ({ ...prev, loading: true }));
     try {
       if (!businessProfile?.content_trends_logo_insight) {
         await base44.functions.invoke('analyzeLogoTrends', { businessProfileId: bpId }, 60000);
       }
       const result = await base44.functions.invoke('critiqueLogo', { businessProfileId: bpId, platform }, 60000);
       const data = result?.data ?? result;
-      setLogoFixState({ loading: false, critiques: data?.critiques ?? [] });
+      setLogoCritique({ loading: false, critique: data?.critiques?.[0] ?? null });
     } catch (e) {
       console.warn('[SocialProfileSuggestions] critiqueLogoNow failed:', e.message);
-      setLogoFixState({ loading: false, critiques: [] });
+      setLogoCritique({ loading: false, critique: null });
     }
   };
 
@@ -297,6 +479,7 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
     // candidate being revised was generated with, instead of silently
     // switching a wordmark attempt back to creative.
     const style = styleArg || logoGenState[critiquePlatform]?.style || 'creative';
+    setLogoCritiqueOpen(false);
     setLogoReviewPlatform(critiquePlatform);
     setLogoGenState(prev => ({ ...prev, [critiquePlatform]: { ...prev[critiquePlatform], loading: true, style } }));
     try {
@@ -352,21 +535,38 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
               <p className="text-xs text-muted-foreground mt-1">{s.description}</p>
             </div>
             {s.kind === 'bio-fix' && (
-              <button
-                onClick={fixBioNow}
-                disabled={bioFixState.loading}
-                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-border hover:bg-muted disabled:opacity-50"
-              >
-                {bioFixState.loading ? 'מנתח...' : '🔧 תקנו לי את הביו'}
-              </button>
+              bioState.suggestion ? (
+                <div className="flex items-center gap-2">
+                  {bioState.accepted ? (
+                    <span className="flex items-center gap-1 text-[11px] font-medium text-green-700 dark:text-green-400">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> ההצעה אושרה
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => setBioReviewOpen(true)}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-border hover:bg-muted"
+                    >
+                      פתחו לבדיקה
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={() => fixBioNow()}
+                  disabled={bioState.loading}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-border hover:bg-muted disabled:opacity-50"
+                >
+                  {bioState.loading ? 'מנתח...' : '🔧 תקנו לי את הביו'}
+                </button>
+              )
             )}
             {s.kind === 'logo-critique' && (
               <button
-                onClick={critiqueLogoNow}
-                disabled={logoFixState.loading}
+                onClick={() => (logoCritique.critique ? setLogoCritiqueOpen(true) : critiqueLogoNow())}
+                disabled={logoCritique.loading}
                 className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-border hover:bg-muted disabled:opacity-50"
               >
-                {logoFixState.loading ? 'מנתח...' : '🔍 בדקו את הלוגו שלי'}
+                {logoCritique.loading ? 'מנתח...' : logoCritique.critique ? '🔍 צפו בניתוח' : '🔍 בדקו את הלוגו שלי'}
               </button>
             )}
             {s.kind === 'open-profile' && ownProfileUrl && (
@@ -389,71 +589,50 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
         ))}
       </div>
 
-      {bioFixState.suggestions.map((s, i) => (
-        <div key={i} className="border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 rounded-lg p-3 space-y-1.5">
-          <p className="text-[10px] font-semibold text-violet-800 dark:text-violet-300">{s.platform}</p>
-          {s.suggested_bio && (
-            <p className="text-xs leading-relaxed text-violet-950 dark:text-violet-100 whitespace-pre-line">{s.suggested_bio}</p>
-          )}
-          {s.rationale && (
-            <p className="text-[11px] text-violet-700 dark:text-violet-400 border-t border-violet-200 dark:border-violet-800 pt-1.5">{s.rationale}</p>
+      {logoGenState[platform]?.url && !logoGenState[platform]?.loading && (
+        <div className="flex items-center gap-2 border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30 rounded-lg p-3">
+          <img
+            src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(logoGenState[platform].url)}`}
+            alt="הצעת לוגו חדש"
+            className="rounded-lg border border-indigo-200 dark:border-indigo-800 w-12 h-12 object-cover shrink-0"
+          />
+          {logoGenState[platform].accepted ? (
+            <span className="flex items-center gap-1 text-[11px] font-medium text-green-700 dark:text-green-400">
+              <CheckCircle2 className="w-3.5 h-3.5" /> ההצעה אושרה
+            </span>
+          ) : (
+            <button
+              onClick={() => setLogoReviewPlatform(platform)}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-indigo-300 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/40"
+            >
+              פתחו לבדיקה
+            </button>
           )}
         </div>
-      ))}
+      )}
 
-      {logoFixState.critiques.map((c, i) => {
-        const genState = logoGenState[c.platform] ?? {};
-        return (
-          <div key={i} className="border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30 rounded-lg p-3 space-y-1.5">
-            <p className="text-[10px] font-semibold text-indigo-800 dark:text-indigo-300">{c.platform}</p>
-            {c.critique && (
-              <p className="text-xs leading-relaxed text-indigo-950 dark:text-indigo-100">{c.critique}</p>
-            )}
-            {c.needs_redesign && !genState.url && (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => generateLogoNow(c.platform, undefined, 'creative')}
-                  disabled={genState.loading}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-indigo-300 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 disabled:opacity-50"
-                >
-                  {genState.loading && genState.style === 'creative' ? 'יוצר לוגו...' : '🎨 לוגו יצירתי'}
-                </button>
-                <button
-                  onClick={() => generateLogoNow(c.platform, undefined, 'wordmark')}
-                  disabled={genState.loading}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-indigo-300 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 disabled:opacity-50"
-                >
-                  {genState.loading && genState.style === 'wordmark' ? 'יוצר לוגו...' : '🔤 שם העסק כלוגו'}
-                </button>
-              </div>
-            )}
-            {genState.error && (
-              <p className="text-[11px] text-red-600 dark:text-red-400">יצירת הלוגו נכשלה, נסו שוב</p>
-            )}
-            {genState.url && !genState.loading && (
-              <div className="flex items-center gap-2">
-                <img
-                  src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(genState.url)}`}
-                  alt="הצעת לוגו חדש"
-                  className="rounded-lg border border-indigo-200 dark:border-indigo-800 w-12 h-12 object-cover shrink-0"
-                />
-                {genState.accepted ? (
-                  <span className="flex items-center gap-1 text-[11px] font-medium text-green-700 dark:text-green-400">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> ההצעה אושרה
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => setLogoReviewPlatform(c.platform)}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-indigo-300 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/40"
-                  >
-                    פתחו לבדיקה
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {bioReviewOpen && (
+        <BioReviewModal
+          platform={platform}
+          suggestion={bioState.suggestion}
+          loading={bioState.loading}
+          busy={bioReviewBusy}
+          onAccept={acceptBioNow}
+          onReject={rejectBioNow}
+          onRequestChange={(feedback) => fixBioNow(feedback)}
+          onClose={() => setBioReviewOpen(false)}
+        />
+      )}
+
+      {logoCritiqueOpen && (
+        <LogoCritiqueModal
+          platform={platform}
+          critique={logoCritique.critique}
+          loading={logoCritique.loading}
+          onGenerate={(style) => generateLogoNow(platform, undefined, style)}
+          onClose={() => setLogoCritiqueOpen(false)}
+        />
+      )}
 
       {logoReviewPlatform && (
         <LogoReviewModal

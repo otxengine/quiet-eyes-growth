@@ -143,6 +143,7 @@ import { analyzeLogoTrends } from './analyzeLogoTrends';
 import { critiqueLogo } from './critiqueLogo';
 import { generateLogo } from './generateLogo';
 import { reviewSuggestedLogo } from './reviewSuggestedLogo';
+import { reviewSuggestedBio } from './reviewSuggestedBio';
 
 const router = Router();
 
@@ -301,6 +302,7 @@ const FUNCTION_MAP: Record<string, any> = {
   critiqueLogo,
   generateLogo,
   reviewSuggestedLogo,
+  reviewSuggestedBio,
   // Stubs (require extra credentials or not yet implemented)
   enrichLeads,
   fetchSocialData,
