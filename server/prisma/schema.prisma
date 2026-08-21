@@ -1220,6 +1220,7 @@ model BusinessSocialProfile {
   // not auto-applied anywhere (no platform API exists to push a profile picture live).
   suggested_logo_url  String?
   suggested_logo_at   String?  // ISO timestamp
+  suggested_logo_accepted Boolean? // set true when the owner accepts the candidate via the review popup; cleared (along with the url) on reject
 
   @@unique([linked_business, platform])
   @@map("business_social_profiles")

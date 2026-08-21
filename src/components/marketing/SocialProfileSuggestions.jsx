@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { X, Loader2, CheckCircle2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import {
   API_BASE, apiFetch, isFacebookAutoBio, weeklyPostingRate,
@@ -93,6 +94,94 @@ export function buildSuggestions({ ownProfiles, competitorProfiles, ownWeeklyRat
 }
 
 /**
+ * Popup for reviewing one AI-generated logo candidate — accept / reject /
+ * request change, mirroring the organic-post review popup (BulkReviewQueueModal
+ * in Marketing.jsx). "Request change" re-generates in place with the owner's
+ * feedback folded into the design brief, same pattern as post revision.
+ */
+function LogoReviewModal({ platform, imageUrl, loading, busy, onAccept, onReject, onRequestChange, onClose }) {
+  const [feedbackMode, setFeedbackMode] = useState(false);
+  const [feedback, setFeedback] = useState('');
+
+  const submitFeedback = async () => {
+    if (!feedback.trim()) return;
+    await onRequestChange(feedback.trim());
+    setFeedback('');
+    setFeedbackMode(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40" dir="rtl">
+      <div className="w-full max-w-lg bg-card rounded-t-2xl md:rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-border sticky top-0 bg-card z-10">
+          <span className="text-[13px] font-semibold text-foreground">הצעת לוגו חדש — {platform === 'instagram' ? 'אינסטגרם' : 'פייסבוק'}</span>
+          <button onClick={onClose} className="text-foreground-muted hover:text-foreground mr-auto"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {loading ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="w-6 h-6 animate-spin text-foreground-muted" />
+            </div>
+          ) : (
+            <img
+              src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(imageUrl)}`}
+              alt="הצעת לוגו חדש"
+              className="w-full max-h-80 object-contain rounded-xl border border-border bg-secondary"
+            />
+          )}
+          <p className="text-[11px] text-foreground-muted">
+            הצעה ראשונית שנוצרה על ידי AI — אין אפשרות להעלות אותה אוטומטית לפרופיל; אם תאשרו, הורידו ותעלו אותה ידנית.
+          </p>
+
+          {feedbackMode && (
+            <div className="space-y-2">
+              <textarea
+                value={feedback}
+                onChange={e => setFeedback(e.target.value)}
+                placeholder="מה תרצו לשנות בלוגו?"
+                rows={3}
+                autoFocus
+                className="w-full text-[13px] text-foreground bg-secondary border border-border rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed"
+              />
+              <div className="flex gap-2">
+                <button onClick={() => { setFeedbackMode(false); setFeedback(''); }}
+                  className="flex-1 py-2 text-[12px] border border-border rounded-lg text-foreground-muted hover:text-foreground transition-colors">
+                  ביטול
+                </button>
+                <button onClick={submitFeedback} disabled={busy || !feedback.trim()}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[12px] font-medium bg-foreground text-background rounded-lg disabled:opacity-60">
+                  {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  שלח בקשה
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {!feedbackMode && (
+          <div className="flex gap-2 px-5 py-4 border-t border-border">
+            <button onClick={onReject} disabled={loading || busy}
+              className="flex-1 py-2.5 border border-red-200 text-red-600 rounded-xl text-[13px] font-medium hover:bg-red-50 transition-colors disabled:opacity-60">
+              דחה
+            </button>
+            <button onClick={() => setFeedbackMode(true)} disabled={loading || busy}
+              className="flex-1 py-2.5 border border-border rounded-xl text-[13px] text-foreground-muted hover:text-foreground transition-colors disabled:opacity-60">
+              בקש שינוי
+            </button>
+            <button onClick={onAccept} disabled={loading || busy}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-green-600 text-white rounded-xl text-[13px] font-bold hover:opacity-90 disabled:opacity-60">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              אשר
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Proactive, always-visible suggestions comparing the business's own social
  * profile(s) against its tracked competitors — bio quality, profile/cover
  * picture, external link/highlights, posting frequency. Every trigger is a
@@ -110,6 +199,9 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
   // Keyed by platform — holds the generated-logo result/loading state for the
   // "🎨 צרו לי לוגו חדש" CTA, independent per platform toggle.
   const [logoGenState, setLogoGenState] = useState({});
+  // Which platform's review popup is open (accept/reject/request-change), or null.
+  const [logoReviewPlatform, setLogoReviewPlatform] = useState(null);
+  const [logoReviewBusy, setLogoReviewBusy] = useState(false);
 
   // Clear any bio-fix/logo-critique result left over from the previous
   // platform when the toggle switches — this component is no longer
@@ -119,6 +211,7 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
     setBioFixState({ loading: false, suggestions: [] });
     setLogoFixState({ loading: false, critiques: [] });
     setLogoGenState({});
+    setLogoReviewPlatform(null);
   }, [platform]);
 
   const { data: competitors = [] } = useQuery({
@@ -198,16 +291,42 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
     }
   };
 
-  const generateLogoNow = async (critiquePlatform) => {
-    setLogoGenState(prev => ({ ...prev, [critiquePlatform]: { loading: true } }));
+  const generateLogoNow = async (critiquePlatform, feedback) => {
+    setLogoReviewPlatform(critiquePlatform);
+    setLogoGenState(prev => ({ ...prev, [critiquePlatform]: { ...prev[critiquePlatform], loading: true } }));
     try {
-      const result = await base44.functions.invoke('generateLogo', { businessProfileId: bpId, platform: critiquePlatform }, 60000);
+      const result = await base44.functions.invoke('generateLogo', { businessProfileId: bpId, platform: critiquePlatform, feedback }, 60000);
       const data = result?.data ?? result;
       setLogoGenState(prev => ({ ...prev, [critiquePlatform]: { loading: false, url: data?.suggested_logo_url ?? null } }));
     } catch (e) {
       console.warn('[SocialProfileSuggestions] generateLogoNow failed:', e.message);
       setLogoGenState(prev => ({ ...prev, [critiquePlatform]: { loading: false, error: true } }));
+      setLogoReviewPlatform(null);
     }
+  };
+
+  const acceptLogoNow = async (critiquePlatform) => {
+    setLogoReviewBusy(true);
+    try {
+      await base44.functions.invoke('reviewSuggestedLogo', { businessProfileId: bpId, platform: critiquePlatform, action: 'accept' }, 30000);
+      setLogoGenState(prev => ({ ...prev, [critiquePlatform]: { ...prev[critiquePlatform], accepted: true } }));
+      setLogoReviewPlatform(null);
+    } catch (e) {
+      console.warn('[SocialProfileSuggestions] acceptLogoNow failed:', e.message);
+    }
+    setLogoReviewBusy(false);
+  };
+
+  const rejectLogoNow = async (critiquePlatform) => {
+    setLogoReviewBusy(true);
+    try {
+      await base44.functions.invoke('reviewSuggestedLogo', { businessProfileId: bpId, platform: critiquePlatform, action: 'reject' }, 30000);
+      setLogoGenState(prev => ({ ...prev, [critiquePlatform]: { loading: false, url: null } }));
+      setLogoReviewPlatform(null);
+    } catch (e) {
+      console.warn('[SocialProfileSuggestions] rejectLogoNow failed:', e.message);
+    }
+    setLogoReviewBusy(false);
   };
 
   const ownProfileUrl = platform === 'instagram' ? businessProfile?.instagram_url : businessProfile?.facebook_url;
@@ -297,21 +416,43 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
             {genState.error && (
               <p className="text-[11px] text-red-600 dark:text-red-400">יצירת הלוגו נכשלה, נסו שוב</p>
             )}
-            {genState.url && (
-              <div className="space-y-1">
+            {genState.url && !genState.loading && (
+              <div className="flex items-center gap-2">
                 <img
                   src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(genState.url)}`}
                   alt="הצעת לוגו חדש"
-                  className="rounded-lg border border-indigo-200 dark:border-indigo-800 w-24 h-24 object-cover"
+                  className="rounded-lg border border-indigo-200 dark:border-indigo-800 w-12 h-12 object-cover shrink-0"
                 />
-                <p className="text-[11px] text-indigo-700 dark:text-indigo-400">
-                  הצעה ראשונית שנוצרה על ידי AI — הורידו ותעלו ידנית לפרופיל ב{c.platform === 'instagram' ? 'אינסטגרם' : 'פייסבוק'}
-                </p>
+                {genState.accepted ? (
+                  <span className="flex items-center gap-1 text-[11px] font-medium text-green-700 dark:text-green-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> ההצעה אושרה
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setLogoReviewPlatform(c.platform)}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-indigo-300 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/40"
+                  >
+                    פתחו לבדיקה
+                  </button>
+                )}
               </div>
             )}
           </div>
         );
       })}
+
+      {logoReviewPlatform && (
+        <LogoReviewModal
+          platform={logoReviewPlatform}
+          imageUrl={logoGenState[logoReviewPlatform]?.url}
+          loading={!!logoGenState[logoReviewPlatform]?.loading}
+          busy={logoReviewBusy}
+          onAccept={() => acceptLogoNow(logoReviewPlatform)}
+          onReject={() => rejectLogoNow(logoReviewPlatform)}
+          onRequestChange={(feedback) => generateLogoNow(logoReviewPlatform, feedback)}
+          onClose={() => setLogoReviewPlatform(null)}
+        />
+      )}
     </div>
   );
 }

@@ -10,10 +10,13 @@ import { uploadBufferToS3, uploadImageFromUrl } from '../../lib/s3';
  * logo critique (critiqueLogo must have already run and flagged
  * logo_needs_redesign, same "run the prior step first" gate as suggestBioFix).
  *
- * Body: { businessProfileId, platform }
+ * Body: { businessProfileId, platform, feedback? } — feedback is the owner's
+ * requested change to a previous draft (from the "request change" action in
+ * the review popup); when present it's folded into the design brief so the
+ * next candidate addresses it.
  */
 export async function generateLogo(req: Request, res: Response) {
-  const { businessProfileId, platform } = req.body;
+  const { businessProfileId, platform, feedback } = req.body;
   if (!businessProfileId || !platform) {
     return res.status(400).json({ error: 'Missing businessProfileId or platform' });
   }
@@ -35,6 +38,7 @@ export async function generateLogo(req: Request, res: Response) {
       city: profile.city || '',
       competitorLogoInsight: profile.content_trends_logo_insight || '',
       ownLogoCritique: social.logo_critique,
+      changeFeedback: typeof feedback === 'string' && feedback.trim() ? feedback.trim() : undefined,
     });
 
     const generated = await generateLogoImage(brief);
@@ -65,7 +69,7 @@ export async function generateLogo(req: Request, res: Response) {
 
     await prisma.businessSocialProfile.update({
       where: { id: social.id },
-      data: { suggested_logo_url: permanentUrl, suggested_logo_at: now },
+      data: { suggested_logo_url: permanentUrl, suggested_logo_at: now, suggested_logo_accepted: false },
     });
 
     return res.json({ platform, suggested_logo_url: permanentUrl });

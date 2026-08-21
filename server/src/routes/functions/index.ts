@@ -142,6 +142,7 @@ import { suggestBioFix } from './suggestBioFix';
 import { analyzeLogoTrends } from './analyzeLogoTrends';
 import { critiqueLogo } from './critiqueLogo';
 import { generateLogo } from './generateLogo';
+import { reviewSuggestedLogo } from './reviewSuggestedLogo';
 
 const router = Router();
 
