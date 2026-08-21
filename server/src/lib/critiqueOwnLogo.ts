@@ -23,7 +23,7 @@ export async function critiqueOwnLogo(input: OwnLogoCritiqueInput): Promise<stri
   try {
     const result = await invokeLLM({
       model: 'sonnet',
-      maxTokens: 400,
+      maxTokens: 700, // observed 400 truncate mid-JSON on a verbose critique, cutting it off invalid — this model tends to write long here
       skipCache: true,
       imageBase64: image.data,
       imageMediaType: image.mediaType,

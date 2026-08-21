@@ -19,7 +19,7 @@ export async function synthesizeLogoTrends(descriptions: LogoDescription[]): Pro
 
     const result = await invokeLLM({
       model: 'sonnet',
-      maxTokens: 400,
+      maxTokens: 550,
       skipCache: true,
       response_json_schema: { type: 'object' },
       prompt: `You are a brand designer. Below are short descriptions of the logos/profile pictures of ${new Set(descriptions.map(d => d.competitorName)).size} different competitors:

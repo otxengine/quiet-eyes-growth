@@ -15,7 +15,7 @@ export async function describeLogo(imageUrl: string): Promise<string | null> {
   try {
     const result = await invokeLLM({
       model: 'sonnet',
-      maxTokens: 250,
+      maxTokens: 350,
       skipCache: true,
       imageBase64: image.data,
       imageMediaType: image.mediaType,
