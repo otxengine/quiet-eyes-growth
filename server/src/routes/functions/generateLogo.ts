@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { buildLogoDesignBrief } from '../../lib/buildLogoDesignBrief';
-import { generateLogoImage } from '../../lib/generateLogoImage';
+import { generateLogoImage, LogoStyle } from '../../lib/generateLogoImage';
 import { uploadBufferToS3, uploadImageFromUrl } from '../../lib/s3';
 
 /**
@@ -10,13 +10,16 @@ import { uploadBufferToS3, uploadImageFromUrl } from '../../lib/s3';
  * logo critique (critiqueLogo must have already run and flagged
  * logo_needs_redesign, same "run the prior step first" gate as suggestBioFix).
  *
- * Body: { businessProfileId, platform, feedback? } — feedback is the owner's
- * requested change to a previous draft (from the "request change" action in
- * the review popup); when present it's folded into the design brief so the
- * next candidate addresses it.
+ * Body: { businessProfileId, platform, feedback?, style? } — feedback is the
+ * owner's requested change to a previous draft (from the "request change"
+ * action in the review popup); style is 'creative' (icon, default) or
+ * 'wordmark' (business name as the design — text rendering is unreliable,
+ * especially non-Latin script, so this leans on the review popup as the
+ * quality gate rather than guaranteeing legible output).
  */
 export async function generateLogo(req: Request, res: Response) {
-  const { businessProfileId, platform, feedback } = req.body;
+  const { businessProfileId, platform, feedback, style } = req.body;
+  const logoStyle: LogoStyle = style === 'wordmark' ? 'wordmark' : 'creative';
   if (!businessProfileId || !platform) {
     return res.status(400).json({ error: 'Missing businessProfileId or platform' });
   }
@@ -39,9 +42,10 @@ export async function generateLogo(req: Request, res: Response) {
       competitorLogoInsight: profile.content_trends_logo_insight || '',
       ownLogoCritique: social.logo_critique,
       changeFeedback: typeof feedback === 'string' && feedback.trim() ? feedback.trim() : undefined,
+      style: logoStyle,
     });
 
-    const generated = await generateLogoImage(brief);
+    const generated = await generateLogoImage(brief, logoStyle);
     if (!generated) return res.status(502).json({ error: 'Logo generation failed on all providers' });
 
     let permanentUrl: string | null;

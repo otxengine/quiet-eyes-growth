@@ -99,7 +99,7 @@ export function buildSuggestions({ ownProfiles, competitorProfiles, ownWeeklyRat
  * in Marketing.jsx). "Request change" re-generates in place with the owner's
  * feedback folded into the design brief, same pattern as post revision.
  */
-function LogoReviewModal({ platform, imageUrl, loading, busy, onAccept, onReject, onRequestChange, onClose }) {
+function LogoReviewModal({ platform, imageUrl, style, loading, busy, onAccept, onReject, onRequestChange, onClose }) {
   const [feedbackMode, setFeedbackMode] = useState(false);
   const [feedback, setFeedback] = useState('');
 
@@ -132,6 +132,7 @@ function LogoReviewModal({ platform, imageUrl, loading, busy, onAccept, onReject
           )}
           <p className="text-[11px] text-foreground-muted">
             הצעה ראשונית שנוצרה על ידי AI — אין אפשרות להעלות אותה אוטומטית לפרופיל; אם תאשרו, הורידו ותעלו אותה ידנית.
+            {style === 'wordmark' && ' מודלים ליצירת תמונות לא תמיד מדייקים בטקסט (בעיקר בעברית) — אם השם יצא מטושטש, בקשו שינוי או נסו שוב.'}
           </p>
 
           {feedbackMode && (
@@ -291,16 +292,20 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
     }
   };
 
-  const generateLogoNow = async (critiquePlatform, feedback) => {
+  const generateLogoNow = async (critiquePlatform, feedback, styleArg) => {
+    // "request change" (feedback set, no styleArg) keeps whatever style the
+    // candidate being revised was generated with, instead of silently
+    // switching a wordmark attempt back to creative.
+    const style = styleArg || logoGenState[critiquePlatform]?.style || 'creative';
     setLogoReviewPlatform(critiquePlatform);
-    setLogoGenState(prev => ({ ...prev, [critiquePlatform]: { ...prev[critiquePlatform], loading: true } }));
+    setLogoGenState(prev => ({ ...prev, [critiquePlatform]: { ...prev[critiquePlatform], loading: true, style } }));
     try {
-      const result = await base44.functions.invoke('generateLogo', { businessProfileId: bpId, platform: critiquePlatform, feedback }, 60000);
+      const result = await base44.functions.invoke('generateLogo', { businessProfileId: bpId, platform: critiquePlatform, feedback, style }, 60000);
       const data = result?.data ?? result;
-      setLogoGenState(prev => ({ ...prev, [critiquePlatform]: { loading: false, url: data?.suggested_logo_url ?? null } }));
+      setLogoGenState(prev => ({ ...prev, [critiquePlatform]: { loading: false, url: data?.suggested_logo_url ?? null, style } }));
     } catch (e) {
       console.warn('[SocialProfileSuggestions] generateLogoNow failed:', e.message);
-      setLogoGenState(prev => ({ ...prev, [critiquePlatform]: { loading: false, error: true } }));
+      setLogoGenState(prev => ({ ...prev, [critiquePlatform]: { loading: false, error: true, style } }));
       setLogoReviewPlatform(null);
     }
   };
@@ -405,13 +410,22 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
               <p className="text-xs leading-relaxed text-indigo-950 dark:text-indigo-100">{c.critique}</p>
             )}
             {c.needs_redesign && !genState.url && (
-              <button
-                onClick={() => generateLogoNow(c.platform)}
-                disabled={genState.loading}
-                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-indigo-300 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 disabled:opacity-50"
-              >
-                {genState.loading ? 'יוצר לוגו...' : '🎨 צרו לי לוגו חדש'}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => generateLogoNow(c.platform, undefined, 'creative')}
+                  disabled={genState.loading}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-indigo-300 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 disabled:opacity-50"
+                >
+                  {genState.loading && genState.style === 'creative' ? 'יוצר לוגו...' : '🎨 לוגו יצירתי'}
+                </button>
+                <button
+                  onClick={() => generateLogoNow(c.platform, undefined, 'wordmark')}
+                  disabled={genState.loading}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-indigo-300 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 disabled:opacity-50"
+                >
+                  {genState.loading && genState.style === 'wordmark' ? 'יוצר לוגו...' : '🔤 שם העסק כלוגו'}
+                </button>
+              </div>
             )}
             {genState.error && (
               <p className="text-[11px] text-red-600 dark:text-red-400">יצירת הלוגו נכשלה, נסו שוב</p>
@@ -445,6 +459,7 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
         <LogoReviewModal
           platform={logoReviewPlatform}
           imageUrl={logoGenState[logoReviewPlatform]?.url}
+          style={logoGenState[logoReviewPlatform]?.style}
           loading={!!logoGenState[logoReviewPlatform]?.loading}
           busy={logoReviewBusy}
           onAccept={() => acceptLogoNow(logoReviewPlatform)}
