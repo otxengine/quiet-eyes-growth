@@ -1,7 +1,7 @@
 import { invokeLLM } from './llm';
 import { isS3Url, downloadFromS3 } from './s3';
+import { fetchImageBase64 } from './fetchImageBase64';
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // Anthropic's per-image limit
 const MAX_VIDEO_BYTES = 12 * 1024 * 1024; // stay safely under Gemini's ~20MB inline-request ceiling after base64 overhead
 // Video analysis (Gemini) is meaningfully more expensive than image analysis and is
 // still being validated — dev-only until proven out. Every caller passing videoUrl
@@ -37,29 +37,6 @@ export interface PostCreativeAnalysis {
   video_content_type: string | null; // 'ugc'|'animated'|'produced'|'talking_head'|'slideshow'|'screen_recording'|'other'
 }
 
-async function fetchImageBase64(url: string): Promise<{ data: string; mediaType: string } | null> {
-  try {
-    if (isS3Url(url)) {
-      const file = await downloadFromS3(url);
-      if (!file) { console.warn('[analyzePostCreative] S3 download failed:', url); return null; }
-      if (file.body.length > MAX_IMAGE_BYTES) { console.warn('[analyzePostCreative] image too large (S3):', url, file.body.length); return null; }
-      return { data: file.body.toString('base64'), mediaType: file.contentType || 'image/jpeg' };
-    }
-
-    const res = await fetch(url, {
-      headers: { Referer: new URL(url).origin },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!res.ok) { console.warn('[analyzePostCreative] image fetch non-OK:', res.status, url); return null; }
-    const contentType = res.headers.get('content-type') || 'image/jpeg';
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length > MAX_IMAGE_BYTES) { console.warn('[analyzePostCreative] image too large:', url, buf.length); return null; }
-    return { data: buf.toString('base64'), mediaType: contentType };
-  } catch (err: any) {
-    console.warn('[analyzePostCreative] image fetch threw:', url, err.message);
-    return null;
-  }
-}
 
 async function fetchVideoBase64(url: string): Promise<{ data: string; mediaType: string } | null> {
   try {

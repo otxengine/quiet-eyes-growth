@@ -141,6 +141,11 @@ model BusinessProfile {
   content_trends_bio_insight     String?  // 3-5 sentences (Hebrew)
   content_trends_bio_examples    String?  // JSON array of {competitorName, text} — real verbatim bios exemplifying content_trends_bio_insight
   content_trends_bio_insight_at  String?  // ISO timestamp
+  // Synthesized visual pattern across tracked competitors' logos/profile
+  // pictures (style, colors, professional-quality markers) — text-only,
+  // built from a per-competitor vision description, not the raw images.
+  content_trends_logo_insight     String?  // 2-4 sentences (Hebrew)
+  content_trends_logo_insight_at  String?  // ISO timestamp
 
   @@map("business_profiles")
 }
@@ -1204,6 +1209,11 @@ model BusinessSocialProfile {
   suggested_bio           String?  // proposed rewritten bio (Hebrew)
   suggested_bio_rationale String?  // 1-3 sentences: what changed and why (Hebrew)
   suggested_bio_at        String?  // ISO timestamp
+  // AI vision critique of this platform's profile picture/logo, grounded in
+  // the visual pattern synthesized across tracked competitors' logos
+  // (BusinessProfile.content_trends_logo_insight).
+  logo_critique    String?  // 2-4 sentences (Hebrew) with concrete suggestions
+  logo_critique_at String?  // ISO timestamp
 
   @@unique([linked_business, platform])
   @@map("business_social_profiles")

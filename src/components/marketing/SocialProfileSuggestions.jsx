@@ -62,6 +62,17 @@ export function buildSuggestions({ ownProfiles, competitorProfiles, ownWeeklyRat
     });
   }
 
+  // Not a gap to flag (there's no cheap heuristic for "is this logo good") —
+  // an opportunity to offer whenever there's actually a logo to look at.
+  if (ownProfiles.some(p => p.profile_picture_url)) {
+    suggestions.push({
+      id: 'logo',
+      title: 'בדקו את איכות הלוגו שלכם',
+      description: 'ניתוח חזותי של תמונת הפרופיל שלכם מול המתחרים',
+      kind: 'logo-critique',
+    });
+  }
+
   if (ownWeeklyRate == null) {
     suggestions.push({
       id: 'posting-rate',
@@ -95,12 +106,15 @@ export function buildSuggestions({ ownProfiles, competitorProfiles, ownWeeklyRat
 export default function SocialProfileSuggestions({ businessProfile, platform, onCreatePost }) {
   const bpId = businessProfile?.id;
   const [bioFixState, setBioFixState] = useState({ loading: false, suggestions: [] });
+  const [logoFixState, setLogoFixState] = useState({ loading: false, critiques: [] });
 
-  // Clear any bio-fix result left over from the previous platform when the
-  // toggle switches — this component is no longer remounted via `key` (that
-  // caused stray duplicate renders), so this is the reset mechanism instead.
+  // Clear any bio-fix/logo-critique result left over from the previous
+  // platform when the toggle switches — this component is no longer
+  // remounted via `key` (that caused stray duplicate renders), so this is
+  // the reset mechanism instead.
   useEffect(() => {
     setBioFixState({ loading: false, suggestions: [] });
+    setLogoFixState({ loading: false, critiques: [] });
   }, [platform]);
 
   const { data: competitors = [] } = useQuery({
@@ -165,6 +179,21 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
     }
   };
 
+  const critiqueLogoNow = async () => {
+    setLogoFixState({ loading: true, critiques: [] });
+    try {
+      if (!businessProfile?.content_trends_logo_insight) {
+        await base44.functions.invoke('analyzeLogoTrends', { businessProfileId: bpId }, 60000);
+      }
+      const result = await base44.functions.invoke('critiqueLogo', { businessProfileId: bpId, platform }, 60000);
+      const data = result?.data ?? result;
+      setLogoFixState({ loading: false, critiques: data?.critiques ?? [] });
+    } catch (e) {
+      console.warn('[SocialProfileSuggestions] critiqueLogoNow failed:', e.message);
+      setLogoFixState({ loading: false, critiques: [] });
+    }
+  };
+
   const ownProfileUrl = platform === 'instagram' ? businessProfile?.instagram_url : businessProfile?.facebook_url;
 
   if (!suggestions.length) return null;
@@ -189,6 +218,15 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
                 className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-border hover:bg-muted disabled:opacity-50"
               >
                 {bioFixState.loading ? 'מנתח...' : '🔧 תקנו לי את הביו'}
+              </button>
+            )}
+            {s.kind === 'logo-critique' && (
+              <button
+                onClick={critiqueLogoNow}
+                disabled={logoFixState.loading}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-border hover:bg-muted disabled:opacity-50"
+              >
+                {logoFixState.loading ? 'מנתח...' : '🔍 בדקו את הלוגו שלי'}
               </button>
             )}
             {s.kind === 'open-profile' && ownProfileUrl && (
@@ -219,6 +257,15 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
           )}
           {s.rationale && (
             <p className="text-[11px] text-violet-700 dark:text-violet-400 border-t border-violet-200 dark:border-violet-800 pt-1.5">{s.rationale}</p>
+          )}
+        </div>
+      ))}
+
+      {logoFixState.critiques.map((c, i) => (
+        <div key={i} className="border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30 rounded-lg p-3 space-y-1.5">
+          <p className="text-[10px] font-semibold text-indigo-800 dark:text-indigo-300">{c.platform}</p>
+          {c.critique && (
+            <p className="text-xs leading-relaxed text-indigo-950 dark:text-indigo-100">{c.critique}</p>
           )}
         </div>
       ))}
