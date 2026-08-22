@@ -10,17 +10,8 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 
-// Public layout & pages
-import PublicLayout from '@/components/public/PublicLayout.jsx';
-import PublicHome from '@/pages/public/Home.jsx';
-import HowItWorks from '@/pages/public/HowItWorks.jsx';
-import Features from '@/pages/public/Features.jsx';
-import PricingPage from '@/pages/public/Pricing.jsx';
-import AboutPage from '@/pages/public/About.jsx';
-import ContactPage from '@/pages/public/Contact.jsx';
-import TermsPage from '@/pages/public/Terms.jsx';
-import PrivacyPage from '@/pages/public/Privacy.jsx';
-import DataDeletionPage from '@/pages/public/DataDeletion.jsx';
+// Public (marketing) routes — shared by all three trees below
+import { publicRoutes, isPublicPath } from '@/marketing/PublicRoutes.jsx';
 
 // App layout
 import AppLayout from '@/components/layout/AppLayout';
@@ -68,6 +59,16 @@ const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated } = useAuth();
 
   if (isLoadingPublicSettings || isLoadingAuth) {
+    // Marketing pages don't depend on auth — render them immediately instead of
+    // a spinner, so prerendered static markup isn't wiped while auth resolves.
+    if (typeof window !== 'undefined' && isPublicPath(window.location.pathname)) {
+      return (
+        <Routes>
+          {publicRoutes()}
+          <Route path="*" element={null} />
+        </Routes>
+      );
+    }
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-white">
         <div className="w-8 h-8 border-4 border-border/50 border-t-[#111111] rounded-full animate-spin"></div>
@@ -83,18 +84,7 @@ const AuthenticatedApp = () => {
     if (authError.type === 'auth_required') {
       return (
         <Routes>
-          <Route element={<PublicLayout />}>
-            <Route path="/" element={<PublicHome />} />
-            <Route path="/home" element={<PublicHome />} />
-            <Route path="/how-it-works" element={<HowItWorks />} />
-            <Route path="/features" element={<Features />} />
-            <Route path="/pricing" element={<PricingPage />} />
-            <Route path="/about" element={<AboutPage />} />
-            <Route path="/contact" element={<ContactPage />} />
-            <Route path="/terms" element={<TermsPage />} />
-            <Route path="/privacy" element={<PrivacyPage />} />
-            <Route path="/data-deletion" element={<DataDeletionPage />} />
-          </Route>
+          {publicRoutes()}
           <Route path="*" element={<PageNotFound />} />
         </Routes>
       );
@@ -115,18 +105,7 @@ const AuthenticatedApp = () => {
             <SignUp routing="path" path="/sign-up" fallbackRedirectUrl="/onboarding" />
           </div>
         } />
-        <Route element={<PublicLayout />}>
-          <Route path="/" element={<PublicHome />} />
-          <Route path="/home" element={<PublicHome />} />
-          <Route path="/how-it-works" element={<HowItWorks />} />
-          <Route path="/features" element={<Features />} />
-          <Route path="/pricing" element={<PricingPage />} />
-          <Route path="/about" element={<AboutPage />} />
-          <Route path="/contact" element={<ContactPage />} />
-          <Route path="/terms" element={<TermsPage />} />
-          <Route path="/privacy" element={<PrivacyPage />} />
-          <Route path="/data-deletion" element={<DataDeletionPage />} />
-        </Route>
+        {publicRoutes()}
         <Route path="/join" element={<JoinPage />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>
@@ -136,18 +115,8 @@ const AuthenticatedApp = () => {
   // Authenticated — show app
   return (
     <Routes>
-      {/* Public pages still accessible when logged in */}
-      <Route element={<PublicLayout />}>
-        <Route path="/home" element={<PublicHome />} />
-        <Route path="/how-it-works" element={<HowItWorks />} />
-        <Route path="/features" element={<Features />} />
-        <Route path="/pricing" element={<PricingPage />} />
-        <Route path="/about" element={<AboutPage />} />
-        <Route path="/contact" element={<ContactPage />} />
-        <Route path="/terms" element={<TermsPage />} />
-        <Route path="/privacy" element={<PrivacyPage />} />
-        <Route path="/data-deletion" element={<DataDeletionPage />} />
-      </Route>
+      {/* Public pages still accessible when logged in — "/" belongs to Dashboard here */}
+      {publicRoutes({ includeRoot: false })}
 
       {/* Invite join — accessible without app layout */}
       <Route path="/join" element={<JoinPage />} />

@@ -1,0 +1,77 @@
+/* Cortexi marketing design tokens — binding spec from the midsite brief.
+   The gradient is an accent ONLY: primary CTA, badges, one highlighted word, spark icon. */
+:root {
+  --mkt-canvas: #FAFAFB;
+  --mkt-surface: #FFFFFF;
+  --mkt-ink: #101014;
+  --mkt-ink-2: #3F3F46;
+  --mkt-muted: #71717A;
+  --mkt-border: #E8E8EC;
+  --mkt-border-strong: #D9D9DE;
+  --mkt-grad: linear-gradient(135deg, #C1257F 0%, #EC1E63 45%, #F8793A 100%);
+}
+
+.mkt-root {
+  background: var(--mkt-canvas);
+  color: var(--mkt-ink);
+  font-family: 'Heebo', 'Inter', sans-serif;
+  direction: rtl;
+}
+
+.mkt-root h1,
+.mkt-root h2,
+.mkt-root h3 {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--mkt-ink);
+}
+
+.mkt-dotgrid {
+  background-image: radial-gradient(circle, #DCDCE1 1.1px, transparent 1.1px);
+  background-size: 26px 26px;
+}
+
+/* Grid fades out toward the fold */
+.mkt-dotgrid-fade {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+}
+
+.mkt-grad { background-image: var(--mkt-grad); }
+
+.mkt-grad-text {
+  background-image: var(--mkt-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.mkt-card {
+  background: var(--mkt-surface);
+  border: 1px solid var(--mkt-border);
+  border-radius: 16px;
+}
+
+/* Typing caret in the hero prompt replica */
+@keyframes mkt-caret { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+.mkt-caret {
+  display: inline-block;
+  width: 1.5px;
+  height: 1.1em;
+  vertical-align: text-bottom;
+  background: var(--mkt-ink-2);
+  animation: mkt-caret 1s step-end infinite;
+}
+
+/* Scroll-reveal — disabled entirely under reduced motion */
+.mkt-reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.mkt-reveal.is-visible { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mkt-caret { animation: none; }
+  .mkt-reveal { opacity: 1; transform: none; transition: none; }
+}
