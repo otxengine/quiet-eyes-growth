@@ -7,9 +7,12 @@ import HowItWorks from './pages/HowItWorks.jsx';
 import FeaturesIndex from './pages/FeaturesIndex.jsx';
 import FeaturePage from './pages/FeaturePage.jsx';
 import NotFound from './pages/NotFound.jsx';
+import Blog from './pages/Blog.jsx';
+import BlogPost from './pages/BlogPost.jsx';
 import { Terms, Privacy, DataDeletion } from './pages/Legal.jsx';
 import { FEATURE_PAGES } from './content/featurePages.js';
 import { PRICING_FAQ } from './content/pricing.js';
+import { BLOG_POSTS } from './content/blogPosts.js';
 
 /**
  * Single source of truth for the marketing midsite: consumed by the SPA router
@@ -48,8 +51,44 @@ const featureRoutes = Object.entries(FEATURE_PAGES).map(([slug, data]) => ({
   },
 }));
 
+const blogRoutes = BLOG_POSTS.map((post) => ({
+  path: `/blog/${post.slug}`,
+  Component: function BlogPostRoute() {
+    return <BlogPost post={post} />;
+  },
+  seo: {
+    title: post.seoTitle,
+    description: post.description,
+    canonical: `/blog/${post.slug}`,
+    article: {
+      headline: post.title,
+      description: post.description,
+      datePublished: post.datePublished,
+    },
+    breadcrumbs: [
+      { name: 'בית', path: '/' },
+      { name: 'בלוג', path: '/blog' },
+      { name: post.title, path: `/blog/${post.slug}` },
+    ],
+  },
+}));
+
 export const marketingRoutes = [
   { path: '/', Component: Home, seo: { ...HOME_SEO, jsonLd: 'software' } },
+  {
+    path: '/blog',
+    Component: Blog,
+    seo: {
+      title: 'הבלוג של Cortexi — מדריכי שיווק ומוניטין לעסקים קטנים',
+      description: 'מדריכים מעשיים לעסקים קטנים: אוטומציות, מענה לביקורות גוגל, לידים ובחירת תוכנה לניהול עסק.',
+      canonical: '/blog',
+      breadcrumbs: [
+        { name: 'בית', path: '/' },
+        { name: 'בלוג', path: '/blog' },
+      ],
+    },
+  },
+  ...blogRoutes,
   // Legacy alias — canonical stays "/", excluded from sitemap
   { path: '/home', Component: Home, seo: { ...HOME_SEO, noSitemap: true } },
   {

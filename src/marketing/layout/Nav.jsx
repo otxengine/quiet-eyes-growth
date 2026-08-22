@@ -1,20 +1,26 @@
 import React, { useState } from 'react';
 import { ChevronDown, Menu, X } from 'lucide-react';
 import { MODULES, featurePath } from '../content/modules.js';
-import { SparkIcon, CtaButton } from '../ui/primitives.jsx';
+import { CtaButton } from '../ui/primitives.jsx';
 
 const NAV_LINKS = [
   { label: 'מחירים', href: '/pricing' },
   { label: 'איך זה עובד', href: '/how-it-works' },
+  { label: 'בלוג', href: '/blog' },
   { label: 'אודות', href: '/about' },
   { label: 'צור קשר', href: '/contact' },
 ];
 
 function Wordmark() {
   return (
-    <a href="/" className="flex items-center gap-2 font-extrabold text-[19px] tracking-tight" style={{ color: 'var(--mkt-ink)' }}>
-      <SparkIcon size={20} />
-      Cortexi
+    <a href="/" aria-label="Cortexi — לעמוד הבית">
+      <img
+        src="/logo/cortexi-logo.png"
+        alt="Cortexi — מערכת AI לשיווק דיגיטלי לעסקים"
+        width={78}
+        height={30}
+        className="h-[30px] w-auto"
+      />
     </a>
   );
 }

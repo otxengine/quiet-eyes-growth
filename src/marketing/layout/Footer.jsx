@@ -1,10 +1,10 @@
 import React from 'react';
 import { MODULES, featurePath } from '../content/modules.js';
-import { SparkIcon } from '../ui/primitives.jsx';
 
 const COMPANY_LINKS = [
   { label: 'איך זה עובד', href: '/how-it-works' },
   { label: 'מחירים', href: '/pricing' },
+  { label: 'בלוג', href: '/blog' },
   { label: 'אודות', href: '/about' },
   { label: 'צור קשר', href: '/contact' },
 ];
@@ -37,9 +37,15 @@ export default function Footer() {
     <footer className="border-t" style={{ borderColor: 'var(--mkt-border)', background: 'var(--mkt-surface)' }}>
       <div className="max-w-6xl mx-auto px-6 py-14 grid grid-cols-2 md:grid-cols-4 gap-10">
         <div className="col-span-2 md:col-span-1">
-          <a href="/" className="flex items-center gap-2 font-extrabold text-[18px]" style={{ color: 'var(--mkt-ink)' }}>
-            <SparkIcon size={18} />
-            Cortexi
+          <a href="/" aria-label="Cortexi — לעמוד הבית">
+            <img
+              src="/logo/cortexi-logo.png"
+              alt="הלוגו של Cortexi"
+              width={104}
+              height={40}
+              loading="lazy"
+              className="h-10 w-auto"
+            />
           </a>
           <p className="mt-3 text-[13px] leading-relaxed" style={{ color: 'var(--mkt-muted)' }}>
             תוכנת בינה מלאכותית לניהול השיווק והמוניטין של עסקים קטנים — המערכת עוקבת, מנתחת ומכינה פעולות. אתה רק מאשר.

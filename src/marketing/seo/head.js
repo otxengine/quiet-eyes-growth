@@ -12,7 +12,7 @@ const ORGANIZATION = {
   name: 'Cortexi',
   alternateName: 'קורטקסי',
   url: SITE_URL,
-  logo: `${SITE_URL}/logo.jpeg`,
+  logo: `${SITE_URL}/logo/cortexi-logo.png`,
   slogan: 'Inspired by the brain. Built for intelligence.',
   email: 'contact@cortexi.ai',
 };
@@ -95,6 +95,20 @@ export function buildHead(seo) {
   if (seo.jsonLd === 'software') graph.push(SOFTWARE_APPLICATION);
   if (seo.jsonLd === 'pricing') graph.push(PRICING_PRODUCT);
   if (seo.faqItems?.length) graph.push(faqJsonLd(seo.faqItems));
+  if (seo.article) {
+    graph.push({
+      '@type': 'BlogPosting',
+      headline: seo.article.headline,
+      description: seo.article.description,
+      datePublished: seo.article.datePublished,
+      dateModified: seo.article.dateModified || seo.article.datePublished,
+      inLanguage: 'he',
+      image: `${SITE_URL}/og/og-default.png`,
+      author: { '@id': `${SITE_URL}/#organization` },
+      publisher: { '@id': `${SITE_URL}/#organization` },
+      mainEntityOfPage: { '@id': `${canonical}#webpage` },
+    });
+  }
 
   const lines = [
     `<title>${esc(seo.title)}</title>`,

@@ -146,6 +146,12 @@ services:
         source: /features/*
         destination: /features/*/index.html
       - type: rewrite
+        source: /blog
+        destination: /blog/index.html
+      - type: rewrite
+        source: /blog/*
+        destination: /blog/*/index.html
+      - type: rewrite
         source: /pricing
         destination: /pricing/index.html
       - type: rewrite
