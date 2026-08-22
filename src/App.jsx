@@ -11,7 +11,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 
 // Public (marketing) routes — shared by all three trees below
-import { publicRoutes, isPublicPath } from '@/marketing/PublicRoutes.jsx';
+import { publicRoutes, isPublicPath, marketingNotFound } from '@/marketing/PublicRoutes.jsx';
 
 // App layout
 import AppLayout from '@/components/layout/AppLayout';
@@ -85,7 +85,7 @@ const AuthenticatedApp = () => {
       return (
         <Routes>
           {publicRoutes()}
-          <Route path="*" element={<PageNotFound />} />
+          <Route path="*" element={marketingNotFound()} />
         </Routes>
       );
     }
@@ -107,7 +107,7 @@ const AuthenticatedApp = () => {
         } />
         {publicRoutes()}
         <Route path="/join" element={<JoinPage />} />
-        <Route path="*" element={<PageNotFound />} />
+        <Route path="*" element={marketingNotFound()} />
       </Routes>
     );
   }
@@ -169,7 +169,7 @@ const AuthenticatedApp = () => {
         <Route path="*" element={<PageNotFound />} />
       </Route>
 
-      <Route path="*" element={<PageNotFound />} />
+      <Route path="*" element={marketingNotFound()} />
     </Routes>
   );
 };

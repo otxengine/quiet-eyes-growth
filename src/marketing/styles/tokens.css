@@ -63,6 +63,17 @@
   animation: mkt-caret 1s step-end infinite;
 }
 
+/* Legal / long-form pages */
+.mkt-legal { color: var(--mkt-ink-2); font-size: 13.5px; line-height: 1.75; }
+.mkt-legal h1 { font-size: 32px; margin-bottom: 6px; }
+.mkt-legal h2 { font-size: 18px; margin: 28px 0 10px; }
+.mkt-legal h3 { font-size: 15px; margin: 18px 0 8px; }
+.mkt-legal p { margin-bottom: 10px; }
+.mkt-legal ul { list-style: disc; padding-inline-start: 20px; margin-bottom: 10px; }
+.mkt-legal li { margin-bottom: 6px; }
+.mkt-legal a { color: var(--mkt-ink); font-weight: 600; text-decoration: underline; }
+.mkt-legal strong { color: var(--mkt-ink); }
+
 /* Scroll-reveal — disabled entirely under reduced motion */
 .mkt-reveal {
   opacity: 0;
