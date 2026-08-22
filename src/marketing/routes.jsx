@@ -36,7 +36,16 @@ const featureRoutes = Object.entries(FEATURE_PAGES).map(([slug, data]) => ({
   Component: function FeatureRoute() {
     return <FeaturePage slug={slug} data={data} />;
   },
-  seo: { ...data.seo, canonical: `/features/${slug}`, faqItems: data.faq },
+  seo: {
+    ...data.seo,
+    canonical: `/features/${slug}`,
+    faqItems: data.faq,
+    breadcrumbs: [
+      { name: 'בית', path: '/' },
+      { name: 'יכולות', path: '/features' },
+      { name: data.label, path: `/features/${slug}` },
+    ],
+  },
 }));
 
 export const marketingRoutes = [

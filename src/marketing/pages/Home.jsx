@@ -39,7 +39,7 @@ const STEPS = [
   {
     n: '03',
     title: 'מקבלים פעולות ומאשרים',
-    body: 'כל המלצה מגיעה עם הסבר, טקסט מוכן ואומדן זמן. שום דבר לא מתפרסם בלי אישור שלך.',
+    body: 'אוטומציות לעסקים — עם רסן: כל המלצה מגיעה עם הסבר, טקסט מוכן ואומדן זמן, ושום דבר לא מתפרסם בלי אישור שלך.',
   },
 ];
 
@@ -66,10 +66,10 @@ export default function Home() {
         <Container className="relative pt-16 md:pt-24 pb-16 text-center">
           <Badge>Inspired by the brain. Built for intelligence.</Badge>
           <h1 className="mt-6 text-[34px] md:text-[52px] leading-[1.12] max-w-3xl mx-auto">
-            מערכת <GradientText>AI</GradientText> לניהול השיווק, המוניטין והמתחרים של העסק שלך
+            מערכת <GradientText>AI</GradientText> לשיווק דיגיטלי, ניהול מוניטין ומעקב מתחרים
           </h1>
           <p className="mt-5 text-[16px] md:text-[17.5px] leading-relaxed max-w-2xl mx-auto" style={{ color: 'var(--mkt-ink-2)' }}>
-            Cortexi עוקבת אחרי השוק, המתחרים והביקורות שלך מסביב לשעון, ומגישה לך פעולות מוכנות — בעברית. אתה רק מאשר.
+            בינה מלאכותית לעסקים קטנים: Cortexi עוקבת אחרי השוק, המתחרים והביקורות שלך מסביב לשעון, ומגישה פעולות מוכנות — בעברית. אתה רק מאשר.
           </p>
 
           <div className="mt-10">

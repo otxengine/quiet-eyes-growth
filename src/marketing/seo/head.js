@@ -10,6 +10,7 @@ const ORGANIZATION = {
   '@type': 'Organization',
   '@id': `${SITE_URL}/#organization`,
   name: 'Cortexi',
+  alternateName: 'קורטקסי',
   url: SITE_URL,
   logo: `${SITE_URL}/logo.jpeg`,
   slogan: 'Inspired by the brain. Built for intelligence.',
@@ -71,6 +72,26 @@ export function buildHead(seo) {
   const ogImage = `${SITE_URL}/og/og-default.png`;
 
   const graph = [ORGANIZATION, WEBSITE];
+  graph.push({
+    '@type': 'WebPage',
+    '@id': `${canonical}#webpage`,
+    url: canonical,
+    name: seo.title,
+    description: seo.description,
+    inLanguage: 'he',
+    isPartOf: { '@id': `${SITE_URL}/#website` },
+  });
+  if (seo.breadcrumbs?.length) {
+    graph.push({
+      '@type': 'BreadcrumbList',
+      itemListElement: seo.breadcrumbs.map((b, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        name: b.name,
+        item: `${SITE_URL}${b.path === '/' ? '/' : b.path}`,
+      })),
+    });
+  }
   if (seo.jsonLd === 'software') graph.push(SOFTWARE_APPLICATION);
   if (seo.jsonLd === 'pricing') graph.push(PRICING_PRODUCT);
   if (seo.faqItems?.length) graph.push(faqJsonLd(seo.faqItems));
@@ -80,7 +101,7 @@ export function buildHead(seo) {
     `<meta name="description" content="${esc(seo.description)}" />`,
     seo.noindex
       ? `<meta name="robots" content="noindex, follow" />`
-      : `<meta name="robots" content="index, follow" />`,
+      : `<meta name="robots" content="index, follow, max-image-preview:large" />`,
     `<link rel="canonical" href="${canonical}" />`,
     // hreflang — he today, /en/ slot ready for the future
     `<link rel="alternate" hreflang="he" href="${canonical}" />`,

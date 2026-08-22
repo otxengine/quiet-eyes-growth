@@ -18,7 +18,7 @@ export default function FeaturesIndex() {
             7 מודולים. <GradientText>מערכת אחת.</GradientText>
           </h1>
           <p className="mt-4 text-[15.5px] max-w-xl mx-auto" style={{ color: 'var(--mkt-ink-2)' }}>
-            כל מודול פותר כאב אמיתי של עסק קטן — וכולם מזינים זה את זה באותו מוח.
+            כל מודול פותר כאב אמיתי בקידום העסק — וכולם מזינים זה את זה באותו מוח.
           </p>
         </Container>
       </div>

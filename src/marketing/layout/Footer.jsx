@@ -42,7 +42,7 @@ export default function Footer() {
             Cortexi
           </a>
           <p className="mt-3 text-[13px] leading-relaxed" style={{ color: 'var(--mkt-muted)' }}>
-            מודיעין שיווקי ותחרותי לעסקים קטנים — המערכת עוקבת, מנתחת ומכינה פעולות. אתה רק מאשר.
+            תוכנת בינה מלאכותית לניהול השיווק והמוניטין של עסקים קטנים — המערכת עוקבת, מנתחת ומכינה פעולות. אתה רק מאשר.
           </p>
           <p className="mt-3 text-[12px]" style={{ color: 'var(--mkt-muted)' }}>
             Inspired by the brain. Built for intelligence.
