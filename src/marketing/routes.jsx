@@ -9,6 +9,7 @@ import FeaturePage from './pages/FeaturePage.jsx';
 import NotFound from './pages/NotFound.jsx';
 import { Terms, Privacy, DataDeletion } from './pages/Legal.jsx';
 import { FEATURE_PAGES } from './content/featurePages.js';
+import { PRICING_FAQ } from './content/pricing.js';
 
 /**
  * Single source of truth for the marketing midsite: consumed by the SPA router
@@ -33,7 +34,7 @@ const featureRoutes = Object.entries(FEATURE_PAGES).map(([slug, data]) => ({
   Component: function FeatureRoute() {
     return <FeaturePage slug={slug} data={data} />;
   },
-  seo: { ...data.seo, canonical: `/features/${slug}`, jsonLd: 'faq' },
+  seo: { ...data.seo, canonical: `/features/${slug}`, faqItems: data.faq },
 }));
 
 export const marketingRoutes = [
@@ -58,6 +59,7 @@ export const marketingRoutes = [
       description: 'תוכנית חינם לתמיד, Starter ‏₪149, Growth ‏₪349 ו-Pro ‏₪699 לסניף לחודש. ללא כרטיס אשראי, ביטול בכל עת.',
       canonical: '/pricing',
       jsonLd: 'pricing',
+      faqItems: PRICING_FAQ,
     },
   },
   {

@@ -1,0 +1,17 @@
+/* Standalone stylesheet for the prerendered marketing bundle.
+   The SPA gets Tailwind from src/index.css; this file provides it for the
+   static marketing pages, plus the shared tokens. */
+@import './tokens.css';
+
+@config "../../../tailwind.marketing.config.js";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  direction: rtl;
+  text-align: right;
+  margin: 0;
+  background: var(--mkt-canvas);
+}

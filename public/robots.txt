@@ -1,0 +1,21 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /settings
+Disallow: /onboarding
+Disallow: /sign-in
+Disallow: /sign-up
+Disallow: /approvals
+Disallow: /insights
+Disallow: /leads
+Disallow: /marketing/create
+Disallow: /subscription
+Disallow: /agents
+Disallow: /org/
+Disallow: /agency
+Disallow: /chat
+Disallow: /otx
+Disallow: /join
+Disallow: /api/
+
+Sitemap: https://cortexi.ai/sitemap.xml

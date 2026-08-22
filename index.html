@@ -3,7 +3,6 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="robots" content="index, follow" />
     <link rel="icon" type="image/jpeg" href="/logo.jpeg" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -14,31 +13,13 @@
     <meta name="theme-color" content="#111111" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <title>Cortexi — Inspired by the brain. Built for intelligence.</title>
-    <meta name="description" content="Cortexi — פלטפורמת מודיעין עסקי AI לעסקים קטנים ובינוניים בישראל. ניתוח אותות שוק, ניקוד הזדמנויות ופעולות מומלצות בעברית. Inspired by the brain. Built for intelligence." />
-    <meta property="og:title" content="Cortexi — Inspired by the brain. Built for intelligence." />
-    <meta property="og:description" content="מודיעין צמיחה בזמן אמת: אותות שוק, מתחרים, אירועים, הזדמנויות — הכל אוטומטי עם AI. Inspired by the brain. Built for intelligence." />
-    <meta property="og:type" content="website" />
-    <meta property="og:image" content="/logo.jpeg" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Cortexi — Inspired by the brain. Built for intelligence." />
-    <meta name="twitter:description" content="AI-powered business intelligence platform. Inspired by the brain. Built for intelligence." />
-    <meta name="twitter:image" content="/logo.jpeg" />
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      "name": "Cortexi",
-      "applicationCategory": "BusinessApplication",
-      "operatingSystem": "Web",
-      "description": "Inspired by the brain. Built for intelligence. מודיעין עסקי AI לעסקים קטנים בישראל",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "ILS"
-      }
-    }
-    </script>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Heebo:wght@400;500;600;700;800&family=Noto+Sans+Hebrew:wght@400;500;600;700;900&display=swap"
+    />
+    <!-- SEO head is injected at build time by scripts/prerender.mjs (home route).
+         In dev, the SPA sets the title per route at runtime. -->
+    <!--app-head-->
     <style>
       @media print {
         body { background: white !important; }
@@ -52,7 +33,7 @@
     </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><!--app-html--></div>
     <script type="module" src="/src/main.jsx"></script>
     <!-- Meta / Facebook SDK — required for WhatsApp Embedded Signup -->
     <script>

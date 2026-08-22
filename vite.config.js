@@ -12,8 +12,10 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        main:  path.resolve(__dirname, 'index.html'),
-        admin: path.resolve(__dirname, 'admin.html'),
+        main:      path.resolve(__dirname, 'index.html'),
+        admin:     path.resolve(__dirname, 'admin.html'),
+        // Lean bundle for the prerendered marketing pages (scripts/prerender.mjs)
+        marketing: path.resolve(__dirname, 'marketing.html'),
       },
     },
   },
