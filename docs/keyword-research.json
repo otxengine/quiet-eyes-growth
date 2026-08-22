@@ -1,0 +1,2362 @@
+[
+  {
+    "keyword": "ai",
+    "volume": 135000,
+    "cpc": 0.5,
+    "competition": "LOW",
+    "difficulty": 100,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "character ai",
+    "volume": 40500,
+    "cpc": 0.77,
+    "competition": "LOW",
+    "difficulty": 67,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "מניית גוגל",
+    "volume": 14800,
+    "cpc": 4.09,
+    "competition": "LOW",
+    "difficulty": 6,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "גוגל מניה",
+    "volume": 14800,
+    "cpc": 3.11,
+    "competition": "LOW",
+    "difficulty": 6,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "google ai",
+    "volume": 14800,
+    "cpc": 1.17,
+    "competition": "LOW",
+    "difficulty": 66,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "ג'ימני ai",
+    "volume": 9900,
+    "cpc": 1.1,
+    "competition": "LOW",
+    "difficulty": 9,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "ai mode",
+    "volume": 6600,
+    "cpc": 1.79,
+    "competition": "LOW",
+    "difficulty": 40,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "ai image generator",
+    "volume": 5400,
+    "cpc": 0.96,
+    "competition": "MEDIUM",
+    "difficulty": 72,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "humanize ai",
+    "volume": 3600,
+    "cpc": 0.86,
+    "competition": "MEDIUM",
+    "difficulty": 66,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "meta ai",
+    "volume": 3600,
+    "cpc": 1.18,
+    "competition": "LOW",
+    "difficulty": 70,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "גוגל פיי",
+    "volume": 2900,
+    "cpc": 2.72,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "המאמת של גוגל",
+    "volume": 2900,
+    "cpc": 1,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "blackbox ai",
+    "volume": 2900,
+    "cpc": 2.19,
+    "competition": "MEDIUM",
+    "difficulty": 24,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "flow ai",
+    "volume": 2400,
+    "cpc": 1.98,
+    "competition": "LOW",
+    "difficulty": 29,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "קורס ai",
+    "volume": 2400,
+    "cpc": 6.47,
+    "competition": "HIGH",
+    "difficulty": 0,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "pixverse ai",
+    "volume": 2400,
+    "cpc": 0.87,
+    "competition": "MEDIUM",
+    "difficulty": 25,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "המצאות ישראליות",
+    "volume": 1900,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "מצגת ai",
+    "volume": 1900,
+    "cpc": 2.04,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "ai agents",
+    "volume": 1900,
+    "cpc": 6.2,
+    "competition": "MEDIUM",
+    "difficulty": 66,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "ai character",
+    "volume": 1900,
+    "cpc": 1.96,
+    "competition": "LOW",
+    "difficulty": 57,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "שיווק דיגיטלי",
+    "volume": 1900,
+    "cpc": 9.86,
+    "competition": "MEDIUM",
+    "difficulty": 21,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "runway ai",
+    "volume": 1600,
+    "cpc": 3.12,
+    "competition": "MEDIUM",
+    "difficulty": 23,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "what is ai",
+    "volume": 1600,
+    "cpc": 1.31,
+    "competition": "LOW",
+    "difficulty": 61,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "מערכת crm",
+    "volume": 1600,
+    "cpc": 14.24,
+    "competition": "MEDIUM",
+    "difficulty": 22,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "midjourney ai",
+    "volume": 1600,
+    "cpc": 2.57,
+    "competition": "MEDIUM",
+    "difficulty": 55,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "face swap ai",
+    "volume": 1600,
+    "cpc": 2.05,
+    "competition": "LOW",
+    "difficulty": 45,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "תמונות ai",
+    "volume": 1600,
+    "cpc": 0.6,
+    "competition": "LOW",
+    "difficulty": 2,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "turbo ai",
+    "volume": 1600,
+    "cpc": 2.1,
+    "competition": "LOW",
+    "difficulty": 24,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "שילוט לעסקים",
+    "volume": 1300,
+    "cpc": 5.42,
+    "competition": "HIGH",
+    "difficulty": 0,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "הפעילות שלי גוגל",
+    "volume": 1300,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 30,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "גוגל בארד",
+    "volume": 1300,
+    "cpc": 1.64,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "גוגל סיסמאות",
+    "volume": 1300,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 17,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "spicy ai",
+    "volume": 1300,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 12,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "מחוללי תמונות ai",
+    "volume": 1300,
+    "cpc": 0.96,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "עריכת תמונות ai",
+    "volume": 1300,
+    "cpc": 1.01,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "ai photo generator",
+    "volume": 1300,
+    "cpc": 1.13,
+    "competition": "MEDIUM",
+    "difficulty": 30,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "video ai",
+    "volume": 1300,
+    "cpc": 2.23,
+    "competition": "MEDIUM",
+    "difficulty": 68,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "notion ai",
+    "volume": 1300,
+    "cpc": 2.53,
+    "competition": "LOW",
+    "difficulty": 64,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "free ai video generator",
+    "volume": 1300,
+    "cpc": 1.35,
+    "competition": "HIGH",
+    "difficulty": 60,
+    "source": "ideas:מערכת AI לניהול שיווק"
+  },
+  {
+    "keyword": "רשתות חברתיות",
+    "volume": 1300,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 8,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "דרושים הייטק",
+    "volume": 1000,
+    "cpc": 1.23,
+    "competition": "MEDIUM",
+    "difficulty": 60,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "ניהול פרויקטים",
+    "volume": 880,
+    "cpc": 3.56,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "גוגל קלאסרום כניסה",
+    "volume": 880,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 3,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "גוגל קונסול",
+    "volume": 880,
+    "cpc": 5.3,
+    "competition": "LOW",
+    "difficulty": 22,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "מעקב פדקס",
+    "volume": 880,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "dsv מעקב",
+    "volume": 880,
+    "cpc": 2.9,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "עידן 2000 מודיעין",
+    "volume": 880,
+    "cpc": 0.86,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "גוגל גרופ",
+    "volume": 720,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 16,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "תקשוב מחוז מרכז סביבת גוגל",
+    "volume": 720,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 4,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "גוגל מסלול",
+    "volume": 720,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 24,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "ksp מעקב הזמנה",
+    "volume": 720,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "אקסלוט מעקב",
+    "volume": 720,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 15,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "ארקיע ניהול הזמנה",
+    "volume": 720,
+    "cpc": 2.89,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "ניהול עסקי",
+    "volume": 590,
+    "cpc": 5.76,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "אוטומציות לעסקים",
+    "volume": 590,
+    "cpc": 7.87,
+    "competition": "MEDIUM",
+    "difficulty": 1,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "סביבת גוגל מחוז מרכז",
+    "volume": 590,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 18,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "גוגל קבוצות",
+    "volume": 590,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 13,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "מעכב או מעקב",
+    "volume": 590,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "exelot מעקב",
+    "volume": 590,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 15,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "משרות הייטק",
+    "volume": 590,
+    "cpc": 1.7,
+    "competition": "MEDIUM",
+    "difficulty": 60,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "אפשטיין ניהול פרויקטים",
+    "volume": 480,
+    "cpc": 2.94,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "חיפוש טיסות גוגל",
+    "volume": 480,
+    "cpc": 0.55,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "גוגל קולב",
+    "volume": 480,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 24,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "מחוז מרכז סביבת גוגל",
+    "volume": 480,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 18,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "אייקון גוגל",
+    "volume": 480,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 72,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "מנהל הסיסמאות של גוגל",
+    "volume": 480,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 18,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "מעקב ups",
+    "volume": 480,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 17,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "דרושים הנדסאי אלקטרוניקה",
+    "volume": 480,
+    "cpc": 0.46,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "חברות ניהול בניינים",
+    "volume": 390,
+    "cpc": 6.51,
+    "competition": "HIGH",
+    "difficulty": 12,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "מפיצי ריח לעסקים",
+    "volume": 390,
+    "cpc": 8.5,
+    "competition": "HIGH",
+    "difficulty": 0,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "ניהול מוניטין באינטרנט",
+    "volume": 390,
+    "cpc": 8.8,
+    "competition": "LOW",
+    "difficulty": 22,
+    "source": "related:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "פתיחת חשבון גוגל חדש",
+    "volume": 390,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 2,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "גלישה בסתר גוגל",
+    "volume": 390,
+    "cpc": 0.86,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "מנויים גוגל",
+    "volume": 390,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "גוגל סטריט",
+    "volume": 390,
+    "cpc": 0.15,
+    "competition": "LOW",
+    "difficulty": 15,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "גוגל דרייב כניסה",
+    "volume": 390,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 15,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "מנכל גוגל",
+    "volume": 390,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 9,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "מכם גוגל",
+    "volume": 390,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 4,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "ע.מ שיווק והפצה",
+    "volume": 390,
+    "cpc": 0.92,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "ע מ שיווק והפצה",
+    "volume": 390,
+    "cpc": 0.92,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "גוגל סטור",
+    "volume": 320,
+    "cpc": 0.01,
+    "competition": "LOW",
+    "difficulty": 23,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "גוגל דרייב למחשב",
+    "volume": 320,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "מלונות גוגל",
+    "volume": 320,
+    "cpc": 2.33,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "צ אט גוגל",
+    "volume": 320,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 27,
+    "source": "ideas:מענה לביקורות גוגל"
+  },
+  {
+    "keyword": "gaash מעקב",
+    "volume": 320,
+    "cpc": 1.31,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "מעקב הזמנות שיין",
+    "volume": 320,
+    "cpc": 2.86,
+    "competition": "HIGH",
+    "difficulty": 8,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "זיפי מעקב",
+    "volume": 320,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 17,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "ביקורות על tibis",
+    "volume": 320,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "מדפים לעסקים",
+    "volume": 260,
+    "cpc": 3.26,
+    "competition": "HIGH",
+    "difficulty": 0,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "חברת ניהול",
+    "volume": 260,
+    "cpc": 4.84,
+    "competition": "HIGH",
+    "difficulty": 12,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "מיתוג לעסקים",
+    "volume": 260,
+    "cpc": 5.5,
+    "competition": "HIGH",
+    "difficulty": 7,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "מרכזיה לעסקים",
+    "volume": 260,
+    "cpc": 36.45,
+    "competition": "LOW",
+    "difficulty": 32,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "לידים לעסקים",
+    "volume": 260,
+    "cpc": 10.29,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "קידום עסקים",
+    "volume": 260,
+    "cpc": 14.46,
+    "competition": "MEDIUM",
+    "difficulty": 5,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "חברות תוכנה",
+    "volume": 260,
+    "cpc": 8.1,
+    "competition": "LOW",
+    "difficulty": 6,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "שיווק ישיר קראוס",
+    "volume": 260,
+    "cpc": 0.34,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "חברות ניהול פרויקטים",
+    "volume": 210,
+    "cpc": 4.45,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "קורס ניהול עסק",
+    "volume": 210,
+    "cpc": 4.52,
+    "competition": "HIGH",
+    "difficulty": 7,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "חוקר מודיעין טכנולוגי",
+    "volume": 210,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "שיווק ארין מודיעין",
+    "volume": 210,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "ניהול הזמנה ארקיע",
+    "volume": 210,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "ניהול הזמנה אל על דיגיטל",
+    "volume": 210,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 1,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "מגנטים לעסקים",
+    "volume": 170,
+    "cpc": 2.03,
+    "competition": "HIGH",
+    "difficulty": 0,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "צ'יפ מעקב",
+    "volume": 170,
+    "cpc": 0.68,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "מעקב או מעכב",
+    "volume": 170,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "aramex מעקב",
+    "volume": 170,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 46,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "מעקב מכולות",
+    "volume": 170,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 11,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "מעקב מכולה",
+    "volume": 170,
+    "cpc": 0.02,
+    "competition": "LOW",
+    "difficulty": 8,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "מעקב הזמנה סטימצקי",
+    "volume": 170,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "חברות it",
+    "volume": 170,
+    "cpc": 10.09,
+    "competition": "LOW",
+    "difficulty": 39,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "משרות it",
+    "volume": 170,
+    "cpc": 0.86,
+    "competition": "MEDIUM",
+    "difficulty": 23,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "שיווק עסקים",
+    "volume": 170,
+    "cpc": 21.88,
+    "competition": "MEDIUM",
+    "difficulty": 19,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "ביקורות על שולטיק",
+    "volume": 170,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "ביקורות על פרוזדור",
+    "volume": 170,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "ניהול תורים",
+    "volume": 170,
+    "cpc": 5.09,
+    "competition": "MEDIUM",
+    "difficulty": 2,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "ביקורות על sinta",
+    "volume": 170,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "רשתות חברתיות 2019",
+    "volume": 170,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 14,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "תריסי גלילה לעסקים",
+    "volume": 140,
+    "cpc": 32.13,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "ניהול פרויקטים בבניה",
+    "volume": 140,
+    "cpc": 3.07,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "ניהול מוניטין בגוגל",
+    "volume": 140,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 4,
+    "source": "related:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "e post מעקב",
+    "volume": 140,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 28,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "tnt מעקב",
+    "volume": 140,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 5,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "הנדסה מודיעין",
+    "volume": 140,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "הייטק דרושים",
+    "volume": 140,
+    "cpc": 1.01,
+    "competition": "MEDIUM",
+    "difficulty": 60,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "יועץ שיווק",
+    "volume": 140,
+    "cpc": 7.67,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "שיווק ישיר ברגים",
+    "volume": 140,
+    "cpc": 7.73,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "שיווק דיגיטלי לעסקים קטנים",
+    "volume": 140,
+    "cpc": 10.69,
+    "competition": "HIGH",
+    "difficulty": 6,
+    "source": "related:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "ביקורות על אונמי",
+    "volume": 140,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "חברת סליקה לעסקים",
+    "volume": 110,
+    "cpc": 25.49,
+    "competition": "MEDIUM",
+    "difficulty": 24,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "איזיביזי לעסקים",
+    "volume": 110,
+    "cpc": 0.87,
+    "competition": "MEDIUM",
+    "difficulty": 4,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "ניהול בנייה",
+    "volume": 110,
+    "cpc": 4.69,
+    "competition": "MEDIUM",
+    "difficulty": 4,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "פועלים לעסקים בשירות עצמי סניפים",
+    "volume": 110,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 1,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "בר מעקב",
+    "volume": 110,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 2,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "ארמקס מעקב",
+    "volume": 110,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 8,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "סטימצקי מעקב הזמנה",
+    "volume": 110,
+    "cpc": 0.01,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "מעקב תקשורתי תשחץ",
+    "volume": 110,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "zigzag מעקב",
+    "volume": 110,
+    "cpc": 0.9,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "מנהלי שיווק דרושים",
+    "volume": 110,
+    "cpc": 0.21,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "שיווק נדלן",
+    "volume": 110,
+    "cpc": 6.43,
+    "competition": "MEDIUM",
+    "difficulty": 3,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "עסקים למכירה מסירה",
+    "volume": 110,
+    "cpc": 1.1,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "מערכת ניהול משלחות מנהלת פולין",
+    "volume": 110,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "ביקורות על teder",
+    "volume": 110,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "שמות של רשתות חברתיות",
+    "volume": 110,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "חברות ניהול פרויקטים בבניה",
+    "volume": 90,
+    "cpc": 4.94,
+    "competition": "MEDIUM",
+    "difficulty": 4,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "ניהול פרויקטים בבנייה",
+    "volume": 90,
+    "cpc": 3.64,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "ריחות לעסקים",
+    "volume": 90,
+    "cpc": 13.09,
+    "competition": "HIGH",
+    "difficulty": 2,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "ניהול משרד",
+    "volume": 90,
+    "cpc": 9.59,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "ציוד לעסקים",
+    "volume": 90,
+    "cpc": 1.2,
+    "competition": "HIGH",
+    "difficulty": 0,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "מענה אנושי לעסקים",
+    "volume": 90,
+    "cpc": 16.72,
+    "competition": "MEDIUM",
+    "difficulty": 10,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "מערכת ניהול עסק",
+    "volume": 90,
+    "cpc": 8.22,
+    "competition": "MEDIUM",
+    "difficulty": 35,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "ריח לעסקים",
+    "volume": 90,
+    "cpc": 13.09,
+    "competition": "HIGH",
+    "difficulty": 9,
+    "source": "ideas:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "parcel home מעקב",
+    "volume": 90,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 12,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "mailog מעקב",
+    "volume": 90,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 15,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "ניתוח פעלים",
+    "volume": 90,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "טבלת ניקוד",
+    "volume": 90,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "אנליסט טכנולוגיות חול",
+    "volume": 90,
+    "cpc": 5.58,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "אירונאוטיקס מודיעין",
+    "volume": 90,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "מכירת עסקים פעילים",
+    "volume": 90,
+    "cpc": 3.53,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "מכירת עסק פעיל",
+    "volume": 90,
+    "cpc": 3.53,
+    "competition": "MEDIUM",
+    "difficulty": 3,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "שיווק לעסקים",
+    "volume": 90,
+    "cpc": 11.24,
+    "competition": "HIGH",
+    "difficulty": 15,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "שיווק כל בע מ",
+    "volume": 90,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "ניהול אירוע",
+    "volume": 90,
+    "cpc": 6.74,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "טבלת מעקב קושניר",
+    "volume": 70,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "מעקב תקשורתי",
+    "volume": 70,
+    "cpc": null,
+    "competition": null,
+    "difficulty": 0,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "e cargo מעקב",
+    "volume": 70,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "אקו פוסט מעקב",
+    "volume": 70,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 14,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "kexpress מעקב",
+    "volume": 70,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 7,
+    "source": "ideas:מעקב מתחרים"
+  },
+  {
+    "keyword": "טבלת קודונים",
+    "volume": 70,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "חברות מחשוב",
+    "volume": 70,
+    "cpc": 6.08,
+    "competition": "LOW",
+    "difficulty": 9,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "דרושים פטנטים",
+    "volume": 70,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "חברות אוטומציה",
+    "volume": 70,
+    "cpc": 5.96,
+    "competition": "MEDIUM",
+    "difficulty": 4,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "דרושים מדעי המחשב",
+    "volume": 70,
+    "cpc": 0.47,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "דין שיווק וקליה בע מ",
+    "volume": 70,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "א.ד שיווק והפצה",
+    "volume": 70,
+    "cpc": null,
+    "competition": "HIGH",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "שיווק מוצרים",
+    "volume": 70,
+    "cpc": 11.28,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "הקמת אתר מכירות",
+    "volume": 70,
+    "cpc": 9.13,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "מכירות באינטרנט",
+    "volume": 70,
+    "cpc": 3.08,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "ניהול מחסן",
+    "volume": 70,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "ביקורות על netofun",
+    "volume": 70,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "ביקורות על cantona",
+    "volume": 70,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "ביקורות על bartuv",
+    "volume": 70,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "מערכת ניהול משלחות",
+    "volume": 70,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 1,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "ניהול מחסנים",
+    "volume": 70,
+    "cpc": 7.69,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "ביקורות על לאוס מדיה",
+    "volume": 70,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 5,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "טבלת שורשים",
+    "volume": 50,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "טבלת ניתוב",
+    "volume": 50,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "דרושים מטמיע מערכות מידע",
+    "volume": 50,
+    "cpc": 1.3,
+    "competition": "HIGH",
+    "difficulty": 0,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "דרושים הנדסאי מכטרוניקה",
+    "volume": 50,
+    "cpc": 0.23,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "שיווק לעסקים קטנים",
+    "volume": 50,
+    "cpc": 12.18,
+    "competition": "HIGH",
+    "difficulty": 0,
+    "source": "overview:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "שיווק פרויקטים",
+    "volume": 50,
+    "cpc": 7.73,
+    "competition": "LOW",
+    "difficulty": 2,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "גאון שיווק הנדסי",
+    "volume": 50,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "חזון שיווק והפצה מגאר",
+    "volume": 50,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "קורס שיווק ומכירות",
+    "volume": 50,
+    "cpc": 7.1,
+    "competition": "HIGH",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "שיווק ומכירות",
+    "volume": 50,
+    "cpc": 7.01,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "ביקורות על תילוש",
+    "volume": 50,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "ביקורות על finupp",
+    "volume": 50,
+    "cpc": 2.89,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "ניהול הרשאות",
+    "volume": 50,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "ביקורות על elock",
+    "volume": 50,
+    "cpc": 0.3,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "לופטהנזה ניהול הזמנה",
+    "volume": 50,
+    "cpc": 2.15,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "ביקורות על agigroup",
+    "volume": 50,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "ניהול רשתות חברתיות",
+    "volume": 50,
+    "cpc": 5.16,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "סמלים של רשתות חברתיות",
+    "volume": 50,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "orif ניתוח",
+    "volume": 40,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "ניתוח orif",
+    "volume": 40,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "טבלת אמת xor",
+    "volume": 40,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "טבלת אשקרופט",
+    "volume": 40,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 42,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "מחלקת הנדסה מודיעין",
+    "volume": 40,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 8,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "חברות מחשוב קוונטי",
+    "volume": 40,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "טכנולוגיה באנגלית",
+    "volume": 40,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "מודיעין הנדסה",
+    "volume": 40,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "בינה דרושים",
+    "volume": 40,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "מרכז שיווק לקוסמטיקאיות",
+    "volume": 40,
+    "cpc": 0.98,
+    "competition": "HIGH",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "רזיט שיווק",
+    "volume": 40,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "ט ק שיווק והפצה",
+    "volume": 40,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "שיווק פרויקטים בנדל ן",
+    "volume": 40,
+    "cpc": 3.35,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "שיווק פרויקטים בנדל\"ן",
+    "volume": 40,
+    "cpc": 3.35,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "ט.ק שיווק והפצה",
+    "volume": 40,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "פרסום עסקים קטנים",
+    "volume": 40,
+    "cpc": 12.18,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "related:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "ביקורות על וייב",
+    "volume": 40,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "ביקורות על homelet",
+    "volume": 40,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "ביקורות על arcdb",
+    "volume": 40,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "hackeru ביקורות",
+    "volume": 40,
+    "cpc": 1.81,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניהול ביקורות"
+  },
+  {
+    "keyword": "רשתות חברתיות 2020",
+    "volume": 40,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 46,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "התמכרות לרשתות חברתיות",
+    "volume": 40,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "טבלת תיאורים",
+    "volume": 30,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "גרפולוגיה ניתוח עצמי",
+    "volume": 30,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "ניתוח פונטן",
+    "volume": 30,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 42,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "טיים מאשין מודיעין",
+    "volume": 30,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "מסלול אלקטרוניקה מודיעין",
+    "volume": 30,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "מחשבים מודיעין",
+    "volume": 30,
+    "cpc": null,
+    "competition": "MEDIUM",
+    "difficulty": 18,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "דרושים מהנדס מערכת",
+    "volume": 30,
+    "cpc": 0.38,
+    "competition": "MEDIUM",
+    "difficulty": 0,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "חברות היי טק ביקנעם",
+    "volume": 30,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 9,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "דרושים מרכיב מכני",
+    "volume": 30,
+    "cpc": 0.26,
+    "competition": "MEDIUM",
+    "difficulty": 41,
+    "source": "ideas:מודיעין תחרותי"
+  },
+  {
+    "keyword": "מה זה רשתות חברתיות",
+    "volume": 30,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 3,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "רשתות חברתיות באנגלית",
+    "volume": 30,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "מאמר על רשתות חברתיות",
+    "volume": 30,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "מאמרים על רשתות חברתיות",
+    "volume": 30,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 9,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "ניתוח מתחרים",
+    "volume": 20,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 38,
+    "source": "overview:ניתוח מתחרים"
+  },
+  {
+    "keyword": "טבלת שקילויות לוגיות",
+    "volume": 20,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "ניתוח פארטו",
+    "volume": 20,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 7,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "טבלת מעקב פייתון",
+    "volume": 20,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "ניתוח פעלים תרגול",
+    "volume": 20,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "טבלת char",
+    "volume": 20,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "רשתות חברתיות מובילות",
+    "volume": 20,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 16,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "שימוש ברשתות חברתיות",
+    "volume": 20,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 12,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "איזה רשתות חברתיות יש",
+    "volume": 20,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "רשתות חברתיות לילדים",
+    "volume": 20,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 43,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "ניהול מוניטין לעסקים",
+    "volume": 10,
+    "cpc": 5.39,
+    "competition": "MEDIUM",
+    "difficulty": 16,
+    "source": "overview:ניהול מוניטין לעסקים"
+  },
+  {
+    "keyword": "טבלת שייכות",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "טבלת שיקוע",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "ניתוח תשחץ",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "ניתוח נתיבים",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 41,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "ניתוח גרפולוגי עצמי",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "ניתוח קריקטורה",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 43,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "ניתוח ערוגות",
+    "volume": 10,
+    "cpc": null,
+    "competition": null,
+    "difficulty": null,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "ניתוח פונקציונלי",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "ניתוח תחבירי אוטומטי",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 42,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "ניתוח עבירה",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "ניתוח ממצאים",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "ניתוח מסטואיד",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 40,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "ניתוח crif",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 42,
+    "source": "ideas:ניתוח מתחרים"
+  },
+  {
+    "keyword": "איך עושים ניתוח מתחרים",
+    "volume": 10,
+    "cpc": null,
+    "competition": null,
+    "difficulty": null,
+    "source": "related:ניתוח מתחרים"
+  },
+  {
+    "keyword": "סקירת מתחרים",
+    "volume": 10,
+    "cpc": null,
+    "competition": null,
+    "difficulty": null,
+    "source": "related:ניתוח מתחרים"
+  },
+  {
+    "keyword": "מודיעין תחרותי",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 13,
+    "source": "overview:מודיעין תחרותי"
+  },
+  {
+    "keyword": "חברות מודיעין עסקי מובילות",
+    "volume": 10,
+    "cpc": null,
+    "competition": null,
+    "difficulty": 23,
+    "source": "related:מודיעין תחרותי"
+  },
+  {
+    "keyword": "מודיעין עסקי שכר",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 43,
+    "source": "related:מודיעין תחרותי"
+  },
+  {
+    "keyword": "מתי לעסקים קטנים",
+    "volume": 10,
+    "cpc": 8.1,
+    "competition": "MEDIUM",
+    "difficulty": null,
+    "source": "related:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "אתר לעסקים קטנים",
+    "volume": 10,
+    "cpc": 16.06,
+    "competition": "LOW",
+    "difficulty": 47,
+    "source": "related:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "עמותה לעסקים קטנים",
+    "volume": 10,
+    "cpc": null,
+    "competition": "HIGH",
+    "difficulty": null,
+    "source": "related:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "מעוף לעסקים קטנים טלפון",
+    "volume": 10,
+    "cpc": 7.91,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "related:שיווק לעסקים קטנים"
+  },
+  {
+    "keyword": "ניטור רשתות חברתיות",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "overview:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "רשתות חברתיות 2021",
+    "volume": 10,
+    "cpc": null,
+    "competition": null,
+    "difficulty": 12,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "רשתות חברתיות לבני נוער",
+    "volume": 10,
+    "cpc": null,
+    "competition": null,
+    "difficulty": 45,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "רשתות חברתיות ובני נוער",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "רשתות חברתיות מאמרים",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 0,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "טקסט על רשתות חברתיות",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "שאלות מחקר בנושא רשתות חברתיות",
+    "volume": 10,
+    "cpc": null,
+    "competition": null,
+    "difficulty": 38,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "חסרונות רשתות חברתיות",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "בעד ונגד רשתות חברתיות",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 9,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "רשתות חברתיות לעסקים",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 41,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "גמילה מרשתות חברתיות",
+    "volume": 10,
+    "cpc": 0.79,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "רשתות חברתיות פייסבוק",
+    "volume": 10,
+    "cpc": null,
+    "competition": null,
+    "difficulty": 43,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "השפעות שליליות של רשתות חברתיות",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "שאלון שימוש ברשתות חברתיות",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": 41,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "חרם ברשתות חברתיות",
+    "volume": 10,
+    "cpc": null,
+    "competition": null,
+    "difficulty": null,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "רשתות חברתיות פופולריות 2020",
+    "volume": 10,
+    "cpc": null,
+    "competition": null,
+    "difficulty": 25,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "רגולציה על רשתות חברתיות",
+    "volume": 10,
+    "cpc": null,
+    "competition": "LOW",
+    "difficulty": null,
+    "source": "ideas:ניטור רשתות חברתיות"
+  },
+  {
+    "keyword": "מטריצת מתחרים",
+    "volume": null,
+    "cpc": null,
+    "competition": null,
+    "difficulty": null,
+    "source": "related:ניתוח מתחרים"
+  },
+  {
+    "keyword": "טבלת מתחרים",
+    "volume": null,
+    "cpc": null,
+    "competition": null,
+    "difficulty": null,
+    "source": "related:ניתוח מתחרים"
+  },
+  {
+    "keyword": "דרושים מודיעין תחרותי",
+    "volume": null,
+    "cpc": null,
+    "competition": null,
+    "difficulty": null,
+    "source": "related:מודיעין תחרותי"
+  },
+  {
+    "keyword": "מודיעין עסקי משרות",
+    "volume": null,
+    "cpc": null,
+    "competition": null,
+    "difficulty": null,
+    "source": "related:מודיעין תחרותי"
+  },
+  {
+    "keyword": "מודיעין עסקי אסטרטגי",
+    "volume": null,
+    "cpc": null,
+    "competition": null,
+    "difficulty": null,
+    "source": "related:מודיעין תחרותי"
+  },
+  {
+    "keyword": "מודיעין עסקי קורס",
+    "volume": null,
+    "cpc": null,
+    "competition": null,
+    "difficulty": 40,
+    "source": "related:מודיעין תחרותי"
+  },
+  {
+    "keyword": "מודיעין עסקי באנגלית",
+    "volume": null,
+    "cpc": null,
+    "competition": null,
+    "difficulty": null,
+    "source": "related:מודיעין תחרותי"
+  },
+  {
+    "keyword": "ארגון עסקים קטנים",
+    "volume": null,
+    "cpc": null,
+    "competition": null,
+    "difficulty": null,
+    "source": "related:שיווק לעסקים קטנים"
+  }
+]
