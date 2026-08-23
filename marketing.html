@@ -8,22 +8,24 @@
     <link rel="apple-touch-icon" href="/logo/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Fonts load async (display=swap paints text with the fallback font first) -->
+    <!-- Heebo (the LCP-critical font) is self-hosted and preloaded; Inter loads async -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/heebo-800-hebrew.woff2" />
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/heebo-400-hebrew.woff2" />
     <link
       rel="preload"
       as="style"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Heebo:wght@400;500;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap"
     />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Heebo:wght@400;500;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap"
       media="print"
       onload="this.media='all'"
     />
     <noscript>
       <link
         rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Heebo:wght@400;500;700;800&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap"
       />
     </noscript>
     <!--app-head-->

@@ -112,6 +112,33 @@ const CRM_PLATFORMS = [
 // ── Convert SocialAccount[] → connections map ──────────────────────────────────
 // Shape: { facebook_page: { connected: true, page_name: '...', account: {...} }, ... }
 
+// Loads the Meta/Facebook SDK on demand (WhatsApp Embedded Signup only) —
+// loading it globally in index.html added third-party cookies to every page.
+let fbSdkPromise = null;
+function ensureFacebookSdk() {
+  if (window.FB) return Promise.resolve();
+  if (fbSdkPromise) return fbSdkPromise;
+  fbSdkPromise = new Promise((resolve, reject) => {
+    window.fbAsyncInit = function () {
+      window.FB.init({
+        appId: import.meta.env.VITE_FACEBOOK_APP_ID,
+        autoLogAppEvents: true,
+        xfbml: true,
+        version: 'v19.0',
+      });
+      resolve();
+    };
+    const script = document.createElement('script');
+    script.src = 'https://connect.facebook.net/en_US/sdk.js';
+    script.async = true;
+    script.defer = true;
+    script.crossOrigin = 'anonymous';
+    script.onerror = () => { fbSdkPromise = null; reject(new Error('FB SDK failed to load')); };
+    document.body.appendChild(script);
+  });
+  return fbSdkPromise;
+}
+
 function accountsToConnections(accounts = []) {
   const map = {};
   for (const acct of accounts) {
@@ -244,8 +271,10 @@ function WhatsAppEmbeddedCard({ platform, connection, account, bpId, expiry, onD
   const isConnected = connection?.connected;
   const [waBusy, setWaBusy] = useState(false);
 
-  const launchEmbeddedSignup = () => {
-    if (!window.FB) {
+  const launchEmbeddedSignup = async () => {
+    try {
+      await ensureFacebookSdk();
+    } catch {
       toast.error('Meta SDK לא נטען — נסה לרענן את הדף');
       return;
     }

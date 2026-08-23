@@ -14,22 +14,25 @@
     <meta name="theme-color" content="#111111" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Fonts load async (display=swap paints text with the fallback font first) -->
+    <!-- Heebo (the LCP-critical font) is self-hosted and preloaded;
+         Inter + Noto Sans Hebrew (app body font) load async -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/heebo-800-hebrew.woff2" />
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/heebo-400-hebrew.woff2" />
     <link
       rel="preload"
       as="style"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Heebo:wght@400;500;600;700;800&family=Noto+Sans+Hebrew:wght@400;500;600;700;900&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Hebrew:wght@400;500;600;700;900&display=swap"
     />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Heebo:wght@400;500;600;700;800&family=Noto+Sans+Hebrew:wght@400;500;600;700;900&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Hebrew:wght@400;500;600;700;900&display=swap"
       media="print"
       onload="this.media='all'"
     />
     <noscript>
       <link
         rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Heebo:wght@400;500;600;700;800&family=Noto+Sans+Hebrew:wght@400;500;600;700;900&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Hebrew:wght@400;500;600;700;900&display=swap"
       />
     </noscript>
     <!-- SEO head is injected at build time by scripts/prerender.mjs (home route).
@@ -50,17 +53,7 @@
   <body>
     <div id="root"><!--app-html--></div>
     <script type="module" src="/src/main.jsx"></script>
-    <!-- Meta / Facebook SDK — required for WhatsApp Embedded Signup -->
-    <script>
-      window.fbAsyncInit = function() {
-        FB.init({
-          appId:            '%VITE_FACEBOOK_APP_ID%',
-          autoLogAppEvents: true,
-          xfbml:            true,
-          version:          'v19.0',
-        });
-      };
-    </script>
-    <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
+    <!-- Meta / Facebook SDK loads on demand in Integrations.jsx (WhatsApp Embedded
+         Signup) — loading it globally added third-party cookies to every page. -->
   </body>
 </html>

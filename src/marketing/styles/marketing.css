@@ -1,6 +1,7 @@
 /* Standalone stylesheet for the prerendered marketing bundle.
    The SPA gets Tailwind from src/index.css; this file provides it for the
    static marketing pages, plus the shared tokens. */
+@import './fonts.css';
 @import './tokens.css';
 
 @config "../../../tailwind.marketing.config.js";

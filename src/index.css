@@ -1,5 +1,6 @@
-/* Fonts load via <link rel="stylesheet"> in index.html / admin.html / marketing.html
-   (display=swap + preconnect) — CSS @import serialized them behind the stylesheet. */
+/* Heebo is self-hosted (preloaded woff2, see scripts/self-host-fonts.mjs);
+   Inter + Noto Sans Hebrew load via an async <link> in index.html. */
+@import './marketing/styles/fonts.css';
 
 @tailwind base;
 @tailwind components;
