@@ -15,45 +15,53 @@ import { publicRoutes, isPublicPath, marketingNotFound } from '@/marketing/Publi
 
 // App layout
 import AppLayout from '@/components/layout/AppLayout';
-
-// App pages
-import Onboarding from '@/pages/Onboarding';
-import Dashboard from '@/pages/Dashboard.jsx';
-import Competitors from '@/pages/Competitors.jsx';
-import Events from '@/pages/Events.jsx';
-import Reputation from '@/pages/Reputation.jsx';
-import ReviewsCompare from '@/pages/ReviewsCompare.jsx';
-import Leads from '@/pages/Leads.jsx';
-import Retention from '@/pages/Retention.jsx';
-import Agents from '@/pages/Agents.jsx';
-import SettingsPage from '@/pages/SettingsPage.jsx';
-import Reports from '@/pages/Reports.jsx';
-import Tasks from '@/pages/Tasks.jsx';
-import Subscription from '@/pages/Subscription.jsx';
-import Integrations from '@/pages/Integrations.jsx';
-import DataSources from '@/pages/DataSources.jsx';
-import SocialConnections from '@/pages/SocialConnections.jsx';
-const OTXDashboard = React.lazy(() => import('@/pages/OTXDashboard'));
-import LearningCenter from '@/pages/LearningCenter.jsx';
-import Marketing from '@/pages/Marketing.jsx';
-import CampaignCreate from '@/pages/CampaignCreate.jsx';
-import TaskDetail from '@/pages/TaskDetail.jsx';
-import Insights from '@/pages/Insights.jsx';
-import InsightDetail from '@/pages/InsightDetail.jsx';
-import MarketAnalysis from '@/pages/MarketAnalysis.jsx';
-import Strategy from '@/pages/Strategy.jsx';
-import Approvals from '@/pages/Approvals.jsx';
-import EventBusDashboard from '@/pages/EventBusDashboard.jsx';
-import SocialComments from '@/pages/SocialComments.jsx';
-import SocialCompetition from '@/pages/SocialCompetition.jsx';
-import CompetitorsOffers from '@/pages/CompetitorsOffers.jsx';
 import DevUserSwitcher from '@/components/DevUserSwitcher';
-import OrganizationSettings from '@/pages/OrganizationSettings.jsx';
-import AgencyDashboard from '@/pages/AgencyDashboard.jsx';
-import JoinPage from '@/pages/JoinPage.jsx';
-import CommandHome from '@/pages/CommandHome.jsx';
-import ChatPage from '@/pages/Chat.jsx';
 import { OrganizationProvider } from '@/contexts/OrganizationContext';
+
+// App pages — ALL lazy, so public visitors (and the prerendered "/" home) never
+// download the app bundle, and each app screen loads its own chunk on demand.
+const lazyPage = (loader) => React.lazy(loader);
+const Onboarding = lazyPage(() => import('@/pages/Onboarding'));
+const Dashboard = lazyPage(() => import('@/pages/Dashboard.jsx'));
+const Competitors = lazyPage(() => import('@/pages/Competitors.jsx'));
+const Events = lazyPage(() => import('@/pages/Events.jsx'));
+const Reputation = lazyPage(() => import('@/pages/Reputation.jsx'));
+const ReviewsCompare = lazyPage(() => import('@/pages/ReviewsCompare.jsx'));
+const Leads = lazyPage(() => import('@/pages/Leads.jsx'));
+const Retention = lazyPage(() => import('@/pages/Retention.jsx'));
+const Agents = lazyPage(() => import('@/pages/Agents.jsx'));
+const SettingsPage = lazyPage(() => import('@/pages/SettingsPage.jsx'));
+const Reports = lazyPage(() => import('@/pages/Reports.jsx'));
+const Tasks = lazyPage(() => import('@/pages/Tasks.jsx'));
+const Subscription = lazyPage(() => import('@/pages/Subscription.jsx'));
+const Integrations = lazyPage(() => import('@/pages/Integrations.jsx'));
+const DataSources = lazyPage(() => import('@/pages/DataSources.jsx'));
+const SocialConnections = lazyPage(() => import('@/pages/SocialConnections.jsx'));
+const OTXDashboard = lazyPage(() => import('@/pages/OTXDashboard'));
+const LearningCenter = lazyPage(() => import('@/pages/LearningCenter.jsx'));
+const Marketing = lazyPage(() => import('@/pages/Marketing.jsx'));
+const CampaignCreate = lazyPage(() => import('@/pages/CampaignCreate.jsx'));
+const TaskDetail = lazyPage(() => import('@/pages/TaskDetail.jsx'));
+const Insights = lazyPage(() => import('@/pages/Insights.jsx'));
+const InsightDetail = lazyPage(() => import('@/pages/InsightDetail.jsx'));
+const MarketAnalysis = lazyPage(() => import('@/pages/MarketAnalysis.jsx'));
+const Strategy = lazyPage(() => import('@/pages/Strategy.jsx'));
+const Approvals = lazyPage(() => import('@/pages/Approvals.jsx'));
+const EventBusDashboard = lazyPage(() => import('@/pages/EventBusDashboard.jsx'));
+const SocialComments = lazyPage(() => import('@/pages/SocialComments.jsx'));
+const SocialCompetition = lazyPage(() => import('@/pages/SocialCompetition.jsx'));
+const CompetitorsOffers = lazyPage(() => import('@/pages/CompetitorsOffers.jsx'));
+const OrganizationSettings = lazyPage(() => import('@/pages/OrganizationSettings.jsx'));
+const AgencyDashboard = lazyPage(() => import('@/pages/AgencyDashboard.jsx'));
+const JoinPage = lazyPage(() => import('@/pages/JoinPage.jsx'));
+const CommandHome = lazyPage(() => import('@/pages/CommandHome.jsx'));
+const ChatPage = lazyPage(() => import('@/pages/Chat.jsx'));
+
+const PageSpinner = () => (
+  <div className="fixed inset-0 flex items-center justify-center bg-white">
+    <div className="w-8 h-8 border-4 border-border/50 border-t-[#111111] rounded-full animate-spin"></div>
+  </div>
+);
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated } = useAuth();
@@ -83,10 +91,12 @@ const AuthenticatedApp = () => {
     // For auth_required on public pages, just show the public site
     if (authError.type === 'auth_required') {
       return (
-        <Routes>
-          {publicRoutes()}
-          <Route path="*" element={marketingNotFound()} />
-        </Routes>
+        <Suspense fallback={<PageSpinner />}>
+          <Routes>
+            {publicRoutes()}
+            <Route path="*" element={marketingNotFound()} />
+          </Routes>
+        </Suspense>
       );
     }
   }
@@ -94,6 +104,7 @@ const AuthenticatedApp = () => {
   // Not authenticated — show public pages + sign-in/sign-up
   if (!isAuthenticated) {
     return (
+      <Suspense fallback={<PageSpinner />}>
       <Routes>
         <Route path="/sign-in/*" element={
           <div className="min-h-screen flex items-center justify-center bg-secondary/50">
@@ -109,11 +120,13 @@ const AuthenticatedApp = () => {
         <Route path="/join" element={<JoinPage />} />
         <Route path="*" element={marketingNotFound()} />
       </Routes>
+      </Suspense>
     );
   }
 
   // Authenticated — show app
   return (
+    <Suspense fallback={<PageSpinner />}>
     <Routes>
       {/* Public pages still accessible when logged in — "/" belongs to Dashboard here */}
       {publicRoutes({ includeRoot: false })}
@@ -171,6 +184,7 @@ const AuthenticatedApp = () => {
 
       <Route path="*" element={marketingNotFound()} />
     </Routes>
+    </Suspense>
   );
 };
 

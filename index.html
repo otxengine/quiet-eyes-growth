@@ -14,10 +14,24 @@
     <meta name="theme-color" content="#111111" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Fonts load async (display=swap paints text with the fallback font first) -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Heebo:wght@400;500;600;700;800&family=Noto+Sans+Hebrew:wght@400;500;600;700;900&display=swap"
+    />
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Heebo:wght@400;500;600;700;800&family=Noto+Sans+Hebrew:wght@400;500;600;700;900&display=swap"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Heebo:wght@400;500;600;700;800&family=Noto+Sans+Hebrew:wght@400;500;600;700;900&display=swap"
+      />
+    </noscript>
     <!-- SEO head is injected at build time by scripts/prerender.mjs (home route).
          In dev, the SPA sets the title per route at runtime. -->
     <!--app-head-->

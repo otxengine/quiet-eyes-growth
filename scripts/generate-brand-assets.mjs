@@ -41,6 +41,8 @@ const wm = await sharp(wordmark).metadata();
 console.log(`wordmark trimmed: ${wm.width}x${wm.height}`);
 const wordmarkAlpha = await whiteToAlpha(wordmark);
 await sharp(wordmarkAlpha).resize({ width: 800 }).png().toFile(join(LOGO_DIR, 'cortexi-logo.png'));
+// Small variant for nav/footer (rendered ≤104px wide; 208w covers 2x screens)
+await sharp(wordmarkAlpha).resize({ width: 208 }).png({ compressionLevel: 9 }).toFile(join(LOGO_DIR, 'cortexi-logo-nav.png'));
 
 // 2. "C" mark: left slice of the trimmed wordmark (0.9×height avoids the first
 // letter of the CORTEXI text), then re-trim

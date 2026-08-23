@@ -131,6 +131,21 @@ services:
         sync: false
       - key: VITE_FACEBOOK_APP_ID
         sync: false
+    # Long cache for immutable hashed assets; a week for brand/og images.
+    # (Mirrors the headers configured manually on quiet-eyes-growth_DEV_FE.)
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /logo/*
+        name: Cache-Control
+        value: public, max-age=604800
+      - path: /og/*
+        name: Cache-Control
+        value: public, max-age=604800
+      - path: /logo.jpeg
+        name: Cache-Control
+        value: public, max-age=604800
     # Order matters: Render serves existing files first, but bare extensionless
     # paths (/pricing) don't match dir/index.html files — each prerendered
     # marketing route needs an explicit rewrite ABOVE the SPA catch-all.

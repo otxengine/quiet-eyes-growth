@@ -39,7 +39,7 @@ export default function Footer() {
         <div className="col-span-2 md:col-span-1">
           <a href="/" aria-label="Cortexi — לעמוד הבית">
             <img
-              src="/logo/cortexi-logo.png"
+              src="/logo/cortexi-logo-nav.png"
               alt="הלוגו של Cortexi"
               width={104}
               height={40}

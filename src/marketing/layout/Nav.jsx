@@ -15,7 +15,7 @@ function Wordmark() {
   return (
     <a href="/" aria-label="Cortexi — לעמוד הבית">
       <img
-        src="/logo/cortexi-logo.png"
+        src="/logo/cortexi-logo-nav.png"
         alt="Cortexi — מערכת AI לשיווק דיגיטלי לעסקים"
         width={78}
         height={30}
