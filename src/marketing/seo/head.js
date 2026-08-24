@@ -35,12 +35,18 @@ const SOFTWARE_APPLICATION = {
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'ILS' },
 };
 
-// Mirrors src/marketing/content/pricing.js (the Stripe-wired catalog)
+// Mirrors src/marketing/content/pricing.js (the Stripe-wired catalog).
+// SoftwareApplication (not Product): SaaS subscriptions carry no shipping/
+// return semantics, so Google stops expecting shippingDetails /
+// hasMerchantReturnPolicy; brand must be an inline Brand object, not an @id ref.
 const PRICING_PRODUCT = {
-  '@type': 'Product',
+  '@type': 'SoftwareApplication',
   name: 'Cortexi',
   description: 'מערכת AI לניהול שיווק ומודיעין תחרותי לעסקים קטנים',
-  brand: { '@id': `${SITE_URL}/#organization` },
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Web',
+  inLanguage: 'he',
+  brand: { '@type': 'Brand', name: 'Cortexi' },
   offers: [
     { name: 'חינם', price: '0' },
     { name: 'Starter', price: '149' },
@@ -53,6 +59,7 @@ const PRICING_PRODUCT = {
     priceCurrency: 'ILS',
     url: `${SITE_URL}/pricing`,
     availability: 'https://schema.org/InStock',
+    category: 'SaaS',
   })),
 };
 
