@@ -2,9 +2,10 @@ import React from 'react';
 import { Star, Eye, Lightbulb, Megaphone, Users, Percent, Calendar, Check } from 'lucide-react';
 import { Container, Section, GradientText, Badge, CtaButton } from '../ui/primitives.jsx';
 import { MODULES, featurePath } from '../content/modules.js';
-import HeroProductReplica from '../mockups/HeroProductReplica.jsx';
+import DashboardWindowMockup from '../mockups/DashboardWindowMockup.jsx';
 import DailyBriefCard from '../mockups/DailyBriefCard.jsx';
 import useReveal from '../lib/useReveal.js';
+import useParallax from '../lib/useParallax.js';
 
 const MODULE_ICONS = { star: Star, eye: Eye, lightbulb: Lightbulb, megaphone: Megaphone, users: Users, percent: Percent, calendar: Calendar };
 
@@ -57,32 +58,42 @@ function SectionHeading({ eyebrow, title, sub }) {
 
 export default function Home() {
   const revealRef = useReveal();
+  const dotgridRef = useParallax(0.045, { clamp: 14 });
+  const windowRef = useParallax(0.10, { clamp: 26 });
+  const headlineRef = useParallax(-0.16, { clamp: 34 });
+  const ctaRef = useParallax(-0.16, { clamp: 34 });
 
   return (
     <div ref={revealRef}>
-      {/* ── Hero: replica of the product home screen ─────────────────────── */}
+      {/* ── Hero: headline+CTA row, then a "look into the system" window ─── */}
       <div className="relative">
-        <div className="absolute inset-0 mkt-dotgrid mkt-dotgrid-fade" aria-hidden="true" />
-        <Container className="relative pt-16 md:pt-24 pb-16 text-center">
-          <Badge>Inspired by the brain. Built for intelligence.</Badge>
-          <h1 className="mt-6 text-[34px] md:text-[52px] leading-[1.12] max-w-3xl mx-auto">
-            מערכת <GradientText>AI</GradientText> לשיווק דיגיטלי, ניהול מוניטין ומעקב מתחרים
-          </h1>
-          <p className="mt-5 text-[16px] md:text-[17.5px] leading-relaxed max-w-2xl mx-auto" style={{ color: 'var(--mkt-ink-2)' }}>
-            בינה מלאכותית לעסקים קטנים: Cortexi עוקבת אחרי השוק, המתחרים והביקורות שלך מסביב לשעון, ומגישה פעולות מוכנות — בעברית. אתה רק מאשר.
-          </p>
+        <div ref={dotgridRef} className="absolute inset-0 mkt-dotgrid mkt-dotgrid-fade" aria-hidden="true" />
+        <Container className="relative pt-16 md:pt-20 pb-16">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 text-center md:text-right">
+            <div ref={headlineRef} className="max-w-xl mx-auto md:mx-0">
+              <Badge>Inspired by the brain. Built for intelligence.</Badge>
+              <h1 className="mt-6 text-[32px] md:text-[46px] leading-[1.12]">
+                מערכת <GradientText>AI</GradientText> לשיווק דיגיטלי, ניהול מוניטין ומעקב מתחרים
+              </h1>
+              <p className="mt-5 text-[16px] leading-relaxed" style={{ color: 'var(--mkt-ink-2)' }}>
+                בינה מלאכותית לעסקים קטנים: Cortexi עוקבת אחרי השוק, המתחרים והביקורות שלך מסביב לשעון, ומגישה פעולות מוכנות — בעברית. אתה רק מאשר.
+              </p>
+            </div>
 
-          <div className="mt-10">
-            <HeroProductReplica />
+            <div ref={ctaRef} className="flex flex-col items-center md:items-end gap-3 shrink-0 mx-auto md:mx-0">
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <CtaButton href="/sign-up" variant="gradient">התחל בחינם</CtaButton>
+                <CtaButton href="/how-it-works" variant="ghost">איך זה עובד</CtaButton>
+              </div>
+              <p className="text-[12.5px]" style={{ color: 'var(--mkt-muted)' }}>
+                ללא כרטיס אשראי · ביטול בכל עת · תובנה ראשונה תוך 60 שניות
+              </p>
+            </div>
           </div>
 
-          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <CtaButton href="/sign-up" variant="gradient">התחל בחינם</CtaButton>
-            <CtaButton href="/how-it-works" variant="ghost">איך זה עובד</CtaButton>
+          <div ref={windowRef} className="mt-14">
+            <DashboardWindowMockup />
           </div>
-          <p className="mt-5 text-[12.5px]" style={{ color: 'var(--mkt-muted)' }}>
-            ללא כרטיס אשראי · ביטול בכל עת · תובנה ראשונה תוך 60 שניות
-          </p>
         </Container>
       </div>
 
