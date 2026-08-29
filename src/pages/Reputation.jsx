@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import RequestReviewModal from '@/components/reputation/RequestReviewModal';
 import ScheduledReviewRequests from '@/components/reputation/ScheduledReviewRequests';
 import RatingTrendChart from '@/components/reputation/RatingTrendChart';
-import TopThemesChart from '@/components/reputation/TopThemesChart';
+import TopThemesChart, { COLORS } from '@/components/reputation/TopThemesChart';
 import ReviewsFilterBar from '@/components/reputation/ReviewsFilterBar';
 import StatCards from '@/components/shared/StatCards';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -541,9 +541,9 @@ export default function Reputation() {
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-3" dir="rtl">
             <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1 text-[10px] text-foreground-muted"><span className="w-2 h-2 rounded-full bg-green-400 inline-block" /> חיובי</span>
-              <span className="flex items-center gap-1 text-[10px] text-foreground-muted"><span className="w-2 h-2 rounded-full bg-rose-400 inline-block" /> שלילי</span>
-              <span className="flex items-center gap-1 text-[10px] text-foreground-muted"><span className="w-2 h-2 rounded-full bg-amber-300 inline-block" /> ניטרלי</span>
+              <span className="flex items-center gap-1 text-[10px] text-foreground-muted"><span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: COLORS.positive }} /> חיובי</span>
+              <span className="flex items-center gap-1 text-[10px] text-foreground-muted"><span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: COLORS.negative }} /> שלילי</span>
+              <span className="flex items-center gap-1 text-[10px] text-foreground-muted"><span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: COLORS.neutral }} /> ניטרלי</span>
             </div>
             <span className="text-[13px] font-semibold text-foreground">נושאים מובילים <span className="text-foreground-muted font-normal text-[11px]">— 90 יום</span></span>
           </div>

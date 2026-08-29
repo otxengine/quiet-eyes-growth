@@ -1,6 +1,6 @@
-import { BarChart, Bar, XAxis, YAxis, ReferenceLine, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
 
-const COLORS = { positive: '#4ade80', neutral: '#fcd34d', negative: '#fb7185' };
+export const COLORS = { positive: '#2a78d6', neutral: '#c3c2b7', negative: '#e34948' };
 const Y_AXIS_WIDTH = 80;
 
 // recharts doesn't shrink the cursor rect for a right-oriented YAxis, so it
@@ -17,9 +17,9 @@ function CustomTooltip(props) {
   return (
     <div dir="rtl" className="bg-white border border-gray-200 rounded-lg shadow-sm px-3 py-2 text-[11px] space-y-1">
       <div className="font-semibold text-foreground">{t.label}</div>
-      <div className="text-green-600">חיובי: {t.positive}</div>
-      <div className="text-amber-600">ניטרלי: {t.neutral}</div>
-      <div className="text-rose-600">שלילי: {t.negative}</div>
+      <div className="text-[#2a78d6]">חיובי: {t.positive}</div>
+      <div className="text-foreground-muted">ניטרלי: {t.neutral}</div>
+      <div className="text-[#e34948]">שלילי: {t.negative}</div>
       <div className="text-foreground-muted">סה"כ: {t.total}</div>
     </div>
   );
@@ -35,10 +35,9 @@ export default function TopThemesChart({ topThemes = [], labelById = {} }) {
       neutral: t.neutral,
       negative: t.negative,
       total: t.total,
-      neg: -(t.negative / t.total) * 100,
-      neuLeft: -(t.neutral / t.total / 2) * 100,
-      neuRight: (t.neutral / t.total / 2) * 100,
-      pos: (t.positive / t.total) * 100,
+      negPct: (t.negative / t.total) * 100,
+      neuPct: (t.neutral / t.total) * 100,
+      posPct: (t.positive / t.total) * 100,
       net: (t.positive - t.negative) / t.total,
     }))
     .sort((a, b) => a.net - b.net);
@@ -47,7 +46,7 @@ export default function TopThemesChart({ topThemes = [], labelById = {} }) {
     <div style={{ height: data.length * 34 + 20 }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} layout="vertical" margin={{ top: 0, right: 8, bottom: 0, left: 0 }}>
-          <XAxis type="number" domain={[-100, 100]} hide />
+          <XAxis type="number" domain={[0, 118]} hide />
           <YAxis
             type="category"
             dataKey="label"
@@ -57,12 +56,12 @@ export default function TopThemesChart({ topThemes = [], labelById = {} }) {
             width={Y_AXIS_WIDTH}
             tick={{ fontSize: 12, fill: '#222' }}
           />
-          <ReferenceLine x={0} stroke="#e5e7eb" />
           <Tooltip content={<CustomTooltip />} cursor={<RowCursor />} />
-          <Bar dataKey="neg" stackId="s" fill={COLORS.negative} radius={[4, 0, 0, 4]} />
-          <Bar dataKey="neuLeft" stackId="s" fill={COLORS.neutral} />
-          <Bar dataKey="neuRight" stackId="s" fill={COLORS.neutral} />
-          <Bar dataKey="pos" stackId="s" fill={COLORS.positive} radius={[0, 4, 4, 0]} />
+          <Bar dataKey="negPct" stackId="s" fill={COLORS.negative} radius={[4, 0, 0, 4]} />
+          <Bar dataKey="neuPct" stackId="s" fill={COLORS.neutral} radius={0} />
+          <Bar dataKey="posPct" stackId="s" fill={COLORS.positive} radius={[0, 4, 4, 0]}>
+            <LabelList dataKey="total" position="right" style={{ fontSize: 10, fill: '#9ca3af' }} />
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </div>
