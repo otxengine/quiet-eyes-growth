@@ -8,17 +8,7 @@ import {
   PLATFORM_LABELS, PLATFORM_COLORS, API_BASE, timeAgo,
   PostDetailModal, AdDetailModal, useDeepAnalysis,
 } from '@/components/competitors/socialShared';
-
-const OFFER_MECHANIC_LABELS = {
-  percent_discount: '% הנחה', fixed_amount: 'הנחה קבועה', bogo: 'קנה קבל',
-  free_shipping: 'משלוח חינם', bundle: 'באנדל', gift_with_purchase: 'מתנה בקנייה',
-  free_trial: 'ניסיון חינם', giveaway: 'הגרלה', loyalty_perk: 'הטבת מועדון', other: 'אחר',
-};
-const AUDIENCE_INTENT_LABELS = {
-  new_customer: 'לקוחות חדשים', retention: 'שימור לקוחות', reactivation: 'הפעלה מחדש',
-  list_building: 'גיוס לרשימה', general: 'כללי',
-};
-const VALUE_FRAMING_LABELS = { relative: 'הנחה יחסית (%)', absolute: 'הנחה מוחלטת (₪)', both: 'יחסית ומוחלטת' };
+import { OFFER_MECHANIC_LABELS, AUDIENCE_INTENT_LABELS, VALUE_FRAMING_LABELS } from '@/lib/offerLabels';
 
 function pctDelta(offerVal, regularVal) {
   if (offerVal == null || regularVal == null || regularVal === 0) return null;

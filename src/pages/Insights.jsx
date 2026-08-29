@@ -21,6 +21,9 @@ import ScanOverlay from '@/components/dashboard/ScanOverlay';
 import PlanGate from '@/components/subscription/PlanGate';
 import { usePlan } from '@/lib/usePlan';
 import { getLimits } from '@/lib/planConfig';
+import OffersPillarSection from '@/components/insights/OffersPillarSection';
+import ReviewsPillarSection from '@/components/insights/ReviewsPillarSection';
+import SocialPillarSection from '@/components/insights/SocialPillarSection';
 
 const TYPE_META = {
   action_needed:       { label: 'פעולה נדרשת',    color: 'text-red-600',    bg: 'bg-red-50' },
@@ -1067,6 +1070,12 @@ export default function Insights() {
       <DemandGapSection bpId={bpId} />
 
       <IntelligenceSection businessProfile={businessProfile} />
+
+      <SocialPillarSection businessProfile={businessProfile} />
+
+      <ReviewsPillarSection businessProfile={businessProfile} />
+
+      <OffersPillarSection businessProfile={businessProfile} />
 
       {/* Upgrade Banner */}
       <div

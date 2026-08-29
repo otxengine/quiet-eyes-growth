@@ -2,10 +2,9 @@ import { useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import {
-  apiFetch, computeOutlierPosts, weeklyPostingRate, useAnalyzeContentTrends, useAnalyzeBioTrends, useSuggestBioFix, CollapsibleSection,
+  apiFetch, weeklyPostingRate, useAnalyzeContentTrends, useAnalyzeBioTrends, useSuggestBioFix, CollapsibleSection,
+  usePooledCompetitorOutlierPosts,
 } from '@/components/competitors/socialShared';
-
-const CONTENT_TRENDS_POOL_CAP = 20; // mirrors MAX_POSTS_PER_CALL in analyzeContentTrends.ts
 
 /**
  * Cross-competitor content-trends report — pools engagement-outlier posts and
@@ -20,18 +19,8 @@ export default function CompetitorContentTrends({ businessProfile }) {
   const bpId = businessProfile?.id;
   const queryClient = useQueryClient();
 
-  const { data: competitors = [] } = useQuery({
-    queryKey: ['socialCompetitors', bpId],
-    queryFn:  () => base44.entities.Competitor.filter({ linked_business: bpId, is_dismissed: { not: true }, not_relevant: { not: true } }),
-    enabled:  !!bpId,
-  });
+  const { competitors, allPosts, pooledOutlierPosts } = usePooledCompetitorOutlierPosts(bpId);
   const compIds = competitors.map(c => c.id);
-
-  const { data: allPosts = [] } = useQuery({
-    queryKey: ['socialPosts', bpId, compIds],
-    queryFn:  () => base44.entities.CompetitorPost.filter({ competitor_id: { in: compIds } }, '-posted_at', 300),
-    enabled:  !!bpId && compIds.length > 0,
-  });
 
   const { data: allProfiles = [] } = useQuery({
     queryKey: ['socialProfiles', bpId, compIds],
@@ -58,19 +47,6 @@ export default function CompetitorContentTrends({ businessProfile }) {
     if (!weeklyRates.length) return null;
     return weeklyRates.reduce((s, v) => s + v, 0) / weeklyRates.length;
   }, [allPosts]);
-
-  // Pools each competitor's own outlier posts (same detection as SocialCompetition's
-  // RivalCard) into one cross-competitor set.
-  const pooledOutlierPosts = useMemo(() => {
-    const byCompetitor = {};
-    for (const p of allPosts) (byCompetitor[p.competitor_id] ||= []).push(p);
-    const compNameById = Object.fromEntries(competitors.map(c => [c.id, c.name]));
-    return Object.entries(byCompetitor)
-      .flatMap(([competitorId, posts]) =>
-        computeOutlierPosts(posts).map(p => ({ ...p, competitor_id: competitorId, competitor_name: compNameById[competitorId] })))
-      .sort((a, b) => b.engagementMultiple - a.engagementMultiple)
-      .slice(0, CONTENT_TRENDS_POOL_CAP);
-  }, [allPosts, competitors]);
 
   const initialCopyExamples = useMemo(() => {
     try { return businessProfile?.content_trends_copy_examples ? JSON.parse(businessProfile.content_trends_copy_examples) : []; }

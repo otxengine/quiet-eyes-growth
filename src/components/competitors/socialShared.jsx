@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, BadgeCheck, Phone, Mail, MapPin, Link as LinkIcon, ChevronDown } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { base44 } from '@/api/base44Client';
@@ -548,6 +549,46 @@ export function useAnalyzeTopPerformers(outlierPosts, { businessProfileId, postT
   };
 
   return { analyzing, analyzeNow, insight };
+}
+
+// Mirrors MAX_POSTS_PER_CALL in analyzeContentTrends.ts.
+const POOLED_OUTLIER_POST_CAP = 20;
+
+/**
+ * Fetches a business's tracked competitors + their posts and pools each
+ * competitor's own engagement-outlier posts (computeOutlierPosts, applied
+ * per-competitor so platform baselines aren't blended across competitors)
+ * into one cross-competitor set, capped and sorted by engagementMultiple.
+ * Shared by CompetitorContentTrends.jsx (Marketing tab) and the Social
+ * pillar section (Insights page) so the pooling logic isn't duplicated a
+ * third time.
+ */
+export function usePooledCompetitorOutlierPosts(bpId, { cap = POOLED_OUTLIER_POST_CAP } = {}) {
+  const { data: competitors = [] } = useQuery({
+    queryKey: ['socialCompetitors', bpId],
+    queryFn:  () => base44.entities.Competitor.filter({ linked_business: bpId, is_dismissed: { not: true }, not_relevant: { not: true } }),
+    enabled:  !!bpId,
+  });
+  const compIds = competitors.map(c => c.id);
+
+  const { data: allPosts = [] } = useQuery({
+    queryKey: ['socialPosts', bpId, compIds],
+    queryFn:  () => base44.entities.CompetitorPost.filter({ competitor_id: { in: compIds } }, '-posted_at', 300),
+    enabled:  !!bpId && compIds.length > 0,
+  });
+
+  const pooledOutlierPosts = useMemo(() => {
+    const byCompetitor = {};
+    for (const p of allPosts) (byCompetitor[p.competitor_id] ||= []).push(p);
+    const compNameById = Object.fromEntries(competitors.map(c => [c.id, c.name]));
+    return Object.entries(byCompetitor)
+      .flatMap(([competitorId, posts]) =>
+        computeOutlierPosts(posts).map(p => ({ ...p, competitor_id: competitorId, competitor_name: compNameById[competitorId] })))
+      .sort((a, b) => b.engagementMultiple - a.engagementMultiple)
+      .slice(0, cap);
+  }, [allPosts, competitors, cap]);
+
+  return { competitors, allPosts, pooledOutlierPosts };
 }
 
 /**

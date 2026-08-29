@@ -124,6 +124,8 @@ import { competitorDataBootstrap } from './competitorDataBootstrap';
 import { compareGoogleMetrics } from './compareGoogleMetrics';
 import { topicTimeline } from './topicTimeline';
 import { getCompetitorReviewInsights } from './getCompetitorReviewInsights';
+import { analyzeOwnReviewInsights } from './analyzeOwnReviewInsights';
+import { analyzeCompetitorReviewInsightsPooled } from './analyzeCompetitorReviewInsightsPooled';
 import { reputationAdvisorChat } from './reputationAdvisorChat';
 import { collectCompetitorSocialPosts } from './collectCompetitorSocialPosts';
 import { collectCompetitorSocialStories } from './collectCompetitorSocialStories';
@@ -137,6 +139,7 @@ import { dedupeCompetitorPosts } from './dedupeCompetitorPosts';
 import { analyzeTopCompetitorPosts } from './analyzeTopCompetitorPosts';
 import { analyzeTopOwnPosts } from './analyzeTopOwnPosts';
 import { analyzeContentTrends } from './analyzeContentTrends';
+import { analyzeOffersLandscape } from './analyzeOffersLandscape';
 import { analyzeBioProfiles } from './analyzeBioProfiles';
 import { suggestBioFix } from './suggestBioFix';
 import { analyzeLogoTrends } from './analyzeLogoTrends';
@@ -283,6 +286,8 @@ const FUNCTION_MAP: Record<string, any> = {
   compareGoogleMetrics,
   topicTimeline,
   getCompetitorReviewInsights,
+  analyzeOwnReviewInsights,
+  analyzeCompetitorReviewInsightsPooled,
   reputationAdvisorChat,
   collectCompetitorSocialPosts,
   collectCompetitorSocialStories,
@@ -296,6 +301,7 @@ const FUNCTION_MAP: Record<string, any> = {
   analyzeTopCompetitorPosts,
   analyzeTopOwnPosts,
   analyzeContentTrends,
+  analyzeOffersLandscape,
   analyzeBioProfiles,
   suggestBioFix,
   analyzeLogoTrends,
