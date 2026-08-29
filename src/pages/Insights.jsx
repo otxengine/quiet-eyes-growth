@@ -5,7 +5,7 @@ import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 import { trackUxEvent } from '@/lib/trackUxEvent';
 import {
-  Loader2, Archive, Search, Zap, TrendingUp, RefreshCw,
+  Loader2, Archive, Search, Zap, TrendingUp,
   ChevronLeft, Clock, Star, ArrowUpRight,
   Eye, AlertTriangle, Sparkles, MessageSquare, Users, Calendar, ChevronDown,
 } from 'lucide-react';
@@ -212,49 +212,6 @@ function parseGapTags(signal) {
   return { score, timeKey };
 }
 
-function GapForecastBanner({ forecast, onRefresh, loading }) {
-  if (!forecast) return null;
-  return (
-    <div className="card-base p-5 border-r-4 border-green-500">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-green-600" />
-          <span className="text-[13px] font-semibold text-foreground">תחזית הכנסות חודשית</span>
-        </div>
-        <button onClick={onRefresh} disabled={loading}
-          className="text-[10px] text-foreground-muted hover:text-foreground transition-colors flex items-center gap-1">
-          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-          עדכן
-        </button>
-      </div>
-
-      <div className="grid grid-cols-3 gap-3 mb-3">
-        {[
-          { label: 'שמרני',  val: forecast.conservative_forecast, color: 'text-foreground' },
-          { label: 'ריאלי',  val: forecast.realistic_forecast,    color: 'text-green-600'  },
-          { label: 'אופטימי', val: forecast.optimistic_forecast,   color: 'text-blue-600'  },
-        ].map(({ label, val, color }) => (
-          <div key={label} className="text-center p-2.5 rounded-xl bg-secondary/50">
-            <p className="text-[9px] text-foreground-muted mb-0.5">{label}</p>
-            <p className={`text-[18px] font-bold ${color}`}>
-              {val > 0 ? `₪${(val / 1000).toFixed(0)}K` : '—'}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      {forecast.expected_deals > 0 && (
-        <div className="flex items-center gap-3 text-[11px] text-foreground-muted">
-          <span>{forecast.expected_deals} עסקאות צפויות</span>
-          {forecast.recommended_actions?.[0] && (
-            <span className="text-green-700 font-medium">· {forecast.recommended_actions[0]}</span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function TopGapOpportunity({ signal }) {
   const { timeKey } = parseGapTags(signal);
   const time = GAP_TIME_STYLES[timeKey] || GAP_TIME_STYLES.weeks;
@@ -354,24 +311,13 @@ function DemandGapSection({ bpId }) {
     }),
   });
 
-  const { data: forecast } = useQuery({
-    queryKey: ['revenueForecast', bpId],
-    queryFn: async () => {
-      const preds = await base44.entities.Prediction.filter({ linked_business: bpId, prediction_type: 'revenue_forecast' });
-      const p = preds?.[0];
-      if (!p?.summary) return null;
-      try { return JSON.parse(p.summary); } catch { return null; }
-    },
-    enabled: !!bpId,
-  });
-
   const runScan = async (fn) => {
     if (!bpId) return;
     setScanning(true);
     try {
       await base44.functions.invoke(fn, { businessProfileId: bpId });
-      await queryClient.invalidateQueries({ queryKey: fn === 'demandGapEngine' ? ['demandGaps', bpId] : ['revenueForecast', bpId] });
-      toast.success(fn === 'demandGapEngine' ? 'ניתוח פערי ביקוש הושלם' : 'תחזית הכנסות עודכנה');
+      await queryClient.invalidateQueries({ queryKey: ['demandGaps', bpId] });
+      toast.success('ניתוח פערי ביקוש הושלם');
     } catch (err) {
       console.error(`${fn} error:`, err);
       toast.error(`שגיאה: ${err?.message || 'נסה שוב'}`);
@@ -384,44 +330,6 @@ function DemandGapSection({ bpId }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-[16px] font-bold text-foreground flex items-center gap-2">
-            <Search className="w-4 h-4 text-primary" />
-            פערי ביקוש
-          </h2>
-          <p className="text-[11px] text-foreground-muted mt-0.5">ביקושים באזורך שאין להם מענה מקומי מספיק</p>
-        </div>
-        <button
-          onClick={() => runScan('demandGapEngine')}
-          disabled={scanning}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-foreground text-background text-[11px] font-semibold hover:opacity-90 transition-all disabled:opacity-60"
-        >
-          {scanning ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-          סרוק עכשיו
-        </button>
-      </div>
-
-      <GapForecastBanner
-        forecast={forecast}
-        onRefresh={() => runScan('revenueForecaster')}
-        loading={scanning}
-      />
-
-      {!forecast && (
-        <div className="card-base p-4 flex items-center justify-between">
-          <div>
-            <p className="text-[12px] font-semibold text-foreground">תחזית הכנסות חודשית</p>
-            <p className="text-[10px] text-foreground-muted">AI ינתח את הצינור ויחזה הכנסות</p>
-          </div>
-          <button onClick={() => runScan('revenueForecaster')} disabled={scanning}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[11px] font-medium text-foreground-muted hover:text-foreground transition-all disabled:opacity-60">
-            {scanning ? <Loader2 className="w-3 h-3 animate-spin" /> : <TrendingUp className="w-3 h-3" />}
-            הפק תחזית
-          </button>
-        </div>
-      )}
-
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="w-5 h-5 animate-spin text-foreground-muted" />
@@ -931,6 +839,12 @@ export default function Insights() {
 
       <DailyBriefPanel businessProfile={businessProfile} />
 
+      <SocialPillarSection businessProfile={businessProfile} />
+
+      <ReviewsPillarSection businessProfile={businessProfile} />
+
+      <OffersPillarSection businessProfile={businessProfile} />
+
       <StatCards cards={statCards} />
 
       {urgentActions.length > 0 && (
@@ -1070,12 +984,6 @@ export default function Insights() {
       <DemandGapSection bpId={bpId} />
 
       <IntelligenceSection businessProfile={businessProfile} />
-
-      <SocialPillarSection businessProfile={businessProfile} />
-
-      <ReviewsPillarSection businessProfile={businessProfile} />
-
-      <OffersPillarSection businessProfile={businessProfile} />
 
       {/* Upgrade Banner */}
       <div
