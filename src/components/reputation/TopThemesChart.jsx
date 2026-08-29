@@ -1,6 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
 
-export const COLORS = { positive: '#2a78d6', neutral: '#c3c2b7', negative: '#e34948' };
+export const COLORS = { positive: '#10b981', neutral: '#c3c2b7', negative: '#e34948' };
 const Y_AXIS_WIDTH = 80;
 
 // recharts doesn't shrink the cursor rect for a right-oriented YAxis, so it
@@ -17,9 +17,9 @@ function CustomTooltip(props) {
   return (
     <div dir="rtl" className="bg-white border border-gray-200 rounded-lg shadow-sm px-3 py-2 text-[11px] space-y-1">
       <div className="font-semibold text-foreground">{t.label}</div>
-      <div className="text-[#2a78d6]">חיובי: {t.positive}</div>
+      <div style={{ color: COLORS.positive }}>חיובי: {t.positive}</div>
       <div className="text-foreground-muted">ניטרלי: {t.neutral}</div>
-      <div className="text-[#e34948]">שלילי: {t.negative}</div>
+      <div style={{ color: COLORS.negative }}>שלילי: {t.negative}</div>
       <div className="text-foreground-muted">סה"כ: {t.total}</div>
     </div>
   );
@@ -45,8 +45,8 @@ export default function TopThemesChart({ topThemes = [], labelById = {} }) {
   return (
     <div style={{ height: data.length * 34 + 20 }}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} layout="vertical" margin={{ top: 0, right: 8, bottom: 0, left: 0 }}>
-          <XAxis type="number" domain={[0, 118]} hide />
+        <BarChart data={data} layout="vertical" margin={{ top: 0, right: 32, bottom: 0, left: 0 }}>
+          <XAxis type="number" domain={[0, 100]} hide />
           <YAxis
             type="category"
             dataKey="label"
