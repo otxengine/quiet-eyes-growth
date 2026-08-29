@@ -983,7 +983,10 @@ export default function Insights() {
 
       <DemandGapSection bpId={bpId} />
 
-      <IntelligenceSection businessProfile={businessProfile} />
+      {/* IntelligenceSection removed for now (2026-08-29) — a meaningful share of
+          its data generators (detectTrends/detectEarlyTrends/synthesizeMarketInsights/
+          detectViralSignals) turned out to be manual-scan-only, not on the daily
+          scheduler, and had been silent for 10 days. Re-add once that's fixed. */}
 
       {/* Upgrade Banner */}
       <div
