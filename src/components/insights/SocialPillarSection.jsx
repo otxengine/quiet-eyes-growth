@@ -123,18 +123,19 @@ function OwnContentBlock({ businessProfile, queryClient }) {
 export default function SocialPillarSection({ businessProfile }) {
   const queryClient = useQueryClient();
 
-  const hasCompetitor = !!businessProfile?.content_trends_copy_insight || !!businessProfile?.content_trends_visual_insight;
-  const hasOwn = !!businessProfile?.outlier_insight;
-
-  if (!hasCompetitor && !hasOwn) return null;
-
+  // CompetitorContentBlock/OwnContentBlock always mount (not gated on
+  // businessProfile data already existing) — each owns a useStaleInsight
+  // call that must run to trigger the very first computation for a business
+  // with no data yet; a parent-level bailout here would prevent that fetch
+  // from ever firing. Each block already self-hides its own JSX via an
+  // internal guard once it knows it truly has nothing to show.
   return (
     <div className="card-base fade-in-up">
       <div className="px-5 py-3.5 border-b border-border">
         <h3 className="text-[16px] font-bold text-foreground">סושיאל</h3>
       </div>
-      {hasCompetitor && <CompetitorContentBlock businessProfile={businessProfile} queryClient={queryClient} />}
-      {hasOwn && <OwnContentBlock businessProfile={businessProfile} queryClient={queryClient} />}
+      <CompetitorContentBlock businessProfile={businessProfile} queryClient={queryClient} />
+      <OwnContentBlock businessProfile={businessProfile} queryClient={queryClient} />
     </div>
   );
 }
