@@ -3,7 +3,7 @@ import { useOutletContext, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { LONG_SCAN_TIMEOUT_MS } from '@/api/client';
-import { Loader2, RefreshCw, ChevronDown, Trophy, Megaphone } from 'lucide-react';
+import { Loader2, RefreshCw, ChevronDown, Megaphone } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -12,6 +12,7 @@ import {
   PostCard, AdCard, StoryCard, PostDetailModal, AdDetailModal, StoryDetailModal, useDeepAnalysis, ProfileHeaderWithToggle,
   computeOutlierPosts, useAnalyzeTopPerformers, CollapsibleSection,
 } from '@/components/competitors/socialShared';
+import SocialInsightsComparison from '@/components/competitors/SocialInsightsComparison';
 
 function resolveSection(param) {
   if (!param) return null;
@@ -597,7 +598,13 @@ export default function SocialCompetition() {
     enabled:  !!bpId && compIds.length > 0,
   });
 
-  const { data: leaderboardData } = useQuery({
+  const { data: ownProfiles = [] } = useQuery({
+    queryKey: ['ownSocialProfiles', bpId],
+    queryFn:  () => base44.entities.BusinessSocialProfile.filter({ linked_business: bpId }),
+    enabled:  !!bpId,
+  });
+
+  const { data: leaderboardData, isLoading: loadingLeaderboard } = useQuery({
     queryKey: ['socialLeaderboard', bpId],
     queryFn:  () => apiFetch(`/competitors/social/leaderboard?businessProfileId=${bpId}`),
     enabled:  !!bpId,
@@ -770,29 +777,17 @@ export default function SocialCompetition() {
         </div>
       )}
 
-      {leaderboard.length > 0 && (
-        <div className="card-base p-4">
-          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5">
-            <Trophy className="w-3.5 h-3.5 text-amber-500" />
-            מובילי מעורבות — 30 יום אחרונים
-          </p>
-          <div className="space-y-1.5">
-            {leaderboard.slice(0, 10).map((row, i) => (
-              <button
-                key={row.competitor_id}
-                onClick={() => setSearchParams({ competitorId: row.competitor_id, section: 'feed' })}
-                className="w-full flex items-center gap-3 px-2.5 py-1.5 rounded-lg hover:bg-muted transition-colors text-right"
-              >
-                <span className={`w-5 text-xs font-bold flex-shrink-0 ${i === 0 ? 'text-amber-500' : 'text-muted-foreground'}`}>
-                  {i + 1}
-                </span>
-                <span className="flex-1 text-[12px] text-foreground truncate">{row.competitor_name}</span>
-                <span className="text-[11px] text-muted-foreground">{row.post_count} פוסטים</span>
-                <span className="text-[12px] font-semibold text-foreground w-16 text-left">{row.avg_interactions.toLocaleString()}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+      {bpId && (
+        <SocialInsightsComparison
+          competitors={competitors}
+          competitorProfiles={allProfiles}
+          ownProfiles={ownProfiles}
+          leaderboard={leaderboard}
+          ownRow={leaderboardData?.own ?? null}
+          businessName={businessProfile?.name}
+          onSelectCompetitor={(id) => setSearchParams({ competitorId: id, section: 'feed' })}
+          isLoading={loadingComps || loadingLeaderboard}
+        />
       )}
     </div>
   );

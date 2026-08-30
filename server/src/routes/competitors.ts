@@ -279,7 +279,22 @@ router.get('/social/leaderboard', async (req: Request, res: Response) => {
       }))
       .sort((a, b) => b.avg_interactions - a.avg_interactions);
 
-    return res.json({ leaderboard, window_days: WINDOW_DAYS });
+    // Same 30-day engagement metric, computed for the business's own posts so
+    // the frontend can show a "you vs competitors" benchmark row/bar.
+    const ownRows = await (prisma as any).$queryRawUnsafe(
+      `SELECT COUNT(*)::int AS post_count,
+              COALESCE(SUM(likes), 0)::int AS total_likes,
+              COALESCE(SUM(comments_count), 0)::int AS total_comments
+       FROM business_posts
+       WHERE linked_business = $1 AND posted_at::timestamptz >= $2::timestamptz`,
+      businessProfileId, since.toISOString(),
+    ) as { post_count: number; total_likes: number; total_comments: number }[];
+    const ownRow = ownRows[0];
+    const own = ownRow && ownRow.post_count > 0
+      ? { post_count: ownRow.post_count, avg_interactions: Math.round((ownRow.total_likes + ownRow.total_comments) / ownRow.post_count) }
+      : null;
+
+    return res.json({ leaderboard, own, window_days: WINDOW_DAYS });
   } catch (e: any) {
     return res.status(500).json({ error: e.message });
   }
