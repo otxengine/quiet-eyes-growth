@@ -17,7 +17,6 @@ const PLATFORM_ASPECT: Record<string, string> = {
   instagram_post:     '1:1',
   instagram_portrait: '3:4',   // 4:5 not supported by Imagen; 3:4 is closest
   instagram_story:    '9:16',
-  tiktok:             '9:16',
   facebook:           '4:3',
   facebook_landscape: '16:9',
   campaign:           '16:9',  // paid campaign banner (Facebook/Google)
@@ -28,7 +27,6 @@ const PLATFORM_FLUX_SIZE: Record<string, string | { width: number; height: numbe
   instagram_post:     'square_hd',                   // 1024×1024
   instagram_portrait: { width: 864, height: 1080 }, // ~4:5
   instagram_story:    'portrait_16_9',               // 576×1024
-  tiktok:             'portrait_16_9',               // 576×1024
   facebook:           'landscape_4_3',               // 1024×768
   facebook_landscape: 'landscape_16_9',              // 1024×576
   campaign:           'landscape_16_9',              // 1024×576 — campaign banner
@@ -392,7 +390,7 @@ function categoryToSector(category = ''): string {
  *   neither → sector fallback scene description
  *
  * Body: { businessProfileId, insight_text?, post_text?, custom_prompt?, force_regenerate?, platform? }
- * platform: 'instagram_post' (default) | 'instagram_portrait' | 'instagram_story' | 'tiktok' | 'facebook' | 'facebook_landscape'
+ * platform: 'instagram_post' (default) | 'instagram_portrait' | 'instagram_story' | 'facebook' | 'facebook_landscape'
  * Returns: { url, provider, is_stock, platform, prompt_used? }
  */
 export async function generateImage(req: Request, res: Response) {

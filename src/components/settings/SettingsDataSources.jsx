@@ -62,15 +62,6 @@ export default function SettingsDataSources({ form, setForm, onSave, saving }) {
             />
           </div>
           <div>
-            <label className={labelCls}>קישור לפרופיל טיקטוק</label>
-            <input
-              value={form.tiktok_url || ''}
-              onChange={(e) => setForm({ ...form, tiktok_url: e.target.value })}
-              placeholder="https://tiktok.com/@your-profile"
-              className={inputCls}
-            />
-          </div>
-          <div>
             <label className={labelCls}>כתובת אתר העסק</label>
             <input
               value={form.website_url || ''}

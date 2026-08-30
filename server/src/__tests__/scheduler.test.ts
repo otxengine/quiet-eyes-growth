@@ -6,7 +6,6 @@ jest.mock('../lib/agentMonitor',              () => ({ writeHeartbeat: jest.fn()
 jest.mock('../infra/logger',                  () => ({ createLogger: () => ({ info: jest.fn(), error: jest.fn(), warn: jest.fn() }) }));
 jest.mock('../orchestration/MasterOrchestrator', () => ({ runPipeline: jest.fn() }));
 jest.mock('../services/execution/executeOrQueue', () => ({ processScheduledAutoActions: jest.fn() }));
-jest.mock('../lib/tiktokTokenRefresh',        () => ({ refreshExpiringTikTokTokens: jest.fn() }));
 // Transitive deps loaded by route-function modules
 jest.mock('../lib/llm',                       () => ({ invokeLLM:            jest.fn() }));
 jest.mock('../lib/tavily',                    () => ({ tavilySearch:         jest.fn() }));

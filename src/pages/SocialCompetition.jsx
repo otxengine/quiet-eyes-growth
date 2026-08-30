@@ -333,9 +333,6 @@ function RivalCard({ competitor, posts, ads, stories, profiles, defaultSec, bpId
         {competitor.facebook_url && (
           <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">FB</span>
         )}
-        {competitor.tiktok_url && (
-          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">TT</span>
-        )}
         {posts.length > 0 && (
           <span className="text-[10px] text-muted-foreground">{posts.length} פוסטים</span>
         )}
@@ -354,10 +351,6 @@ function RivalCard({ competitor, posts, ads, stories, profiles, defaultSec, bpId
           {competitor.facebook_url && (
             <a href={competitor.facebook_url} target="_blank" rel="noopener noreferrer"
                className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 hover:opacity-80">Facebook ↗</a>
-          )}
-          {competitor.tiktok_url && (
-            <a href={competitor.tiktok_url} target="_blank" rel="noopener noreferrer"
-               className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 hover:opacity-80">TikTok ↗</a>
           )}
         </div>
 
@@ -584,7 +577,6 @@ export default function SocialCompetition() {
     queryFn:  () => base44.entities.CompetitorAdHistory.filter({ competitor_id: { in: compIds } }, '-last_seen_at', 300),
     enabled:  !!bpId && compIds.length > 0,
   });
-  const allAds = allAdsRaw.filter(a => a.platform !== 'tiktok');
 
   const { data: allStories = [], isLoading: loadingStories } = useQuery({
     queryKey: ['socialStories', bpId, compIds],
@@ -676,11 +668,11 @@ export default function SocialCompetition() {
 
   let visible = competitors;
   if (filter === 'with_posts') visible = visible.filter(c => allPosts.some(p => p.competitor_id === c.id));
-  if (filter === 'with_ads')   visible = visible.filter(c => allAds.some(a => a.competitor_id === c.id));
+  if (filter === 'with_ads')   visible = visible.filter(c => allAdsRaw.some(a => a.competitor_id === c.id));
   if (platformFilter) {
     visible = visible.filter(c =>
       allPosts.some(p => p.competitor_id === c.id && p.platform === platformFilter) ||
-      allAds.some(a   => a.competitor_id === c.id && a.platform === platformFilter) ||
+      allAdsRaw.some(a   => a.competitor_id === c.id && a.platform === platformFilter) ||
       allStories.some(s => s.competitor_id === c.id && s.platform === platformFilter)
     );
   }
@@ -714,7 +706,7 @@ export default function SocialCompetition() {
           </button>
         ))}
 
-        {['instagram', 'facebook', 'tiktok'].map(p => (
+        {['instagram', 'facebook'].map(p => (
           <button
             key={p}
             onClick={() => setPlatformFilter(platformFilter === p ? null : p)}
@@ -764,7 +756,7 @@ export default function SocialCompetition() {
               <RivalCard
                 competitor={comp}
                 posts={allPosts.filter(p => p.competitor_id === comp.id)}
-                ads={allAds.filter(a => a.competitor_id === comp.id)}
+                ads={allAdsRaw.filter(a => a.competitor_id === comp.id)}
                 stories={allStories.filter(s => s.competitor_id === comp.id)}
                 profiles={allProfiles.filter(p => p.competitor_id === comp.id)}
                 defaultSec={comp.id === focusId ? focusSection : null}

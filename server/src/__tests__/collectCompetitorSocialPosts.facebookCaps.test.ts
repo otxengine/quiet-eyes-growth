@@ -32,7 +32,7 @@ import { prisma } from '../db';
 import { runApifyActor } from '../lib/apify';
 import { collectCompetitorSocialPosts } from '../routes/functions/collectCompetitorSocialPosts';
 
-const COMP = { id: 'c1', name: 'אב-גד', not_relevant: false, tracking_status: 'approved', instagram_url: null, facebook_url: 'https://facebook.com/avgadgroup', tiktok_url: null };
+const COMP = { id: 'c1', name: 'אב-גד', not_relevant: false, tracking_status: 'approved', instagram_url: null, facebook_url: 'https://facebook.com/avgadgroup' };
 
 function mockRes() {
   const res: any = {};

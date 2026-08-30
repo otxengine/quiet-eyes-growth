@@ -1,12 +1,11 @@
 /**
- * KAN-218: extracts Instagram/Facebook/TikTok profile links from a competitor's
+ * KAN-218: extracts Instagram/Facebook profile links from a competitor's
  * own website HTML. DIY-only — every fetch below targets `websiteUrl` or
- * `origin + <secondary path>`, never instagram.com/facebook.com/tiktok.com/Apify.
+ * `origin + <secondary path>`, never instagram.com/facebook.com/Apify.
  */
 export interface SocialLinksResult {
   instagram_url: string | null;
   facebook_url: string | null;
-  tiktok_url: string | null;
 }
 
 const SECONDARY_PATHS = ['/contact', '/about', '/אודות'];
@@ -56,17 +55,11 @@ function matchFacebook(href: string): string | null {
   return seg && !FB_SKIP.includes(seg) ? href.trim() : null;
 }
 
-function matchTikTok(href: string): string | null {
-  const m = href.match(/tiktok\.com\/(@[\w.-]+)/i);
-  return m ? `https://www.tiktok.com/${m[1]}` : null;
-}
-
 function scanHtmlForSocialLinks(html: string): SocialLinksResult {
-  const result: SocialLinksResult = { instagram_url: null, facebook_url: null, tiktok_url: null };
+  const result: SocialLinksResult = { instagram_url: null, facebook_url: null };
   for (const href of extractHrefs(html)) {
     result.instagram_url ||= matchInstagram(href);
     result.facebook_url ||= matchFacebook(href);
-    result.tiktok_url ||= matchTikTok(href);
   }
   return result;
 }
@@ -74,15 +67,14 @@ function scanHtmlForSocialLinks(html: string): SocialLinksResult {
 function merge(into: SocialLinksResult, from: SocialLinksResult): void {
   into.instagram_url ||= from.instagram_url;
   into.facebook_url ||= from.facebook_url;
-  into.tiktok_url ||= from.tiktok_url;
 }
 
 function isComplete(result: SocialLinksResult): boolean {
-  return !!(result.instagram_url && result.facebook_url && result.tiktok_url);
+  return !!(result.instagram_url && result.facebook_url);
 }
 
 export async function extractSocialLinksFromWebsite(websiteUrl: string): Promise<SocialLinksResult> {
-  const result: SocialLinksResult = { instagram_url: null, facebook_url: null, tiktok_url: null };
+  const result: SocialLinksResult = { instagram_url: null, facebook_url: null };
 
   let origin: string;
   try { origin = new URL(websiteUrl).origin; } catch { return result; }

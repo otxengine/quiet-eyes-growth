@@ -170,12 +170,6 @@ const ACTION_DEFS = {
     url: insight?.campaign_url || `/marketing/create?summary=${encodeURIComponent(insight?.title || '')}`,
   }),
 
-  view_tiktok_audience: () => ({
-    label: 'קהל יעד TikTok',
-    icon: 'Users',
-    type: 'navigate',
-    url: '/marketing?tab=audiences',
-  }),
 };
 
 // ── Routing map ───────────────────────────────────────────────────────────────
@@ -237,13 +231,11 @@ const INSIGHT_ACTION_MAP = {
   trend_opportunity: [
     'create_campaign_with_audience',
     'draft_post',
-    'view_tiktok_audience',
     'create_task',
   ],
   campaign_opportunity: [
     'create_campaign_with_audience',
     'draft_post',
-    'view_tiktok_audience',
     'create_task',
   ],
   new_service: [
@@ -276,7 +268,6 @@ const INSIGHT_ACTION_MAP = {
   social_viral: [
     'draft_post',
     'create_campaign_with_audience',
-    'view_tiktok_audience',
     'create_task',
   ],
   future_prediction: [
@@ -346,7 +337,7 @@ export function getActionsForInsight(insightType, snapshot, insight = {}, max = 
  * relevant to a given insight type — used to filter LLM suggestions.
  *
  * Example: for 'opportunity' insight, returns
- * "חבור: facebook, instagram | לא חבור: google, tiktok | ביקורות ממתינות: 3"
+ * "חבור: facebook, instagram | לא חבור: google | ביקורות ממתינות: 3"
  */
 export function getRelevantSnapshotContext(insightType, snapshot) {
   if (!snapshot) return '';

@@ -88,7 +88,7 @@ export async function incrementalMemoryUpdate(
 
   // Update channel preferences
   const channelTags = tags.filter(t =>
-    ['instagram', 'facebook', 'whatsapp', 'tiktok', 'email', 'google', 'dashboard'].includes(t)
+    ['instagram', 'facebook', 'whatsapp', 'email', 'google', 'dashboard'].includes(t)
   );
   for (const ch of channelTags) {
     const current = channelPrefs[ch] ?? 0.5;
@@ -246,7 +246,7 @@ export async function fullMemoryCycle(
   // Channel preferences from positive feedback
   const channelVotes: Record<string, number> = {};
   for (const f of feedback.filter(e => (e.score ?? 0) > 0)) {
-    for (const ch of ['instagram', 'facebook', 'whatsapp', 'tiktok', 'email']) {
+    for (const ch of ['instagram', 'facebook', 'whatsapp', 'email']) {
       if (f.tags?.includes(ch)) channelVotes[ch] = (channelVotes[ch] || 0) + 1;
     }
   }

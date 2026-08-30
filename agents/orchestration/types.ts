@@ -245,7 +245,7 @@ export interface ViralPattern {
   business_id:     string;
   pattern_type:    "format" | "music" | "hashtag" | "timing" | "hook";
   pattern_value:   string;
-  platform:        "tiktok" | "instagram" | "facebook" | "youtube";
+  platform:        "instagram" | "facebook" | "youtube";
   virality_score:  number;
   geo_relevance:   string | null;
   peak_hour:       number | null;

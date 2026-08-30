@@ -4,17 +4,15 @@ function htmlResponse(html: string) {
   return { ok: true, text: () => Promise.resolve(html) };
 }
 
-const HOME_ALL_THREE = `
+const HOME_ALL = `
   <a href="https://instagram.com/pizzaroma">IG</a>
   <a href="https://www.facebook.com/pizzaroma">FB</a>
-  <a href="https://tiktok.com/@pizzaroma">TikTok</a>
 `;
 
 const HOME_NOISE_ONLY = `
   <a href="https://instagram.com/p/123">post</a>
   <a href="https://instagram.com/accounts/login">login</a>
   <a href="https://facebook.com/sharer/sharer.php?u=x">share</a>
-  <a href="https://tiktok.com/discover">discover</a>
 `;
 
 const EMPTY_HTML = `<html><body>no links here</body></html>`;
@@ -24,14 +22,13 @@ beforeEach(() => {
 });
 
 describe('extractSocialLinksFromWebsite', () => {
-  test('AC1/AC3: happy path extracts all three platforms from the homepage and short-circuits', async () => {
-    global.fetch = jest.fn().mockResolvedValue(htmlResponse(HOME_ALL_THREE)) as any;
+  test('AC1/AC3: happy path extracts both platforms from the homepage and short-circuits', async () => {
+    global.fetch = jest.fn().mockResolvedValue(htmlResponse(HOME_ALL)) as any;
 
     const result = await extractSocialLinksFromWebsite('https://pizzaroma.com');
 
     expect(result.instagram_url).toBe('https://www.instagram.com/pizzaroma/');
     expect(result.facebook_url).toBe('https://www.facebook.com/pizzaroma');
-    expect(result.tiktok_url).toBe('https://www.tiktok.com/@pizzaroma');
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -42,13 +39,12 @@ describe('extractSocialLinksFromWebsite', () => {
 
     expect(result.instagram_url).toBeNull();
     expect(result.facebook_url).toBeNull();
-    expect(result.tiktok_url).toBeNull();
   });
 
   test('AC1: falls back to a secondary page when the homepage has nothing', async () => {
     const fetchMock = jest.fn()
       .mockResolvedValueOnce(htmlResponse(EMPTY_HTML))
-      .mockResolvedValueOnce(htmlResponse(HOME_ALL_THREE));
+      .mockResolvedValueOnce(htmlResponse(HOME_ALL));
     global.fetch = fetchMock as any;
 
     const result = await extractSocialLinksFromWebsite('https://pizzaroma.com');
@@ -58,19 +54,17 @@ describe('extractSocialLinksFromWebsite', () => {
     expect(fetchMock.mock.calls[1][0]).toBe('https://pizzaroma.com/contact');
   });
 
-  test('AC1: fills platforms across multiple secondary pages and short-circuits once complete', async () => {
+  test('AC1: fills platforms across secondary pages and short-circuits once complete', async () => {
     const fetchMock = jest.fn()
       .mockResolvedValueOnce(htmlResponse('<a href="https://instagram.com/pizzaroma">IG</a>'))       // home
-      .mockResolvedValueOnce(htmlResponse('<a href="https://facebook.com/pizzaroma">FB</a>'))         // /contact
-      .mockResolvedValueOnce(htmlResponse('<a href="https://tiktok.com/@pizzaroma">TikTok</a>'));     // /about
+      .mockResolvedValueOnce(htmlResponse('<a href="https://facebook.com/pizzaroma">FB</a>'));        // /contact
     global.fetch = fetchMock as any;
 
     const result = await extractSocialLinksFromWebsite('https://pizzaroma.com');
 
     expect(result.instagram_url).toBe('https://www.instagram.com/pizzaroma/');
     expect(result.facebook_url).toBe('https://facebook.com/pizzaroma');
-    expect(result.tiktok_url).toBe('https://www.tiktok.com/@pizzaroma');
-    expect(fetchMock).toHaveBeenCalledTimes(3); // home + /contact + /about — /אודות never fetched
+    expect(fetchMock).toHaveBeenCalledTimes(2); // home + /contact — /about and /אודות never fetched
   });
 
   test('facebook.com/fb.com: first-encountered match wins in document order', async () => {
@@ -89,7 +83,7 @@ describe('extractSocialLinksFromWebsite', () => {
 
     const result = await extractSocialLinksFromWebsite('https://pizzaroma.com');
 
-    expect(result).toEqual({ instagram_url: null, facebook_url: null, tiktok_url: null });
+    expect(result).toEqual({ instagram_url: null, facebook_url: null });
   });
 
   test('AC5: soft-fails to empties on timeout (abort), never throws', async () => {
@@ -97,7 +91,7 @@ describe('extractSocialLinksFromWebsite', () => {
 
     const result = await extractSocialLinksFromWebsite('https://pizzaroma.com');
 
-    expect(result).toEqual({ instagram_url: null, facebook_url: null, tiktok_url: null });
+    expect(result).toEqual({ instagram_url: null, facebook_url: null });
   });
 
   test('AC3: returns empties when nothing is found on the homepage or any secondary page', async () => {
@@ -106,7 +100,7 @@ describe('extractSocialLinksFromWebsite', () => {
 
     const result = await extractSocialLinksFromWebsite('https://pizzaroma.com');
 
-    expect(result).toEqual({ instagram_url: null, facebook_url: null, tiktok_url: null });
+    expect(result).toEqual({ instagram_url: null, facebook_url: null });
     expect(fetchMock).toHaveBeenCalledTimes(4); // home + /contact + /about + /אודות
   });
 
@@ -121,7 +115,7 @@ describe('extractSocialLinksFromWebsite', () => {
     }
   });
 
-  test('KAN-223 IL sampling: fills all three from a real IL business footer', async () => {
+  test('KAN-223 IL sampling: fills both platforms from a real IL business footer', async () => {
     global.fetch = jest.fn().mockResolvedValue(htmlResponse(`
       <html><body>
         <header><a href="/menu">תפריט</a></header>
@@ -129,7 +123,6 @@ describe('extractSocialLinksFromWebsite', () => {
           <p>פיצה רומא © 2026 - כל הזכויות שמורות</p>
           <a href="https://www.instagram.com/pizza_roma_il">אינסטגרם</a>
           <a href="https://www.facebook.com/pizzaromatlv">פייסבוק</a>
-          <a href="https://www.tiktok.com/@pizzaromatlv">טיקטוק</a>
         </footer>
       </body></html>
     `)) as any;
@@ -138,7 +131,6 @@ describe('extractSocialLinksFromWebsite', () => {
 
     expect(result.instagram_url).toBe('https://www.instagram.com/pizza_roma_il/');
     expect(result.facebook_url).toBe('https://www.facebook.com/pizzaromatlv');
-    expect(result.tiktok_url).toBe('https://www.tiktok.com/@pizzaromatlv');
   });
 
   test('malformed URL input resolves to empties without fetching', async () => {
@@ -147,7 +139,7 @@ describe('extractSocialLinksFromWebsite', () => {
 
     const result = await extractSocialLinksFromWebsite('not-a-url');
 
-    expect(result).toEqual({ instagram_url: null, facebook_url: null, tiktok_url: null });
+    expect(result).toEqual({ instagram_url: null, facebook_url: null });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

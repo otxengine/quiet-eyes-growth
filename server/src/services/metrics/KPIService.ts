@@ -698,7 +698,6 @@ export async function computeUrlEnrichmentMetrics(tenantId: string, windowDays =
     website_url: string | null; website_url_source: string | null;
     instagram_url: string | null; instagram_url_source: string | null;
     facebook_url: string | null; facebook_url_source: string | null;
-    tiktok_url: string | null; tiktok_url_source: string | null;
     social_pages_crawled_at: string | null;
     manual_url_fields: string[] | null;
   };
@@ -709,7 +708,6 @@ export async function computeUrlEnrichmentMetrics(tenantId: string, windowDays =
       `SELECT c.created_date, c.website_url, c.website_url_source,
               c.instagram_url, c.instagram_url_source,
               c.facebook_url, c.facebook_url_source,
-              c.tiktok_url, c.tiktok_url_source,
               c.social_pages_crawled_at, c.manual_url_fields
        FROM competitors c
        JOIN business_profiles bp ON bp.id = c.linked_business
@@ -740,7 +738,6 @@ export async function computeUrlEnrichmentMetrics(tenantId: string, windowDays =
     ['website_url', 'website_url_source'],
     ['instagram_url', 'instagram_url_source'],
     ['facebook_url', 'facebook_url_source'],
-    ['tiktok_url', 'tiktok_url_source'],
   ];
   const SOCIAL_FIELDS = FIELDS.slice(1);
 
@@ -762,7 +759,7 @@ export async function computeUrlEnrichmentMetrics(tenantId: string, windowDays =
     }
   }
 
-  const emptySocial = rows.filter(r => !r.instagram_url && !r.facebook_url && !r.tiktok_url).length;
+  const emptySocial = rows.filter(r => !r.instagram_url && !r.facebook_url).length;
 
   const runCount = runRows.length;
   const failedRuns = runRows.filter(r => r.status === 'failed').length;

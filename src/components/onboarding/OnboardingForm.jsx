@@ -66,7 +66,6 @@ const SOCIAL_CHANNELS = [
   { key: 'website_url',   label: 'אתר',             icon: '🌐', placeholder: 'https://example.co.il' },
   { key: 'instagram_url', label: 'אינסטגרם',         icon: '📸', placeholder: 'https://instagram.com/...' },
   { key: 'facebook_url',  label: 'פייסבוק',          icon: '👥', placeholder: 'https://facebook.com/...' },
-  { key: 'tiktok_url',    label: 'טיקטוק',           icon: '🎵', placeholder: 'https://tiktok.com/@...' },
   { key: 'google_url',    label: 'Google Business',  icon: '📍', placeholder: 'https://g.page/...' },
 ];
 
@@ -182,7 +181,7 @@ export default function OnboardingForm() {
     name: '', city: '', category: '',
     relevant_services: [], description: '', price_tier: '',
     customer_sources: [], business_goal: '',
-    website_url: '', instagram_url: '', facebook_url: '', tiktok_url: '',
+    website_url: '', instagram_url: '', facebook_url: '',
     seed_info: '',
   });
   const scrollRef = useRef(null);
@@ -290,7 +289,6 @@ export default function OnboardingForm() {
         website_url:         formData.website_url  || undefined,
         instagram_url:       formData.instagram_url || undefined,
         facebook_url:        formData.facebook_url  || undefined,
-        tiktok_url:          formData.tiktok_url    || undefined,
         onboarding_completed: false,
         created_at:          new Date().toISOString(),
       });
@@ -441,7 +439,7 @@ export default function OnboardingForm() {
         );
 
       case 9: {
-        const hasIdentityInput = !!(formData.website_url || formData.instagram_url || formData.facebook_url || formData.tiktok_url || formData.seed_info?.trim());
+        const hasIdentityInput = !!(formData.website_url || formData.instagram_url || formData.facebook_url || formData.seed_info?.trim());
         return (
           <div className="space-y-2.5 max-w-sm">
             {SOCIAL_CHANNELS.map(ch => (
@@ -661,7 +659,7 @@ export default function OnboardingForm() {
     if (step === 4) return tempServices.length > 0 || otherService.trim().length > 0;
     if (step === 5) return true; // optional — description is no longer required
     if (step === 7) return tempSources.length > 0;
-    if (step === 9) return !!(formData.website_url || formData.instagram_url || formData.facebook_url || formData.tiktok_url || formData.seed_info?.trim());
+    if (step === 9) return !!(formData.website_url || formData.instagram_url || formData.facebook_url || formData.seed_info?.trim());
     return false; // auto-advance steps (3, 6, 8)
   };
 

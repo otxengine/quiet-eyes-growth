@@ -20,7 +20,6 @@ const PLATFORM_ICONS = {
   instagram: { icon: '📸', label: 'Instagram', color: '#e1306c' },
   tripadvisor:{ icon: '🦉', label: 'TripAdvisor', color: '#00af87' },
   waze:      { icon: '🗺️', label: 'Waze',      color: '#00d4ff' },
-  tiktok:    { icon: '🎵', label: 'TikTok',    color: '#000' },
   wolt:      { icon: '🛵', label: 'Wolt',      color: '#01dae8' },
   default:   { icon: '⭐', label: 'אחר',       color: '#9090A8' },
 };

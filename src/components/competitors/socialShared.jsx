@@ -4,11 +4,10 @@ import { ExternalLink, BadgeCheck, Phone, Mail, MapPin, Link as LinkIcon, Chevro
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { base44 } from '@/api/base44Client';
 
-export const PLATFORM_LABELS = { instagram: 'אינסטגרם', facebook: 'פייסבוק', tiktok: 'טיקטוק' };
+export const PLATFORM_LABELS = { instagram: 'אינסטגרם', facebook: 'פייסבוק' };
 export const PLATFORM_COLORS = {
   instagram: 'bg-pink-100 text-pink-700',
   facebook:  'bg-blue-100 text-blue-700',
-  tiktok:    'bg-gray-100 text-gray-800',
 };
 
 export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -484,7 +483,7 @@ const OUTLIER_MULTIPLIER = 2;
 const OUTLIER_MIN_SAMPLE = 3;
 
 // Posts whose engagement (likes + comments) is >=2x that competitor's own
-// average *for the same platform* — TikTok/Instagram/Facebook baselines
+// average *for the same platform* — Instagram/Facebook baselines
 // differ too much to average together.
 export function computeOutlierPosts(posts) {
   const byPlatform = {};

@@ -10,7 +10,6 @@ import { prisma } from '../db';
 import { createGoogleAdsCampaign, getGoogleAdsCampaignStats } from '../lib/googleAdsApi';
 import { createMetaAdsCampaign } from '../lib/metaAdsApi';
 import type { MetaAdPlacement, MetaAdType } from '../lib/metaAdsApi';
-import { createTikTokAdsCampaign } from '../lib/tiktokAdsApi';
 
 const router = Router();
 
@@ -248,78 +247,6 @@ router.post('/publish-meta-ads', async (req: Request, res: Response) => {
 
   } catch (err: any) {
     console.error('[publish-meta-ads]', err.message);
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-// ── Publish campaign to TikTok Ads ───────────────────────────────────────────
-router.post('/publish-tiktok-ads', async (req: Request, res: Response) => {
-  const { campaignId, businessId } = req.body;
-  if (!campaignId || !businessId) {
-    return res.status(400).json({ error: 'Missing campaignId or businessId' });
-  }
-
-  try {
-    // 1. Load campaign
-    const campaign = await prisma.campaign.findFirst({
-      where: { id: campaignId, linked_business: businessId },
-    });
-    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
-    if (campaign.platform !== 'tiktok') {
-      return res.status(400).json({ error: 'Campaign platform is not TikTok' });
-    }
-
-    // 2. Load TikTok Ads credentials
-    const rows = await prisma.$queryRawUnsafe<Array<{
-      access_token: string; page_id: string | null;
-    }>>(
-      `SELECT access_token, page_id FROM social_accounts
-       WHERE linked_business=$1 AND platform='tiktok_ads' AND is_connected=true LIMIT 1`,
-      businessId,
-    );
-    const adsAccount = rows[0];
-    if (!adsAccount) {
-      return res.status(400).json({ error: 'TikTok Ads not connected — go to Integrations and connect first' });
-    }
-    if (!adsAccount.page_id) {
-      return res.status(400).json({ error: 'TikTok Advertiser ID missing' });
-    }
-
-    // 3. Build date range
-    const start = new Date();
-    const end   = new Date(start.getTime() + (campaign.campaign_days || 7) * 86400000);
-
-    // 4. Publish to TikTok Ads
-    const result = await createTikTokAdsCampaign({
-      accessToken:    adsAccount.access_token,
-      advertiserId:   adsAccount.page_id,
-      name:           campaign.title || 'OTX Campaign',
-      objective:      (campaign.objective as any) || 'traffic',
-      dailyBudgetIls: campaign.daily_budget_ils || 50,
-      startDate:      start.toISOString().slice(0, 10),
-      endDate:        end.toISOString().slice(0, 10),
-    });
-
-    // 5. Save external IDs + update status
-    await prisma.$executeRawUnsafe(
-      `UPDATE campaigns
-       SET status='active', external_campaign_id=$1, external_ad_group_id=$2, published_at=now()
-       WHERE id=$3`,
-      result.campaignId, result.adGroupId, campaignId,
-    );
-
-    console.log(`[tiktok_ads] Campaign published: ${result.campaignId} for business ${businessId}`);
-
-    return res.json({
-      success:        true,
-      campaignId:     result.campaignId,
-      adGroupId:      result.adGroupId,
-      adsManagerLink: result.adsManagerLink,
-      note:           'Campaign and Ad Group created (paused). Upload a video in TikTok Ads Manager to activate.',
-    });
-
-  } catch (err: any) {
-    console.error('[publish-tiktok-ads]', err.message);
     return res.status(500).json({ error: err.message });
   }
 });

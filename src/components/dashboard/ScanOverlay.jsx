@@ -8,13 +8,11 @@ const SCAN_LABELS = [
   'אוסף אותות מהרשת...',
   'סורק פייסבוק ואינסטגרם...',
   'מנתח תגובות ורשתות חברתיות...',
-  'מנתח תוכן TikTok...',
   'סורק ביקורות גוגל...',
   'מנתח מודיעין שוק...',
   'מזהה מתחרים ושינויים...',
   'סורק לידים מהאינטרנט...',
   'מחפש לידים ברשתות...',
-  'סורק טרנדים TikTok...',
   'מזהה מגמות שוק...',
   'מגלה טרנדים מוקדמים...',
   'סורק סיגנלים ויראלים...',
@@ -37,7 +35,7 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
   const [, setCompleted] = useState({});
   const [results, setResults]     = useState({
     reviews: 0, collect: 0, social: 0, compete: 0, leads: 0,
-    tiktok_trends: 0, trends: 0, early_trends: 0, viral: 0,
+    trends: 0, early_trends: 0, viral: 0,
     alerts: 0, advisory: 0, predictions: 0, analyze: 0,
   });
   const [done, setDone]           = useState(false);
@@ -58,7 +56,7 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
     if (customSteps) {
       // ── Individual-step mode (backward compat for custom step lists) ──────
       const run = async () => {
-        const finalResults = { reviews: 0, collect: 0, social: 0, compete: 0, leads: 0, tiktok_trends: 0, trends: 0, early_trends: 0, viral: 0, alerts: 0, advisory: 0, predictions: 0, analyze: 0 };
+        const finalResults = { reviews: 0, collect: 0, social: 0, compete: 0, leads: 0, trends: 0, early_trends: 0, viral: 0, alerts: 0, advisory: 0, predictions: 0, analyze: 0 };
         for (let i = 0; i < customSteps.length; i++) {
           if (cancelledRef.current) return;
           setCurrentStep(i);
@@ -105,7 +103,6 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
             social:       r.collectSocialSignals?.new_signals || 0,
             compete:      r.runCompetitorIdentification?.competitors_found || 0,
             leads:        (r.runLeadGeneration?.leads_generated || 0) + (r.findSocialLeads?.leads_created || 0),
-            tiktok_trends: r.tiktokSectorTrendAgent?.trends_created || 0,
             trends:       r.detectTrends?.trends_created || 0,
             early_trends: r.detectEarlyTrends?.trends_created || 0,
             viral:        r.detectViralSignals?.signals_created || 0,
@@ -139,7 +136,7 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
 
   const totalSignals  = (results.collect || 0) + (results.social || 0);
   const totalLeads    = results.leads || 0;
-  const totalTrends   = (results.tiktok_trends || 0) + (results.trends || 0) + (results.early_trends || 0);
+  const totalTrends   = (results.trends || 0) + (results.early_trends || 0);
   const totalInsights = (results.alerts || 0) + (results.advisory || 0);
   const summary = [
     totalSignals > 0    ? `${totalSignals} אותות`           : null,

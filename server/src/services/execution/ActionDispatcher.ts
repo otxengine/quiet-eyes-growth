@@ -104,27 +104,6 @@ async function socialChannelHandler(task: ExecutionTask, rec: Recommendation): P
   }
 }
 
-// TikTok channel handler
-async function tiktokChannelHandler(task: ExecutionTask, rec: Recommendation): Promise<DispatchResult> {
-  try {
-    await executeOrQueue({
-      businessProfileId: task.business_id,
-      agentName:         'ActionDispatcher',
-      actionType:        'tiktok_post',
-      description:       rec.title || task.task_type,
-      payload: {
-        caption:  rec.draft_content || rec.body || rec.title,
-        videoUrl: (rec as any).video_url || null,
-      },
-      revenueImpact: 0,
-      autoExecuteAfterHours: 24,
-    });
-    return { success: true, result: 'Queued via executeOrQueue → tiktok', metadata: {} };
-  } catch (e: any) {
-    return { success: false, result: e.message, metadata: {} };
-  }
-}
-
 // Email channel handler
 async function emailChannelHandler(task: ExecutionTask, rec: Recommendation): Promise<DispatchResult> {
   try {
@@ -156,7 +135,6 @@ const CHANNEL_HANDLERS: Record<string, ChannelHandler> = {
   facebook:  socialChannelHandler,
   whatsapp:  socialChannelHandler,
   google:    socialChannelHandler,
-  tiktok:    tiktokChannelHandler,
   email:     emailChannelHandler,
 };
 

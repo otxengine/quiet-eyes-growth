@@ -63,7 +63,7 @@ describe('AC1 KAN-21 — upsertSocialAccount', () => {
   });
 
   test('access_token is encrypted before storage (security NFR §7.4)', async () => {
-    await upsertSocialAccount('biz-1', 'tiktok_business', { account_name: 'TikTok Biz', access_token: 'plain-token' });
+    await upsertSocialAccount('biz-1', 'facebook_page', { account_name: 'FB Biz', access_token: 'plain-token' });
 
     expect(encrypt).toHaveBeenCalledWith('plain-token');
     expect(saCreate).toHaveBeenCalledWith(expect.objectContaining({

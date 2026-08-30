@@ -6,7 +6,7 @@
 import { runApifyActor, hasApifyKey } from './apify';
 import { tavilySearch } from './tavily';
 
-export type SocialPlatform = 'facebook' | 'instagram' | 'tiktok';
+export type SocialPlatform = 'facebook' | 'instagram';
 
 export interface SocialAboutResult {
   platform: SocialPlatform;
@@ -23,7 +23,6 @@ export interface SocialAboutCacheEntry extends SocialAboutResult {
 export interface FetchSocialPageAboutUrls {
   facebookUrl?: string;
   instagramUrl?: string;
-  tiktokUrl?: string;
 }
 
 export interface FetchSocialPageAboutOptions {
@@ -39,7 +38,6 @@ const DEFAULT_TTL_DAYS = 14;
 // ponytail: FB actor id is a placeholder — "Actor IDs may evolve; the lock is Apify scrape" (ticket).
 const FACEBOOK_ABOUT_ACTOR = 'apify~facebook-pages-scraper';
 const INSTAGRAM_ACTOR      = 'apify~instagram-scraper';
-const TIKTOK_ACTOR         = 'clockworks~tiktok-profile-scraper';
 
 function usernameFromUrl(url: string): string {
   return url.replace(/\/+$/, '').split('/').pop() || url;
@@ -59,17 +57,9 @@ async function scrapeInstagram(profileUrl: string): Promise<SocialAboutResult | 
   return { platform: 'instagram', aboutText, pageName: item.fullName || item.username, profileUrl, raw: item };
 }
 
-async function scrapeTikTok(profileUrl: string): Promise<SocialAboutResult | null> {
-  const [item] = await runApifyActor(TIKTOK_ACTOR, { profiles: [usernameFromUrl(profileUrl)] });
-  const aboutText = item?.authorMeta?.signature;
-  if (!aboutText) return null;
-  return { platform: 'tiktok', aboutText, pageName: item.authorMeta?.nickName, profileUrl, raw: item };
-}
-
 const SCRAPERS: Record<SocialPlatform, (url: string) => Promise<SocialAboutResult | null>> = {
   facebook: scrapeFacebook,
   instagram: scrapeInstagram,
-  tiktok: scrapeTikTok,
 };
 
 function freshCacheEntry(cache: SocialAboutCacheEntry[] | undefined, profileUrl: string, ttlDays: number): SocialAboutCacheEntry | null {
@@ -105,7 +95,7 @@ async function resolveOne(platform: SocialPlatform, profileUrl: string, opts: Fe
 }
 
 /**
- * Fetches page/profile About text (bio only, not a post feed) for FB/IG/TikTok via Apify,
+ * Fetches page/profile About text (bio only, not a post feed) for FB/IG via Apify,
  * with an optional Tavily fallback and a caller-supplied TTL cache. Soft-fails per platform —
  * never invents an About when nothing was found.
  */
@@ -116,7 +106,6 @@ export async function fetchSocialPageAbout(
   const targets: Array<[SocialPlatform, string | undefined]> = [
     ['facebook', urls.facebookUrl],
     ['instagram', urls.instagramUrl],
-    ['tiktok', urls.tiktokUrl],
   ];
 
   const results = await Promise.all(

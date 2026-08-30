@@ -20,7 +20,7 @@ interface TrendingFormat {
   type: "format" | "music" | "hashtag" | "timing" | "hook";
   value: string;
   virality_score: number;
-  platform: "tiktok" | "instagram" | "facebook" | "youtube";
+  platform: "instagram" | "facebook" | "youtube";
   peak_hour: number;
   source_url: string;
 }
@@ -35,10 +35,10 @@ interface ViralScript {
   hashtags: string[];
 }
 
-// ─── Data sourcing (stubbed — replace with real API calls: TikTok Research, Meta Graph) ──
+// ─── Data sourcing (stubbed — replace with real API calls: Meta Graph) ──
 
 async function scanViralFormats(geoCity: string): Promise<TrendingFormat[]> {
-  // In production: call TikTok Research API + Meta Graph API + SerpAPI for trending content.
+  // In production: call Meta Graph API + SerpAPI for trending content.
   // Returns formats currently accelerating in the region — detected before they peak.
   const serpApiKey = Deno.env.get("SERPAPI_KEY");
   if (!serpApiKey) {
@@ -47,7 +47,7 @@ async function scanViralFormats(geoCity: string): Promise<TrendingFormat[]> {
   }
 
   try {
-    const query = encodeURIComponent(`viral trends ${geoCity} site:tiktok.com OR site:instagram.com`);
+    const query = encodeURIComponent(`viral trends ${geoCity} site:instagram.com`);
     const res = await fetch(
       `https://serpapi.com/search.json?engine=google&q=${query}&api_key=${serpApiKey}&num=20`,
     );
@@ -61,9 +61,7 @@ async function scanViralFormats(geoCity: string): Promise<TrendingFormat[]> {
 
     for (const r of results.slice(0, MAX_FORMATS_PER_RUN)) {
       if (!r.title || !r.link) continue;
-      const platform = r.link.includes("tiktok")
-        ? "tiktok"
-        : r.link.includes("instagram")
+      const platform = r.link.includes("instagram")
         ? "instagram"
         : r.link.includes("youtube")
         ? "youtube"

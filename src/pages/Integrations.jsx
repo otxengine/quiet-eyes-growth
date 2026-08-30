@@ -45,14 +45,6 @@ const SOCIAL_PLATFORMS = [
     bg: '#EBF3FF',
     description: 'הגב לביקורות ישירות מהמערכת',
   },
-  {
-    id: 'tiktok_business',
-    name: 'TikTok',
-    icon: '🎵',
-    color: '#010101',
-    bg: '#F0F0F0',
-    description: 'פרסם סרטונים ותוכן',
-  },
 ];
 
 const ADS_PLATFORMS = [
@@ -71,14 +63,6 @@ const ADS_PLATFORMS = [
     color: '#1877F2',
     bg: '#EBF3FF',
     description: 'פרסם בפייסבוק, אינסטגרם ו-WhatsApp — החיוב עובר לחשבון Meta שלך',
-  },
-  {
-    id: 'tiktok_ads',
-    name: 'TikTok Ads',
-    icon: '🎵',
-    color: '#010101',
-    bg: '#F0F0F0',
-    description: 'פרסם קמפיינים בטיקטוק — החיוב עובר לחשבון TikTok Ads שלך',
   },
 ];
 

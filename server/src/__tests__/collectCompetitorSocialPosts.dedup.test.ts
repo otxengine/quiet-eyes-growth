@@ -46,7 +46,7 @@ import { runApifyActor } from '../lib/apify';
 import { collectCompetitorSocialPosts } from '../routes/functions/collectCompetitorSocialPosts';
 import { postContentHash } from '../lib/postContentHash';
 
-const COMP = { id: 'c1', name: 'פר דרייר', not_relevant: false, tracking_status: 'approved', instagram_url: 'https://instagram.com/perdrier', facebook_url: null, tiktok_url: null };
+const COMP = { id: 'c1', name: 'פר דרייר', not_relevant: false, tracking_status: 'approved', instagram_url: 'https://instagram.com/perdrier', facebook_url: null };
 
 function mockRes() {
   const res: any = {};

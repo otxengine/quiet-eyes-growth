@@ -132,8 +132,7 @@ export default function CampaignCreate() {
   // Form state
   const [postContent,  setPostContent]  = useState('');
   const [platform,     setPlatform]     = useState(
-    urlPlatform === 'tiktok'    ? 'tiktok'
-    : urlPlatform === 'instagram' ? 'instagram'
+    urlPlatform === 'instagram' ? 'instagram'
     : urlPlatform === 'facebook'  ? 'facebook'
     : 'facebook'
   );
@@ -733,7 +732,7 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
             <div className="flex items-start gap-2 bg-purple-50 border border-purple-100 rounded-lg px-3 py-2 mb-3">
               <Sparkles className="w-3.5 h-3.5 text-purple-500 mt-0.5 flex-shrink-0" />
               <div className="text-[11px] text-purple-700 leading-snug">
-                <p className="font-semibold mb-0.5">קהל יעד מזוהה מ-TikTok Intelligence</p>
+                <p className="font-semibold mb-0.5">קהל יעד מזוהה ממודיעין שוק</p>
                 {urlAudienceAge && <p>גיל: {urlAudienceAge}</p>}
                 {urlBestTime && <p>שעת פרסום מומלצת: {urlBestTime}</p>}
                 <p className="mt-1 text-purple-600">לחץ "צור קהל יעד" לטרגטינג מלא</p>

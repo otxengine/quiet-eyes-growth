@@ -27,7 +27,7 @@ const COMP = {
   content_themes: null, engagement_level: null, strongest_channel: null,
   social_post_frequency: null, social_followers_est: null,
   social_deep_analysis: null, social_deep_analysis_at: null,
-  google_place_id: 'place1', instagram_url: 'https://instagram.com/testco', facebook_url: null, tiktok_url: null,
+  google_place_id: 'place1', instagram_url: 'https://instagram.com/testco', facebook_url: null,
 };
 
 function mockRes() {

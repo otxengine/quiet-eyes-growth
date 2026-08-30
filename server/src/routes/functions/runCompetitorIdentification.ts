@@ -377,17 +377,16 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
 
     // AC8b (extended): classify a Maps candidate's url/domain into website vs. social —
     // restaurants especially often have only a Facebook/Instagram page, no real site.
-    interface DerivedUrls { website: string | null; instagram: string | null; facebook: string | null; tiktok: string | null; }
+    interface DerivedUrls { website: string | null; instagram: string | null; facebook: string | null; }
     const classifyUrl = (url: string | undefined, out: DerivedUrls) => {
       if (!url) return;
       if (/instagram\.com/i.test(url)) { out.instagram ||= url; return; }
       if (/facebook\.com/i.test(url)) { out.facebook ||= url; return; }
-      if (/tiktok\.com/i.test(url)) { out.tiktok ||= url; return; }
       if (/google\.com\/maps/i.test(url)) return; // never usable as website or social
       if (/^https?:\/\//i.test(url)) out.website ||= url;
     };
     const deriveUrls = async (m: MapsCandidate): Promise<DerivedUrls> => {
-      const out: DerivedUrls = { website: null, instagram: null, facebook: null, tiktok: null };
+      const out: DerivedUrls = { website: null, instagram: null, facebook: null };
       classifyUrl(m.url, out);
       if (m.domain) classifyUrl(`https://${m.domain}`, out);
       // Fallback: DataForSEO had no usable website — try Google's own Place Details data.
@@ -434,7 +433,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
       const mapMatch = findMapMatch(c.name, c.address);
       const urls: DerivedUrls = mapMatch
         ? await deriveUrls(mapMatch)
-        : { website: null, instagram: null, facebook: null, tiktok: null };
+        : { website: null, instagram: null, facebook: null };
 
       if (existingNames.has(nameKey)) {
         const existing = existingCompetitors.find(e => e.name.toLowerCase() === nameKey);
@@ -454,7 +453,6 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
               ...(urls.website && !(existing as any).website_url ? { website_url: urls.website } : {}),
               ...(urls.instagram && !(existing as any).instagram_url ? { instagram_url: urls.instagram } : {}),
               ...(urls.facebook && !(existing as any).facebook_url ? { facebook_url: urls.facebook } : {}),
-              ...(urls.tiktok && !(existing as any).tiktok_url ? { tiktok_url: urls.tiktok } : {}),
               // KAN-216 AC3: re-tag provenance on every scan that still sees this row
               ...(mapMatch ? { discovery_sources: JSON.stringify(mapMatch.discovery_sources) } : {}),
             },
@@ -481,7 +479,6 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
             website_url: urls.website || undefined,
             instagram_url: urls.instagram || undefined,
             facebook_url: urls.facebook || undefined,
-            tiktok_url: urls.tiktok || undefined,
             google_place_id: mapMatch?.place_id || undefined,
             // KAN-216 AC3: which API(s) surfaced this row
             discovery_sources: mapMatch ? JSON.stringify(mapMatch.discovery_sources) : undefined,

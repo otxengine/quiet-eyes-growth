@@ -1,11 +1,11 @@
 /**
  * SearchAPI wrapper — competitor ad intelligence
- * Covers: Meta Ads Library, TikTok Ads Library, Google Ads
+ * Covers: Meta Ads Library, Google Ads
  * Docs: https://www.searchapi.io
  *
  * Meta ads prefer the Apify actor (searchMetaAdsViaApify) when configured —
  * SearchAPI's meta_ad_library engine is the fallback, same priority already
- * used elsewhere in this file for Instagram/TikTok profile scraping.
+ * used elsewhere in this file for Instagram profile scraping.
  */
 import { runApifyActor, hasApifyKey } from './apify';
 
@@ -39,7 +39,7 @@ async function _fetch(params: Record<string, string>): Promise<any> {
 }
 
 export interface AdResult {
-  platform:       'facebook' | 'instagram' | 'tiktok' | 'google';
+  platform:       'facebook' | 'instagram' | 'google';
   title:          string;
   body:           string;
   cta:            string;
@@ -138,37 +138,6 @@ export async function searchMetaAdsViaApify(pageUrl: string): Promise<AdResult[]
   });
 }
 
-// ── TikTok Ads Library ────────────────────────────────────────────────────────
-// TikTok only supports EU countries in its library — use country=all
-export async function searchTikTokAds(query: string): Promise<AdResult[]> {
-  const data = await _fetch({ engine: 'tiktok_ads_library', q: query, country: 'all' });
-  if (!data?.ads) return [];
-
-  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000; // last 30 days
-
-  return (data.ads as any[])
-    .filter(ad => {
-      const last = ad.last_shown_datetime ? new Date(ad.last_shown_datetime).getTime() : 0;
-      return last >= cutoff;
-    })
-    .slice(0, 5)
-    .map(ad => ({
-      platform:       'tiktok' as const,
-      title:          '',
-      body:           '',
-      cta:            '',
-      link:           ad.video_link || '',
-      page_name:      ad.advertiser || '',
-      is_active:      true,
-      start_date:     ad.first_shown_datetime || null,
-      end_date:       ad.last_shown_datetime  || null,
-      audience_est:   ad.estimated_audience   || null,
-      external_ad_id: ad.id ? String(ad.id) : null,
-      media_url:      ad.thumbnail || null,
-      video_url:      ad.video_link || null,
-    }));
-}
-
 // ── Google Ads ────────────────────────────────────────────────────────────────
 export async function searchGoogleAds(query: string): Promise<AdResult[]> {
   const data = await _fetch({ engine: 'google', q: query, gl: 'il' });
@@ -223,30 +192,6 @@ export async function searchInstagramPosts(username: string): Promise<InstagramP
   return [];
 }
 
-// ── TikTok profile videos (fallback when Apify is unavailable) ────────────────
-export interface TikTokVideo {
-  title:         string;
-  views:         number;
-  likes:         number;
-  comments:      number;
-  url:           string;
-}
-
-export async function searchTikTokProfileVideos(username: string): Promise<TikTokVideo[]> {
-  const query = username.startsWith('@') ? username : `@${username}`;
-  const data = await _fetch({ engine: 'tiktok', q: query });
-  if (data?.videos?.length) {
-    return (data.videos as any[]).slice(0, 10).map((v: any) => ({
-      title:    v.title || v.desc || '',
-      views:    v.play_count || v.views || 0,
-      likes:    v.digg_count || v.likes || 0,
-      comments: v.comment_count || v.comments || 0,
-      url:      v.url || v.share_url || '',
-    })).filter(v => v.title);
-  }
-  return [];
-}
-
 // ── Google Trends Trending Now ────────────────────────────────────────────────
 export interface TrendingNowResult {
   title:            string;
@@ -284,16 +229,12 @@ export async function searchAllAds(
   category: string,
   city: string,
   facebookHandle?: string | null,
-  tiktokHandle?: string | null,
   facebookUrl?: string | null,
 ): Promise<AdResult[]> {
   let metaAds: AdResult[] = [];
   if (facebookUrl && hasApifyKey()) metaAds = await searchMetaAdsViaApify(facebookUrl);
   if (metaAds.length === 0 && facebookHandle) metaAds = await searchMetaAds(facebookHandle, 'IL');
 
-  const tiktokAds = tiktokHandle ? await searchTikTokAds(tiktokHandle) : [];
-  const combined = [...metaAds, ...tiktokAds];
-
-  // ponytail: Google only when both libraries are empty — saves credits (KAN-172)
-  return combined.length > 0 ? combined : searchGoogleAds(`${competitorName} ${category} ${city}`);
+  // ponytail: Google only when the library is empty — saves credits (KAN-172)
+  return metaAds.length > 0 ? metaAds : searchGoogleAds(`${competitorName} ${category} ${city}`);
 }

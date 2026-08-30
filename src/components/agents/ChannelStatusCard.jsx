@@ -6,7 +6,6 @@ const channelDefs = [
   { key: 'whatsapp', label: 'WhatsApp', icon: '💬', activeColor: 'bg-[#dcfce7] border-[#bbf7d0]' },
   { key: 'instagram', label: 'Instagram', icon: '📸', activeColor: 'bg-[#fce7f3] border-[#fbcfe8]' },
   { key: 'facebook', label: 'Facebook', icon: '👤', activeColor: 'bg-[#dbeafe] border-[#bfdbfe]' },
-  { key: 'tiktok', label: 'TikTok', icon: '🎵', activeColor: 'bg-[#f3e8ff] border-[#e9d5ff]' },
   { key: 'website', label: 'אתר', icon: '🌐', activeColor: 'bg-[#f0fdf4] border-[#dcfce7]' },
 ];
 

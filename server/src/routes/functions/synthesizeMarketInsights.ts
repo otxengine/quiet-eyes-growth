@@ -69,7 +69,7 @@ Return ONLY valid JSON:
   "recommended_action": "פועל ציווי + ערוץ + תוכן ספציפי",
   "action_label": "3-4 מילים עם פועל",
   "action_type": "social_post|promote|task|call",
-  "action_platform": "instagram|facebook|tiktok|google|whatsapp|wolt|ten_bis|website|general",
+  "action_platform": "instagram|facebook|google|whatsapp|wolt|ten_bis|website|general",
   "platform_reason": "מדוע פלטפורמה זו מתאימה לסקטור זה — נימוק ספציפי",
   "prefilled_text": "טקסט מוכן לשימוש ישיר בעברית — 40-70 מילים עם Hook + ערך + CTA",
   "time_minutes": 15,
@@ -155,7 +155,7 @@ Critical rules for insights:
 2. Every recommended_action must start with a specific imperative verb ("פרסם", "הגב", "התקשר", "שלח")
 3. action_label must be short, specific, with a verb (maximum 5 words)
 4. action_type: one of: social_post / respond / promote / call / task
-5. action_platform: the most suitable platform for this action — choose: instagram (visual content, audience 18-40, restaurants/beauty/fashion) | facebook (events, local audience, 30+) | tiktok (viral content, audience 16-30) | google (reviews, local SEO) | whatsapp (direct communication, blasts) | wolt / ten_bis (delivery promos) | general (when all platforms are relevant)
+5. action_platform: the most suitable platform for this action — choose: instagram (visual content, audience 18-40, restaurants/beauty/fashion) | facebook (events, local audience, 30+) | google (reviews, local SEO) | whatsapp (direct communication, blasts) | wolt / ten_bis (delivery promos) | general (when all platforms are relevant)
 6. platform_reason: one sentence in Hebrew — why this platform suits this business and this insight
 7. prefilled_text: ready-to-use action text (post/reply/offer) in Hebrew — 30-80 words
 8. time_minutes: realistic execution time (5-60 minutes)
@@ -168,7 +168,7 @@ Return ONLY valid JSON:
   "recommended_action": "פעולה ספציפית בעברית",
   "action_label": "פועל + עצם קצר",
   "action_type": "social_post|respond|promote|call|task",
-  "action_platform": "instagram|facebook|tiktok|google|whatsapp|wolt|ten_bis|general",
+  "action_platform": "instagram|facebook|google|whatsapp|wolt|ten_bis|general",
   "platform_reason": "מדוע פלטפורמה זו — משפט אחד",
   "prefilled_text": "טקסט מוכן לשימוש...",
   "time_minutes": 15,

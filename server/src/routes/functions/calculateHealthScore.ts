@@ -57,10 +57,10 @@ export async function calculateHealthScore(req: Request, res: Response) {
 
     const actedOutcomes = outcomes.filter(o => o.was_accepted === true);
     const engagementRate = outcomes.length > 0 ? actedOutcomes.length / outcomes.length : 0;
-    const channelsEnabled = ['whatsapp', 'instagram', 'facebook', 'tiktok', 'website']
+    const channelsEnabled = ['whatsapp', 'instagram', 'facebook', 'website']
       .filter(ch => (profile as any)[`channels_${ch}_enabled`]).length;
     let engagementScore = Math.min(100, Math.round(
-      (engagementRate * 40) + (channelsEnabled / 5 * 30) + (profile.bot_enabled ? 30 : 10)
+      (engagementRate * 40) + (channelsEnabled / 4 * 30) + (profile.bot_enabled ? 30 : 10)
     ));
 
     // ── P1: Local SEO Score ──────────────────────────────────────────────────

@@ -11,7 +11,6 @@ const mediaIcons = {
 const platformColors = {
   facebook: 'bg-blue-50 text-blue-600',
   instagram: 'bg-pink-50 text-pink-600',
-  tiktok: 'bg-secondary/50 text-foreground',
 };
 
 export default function SocialSignalsList({ businessProfileId }) {

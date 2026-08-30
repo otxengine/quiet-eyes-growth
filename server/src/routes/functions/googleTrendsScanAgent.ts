@@ -139,7 +139,7 @@ async function savePlatformTrend(
 
 // ── Cross-platform gap analysis ───────────────────────────────────────────────
 /**
- * Aggregates trend signals from all platforms (Google, TikTok, Instagram, viral),
+ * Aggregates trend signals from all platforms (Google, Instagram, viral),
  * enriches with SearchAPI real-time data, and runs gap analysis against the
  * business's known services.
  *
@@ -177,7 +177,7 @@ async function runCrossPlatformGapAnalysis(
   const platformSignals = await prisma.marketSignal.findMany({
     where: {
       linked_business: businessProfileId,
-      category: { in: ['google_trend', 'tiktok_sector_trend', 'instagram_trend', 'viral'] },
+      category: { in: ['google_trend', 'instagram_trend', 'viral'] },
       detected_at: { gte: fourteenDaysAgo },
     },
     select: { summary: true, category: true, recommended_action: true },
@@ -260,7 +260,7 @@ Return ONLY valid JSON:
     "trend_name": "שם תבנית התוכן",
     "description": "מה עובד ולמה בסקטור זה",
     "example_hook": "שורה ראשונה לפוסט/ריל שעובדת",
-    "platform": "tiktok|instagram|both",
+    "platform": "instagram",
     "confidence": 65
   }]
 }`,

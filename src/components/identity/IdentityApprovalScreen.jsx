@@ -11,7 +11,7 @@ const BUSINESS_TYPES = ['B2B', 'B2C', 'B2B2C'];
 const SERVICE_MODELS = ['project_based', 'subscription', 'appointment', 'walk_in', 'ecommerce'];
 const TONES = ['professional', 'friendly', 'inspirational', 'technical', 'casual'];
 
-// ponytail: backend only tracks the coarse 'social' bucket, not per-platform (IG/FB/TikTok) —
+// ponytail: backend only tracks the coarse 'social' bucket, not per-platform (IG/FB) —
 // upgrade path is having generate-about tag which platform it actually read from.
 
 function computeDiff(newDraft, base) {

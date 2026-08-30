@@ -203,7 +203,6 @@ router.post('/generate-about', async (req: Request, res: Response) => {
       {
         facebookUrl:  profile.facebook_url  || undefined,
         instagramUrl: profile.instagram_url || undefined,
-        tiktokUrl:    profile.tiktok_url    || undefined,
       },
       { forceRegenerate: !!force },
     ) : [];

@@ -43,7 +43,7 @@ function buildSnapshot(bp, socialAccounts, competitors, healthScore, reviews, ta
     .map(a => (a.platform || '').toLowerCase())
     .filter(Boolean);
 
-  const ALL_PLATFORMS = ['facebook', 'instagram', 'google', 'tiktok', 'whatsapp', 'wolt', 'ten_bis', 'website'];
+  const ALL_PLATFORMS = ['facebook', 'instagram', 'google', 'whatsapp', 'wolt', 'ten_bis', 'website'];
   const missingPlatforms = ALL_PLATFORMS.filter(p => !connectedPlatforms.includes(p));
 
   // Reviews

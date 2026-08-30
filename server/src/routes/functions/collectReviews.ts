@@ -28,7 +28,6 @@ const SOURCE_QUERIES: Record<string, (name: string, city: string) => string> = {
   instagram:   (n: string, _c: string) => `"${n}" comments OR תגובות site:instagram.com`,
   tripadvisor: (n: string, _c: string) => `"${n}" site:tripadvisor.com OR site:tripadvisor.co.il`,
   waze:        (n: string, c: string) => `"${n}" site:waze.com ${c}`,
-  tiktok:      (n: string, _c: string) => `"${n}" site:tiktok.com`,
   wolt:        (n: string, _c: string) => `"${n}" ביקורות site:wolt.com`,
   '10bis':     (n: string, c: string) => `"${n}" ביקורות site:10bis.co.il OR "${n}" ${c} 10bis`,
   easy:        (n: string, _c: string) => `"${n}" ביקורות OR חוות דעת site:easy.co.il`,
@@ -37,7 +36,7 @@ const SOURCE_QUERIES: Record<string, (name: string, city: string) => string> = {
 };
 const SOURCE_PLATFORM_LABELS: Record<string, string> = {
   facebook: 'Facebook', instagram: 'Instagram', tripadvisor: 'TripAdvisor',
-  waze: 'Waze', tiktok: 'TikTok', wolt: 'Wolt',
+  waze: 'Waze', wolt: 'Wolt',
   '10bis': '10BIS', easy: 'easy.co.il', booking: 'Booking.com', forums: 'פורומים',
 };
 

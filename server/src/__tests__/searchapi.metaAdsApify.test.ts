@@ -1,8 +1,7 @@
 /**
  * Unit tests — Meta ads via Apify (primary) with SearchAPI fallback.
  * Covers: Apify success -> used as-is, no SearchAPI call; Apify empty/unavailable
- * -> falls back to SearchAPI meta_ad_library; TikTok ads actually get queried
- * and merged (previously dead code — tiktokHandle was accepted but ignored).
+ * -> falls back to SearchAPI meta_ad_library.
  */
 import '../__tests__/testEnv';
 
@@ -91,7 +90,7 @@ describe('searchAllAds priority', () => {
       snapshot: { title: 't', body: 'b', ctaText: 'c', linkUrl: 'l' },
     }]);
 
-    const ads = await searchAllAds('Acme', 'cafe', 'TLV', 'acmeco', null, 'https://facebook.com/acmeco');
+    const ads = await searchAllAds('Acme', 'cafe', 'TLV', 'acmeco', 'https://facebook.com/acmeco');
 
     expect(ads).toHaveLength(1);
     expect(mockFetch).not.toHaveBeenCalled(); // SearchAPI never hit
@@ -106,23 +105,9 @@ describe('searchAllAds priority', () => {
       }],
     }));
 
-    const ads = await searchAllAds('Acme', 'cafe', 'TLV', 'acmeco', null, 'https://facebook.com/acmeco');
+    const ads = await searchAllAds('Acme', 'cafe', 'TLV', 'acmeco', 'https://facebook.com/acmeco');
 
     expect(runApifyActor).not.toHaveBeenCalled();
     expect(ads).toEqual([expect.objectContaining({ title: 'from searchapi' })]);
-  });
-
-  it('queries TikTok ads and merges them in when a handle is present', async () => {
-    (hasApifyKey as jest.Mock).mockReturnValue(false);
-    // No facebookHandle/facebookUrl passed -> only the TikTok engine gets hit.
-    mockFetch.mockResolvedValueOnce(fetchJson({
-      ads: [{ id: 'tt1', advertiser: 'Acme', last_shown_datetime: new Date().toISOString() }],
-    }));
-
-    const ads = await searchAllAds('Acme', 'cafe', 'TLV', null, 'acmeco_tiktok', null);
-
-    const tiktokCall = mockFetch.mock.calls.find(([url]) => String(url).includes('tiktok_ads_library'));
-    expect(tiktokCall).toBeTruthy();
-    expect(ads).toEqual([expect.objectContaining({ platform: 'tiktok', page_name: 'Acme' })]);
   });
 });

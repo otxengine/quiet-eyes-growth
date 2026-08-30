@@ -6,7 +6,7 @@ import { getPlaceDetails } from '../../lib/googlePlaces';
 import { searchOrganic } from '../../lib/dataforseo';
 import { serpGoogleOrganic } from '../../lib/serpapi';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
-import { SITE_BLACKLIST, IG_NON_PROFILE, FB_NON_PROFILE, TIK_NON_PROFILE, isProfileUrl, handleMatchesBusiness } from './discoverCompetitorUrls';
+import { SITE_BLACKLIST, IG_NON_PROFILE, FB_NON_PROFILE, isProfileUrl, handleMatchesBusiness } from './discoverCompetitorUrls';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const CATCH_UP_CAP = 10; // same cap as discoverCompetitorUrls' own scheduler job
@@ -61,7 +61,6 @@ async function enrichSocial(domain: string, nonProfile: string[], name: string, 
 const SOCIAL_PLATFORMS: [string, string, string[]][] = [
   ['instagram_url', 'instagram.com', IG_NON_PROFILE],
   ['facebook_url',  'facebook.com',  FB_NON_PROFILE],
-  ['tiktok_url',    'tiktok.com',    TIK_NON_PROFILE],
 ];
 
 /**
@@ -107,7 +106,7 @@ export async function enrichCompetitorUrls(
     }
 
     const websiteForExtract = update.website_url || comp.website_url;
-    const anySocialEmpty = !comp.instagram_url || !comp.facebook_url || !comp.tiktok_url;
+    const anySocialEmpty = !comp.instagram_url || !comp.facebook_url;
 
     // KAN-219 — site-extract stays the primary social source
     if (websiteForExtract && (anySocialEmpty || opts.force)) {
@@ -115,7 +114,6 @@ export async function enrichCompetitorUrls(
       const links = await extractSocialLinksFromWebsite(websiteForExtract);
       if (links.instagram_url && !comp.instagram_url) { update.instagram_url = links.instagram_url; update.instagram_url_source = 'site_extract'; }
       if (links.facebook_url  && !comp.facebook_url)  { update.facebook_url  = links.facebook_url;  update.facebook_url_source  = 'site_extract'; }
-      if (links.tiktok_url    && !comp.tiktok_url)    { update.tiktok_url    = links.tiktok_url;    update.tiktok_url_source    = 'site_extract'; }
     }
 
     // AC4/AC6 — still-empty socials after site-extract: paid-tier fallback, never re-spend on a filled field
@@ -159,7 +157,6 @@ export async function enrichCompetitorUrlsScheduled(req: Request, res: Response)
             { website_url: null },
             { instagram_url: null },
             { facebook_url: null },
-            { tiktok_url: null },
             { rating: null },
             { review_count: null },
             { social_pages_crawled_at: null },

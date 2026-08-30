@@ -86,7 +86,7 @@ const PER_COMP_INTERVAL_MS = 48 * 60 * 60 * 1000; // skip individual competitor 
 // exact real-world competitor. Checks google_place_id + each set social URL (ads
 // aren't tied to one platform the way posts are, so no single platform to match on).
 async function findAdsDonor(comp: any, businessProfileId: string): Promise<(DonorCandidate & { sponsored_ads_updated_at: string }) | null> {
-  const platforms: DonorPlatform[] = ['instagram', 'facebook', 'tiktok'];
+  const platforms: DonorPlatform[] = ['instagram', 'facebook'];
   const byId = new Map<string, DonorCandidate>();
   for (const platform of platforms) {
     const urlValue = comp[`${platform}_url`] ?? null;
@@ -152,10 +152,10 @@ async function cloneAdsFromDonor(competitorId: string, businessProfileId: string
 }
 
 /**
- * detectCompetitorAds — scans Meta Ads Library, TikTok Ads Library and Google Ads
+ * detectCompetitorAds — scans Meta Ads Library and Google Ads
  * for every known competitor, then:
  *
- * 1. Detects active paid campaigns across all three platforms
+ * 1. Detects active paid campaigns across both platforms
  * 2. LLM extracts: what product/service is being promoted, messaging angle, CTA
  * 3. Updates Competitor record: sponsored_ads_detected, last_promo_detected,
  *    active_ad_platforms, active_ad_count, active_ads_summary
@@ -235,11 +235,8 @@ export async function detectCompetitorAds(req: Request, res: Response) {
         const fbHandle  = c.facebook_url
           ? c.facebook_url.replace(/^https?:\/\/(www\.)?facebook\.com\//, '').split(/[/?#]/)[0].replace(/^@/, '') || null
           : null;
-        const tikHandle = c.tiktok_url
-          ? c.tiktok_url.replace(/^https?:\/\/(www\.)?tiktok\.com\//, '').split(/[/?#]/)[0].replace(/^@/, '') || null
-          : null;
 
-        const ads = await searchAllAds(comp.name, profile.category || '', profile.city || '', fbHandle, tikHandle, c.facebook_url || null);
+        const ads = await searchAllAds(comp.name, profile.category || '', profile.city || '', fbHandle, c.facebook_url || null);
 
         // ── Update competitor record ─────────────────────────────────────────
         const platforms = [...new Set(ads.map(a => a.platform))];
@@ -407,7 +404,7 @@ Return ONLY valid JSON. ALL string values MUST be in Hebrew:
 
         if (!existingAlert) {
           const platformEmojis: Record<string, string> = {
-            facebook: '📘', instagram: '📸', tiktok: '🎵', google: '🔍',
+            facebook: '📘', instagram: '📸', google: '🔍',
           };
           const platformBadges = platforms.map(p => `${platformEmojis[p] || '📣'}${p}`).join(' + ');
 

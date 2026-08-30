@@ -10,7 +10,6 @@ import ActionPopup from '@/components/ui/ActionPopup';
 const PLATFORM_BADGE = {
   instagram: { icon: '📸', label: 'Instagram', cls: 'bg-pink-50 text-pink-600 border-pink-200' },
   facebook:  { icon: '👤', label: 'Facebook',  cls: 'bg-blue-50 text-blue-600 border-blue-200' },
-  tiktok:    { icon: '🎵', label: 'TikTok',    cls: 'bg-secondary text-foreground-secondary border-border-hover' },
   google:    { icon: '⭐', label: 'Google',    cls: 'bg-red-50 text-red-600 border-red-200' },
   whatsapp:  { icon: '💬', label: 'WhatsApp',  cls: 'bg-green-50 text-green-700 border-green-200' },
   wolt:      { icon: '🛵', label: 'Wolt',      cls: 'bg-sky-50 text-sky-600 border-sky-200' },

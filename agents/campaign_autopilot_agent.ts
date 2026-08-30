@@ -16,7 +16,7 @@ const AGENT_NAME = "CampaignAutoPilot";
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
 interface CampaignBrief {
-  platform:              "instagram" | "facebook" | "tiktok" | "whatsapp";
+  platform:              "instagram" | "facebook" | "whatsapp";
   format:                "story" | "reel" | "post" | "broadcast";
   headline:              string;
   body_text:             string;

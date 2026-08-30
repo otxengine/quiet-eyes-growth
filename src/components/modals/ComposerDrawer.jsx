@@ -20,13 +20,6 @@ const PLATFORM_META = {
     openUrl: () => `https://www.facebook.com/`,
     copyLabel: 'העתק לפייסבוק',
   },
-  tiktok: {
-    label: 'TikTok',
-    icon: null,
-    color: 'text-foreground',
-    openUrl: () => `https://www.tiktok.com/upload`,
-    copyLabel: 'העתק לטיקטוק',
-  },
   default: {
     label: 'פרסום',
     icon: null,
@@ -85,9 +78,6 @@ export default function ComposerDrawer({ text = '', platform, context, onClose }
         <div className="flex items-center justify-between px-5 py-3 border-b border-border/50">
           <div className="flex items-center gap-2">
             {PlatformIcon && <PlatformIcon className={`w-4 h-4 ${meta.color}`} />}
-            {!PlatformIcon && platform === 'tiktok' && (
-              <span className="text-[13px]">🎵</span>
-            )}
             <h3 className="text-[14px] font-semibold text-foreground">
               {meta.label ? `כתוב פוסט ל${meta.label}` : 'צור תוכן לפרסום'}
             </h3>

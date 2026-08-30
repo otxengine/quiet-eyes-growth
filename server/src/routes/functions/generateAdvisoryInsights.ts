@@ -12,7 +12,7 @@ import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessC
  * Unlike generateProactiveAlerts (which is reactive — hot leads, bad reviews),
  * this engine synthesizes ALL collected OSINT into proactive strategic insights:
  *
- *   • TikTok/social trends the business can exploit
+ *   • Social trends the business can exploit
  *   • New services/products competitors offer that you don't
  *   • Upcoming events to leverage (local, seasonal, Israeli calendar)
  *   • Viral content opportunities from detectViralSignals / early trends
@@ -43,7 +43,6 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
 
     // ── Pull all intelligence in parallel ──────────────────────────────────────
     const [
-      tiktokTrends,
       viralSignals,
       earlyTrends,
       eventSignals,
@@ -58,14 +57,8 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
       competitors,
       recentReviews,
       existingAdvisory,
-      tiktokAudienceSignal,
     ] = await Promise.all([
       // Social & trend intelligence
-      prisma.marketSignal.findMany({
-        where: { linked_business: businessProfileId, category: 'tiktok_sector_trend' },
-        orderBy: { detected_at: 'desc' },
-        take: 10,
-      }),
       prisma.marketSignal.findMany({
         where: { linked_business: businessProfileId, category: 'viral_signal' },
         orderBy: { detected_at: 'desc' },
@@ -150,11 +143,6 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
           created_at: { gte: sevenDaysAgo.toISOString() },
         },
         select: { alert_type: true, title: true },
-      }),
-      // TikTok audience profile — for campaign opportunity generation
-      prisma.marketSignal.findFirst({
-        where: { linked_business: businessProfileId, category: 'tiktok_audience' },
-        orderBy: { detected_at: 'desc' },
       }),
     ]);
 
@@ -264,7 +252,6 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
       section('מודיעין סקטור', sectorLines),
       section('פרופיל מתחרים', competitorProfiles),
       section('מהלכי מתחרים (30 יום)', fmt(competitorMoves)),
-      section('מגמות TikTok בסקטור', fmt(tiktokTrends)),
       section('אותות ויראליים', fmt(viralSignals)),
       section('טרנדים מוקדמים שזוהו', fmt(earlyTrends)),
       section('אירועים קרובים', fmt(eventSignals)),
@@ -279,7 +266,7 @@ export async function generateAdvisoryInsights(req: Request, res: Response) {
 
     const sectorBlock = getBusinessSectorContext(profile);
 
-    const totalSignals = tiktokTrends.length + viralSignals.length + earlyTrends.length +
+    const totalSignals = viralSignals.length + earlyTrends.length +
       eventSignals.length + competitorMoves.length + demandGaps.length +
       opportunitySignals.length + socialSignals.length;
 
@@ -313,7 +300,7 @@ Your job: synthesize this intelligence into ${maxNewInsights} HIGH-VALUE, NON-OB
 
 RULES for high-quality insights:
 1. Each insight MUST reference at least one specific data point from the briefing (signal, trend name, competitor name, etc.)
-2. Cross-reference multiple sources when possible — e.g., "TikTok trend X + competitor gap Y + demand signal Z all point to opportunity W"
+2. Cross-reference multiple sources when possible — e.g., "trend signal X + competitor gap Y + demand signal Z all point to opportunity W"
 3. NEVER give generic advice like "post more on social media" — always say WHAT, WHERE, WHY NOW
 4. Include a concrete "cost of not acting" or quantified opportunity
 5. Cover DIVERSE categories — do not generate 4 similar insights. Cover: trends, competitors, services, events, promotions
@@ -326,7 +313,7 @@ ${rejectedPatterns.length > 0 ? `CRITICAL: Do NOT generate insights about these 
 ${intelligenceBriefing}
 
 === INSIGHT TYPES AVAILABLE ===
-- trend_opportunity: TikTok/social trend to exploit right now
+- trend_opportunity: social/platform trend to exploit right now
 - new_service: new service or product to add based on market signals
 - promotion_strategy: specific promotion/pricing action to drive revenue
 - sector_shift: important sector-wide change the business must adapt to
@@ -349,7 +336,7 @@ Return ONLY valid JSON. ALL string values MUST be in Hebrew:
   "action_label": "פועל + עצם קצר (עד 4 מילים)",
   "prefilled_text": "טקסט מוכן לשימוש ישיר — פוסט/הודעה/מבצע (50-80 מילים) אם רלוונטי",
   "urgency_hours": 48,
-  "data_sources": ["tiktok_trend", "competitor_move", "demand_gap"]
+  "data_sources": ["trend_signal", "competitor_move", "demand_gap"]
 }]}`,
       response_json_schema: { type: 'object' },
     });
@@ -405,92 +392,6 @@ Return ONLY valid JSON. ALL string values MUST be in Hebrew:
 
       recentAdvisoryKeys.add(dedupKey);
       created++;
-    }
-
-    // ── Campaign Opportunity: auto-connect trend + TikTok audience → campaign alert ──
-    const hasTrendSignals = tiktokTrends.length > 0 || viralSignals.length > 0;
-    const alreadyHasCampaignOpp = existingAdvisory.some(a => a.alert_type === 'campaign_opportunity');
-
-    if (hasTrendSignals && tiktokAudienceSignal && !alreadyHasCampaignOpp && activeCount + created < HARD_CAP) {
-      try {
-        let audienceData: any = null;
-        try { audienceData = JSON.parse(tiktokAudienceSignal.source_description || '{}'); } catch {}
-
-        const trendSignal = tiktokTrends[0] || viralSignals[0];
-        const platform   = audienceData?.dominant_platform || 'instagram';
-        const ageRange   = audienceData?.age_range || '25-40';
-        const genderSkew = audienceData?.gender_skew || '';
-        const bestTime   = audienceData?.optimal_posting_hours || '19:00-21:00';
-        const hooks      = (audienceData?.hooks_that_work || []).slice(0, 2).join(', ');
-
-        // Generate a ready-to-use post text for the campaign
-        const postResult = await invokeLLM({
-          model: 'haiku',
-          maxTokens: 200,
-          prompt: `כתוב פוסט שיווקי קצר בעברית לעסק "${profile.name}" (${profile.category}, ${profile.city}).
-בסיס הפוסט על הטרנד: "${trendSignal?.summary?.slice(0, 120) || ''}".
-קהל יעד: גיל ${ageRange}${genderSkew ? `, ${genderSkew}` : ''}.
-הוקים שעובדים: ${hooks || 'ערך, דחיפות'}.
-כתוב רק טקסט הפוסט: Hook + ערך + CTA. 40-60 מילים. בעברית.`,
-        });
-
-        const postText = typeof postResult === 'string' ? postResult.trim() : '';
-
-        const campaignParams = new URLSearchParams({
-          summary:      (trendSignal?.summary || '').slice(0, 100),
-          platform,
-          audience_age: ageRange,
-          best_time:    bestTime,
-        });
-        const campaignUrl = `/marketing/create?${campaignParams.toString()}`;
-
-        const alertTitle = `הזדמנות קמפיין: ${(trendSignal?.summary || 'טרנד עולה').slice(0, 60)}`;
-
-        const existingCampOpp = await prisma.proactiveAlert.findFirst({
-          where: {
-            linked_business: businessProfileId,
-            alert_type: 'campaign_opportunity',
-            is_dismissed: false,
-            created_at: { gte: sevenDaysAgo.toISOString() },
-          },
-          select: { id: true },
-        });
-
-        if (!existingCampOpp) {
-          const campaignMeta = JSON.stringify({
-            action_label:     'צור קמפיין ממוקד',
-            action_type:      'create_campaign_with_audience',
-            action_platform:  platform,
-            prefilled_text:   postText,
-            audience_age:     ageRange,
-            audience_gender:  genderSkew,
-            best_time:        bestTime,
-            audience_hooks:   hooks,
-            campaign_url:     campaignUrl,
-            urgency_hours:    48,
-            impact_reason:    'טרנד + קהל יעד מזוהה — חלון הזדמנות צר לפני שמתחרים יפעלו',
-          });
-
-          await prisma.proactiveAlert.create({
-            data: {
-              linked_business:  businessProfileId,
-              title:            alertTitle,
-              description:      `זוהה טרנד "${(trendSignal?.summary || '').slice(0, 80)}" ופרופיל קהל יעד מ-TikTok (גיל ${ageRange}). הזדמנות לקמפיין ממוקד עם טרגטינג מוכן.`,
-              alert_type:       'campaign_opportunity',
-              priority:         'high',
-              suggested_action: `צור קמפיין בפלטפורמת ${platform} ממוקד לגיל ${ageRange}, שעת פרסום מומלצת: ${bestTime}`,
-              source_agent:     campaignMeta,
-              is_dismissed:     false,
-              is_acted_on:      false,
-              created_at:       new Date().toISOString(),
-            },
-          });
-          created++;
-          console.log(`[generateAdvisoryInsights] created campaign_opportunity alert for ${profile.name}`);
-        }
-      } catch (campErr: any) {
-        console.warn('[generateAdvisoryInsights] campaign_opportunity failed:', campErr.message);
-      }
     }
 
     await writeAutomationLog('generateAdvisoryInsights', businessProfileId, startTime, created);

@@ -14,7 +14,7 @@ const BG_STYLE = {
   backgroundSize: '24px 24px',
 };
 
-const EMPTY_URLS = { website_url: '', instagram_url: '', facebook_url: '', tiktok_url: '' };
+const EMPTY_URLS = { website_url: '', instagram_url: '', facebook_url: '' };
 
 const inputCls = 'w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-[12px] text-gray-800 placeholder-gray-400 focus:outline-none focus:border-gray-300';
 
@@ -60,7 +60,6 @@ function AddCompetitorForm({ businessProfileId, onAdded }) {
           <input value={urls.website_url} onChange={(e) => setUrls({ ...urls, website_url: e.target.value })} placeholder="אתר (אופציונלי)" className={inputCls} />
           <input value={urls.instagram_url} onChange={(e) => setUrls({ ...urls, instagram_url: e.target.value })} placeholder="Instagram (אופציונלי)" className={inputCls} />
           <input value={urls.facebook_url} onChange={(e) => setUrls({ ...urls, facebook_url: e.target.value })} placeholder="Facebook (אופציונלי)" className={inputCls} />
-          <input value={urls.tiktok_url} onChange={(e) => setUrls({ ...urls, tiktok_url: e.target.value })} placeholder="TikTok (אופציונלי)" className={inputCls} />
         </div>
       ) : (
         <button onClick={() => setShowUrls(true)} className="text-[11px] text-gray-500 underline">

@@ -45,7 +45,7 @@ export default function Competitors() {
   const [selectedCompetitorId, setSelectedCompetitorId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [showAddUrls, setShowAddUrls] = useState(false);
-  const [newComp, setNewComp] = useState({ name: '', website_url: '', instagram_url: '', facebook_url: '', tiktok_url: '' });
+  const [newComp, setNewComp] = useState({ name: '', website_url: '', instagram_url: '', facebook_url: '' });
   const [adding, setAdding] = useState(false);
   const [selectedMove, setSelectedMove] = useState(null);
 
@@ -100,7 +100,7 @@ export default function Competitors() {
       const providedUrls = Object.fromEntries(Object.entries(urls).filter(([, v]) => v.trim()));
       await addCompetitorManually({ businessProfileId: bpId, name: name.trim(), urls: providedUrls });
       queryClient.invalidateQueries({ queryKey: ['competitorsPage', bpId] });
-      setNewComp({ name: '', website_url: '', instagram_url: '', facebook_url: '', tiktok_url: '' });
+      setNewComp({ name: '', website_url: '', instagram_url: '', facebook_url: '' });
       setShowAddUrls(false);
       setShowAdd(false);
       toast.success('מתחרה נוסף');
@@ -180,7 +180,6 @@ export default function Competitors() {
                   <input value={newComp.website_url}   onChange={e => setNewComp({ ...newComp, website_url:   e.target.value })} placeholder="אתר (אופציונלי)"      className={inputCls} />
                   <input value={newComp.instagram_url} onChange={e => setNewComp({ ...newComp, instagram_url: e.target.value })} placeholder="Instagram (אופציונלי)" className={inputCls} />
                   <input value={newComp.facebook_url}  onChange={e => setNewComp({ ...newComp, facebook_url:  e.target.value })} placeholder="Facebook (אופציונלי)"  className={inputCls} />
-                  <input value={newComp.tiktok_url}    onChange={e => setNewComp({ ...newComp, tiktok_url:    e.target.value })} placeholder="TikTok (אופציונלי)"    className={inputCls} />
                 </div>
               ) : (
                 <button onClick={() => setShowAddUrls(true)} className="text-[11px] text-foreground-muted underline">

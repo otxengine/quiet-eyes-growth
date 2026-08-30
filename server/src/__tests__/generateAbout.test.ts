@@ -46,7 +46,7 @@ function post(body: Record<string, any>): Promise<{ statusCode: number; body: an
 const BASE_PROFILE = {
   id: 'bp1', name: 'Test Biz', category: 'beauty', city: 'Tel Aviv',
   description: 'Hair salon', website_url: null, instagram_url: null,
-  facebook_url: null, tiktok_url: null, google_place_id: null, channels_website: null,
+  facebook_url: null, google_place_id: null, channels_website: null,
 };
 
 const VALID_DRAFT = {

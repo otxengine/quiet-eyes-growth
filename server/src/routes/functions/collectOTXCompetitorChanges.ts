@@ -20,7 +20,6 @@ interface CompetitorConfig {
   google_place_id?: string;
   instagram_handle?: string;
   facebook_page_id?: string;
-  tiktok_handle?: string;
 }
 
 interface SocialPost { id: string; caption?: string; timestamp?: string; likes?: number; comments?: number; url?: string }
@@ -30,7 +29,7 @@ interface CompetitorChangeRow {
   change_type: 'price' | 'website' | 'social' | 'reviews';
   change_summary: string; detected_at_utc: string; source_url: string;
   confidence_score: number;
-  social_platform?: 'instagram' | 'facebook' | 'tiktok' | 'google' | 'website';
+  social_platform?: 'instagram' | 'facebook' | 'google' | 'website';
   post_url?: string; sentiment?: 'positive' | 'neutral' | 'negative';
   engagement_count?: number; content_excerpt?: string;
 }
@@ -107,28 +106,6 @@ async function fetchFacebookPosts(pageId: string, apifyToken: string): Promise<S
   } catch (e: any) { logger.warn(`Facebook Apify fetch failed for ${pageId}: ${e.message}`); return []; }
 }
 
-// ─── TikTok via Apify ─────────────────────────────────────────────────────────
-
-async function fetchTikTokPosts(handle: string, apifyToken: string): Promise<SocialPost[]> {
-  const cleanHandle = handle.replace(/^@/, '');
-  try {
-    const res = await fetch(`https://api.apify.com/v2/acts/clockworks~free-tiktok-scraper/run-sync-get-dataset-items?token=${apifyToken}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profiles: [`https://www.tiktok.com/@${cleanHandle}`], resultsPerPage: 3, shouldDownloadVideos: false }),
-      signal: AbortSignal.timeout(60_000),
-    });
-    if (!res.ok) { logger.warn(`TikTok Apify HTTP ${res.status} for @${cleanHandle}`); return []; }
-    const items = (await res.json()) as any[];
-    return (items ?? []).slice(0, 3).map((item: any) => ({
-      id: item.id ?? '', caption: item.text ?? '',
-      timestamp: item.createTime ? new Date(item.createTime * 1000).toISOString() : undefined,
-      likes: item.diggCount ?? 0, comments: item.commentCount ?? 0,
-      url: item.webVideoUrl ?? `https://www.tiktok.com/@${cleanHandle}`,
-    }));
-  } catch (e: any) { logger.warn(`TikTok fetch failed for @${cleanHandle}: ${e.message}`); return []; }
-}
-
 // ─── Sentiment heuristic ──────────────────────────────────────────────────────
 
 function inferSentiment(text: string): 'positive' | 'neutral' | 'negative' {
@@ -141,7 +118,7 @@ function inferSentiment(text: string): 'positive' | 'neutral' | 'negative' {
 // ─── Social post diff ─────────────────────────────────────────────────────────
 
 function detectSocialChanges(
-  posts: SocialPost[], platform: 'instagram' | 'facebook' | 'tiktok',
+  posts: SocialPost[], platform: 'instagram' | 'facebook',
   competitor: CompetitorConfig, businessId: string, prevMap: Map<string, LastChangeRow>,
 ): CompetitorChangeRow[] {
   const changes: CompetitorChangeRow[] = [];
@@ -254,7 +231,7 @@ async function loadCompetitorConfigs(
   // 1) competitor_config table (v4 schema)
   const { data: configRows, error: configErr } = await supabase
     .from('competitor_config')
-    .select('id, competitor_name, website_url, google_place_id, instagram_handle, facebook_page_id, tiktok_handle')
+    .select('id, competitor_name, website_url, google_place_id, instagram_handle, facebook_page_id')
     .eq('business_id', businessId)
     .eq('is_active', true);
   if (configErr) logger.error(`competitor_config fetch failed for business ${businessId}: ${configErr.message}`);
@@ -263,7 +240,7 @@ async function loadCompetitorConfigs(
     return configRows.map((r: any) => ({
       id: r.id, name: r.competitor_name, website_url: r.website_url ?? undefined,
       google_place_id: r.google_place_id ?? undefined, instagram_handle: r.instagram_handle ?? undefined,
-      facebook_page_id: r.facebook_page_id ?? undefined, tiktok_handle: r.tiktok_handle ?? undefined,
+      facebook_page_id: r.facebook_page_id ?? undefined,
     }));
   }
 
@@ -293,7 +270,7 @@ async function loadCompetitorConfigs(
     await autoDiscoverCompetitors(supabase, businessId, sector, geoCity, serpKey);
     const { data: fresh, error: freshErr } = await supabase
       .from('competitor_config')
-      .select('id, competitor_name, website_url, google_place_id, instagram_handle, facebook_page_id, tiktok_handle')
+      .select('id, competitor_name, website_url, google_place_id, instagram_handle, facebook_page_id')
       .eq('business_id', businessId)
       .eq('is_active', true);
     if (freshErr) logger.error(`competitor_config re-fetch failed for business ${businessId}: ${freshErr.message}`);
@@ -350,7 +327,7 @@ export async function collectOTXCompetitorChanges(): Promise<void> {
       for (const row of (prevRows ?? []) as LastChangeRow[]) {
         if (!prevMap.has(row.change_type)) prevMap.set(row.change_type, row);
         if (row.change_type === 'social') {
-          const platform = (row.change_summary.match(/New (instagram|facebook|tiktok)/) ?? [])[1];
+          const platform = (row.change_summary.match(/New (instagram|facebook)/) ?? [])[1];
           if (platform && !prevMap.has(`social_${platform}`)) prevMap.set(`social_${platform}`, row);
         }
       }
@@ -381,10 +358,6 @@ export async function collectOTXCompetitorChanges(): Promise<void> {
       // Source 4: Facebook
       if (comp.facebook_page_id && apifyToken)
         allChanges.push(...detectSocialChanges(await fetchFacebookPosts(comp.facebook_page_id, apifyToken), 'facebook', comp, biz.id, prevMap));
-
-      // Source 5: TikTok
-      if (comp.tiktok_handle && apifyToken)
-        allChanges.push(...detectSocialChanges(await fetchTikTokPosts(comp.tiktok_handle, apifyToken), 'tiktok', comp, biz.id, prevMap));
 
       if (allChanges.length === 0) continue;
 

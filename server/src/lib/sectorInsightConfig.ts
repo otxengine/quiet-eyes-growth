@@ -249,9 +249,9 @@ const SECTOR_INSIGHT_MAP: Record<string, SectorInsightConfig> = {
       },
       {
         type: 'content_opportunity',
-        title: 'CleanTok — לא פרסמת ב-TikTok 3 שבועות',
-        description: '#cleantok מגיע ל-50B+ צפיות. ניקיון הוא אחד הסגמנטים הכי ויראליים ב-TikTok.',
-        action: 'צלם 30 שניות של "ניקיון ASMR" — ניקוי פינה קשה. אין צורך בעריכה מיוחדת. כיתוב: "כשלקוחה אומרת תודה 🙏 #cleantok"',
+        title: 'לא פרסמת רילס 3 שבועות',
+        description: 'סרטוני "ניקיון ASMR" קצרים הם אחד הפורמטים הכי ויראליים באינסטגרם.',
+        action: 'צלם 30 שניות של "ניקיון ASMR" — ניקוי פינה קשה. אין צורך בעריכה מיוחדת. כיתוב: "כשלקוחה אומרת תודה 🙏 #ניקיון"',
       },
     ],
     israeliCalendarHooks: [
@@ -312,8 +312,8 @@ const SECTOR_INSIGHT_MAP: Record<string, SectorInsightConfig> = {
       },
       {
         type: 'content_opportunity',
-        title: 'TikTok — 3 שבועות בלי תוכן טיפ רכב',
-        description: 'טיפים על רכב מגיעים ל-200K-1M צפיות ב-TikTok. הפורמט הוכח.',
+        title: '3 שבועות בלי תוכן טיפ רכב',
+        description: 'סרטוני טיפים קצרים על רכב הם פורמט רילס מוכח שמושך צפיות גבוהות.',
         action: 'צלם 30 שניות: "הסימן הזה על לוח המכוונים שרוב הנהגים מתעלמים ממנו... ❗" — פשוט, מהיר, ויראלי',
       },
     ],

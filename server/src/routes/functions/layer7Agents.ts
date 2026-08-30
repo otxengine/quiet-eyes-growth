@@ -111,7 +111,7 @@ Return a JSON array of 3 objects. ALL string values must be in Hebrew:
 
     for (const p of patterns) {
       const types     = ['format', 'music', 'hashtag', 'timing', 'hook'];
-      const platforms = ['tiktok', 'instagram', 'facebook', 'youtube'];
+      const platforms = ['instagram', 'facebook', 'youtube'];
       const pType     = types.includes(p.pattern_type) ? p.pattern_type : 'format';
       const platform  = platforms.includes(p.platform) ? p.platform : 'instagram';
 
@@ -628,7 +628,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       response_json_schema: { type: 'object' },
     });
 
-    const platforms = ['instagram', 'facebook', 'tiktok', 'youtube', 'google'];
+    const platforms = ['instagram', 'facebook', 'youtube', 'google'];
     const platform  = platforms.includes(result?.platform) ? result.platform : 'instagram';
     const recTime   = new Date(Date.now() + 2 * 3600000).toISOString();
 

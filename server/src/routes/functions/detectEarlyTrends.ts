@@ -3,7 +3,7 @@
  *
  * Sources:
  *   • Google Trends velocity (SerpAPI) — measures 7d vs 30d growth acceleration
- *   • TikTok, Instagram Reels, YouTube Shorts — via Tavily social search
+ *   • Instagram Reels, YouTube Shorts — via Tavily social search
  *   • Reddit rising posts (r/Israel, niche subs) — early adopter signals
  *   • Israeli news aggregators & food/lifestyle blogs
  *   • Competitor activity spikes
@@ -73,8 +73,8 @@ async function fetchTrendsVelocity(keyword: string, geo = 'IL'): Promise<{
 // ── Social platform trend queries (reduced from 10 → 5 to cut Tavily cost) ───
 function buildSocialQueries(category: string, city: string, services: string): string[] {
   return [
-    // TikTok + Instagram combined
-    `TikTok OR Instagram viral trending ${category} Israel ${new Date().getFullYear()}`,
+    // Instagram
+    `Instagram viral trending ${category} Israel ${new Date().getFullYear()}`,
     // Reddit early adopters
     `Reddit r/Israel "${category}" rising OR popular new`,
     // Israeli news / lifestyle
@@ -205,7 +205,7 @@ export async function detectEarlyTrends(req: Request, res: Response) {
       .find(([key]) => catLower.includes(key.toLowerCase()))?.[1] || [];
     let crossSectorContext = '';
     if (adjacentSectors.length > 0) {
-      const crossQuery = `trending 2025 Israel ${adjacentSectors[0]} viral TikTok new service`;
+      const crossQuery = `trending 2025 Israel ${adjacentSectors[0]} viral new service`;
       const crossResults = await tavilyAdvancedSearch(crossQuery, 3).catch(() => []);
       if (crossResults.length > 0) {
         crossSectorContext = '\n\n=== CROSS-SECTOR BORROWING (adjacent sectors) ===\n' +
@@ -263,7 +263,7 @@ Return ONLY valid JSON:
   "name": "שם הטרנד בעברית — עד 5 מילים",
   "description": "מה זה ולמה זה הולך להיות גדול — עד 15 מילה",
   "evidence": "ציטוט ספציפי או URL מהנתונים שמוכיח שהטרנד עולה",
-  "source_platforms": ["tiktok","instagram","reddit","google_trends","news"],
+  "source_platforms": ["instagram","reddit","google_trends","news"],
   "stage": "emerging|early_growing",
   "velocity_score": 0-100,
   "days_to_peak_estimate": 7-60,

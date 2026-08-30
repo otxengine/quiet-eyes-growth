@@ -66,7 +66,6 @@ import { competitorIntelAgent } from './competitorIntelAgent';
 import { fetchSocialInsights } from './fetchSocialInsights';
 import { schedulePostPublisher } from './schedulePostPublisher';
 import { analyzeInstagramComments } from './analyzeInstagramComments';
-import { analyzeTikTokContent } from './analyzeTikTokContent';
 import { publishPost } from './publishPost';
 import { estimateCampaignMetrics } from './estimateCampaignMetrics';
 import { analyzeImageForPost } from './analyzeImageForPost';
@@ -88,9 +87,6 @@ import { lostLeadRecovery } from './lostLeadRecovery';
 import { pricingIntelligence } from './pricingIntelligence';
 import { revenueForecaster } from './revenueForecaster';
 import { sentimentVelocityMonitor } from './sentimentVelocityMonitor';
-import { tiktokSectorTrendAgent } from './tiktokSectorTrendAgent';
-import { tiktokAudienceAgent } from './tiktokAudienceAgent';
-import { tiktokPostTracker } from './tiktokPostTracker';
 import { updateInsightMemory } from './updateInsightMemory';
 import { generateAdvisoryInsights } from './generateAdvisoryInsights';
 import { cleanupInsights } from './cleanupInsights';
@@ -225,7 +221,6 @@ const FUNCTION_MAP: Record<string, any> = {
   fetchSocialInsights,
   schedulePostPublisher,
   analyzeInstagramComments,
-  analyzeTikTokContent,
   publishPost,
   estimateCampaignMetrics,
   analyzeImageForPost,
@@ -247,9 +242,6 @@ const FUNCTION_MAP: Record<string, any> = {
   pricingIntelligence,
   revenueForecaster,
   sentimentVelocityMonitor,
-  tiktokSectorTrendAgent,
-  tiktokAudienceAgent,
-  tiktokPostTracker,
   updateInsightMemory,
   generateAdvisoryInsights,
   cleanupInsights,

@@ -19,9 +19,7 @@ export default function BusinessSocialSnapshot({ businessProfile, platform }) {
   const bpId = businessProfile?.id;
   const hasPlatformUrl = platform === 'instagram'
     ? !!businessProfile?.instagram_url
-    : platform === 'facebook'
-    ? !!(businessProfile?.facebook_url || businessProfile?.facebook_page_id)
-    : !!businessProfile?.tiktok_url;
+    : !!(businessProfile?.facebook_url || businessProfile?.facebook_page_id);
 
   const [section, setSection] = useState('feed');
   const [selectedPost, setSelectedPost] = useState(null);

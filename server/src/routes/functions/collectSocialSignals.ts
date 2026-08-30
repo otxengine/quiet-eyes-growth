@@ -177,7 +177,7 @@ export async function collectSocialSignals(req: Request, res: Response) {
         : category;
 
       const influencerResults = await tavilySearch(
-        `influencers ${catStr} Israel instagram tiktok micro-influencer`,
+        `influencers ${catStr} Israel instagram micro-influencer`,
         6, 30, onTavilyError,
       );
 
@@ -197,7 +197,7 @@ ${influencerCtx}
 
 Identify up to 3 influencers active in this sector in Israel.
 Return ONLY valid JSON. ALL string values must be in Hebrew:
-{"influencers":[{"name":"name","platform":"instagram|tiktok|youtube","followers_estimate":"50K","relevance":"why relevant to the sector","collaboration_idea":"concrete collaboration idea"}]}`,
+{"influencers":[{"name":"name","platform":"instagram|youtube","followers_estimate":"50K","relevance":"why relevant to the sector","collaboration_idea":"concrete collaboration idea"}]}`,
           response_json_schema: { type: 'object' },
         });
 
@@ -225,12 +225,12 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     if (!isTavilyRateLimited()) {
       const keywords = parseKeywords(profile);
       const urlQueries = buildUrlQueries(profile, name); // e.g. '"name" instagram'
-      for (const q of [...urlQueries, ...keywords.slice(0, 8).map(kw => `"${kw}" site:facebook.com OR site:instagram.com OR site:tiktok.com`)]) {
+      for (const q of [...urlQueries, ...keywords.slice(0, 8).map(kw => `"${kw}" site:facebook.com OR site:instagram.com`)]) {
         if (isTavilyRateLimited()) break;
         const results = await tavilySearch(q, 4, 30, onTavilyError);
         for (const r of results) {
           if (!r.url || existingUrls.has(r.url)) continue;
-          const isSocial = ['facebook.com', 'instagram.com', 'tiktok.com'].some(d => r.url.includes(d));
+          const isSocial = ['facebook.com', 'instagram.com'].some(d => r.url.includes(d));
           if (!isSocial) continue;
           await prisma.rawSignal.create({
             data: {
@@ -238,7 +238,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
               content: (r.content || r.title || '').substring(0, 500),
               url: r.url,
               signal_type: 'social_mention',
-              platform: r.url.includes('facebook') ? 'facebook' : r.url.includes('instagram') ? 'instagram' : 'tiktok',
+              platform: r.url.includes('facebook') ? 'facebook' : 'instagram',
               source_origin: 'tavily',
               detected_at: new Date().toISOString(),
               linked_business: businessProfileId,
@@ -260,7 +260,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       const results = await tavilySearch(query, 5, 30, onTavilyError);
       for (const r of results) {
         if (!r.url || existingUrls.has(r.url)) continue;
-        const isSocial = ['facebook.com', 'instagram.com', 'tiktok.com', 'twitter.com'].some(d => r.url.includes(d));
+        const isSocial = ['facebook.com', 'instagram.com', 'twitter.com'].some(d => r.url.includes(d));
         if (!isSocial) continue;
 
         await prisma.rawSignal.create({

@@ -35,7 +35,7 @@ import { detectCompetitorAds } from '../routes/functions/detectCompetitorAds';
 
 const COMP = {
   id: 'c1', name: 'Test Co', not_relevant: false, tracking_status: 'approved',
-  google_place_id: 'place1', instagram_url: 'https://instagram.com/testco', facebook_url: null, tiktok_url: null,
+  google_place_id: 'place1', instagram_url: 'https://instagram.com/testco', facebook_url: null,
   sponsored_ads_updated_at: null,
 };
 

@@ -25,7 +25,7 @@ interface SectorDef {
   /** 5 content pillars — types of posts that drive engagement in this sector */
   contentPillars: string[];
   /** Platform-specific best format */
-  platformFormats: { instagram: string; tiktok: string; facebook: string };
+  platformFormats: { instagram: string; facebook: string };
   /** Conversion triggers — phrases/angles that move people to buy */
   conversionTriggers: string[];
   /** Typical audience demographics */
@@ -50,7 +50,6 @@ const SECTOR_LIBRARY: Record<string, SectorDef> = {
     ],
     platformFormats: {
       instagram: 'קרוסל תמונות איכותיות של מנות + Reels קצרים של הכנה (15-30 שניות)',
-      tiktok: 'וידאו מאחורי הקלעים, טיפ בישול מהיר, או "צפו איך מכינים X"',
       facebook: 'פוסטים ארוכים יותר עם סיפור + תמונה, אירועים ומבצעי שבוע',
     },
     conversionTriggers: [
@@ -78,7 +77,6 @@ const SECTOR_LIBRARY: Record<string, SectorDef> = {
     ],
     platformFormats: {
       instagram: 'Reels טרנספורמציה + תמונות high-quality לפני-אחרי + Stories לקידום',
-      tiktok: 'ASMR טיפולים, "הכנה לאירוע", טיפ יופי מהיר ויזואלי',
       facebook: 'פוסט מבצע + ביקורת לקוחה + הזמנה לתאם תור',
     },
     conversionTriggers: [
@@ -106,7 +104,6 @@ const SECTOR_LIBRARY: Record<string, SectorDef> = {
     ],
     platformFormats: {
       instagram: 'Reels אימון + תמונות בתוצאות + Stories אינטראקטיביות (סקר, שאלה)',
-      tiktok: 'שגרת אימון 60 שניות, טיפ מהיר, אתגר ויראלי (#FitnessChallenge)',
       facebook: 'פוסט עם סיפור השראה + קישור לניסיון חינמי + אירוע קבוצתי',
     },
     conversionTriggers: [
@@ -126,7 +123,7 @@ const SECTOR_LIBRARY: Record<string, SectorDef> = {
     postHookExample: 'חוזה שכירות שלא בדקת עלול לעלות לך הרבה. 3 סעיפים שחשוב לבדוק לפני שחותמים...',
     keywords: ['עורך דין', 'משפטי', 'חוזה', 'תביעה', 'ירושה', 'גירושין', 'נדל"ן'],
     contentPillars: ['חינוך משפטי — טיפ שכולם צריכים לדעת', 'מיתוס vs. מציאות משפטית', 'מקרה הצלחה (ללא פרטים מזהים)', 'שינויי חקיקה שמשפיעים עלייך', 'שאלות נפוצות'],
-    platformFormats: { instagram: 'Carousel מידע ויזואלי (5-7 שקפים), טקסט + אייקונים', tiktok: 'ועדיין לא נפוץ לסקטור — עדיף LinkedIn + Facebook', facebook: 'פוסט ארוך עם מידע מלא + הזמנה לייעוץ חינמי' },
+    platformFormats: { instagram: 'Carousel מידע ויזואלי (5-7 שקפים), טקסט + אייקונים', facebook: 'פוסט ארוך עם מידע מלא + הזמנה לייעוץ חינמי' },
     conversionTriggers: ['ייעוץ ראשוני ללא עלות', 'שאלה אחת שיכולה לחסוך לך אלפי שקלים', 'שלח הודעה עכשיו — נחזור תוך שעה'],
     audienceDemographics: 'עסקים קטנים ובינוניים, יחידים בהליכים משפחתיים, יזמי נדל"ן, 30-60',
   },
@@ -139,7 +136,7 @@ const SECTOR_LIBRARY: Record<string, SectorDef> = {
     postHookExample: 'כאב גב? לפני שאתה לוקח כדורים — נסה את השיטה שעוזרת לרוב המטופלים שלנו תוך שבוע...',
     keywords: ['רפואה', 'קליניקה', 'רופא', 'פיזיותרפיה', 'שיניים', 'עיניים', 'כאב'],
     contentPillars: ['טיפ בריאות מהיר ומעשי', 'הסבר על טיפול/נוהל', 'מיתוס בריאות vs. מציאות', 'כאבים נפוצים ואיך לפתור', 'מקרה הצלחה מטופל'],
-    platformFormats: { instagram: 'אינפוגרפיקה + carousel הסבר', tiktok: 'טיפ בריאות מהיר 30-60 שניות', facebook: 'פוסט מפורט + קישור לתור אונליין' },
+    platformFormats: { instagram: 'אינפוגרפיקה + carousel הסבר', facebook: 'פוסט מפורט + קישור לתור אונליין' },
     conversionTriggers: ['תורים זמינים השבוע', 'בדיקה ראשונה ללא עלות', 'הפנייה מהרופא? נסדר הכל'],
     audienceDemographics: 'כל הגילאים, בעיקר 30-65 עם כאבים ספציפיים, הורים לילדים, ספורטאים',
   },
@@ -152,7 +149,7 @@ const SECTOR_LIBRARY: Record<string, SectorDef> = {
     postHookExample: 'מה קורה לשוק הנדל"ן ב{city} החודש? 3 נתונים שכל קונה/מוכר חייב לדעת...',
     keywords: ['נדל"ן', 'דירה', 'בית', 'קנייה', 'מכירה', 'שכירות', 'השקעה'],
     contentPillars: ['עדכון שוק מקומי', 'טיפ לקונה/מוכר', 'נכס שנמכר / הצלחה', 'מדריך צעד-אחר-צעד לתהליך', 'מגמות שוק'],
-    platformFormats: { instagram: 'תמונות נכסים + Reels סיור בנכס', tiktok: 'סיור וירטואלי, טיפ שוק 60 שניות', facebook: 'פוסט מפורט + קישור לנכסים + קבוצת שוק מקומי' },
+    platformFormats: { instagram: 'תמונות נכסים + Reels סיור בנכס', facebook: 'פוסט מפורט + קישור לנכסים + קבוצת שוק מקומי' },
     conversionTriggers: ['הנכס הזה לא יחכה — צרו קשר היום', 'שמאות חינמית לנכסכם', 'לקוחות שלנו חסכו בממוצע 50K₪'],
     audienceDemographics: 'זוגות צעירים 28-40, משקיעים 35-60, משפרי דיור 35-55',
   },
@@ -165,7 +162,7 @@ const SECTOR_LIBRARY: Record<string, SectorDef> = {
     postHookExample: 'מבצע שמסתיים ביום שישי! אלה {count} המוצרים הכי נמכרים השבוע...',
     keywords: ['חנות', 'קמעונאות', 'מכירה', 'מבצע', 'הנחה', 'מוצר', 'מלאי'],
     contentPillars: ['מוצר השבוע + יתרונות', 'מאחורי הקלעים — מיהם אנחנו', 'ביקורת לקוח + תמונה', 'מבצע / מוגבל בזמן', 'טיפ שימוש / הדרכה על מוצר'],
-    platformFormats: { instagram: 'תמונות מוצר איכותיות, Reels unboxing, Stories מבצעים', tiktok: 'unboxing, הדגמת מוצר, "למה כולם קונים את זה"', facebook: 'מבצע + קישור לחנות + פוסט ביקורות' },
+    platformFormats: { instagram: 'תמונות מוצר איכותיות, Reels unboxing, Stories מבצעים', facebook: 'מבצע + קישור לחנות + פוסט ביקורות' },
     conversionTriggers: ['מבצע לזמן מוגבל — X% הנחה', 'משלוח חינמי מ-X₪', 'קנה שניים, קבל שלישי במחיר מוזל'],
     audienceDemographics: 'תלוי במוצר, בדרך כלל 25-55 רוכשים מקוונים ומקומיים',
   },
@@ -178,7 +175,7 @@ const SECTOR_LIBRARY: Record<string, SectorDef> = {
     postHookExample: 'האות הזאת על לוח המכוונים שרוב הנהגים מתעלמים ממנה — ויכולה לעלות לך הרבה...',
     keywords: ['רכב', 'גרז', 'טסט', 'תיקון', 'צמיגים', 'מוסך', 'שמן'],
     contentPillars: ['טיפ טיפול ברכב', 'תיקון מפתיע שמנענו ללקוח', 'מה לבדוק לפני נסיעה ארוכה', 'צמיג / שמן / טסט — מתי ולמה', 'מוצר/שירות חדש'],
-    platformFormats: { instagram: 'תמונות לפני-אחרי תיקון, Reels תהליך עבודה', tiktok: 'טיפ מהיר על רכב, "כך תדעו שצריך להחליף צמיגים"', facebook: 'מבצע עונתי + תורים + פוסט מידעי' },
+    platformFormats: { instagram: 'תמונות לפני-אחרי תיקון, Reels תהליך עבודה', facebook: 'מבצע עונתי + תורים + פוסט מידעי' },
     conversionTriggers: ['קבל תור לטסט תוך 24 שעות', 'בדיקה חינמית לרכב', 'מבצע חילוף שמן + צמיגים'],
     audienceDemographics: 'נהגים 25-65, בעלי רכב, גברים בעיקר אבל לא רק',
   },
@@ -191,7 +188,7 @@ const SECTOR_LIBRARY: Record<string, SectorDef> = {
     postHookExample: '3 אזורים בבית שרוב האנשים שוכחים לנקות — ומה קורה אם לא...',
     keywords: ['ניקיון', 'איחזוק', 'ניקוי', 'מנקה', 'דירה', 'משרד'],
     contentPillars: ['טיפ ניקיון מהיר', 'לפני-אחרי ניקיון', 'ניקיון עמוק לעונה', 'כלים ומוצרים מקצועיים', 'ביקורת לקוח'],
-    platformFormats: { instagram: 'לפני-אחרי ויזואלי, Reels תהליך ניקיון מרגיע', tiktok: 'CleanTok — ניקיון סטיפאינג, ASMR ניקוי', facebook: 'מבצע עונתי + המלצות + קישור לתיאום' },
+    platformFormats: { instagram: 'לפני-אחרי ויזואלי, Reels תהליך ניקיון מרגיע', facebook: 'מבצע עונתי + המלצות + קישור לתיאום' },
     conversionTriggers: ['ניקיון ראשוני בהנחה', 'חבילת ניקיון חודשי קבוע', 'מגיעים תוך 24 שעות'],
     audienceDemographics: 'בעלי בתים 30-60, עסקים, בעלי נכסים להשכרה',
   },
@@ -204,7 +201,7 @@ const SECTOR_LIBRARY: Record<string, SectorDef> = {
     postHookExample: 'הטכניקה שעוזרת לתלמידים לשפר את ציוניהם ב-30% תוך חודש — ואיך מיישמים אותה...',
     keywords: ['חינוך', 'שיעורים', 'קורס', 'הדרכה', 'לימודים', 'מורה', 'בגרות'],
     contentPillars: ['סיפור הצלחה תלמיד', 'טיפ לימוד מוכח', 'מיתוס חינוכי vs. מציאות', 'הכנה לבחינה — מדריך', 'מאחורי הקלעים — המורה/הקורס'],
-    platformFormats: { instagram: 'carousel טיפים, Stories שאלות אינטראקטיביות', tiktok: '"שיעור ב-60 שניות", טיפ מהיר לבחינה', facebook: 'פוסט מפורט + הזמנה לשיעור ניסיון + קבוצת הורים' },
+    platformFormats: { instagram: 'carousel טיפים, Stories שאלות אינטראקטיביות', facebook: 'פוסט מפורט + הזמנה לשיעור ניסיון + קבוצת הורים' },
     conversionTriggers: ['שיעור ניסיון ראשון חינמי', 'כפל ציון תוך חודש — או הכסף חזר', 'הרשמה לסמסטר הבא פתוחה — X מקומות נשארו'],
     audienceDemographics: 'תלמידים 12-18, הורים 35-55, בוגרים שרוצים לרכוש מיומנות',
   },
@@ -220,7 +217,7 @@ const DEFAULT_DEF: SectorDef = {
   postHookExample: 'שאלה אחת שכל לקוח שואל — והתשובה שמפתיעה כולם...',
   keywords: ['שירות', 'מקצועי', 'איכות', 'לקוח'],
   contentPillars: ['הצגת שירות מרכזי + יתרון', 'ביקורת לקוח מרוצה', 'מאחורי הקלעים', 'טיפ מקצועי', 'מבצע / הצעה מיוחדת'],
-  platformFormats: { instagram: 'תמונות מקצועיות + Reels תהליך עבודה', tiktok: 'טיפ מהיר ויזואלי', facebook: 'פוסט מפורט + הזמנה ליצור קשר' },
+  platformFormats: { instagram: 'תמונות מקצועיות + Reels תהליך עבודה', facebook: 'פוסט מפורט + הזמנה ליצור קשר' },
   conversionTriggers: ['צרו קשר לקבלת הצעת מחיר', 'ניסיון ראשוני ללא עלות', 'מוגבל בזמן — פנה עכשיו'],
   audienceDemographics: 'לקוחות פוטנציאליים מקומיים 25-60',
 };
@@ -290,7 +287,6 @@ ${def.contentPillars.map((p, i) => `  ${i + 1}. ${p}`).join('\n')}
 
 פורמטים מנצחים לפלטפורמה:
   Instagram: ${def.platformFormats.instagram}
-  TikTok:    ${def.platformFormats.tiktok}
   Facebook:  ${def.platformFormats.facebook}
 
 טריגרי המרה שעובדים:

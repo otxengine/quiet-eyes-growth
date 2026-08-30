@@ -26,7 +26,6 @@ describe('fetchSocialPageAbout', () => {
   it('scrapes each platform with the correct Apify actor (AC2)', async () => {
     mockRunApifyActor.mockImplementation((actorId: string) => {
       if (actorId === 'apify~instagram-scraper') return Promise.resolve([{ biography: 'IG bio', username: 'biz' }]);
-      if (actorId === 'clockworks~tiktok-profile-scraper') return Promise.resolve([{ authorMeta: { signature: 'TikTok bio', nickName: 'biz' } }]);
       if (actorId === 'apify~facebook-pages-scraper') return Promise.resolve([{ about: 'FB about', pageName: 'Biz' }]);
       return Promise.resolve([]);
     });
@@ -34,28 +33,26 @@ describe('fetchSocialPageAbout', () => {
     const result = await fetchSocialPageAbout({
       facebookUrl: 'https://facebook.com/biz',
       instagramUrl: 'https://instagram.com/biz',
-      tiktokUrl: 'https://tiktok.com/@biz',
     });
 
-    expect(result).toHaveLength(3);
+    expect(result).toHaveLength(2);
     expect(result.find(r => r.platform === 'instagram')?.aboutText).toBe('IG bio');
-    expect(result.find(r => r.platform === 'tiktok')?.aboutText).toBe('TikTok bio');
     expect(result.find(r => r.platform === 'facebook')?.aboutText).toBe('FB about');
   });
 
   it('soft-fails per platform — one platform erroring does not block the others (AC4)', async () => {
     mockRunApifyActor.mockImplementation((actorId: string) => {
       if (actorId === 'apify~instagram-scraper') return Promise.reject(new Error('actor timeout'));
-      if (actorId === 'clockworks~tiktok-profile-scraper') return Promise.resolve([{ authorMeta: { signature: 'TikTok bio' } }]);
+      if (actorId === 'apify~facebook-pages-scraper') return Promise.resolve([{ about: 'FB about', pageName: 'Biz' }]);
       return Promise.resolve([]);
     });
 
     const result = await fetchSocialPageAbout({
       instagramUrl: 'https://instagram.com/biz',
-      tiktokUrl: 'https://tiktok.com/@biz',
+      facebookUrl: 'https://facebook.com/biz',
     });
 
-    expect(result).toEqual([{ platform: 'tiktok', aboutText: 'TikTok bio', pageName: undefined, profileUrl: 'https://tiktok.com/@biz', raw: { authorMeta: { signature: 'TikTok bio' } } }]);
+    expect(result).toEqual([{ platform: 'facebook', aboutText: 'FB about', pageName: 'Biz', profileUrl: 'https://facebook.com/biz', raw: { about: 'FB about', pageName: 'Biz' } }]);
   });
 
   it('never invents — returns [] when Apify and Tavily both yield nothing', async () => {

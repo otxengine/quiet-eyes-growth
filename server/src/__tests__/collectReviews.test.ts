@@ -794,7 +794,7 @@ describe('collectReviews — KAN-17 Tier 4: multi-source Tavily', () => {
     const queries = (tavily.mock.calls as string[][]).map(([q]) => q);
     const expectedFragments = [
       'facebook.com', 'instagram.com', 'tripadvisor',
-      'waze.com', 'tiktok.com', 'wolt.com',
+      'waze.com', 'wolt.com',
       '10bis.co.il', 'easy.co.il', 'booking.com', 'tapuz.co.il',
     ];
     for (const frag of expectedFragments) {

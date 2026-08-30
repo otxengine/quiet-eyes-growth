@@ -224,12 +224,6 @@ async function scrapeAndSave(
       resultsLimit: platformCap,
       ...(onlyPostsNewerThan ? { onlyPostsNewerThan } : {}),
     }, 120_000, 160, (msg) => { apifyError = msg; });
-  } else if (platform === 'tiktok') {
-    rawPosts = await runApifyActor('clockworks~tiktok-profile-scraper', {
-      profiles: [url],
-      resultsPerPage: platformCap,
-      ...(onlyPostsNewerThan ? { oldestPostDateUnified: onlyPostsNewerThan } : {}),
-    }, 90_000, 160, (msg) => { apifyError = msg; });
   }
 
   const insertErrors: any[] = [];
@@ -299,20 +293,15 @@ async function scrapeAndSave(
       post.attachments?.[0]?.media?.url ||
       post.attachments?.[0]?.url ||
       post.attachments?.[0]?.imageUrl ||
-      // TikTok (clockworks~tiktok-profile-scraper)
-      post.videoMeta?.coverUrl ||
-      post.covers?.[0] ||
       null,
     );
     if (rawMediaUrl) mediaFound++;
 
     // Raw playable video file — separate from the thumbnail above. videoUrl/webVideoUrl
     // were previously (wrongly) mixed into rawMediaUrl: Instagram's videoUrl is the raw
-    // .mp4, and TikTok's webVideoUrl is the HTML watch page, not media at all — neither
-    // is a valid thumbnail image, so they're only ever used here now.
+    // .mp4, not a valid thumbnail image, so it's only ever used here now.
     const rawVideoUrl = pgSafe(
       post.videoUrl ||               // Instagram Reel .mp4
-      post.videoMeta?.downloadAddr || // TikTok raw video file
       null,
     );
 
@@ -477,7 +466,6 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
       const urls: Record<string, string | null> = {
         instagram: (comp as any).instagram_url,
         facebook:  (comp as any).facebook_url,
-        tiktok:    (comp as any).tiktok_url,
       };
       for (const [platform, url] of Object.entries(urls)) {
         if (url) {

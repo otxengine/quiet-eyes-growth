@@ -39,11 +39,7 @@ import { analyzeCompetitorSocial } from './routes/functions/analyzeCompetitorSoc
 import { detectCompetitorAds } from './routes/functions/detectCompetitorAds';
 import { scheduledAnalyzeSocialPosts } from './routes/functions/analyzeSocialPosts';
 import { competitorMoveTracker } from './routes/functions/competitorMoveTracker';
-import { tiktokSectorTrendAgent } from './routes/functions/tiktokSectorTrendAgent';
-import { tiktokAudienceAgent } from './routes/functions/tiktokAudienceAgent';
-import { tiktokPostTracker } from './routes/functions/tiktokPostTracker';
 import { findLocalEvents } from './routes/functions/findLocalEvents';
-import { refreshExpiringTikTokTokens } from './lib/tiktokTokenRefresh';
 import { instagramTrendAgent } from './routes/functions/instagramTrendAgent';
 import { facebookGroupTrendAgent } from './routes/functions/facebookGroupTrendAgent';
 import { googleTrendsScanAgent } from './routes/functions/googleTrendsScanAgent';
@@ -230,7 +226,7 @@ export function startScheduler() {
     runAgentForAll('BatchSnapshotCompetitors', batchSnapshotCompetitors); // takes fresh snapshots + writes last_scanned
     runAgentForAll('DetectCompetitorChanges',  detectCompetitorChanges);  // prices/promos/posts → MarketSignals (48h dedup)
     runAgentForAll('AnalyzeCompetitorSocial',   analyzeCompetitorSocial);   // social enrichment + promo/ads/product detection → new fields + alerts
-    runAgentForAll('DetectCompetitorAds',       detectCompetitorAds);       // Meta/TikTok/Google paid ad campaigns → ProactiveAlerts
+    runAgentForAll('DetectCompetitorAds',       detectCompetitorAds);       // Meta/Google paid ad campaigns → ProactiveAlerts
     runAgentForAll('AnalyzeSocialPosts', scheduledAnalyzeSocialPosts); // deep content-strategy analysis, grounded in per-post vision analysis (48h/competitor guard)
     runAgentForAll('CompetitorIntel',           competitorIntelAgent);      // OSINT × events → ProactiveAlerts
     runAgentForAll('CompetitorMoveTracker',     competitorMoveTracker);     // DB-level moves → ProactiveAlerts
@@ -241,10 +237,6 @@ export function startScheduler() {
     // ── Events (checked daily, self-throttle to 3 days via agentCache) ───────
     runAgentForAll('FindLocalEvents', findLocalEvents); // Tavily + LLM — 3-day guard
     runAgentForAll('DetectEvents', detectEvents);        // calendar-based — 3-day guard
-    // ── TikTok (internal cooldown guards prevent double-running) ─────────────
-    runAgentForAll('TikTokSectorTrendAgent', tiktokSectorTrendAgent); // 8h guard
-    runAgentForAll('TikTokAudienceAgent', tiktokAudienceAgent);       // 24h guard
-    runAgentForAll('TikTokPostTracker', tiktokPostTracker);           // 12h guard
     // ── Insight generators (run after pipeline so they have fresh signals) ───
     // 15min delay: ensure MasterOrchestrator has finished fusing insights first
     setTimeout(() => {
@@ -330,12 +322,10 @@ export function startScheduler() {
     });
   }
 
-  // ── Every 30 min: semi_auto actions + token refresh ───────────────────────────
+  // ── Every 30 min: semi_auto actions ───────────────────────────
   cron.schedule('*/30 * * * *', () => {
     processScheduledAutoActions()
       .catch(err => logger.error('processScheduledAutoActions failed', { error: err.message }));
-    refreshExpiringTikTokTokens()
-      .catch(err => logger.error('refreshExpiringTikTokTokens failed', { error: err.message }));
   });
 
   // ── Every 15 min: DataForSEO review task reconciliation (missed postbacks) ───

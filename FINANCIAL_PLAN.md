@@ -28,7 +28,6 @@
 | יכולת | Business | Professional | Premium |
 |-------|---------|-------------|---------|
 | סריקות AI | כל 12 שעות | כל 4 שעות | כל 4 שעות + עדיפות |
-| TikTok Intelligence | — | — | כן |
 | Instagram / Facebook Apify | — | כן | כן |
 | Google Trends (SerpAPI) | — | כן | כן |
 | לידים חמים AI | עד 50/חודש | עד 250/חודש | ללא הגבלה |
@@ -54,7 +53,7 @@
 | **סה"כ Claude** | **39 ₪** | **50 ₪** | **61 ₪** |
 | Tavily (delta-based, רק נתונים חדשים) | 28 ₪ | 63 ₪ | 96 ₪ |
 | SerpAPI + Google Places | 19 ₪ | 46 ₪ | 66 ₪ |
-| Apify (Instagram/FB/TikTok) | — | 25 ₪ | 40 ₪ |
+| Apify (Instagram/FB) | — | 25 ₪ | 40 ₪ |
 | WhatsApp (Meta Cloud API) | — | 24 ₪ | 70 ₪ |
 | OpenAI fallback + Email + DB | 11 ₪ | 18 ₪ | 28 ₪ |
 | **סה"כ Variable/לקוח/חודש** | **97 ₪** | **226 ₪** | **361 ₪** |

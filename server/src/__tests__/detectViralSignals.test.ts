@@ -1,7 +1,6 @@
 /**
  * Tests for detectViralSignals — KAN-76
  * AC1: creates MarketSignal category=viral_signal with content template in metadata
- * AC2: filterNewIds applied on cache-hit path (not just fresh Apify calls)
  * AC3: non-Growth plan skips with plan_not_eligible
  * AC4: 12h cooldown skips with ran_recently
  */
@@ -16,17 +15,12 @@ jest.mock('../lib/llm',           () => ({ invokeLLM: jest.fn() }));
 jest.mock('../lib/automationLog', () => ({ writeAutomationLog: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../lib/trendMemory',   () => ({
   loadCheckpoint:   jest.fn(),
-  filterNewIds:     jest.fn(),
   saveCheckpoint:   jest.fn().mockResolvedValue(undefined),
   shouldSkipByTime: jest.fn().mockReturnValue(false),
 }));
 jest.mock('../lib/tavily', () => ({
   tavilyAdvancedSearch: jest.fn(),
   isTavilyRateLimited:  jest.fn(),
-}));
-jest.mock('../lib/apify', () => ({
-  runApifyActor: jest.fn(),
-  hasApifyKey:   jest.fn(),
 }));
 jest.mock('../lib/agentCache', () => ({
   shouldSkipAgent: jest.fn(),
@@ -39,9 +33,8 @@ jest.mock('../lib/agentCache', () => ({
 import { detectViralSignals } from '../routes/functions/detectViralSignals';
 import { prisma } from '../db';
 import { invokeLLM } from '../lib/llm';
-import { loadCheckpoint, filterNewIds } from '../lib/trendMemory';
+import { loadCheckpoint } from '../lib/trendMemory';
 import { isTavilyRateLimited, tavilyAdvancedSearch } from '../lib/tavily';
-import { hasApifyKey, runApifyActor } from '../lib/apify';
 import { cacheGet } from '../lib/agentCache';
 import { shouldSkipByTime } from '../lib/trendMemory';
 
@@ -60,7 +53,7 @@ function makeRes() {
 
 function makeSignal(overrides = {}) {
   return {
-    title: 'ויראלי בדיקה', platform: 'tiktok', content_format: 'reel',
+    title: 'ויראלי בדיקה', platform: 'instagram', content_format: 'reel',
     hashtags: ['#test'], velocity: 'exploding', window_hours: 24,
     evidence_url: 'https://example.com', ready_to_post_text: 'פוסט בדיקה',
     visual_direction: 'צלם', relevance: 'high', confidence: 80,
@@ -74,9 +67,7 @@ beforeEach(() => {
   (prisma.marketSignal.findMany     as jest.Mock).mockResolvedValue([]);
   (prisma.marketSignal.create       as jest.Mock).mockResolvedValue({});
   (loadCheckpoint                   as jest.Mock).mockResolvedValue(EMPTY_CP);
-  (filterNewIds                     as jest.Mock).mockImplementation((ids: string[]) => ids);
   (shouldSkipByTime                 as jest.Mock).mockReturnValue(false);
-  (hasApifyKey                      as jest.Mock).mockReturnValue(false);
   (isTavilyRateLimited              as jest.Mock).mockReturnValue(true); // skip Tavily by default
   (cacheGet                         as jest.Mock).mockReturnValue(null);
   (invokeLLM                        as jest.Mock).mockResolvedValue({ signals: [] });
@@ -143,35 +134,9 @@ it('AC1: creates MarketSignal with category=viral_signal and content template', 
   const meta = JSON.parse(call.data.source_description);
   expect(meta).toMatchObject({
     action_type:      'social_post',
-    platform:         'tiktok',
+    platform:         'instagram',
     content_format:   'reel',
     is_viral_signal:  true,
     ready_to_post_text: expect.any(String),
   });
-});
-
-// ── AC2 — filterNewIds applied on cache-hit path ──────────────────────────────
-
-it('AC2: filterNewIds runs even when Apify result comes from cache', async () => {
-  const cachedVideos = [
-    { id: 'vid_001', text: 'video 1', playCount: 100000, diggCount: 5000, commentCount: 200, hashtags: [] },
-    { id: 'vid_002', text: 'video 2', playCount: 80000,  diggCount: 3000, commentCount: 100, hashtags: [] },
-  ];
-  const cachedHashtags = { local: ['#מסעדה', '#food_israel'], global: ['#italianfood', '#foodie'] };
-
-  (hasApifyKey as jest.Mock).mockReturnValue(true);
-  // different cache keys return different values
-  (cacheGet as jest.Mock).mockImplementation((key: string) => {
-    if (key.startsWith('hashtags_generated:')) return cachedHashtags;
-    if (key.startsWith('apify_tiktok_hashtags:')) return cachedVideos;
-    return null;
-  });
-  (filterNewIds as jest.Mock).mockReturnValue(['vid_002']); // vid_001 already seen
-  (invokeLLM    as jest.Mock).mockResolvedValue({ signals: [makeSignal()] });
-
-  const res = makeRes();
-  await detectViralSignals(makeReq(), res);
-
-  expect(filterNewIds).toHaveBeenCalledWith(['vid_001', 'vid_002'], EMPTY_CP);
-  expect(runApifyActor).not.toHaveBeenCalled(); // confirms Apify cache was hit
 });

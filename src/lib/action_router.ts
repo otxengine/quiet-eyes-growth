@@ -23,7 +23,7 @@ export interface ActionInput {
 
 const SOCIAL_KEYWORDS = [
   "פוסט", "פרסם", "פרסום", "post", "פייסבוק", "אינסטגרם", "instagram", "facebook",
-  "tiktok", "טיקטוק", "סטורי", "story", "קמפיין", "campaign", "שתף", "share",
+  "סטורי", "story", "קמפיין", "campaign", "שתף", "share",
 ];
 
 const REPLY_KEYWORDS = [

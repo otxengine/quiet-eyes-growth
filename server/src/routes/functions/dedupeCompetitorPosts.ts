@@ -54,7 +54,7 @@ export async function dedupeCompetitorPosts(req: Request, res: Response) {
 
     outer:
     for (const comp of competitors) {
-      for (const platform of ['instagram', 'facebook', 'tiktok']) {
+      for (const platform of ['instagram', 'facebook']) {
         if (timeLeft() <= 0) { ranOutOfTime = true; break outer; }
 
         const posts = await (prisma as any).$queryRawUnsafe(

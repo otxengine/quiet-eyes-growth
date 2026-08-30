@@ -24,7 +24,7 @@ const TECH_STATS = [
   { value: '44', label: 'קטגוריות עסקיות בישראל', sub: 'מקורות מידע ייעודיים לכל תחום' },
 ];
 
-const INTEGRATIONS = ['Facebook', 'Instagram', 'TikTok', 'Google Business', 'Google Ads', 'Meta Ads', 'WhatsApp'];
+const INTEGRATIONS = ['Facebook', 'Instagram', 'Google Business', 'Google Ads', 'Meta Ads', 'WhatsApp'];
 
 const STEPS = [
   {

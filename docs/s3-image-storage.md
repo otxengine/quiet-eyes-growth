@@ -1,7 +1,7 @@
 # S3 Image Storage — Competitor Post Media
 
-Competitor post images scraped from Instagram, Facebook, and TikTok are stored
-in S3 so they survive CDN expiry (IG/FB URLs expire after ~24-48h; TikTok even faster).
+Competitor post images scraped from Instagram and Facebook are stored
+in S3 so they survive CDN expiry (IG/FB URLs expire after ~24-48h).
 
 Without S3 configured the scraper falls back to storing the raw CDN URL, which
 will break after expiry. The frontend proxy (`/api/competitors/proxy-image`) also

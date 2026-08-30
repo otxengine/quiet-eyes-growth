@@ -1,7 +1,7 @@
 // OTXEngine — Agent 3: CompetitorSnapshot
 // Schedule: every 6 hours
 // Output: competitor_changes (diff-only — never write "no change" rows)
-// Sources: website hash, Google Maps, Instagram (Apify), Facebook Graph, TikTok (Apify)
+// Sources: website hash, Google Maps, Instagram (Apify), Facebook Graph
 
 import { supabase } from "./lib/supabase.ts";
 import { pingHeartbeat } from "./lib/heartbeat.ts";
@@ -24,7 +24,6 @@ interface CompetitorConfig {
   google_place_id?: string;
   instagram_handle?: string;
   facebook_page_id?: string;
-  tiktok_handle?: string;
 }
 
 interface SocialPost {
@@ -44,7 +43,7 @@ interface CompetitorChangeRow {
   detected_at_utc:  string;
   source_url:       string;
   confidence_score: number;
-  social_platform?: "instagram" | "facebook" | "tiktok" | "google" | "website";
+  social_platform?: "instagram" | "facebook" | "google" | "website";
   post_url?:        string;
   sentiment?:       "positive" | "neutral" | "negative";
   engagement_count?: number;
@@ -196,53 +195,6 @@ async function fetchFacebookPosts(
   }
 }
 
-// ─── TikTok via Apify ─────────────────────────────────────────────────────────
-
-async function fetchTikTokPosts(
-  handle: string,
-  apifyToken: string,
-): Promise<SocialPost[]> {
-  const cleanHandle = handle.replace(/^@/, "");
-  const runUrl = "https://api.apify.com/v2/acts/clockworks~free-tiktok-scraper/run-sync-get-dataset-items";
-  const payload = {
-    profiles: [`https://www.tiktok.com/@${cleanHandle}`],
-    resultsPerPage: 3,
-    shouldDownloadVideos: false,
-  };
-
-  try {
-    const res = await fetch(`${runUrl}?token=${apifyToken}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(60_000),
-    });
-    if (!res.ok) {
-      console.warn(`[${AGENT_NAME}] TikTok Apify HTTP ${res.status} for @${cleanHandle}`);
-      return [];
-    }
-    const items: Array<{
-      id?: string;
-      text?: string;
-      createTime?: number;
-      webVideoUrl?: string;
-      diggCount?: number;
-      commentCount?: number;
-    }> = await res.json();
-    return (items ?? []).slice(0, 3).map((item) => ({
-      id:        item.id ?? "",
-      caption:   item.text ?? "",
-      timestamp: item.createTime ? new Date(item.createTime * 1000).toISOString() : undefined,
-      likes:     item.diggCount ?? 0,
-      comments:  item.commentCount ?? 0,
-      url:       item.webVideoUrl ?? `https://www.tiktok.com/@${cleanHandle}`,
-    }));
-  } catch (e) {
-    console.warn(`[${AGENT_NAME}] TikTok fetch failed for @${cleanHandle}:`, e);
-    return [];
-  }
-}
-
 // ─── Sentiment heuristic ──────────────────────────────────────────────────────
 
 function inferSentiment(text: string): "positive" | "neutral" | "negative" {
@@ -258,7 +210,7 @@ function inferSentiment(text: string): "positive" | "neutral" | "negative" {
 
 function detectSocialChanges(
   posts:       SocialPost[],
-  platform:    "instagram" | "facebook" | "tiktok",
+  platform:    "instagram" | "facebook",
   competitor:  CompetitorConfig,
   businessId:  string,
   prevMap:     Map<string, LastChangeRow>,
@@ -434,7 +386,7 @@ async function loadCompetitorConfigs(
   // 1) Try competitor_config table first (v4 schema)
   const { data: configRows } = await supabase
     .from("competitor_config")
-    .select("id, competitor_name, website_url, google_place_id, instagram_handle, facebook_page_id, tiktok_handle")
+    .select("id, competitor_name, website_url, google_place_id, instagram_handle, facebook_page_id")
     .eq("business_id", businessId)
     .eq("is_active", true);
 
@@ -446,7 +398,6 @@ async function loadCompetitorConfigs(
       google_place_id:  r.google_place_id ?? undefined,
       instagram_handle: r.instagram_handle ?? undefined,
       facebook_page_id: r.facebook_page_id ?? undefined,
-      tiktok_handle:    r.tiktok_handle ?? undefined,
     }));
   }
 
@@ -476,7 +427,7 @@ async function loadCompetitorConfigs(
     // Re-load after discovery
     const { data: fresh } = await supabase
       .from("competitor_config")
-      .select("id, competitor_name, website_url, google_place_id, instagram_handle, facebook_page_id, tiktok_handle")
+      .select("id, competitor_name, website_url, google_place_id, instagram_handle, facebook_page_id")
       .eq("business_id", businessId)
       .eq("is_active", true);
 
@@ -535,7 +486,7 @@ async function run(): Promise<void> {
         if (!prevMap.has(row.change_type)) prevMap.set(row.change_type, row);
         // Also track per-platform social state
         if (row.change_type === "social") {
-          const platform = (row.change_summary.match(/New (instagram|facebook|tiktok)/) ?? [])[1];
+          const platform = (row.change_summary.match(/New (instagram|facebook)/) ?? [])[1];
           if (platform && !prevMap.has(`social_${platform}`)) {
             prevMap.set(`social_${platform}`, row);
           }
@@ -584,13 +535,6 @@ async function run(): Promise<void> {
         const posts = await fetchFacebookPosts(comp.facebook_page_id, apifyToken);
         const fbChanges = detectSocialChanges(posts, "facebook", comp, biz.id, prevMap);
         allChanges.push(...fbChanges);
-      }
-
-      // ── Source 5: TikTok ──
-      if (comp.tiktok_handle && apifyToken) {
-        const posts = await fetchTikTokPosts(comp.tiktok_handle, apifyToken);
-        const ttChanges = detectSocialChanges(posts, "tiktok", comp, biz.id, prevMap);
-        allChanges.push(...ttChanges);
       }
 
       if (allChanges.length === 0) continue;

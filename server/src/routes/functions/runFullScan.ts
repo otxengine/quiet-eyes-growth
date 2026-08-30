@@ -13,7 +13,6 @@ import { detectEvents } from './detectEvents';
 import { detectTrends } from './detectTrends';
 import { detectEarlyTrends } from './detectEarlyTrends';
 import { detectViralSignals } from './detectViralSignals';
-import { tiktokSectorTrendAgent } from './tiktokSectorTrendAgent';
 import { calculateHealthScore } from './calculateHealthScore';
 import { generateMorningBriefing } from './generateMorningBriefing';
 import { runPredictions } from './runPredictions';
@@ -26,7 +25,6 @@ import { runMLLearningCycle } from './runMLLearningCycle';
 import { cleanupAndLearn } from './cleanupAndLearn';
 import { analyzeInstagramComments } from './analyzeInstagramComments';
 import { analyzeSocialComments } from './analyzeSocialComments';
-import { analyzeTikTokContent } from './analyzeTikTokContent';
 import { updateSectorKnowledge } from './updateSectorKnowledge';
 import { marketMemoryEngine } from './marketMemoryEngine';
 import { microMomentDetector } from './microMomentDetector';
@@ -140,9 +138,6 @@ export async function runFullScan(req: Request, res: Response) {
     }
   }
 
-  // ponytail: outer 12h guard removed — agent's own shouldSkipAgent (8h) is authoritative (KAN-77)
-  const tiktokSectorHandler: Function = tiktokSectorTrendAgent;
-
   // detectEarlyTrends is expensive (12 Tavily + 5 SerpAPI) — skip if ran within 48h
   let earlyTrendsHandler: Function = detectEarlyTrends;
   try {
@@ -166,7 +161,6 @@ export async function runFullScan(req: Request, res: Response) {
     ['collectSocialSignals',        collectSocialSignals],
     ['analyzeInstagramComments',    analyzeInstagramComments],
     ['analyzeSocialComments',       analyzeSocialComments],
-    ['analyzeTikTokContent',        analyzeTikTokContent],
     ['collectReviews',              collectReviews],
     // ── Analysis ────────────────────────────────────────────────
     ['synthesizeMarketInsights',    synthesizeMarketInsights],
@@ -176,7 +170,6 @@ export async function runFullScan(req: Request, res: Response) {
     ['findLocalEvents',             findLocalEvents],
     ['detectEvents',                detectEvents],
     // ── Trend Intelligence ───────────────────────────────────────
-    ['tiktokSectorTrendAgent',      tiktokSectorHandler],
     ['detectTrends',                detectTrends],
     ['detectEarlyTrends',           earlyTrendsHandler],
     ['detectViralSignals',          detectViralSignals],

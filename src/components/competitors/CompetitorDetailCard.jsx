@@ -301,7 +301,6 @@ export default function CompetitorDetailCard({
               <UrlInput label="אתר" fieldKey="website_url" initialValue={comp.website_url} competitorId={comp.id} manualFields={comp.manual_url_fields} />
               <UrlInput label="Instagram" fieldKey="instagram_url" initialValue={comp.instagram_url} competitorId={comp.id} manualFields={comp.manual_url_fields} />
               <UrlInput label="Facebook" fieldKey="facebook_url" initialValue={comp.facebook_url} competitorId={comp.id} manualFields={comp.manual_url_fields} />
-              <UrlInput label="TikTok" fieldKey="tiktok_url" initialValue={comp.tiktok_url} competitorId={comp.id} manualFields={comp.manual_url_fields} />
             </div>
           </div>
 
@@ -343,13 +342,6 @@ export default function CompetitorDetailCard({
                 className="flex items-center gap-1 text-[10px] text-blue-500 hover:underline"
                 onClick={e => e.stopPropagation()}>
                 <Globe className="w-3 h-3" /> Facebook
-              </a>
-            )}
-            {comp.tiktok_url && (
-              <a href={comp.tiktok_url} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-1 text-[10px] text-foreground-muted hover:underline"
-                onClick={e => e.stopPropagation()}>
-                <Globe className="w-3 h-3" /> TikTok
               </a>
             )}
             {comp.website_url && (

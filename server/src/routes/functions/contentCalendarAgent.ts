@@ -65,7 +65,7 @@ export async function contentCalendarAgent(req: Request, res: Response) {
 
     // Load rich intelligence for high-quality content
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600000);
-    const [recentSignals, competitors, sectorKnowledge, audienceSignal, trendSignals, recentReviews, recentPosts] = await Promise.all([
+    const [recentSignals, competitors, sectorKnowledge, trendSignals, recentReviews, recentPosts] = await Promise.all([
       prisma.marketSignal.findMany({
         where: { linked_business: businessProfileId, created_date: { gte: sevenDaysAgo } },
         orderBy: { created_date: 'desc' },
@@ -80,14 +80,9 @@ export async function contentCalendarAgent(req: Request, res: Response) {
         where: { sector: category },
         orderBy: { created_date: 'desc' },
       }),
-      // TikTok audience intelligence
-      prisma.marketSignal.findFirst({
-        where: { linked_business: businessProfileId, category: 'tiktok_audience' },
-        orderBy: { detected_at: 'desc' },
-      }),
-      // TikTok sector trends + viral content format trends
+      // Viral content format trends
       prisma.marketSignal.findMany({
-        where: { linked_business: businessProfileId, category: { in: ['tiktok_sector_trend', 'content_trend'] } },
+        where: { linked_business: businessProfileId, category: 'content_trend' },
         orderBy: { detected_at: 'desc' },
         take: 5,
       }),
@@ -124,35 +119,12 @@ export async function contentCalendarAgent(req: Request, res: Response) {
       return res.json({ message: 'Content calendar already generated this week', tasks_created: 0 });
     }
 
-    // Parse TikTok audience intelligence
-    let audienceCtx = '';
-    if (audienceSignal?.source_description) {
-      try {
-        const aud = JSON.parse(audienceSignal.source_description);
-        const pa = aud.primary_audience;
-        if (pa) {
-          audienceCtx = `קהל יעד מאומת (מבוסס TikTok + מחקר):
-• גיל: ${pa.age_range || '?'}, מגדר: ${pa.gender_skew || '?'}
-• תחומי עניין: ${(pa.interests || []).join(', ')}
-• מה מניע אותם לצרוך תוכן: ${pa.why_they_follow || '?'}
-• כאבים עיקריים: ${(pa.pain_points || []).join(', ')}
-• Hooks שעובדים: ${(aud.hooks_that_work || []).slice(0, 3).join(' | ')}
-• שעות פרסום שיא: ${(aud.best_posting_hours_il || []).join(', ')}`;
-        }
-      } catch {}
-    }
-
     // Build context blocks
     const signalContext = recentSignals.length > 0
       ? `מגמות שוק השבוע:\n${recentSignals.map(s => `- ${s.summary}`).join('\n')}`
       : '';
 
-    const tiktokTrends    = trendSignals.filter(s => s.category === 'tiktok_sector_trend');
     const contentTrends   = trendSignals.filter(s => s.category === 'content_trend');
-
-    const trendContext = tiktokTrends.length > 0
-      ? `טרנדים ב-TikTok לסקטור:\n${tiktokTrends.map(s => `- ${s.summary}`).join('\n')}`
-      : '';
 
     // Viral content format trends — HOW to create, not what product
     const contentTrendContext = contentTrends.length > 0
@@ -228,9 +200,7 @@ ${seasonalBlock ? `\n${seasonalBlock}` : ''}
 ${hookExamples ? `\nדוגמאות לפתיחת פוסט שעובדות בסקטור זה (השתמש כהשראה, לא כהעתקה):\n• ${hookExamples}` : ''}
 ${hashtagGuide ? `\n${hashtagGuide}` : ''}
 
-${audienceCtx ? `=== מחקר קהל יעד ===\n${audienceCtx}\n===` : ''}
 ${signalContext ? `\n${signalContext}` : ''}
-${trendContext ? `\n${trendContext}` : ''}
 ${contentTrendContext ? `\n${contentTrendContext}` : ''}
 ${competitorContext ? `\n${competitorContext}` : ''}
 ${adsIntelContext ? `\n${adsIntelContext}` : ''}

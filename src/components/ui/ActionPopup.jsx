@@ -594,7 +594,6 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
     { key: 'instagram_portrait', label: 'פורטרט',     sub: '4:5',   icon: '🖼' },
     { key: 'instagram_story',    label: 'סטורי',      sub: '9:16',  icon: '📱' },
     { key: 'facebook',           label: 'Facebook',   sub: '4:3',   icon: '🌐' },
-    { key: 'tiktok',             label: 'TikTok',     sub: '9:16',  icon: '🎵' },
   ];
 
   // aspect-ratio CSS value per platform (for the preview container)
@@ -603,7 +602,6 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
     instagram_portrait: '4 / 5',
     instagram_story:    '9 / 16',
     facebook:           '4 / 3',
-    tiktok:             '9 / 16',
     facebook_landscape: '16 / 9',
   };
 

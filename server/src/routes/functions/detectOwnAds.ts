@@ -89,7 +89,7 @@ async function upsertAdHistory(businessProfileId: string, ads: AdResult[]) {
 }
 
 /**
- * detectOwnAds — scans Meta Ads Library, TikTok Ads Library and Google Ads for the
+ * detectOwnAds — scans Meta Ads Library and Google Ads for the
  * business's own page/brand (catches any ad currently running, not just ones
  * created through this tool), then runs a self-audit LLM pass on the result:
  * is our own ad messaging coherent, who are we actually targeting, what's missing.
@@ -121,11 +121,7 @@ export async function detectOwnAds(req: Request, res: Response) {
     const fbHandle = profile.facebook_url
       ? profile.facebook_url.replace(/^https?:\/\/(www\.)?facebook\.com\//, '').split(/[/?#]/)[0].replace(/^@/, '') || null
       : null;
-    const tikHandle = profile.tiktok_url
-      ? profile.tiktok_url.replace(/^https?:\/\/(www\.)?tiktok\.com\//, '').split(/[/?#]/)[0].replace(/^@/, '') || null
-      : null;
-
-    const ads = await searchAllAds(profile.name, profile.category || '', profile.city || '', fbHandle, tikHandle);
+    const ads = await searchAllAds(profile.name, profile.category || '', profile.city || '', fbHandle);
 
     if (ads.length === 0) {
       await prisma.businessAdHistory.updateMany({

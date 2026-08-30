@@ -16,7 +16,6 @@ import ActionPopup from '@/components/ui/ActionPopup';
 const PLATFORM_BADGE = {
   instagram: { icon: '📸', label: 'Instagram', cls: 'bg-pink-50 text-pink-600 border-pink-100' },
   facebook:  { icon: '👤', label: 'Facebook',  cls: 'bg-blue-50 text-blue-600 border-blue-100' },
-  tiktok:    { icon: '🎵', label: 'TikTok',    cls: 'bg-secondary text-foreground-secondary border-border' },
   google:    { icon: '⭐', label: 'Google',    cls: 'bg-red-50 text-red-600 border-red-100' },
   whatsapp:  { icon: '💬', label: 'WhatsApp',  cls: 'bg-green-50 text-green-600 border-green-100' },
   wolt:      { icon: '🛵', label: 'Wolt',      cls: 'bg-sky-50 text-sky-600 border-sky-100' },
@@ -30,9 +29,6 @@ const categoryConfig = {
   trend:           { borderClass: 'signal-border-trend',          label: 'מגמה' },
   mention:         { borderClass: 'signal-border-mention',        label: 'אזכור' },
   competitor_move:        { borderClass: 'signal-border-competitor_move', label: 'מתחרים' },
-  tiktok_sector_trend:   { borderClass: 'signal-border-trend',          label: 'TikTok טרנד' },
-  tiktok_audience:       { borderClass: 'signal-border-trend',          label: 'TikTok קהל' },
-  tiktok_post_performance: { borderClass: 'signal-border-mention',      label: 'TikTok ביצועים' },
   event:                 { borderClass: 'signal-border-trend',          label: 'אירוע' },
   early_trend:           { borderClass: 'signal-border-early_trend',    label: '🔥 טרנד מוקדם' },
   viral_signal:          { borderClass: 'signal-border-opportunity',    label: '🔥 ויראלי' },
@@ -326,14 +322,13 @@ ACTION_TIME: [זמן ביצוע ריאלי]
                 {creatingTask ? <Loader2 className="w-3 h-3 animate-spin" /> : <ListPlus className="w-3 h-3" />}
                 צור משימה
               </button>
-              {(signal.category === 'trend' || signal.category === 'opportunity' || signal.category === 'early_trend' || signal.category === 'tiktok_sector_trend' || signal.category === 'viral_signal') && (
+              {(signal.category === 'trend' || signal.category === 'opportunity' || signal.category === 'early_trend' || signal.category === 'viral_signal') && (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleCreateCampaignIdea(); }}
                   className="btn-subtle text-[10px] text-foreground-muted hover:text-primary flex items-center gap-1"
                 >
                   <Megaphone className="w-3 h-3" />
                   {signal.category === 'early_trend' ? 'צור תוכן לטרנד'
-                    : signal.category === 'tiktok_sector_trend' ? 'פרסם ל-Marketing'
                     : signal.category === 'viral_signal' ? 'פרסם עכשיו 🔥'
                     : 'צור קמפיין'}
                 </button>
@@ -378,16 +373,6 @@ ACTION_TIME: [זמן ביצוע ריאלי]
                       viral: 'true',
                     });
                     navigate(`/marketing?${params.toString()}`);
-                    return;
-                  }
-                  if (signal.category === 'tiktok_sector_trend') {
-                    const params = new URLSearchParams({
-                      signalId: signal.id,
-                      summary: signal.summary || '',
-                      action: signal.recommended_action || '',
-                      category: 'tiktok_sector_trend',
-                    });
-                    navigate(`/marketing/create?${params.toString()}`);
                     return;
                   }
                   let meta = {};
@@ -539,61 +524,6 @@ ACTION_TIME: [זמן ביצוע ריאלי]
                     </div>
                   ))}
                 </div>
-              </div>
-            );
-          })()}
-
-          {/* TikTok sector script — hook / body / CTA + competitor examples (AC2) */}
-          {signal.category === 'tiktok_sector_trend' && (() => {
-            let m = {};
-            try { m = JSON.parse(signal.source_description || '{}'); } catch {}
-            const s    = m.content_script || {};
-            const hook = s.hook_3sec || m.hook || m.script_hook || '';
-            const body = s.body_20sec || m.body || m.script_body || '';
-            const cta  = s.cta || m.cta || m.script_cta || '';
-            const vis  = s.visual_direction || '';
-            const music = s.music_suggestion || '';
-            const examples = Array.isArray(m.competitor_examples) ? m.competitor_examples : [];
-            if (!hook && !body && !cta) return null;
-            return (
-              <div>
-                <h4 className="text-[11px] font-semibold text-foreground-secondary mb-2">📝 סקריפט TikTok</h4>
-                {hook && (
-                  <div className="bg-white rounded-lg border border-border px-3 py-2 mb-1.5">
-                    <p className="text-[9px] text-foreground-muted mb-0.5">Hook (3 שניות)</p>
-                    <p className="text-[12px] text-foreground font-medium">{hook}</p>
-                  </div>
-                )}
-                {body && (
-                  <div className="bg-white rounded-lg border border-border px-3 py-2 mb-1.5">
-                    <p className="text-[9px] text-foreground-muted mb-0.5">Body (20 שניות)</p>
-                    <p className="text-[11px] text-foreground-secondary leading-relaxed">{body}</p>
-                  </div>
-                )}
-                {cta && (
-                  <div className="bg-white rounded-lg border border-border px-3 py-2 mb-1.5">
-                    <p className="text-[9px] text-foreground-muted mb-0.5">CTA</p>
-                    <p className="text-[11px] text-foreground font-semibold">{cta}</p>
-                  </div>
-                )}
-                {(vis || music) && (
-                  <div className="flex flex-wrap gap-1.5 mt-1">
-                    {vis && <span className="text-[10px] px-2 py-0.5 bg-secondary text-foreground-secondary rounded-full border border-border">🎬 {vis}</span>}
-                    {music && <span className="text-[10px] px-2 py-0.5 bg-secondary text-foreground-secondary rounded-full border border-border">🎵 {music}</span>}
-                  </div>
-                )}
-                {examples.length > 0 && (
-                  <div>
-                    <p className="text-[11px] font-semibold text-foreground-secondary mb-1.5 mt-2">דוגמאות מהמתחרים</p>
-                    <div className="space-y-1.5">
-                      {examples.slice(0, 3).map((ex, i) => (
-                        <div key={i} className="bg-secondary/50 rounded-lg border border-border px-3 py-2">
-                          <p className="text-[11px] text-foreground-secondary">{typeof ex === 'string' ? ex : ex.text || ex.content || ''}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })()}
@@ -860,13 +790,13 @@ ACTION_TIME: [זמן ביצוע ריאלי]
                 >
                   <RefreshCw className="w-3 h-3" /> עדכן תובנה
                 </button>
-                {(signal.category === 'trend' || signal.category === 'opportunity' || signal.category === 'tiktok_sector_trend' || signal.category === 'viral_signal') && (
+                {(signal.category === 'trend' || signal.category === 'opportunity' || signal.category === 'viral_signal') && (
                   <button
                     onClick={handleCreateCampaignIdea}
                     className="text-[10px] text-primary/70 hover:text-primary flex items-center gap-1 transition-colors mr-auto"
                   >
                     <Megaphone className="w-3 h-3" />
-                    {signal.category === 'tiktok_sector_trend' ? 'פרסם ל-Marketing' : signal.category === 'viral_signal' ? 'פרסם עכשיו 🔥' : 'צור קמפיין'}
+                    {signal.category === 'viral_signal' ? 'פרסם עכשיו 🔥' : 'צור קמפיין'}
                   </button>
                 )}
               </div>

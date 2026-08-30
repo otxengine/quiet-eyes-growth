@@ -131,7 +131,6 @@ Rules:
     const SOCIAL_PLATFORMS = [
       'https://www.instagram.com',
       'https://www.facebook.com',
-      'https://www.tiktok.com',
     ];
 
     const CURATED_URLS: Record<string, string[]> = {
@@ -178,7 +177,7 @@ Rules:
 
     // Add business's own social/web URLs from profile
     const ownUrls: string[] = [
-      profile.website_url, profile.facebook_url, profile.instagram_url, profile.tiktok_url,
+      profile.website_url, profile.facebook_url, profile.instagram_url,
     ].filter((u): u is string => !!u && u.startsWith('http'));
 
     const allUrls = [...new Set([...ownUrls, ...discoveredUrls.slice(0, 4), ...curatedBase])].slice(0, 12);

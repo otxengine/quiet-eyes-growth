@@ -71,8 +71,8 @@ test('returns 404 when profile not found', async () => {
 test('skips recently crawled competitor, processes stale one', async () => {
   const { prisma: db } = require('../db');
   db.competitor.findMany.mockResolvedValueOnce([
-    { id: 'fresh', name: 'Fresh', social_pages_crawled_at: FRESH_DATE, instagram_url: null, facebook_url: null, tiktok_url: null, website_url: null },
-    { id: 'stale', name: 'Stale', social_pages_crawled_at: STALE_DATE, instagram_url: null, facebook_url: null, tiktok_url: null, website_url: null },
+    { id: 'fresh', name: 'Fresh', social_pages_crawled_at: FRESH_DATE, instagram_url: null, facebook_url: null, website_url: null },
+    { id: 'stale', name: 'Stale', social_pages_crawled_at: STALE_DATE, instagram_url: null, facebook_url: null, website_url: null },
   ]);
   await discoverCompetitorUrls(makeReq({ businessProfileId: 'biz1' }), makeRes());
   expect(mockUpdate).toHaveBeenCalledTimes(1);
@@ -82,7 +82,7 @@ test('skips recently crawled competitor, processes stale one', async () => {
 test('processes competitor with null social_pages_crawled_at (never crawled)', async () => {
   const { prisma: db } = require('../db');
   db.competitor.findMany.mockResolvedValueOnce([
-    { id: 'never', name: 'Never', social_pages_crawled_at: null, instagram_url: null, facebook_url: null, tiktok_url: null, website_url: null },
+    { id: 'never', name: 'Never', social_pages_crawled_at: null, instagram_url: null, facebook_url: null, website_url: null },
   ]);
   await discoverCompetitorUrls(makeReq({ businessProfileId: 'biz1' }), makeRes());
   expect(mockUpdate).toHaveBeenCalledTimes(1);
@@ -93,13 +93,12 @@ test('processes competitor with null social_pages_crawled_at (never crawled)', a
 test('fires site: queries even when all URL fields are null (AC1)', async () => {
   const { prisma: db } = require('../db');
   db.competitor.findMany.mockResolvedValueOnce([
-    { id: 'c1', name: 'NoWeb', social_pages_crawled_at: STALE_DATE, instagram_url: null, facebook_url: null, tiktok_url: null, website_url: null },
+    { id: 'c1', name: 'NoWeb', social_pages_crawled_at: STALE_DATE, instagram_url: null, facebook_url: null, website_url: null },
   ]);
   await discoverCompetitorUrls(makeReq({ businessProfileId: 'biz1' }), makeRes());
   const queries: string[] = mockTavily.mock.calls.map((c: any) => c[0]);
   expect(queries.some(q => q.includes('site:instagram.com'))).toBe(true);
   expect(queries.some(q => q.includes('site:facebook.com'))).toBe(true);
-  expect(queries.some(q => q.includes('site:tiktok.com'))).toBe(true);
 });
 
 // ── AC2: ±city — both with-city and without-city fire ─────────────────────────
@@ -107,7 +106,7 @@ test('fires site: queries even when all URL fields are null (AC1)', async () => 
 test('fires with-city and without-city queries for each platform (AC2)', async () => {
   const { prisma: db } = require('../db');
   db.competitor.findMany.mockResolvedValueOnce([
-    { id: 'c1', name: 'TestComp', social_pages_crawled_at: STALE_DATE, instagram_url: null, facebook_url: null, tiktok_url: null, website_url: null },
+    { id: 'c1', name: 'TestComp', social_pages_crawled_at: STALE_DATE, instagram_url: null, facebook_url: null, website_url: null },
   ]);
   await discoverCompetitorUrls(makeReq({ businessProfileId: 'biz1' }), makeRes());
   const queries: string[] = mockTavily.mock.calls.map((c: any) => c[0]);
@@ -123,7 +122,7 @@ test('adds EN+city and EN queries when LLM returns English name', async () => {
   mockLLM.mockResolvedValue({ en: 'CafeAmor' });
   const { prisma: db } = require('../db');
   db.competitor.findMany.mockResolvedValueOnce([
-    { id: 'c1', name: 'קפה אמור', social_pages_crawled_at: STALE_DATE, instagram_url: null, facebook_url: null, tiktok_url: null, website_url: null },
+    { id: 'c1', name: 'קפה אמור', social_pages_crawled_at: STALE_DATE, instagram_url: null, facebook_url: null, website_url: null },
   ]);
   await discoverCompetitorUrls(makeReq({ businessProfileId: 'biz1' }), makeRes());
   const queries: string[] = mockTavily.mock.calls.map((c: any) => c[0]);
@@ -140,7 +139,7 @@ test('adds EN+city and EN queries when LLM returns English name', async () => {
 test('skips EN queries when name is already Latin', async () => {
   const { prisma: db } = require('../db');
   db.competitor.findMany.mockResolvedValueOnce([
-    { id: 'c1', name: 'Pizza Roma', social_pages_crawled_at: STALE_DATE, instagram_url: null, facebook_url: null, tiktok_url: null, website_url: null },
+    { id: 'c1', name: 'Pizza Roma', social_pages_crawled_at: STALE_DATE, instagram_url: null, facebook_url: null, website_url: null },
   ]);
   await discoverCompetitorUrls(makeReq({ businessProfileId: 'biz1' }), makeRes());
   // LLM should NOT be called for a Latin name
@@ -156,7 +155,7 @@ test('low confidence: does not overwrite existing URL (AC3)', async () => {
   const { prisma: db } = require('../db');
   db.competitor.findMany.mockResolvedValueOnce([
     { id: 'c1', name: 'Comp', social_pages_crawled_at: STALE_DATE,
-      instagram_url: 'https://instagram.com/existing', facebook_url: null, tiktok_url: null, website_url: null },
+      instagram_url: 'https://instagram.com/existing', facebook_url: null, website_url: null },
   ]);
   // Only one variant returns a result → low confidence
   mockTavily.mockImplementation(async (query: any) => {
@@ -173,7 +172,7 @@ test('high confidence: overwrites existing URL when 2+ variants agree (AC3)', as
   const { prisma: db } = require('../db');
   db.competitor.findMany.mockResolvedValueOnce([
     { id: 'c1', name: 'Comp', social_pages_crawled_at: STALE_DATE,
-      instagram_url: 'https://instagram.com/old', facebook_url: null, tiktok_url: null, website_url: null },
+      instagram_url: 'https://instagram.com/old', facebook_url: null, website_url: null },
   ]);
   // All IG variants return the same URL (handle matches business name 'Comp') → high confidence
   mockTavily.mockImplementation(async (query: any) => {
@@ -192,7 +191,7 @@ test('high confidence: does NOT overwrite a manually-set URL without force', asy
   const { prisma: db } = require('../db');
   db.competitor.findMany.mockResolvedValueOnce([
     { id: 'c1', name: 'Comp', social_pages_crawled_at: STALE_DATE,
-      instagram_url: 'https://instagram.com/manual', facebook_url: null, tiktok_url: null, website_url: null,
+      instagram_url: 'https://instagram.com/manual', facebook_url: null, website_url: null,
       manual_url_fields: ['instagram_url'] },
   ]);
   mockTavily.mockImplementation(async (query: any) => {
@@ -208,7 +207,7 @@ test('high confidence: overwrites a manually-set URL when force=true', async () 
   const { prisma: db } = require('../db');
   db.competitor.findMany.mockResolvedValueOnce([
     { id: 'c1', name: 'Comp', social_pages_crawled_at: STALE_DATE,
-      instagram_url: 'https://instagram.com/manual', facebook_url: null, tiktok_url: null, website_url: null,
+      instagram_url: 'https://instagram.com/manual', facebook_url: null, website_url: null,
       manual_url_fields: ['instagram_url'] },
   ]);
   mockTavily.mockImplementation(async (query: any) => {
@@ -226,7 +225,7 @@ test('ignores Instagram post/reel URLs, keeps profile URLs only', async () => {
   const { prisma: db } = require('../db');
   db.competitor.findMany.mockResolvedValueOnce([
     { id: 'c1', name: 'Cafe Amor', social_pages_crawled_at: STALE_DATE,
-      instagram_url: null, facebook_url: null, tiktok_url: null, website_url: null },
+      instagram_url: null, facebook_url: null, website_url: null },
   ]);
   mockTavily.mockImplementation(async (query: any) => {
     if (query.includes('site:instagram.com')) return [
@@ -241,58 +240,22 @@ test('ignores Instagram post/reel URLs, keeps profile URLs only', async () => {
   expect(updateArg.instagram_url).toBe('https://instagram.com/cafeamor/');
 });
 
-test('ignores TikTok video URLs, keeps profile URLs only', async () => {
-  const { prisma: db } = require('../db');
-  db.competitor.findMany.mockResolvedValueOnce([
-    { id: 'c1', name: 'Cafe Amor', social_pages_crawled_at: STALE_DATE,
-      instagram_url: null, facebook_url: null, tiktok_url: null, website_url: null },
-  ]);
-  mockTavily.mockImplementation(async (query: any) => {
-    if (query.includes('site:tiktok.com')) return [
-      { url: 'https://tiktok.com/@cafeamor/video/123456' }, // video — rejected
-      { url: 'https://tiktok.com/@cafeamor' },              // profile, handle matches 'cafe' — kept
-    ];
-    return [];
-  });
-  await discoverCompetitorUrls(makeReq({ businessProfileId: 'biz1' }), makeRes());
-  const updateArg = (mockUpdate.mock.calls as any)[0][0].data;
-  expect(updateArg.tiktok_url).toBe('https://tiktok.com/@cafeamor');
-});
-
-test('rejects TikTok profile belonging to a reviewer, not the business', async () => {
-  const { prisma: db } = require('../db');
-  db.competitor.findMany.mockResolvedValueOnce([
-    { id: 'c1', name: 'Cafe Amor', social_pages_crawled_at: STALE_DATE,
-      instagram_url: null, facebook_url: null, tiktok_url: null, website_url: null },
-  ]);
-  mockTavily.mockImplementation(async (query: any) => {
-    if (query.includes('site:tiktok.com'))
-      return [{ url: 'https://tiktok.com/@israelifoodreviewer' }]; // reviewer — handle doesn't match
-    return [];
-  });
-  await discoverCompetitorUrls(makeReq({ businessProfileId: 'biz1' }), makeRes());
-  const updateArg = (mockUpdate.mock.calls as any)[0][0].data;
-  expect(updateArg.tiktok_url).toBeUndefined();
-});
-
 // ── AC2: canonical field names ─────────────────────────────────────────────────
 
 test('saves to canonical field names (AC2)', async () => {
   const { prisma: db } = require('../db');
   db.competitor.findMany.mockResolvedValueOnce([
     { id: 'c1', name: 'Comp', social_pages_crawled_at: STALE_DATE,
-      instagram_url: null, facebook_url: null, tiktok_url: null, website_url: null },
+      instagram_url: null, facebook_url: null, website_url: null },
   ]);
   mockTavily.mockImplementation(async (query: any) => {
     if (query.includes('site:instagram.com')) return [{ url: 'https://instagram.com/comp' }];
     if (query.includes('site:facebook.com'))  return [{ url: 'https://facebook.com/comp' }];
-    if (query.includes('site:tiktok.com'))    return [{ url: 'https://tiktok.com/@comp' }];
     return [];
   });
   await discoverCompetitorUrls(makeReq({ businessProfileId: 'biz1' }), makeRes());
   const updateArg = (mockUpdate.mock.calls as any)[0][0].data;
   expect(updateArg).toHaveProperty('instagram_url');
   expect(updateArg).toHaveProperty('facebook_url');
-  expect(updateArg).toHaveProperty('tiktok_url');
   expect(updateArg).toHaveProperty('social_pages_crawled_at');
 });

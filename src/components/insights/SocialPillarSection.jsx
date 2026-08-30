@@ -91,14 +91,6 @@ function OwnContentBlock({ businessProfile, queryClient }) {
     onRefreshed: () => queryClient.invalidateQueries({ queryKey: ['businessProfiles'] }),
   });
 
-  // Best-effort TikTok audience chip — latest tiktok_audience MarketSignal, if any.
-  const { data: audienceSignals = [] } = useQuery({
-    queryKey: ['tiktokAudienceSignal', bpId],
-    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'tiktok_audience' }, '-detected_at', 1),
-    enabled: !!bpId,
-  });
-  const audienceSummary = audienceSignals[0]?.summary;
-
   if (!insight) return null;
 
   return (
@@ -108,9 +100,6 @@ function OwnContentBlock({ businessProfile, queryClient }) {
         <PillarRefreshBadge updatedAt={updatedAt} refreshing={refreshing} onRefresh={manualRefresh} />
       </div>
       <p className="text-[13px] leading-relaxed text-foreground">{insight}</p>
-      {audienceSummary && (
-        <p className="text-[11px] text-foreground-muted border-t border-border pt-2">👥 {audienceSummary}</p>
-      )}
     </div>
   );
 }

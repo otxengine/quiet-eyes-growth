@@ -19,14 +19,13 @@ interface CompetitorMeta {
   google_place_id: string | null;
   instagram_url: string | null;
   facebook_url: string | null;
-  tiktok_url: string | null;
 }
 
 // Cross-business cache: another business may already have a fresh deep analysis
 // of this exact real-world competitor — clone it instead of calling the LLM again.
 // Returns whether a fresh donor was found and applied.
 async function tryCloneDeepAnalysisFromDonor(competitor: CompetitorMeta): Promise<boolean> {
-  const platforms: DonorPlatform[] = ['instagram', 'facebook', 'tiktok'];
+  const platforms: DonorPlatform[] = ['instagram', 'facebook'];
   const byId = new Map<string, DonorCandidate>();
   for (const platform of platforms) {
     const urlValue = competitor[`${platform}_url`] ?? null;
@@ -207,7 +206,7 @@ const COMPETITOR_SELECT = {
   strongest_channel: true, social_post_frequency: true,
   social_followers_est: true,
   social_deep_analysis: true, social_deep_analysis_at: true,
-  google_place_id: true, instagram_url: true, facebook_url: true, tiktok_url: true,
+  google_place_id: true, instagram_url: true, facebook_url: true,
 } as const;
 
 /** POST /api/functions/analyzeSocialPosts — manual "✨ צור ניתוח AI" button, one competitor. */

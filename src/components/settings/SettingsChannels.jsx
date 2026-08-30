@@ -36,16 +36,6 @@ const channels = [
     inputType: 'text',
   },
   {
-    key: 'tiktok',
-    label: 'טיקטוק',
-    icon: '🎵',
-    activeBg: 'bg-[#f3e8ff]',
-    activeBorder: 'border-[#e9d5ff]',
-    placeholder: 'שם המשתמש שלך',
-    helpText: 'הכנס את שם המשתמש בטיקטוק',
-    inputType: 'text',
-  },
-  {
     key: 'website',
     label: 'האתר שלי',
     icon: '🌐',

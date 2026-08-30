@@ -6,7 +6,7 @@
  *   GET  /api/oauth/callback/:platform
  *   POST /api/oauth/disconnect
  *
- * Supported platforms: facebook_page | instagram_business | tiktok_business | google_business
+ * Supported platforms: facebook_page | instagram_business | google_business
  *
  * Tokens are stored in the `social_accounts` table (SocialAccount model)
  * AND mirrored into BusinessProfile fields so executors can read them directly.
@@ -16,7 +16,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes } from 'crypto';
 import { prisma } from '../db';
 import { tryEncryptToken } from '../lib/crypto';
 
@@ -43,10 +43,6 @@ const env = () => {
   return {
     FACEBOOK_APP_ID:      fbId,
     FACEBOOK_APP_SECRET:  fbSecret,
-    TIKTOK_CLIENT_KEY:    process.env.TIKTOK_CLIENT_KEY    || '',
-    TIKTOK_CLIENT_SECRET: process.env.TIKTOK_CLIENT_SECRET || '',
-    TIKTOK_ADS_APP_ID:    process.env.TIKTOK_ADS_APP_ID    || '',
-    TIKTOK_ADS_APP_SECRET: process.env.TIKTOK_ADS_APP_SECRET || '',
     GOOGLE_CLIENT_ID:           process.env.GOOGLE_CLIENT_ID           || '',
     GOOGLE_CLIENT_SECRET:       process.env.GOOGLE_CLIENT_SECRET       || '',
     GOOGLE_ADS_DEVELOPER_TOKEN: process.env.GOOGLE_ADS_DEVELOPER_TOKEN || '',
@@ -97,12 +93,6 @@ async function consumeState(state: string): Promise<{ businessId: string; platfo
   }
 }
 
-function generatePKCE(): { codeVerifier: string; codeChallenge: string } {
-  const codeVerifier  = randomBytes(32).toString('base64url');
-  const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url');
-  return { codeVerifier, codeChallenge };
-}
-
 function callbackUrl(platform: string): string {
   return `${env().SERVER_BASE_URL}/api/oauth/callback/${platform}`;
 }
@@ -151,9 +141,7 @@ router.get('/initiate/:platform', async (req: Request, res: Response) => {
     });
   }
 
-  // TikTok requires PKCE — generate verifier before state so it's stored together
-  const pkce = platform === 'tiktok_business' ? generatePKCE() : null;
-  const state = await generateState(String(platform), String(businessId), pkce?.codeVerifier);
+  const state = await generateState(String(platform), String(businessId));
   let authUrl: string;
 
   if (platform === 'facebook_page' || platform === 'instagram_business') {
@@ -175,20 +163,6 @@ router.get('/initiate/:platform', async (req: Request, res: Response) => {
       `&scope=${encodeURIComponent(scope)}` +
       `&state=${state}` +
       `&response_type=code`;
-
-  } else if (platform === 'tiktok_business') {
-    if (!env().TIKTOK_CLIENT_KEY) {
-      return res.status(503).json({ error: 'TikTok app not configured', demo: true });
-    }
-    authUrl =
-      `https://www.tiktok.com/v2/auth/authorize/?` +
-      `client_key=${env().TIKTOK_CLIENT_KEY}` +
-      `&scope=${encodeURIComponent('user.info.basic,video.upload,video.list')}` +
-      `&response_type=code` +
-      `&redirect_uri=${encodeURIComponent(callbackUrl(platform))}` +
-      `&state=${state}` +
-      `&code_challenge=${pkce!.codeChallenge}` +
-      `&code_challenge_method=S256`;
 
   } else if (platform === 'google_business') {
     if (!env().GOOGLE_CLIENT_ID) {
@@ -229,16 +203,6 @@ router.get('/initiate/:platform', async (req: Request, res: Response) => {
       `&scope=${encodeURIComponent('ads_management,ads_read,business_management,pages_show_list')}` +
       `&state=${state}` +
       `&response_type=code`;
-
-  } else if (platform === 'tiktok_ads') {
-    if (!env().TIKTOK_ADS_APP_ID) {
-      return res.status(503).json({ error: 'TikTok Ads app not configured', demo: true });
-    }
-    authUrl =
-      `https://ads.tiktok.com/marketing_api/auth?` +
-      `app_id=${env().TIKTOK_ADS_APP_ID}` +
-      `&redirect_uri=${encodeURIComponent(callbackUrl(platform))}` +
-      `&state=${state}`;
 
   } else {
     return res.status(400).json({ error: `Unknown platform: ${platform}` });
@@ -656,112 +620,11 @@ async function handleGoogleAdsCallback(code: string, businessId: string) {
   return { page_name: displayName, platform: 'google_ads' };
 }
 
-// ── TikTok Ads callback ───────────────────────────────────────────────────────
-async function handleTikTokAdsCallback(authCode: string, businessId: string) {
-  // Exchange auth_code for access_token
-  const tokenRes = await fetch('https://business-api.tiktok.com/open_api/v1.3/oauth2/access_token/', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({
-      app_id:    env().TIKTOK_ADS_APP_ID,
-      secret:    env().TIKTOK_ADS_APP_SECRET,
-      auth_code: authCode,
-    }),
-  });
-  const tokenData: any = await tokenRes.json();
-  if (tokenData.code !== 0) {
-    throw new Error(`TikTok Ads token exchange failed: ${tokenData.message}`);
-  }
-
-  const accessToken    = tokenData.data.access_token as string;
-  const advertiserIds: string[] = tokenData.data.advertiser_ids || [];
-  const advertiserId   = advertiserIds[0] || '';
-
-  const accountName = `TikTok Ads${advertiserId ? ` (${advertiserId})` : ''}`;
-
-  await prisma.$executeRawUnsafe(
-    `INSERT INTO social_accounts
-       (id, created_date, linked_business, platform, account_name, access_token, page_id, is_connected, last_sync)
-     VALUES (gen_random_uuid()::text, now(), $1, 'tiktok_ads', $2, $3, $4, true, now())
-     ON CONFLICT (linked_business, platform) DO UPDATE
-       SET access_token=EXCLUDED.access_token, page_id=EXCLUDED.page_id,
-           account_name=EXCLUDED.account_name, is_connected=true, last_sync=now()`,
-    businessId, accountName, accessToken, advertiserId,
-  );
-
-  console.log(`[tiktok_ads] Connected: business=${businessId} advertiser=${advertiserId}`);
-  return { platform: 'tiktok_ads', page_name: accountName };
-}
-
-// ── TikTok callback ───────────────────────────────────────────────────────────
-async function handleTikTokCallback(code: string, businessId: string, codeVerifier?: string) {
-  const tokenParams: Record<string, string> = {
-    client_key:    env().TIKTOK_CLIENT_KEY,
-    client_secret: env().TIKTOK_CLIENT_SECRET,
-    code,
-    grant_type:    'authorization_code',
-    redirect_uri:  callbackUrl('tiktok_business'),
-  };
-  if (codeVerifier) tokenParams.code_verifier = codeVerifier;
-
-  const tokenRes = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams(tokenParams).toString(),
-  });
-  if (!tokenRes.ok) throw new Error('TikTok token exchange failed');
-  const tokenData: any = await tokenRes.json();
-  const access_token  = tokenData?.access_token  || tokenData?.data?.access_token  || '';
-  const refresh_token = tokenData?.refresh_token || tokenData?.data?.refresh_token || '';
-  const open_id       = tokenData?.open_id       || tokenData?.data?.open_id       || '';
-  const expiresIn     = tokenData?.expires_in    || tokenData?.data?.expires_in    || 86400;
-  const expiresAt     = new Date(Date.now() + expiresIn * 1000).toISOString();
-
-  // Fetch display name from user info
-  let display_name = 'TikTok Account';
-  try {
-    const infoRes = await fetch('https://open.tiktokapis.com/v2/user/info/?fields=display_name,avatar_url', {
-      headers: { Authorization: `Bearer ${access_token}` },
-    });
-    if (infoRes.ok) {
-      const info: any = await infoRes.json();
-      display_name = info?.data?.user?.display_name || display_name;
-    }
-  } catch (_) {}
-
-  // Upsert SocialAccount with refresh_token + expiry
-  const existing = await prisma.socialAccount.findFirst({
-    where: { linked_business: businessId, platform: 'tiktok_business' },
-  });
-  if (existing) {
-    await prisma.$executeRawUnsafe(
-      `UPDATE social_accounts
-       SET account_name=$1, access_token=$2, page_id=$3, is_connected=true,
-           last_sync=$4, refresh_token=$5, expires_at=$6
-       WHERE id=$7`,
-      display_name, access_token, open_id, new Date().toISOString(),
-      refresh_token || null, expiresAt, existing.id,
-    );
-  } else {
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO social_accounts
-         (id, created_date, linked_business, platform, account_name, access_token, page_id, is_connected, last_sync, refresh_token, expires_at)
-       VALUES (gen_random_uuid()::text, now(), $1, 'tiktok_business', $2, $3, $4, true, $5, $6, $7)`,
-      businessId, display_name, access_token, open_id,
-      new Date().toISOString(), refresh_token || null, expiresAt,
-    );
-  }
-
-  return { platform: 'tiktok_business', page_name: display_name };
-}
-
 // ── Callback route ────────────────────────────────────────────────────────────
 router.get('/callback/:platform', async (req: Request, res: Response) => {
   const { platform }             = req.params;
-  // TikTok Ads uses auth_code instead of code
-  const authCode = (req.query.auth_code || req.query.code) as string;
+  const code = req.query.code as string;
   const { state, error } = req.query as Record<string, string>;
-  const code = authCode;
 
   if (error) {
     return res.redirect(`${env().FRONTEND_URL}/integrations?oauth_error=${encodeURIComponent(error)}`);
@@ -787,10 +650,6 @@ router.get('/callback/:platform', async (req: Request, res: Response) => {
       result = await handleGoogleAdsCallback(code, stateData.businessId);
     } else if (platform === 'meta_ads') {
       result = await handleMetaAdsCallback(code, stateData.businessId);
-    } else if (platform === 'tiktok_ads') {
-      result = await handleTikTokAdsCallback(code, stateData.businessId);
-    } else if (platform === 'tiktok_business') {
-      result = await handleTikTokCallback(code, stateData.businessId, stateData.codeVerifier);
     } else {
       return res.redirect(`${env().FRONTEND_URL}/integrations?oauth_error=unknown_platform`);
     }

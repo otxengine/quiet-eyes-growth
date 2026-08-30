@@ -9,7 +9,6 @@ const PLATFORM_ICON = {
   'Instagram':    '📸',
   'TripAdvisor':  '🦉',
   'Waze':         '🗺️',
-  'TikTok':       '🎵',
   'Booking.com':  '🏨',
   'Wolt':         '🛵',
 };

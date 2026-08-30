@@ -23,7 +23,7 @@ const llm        = invokeLLM                          as jest.Mock;
 const PROFILE = {
   id: 'bp1', name: 'פיצה רומא', category: 'מסעדה', city: 'תל אביב',
   relevant_services: 'פיצה, פסטה',
-  website_url: null, facebook_url: null, instagram_url: null, tiktok_url: null,
+  website_url: null, facebook_url: null, instagram_url: null,
   created_by: 'user1',
 };
 

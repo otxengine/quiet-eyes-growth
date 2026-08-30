@@ -13,7 +13,6 @@ const sourceConfig = {
 const platformConfig = {
   facebook: { label: 'Facebook', cls: 'bg-blue-50 text-blue-700 border-blue-100' },
   instagram: { label: 'Instagram', cls: 'bg-pink-50 text-pink-600 border-pink-100' },
-  tiktok: { label: 'TikTok', cls: 'bg-gray-900 text-white border-gray-700' },
   google: { label: 'Google', cls: 'bg-green-50 text-green-600 border-green-100' },
   forum: { label: 'פורום', cls: 'bg-violet-50 text-violet-600 border-violet-100' },
   website: { label: 'אתר', cls: 'bg-secondary/50 text-foreground-secondary border-border/60' },

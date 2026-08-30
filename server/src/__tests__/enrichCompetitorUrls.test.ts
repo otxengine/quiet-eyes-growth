@@ -35,7 +35,7 @@ import { searchOrganic } from '../lib/dataforseo';
 import { serpGoogleOrganic } from '../lib/serpapi';
 import { tavilySearch } from '../lib/tavily';
 
-const EMPTY = { instagram_url: null, facebook_url: null, tiktok_url: null };
+const EMPTY = { instagram_url: null, facebook_url: null };
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -48,7 +48,7 @@ beforeEach(() => {
 
 test('AC7: skips a competitor with no website_url (nothing to consume)', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([
-    { id: 'c1', website_url: null, instagram_url: null, facebook_url: null, tiktok_url: null },
+    { id: 'c1', website_url: null, instagram_url: null, facebook_url: null },
   ]);
   const result = await enrichCompetitorUrls(['c1']);
   expect(result).toEqual({ enriched: 0, skipped: 1 });
@@ -58,10 +58,10 @@ test('AC7: skips a competitor with no website_url (nothing to consume)', async (
 
 test('AC2: calls extractSocialLinksFromWebsite and fills empty social fields, no staleness gate involved', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([
-    { id: 'c1', website_url: 'https://biz.co.il', instagram_url: null, facebook_url: null, tiktok_url: null },
+    { id: 'c1', website_url: 'https://biz.co.il', instagram_url: null, facebook_url: null },
   ]);
   (extractSocialLinksFromWebsite as jest.Mock).mockResolvedValue({
-    instagram_url: 'https://www.instagram.com/mybiz/', facebook_url: 'https://facebook.com/mybiz', tiktok_url: null,
+    instagram_url: 'https://www.instagram.com/mybiz/', facebook_url: 'https://facebook.com/mybiz',
   });
 
   const result = await enrichCompetitorUrls(['c1']);
@@ -80,22 +80,21 @@ test('AC2: calls extractSocialLinksFromWebsite and fills empty social fields, no
 
 test('AC5: never overwrites an already-set (manual or prior) social field', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([
-    { id: 'c1', website_url: 'https://biz.co.il', instagram_url: 'https://instagram.com/owner_set', facebook_url: null, tiktok_url: 'https://tiktok.com/@owner_set' },
+    { id: 'c1', website_url: 'https://biz.co.il', instagram_url: 'https://instagram.com/owner_set', facebook_url: null },
   ]);
   (extractSocialLinksFromWebsite as jest.Mock).mockResolvedValue({
-    instagram_url: 'https://instagram.com/auto_found', facebook_url: 'https://facebook.com/auto_found', tiktok_url: 'https://tiktok.com/@auto_found',
+    instagram_url: 'https://instagram.com/auto_found', facebook_url: 'https://facebook.com/auto_found',
   });
 
   await enrichCompetitorUrls(['c1']);
 
   const updateData = (prisma.competitor.update as jest.Mock).mock.calls[0][0].data;
   expect(updateData.instagram_url).toBeUndefined(); // untouched — was already set
-  expect(updateData.tiktok_url).toBeUndefined();     // untouched — was already set
   expect(updateData.facebook_url).toBe('https://facebook.com/auto_found'); // filled — was empty
 });
 
 test('skips a fully-populated competitor unless force is passed', async () => {
-  const full = { id: 'c1', website_url: 'https://biz.co.il', instagram_url: 'a', facebook_url: 'b', tiktok_url: 'c' };
+  const full = { id: 'c1', website_url: 'https://biz.co.il', instagram_url: 'a', facebook_url: 'b' };
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([full]);
 
   const result = await enrichCompetitorUrls(['c1']);
@@ -105,7 +104,7 @@ test('skips a fully-populated competitor unless force is passed', async () => {
 });
 
 test('AC2 (force): re-runs extraction for a fully-populated competitor when force=true', async () => {
-  const full = { id: 'c1', website_url: 'https://biz.co.il', instagram_url: 'a', facebook_url: 'b', tiktok_url: 'c' };
+  const full = { id: 'c1', website_url: 'https://biz.co.il', instagram_url: 'a', facebook_url: 'b' };
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([full]);
 
   const result = await enrichCompetitorUrls(['c1'], { force: true });
@@ -118,7 +117,7 @@ test('AC2 (force): re-runs extraction for a fully-populated competitor when forc
 
 test('TTL stamp: social_pages_crawled_at is set even on soft-empty (extraction finds nothing)', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([
-    { id: 'c1', website_url: 'https://biz.co.il', instagram_url: null, facebook_url: null, tiktok_url: null },
+    { id: 'c1', website_url: 'https://biz.co.il', instagram_url: null, facebook_url: null },
   ]);
   // default mock already resolves EMPTY
 
@@ -141,7 +140,7 @@ test('returns immediately for an empty id list without touching the db', async (
 test('AC3: Places Details fills a missing website_url when place_id is present', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([
     { id: 'c1', name: 'Comp', google_place_id: 'place123', website_url: null,
-      instagram_url: 'a', facebook_url: 'b', tiktok_url: 'c' },
+      instagram_url: 'a', facebook_url: 'b' },
   ]);
   (getPlaceDetails as jest.Mock).mockResolvedValue({ websiteUri: 'https://comp.co.il' });
 
@@ -156,7 +155,7 @@ test('AC3: Places Details fills a missing website_url when place_id is present',
 test('AC3/SERP transport: no place_id — DataForSEO organic fills website, SerpAPI not called', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([
     { id: 'c1', name: 'Comp', google_place_id: null, website_url: null,
-      instagram_url: 'a', facebook_url: 'b', tiktok_url: 'c' },
+      instagram_url: 'a', facebook_url: 'b' },
   ]);
   (searchOrganic as jest.Mock).mockResolvedValue({ urls: ['https://comp.co.il'], costUsd: 0.002 });
 
@@ -170,7 +169,7 @@ test('AC3/SERP transport: no place_id — DataForSEO organic fills website, Serp
 test('SERP transport: DataForSEO organic empty — soft-fails to SerpAPI', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([
     { id: 'c1', name: 'Comp', google_place_id: null, website_url: null,
-      instagram_url: 'a', facebook_url: 'b', tiktok_url: 'c' },
+      instagram_url: 'a', facebook_url: 'b' },
   ]);
   (serpGoogleOrganic as jest.Mock).mockResolvedValue(['https://comp.co.il']);
 
@@ -183,7 +182,7 @@ test('SERP transport: DataForSEO organic empty — soft-fails to SerpAPI', async
 test('AC3/AC6: Places + organic SERP both empty — Tavily is the last resort for website', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([
     { id: 'c1', name: 'Comp', google_place_id: 'place123', website_url: null,
-      instagram_url: 'a', facebook_url: 'b', tiktok_url: 'c' },
+      instagram_url: 'a', facebook_url: 'b' },
   ]);
   (tavilySearch as jest.Mock).mockImplementation(async (q: string) =>
     q.includes('אתר') ? [{ url: 'https://tavily-found.co.il' }] : []);
@@ -197,7 +196,7 @@ test('AC3/AC6: Places + organic SERP both empty — Tavily is the last resort fo
 test('AC4: organic SERP fills a social field still empty after site-extract', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([
     { id: 'c1', name: 'Comp', google_place_id: null, website_url: 'https://comp.co.il',
-      instagram_url: null, facebook_url: 'b', tiktok_url: 'c' },
+      instagram_url: null, facebook_url: 'b' },
   ]);
   (searchOrganic as jest.Mock).mockImplementation(async (q: string) =>
     q.includes('site:instagram.com') ? { urls: ['https://instagram.com/comp'], costUsd: 0 } : { urls: [], costUsd: 0 });
@@ -212,10 +211,10 @@ test('AC4: organic SERP fills a social field still empty after site-extract', as
 test('AC6: site-extract already found a social field — organic SERP not spent on it', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([
     { id: 'c1', name: 'Comp', google_place_id: null, website_url: 'https://comp.co.il',
-      instagram_url: null, facebook_url: null, tiktok_url: null },
+      instagram_url: null, facebook_url: null },
   ]);
   (extractSocialLinksFromWebsite as jest.Mock).mockResolvedValue({
-    instagram_url: 'https://instagram.com/from-site', facebook_url: null, tiktok_url: null,
+    instagram_url: 'https://instagram.com/from-site', facebook_url: null,
   });
 
   await enrichCompetitorUrls(['c1']);
@@ -229,7 +228,7 @@ test('AC6: site-extract already found a social field — organic SERP not spent 
 test('AC5: paid-tier website fallback is skipped entirely once website_url is already set', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([
     { id: 'c1', name: 'Comp', google_place_id: 'place123', website_url: 'https://existing.co.il',
-      instagram_url: 'a', facebook_url: 'b', tiktok_url: 'c', rating: 4.5, review_count: 100 },
+      instagram_url: 'a', facebook_url: 'b', rating: 4.5, review_count: 100 },
   ]);
 
   const result = await enrichCompetitorUrls(['c1']);
@@ -242,7 +241,7 @@ test('AC5: paid-tier website fallback is skipped entirely once website_url is al
 test('rating/review_count backfill: fetched independently of website_url and fill-if-empty only', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([
     { id: 'c1', name: 'Comp', google_place_id: 'place123', website_url: 'https://existing.co.il',
-      instagram_url: 'a', facebook_url: 'b', tiktok_url: 'c', rating: null, review_count: null },
+      instagram_url: 'a', facebook_url: 'b', rating: null, review_count: null },
   ]);
   (getPlaceDetails as jest.Mock).mockResolvedValue({ websiteUri: '', rating: 4.2, reviewCount: 250 });
 
@@ -259,7 +258,7 @@ test('rating/review_count backfill: fetched independently of website_url and fil
 test('host validation rejects a malformed Places Details website', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([
     { id: 'c1', name: 'Comp', google_place_id: 'place123', website_url: null,
-      instagram_url: 'a', facebook_url: 'b', tiktok_url: 'c' },
+      instagram_url: 'a', facebook_url: 'b' },
   ]);
   (getPlaceDetails as jest.Mock).mockResolvedValue({ websiteUri: 'not-a-valid-url' });
 
@@ -269,19 +268,17 @@ test('host validation rejects a malformed Places Details website', async () => {
   expect(prisma.competitor.update).not.toHaveBeenCalled();
 });
 
-test('KAN-223 IL sampling: IL brand with no footer social falls through organic SERP → Tavily for every platform', async () => {
+test('KAN-223 IL sampling: IL brand with no footer social falls through organic SERP for every platform', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([
     { id: 'c1', name: 'פיצה רומא', google_place_id: null, website_url: 'https://pizza-roma.co.il', address: 'תל אביב',
-      instagram_url: null, facebook_url: null, tiktok_url: null },
+      instagram_url: null, facebook_url: null },
   ]);
   // site-extract found nothing on the site itself (no footer social) — default EMPTY mock applies
   (searchOrganic as jest.Mock).mockImplementation(async (q: string) => {
     if (q.includes('site:instagram.com')) return { urls: ['https://instagram.com/pizza_roma_il'], costUsd: 0 };
     if (q.includes('site:facebook.com'))  return { urls: ['https://facebook.com/pizzaromatlv'], costUsd: 0 };
-    return { urls: [], costUsd: 0 }; // tiktok stays empty from SERP — falls to Tavily
+    return { urls: [], costUsd: 0 };
   });
-  (tavilySearch as jest.Mock).mockImplementation(async (q: string) =>
-    q.includes('site:tiktok.com') ? [{ url: 'https://tiktok.com/@pizzaromatlv' }] : []);
 
   await enrichCompetitorUrls(['c1']);
 
@@ -289,7 +286,6 @@ test('KAN-223 IL sampling: IL brand with no footer social falls through organic 
   const updateData = (prisma.competitor.update as jest.Mock).mock.calls[0][0].data;
   expect(updateData.instagram_url).toBe('https://instagram.com/pizza_roma_il'); // SERP
   expect(updateData.facebook_url).toBe('https://facebook.com/pizzaromatlv');    // SERP
-  expect(updateData.tiktok_url).toBe('https://tiktok.com/@pizzaromatlv');       // Tavily last resort
 });
 
 test('AC8: Apify is never imported/called by the URL discovery/enrichment pipeline', () => {
@@ -314,7 +310,7 @@ describe('enrichCompetitorUrlsScheduled (KAN-221)', () => {
   test('AC1/AC2: selects rivals with a website_url that are empty-or-stale, capped and ordered oldest-crawled-first, independent of last_scanned', async () => {
     (prisma.competitor.findMany as jest.Mock)
       .mockResolvedValueOnce([{ id: 'c1' }])
-      .mockResolvedValueOnce([{ id: 'c1', website_url: 'https://biz.co.il', instagram_url: null, facebook_url: null, tiktok_url: null }]);
+      .mockResolvedValueOnce([{ id: 'c1', website_url: 'https://biz.co.il', instagram_url: null, facebook_url: null }]);
 
     const res = mkRes();
     await enrichCompetitorUrlsScheduled({ body: { businessProfileId: 'biz1' } } as any, res);
@@ -323,7 +319,7 @@ describe('enrichCompetitorUrlsScheduled (KAN-221)', () => {
     expect(selection.where.linked_business).toBe('biz1');
     expect(selection.where.website_url).toEqual({ not: null });
     expect(selection.where.OR).toEqual(expect.arrayContaining([
-      { instagram_url: null }, { facebook_url: null }, { tiktok_url: null }, { social_pages_crawled_at: null },
+      { instagram_url: null }, { facebook_url: null }, { social_pages_crawled_at: null },
     ]));
     expect(selection.where).not.toHaveProperty('last_scanned');
     expect(selection.take).toBe(10);
@@ -344,7 +340,7 @@ describe('enrichCompetitorUrlsScheduled (KAN-221)', () => {
   test('force=true bypasses the empty/stale filter and re-runs the capped batch', async () => {
     (prisma.competitor.findMany as jest.Mock)
       .mockResolvedValueOnce([{ id: 'c1' }])
-      .mockResolvedValueOnce([{ id: 'c1', website_url: 'https://biz.co.il', instagram_url: 'a', facebook_url: 'b', tiktok_url: 'c' }]);
+      .mockResolvedValueOnce([{ id: 'c1', website_url: 'https://biz.co.il', instagram_url: 'a', facebook_url: 'b' }]);
 
     const res = mkRes();
     await enrichCompetitorUrlsScheduled({ body: { businessProfileId: 'biz1', force: true } } as any, res);

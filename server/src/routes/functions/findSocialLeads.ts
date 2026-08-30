@@ -103,7 +103,7 @@ export async function findSocialLeads(req: Request, res: Response) {
     // ── eCommerce / Dropshipping ────────────────────────────────────────────
     const isEcommerce = ['ecommerce', 'dropship', 'shopify', 'חנות', 'retail', 'קמעונאות', 'עיצוב הבית', 'home decor', 'lifestyle'].some(k => catLower.includes(k));
     if (isEcommerce) {
-      queries.push(`tiktok trending home decor products ${new Date().getFullYear()} viral`);
+      queries.push(`trending home decor products ${new Date().getFullYear()} viral`);
       queries.push(`site:facebook.com/groups "מחפשת" OR "מחפש" ${svc} משלוח ישראל`);
       queries.push(`aliexpress trending ${svc} wholesale dropship ${new Date().getFullYear()}`);
       queries.push(`pinterest trending home decor ${new Date().getFullYear()}`);
@@ -169,7 +169,7 @@ export async function findSocialLeads(req: Request, res: Response) {
     // ── Music festivals / EDM / Nightlife production ────────────────────────
     const isMusicEvent = ['מוזיקה', 'פסטיבל', 'dj', 'edm', 'rave', 'מועדון', 'הפקה', 'music', 'festival', 'nightlife', 'club'].some(k => catLower.includes(k));
     if (isMusicEvent) {
-      queries.push(`tiktok trending dj edm music ${new Date().getFullYear()} viral israel`);
+      queries.push(`trending dj edm music ${new Date().getFullYear()} viral israel`);
       queries.push(`site:resident-advisor.net OR site:facebook.com/events פסטיבל מוזיקה ${area} ${new Date().getFullYear()}`);
       queries.push(`dj lineup festival israel ${new Date().getFullYear()} tickets`);
       queries.push(`"מחפש" OR "רוצה" כרטיסים פסטיבל ${area} site:facebook.com`);
@@ -178,7 +178,7 @@ export async function findSocialLeads(req: Request, res: Response) {
     // ── Nutrition supplements / Sports nutrition ────────────────────────────
     const isNutrition = ['תוסף', 'תזונה', 'חלבון', 'קריאטין', 'supplement', 'protein', 'creatine', 'preworkout', 'nutrition'].some(k => catLower.includes(k));
     if (isNutrition) {
-      queries.push(`tiktok trending protein supplement creatine ${new Date().getFullYear()} review`);
+      queries.push(`trending protein supplement creatine ${new Date().getFullYear()} review`);
       queries.push(`site:facebook.com/groups "תוסף" OR "חלבון" "מחיר" OR "מבצע" israel`);
       queries.push(`supplement price drop promotion israel ${new Date().getFullYear()} competitor`);
       queries.push(`"איזה תוסף" OR "מה עדיף" site:tapuz.co.il OR site:facebook.com`);

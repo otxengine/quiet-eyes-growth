@@ -16,7 +16,6 @@ import { createLogger } from '../../infra/logger';
 import { sendWhatsApp } from './WhatsAppExecutor';
 import { postReviewReply } from './GoogleBusinessClient';
 import { publishPost } from './InstagramPublisher';
-import { publishTikTok } from './TikTokPublisher';
 import { sendEmail } from './EmailExecutor';
 
 const logger = createLogger('executeOrQueue');
@@ -26,7 +25,6 @@ export type ActionType =
   | 'whatsapp_send'
   | 'post_publish'
   | 'review_request'
-  | 'tiktok_post'
   | 'email_send';
 
 export interface QueuedAction {
@@ -131,16 +129,6 @@ export async function dispatch(action: QueuedAction): Promise<string> {
       return r.published
         ? `פורסם ב: ${r.platforms.join(', ')}`
         : `מוכן לפרסום — ממתין לאישור`;
-    }
-
-    case 'tiktok_post': {
-      const r = await publishTikTok(businessProfileId, {
-        taskId:    payload.taskId,
-        caption:   payload.caption,
-        videoUrl:  payload.videoUrl,
-        coverTime: payload.coverTime,
-      });
-      return r.published ? `פורסם ב-TikTok` : `ממתין לפרסום TikTok`;
     }
 
     case 'email_send': {

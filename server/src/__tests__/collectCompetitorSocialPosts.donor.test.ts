@@ -51,7 +51,7 @@ import { collectCompetitorSocialPosts } from '../routes/functions/collectCompeti
 // that also enqueues donor-only attempts for platforms with no local URL.
 const COMP = {
   id: 'c1', name: 'Test Co', not_relevant: false, tracking_status: 'approved',
-  google_place_id: null, instagram_url: 'https://instagram.com/testco', facebook_url: null, tiktok_url: null,
+  google_place_id: null, instagram_url: 'https://instagram.com/testco', facebook_url: null,
 };
 
 function mockRes() {
@@ -125,9 +125,9 @@ test('force=true with no fresh donor still scrapes fresh via Apify', async () =>
 test('no local URL but has google_place_id -> still finds and clones from a donor', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([{
     id: 'c1', name: 'Test Co', not_relevant: false, tracking_status: 'approved',
-    google_place_id: 'place1', instagram_url: null, facebook_url: null, tiktok_url: null,
+    google_place_id: 'place1', instagram_url: null, facebook_url: null,
   }]);
-  // All 3 platforms produce donor-only tasks that run concurrently — use
+  // Both platforms produce donor-only tasks that run concurrently — use
   // implementation-based mocks (order-independent) rather than *Once queuing.
   queryRawUnsafe.mockImplementation(async (sql: string) =>
     sql.includes('GROUP BY competitor_id') ? [{ competitor_id: 'donor-1' }] : [],
@@ -146,7 +146,7 @@ test('no local URL but has google_place_id -> still finds and clones from a dono
 test('no local URL, has google_place_id, but no donor -> skips Apify entirely (no url to scrape)', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([{
     id: 'c1', name: 'Test Co', not_relevant: false, tracking_status: 'approved',
-    google_place_id: 'place1', instagram_url: null, facebook_url: null, tiktok_url: null,
+    google_place_id: 'place1', instagram_url: null, facebook_url: null,
   }]);
   queryRawUnsafe.mockResolvedValue([]); // no existing posts, no fresh donor for any platform
   (findDonorCandidates as jest.Mock).mockResolvedValue([]);
@@ -162,7 +162,7 @@ test('no local URL, has google_place_id, but no donor -> skips Apify entirely (n
 test('no local URL and no google_place_id -> skipped immediately, no donor lookup attempted', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([{
     id: 'c1', name: 'Test Co', not_relevant: false, tracking_status: 'approved',
-    google_place_id: null, instagram_url: null, facebook_url: null, tiktok_url: null,
+    google_place_id: null, instagram_url: null, facebook_url: null,
   }]);
 
   const req: any = { body: { businessProfileId: 'b1', force: true } };

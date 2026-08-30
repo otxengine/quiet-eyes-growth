@@ -5,12 +5,11 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-export const SITE_BLACKLIST = ['instagram.com', 'facebook.com', 'tiktok.com', 'google.com', 'yad2'];
+export const SITE_BLACKLIST = ['instagram.com', 'facebook.com', 'google.com', 'yad2'];
 
 // Non-profile path segments for each platform — filter these out so we only keep main pages.
 export const IG_NON_PROFILE  = ['p/', 'reel/', 'stories/', 'explore/', 'tv/', 'reels/'];
 export const FB_NON_PROFILE  = ['posts/', 'photos/', 'videos/', 'events/', 'photo/', 'video/'];
-export const TIK_NON_PROFILE = ['video/', 'discover', 'tag/', 'content/'];
 
 export function isProfileUrl(url: string, domain: string, nonProfile: string[]): boolean {
   if (!url?.includes(domain)) return false;
@@ -135,10 +134,9 @@ export async function discoverCompetitorUrls(req: Request, res: Response) {
         ];
 
         // Fire all variants in parallel, grouped by platform
-        const [igSets, fbSets, tikSets, siteSets] = await Promise.all([
+        const [igSets, fbSets, siteSets] = await Promise.all([
           Promise.all(prefixes.map(p => tavilySearch(`${p} site:instagram.com`, 3))),
           Promise.all(prefixes.map(p => tavilySearch(`${p} site:facebook.com`, 3))),
-          Promise.all(prefixes.map(p => tavilySearch(`${p} site:tiktok.com`, 3))),
           Promise.all([
             tavilySearch(`"${comp.name}" ${city} ${category} אתר רשמי`, 2),
             tavilySearch(`"${comp.name}" ${category} אתר רשמי`, 2),
@@ -151,7 +149,6 @@ export async function discoverCompetitorUrls(req: Request, res: Response) {
 
         const ig   = pickBest(igSets,  'instagram.com/', u => isProfileUrl(u, 'instagram.com/', IG_NON_PROFILE)  && handleMatchesBusiness(u, comp.name, nameEn));
         const fb   = pickBest(fbSets,  'facebook.com/',  u => isProfileUrl(u, 'facebook.com/',  FB_NON_PROFILE)  && handleMatchesBusiness(u, comp.name, nameEn));
-        const tik  = pickBest(tikSets, 'tiktok.com/',    u => isProfileUrl(u, 'tiktok.com/',    TIK_NON_PROFILE) && handleMatchesBusiness(u, comp.name, nameEn));
         const site = pickSite(siteSets);
 
         const c = comp as any;
@@ -161,7 +158,6 @@ export async function discoverCompetitorUrls(req: Request, res: Response) {
 
         if (ig.url   && ((ig.high   && canOverwrite('instagram_url')) || !c.instagram_url)) update.instagram_url = cleanUrl(ig.url);
         if (fb.url   && ((fb.high   && canOverwrite('facebook_url'))  || !c.facebook_url))  update.facebook_url  = cleanUrl(fb.url);
-        if (tik.url  && ((tik.high  && canOverwrite('tiktok_url'))    || !c.tiktok_url))    update.tiktok_url    = cleanUrl(tik.url);
         if (site.url && ((site.high && canOverwrite('website_url'))   || !c.website_url))   update.website_url   = site.url;
 
         await prisma.competitor.update({ where: { id: comp.id }, data: update }).catch(() => {});
@@ -169,7 +165,7 @@ export async function discoverCompetitorUrls(req: Request, res: Response) {
         console.log(
           `[discoverCompetitorUrls] ${comp.name}${nameEn ? ` (${nameEn})` : ''}: ` +
           `ig=${!!ig.url}(${ig.high ? 'hi' : 'lo'}) fb=${!!fb.url}(${fb.high ? 'hi' : 'lo'}) ` +
-          `tik=${!!tik.url}(${tik.high ? 'hi' : 'lo'}) site=${!!site.url}(${site.high ? 'hi' : 'lo'})`
+          `site=${!!site.url}(${site.high ? 'hi' : 'lo'})`
         );
       } catch (e: any) {
         console.warn(`[discoverCompetitorUrls] ${comp.name} failed:`, e.message);

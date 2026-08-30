@@ -9,7 +9,6 @@ const categoryConfig = {
   competitor_move:      { icon: Users,         borderColor: 'border-l-[#6366f1]' },
   competitor_mention:   { icon: Users,         borderColor: 'border-l-[#818cf8]' },
   demand_gap:           { icon: Target,        borderColor: 'border-l-[#06b6d4]' },
-  tiktok_sector_trend:  { icon: TrendingUp,    borderColor: 'border-l-[#ec4899]' },
   content_performance:  { icon: TrendingUp,    borderColor: 'border-l-[#8b5cf6]' },
   review_timing:        { icon: Target,        borderColor: 'border-l-[#14b8a6]' },
   micro_moment:         { icon: Target,        borderColor: 'border-l-[#f59e0b]' },

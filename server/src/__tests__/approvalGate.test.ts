@@ -20,7 +20,6 @@ jest.mock('../services/execution/GoogleBusinessClient', () => ({
   postReviewReply: jest.fn().mockResolvedValue({ published: false, method: 'suggested_only' }),
 }));
 jest.mock('../services/execution/InstagramPublisher', () => ({ publishPost: jest.fn() }));
-jest.mock('../services/execution/TikTokPublisher',    () => ({ publishTikTok: jest.fn() }));
 jest.mock('../services/execution/EmailExecutor',      () => ({ sendEmail: jest.fn() }));
 
 import { executeOrQueue } from '../services/execution/executeOrQueue';

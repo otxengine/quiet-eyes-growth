@@ -429,7 +429,6 @@ ${insight.description ? `הקשר: ${(insight.description).slice(0, 150)}` : ''}
 // ── Source badge for trends ───────────────────────────────────────────────────
 
 const TREND_SOURCE_META = {
-  tiktok:    { label: 'TikTok',        color: 'text-slate-800',  bg: 'bg-slate-100',  border: 'border-slate-200' },
   instagram: { label: 'Instagram',     color: 'text-pink-600',   bg: 'bg-pink-50',    border: 'border-pink-100' },
   facebook:  { label: 'Facebook',      color: 'text-blue-700',   bg: 'bg-blue-50',    border: 'border-blue-100' },
   google:    { label: 'Google Trends', color: 'text-green-700',  bg: 'bg-green-50',   border: 'border-green-100' },
@@ -438,7 +437,6 @@ const TREND_SOURCE_META = {
 
 function detectSource(title = '', description = '') {
   const t = (title + ' ' + description).toLowerCase();
-  if (t.includes('tiktok') || t.includes('טיקטוק')) return 'tiktok';
   if (t.includes('instagram') || t.includes('אינסטגרם') || t.includes('reels')) return 'instagram';
   if (t.includes('facebook') || t.includes('פייסבוק')) return 'facebook';
   if (t.includes('google trends') || t.includes('גוגל טרנדס')) return 'google';

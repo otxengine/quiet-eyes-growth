@@ -75,7 +75,7 @@ ${textBlob.slice(0, 2800)}
 
 Return ONLY valid JSON. ALL string values must be in Hebrew:
 {
-  "strongest_channel": "instagram|facebook|google|tiktok|unknown",
+  "strongest_channel": "instagram|facebook|google|unknown",
   "content_themes": ["specific topic 1", "specific topic 2"],
   "main_weakness": "their clearest weakness — based on review complaints",
   "our_opportunity": "one specific actionable opportunity for my business — be concrete",

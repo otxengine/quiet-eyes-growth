@@ -27,13 +27,13 @@ interface VisionAnalysis {
   sentiment_visual:     "positive" | "neutral" | "negative" | "urgent";
 }
 
-// ─── Media collection (stubbed — replace with Instagram Basic Display API + TikTok Research) ──
+// ─── Media collection (stubbed — replace with Instagram Basic Display API) ──
 
 async function collectLocalMedia(
   geoCity: string,
   sector: string,
 ): Promise<MediaItem[]> {
-  // In production: query Instagram geo-tagged posts + TikTok location search API.
+  // In production: query Instagram geo-tagged posts.
   // Filter to recent 48h posts within local_radius_meters of business.
   const serpApiKey = Deno.env.get("SERPAPI_KEY");
   if (!serpApiKey) {

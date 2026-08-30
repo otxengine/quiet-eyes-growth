@@ -44,13 +44,12 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
 
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600000).toISOString();
 
-    const [recentReviews, hotLeads, signals, competitors, pendingAlerts, audienceSignal, demandGaps, lostLeads, recentCompetitorMoves] = await Promise.all([
+    const [recentReviews, hotLeads, signals, competitors, pendingAlerts, demandGaps, lostLeads, recentCompetitorMoves] = await Promise.all([
       prisma.review.findMany({ where: { linked_business: businessProfileId }, orderBy: { created_date: 'desc' }, take: 20 }),
       prisma.lead.findMany({ where: { linked_business: businessProfileId, status: 'hot' }, orderBy: { created_date: 'desc' }, take: 15 }),
       prisma.marketSignal.findMany({ where: { linked_business: businessProfileId }, orderBy: { detected_at: 'desc' }, take: 20 }),
       prisma.competitor.findMany({ where: { linked_business: businessProfileId }, take: 8 }),
       prisma.proactiveAlert.findMany({ where: { linked_business: businessProfileId, is_dismissed: false } }),
-      prisma.marketSignal.findFirst({ where: { linked_business: businessProfileId, category: 'tiktok_audience' }, orderBy: { detected_at: 'desc' } }),
       prisma.marketSignal.findMany({ where: { linked_business: businessProfileId, category: 'demand_gap' }, orderBy: { detected_at: 'desc' }, take: 5 }),
       prisma.lead.findMany({ where: { linked_business: businessProfileId, status: { in: ['lost', 'cold'] } }, orderBy: { created_date: 'desc' }, take: 10 }),
       // Specific competitor moves from last 7 days for context
@@ -101,18 +100,6 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
     const avgRating = recentReviews.length > 0
       ? (recentReviews.reduce((s, r) => s + (r.rating || 4), 0) / recentReviews.length).toFixed(1)
       : null;
-
-    // Parse TikTok audience for better persona targeting
-    let audienceInfo = '';
-    if (audienceSignal?.source_description) {
-      try {
-        const aud = JSON.parse(audienceSignal.source_description);
-        const pa = aud.primary_audience;
-        if (pa) {
-          audienceInfo = `קהל יעד מאומת: גיל ${pa.age_range}, ${pa.gender_skew}. כאבים: ${(pa.pain_points || []).join(', ')}. Hooks: ${(aud.hooks_that_work || []).slice(0, 2).join(' | ')}`;
-        }
-      } catch {}
-    }
 
     // Rich lead context — include days waiting and service requested
     const hotLeadDetails = hotLeads.slice(0, 5).map(l => {
@@ -170,8 +157,6 @@ export async function generateProactiveAlerts(req: Request, res: Response) {
       competitors.length > 0
         ? `מתחרים (${competitors.length}): ${competitors.slice(0, 5).map(c => `${c.name}(${c.rating || '?'}⭐)`).join(', ')}`
         : 'מתחרים: לא זוהו',
-
-      audienceInfo ? `קהל יעד: ${audienceInfo}` : '',
     ].filter(Boolean).join('\n');
 
     // Sector-specific intelligence blocks
@@ -230,15 +215,15 @@ Generate 2-3 initial CRITICAL recommendations for this sector — what every new
 ` : ''}
 
 Non-negotiable quality rules:
-1. TITLE: must include a specific name / number / action — e.g. "negative review from X", "3 hot leads waiting", "TikTok trend to leverage"
+1. TITLE: must include a specific name / number / action — e.g. "negative review from X", "3 hot leads waiting", "trending opportunity to leverage"
 2. DESCRIPTION: a concrete fact from the data — no generic generalizations
-3. SUGGESTED_ACTION: imperative verb + channel + content (e.g. "Post a Reel on TikTok about X", "Send personal WhatsApp to Y", "Reply to Z's review")
+3. SUGGESTED_ACTION: imperative verb + channel + content (e.g. "Post a Reel on Instagram about X", "Send personal WhatsApp to Y", "Reply to Z's review")
 4. PREFILLED_TEXT: ready-to-use text the user can copy and send directly — 40-80 words, in the business's name, human + professional tone.
    For posts: includes Hook + body + CTA + relevant hashtags.
    For replies: includes customer name, reference to content, resolution.
    For WhatsApp: friendly, short, with clear CTA.
 5. ACTION_TYPE: post_publish=social media post (generates full post) | respond=reply to review/customer | call=phone call | task=internal task | promote=paid promotion
-6. PLATFORM: choose by: instagram=visual content 18-40 | tiktok=viral 16-30 | facebook=local 30+ | google=reviews/SEO | whatsapp=direct communication | general=cross-platform
+6. PLATFORM: choose by: instagram=visual content 18-40 | facebook=local 30+ | google=reviews/SEO | whatsapp=direct communication | general=cross-platform
 7. URGENCY_HOURS: realistic time — negative review=2h, hot lead=4h, market opportunity=24h, content=48h
 
 Generate ${maxNewAlerts} diverse, non-duplicate alerts. Return ONLY valid JSON:
@@ -250,7 +235,7 @@ Generate ${maxNewAlerts} diverse, non-duplicate alerts. Return ONLY valid JSON:
   "suggested_action": "פעולה ספציפית מפורטת — ערוץ + תוכן + קהל",
   "action_label": "פועל + עצם (עד 4 מילים)",
   "action_type": "post_publish|respond|call|task|promote",
-  "action_platform": "instagram|facebook|tiktok|google|whatsapp|wolt|ten_bis|general",
+  "action_platform": "instagram|facebook|google|whatsapp|wolt|ten_bis|general",
   "platform_reason": "מדוע פלטפורמה זו — משפט אחד עם נימוק",
   "prefilled_text": "טקסט מוכן שאפשר לשלוח/לפרסם ישירות בעברית — 40-80 מילים",
   "urgency_hours": 4,

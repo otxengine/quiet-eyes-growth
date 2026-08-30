@@ -11,13 +11,11 @@ const COMPETITOR = (overrides: Partial<{
   created_date: string; website_url: string | null; website_url_source: string | null;
   instagram_url: string | null; instagram_url_source: string | null;
   facebook_url: string | null; facebook_url_source: string | null;
-  tiktok_url: string | null; tiktok_url_source: string | null;
   social_pages_crawled_at: string | null; manual_url_fields: string[] | null;
 }>) => ({
   created_date: '2026-01-01T00:00:00.000Z', website_url: 'https://a.com', website_url_source: null,
   instagram_url: null, instagram_url_source: null,
   facebook_url: null, facebook_url_source: null,
-  tiktok_url: null, tiktok_url_source: null,
   social_pages_crawled_at: null, manual_url_fields: [],
   ...overrides,
 });
@@ -48,15 +46,14 @@ describe('computeUrlEnrichmentMetrics (KAN-224)', () => {
       .mockResolvedValueOnce([
         COMPETITOR({ instagram_url: 'https://instagram.com/a', instagram_url_source: 'site_extract' }),
         COMPETITOR({ facebook_url: 'https://facebook.com/b', facebook_url_source: 'serp' }),
-        COMPETITOR({ tiktok_url: 'https://tiktok.com/c', tiktok_url_source: 'tavily' }),
       ])
       .mockResolvedValueOnce([]);
 
     const m = await computeUrlEnrichmentMetrics('tenant1', 30);
 
-    expect(m.social_fill_count).toBe(3);
+    expect(m.social_fill_count).toBe(2);
     expect(m.social_from_site_extract).toBe(1);
-    expect(m.social_from_site_extract_rate).toBeCloseTo(1 / 3);
+    expect(m.social_from_site_extract_rate).toBeCloseTo(1 / 2);
   });
 
   it('computes precision as auto-filled fields the owner did not later edit or clear', async () => {

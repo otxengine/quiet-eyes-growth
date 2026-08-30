@@ -114,7 +114,7 @@ export function classifyInsight(insight: {
   if (/google.?(maps|business|מפות|עסקים)|גוגל.?(מפות|עסקים)/.test(text + label) && setupPattern.test(text + label)) return 'platform_setup';
 
   // Platform-based detection
-  if (['instagram', 'tiktok', 'facebook'].includes(platform)) return 'social_post';
+  if (['instagram', 'facebook'].includes(platform)) return 'social_post';
   if (platform === 'whatsapp') return 'whatsapp_blast';
   if (platform === 'google_maps') return 'platform_setup';
   if (platform === 'google') return 'respond';
