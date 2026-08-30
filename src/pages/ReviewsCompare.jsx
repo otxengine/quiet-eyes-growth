@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import TopicTimelineWidget from '@/components/competitors/TopicTimelineWidget';
 import CompetitorReviewInsightsPanel from '@/components/competitors/CompetitorReviewInsightsPanel';
+import ReviewsInsightsRadar from '@/components/competitors/ReviewsInsightsRadar';
 
 const ADVISOR_SUGGESTIONS = [
   'איפה אני מפסיד למתחרים בנושא ההמתנה?',
@@ -133,6 +134,7 @@ export default function ReviewsCompare() {
         </Link>
         <span className="text-lg font-semibold text-foreground">השוואת Google</span>
       </div>
+      <ReviewsInsightsRadar businessProfile={businessProfile} competitors={competitors} />
       {listed.length > 0 && (
         <div className="space-y-3">
           <p className="text-[11px] font-semibold text-foreground-muted uppercase tracking-wide" dir="rtl">

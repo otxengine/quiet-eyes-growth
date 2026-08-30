@@ -1,13 +1,8 @@
 import { useMemo, useState } from 'react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-  RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend,
-} from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Loader2, ChevronUp, ChevronDown } from 'lucide-react';
 import { fmtCount } from '@/components/competitors/socialShared';
-
-const OWN_COLOR = '#111111';
-const COMPETITOR_COLOR = '#d1d5db';
+import RadarComparisonChart, { RADAR_OWN_COLOR as OWN_COLOR, RADAR_COMPETITOR_COLOR as COMPETITOR_COLOR, normalizeRadarTopics } from '@/components/competitors/RadarComparisonChart';
 
 const RADAR_TOPICS = [
   { key: 'followers',      label: 'עוקבים' },
@@ -16,27 +11,19 @@ const RADAR_TOPICS = [
   { key: 'engagementRate', label: 'אחוז מעורבות' },
 ];
 
-// One axis per topic, own vs. the average of tracked competitors, each pair
-// normalized to 0-100 against the larger of the two so wildly different
-// scales — followers in the thousands, post counts in single digits — plot
-// on the same radial axis without one metric drowning out the others.
+// Own vs. the average of tracked competitors, one axis per topic.
 function buildRadarData(rows) {
   const own = rows.find(r => r.isOwn);
   const competitors = rows.filter(r => !r.isOwn);
   if (!own || competitors.length === 0) return [];
 
-  return RADAR_TOPICS.map(topic => {
-    const ownVal = own[topic.key];
-    const compVals = competitors.map(c => c[topic.key]).filter(v => v != null);
-    if (ownVal == null || compVals.length === 0) return null;
-    const compAvg = compVals.reduce((a, b) => a + b, 0) / compVals.length;
-    const max = Math.max(ownVal, compAvg) || 1;
-    return {
-      topic: topic.label,
-      own: Math.round((ownVal / max) * 100),
-      competitors: Math.round((compAvg / max) * 100),
-    };
-  }).filter(Boolean);
+  const competitorAvg = {};
+  for (const topic of RADAR_TOPICS) {
+    const vals = competitors.map(c => c[topic.key]).filter(v => v != null);
+    competitorAvg[topic.key] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  }
+
+  return normalizeRadarTopics(RADAR_TOPICS, own, competitorAvg);
 }
 
 function sumOrNull(profiles, field) {
@@ -127,31 +114,6 @@ function ComparisonChart({ title, subtitle, data, dataKey }) {
   );
 }
 
-// "Grid only" style: concentric rings with no radial spoke lines (polarAngles={[]})
-// and no radius-axis numbers, so the two overlapping shapes read at a glance
-// without a wall of gridlines competing for attention.
-function RadarComparisonChart({ data }) {
-  if (data.length < 3) return null;
-  return (
-    <div className="card-base p-4">
-      <h3 className="text-[13px] font-semibold text-[#222222] mb-1">השוואה לפי נושאים</h3>
-      <p className="text-[10px] text-foreground-muted mb-2">העסק שלי מול ממוצע המתחרים</p>
-      <div className="h-[280px]" dir="ltr">
-        <ResponsiveContainer width="100%" height="100%">
-          <RadarChart data={data} outerRadius="70%">
-            <PolarGrid polarAngles={[]} stroke="#e5e7eb" />
-            <PolarAngleAxis dataKey="topic" tick={{ fontSize: 10, fill: '#666' }} axisLine={false} />
-            <Radar name="העסק שלי" dataKey="own" stroke={OWN_COLOR} fill={OWN_COLOR} fillOpacity={0.25} strokeWidth={2} />
-            <Radar name="ממוצע מתחרים" dataKey="competitors" stroke={COMPETITOR_COLOR} fill={COMPETITOR_COLOR} fillOpacity={0.4} strokeWidth={2} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #f0f0f0' }} />
-          </RadarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
 export default function SocialInsightsComparison({
   competitors = [], competitorProfiles = [], ownProfiles = [], leaderboard = [], ownRow = null,
   businessName, onSelectCompetitor, isLoading = false,
@@ -200,7 +162,7 @@ export default function SocialInsightsComparison({
 
   return (
     <div className="space-y-3">
-      <RadarComparisonChart data={radarData} />
+      <RadarComparisonChart title="השוואה לפי נושאים" subtitle="העסק שלי מול ממוצע המתחרים" data={radarData} />
 
       <div className="card-base p-4 overflow-x-auto">
         <table dir="rtl" className="w-full">

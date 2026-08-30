@@ -301,6 +301,51 @@ router.get('/social/leaderboard', async (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/competitors/reviews/leaderboard?businessProfileId=
+// Review volume per tracked competitor over the last 30 days, plus the same
+// count for the business's own reviews — rating and total review_count are
+// already on the Competitor/BusinessProfile rows the frontend has loaded, so
+// this only needs to supply the one number that isn't: recent review velocity.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/reviews/leaderboard', async (req: Request, res: Response) => {
+  try {
+    const { businessProfileId } = req.query as Record<string, string>;
+    if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+    const competitors = await prisma.competitor.findMany({
+      where: { linked_business: businessProfileId, not_relevant: false },
+      select: { id: true },
+    });
+    const ids = competitors.map(c => c.id);
+
+    const WINDOW_DAYS = 30;
+    const since = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000);
+
+    const [competitorCounts, ownCount] = await Promise.all([
+      ids.length
+        ? prisma.review.groupBy({
+            by: ['linked_competitor'],
+            where: { linked_competitor: { in: ids }, created_date: { gte: since } },
+            _count: true,
+          })
+        : Promise.resolve([]),
+      prisma.review.count({
+        where: { linked_business: businessProfileId, linked_competitor: null, created_date: { gte: since } },
+      }),
+    ]);
+
+    const leaderboard = competitorCounts.map(c => ({
+      competitor_id: c.linked_competitor as string,
+      reviews_30d: c._count,
+    }));
+
+    return res.json({ leaderboard, own: { reviews_30d: ownCount }, window_days: WINDOW_DAYS });
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/competitors/proxy-image?url=<encoded>
 // Server-side proxy to bypass CORS on Instagram/Facebook/TikTok CDN URLs.
 // Whitelisted to known CDN hostnames to prevent SSRF.
