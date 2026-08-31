@@ -302,13 +302,21 @@ router.get('/social/leaderboard', async (req: Request, res: Response) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/competitors/reviews/leaderboard?businessProfileId=
-// Review volume per tracked competitor over the last 30 days, plus the same
+// Review volume per tracked competitor over the last year, plus the same
 // count for the business's own reviews. Competitor rating/review_count are
 // already on the Competitor rows the frontend has loaded, but the business's
 // own google_rating/google_review_count are frequently unset (only populated
 // via a specific Google sync), so own rating/review_count are computed here
 // from the business's actual review rows instead — same fallback the health
 // score route already uses (profile.google_rating ?? avg of own reviews).
+//
+// Filters on created_at (the review's actual post date, scraped from
+// Google), not created_date (when the row was inserted into our DB) — every
+// scrape batch backfills years of historical reviews in one run, so
+// created_date only reflects when we last scraped, not real review
+// activity. created_at is stored as text in a couple of different formats
+// across scrape sources, so it's cast with ::timestamptz rather than
+// filtered through Prisma's typed (string-only) comparison.
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/reviews/leaderboard', async (req: Request, res: Response) => {
   try {
@@ -321,35 +329,38 @@ router.get('/reviews/leaderboard', async (req: Request, res: Response) => {
     });
     const ids = competitors.map(c => c.id);
 
-    const WINDOW_DAYS = 30;
+    const WINDOW_DAYS = 365;
     const since = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
-    const [competitorCounts, ownCount, ownAgg] = await Promise.all([
+    const [competitorCounts, ownRows] = await Promise.all([
       ids.length
-        ? prisma.review.groupBy({
-            by: ['linked_competitor'],
-            where: { linked_competitor: { in: ids }, created_date: { gte: since } },
-            _count: true,
-          })
+        ? (prisma as any).$queryRawUnsafe(
+            `SELECT linked_competitor, COUNT(*)::int AS reviews_recent
+             FROM reviews
+             WHERE linked_competitor = ANY($1::text[]) AND created_at::timestamptz >= $2::timestamptz
+             GROUP BY linked_competitor`,
+            ids, since.toISOString(),
+          ) as Promise<{ linked_competitor: string; reviews_recent: number }[]>
         : Promise.resolve([]),
-      prisma.review.count({
-        where: { linked_business: businessProfileId, linked_competitor: null, created_date: { gte: since } },
-      }),
-      prisma.review.aggregate({
-        where: { linked_business: businessProfileId, linked_competitor: null },
-        _avg: { rating: true },
-        _count: true,
-      }),
+      (prisma as any).$queryRawUnsafe(
+        `SELECT COUNT(*)::int AS review_count,
+                AVG(rating)::float AS rating,
+                COUNT(*) FILTER (WHERE created_at::timestamptz >= $2::timestamptz)::int AS reviews_recent
+         FROM reviews
+         WHERE linked_business = $1 AND linked_competitor IS NULL`,
+        businessProfileId, since.toISOString(),
+      ) as Promise<{ review_count: number; rating: number | null; reviews_recent: number }[]>,
     ]);
 
-    const leaderboard = competitorCounts.map(c => ({
-      competitor_id: c.linked_competitor as string,
-      reviews_30d: c._count,
+    const leaderboard = competitorCounts.map((c: { linked_competitor: string; reviews_recent: number }) => ({
+      competitor_id: c.linked_competitor,
+      reviews_recent: c.reviews_recent,
     }));
+    const own = ownRows[0] ?? { review_count: 0, rating: null, reviews_recent: 0 };
 
     return res.json({
       leaderboard,
-      own: { reviews_30d: ownCount, rating: ownAgg._avg.rating, review_count: ownAgg._count },
+      own: { reviews_recent: own.reviews_recent, rating: own.rating, review_count: own.review_count },
       window_days: WINDOW_DAYS,
     });
   } catch (e: any) {

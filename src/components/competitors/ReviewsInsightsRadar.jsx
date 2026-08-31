@@ -4,9 +4,9 @@ import { apiFetch } from '@/components/competitors/socialShared';
 import RadarComparisonChart, { normalizeRadarTopics } from '@/components/competitors/RadarComparisonChart';
 
 const REVIEW_RADAR_TOPICS = [
-  { key: 'rating',      label: 'דירוג ממוצע' },
-  { key: 'reviewCount',  label: 'סה״כ ביקורות' },
-  { key: 'reviews30d',  label: 'ביקורות (30 יום)' },
+  { key: 'rating',        label: 'דירוג ממוצע' },
+  { key: 'reviewCount',   label: 'סה״כ ביקורות' },
+  { key: 'reviewsRecent', label: 'ביקורות (שנה אחרונה)' },
 ];
 
 function avgOrNull(vals) {
@@ -33,17 +33,17 @@ export default function ReviewsInsightsRadar({ businessProfile, competitors = []
   const radarData = useMemo(() => {
     if (competitors.length === 0) return [];
 
-    const countsByCompetitor = Object.fromEntries((leaderboardData?.leaderboard ?? []).map(l => [l.competitor_id, l.reviews_30d]));
+    const countsByCompetitor = Object.fromEntries((leaderboardData?.leaderboard ?? []).map(l => [l.competitor_id, l.reviews_recent]));
 
     const own = {
       rating: businessProfile?.google_rating ?? (leaderboardData ? leaderboardData.own?.rating ?? null : null),
       reviewCount: businessProfile?.google_review_count ?? (leaderboardData ? leaderboardData.own?.review_count ?? null : null),
-      reviews30d: leaderboardData ? (leaderboardData.own?.reviews_30d ?? 0) : null,
+      reviewsRecent: leaderboardData ? (leaderboardData.own?.reviews_recent ?? 0) : null,
     };
     const competitorAvg = {
       rating: avgOrNull(competitors.map(c => c.rating)),
       reviewCount: avgOrNull(competitors.map(c => c.review_count)),
-      reviews30d: leaderboardData ? avgOrNull(competitors.map(c => countsByCompetitor[c.id] ?? 0)) : null,
+      reviewsRecent: leaderboardData ? avgOrNull(competitors.map(c => countsByCompetitor[c.id] ?? 0)) : null,
     };
 
     return normalizeRadarTopics(REVIEW_RADAR_TOPICS, own, competitorAvg);
