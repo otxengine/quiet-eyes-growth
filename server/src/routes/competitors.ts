@@ -3,7 +3,7 @@ import { prisma } from '../db';
 import { isS3Url, downloadFromS3 } from '../lib/s3';
 import { findPlaceId } from '../lib/googlePlaces';
 import { enrichCompetitorUrls } from './functions/enrichCompetitorUrls';
-import { computeThemeRollup, computeReviewTrend } from './functions/computeThemeRollup';
+import { computeThemeRollup, computeReviewTrend, REVIEWS_INSIGHTS_WINDOW_DAYS } from './functions/computeThemeRollup';
 
 const router = Router();
 
@@ -376,9 +376,9 @@ router.get('/reviews/leaderboard', async (req: Request, res: Response) => {
 // computeThemeRollup, the same theme-extraction pipeline the Insights page's
 // review pillars already use (analyzeOwnReviewInsights.ts,
 // analyzeCompetitorReviewInsightsPooled.ts). Pooling is done inline here rather
-// than reusing analyzeCompetitorReviewInsightsPooled's computePooledThemes so
-// this route can use its own 365-day window without changing that function's
-// hardcoded 90-day one, which the Insights page pillar still depends on.
+// than reusing analyzeCompetitorReviewInsightsPooled's computePooledThemes, but
+// shares its window (REVIEWS_INSIGHTS_WINDOW_DAYS) so the radar and the two
+// pillar narratives all describe the same period.
 // Only returns topics with enough mentions on both sides to be meaningful.
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/reviews/topics-comparison', async (req: Request, res: Response) => {
@@ -391,10 +391,9 @@ router.get('/reviews/topics-comparison', async (req: Request, res: Response) => 
       select: { id: true },
     });
 
-    const WINDOW_DAYS = 365;
     const [ownThemes, perCompetitorThemes] = await Promise.all([
-      computeThemeRollup(businessProfileId, WINDOW_DAYS, 'google'),
-      Promise.all(competitors.map(c => computeThemeRollup(businessProfileId, WINDOW_DAYS, 'google', c.id))),
+      computeThemeRollup(businessProfileId, REVIEWS_INSIGHTS_WINDOW_DAYS, 'google'),
+      Promise.all(competitors.map(c => computeThemeRollup(businessProfileId, REVIEWS_INSIGHTS_WINDOW_DAYS, 'google', c.id))),
     ]);
 
     const competitorThemes: Record<string, { positive: number; negative: number }> = {};
@@ -429,7 +428,7 @@ router.get('/reviews/topics-comparison', async (req: Request, res: Response) => 
       .sort((a, b) => (b.own_mentions + b.competitor_mentions) - (a.own_mentions + a.competitor_mentions))
       .slice(0, 6);
 
-    return res.json({ topics, window_days: WINDOW_DAYS });
+    return res.json({ topics, window_days: REVIEWS_INSIGHTS_WINDOW_DAYS });
   } catch (e: any) {
     return res.status(500).json({ error: e.message });
   }

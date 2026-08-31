@@ -9,6 +9,14 @@ export interface ThemeCount {
   total: number;
 }
 
+// Shared window for every Reviews-pillar surface on the Insights page (own-business
+// narrative, pooled-competitor narrative, own-vs-competitor topic radar) so they all
+// describe the same period instead of three independently-hardcoded windows silently
+// disagreeing (was 90d/90d/365d — see KAN reviews-insights time-frame unification).
+// 365, not 90, because review volume per topic is too sparse over shorter windows for
+// many small businesses (c5d136a/56d3882) — widening only adds data, never removes it.
+export const REVIEWS_INSIGHTS_WINDOW_DAYS = 365;
+
 /**
  * Aggregates topic_sentiment JSON blobs from reviews into per-topic polarity counts.
  * windowDays defaults to 90.

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
-import { computeThemeRollup, ThemeCount } from './computeThemeRollup';
+import { computeThemeRollup, ThemeCount, REVIEWS_INSIGHTS_WINDOW_DAYS } from './computeThemeRollup';
 import { synthesizeReviewThemeInsight, ReviewExample } from '../../lib/synthesizeReviewThemeInsight';
 
 // 48h — matches the freshness window used by analyzeSocialPosts.ts / content_trends_* fields.
@@ -63,7 +63,7 @@ export async function analyzeOwnReviewInsights(req: Request, res: Response) {
       }
     }
 
-    const themes: ThemeCount[] = await computeThemeRollup(businessProfileId, 90);
+    const themes: ThemeCount[] = await computeThemeRollup(businessProfileId, REVIEWS_INSIGHTS_WINDOW_DAYS);
     if (!themes.length) {
       // ponytail: no reviews yet — omit rather than fabricate, don't throw.
       return res.json({ insight: null, examples: [], cached: false });

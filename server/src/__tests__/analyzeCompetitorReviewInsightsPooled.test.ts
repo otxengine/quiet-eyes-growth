@@ -16,6 +16,7 @@ jest.mock('../db', () => ({
 
 jest.mock('../routes/functions/computeThemeRollup', () => ({
   computeThemeRollup: jest.fn(),
+  REVIEWS_INSIGHTS_WINDOW_DAYS: 365,
 }));
 
 jest.mock('../lib/synthesizeReviewThemeInsight', () => ({
@@ -90,8 +91,8 @@ test('force bypasses a fresh cache and pools across 2 competitors with correct m
   const res = makeRes();
   await analyzeCompetitorReviewInsightsPooled(makeReq({ businessProfileId: 'bp-1', force: true }), res);
 
-  expect(mockComputeThemeRollup).toHaveBeenCalledWith('bp-1', 90, 'google', 'c1');
-  expect(mockComputeThemeRollup).toHaveBeenCalledWith('bp-1', 90, 'google', 'c2');
+  expect(mockComputeThemeRollup).toHaveBeenCalledWith('bp-1', 365, 'google', 'c1');
+  expect(mockComputeThemeRollup).toHaveBeenCalledWith('bp-1', 365, 'google', 'c2');
 
   const jsonArg = res.json.mock.calls[0][0];
   const stats: any[] = jsonArg.stats;

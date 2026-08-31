@@ -13,6 +13,7 @@ jest.mock('../db', () => ({
 
 jest.mock('../routes/functions/computeThemeRollup', () => ({
   computeThemeRollup: jest.fn(),
+  REVIEWS_INSIGHTS_WINDOW_DAYS: 365,
 }));
 
 jest.mock('../lib/synthesizeReviewThemeInsight', () => ({
@@ -71,7 +72,7 @@ test('force bypasses a fresh cache and recomputes', async () => {
   const res = makeRes();
   await analyzeOwnReviewInsights(makeReq({ businessProfileId: 'bp-1', force: true }), res);
 
-  expect(computeThemeRollup).toHaveBeenCalledWith('bp-1', 90);
+  expect(computeThemeRollup).toHaveBeenCalledWith('bp-1', 365);
   expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
     where: { id: 'bp-1' },
     data: expect.objectContaining({ own_reviews_pillar_insight: 'תובנה חדשה' }),

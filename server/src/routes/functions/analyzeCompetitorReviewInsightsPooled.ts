@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
-import { computeThemeRollup, ThemeCount } from './computeThemeRollup';
+import { computeThemeRollup, ThemeCount, REVIEWS_INSIGHTS_WINDOW_DAYS } from './computeThemeRollup';
 import { GOOGLE_REVIEW_SOURCES } from '../../lib/signalGuard';
 import { synthesizeReviewThemeInsight, ReviewExample } from '../../lib/synthesizeReviewThemeInsight';
 
@@ -23,7 +23,7 @@ async function computePooledThemes(
   competitorIds: string[],
 ): Promise<PooledThemeCount[]> {
   const perCompetitor = await Promise.all(
-    competitorIds.map(id => computeThemeRollup(businessProfileId, 90, 'google', id)),
+    competitorIds.map(id => computeThemeRollup(businessProfileId, REVIEWS_INSIGHTS_WINDOW_DAYS, 'google', id)),
   );
 
   const merged: Record<string, PooledThemeCount> = {};
