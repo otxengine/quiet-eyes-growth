@@ -61,7 +61,8 @@ Identify 3-5 concrete demand gaps — real unmet local demand. Return ONLY a JSO
       "estimated_monthly_demand": "estimated monthly searches/requests (number as string)",
       "opportunity_score": 75,
       "action": "Hebrew concrete action to capture this opportunity",
-      "time_to_capture": "immediate|weeks|months"
+      "time_to_capture": "immediate|weeks|months",
+      "prefilled_text": "Hebrew ready-to-post social content that capitalizes on this demand gap"
     }
   ]
 }`,
@@ -95,6 +96,13 @@ Identify 3-5 concrete demand gaps — real unmet local demand. Return ONLY a JSO
           is_read: false,
           is_dismissed: false,
           agent_name: 'demandGapEngine',
+          source_agent: JSON.stringify({
+            action_type: 'social_post',
+            action_label: 'צור תוכן על ההזדמנות',
+            prefilled_text: gap.prefilled_text || '',
+            opportunity_size: gap.estimated_monthly_demand ? `~${gap.estimated_monthly_demand} פניות/חיפושים בחודש` : '',
+            impact_reason: gap.evidence || '',
+          }),
         },
       });
       existingGapTexts.add(key);

@@ -348,6 +348,7 @@ model MarketSignal {
   agent_name         String?  // event/agent name for display
   source_type        String?  // 'agent' | 'web_scan' | 'social'
   tags               String?  // comma-separated classification tags
+  source_agent       String?  // JSON action metadata (prefilled_text, action_type, action_label, opportunity_size, impact_reason) — same convention as ProactiveAlert.source_agent
 
   @@map("market_signals")
 }

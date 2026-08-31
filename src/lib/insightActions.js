@@ -188,6 +188,12 @@ const INSIGHT_ACTION_MAP = {
     'create_task',
     'view_signals',
   ],
+  demand_gap: [
+    'create_campaign_with_audience',
+    'draft_post',
+    'create_task',
+    'view_leads',
+  ],
   action_needed: [
     'create_task',
     'draft_post',

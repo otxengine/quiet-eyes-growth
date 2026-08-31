@@ -212,11 +212,11 @@ function parseGapTags(signal) {
   return { score, timeKey };
 }
 
-function TopGapOpportunity({ signal }) {
+function TopGapOpportunity({ signal, onOpen }) {
   const { timeKey } = parseGapTags(signal);
   const time = GAP_TIME_STYLES[timeKey] || GAP_TIME_STYLES.weeks;
   return (
-    <div className="card-base p-5 border-2 border-primary/30 bg-primary/3">
+    <button onClick={onOpen} className="card-base p-5 border-2 border-primary/30 bg-primary/3 text-right w-full hover:shadow-md transition-shadow">
       <div className="flex items-center gap-2 mb-3">
         <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
         <span className="text-[12px] font-bold text-foreground">הזדמנות מובילה</span>
@@ -234,17 +234,17 @@ function TopGapOpportunity({ signal }) {
           <p className="text-[12px] text-primary font-semibold">{signal.recommended_action}</p>
         </div>
       )}
-    </div>
+    </button>
   );
 }
 
-function GapCard({ signal }) {
+function GapCard({ signal, onOpen }) {
   const { score, timeKey } = parseGapTags(signal);
   const impact = GAP_IMPACT_STYLES[signal.impact_level] || GAP_IMPACT_STYLES.medium;
   const time   = GAP_TIME_STYLES[timeKey] || GAP_TIME_STYLES.weeks;
 
   return (
-    <div className="card-base p-4 hover:shadow-md transition-shadow flex flex-col gap-3">
+    <button onClick={onOpen} className="card-base p-4 hover:shadow-md transition-shadow flex flex-col gap-3 text-right">
       <div className="flex items-center gap-2">
         <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
           <div className="h-full rounded-full transition-all duration-700"
@@ -273,7 +273,7 @@ function GapCard({ signal }) {
           <p className="text-[10px] text-foreground-muted leading-snug">{signal.recommended_action}</p>
         </div>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -297,6 +297,7 @@ function GapEmptyState({ scanning, onScan }) {
 }
 
 function DemandGapSection({ bpId }) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [scanning, setScanning] = useState(false);
 
@@ -347,12 +348,12 @@ function DemandGapSection({ bpId }) {
             )}
           </div>
 
-          {top && <TopGapOpportunity signal={top} />}
+          {top && <TopGapOpportunity signal={top} onOpen={() => navigate(`/insights/signal-${top.id}`)} />}
 
           {rest.length > 0 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {rest.map(gap => (
-                <GapCard key={gap.id} signal={gap} />
+                <GapCard key={gap.id} signal={gap} onOpen={() => navigate(`/insights/signal-${gap.id}`)} />
               ))}
             </div>
           )}
@@ -905,7 +906,7 @@ export default function Insights() {
 
               if (col.key === 'action') return (
                 <button
-                  onClick={() => navigate(`/insights/${row.id}?kind=${row.kind}`)}
+                  onClick={() => navigate(`/insights/${row.kind}-${row.id}`)}
                   className="text-xs font-semibold text-[#e8344d] hover:underline whitespace-nowrap"
                 >
                   {getActionLabel(row)} &rarr;
