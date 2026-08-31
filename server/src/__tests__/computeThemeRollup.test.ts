@@ -1,14 +1,14 @@
 import { computeThemeRollup } from '../routes/functions/computeThemeRollup';
 import { prisma } from '../db';
 
-jest.mock('../db', () => ({ prisma: { review: { findMany: jest.fn() } } }));
-const mockFindMany = prisma.review.findMany as jest.Mock;
+jest.mock('../db', () => ({ prisma: { $queryRawUnsafe: jest.fn() } }));
+const mockQueryRaw = prisma.$queryRawUnsafe as jest.Mock;
 
 describe('computeThemeRollup — KAN-124 AC1', () => {
   afterEach(() => jest.clearAllMocks());
 
   test('aggregates topic_sentiment counts per topic and polarity', async () => {
-    mockFindMany.mockResolvedValue([
+    mockQueryRaw.mockResolvedValue([
       { topic_sentiment: JSON.stringify({ שירות: 'positive', מחיר: 'neutral' }) },
       { topic_sentiment: JSON.stringify({ שירות: 'positive', אוכל: 'negative' }) },
       { topic_sentiment: JSON.stringify({ שירות: 'negative' }) },
@@ -27,7 +27,7 @@ describe('computeThemeRollup — KAN-124 AC1', () => {
   });
 
   test('skips rows with null or invalid topic_sentiment', async () => {
-    mockFindMany.mockResolvedValue([
+    mockQueryRaw.mockResolvedValue([
       { topic_sentiment: null },
       { topic_sentiment: 'not-json' },
       { topic_sentiment: JSON.stringify({ נושא: 'positive' }) },
@@ -39,15 +39,32 @@ describe('computeThemeRollup — KAN-124 AC1', () => {
   });
 
   test('returns empty array when no reviews have topic_sentiment', async () => {
-    mockFindMany.mockResolvedValue([]);
+    mockQueryRaw.mockResolvedValue([]);
     const result = await computeThemeRollup('bp-3');
     expect(result).toEqual([]);
   });
 
+  test('filters on created_at::timestamptz, not created_date', async () => {
+    mockQueryRaw.mockResolvedValue([]);
+    await computeThemeRollup('bp-4');
+    const sql = mockQueryRaw.mock.calls[0][0];
+    expect(sql).toContain('created_at::timestamptz');
+    expect(sql).not.toContain('created_date');
+  });
+
   test('platformFilter=google includes dataforseo_google_reviews in the source_origin filter', async () => {
-    mockFindMany.mockResolvedValue([]);
-    await computeThemeRollup('bp-4', 90, 'google');
-    const where = mockFindMany.mock.calls[0][0].where;
-    expect(where.source_origin.in).toContain('dataforseo_google_reviews');
+    mockQueryRaw.mockResolvedValue([]);
+    await computeThemeRollup('bp-5', 90, 'google');
+    const [sql, , , sourceOrigins] = mockQueryRaw.mock.calls[0];
+    expect(sql).toContain('source_origin = ANY');
+    expect(sourceOrigins).toContain('dataforseo_google_reviews');
+  });
+
+  test('queries by linked_competitor when linkedCompetitorId is given', async () => {
+    mockQueryRaw.mockResolvedValue([]);
+    await computeThemeRollup('bp-6', 90, undefined, 'comp-1');
+    const [sql, param1] = mockQueryRaw.mock.calls[0];
+    expect(sql).toContain('linked_competitor = $1');
+    expect(param1).toBe('comp-1');
   });
 });
