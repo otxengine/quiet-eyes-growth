@@ -303,9 +303,12 @@ router.get('/social/leaderboard', async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/competitors/reviews/leaderboard?businessProfileId=
 // Review volume per tracked competitor over the last 30 days, plus the same
-// count for the business's own reviews — rating and total review_count are
-// already on the Competitor/BusinessProfile rows the frontend has loaded, so
-// this only needs to supply the one number that isn't: recent review velocity.
+// count for the business's own reviews. Competitor rating/review_count are
+// already on the Competitor rows the frontend has loaded, but the business's
+// own google_rating/google_review_count are frequently unset (only populated
+// via a specific Google sync), so own rating/review_count are computed here
+// from the business's actual review rows instead — same fallback the health
+// score route already uses (profile.google_rating ?? avg of own reviews).
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/reviews/leaderboard', async (req: Request, res: Response) => {
   try {
@@ -321,7 +324,7 @@ router.get('/reviews/leaderboard', async (req: Request, res: Response) => {
     const WINDOW_DAYS = 30;
     const since = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
-    const [competitorCounts, ownCount] = await Promise.all([
+    const [competitorCounts, ownCount, ownAgg] = await Promise.all([
       ids.length
         ? prisma.review.groupBy({
             by: ['linked_competitor'],
@@ -332,6 +335,11 @@ router.get('/reviews/leaderboard', async (req: Request, res: Response) => {
       prisma.review.count({
         where: { linked_business: businessProfileId, linked_competitor: null, created_date: { gte: since } },
       }),
+      prisma.review.aggregate({
+        where: { linked_business: businessProfileId, linked_competitor: null },
+        _avg: { rating: true },
+        _count: true,
+      }),
     ]);
 
     const leaderboard = competitorCounts.map(c => ({
@@ -339,7 +347,11 @@ router.get('/reviews/leaderboard', async (req: Request, res: Response) => {
       reviews_30d: c._count,
     }));
 
-    return res.json({ leaderboard, own: { reviews_30d: ownCount }, window_days: WINDOW_DAYS });
+    return res.json({
+      leaderboard,
+      own: { reviews_30d: ownCount, rating: ownAgg._avg.rating, review_count: ownAgg._count },
+      window_days: WINDOW_DAYS,
+    });
   } catch (e: any) {
     return res.status(500).json({ error: e.message });
   }

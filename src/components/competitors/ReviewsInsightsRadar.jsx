@@ -15,9 +15,12 @@ function avgOrNull(vals) {
 }
 
 // Own vs. the average of tracked competitors, one axis per review topic.
-// Rating/review_count come straight off the already-loaded Competitor and
-// BusinessProfile rows — reviews_30d is the only piece that needs a query,
-// since review velocity isn't stored as a scalar anywhere.
+// Competitor rating/review_count come straight off the already-loaded
+// Competitor rows. Own rating/review_count prefer BusinessProfile's
+// google_rating/google_review_count, but those are frequently unset (only
+// populated via a specific Google sync) — the backend falls back to
+// computing them from the business's actual review rows, so this just
+// applies the same preference client-side once that data has loaded.
 export default function ReviewsInsightsRadar({ businessProfile, competitors = [] }) {
   const bpId = businessProfile?.id;
 
@@ -33,8 +36,8 @@ export default function ReviewsInsightsRadar({ businessProfile, competitors = []
     const countsByCompetitor = Object.fromEntries((leaderboardData?.leaderboard ?? []).map(l => [l.competitor_id, l.reviews_30d]));
 
     const own = {
-      rating: businessProfile?.google_rating ?? null,
-      reviewCount: businessProfile?.google_review_count ?? null,
+      rating: businessProfile?.google_rating ?? (leaderboardData ? leaderboardData.own?.rating ?? null : null),
+      reviewCount: businessProfile?.google_review_count ?? (leaderboardData ? leaderboardData.own?.review_count ?? null : null),
       reviews30d: leaderboardData ? (leaderboardData.own?.reviews_30d ?? 0) : null,
     };
     const competitorAvg = {
