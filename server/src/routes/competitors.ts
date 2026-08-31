@@ -407,11 +407,14 @@ router.get('/reviews/topics-comparison', async (req: Request, res: Response) => 
     }
 
     const MIN_MENTIONS = 3;
+    // 'quality' is a generic catch-all the topic extractor produces alongside
+    // 'product_quality' — near-duplicate axes on this chart, so drop the vaguer one.
+    const EXCLUDED_TOPICS = new Set(['quality']);
     const topics = ownThemes
       .filter(o => {
         const ownMentions = o.positive + o.negative;
         const c = competitorThemes[o.theme];
-        return ownMentions >= MIN_MENTIONS && c && (c.positive + c.negative) >= MIN_MENTIONS;
+        return !EXCLUDED_TOPICS.has(o.theme) && ownMentions >= MIN_MENTIONS && c && (c.positive + c.negative) >= MIN_MENTIONS;
       })
       .map(o => {
         const c = competitorThemes[o.theme];
