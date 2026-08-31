@@ -2,15 +2,24 @@
  * Background scheduler — runs agent pipelines for all active business profiles.
  *
  * Schedule (all times UTC):
- *  - 02:00 daily:  multi-platform trend intelligence (Instagram/Facebook/Google trends)
- *  - 03:00 daily:  cleanup + ML learning + HealthScore + SectorKnowledge + forecasting
- *  - 04:00 daily:  competitor snapshot diff
- *  - 05:30 daily:  data ingestion (reviews, web signals, lead gen, social leads)
- *  - 07:00 daily:  full intelligence pipeline + competitors + social + insight generators
- *                  (includes local events + calendar events — each self-throttles to a 3-day cadence)
- *  - Sunday 20:00: content calendar + sector benchmark + weekly email digest
- *  - Every 30min:  execute queued semi_auto actions
- *  - Every 15min:  keep-alive heartbeat
+ *  - 02:00 daily:    multi-platform trend intelligence (Instagram/Facebook/Google trends,
+ *                    each self-throttles to a 20h cadence)
+ *  - 03:00 daily:    cleanup + review automation + ML learning + HealthScore +
+ *                    SectorKnowledge (+10min delayed) + forecasting
+ *  - 04:00 daily:    competitor snapshot diff + URL discovery/enrichment (7-day cadence)
+ *  - 05:30 daily:    data ingestion — reviews, web signals, lead gen, social leads,
+ *                    competitor social posts/profile/stories, own social posts/profile
+ *                    (+5min delayed lead intent classification)
+ *  - 07:00 daily:    full intelligence pipeline + competitor pipeline stages + own ad
+ *                    detection + social + insight generators (+15min delayed)
+ *                    (includes local events + calendar events — each self-throttles to a 3-day cadence)
+ *  - Sunday 20:00:   content calendar + sector benchmark + weekly email digest (+10min delayed)
+ *  - Every 6h:       OTX competitor snapshot diff (OTX_COMPETITOR_SNAPSHOT_DISABLED kill switch)
+ *  - Every 10min:    OTX sync bridge (OTX_SYNC_BRIDGE_DISABLED kill switch)
+ *  - Every 30min:    execute queued semi_auto actions
+ *  - Every 15min:    DataForSEO review-task reconciliation (DATAFORSEO_RECONCILE_DISABLED
+ *                    kill switch) + a separate keep-alive heartbeat log
+ *  - Hourly:         collector failure-rate alert check
  */
 
 import cron from 'node-cron';
@@ -73,6 +82,8 @@ import { collectOTXCompetitorChanges } from './routes/functions/collectOTXCompet
 import { runOTXSyncBridge } from './routes/functions/runOTXSyncBridge';
 import { collectCompetitorSocialPosts } from './routes/functions/collectCompetitorSocialPosts';
 import { collectOwnSocialPosts } from './routes/functions/collectOwnSocialPosts';
+import { collectOwnSocialProfile } from './routes/functions/collectOwnSocialProfile';
+import { detectOwnAds } from './routes/functions/detectOwnAds';
 import { collectCompetitorSocialProfile } from './routes/functions/collectCompetitorSocialProfile';
 import { collectCompetitorSocialStories } from './routes/functions/collectCompetitorSocialStories';
 import { reconcileDataForSeoReviewTasks } from './routes/functions/reconcileDataForSeoReviewTasks';
@@ -205,6 +216,7 @@ export function startScheduler() {
     runAgentForAll('CollectCompetitorSocialProfile', collectCompetitorSocialProfile);
     runAgentForAll('CollectCompetitorSocialStories', collectCompetitorSocialStories);
     runAgentForAll('CollectOwnSocialPosts', collectOwnSocialPosts);
+    runAgentForAll('CollectOwnSocialProfile', collectOwnSocialProfile);
     // Enrich newly created leads with Haiku intent classification (5min after lead gen)
     setTimeout(() => enrichNewLeadsWithIntent()
       .catch(err => logger.error('enrichNewLeadsWithIntent error', { error: err.message })),
@@ -227,6 +239,7 @@ export function startScheduler() {
     runAgentForAll('DetectCompetitorChanges',  detectCompetitorChanges);  // prices/promos/posts → MarketSignals (48h dedup)
     runAgentForAll('AnalyzeCompetitorSocial',   analyzeCompetitorSocial);   // social enrichment + promo/ads/product detection → new fields + alerts
     runAgentForAll('DetectCompetitorAds',       detectCompetitorAds);       // Meta/Google paid ad campaigns → ProactiveAlerts
+    runAgentForAll('DetectOwnAds',              detectOwnAds);              // own Meta/Google ad campaigns → self-audit MarketSignal (48h guard)
     runAgentForAll('AnalyzeSocialPosts', scheduledAnalyzeSocialPosts); // deep content-strategy analysis, grounded in per-post vision analysis (48h/competitor guard)
     runAgentForAll('CompetitorIntel',           competitorIntelAgent);      // OSINT × events → ProactiveAlerts
     runAgentForAll('CompetitorMoveTracker',     competitorMoveTracker);     // DB-level moves → ProactiveAlerts

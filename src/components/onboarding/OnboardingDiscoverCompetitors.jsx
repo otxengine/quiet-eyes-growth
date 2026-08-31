@@ -154,6 +154,7 @@ export default function OnboardingDiscoverCompetitors() {
       base44.functions.invoke(fn, params, timeoutMs).catch((err) => console.error(`${fn} failed:`, err));
 
     invoke('collectCompetitorSocialPosts', { businessProfileId: bp, force: true }, LONG_SCAN_TIMEOUT_MS);
+    invoke('collectCompetitorSocialProfile', { businessProfileId: bp, force: true }, LONG_SCAN_TIMEOUT_MS);
     invoke('collectCompetitorSocialStories', { businessProfileId: bp, force: true }, LONG_SCAN_TIMEOUT_MS);
     invoke('detectCompetitorAds', { businessProfileId: bp, force: true, allCompetitors: true }, LONG_SCAN_TIMEOUT_MS);
     invoke('collectReviews', { businessProfileId: bp, force: true, skipCompetitorTrigger: true }, LONG_SCAN_TIMEOUT_MS);
