@@ -1,7 +1,11 @@
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend, Tooltip, ResponsiveContainer } from 'recharts';
 
-export const RADAR_OWN_COLOR = '#111111';
-export const RADAR_COMPETITOR_COLOR = '#d1d5db';
+// Validated categorical pair (dataviz skill, slots 1+2 of the fixed hue order):
+// worst-case CVD ΔE 24.7 / normal-vision ΔE 33.6 on white — both well clear of
+// the safety floors. Blue also matches the "own" highlight color already used
+// elsewhere in this app (e.g. the comparison table's own-row styling).
+export const RADAR_OWN_COLOR = '#2a78d6';
+export const RADAR_COMPETITOR_COLOR = '#eb6834';
 
 // "Grid only" style: concentric rings with no radial spoke lines (polarAngles={[]})
 // and no radius-axis numbers, so the two overlapping shapes read at a glance
@@ -11,16 +15,20 @@ export default function RadarComparisonChart({ title, subtitle, data, ownLabel =
   return (
     <div className="card-base p-4">
       <h3 className="text-[13px] font-semibold text-[#222222] mb-1">{title}</h3>
-      <p className="text-[10px] text-foreground-muted mb-2">{subtitle}</p>
+      <p className="text-[10px] text-foreground-muted">{subtitle}</p>
+      <p className="text-[10px] text-foreground-muted mb-2">כל ציר מנורמל בנפרד: 100% = הצד הגבוה יותר באותו נושא</p>
       <div className="h-[280px]" dir="ltr">
         <ResponsiveContainer width="100%" height="100%">
           <RadarChart data={data} outerRadius="70%">
             <PolarGrid polarAngles={[]} stroke="#e5e7eb" />
             <PolarAngleAxis dataKey="topic" tick={{ fontSize: 10, fill: '#666' }} axisLine={false} />
-            <Radar name={ownLabel} dataKey="own" stroke={RADAR_OWN_COLOR} fill={RADAR_OWN_COLOR} fillOpacity={0.25} strokeWidth={2} />
-            <Radar name={competitorsLabel} dataKey="competitors" stroke={RADAR_COMPETITOR_COLOR} fill={RADAR_COMPETITOR_COLOR} fillOpacity={0.4} strokeWidth={2} />
+            <Radar name={ownLabel} dataKey="own" stroke={RADAR_OWN_COLOR} fill={RADAR_OWN_COLOR} fillOpacity={0.12} strokeWidth={2} />
+            <Radar name={competitorsLabel} dataKey="competitors" stroke={RADAR_COMPETITOR_COLOR} fill={RADAR_COMPETITOR_COLOR} fillOpacity={0.12} strokeWidth={2} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #f0f0f0' }} />
+            <Tooltip
+              contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #f0f0f0' }}
+              formatter={(v, name) => [`${v}%`, name]}
+            />
           </RadarChart>
         </ResponsiveContainer>
       </div>
