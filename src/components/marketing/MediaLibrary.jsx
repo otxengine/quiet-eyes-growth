@@ -39,11 +39,15 @@ export default function MediaLibrary({ businessProfileId, onSelect }) {
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
 
-  const { data: assets = [], isLoading } = useQuery({
+  const { data: rawAssets = [], isLoading } = useQuery({
     queryKey: ['mediaLibrary', businessProfileId],
     queryFn: () => base44.entities.MediaAsset.filter({ linked_business: businessProfileId }, '-created_date', 100),
     enabled: !!businessProfileId,
   });
+  // Exclude assets with no viewable image (failed generation/upload never got
+  // real bytes) and logo candidates from the separate business-identity flow —
+  // neither belongs in the post-image library.
+  const assets = rawAssets.filter(a => (a.url || a.image_base64) && a.used_in !== 'logo');
 
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.MediaAsset.delete(id),
