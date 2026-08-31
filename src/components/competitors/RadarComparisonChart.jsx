@@ -10,13 +10,16 @@ export const RADAR_COMPETITOR_COLOR = '#eb6834';
 // "Grid only" style: concentric rings with no radial spoke lines (polarAngles={[]})
 // and no radius-axis numbers, so the two overlapping shapes read at a glance
 // without a wall of gridlines competing for attention.
-export default function RadarComparisonChart({ title, subtitle, data, ownLabel = 'העסק שלי', competitorsLabel = 'ממוצע מתחרים' }) {
+export default function RadarComparisonChart({
+  title, subtitle, data, ownLabel = 'העסק שלי', competitorsLabel = 'ממוצע מתחרים',
+  captionText = 'כל ציר מנורמל בנפרד: 100% = הצד הגבוה יותר באותו נושא',
+}) {
   if (data.length < 3) return null;
   return (
     <div className="card-base p-4">
       <h3 className="text-[13px] font-semibold text-[#222222] mb-1">{title}</h3>
       <p className="text-[10px] text-foreground-muted">{subtitle}</p>
-      <p className="text-[10px] text-foreground-muted mb-2">כל ציר מנורמל בנפרד: 100% = הצד הגבוה יותר באותו נושא</p>
+      {captionText && <p className="text-[10px] text-foreground-muted mb-2">{captionText}</p>}
       <div className="h-[280px]" dir="ltr">
         <ResponsiveContainer width="100%" height="100%">
           <RadarChart data={data} outerRadius="70%">

@@ -3,6 +3,7 @@ import { prisma } from '../db';
 import { isS3Url, downloadFromS3 } from '../lib/s3';
 import { findPlaceId } from '../lib/googlePlaces';
 import { enrichCompetitorUrls } from './functions/enrichCompetitorUrls';
+import { computeThemeRollup } from './functions/computeThemeRollup';
 
 const router = Router();
 
@@ -363,6 +364,69 @@ router.get('/reviews/leaderboard', async (req: Request, res: Response) => {
       own: { reviews_recent: own.reviews_recent, rating: own.rating, review_count: own.review_count },
       window_days: WINDOW_DAYS,
     });
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/competitors/reviews/topics-comparison?businessProfileId=
+// Own vs. pooled-competitor sentiment (% positive) per review topic — service,
+// quality, price, cleanliness, etc. — extracted from Review.topic_sentiment via
+// computeThemeRollup, the same theme-extraction pipeline the Insights page's
+// review pillars already use (analyzeOwnReviewInsights.ts,
+// analyzeCompetitorReviewInsightsPooled.ts). Pooling is done inline here rather
+// than reusing analyzeCompetitorReviewInsightsPooled's computePooledThemes so
+// this route can use its own 365-day window without changing that function's
+// hardcoded 90-day one, which the Insights page pillar still depends on.
+// Only returns topics with enough mentions on both sides to be meaningful.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/reviews/topics-comparison', async (req: Request, res: Response) => {
+  try {
+    const { businessProfileId } = req.query as Record<string, string>;
+    if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+    const competitors = await prisma.competitor.findMany({
+      where: { linked_business: businessProfileId, not_relevant: false },
+      select: { id: true },
+    });
+
+    const WINDOW_DAYS = 365;
+    const [ownThemes, perCompetitorThemes] = await Promise.all([
+      computeThemeRollup(businessProfileId, WINDOW_DAYS, 'google'),
+      Promise.all(competitors.map(c => computeThemeRollup(businessProfileId, WINDOW_DAYS, 'google', c.id))),
+    ]);
+
+    const competitorThemes: Record<string, { positive: number; negative: number }> = {};
+    for (const themes of perCompetitorThemes) {
+      for (const t of themes) {
+        if (!competitorThemes[t.theme]) competitorThemes[t.theme] = { positive: 0, negative: 0 };
+        competitorThemes[t.theme].positive += t.positive;
+        competitorThemes[t.theme].negative += t.negative;
+      }
+    }
+
+    const MIN_MENTIONS = 3;
+    const topics = ownThemes
+      .filter(o => {
+        const ownMentions = o.positive + o.negative;
+        const c = competitorThemes[o.theme];
+        return ownMentions >= MIN_MENTIONS && c && (c.positive + c.negative) >= MIN_MENTIONS;
+      })
+      .map(o => {
+        const c = competitorThemes[o.theme];
+        return {
+          topic: o.theme,
+          own_pct: Math.round((o.positive / (o.positive + o.negative)) * 100),
+          competitor_pct: Math.round((c.positive / (c.positive + c.negative)) * 100),
+          own_mentions: o.positive + o.negative,
+          competitor_mentions: c.positive + c.negative,
+        };
+      })
+      .sort((a, b) => (b.own_mentions + b.competitor_mentions) - (a.own_mentions + a.competitor_mentions))
+      .slice(0, 6);
+
+    return res.json({ topics, window_days: WINDOW_DAYS });
   } catch (e: any) {
     return res.status(500).json({ error: e.message });
   }
