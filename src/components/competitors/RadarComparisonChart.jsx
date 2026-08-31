@@ -13,10 +13,11 @@ export const RADAR_COMPETITOR_COLOR = '#eb6834';
 export default function RadarComparisonChart({
   title, subtitle, data, ownLabel = 'העסק שלי', competitorsLabel = 'ממוצע מתחרים',
   captionText = 'כל ציר מנורמל בנפרד: 100% = הצד הגבוה יותר באותו נושא',
+  bare = false,
 }) {
   if (data.length < 3) return null;
-  return (
-    <div className="card-base p-4">
+  const content = (
+    <>
       <h3 className="text-[13px] font-semibold text-[#222222] mb-1">{title}</h3>
       <p className="text-[10px] text-foreground-muted">{subtitle}</p>
       {captionText && <p className="text-[10px] text-foreground-muted mb-2">{captionText}</p>}
@@ -35,8 +36,9 @@ export default function RadarComparisonChart({
           </RadarChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </>
   );
+  return bare ? content : <div className="card-base p-4">{content}</div>;
 }
 
 // Normalizes an own-value/competitor-avg-value pair per topic to 0-100 against

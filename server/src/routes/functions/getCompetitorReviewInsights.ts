@@ -1,33 +1,8 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
-import { computeThemeRollup } from './computeThemeRollup';
+import { computeThemeRollup, computeReviewTrend } from './computeThemeRollup';
 import { GOOGLE_REVIEW_SOURCES as GOOGLE_SOURCES } from '../../lib/signalGuard';
-
-async function computeReviewTrend(competitorId: string): Promise<string | null> {
-  const now = new Date();
-  const d30 = new Date(now); d30.setDate(d30.getDate() - 30);
-  const d60 = new Date(now); d60.setDate(d60.getDate() - 60);
-
-  const reviews = await prisma.review.findMany({
-    where: { linked_competitor: competitorId, source_origin: { in: GOOGLE_SOURCES }, rating: { not: null } },
-    select: { rating: true, created_at: true, created_date: true },
-    take: 200,
-  });
-
-  const reviewDate = (r: { created_at: string | null; created_date: Date }) => new Date(r.created_at || r.created_date);
-  const recent = reviews.filter(r => reviewDate(r) >= d30);
-  const prior  = reviews.filter(r => reviewDate(r) >= d60 && reviewDate(r) < d30);
-
-  // ponytail: omit rather than fabricate — AC2 explicitly requires this guard
-  if (recent.length < 3 || prior.length < 3) return null;
-
-  const avg = (arr: typeof reviews) => arr.reduce((s, r) => s + (r.rating ?? 0), 0) / arr.length;
-  const delta = avg(recent) - avg(prior);
-  if (delta > 0.1) return 'improving';
-  if (delta < -0.1) return 'declining';
-  return 'stable';
-}
 
 export async function getCompetitorReviewInsightsData(businessProfileId: string, competitorId: string) {
   const reviewSelect = { reviewer_name: true, rating: true, text: true, created_at: true, created_date: true, topic_sentiment: true } as const;
@@ -38,7 +13,7 @@ export async function getCompetitorReviewInsightsData(businessProfileId: string,
       select: { name: true, rating: true, review_count: true },
     }),
     computeThemeRollup(businessProfileId, 90, 'google', competitorId),
-    computeReviewTrend(competitorId),
+    computeReviewTrend({ linked_competitor: competitorId }),
     prisma.review.findMany({
       where: { linked_business: businessProfileId, source_origin: { in: GOOGLE_SOURCES }, rating: { not: null } },
       select: { rating: true },

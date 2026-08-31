@@ -10,7 +10,7 @@ import RadarComparisonChart from '@/components/competitors/RadarComparisonChart'
 // is already a 0-100% positive-sentiment ratio, so it's passed straight
 // through — no relative normalization needed, unlike the social radar's
 // wildly-different-scale metrics (followers vs. post counts).
-export default function ReviewsInsightsRadar({ businessProfile, competitors = [] }) {
+export default function ReviewsInsightsRadar({ businessProfile, competitors = [], bare = false }) {
   const bpId = businessProfile?.id;
 
   const { data } = useQuery({
@@ -33,6 +33,7 @@ export default function ReviewsInsightsRadar({ businessProfile, competitors = []
       subtitle="אחוז חוות דעת חיוביות בכל נושא — העסק שלי מול ממוצע המתחרים"
       captionText="כל ציר = % ביקורות חיוביות מתוך הביקורות שהזכירו את הנושא"
       data={radarData}
+      bare={bare}
     />
   );
 }

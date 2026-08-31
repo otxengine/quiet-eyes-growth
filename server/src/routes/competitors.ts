@@ -3,7 +3,7 @@ import { prisma } from '../db';
 import { isS3Url, downloadFromS3 } from '../lib/s3';
 import { findPlaceId } from '../lib/googlePlaces';
 import { enrichCompetitorUrls } from './functions/enrichCompetitorUrls';
-import { computeThemeRollup } from './functions/computeThemeRollup';
+import { computeThemeRollup, computeReviewTrend } from './functions/computeThemeRollup';
 
 const router = Router();
 
@@ -430,6 +430,26 @@ router.get('/reviews/topics-comparison', async (req: Request, res: Response) => 
       .slice(0, 6);
 
     return res.json({ topics, window_days: WINDOW_DAYS });
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/competitors/reviews/own-trend?businessProfileId=
+// Directional movement (improving/declining/stable) of the business's own
+// review ratings, last 30 days vs. the prior 30-60 day window. Reuses the
+// same computeReviewTrend logic the per-competitor drill-down panel already
+// uses. A separate always-fresh read (not cached on BusinessProfile like the
+// Insights review pillars) since it's one cheap query with no LLM call.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/reviews/own-trend', async (req: Request, res: Response) => {
+  try {
+    const { businessProfileId } = req.query as Record<string, string>;
+    if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+    const trend = await computeReviewTrend({ linked_business: businessProfileId });
+    return res.json({ trend });
   } catch (e: any) {
     return res.status(500).json({ error: e.message });
   }
