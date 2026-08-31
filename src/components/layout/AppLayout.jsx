@@ -45,6 +45,7 @@ const pageTitles = {
   '/competitors':   'מתחרים',
   '/marketing':     'מרכז השיווק',
   '/marketing/create': 'יצירת קמפיין',
+  '/posts':         'פוסטים',
   '/events':        'אירועים',
   '/reviews':       'מוניטין / נראות עסקית',
   '/retention':     'ניהול לקוחות',
