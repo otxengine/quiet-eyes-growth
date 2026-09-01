@@ -1,4 +1,4 @@
-import { computeThemeRollup } from '../routes/functions/computeThemeRollup';
+import { computeThemeRollup, computeReviewTrend } from '../routes/functions/computeThemeRollup';
 import { prisma } from '../db';
 
 jest.mock('../db', () => ({ prisma: { $queryRawUnsafe: jest.fn() } }));
@@ -63,6 +63,55 @@ describe('computeThemeRollup — KAN-124 AC1', () => {
   test('queries by linked_competitor when linkedCompetitorId is given', async () => {
     mockQueryRaw.mockResolvedValue([]);
     await computeThemeRollup('bp-6', 90, undefined, 'comp-1');
+    const [sql, param1] = mockQueryRaw.mock.calls[0];
+    expect(sql).toContain('linked_competitor = $1');
+    expect(param1).toBe('comp-1');
+  });
+});
+
+describe('computeReviewTrend', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  // Regression test: computeReviewTrend used to fetch `take: 200` unordered rows and
+  // filter in JS — on a business with hundreds of reviews spanning years, that could
+  // grab an arbitrary subset missing the real recent rows entirely, wrongly returning
+  // null. Aggregating in SQL means the counts/avgs are always over the FULL matching
+  // set, not a capped sample.
+  test('returns improving when recent avg rating is higher than prior', async () => {
+    mockQueryRaw.mockResolvedValue([
+      { recent_count: 8, recent_avg: 4.8, prior_count: 14, prior_avg: 4.2 },
+    ]);
+    const trend = await computeReviewTrend({ linked_business: 'bp-1' });
+    expect(trend).toBe('improving');
+  });
+
+  test('returns declining when recent avg rating is lower than prior', async () => {
+    mockQueryRaw.mockResolvedValue([
+      { recent_count: 5, recent_avg: 3.0, prior_count: 6, prior_avg: 4.5 },
+    ]);
+    const trend = await computeReviewTrend({ linked_business: 'bp-2' });
+    expect(trend).toBe('declining');
+  });
+
+  test('returns stable when the delta is within the noise threshold', async () => {
+    mockQueryRaw.mockResolvedValue([
+      { recent_count: 5, recent_avg: 4.5, prior_count: 5, prior_avg: 4.45 },
+    ]);
+    const trend = await computeReviewTrend({ linked_business: 'bp-3' });
+    expect(trend).toBe('stable');
+  });
+
+  test('returns null when either window has fewer than 3 reviews', async () => {
+    mockQueryRaw.mockResolvedValue([
+      { recent_count: 2, recent_avg: 5, prior_count: 10, prior_avg: 4 },
+    ]);
+    const trend = await computeReviewTrend({ linked_business: 'bp-4' });
+    expect(trend).toBeNull();
+  });
+
+  test('queries by linked_competitor column when given a competitor filter', async () => {
+    mockQueryRaw.mockResolvedValue([{ recent_count: 0, recent_avg: null, prior_count: 0, prior_avg: null }]);
+    await computeReviewTrend({ linked_competitor: 'comp-1' });
     const [sql, param1] = mockQueryRaw.mock.calls[0];
     expect(sql).toContain('linked_competitor = $1');
     expect(param1).toBe('comp-1');
