@@ -3,7 +3,7 @@ import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { LONG_SCAN_TIMEOUT_MS } from '@/api/client';
-import { Plus, Loader2, Sparkles, Upload, RefreshCw, Send, Image as ImageIcon, X, Trash2, CheckCircle2 } from 'lucide-react';
+import { Plus, Loader2, Sparkles, Upload, RefreshCw, Send, Image as ImageIcon, X, Trash2, CheckCircle2, Calendar, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import MediaLibrary from '@/components/marketing/MediaLibrary';
@@ -25,8 +25,23 @@ function fmtDate(d) {
   return new Date(d).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' });
 }
 
+function fmtDateTime(d) {
+  if (!d) return '';
+  return new Date(d).toLocaleString('he-IL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+// datetime-local <input> uses the browser's local time, with no timezone info —
+// this just formats/parses that local wall-clock string, no conversion needed.
+function isoToLocalInputValue(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 const TABS = [
   { id: 'posts', label: 'פוסטים', icon: '📄' },
+  { id: 'calendar', label: 'לוח שנה', icon: '📅' },
   { id: 'media', label: 'מדיה',   icon: '🖼️' },
 ];
 
@@ -67,7 +82,13 @@ function OrganicCard({ post, onDelete, onOpen }) {
         </div>
       </button>
       <div className="flex items-center gap-2 px-4 py-2 border-t border-border bg-secondary/30">
-        <span className="text-[10px] text-foreground-muted mr-auto">{fmtDate(post.published_at || post.created_date)}</span>
+        {post.scheduled_at && post.status !== 'published' ? (
+          <span className="flex items-center gap-1 text-[10px] text-foreground-muted mr-auto">
+            <Calendar className="w-3 h-3" /> מתוזמן ל-{fmtDateTime(post.scheduled_at)}
+          </span>
+        ) : (
+          <span className="text-[10px] text-foreground-muted mr-auto">{fmtDate(post.published_at || post.created_date)}</span>
+        )}
         <button onClick={() => onDelete(post.id)} className="text-[11px] text-foreground-muted hover:text-red-500 transition-colors">
           <Trash2 className="w-3 h-3" />
         </button>
@@ -100,6 +121,11 @@ function OrganicPostDetailModal({ post, onClose, onToggleApprove, toggling, onPu
         <div className="p-5 space-y-4">
           {post.signal_summary && (
             <p className="text-[11px] text-foreground-muted opacity-70">💡 {post.signal_summary}</p>
+          )}
+          {post.scheduled_at && (
+            <p className="flex items-center gap-1.5 text-[11px] text-foreground-muted">
+              <Calendar className="w-3.5 h-3.5" /> מתוזמן לפרסום: {fmtDateTime(post.scheduled_at)}
+            </p>
           )}
           {post.image_url && (
             <img src={post.image_url} alt="" className="w-full max-h-96 object-cover rounded-xl border border-border" />
@@ -138,6 +164,7 @@ function BulkGenerateSetupModal({ onClose, onGenerate, generating }) {
   const [count, setCount] = useState(3);
   const [platform, setPlatform] = useState('both');
   const [specialRequest, setSpecialRequest] = useState('');
+  const [scheduleMode, setScheduleMode] = useState('none'); // 'none' | 'manual' | 'auto'
   const [scheduledAt, setScheduledAt] = useState('');
 
   return (
@@ -189,13 +216,32 @@ function BulkGenerateSetupModal({ onClose, onGenerate, generating }) {
           </div>
 
           <div>
-            <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">מתי תרצו לפרסם? (אופציונלי)</p>
-            <input
-              type="datetime-local"
-              value={scheduledAt}
-              onChange={e => setScheduledAt(e.target.value)}
-              className="w-full text-[13px] text-foreground bg-secondary border border-border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-primary"
-            />
+            <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">מתי לפרסם? (אופציונלי)</p>
+            <div className="flex items-center gap-1 p-1 bg-secondary rounded-lg w-fit mb-2">
+              {[
+                { id: 'none', label: 'לא לתזמן' },
+                { id: 'manual', label: 'אני אבחר' },
+                { id: 'auto', label: '✨ AI יבחר' },
+              ].map(m => (
+                <button key={m.id} onClick={() => setScheduleMode(m.id)}
+                  className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
+                    scheduleMode === m.id ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
+                  }`}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            {scheduleMode === 'manual' && (
+              <input
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={e => setScheduledAt(e.target.value)}
+                className="w-full text-[13px] text-foreground bg-secondary border border-border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            )}
+            {scheduleMode === 'auto' && (
+              <p className="text-[11px] text-foreground-muted">ה-AI יבחר לכל פוסט את המועד הטוב ביותר לפי הפלטפורמה וסוג התוכן.</p>
+            )}
           </div>
         </div>
 
@@ -209,7 +255,8 @@ function BulkGenerateSetupModal({ onClose, onGenerate, generating }) {
               count,
               platform,
               special_request: specialRequest.trim() || undefined,
-              scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
+              scheduled_at: scheduleMode === 'manual' && scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
+              auto_schedule: scheduleMode === 'auto',
             })}
             disabled={generating}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-foreground text-background rounded-xl text-[13px] font-bold hover:opacity-90 disabled:opacity-60">
@@ -322,6 +369,27 @@ function OrganicCreateDrawer({ businessProfile, signalContext, audienceData, rec
   const [saving,      setSaving]      = useState(false);
   const [imgPreview,  setImgPreview]  = useState(false);
   const [showPicker,  setShowPicker]  = useState(false);
+
+  const [scheduleMode, setScheduleMode]   = useState('none'); // 'none' | 'manual' | 'auto'
+  const [scheduledAt,  setScheduledAt]    = useState('');
+  const [aiTimeReason, setAiTimeReason]   = useState('');
+  const [suggestingTime, setSuggestingTime] = useState(false);
+
+  const handleAiSchedule = useCallback(async () => {
+    setScheduleMode('auto');
+    setSuggestingTime(true);
+    try {
+      const res = await base44.functions.invoke('suggestPostTime', {
+        businessProfileId: businessProfile.id, platform, postType, content,
+      });
+      const data = res?.data || res;
+      if (data?.scheduled_at) {
+        setScheduledAt(isoToLocalInputValue(data.scheduled_at));
+        setAiTimeReason(data.reasoning || '');
+      }
+    } catch { toast.error('שגיאה בבחירת מועד'); setScheduleMode('none'); }
+    setSuggestingTime(false);
+  }, [businessProfile?.id, platform, postType, content]);
 
   const fileRef = useRef(null);
 
@@ -486,6 +554,7 @@ ${formatInstr}
         image_url:       imageUrl || null,
         status:          'draft',
         published_at:    null,
+        scheduled_at:    scheduleMode !== 'none' && scheduledAt ? new Date(scheduledAt).toISOString() : null,
       });
 
       if (publish) {
@@ -676,6 +745,42 @@ ${formatInstr}
             />
           </div>
 
+          {/* Scheduling */}
+          <div>
+            <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">מתי לפרסם? (אופציונלי)</p>
+            <div className="flex items-center gap-1 p-1 bg-secondary rounded-lg w-fit mb-2">
+              {[
+                { id: 'none', label: 'לא לתזמן' },
+                { id: 'manual', label: 'אני אבחר' },
+              ].map(m => (
+                <button key={m.id} onClick={() => setScheduleMode(m.id)}
+                  className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
+                    scheduleMode === m.id ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
+                  }`}>
+                  {m.label}
+                </button>
+              ))}
+              <button onClick={handleAiSchedule} disabled={suggestingTime}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-all disabled:opacity-60 ${
+                  scheduleMode === 'auto' ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
+                }`}>
+                {suggestingTime ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                AI יבחר
+              </button>
+            </div>
+            {scheduleMode !== 'none' && (
+              <input
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={e => { setScheduledAt(e.target.value); setScheduleMode('manual'); setAiTimeReason(''); }}
+                className="w-full text-[13px] text-foreground bg-secondary border border-border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            )}
+            {scheduleMode === 'auto' && aiTimeReason && (
+              <p className="text-[10px] text-foreground-muted mt-1">✨ {aiTimeReason}</p>
+            )}
+          </div>
+
           {/* Actions */}
           <div className="flex gap-2 pt-1">
             <button onClick={() => handleSave(false)} disabled={saving}
@@ -696,8 +801,6 @@ ${formatInstr}
 }
 
 // ── Content Calendar ─────────────────────────────────────────────────────────
-// Not currently wired into a tab (matches prior behavior in Marketing.jsx —
-// co-located here since it consumes organic-posts data).
 
 const DAY_LABELS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
 
@@ -753,9 +856,12 @@ function CalendarView({ posts }) {
               </div>
               {dayPosts.map(p => {
                 const platCfg = ORGANIC_PLATFORMS.find(pl => pl.id === p.platform);
+                const time = p.scheduled_at
+                  ? new Date(p.scheduled_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+                  : null;
                 return (
                   <div key={p.id} className="rounded-lg px-1.5 py-1 text-[9px] leading-tight truncate" style={{ background: platCfg?.color + '22', color: platCfg?.color || '#555' }}>
-                    {platCfg?.icon} {p.content?.slice(0, 30) || '(פוסט)'}
+                    {platCfg?.icon} {time && <span className="font-semibold">{time} · </span>}{p.content?.slice(0, 30) || '(פוסט)'}
                   </div>
                 );
               })}
@@ -859,10 +965,10 @@ export default function Posts() {
   const [reviewIndex, setReviewIndex] = useState(0);
   const [reviewBusy, setReviewBusy] = useState(false);
 
-  const handleBulkGenerate = async ({ count, platform, special_request, scheduled_at }) => {
+  const handleBulkGenerate = async ({ count, platform, special_request, scheduled_at, auto_schedule }) => {
     setBulkGenerating(true);
     try {
-      const res = await base44.functions.invoke('generateBulkPosts', { businessProfileId: bpId, count, platform, special_request, scheduled_at }, LONG_SCAN_TIMEOUT_MS);
+      const res = await base44.functions.invoke('generateBulkPosts', { businessProfileId: bpId, count, platform, special_request, scheduled_at, auto_schedule }, LONG_SCAN_TIMEOUT_MS);
       const data = res?.data || res;
       await queryClient.invalidateQueries({ queryKey: ['organicPosts', bpId] });
       toast.success(`נוצרו ${data?.created ?? 0} מתוך ${data?.requested ?? count} פוסטים`);
@@ -987,6 +1093,11 @@ export default function Posts() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Calendar tab */}
+      {activeTab === 'calendar' && (
+        <CalendarView posts={organicPosts} />
       )}
 
       {/* Media library tab */}

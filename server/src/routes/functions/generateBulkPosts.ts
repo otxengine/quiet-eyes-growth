@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
+import { israelDateOffset, israelLocalToUTC } from '../../lib/timezone';
 
 const SUPPORTED_PLATFORMS = ['facebook', 'instagram']; // tiktok not supported for this feature yet
 
@@ -13,14 +14,16 @@ const SUPPORTED_PLATFORMS = ['facebook', 'instagram']; // tiktok not supported f
  * elsewhere) and the business's own media library. Each post gets a matching
  * media asset only when one genuinely fits; otherwise no image.
  *
- * Body: { businessProfileId, count, platform?, special_request?, scheduled_at? }
+ * Body: { businessProfileId, count, platform?, special_request?, scheduled_at?, auto_schedule? }
  *   platform: 'facebook' | 'instagram' | 'both' (default 'both')
  *   special_request: optional free text the business owner wants reflected in the batch (an offer, event, announcement)
- *   scheduled_at: optional ISO datetime — stored on the created posts, informational only (no auto-publish)
+ *   scheduled_at: optional ISO datetime — applied to every post in the batch, informational only (no auto-publish)
+ *   auto_schedule: when true (and scheduled_at is not set), the LLM picks a per-post posting
+ *     time from general platform best-practice knowledge instead of the owner choosing manually
  * Returns: { created, requested, posts }
  */
 export async function generateBulkPosts(req: Request, res: Response) {
-  const { businessProfileId, special_request, scheduled_at } = req.body;
+  const { businessProfileId, special_request, scheduled_at, auto_schedule } = req.body;
   const count = Math.max(1, Math.min(10, parseInt(req.body.count, 10) || 0));
   const allowedPlatforms = SUPPORTED_PLATFORMS.includes(req.body.platform)
     ? [req.body.platform]
@@ -96,6 +99,7 @@ ${mediaBlock}
 2. כל פוסט: Hook פותח חזק, גוף עם ערך אמיתי (60-100 מילה), CTA ברור בסוף, 3-6 האשטאגים רלוונטיים.
 3. platform לכל פוסט: ${allowedPlatforms.length > 1 ? `בחר ${allowedPlatforms.join('/')} לפי מה שהכי מתאים לתוכן, תוך גיוון בין הפוסטים` : `כל הפוסטים עבור ${allowedPlatforms[0]} בלבד`}.
 4. media_asset_id: אך ורק id מדויק מהרשימה למעלה, או null. לעולם אל תמציא id.
+5. לכל פוסט קבע גם day_offset (0-6, מספר ימים קדימה מהיום) ו-best_time (שעה בפורמט HH:MM) — המועד הטוב ביותר לפרסום לפי הפלטפורמה וסוג התוכן, עם פיזור סביר בין הפוסטים (לא כולם באותו יום/שעה).
 
 Return ONLY valid JSON. ALL string values in Hebrew (except platform/media_asset_id):
 {
@@ -107,7 +111,9 @@ Return ONLY valid JSON. ALL string values in Hebrew (except platform/media_asset
       "body": "...",
       "cta": "...",
       "hashtags": "#תג1 #תג2 #תג3",
-      "media_asset_id": "id מדויק מהרשימה, או null"
+      "media_asset_id": "id מדויק מהרשימה, או null",
+      "day_offset": 0,
+      "best_time": "19:00"
     }
   ]
 }`;
@@ -139,6 +145,13 @@ Return ONLY valid JSON. ALL string values in Hebrew (except platform/media_asset
       }
       const platform = allowedPlatforms.includes(p?.platform) ? p.platform : allowedPlatforms[0];
 
+      let postScheduledAt = scheduledAt;
+      if (!postScheduledAt && auto_schedule) {
+        const dayOffset = Math.max(0, Math.min(6, parseInt(p?.day_offset, 10) || 0));
+        const time = /^\d{2}:\d{2}$/.test(p?.best_time) ? p.best_time : '19:00';
+        postScheduledAt = israelLocalToUTC(israelDateOffset(dayOffset), time);
+      }
+
       const row = await prisma.organicPost.create({
         data: {
           linked_business: businessProfileId,
@@ -149,7 +162,7 @@ Return ONLY valid JSON. ALL string values in Hebrew (except platform/media_asset
           media_asset_id: mediaAssetId,
           image_url: mediaAssetId ? `${serverBase}/api/social/media/${mediaAssetId}` : null,
           status: 'draft',
-          scheduled_at: scheduledAt,
+          scheduled_at: postScheduledAt,
         },
       });
       created.push(row);
