@@ -956,13 +956,13 @@ export default function Posts() {
           <div className="flex items-center justify-between flex-wrap gap-3">
             <p className="text-[12px] text-foreground-muted">
               {organicPosts.length} פוסטים
-              {!(businessProfile.content_trends_copy_insight || businessProfile.outlier_insight) && (
+              {!(businessProfile?.content_trends_copy_insight || businessProfile?.outlier_insight) && (
                 <span className="text-foreground-muted/60"> · 💡 הריצו ניתוח מגמות תוכן מתחרים לתוצאות טובות יותר ביצירה עם AI</span>
               )}
             </p>
             <div className="flex items-center gap-2">
-              <button onClick={() => setShowOrgCreate(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[11px] font-medium text-foreground-muted hover:text-foreground hover:bg-secondary transition-all">
+              <button onClick={() => setShowOrgCreate(true)} disabled={!bpId}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[11px] font-medium text-foreground-muted hover:text-foreground hover:bg-secondary transition-all disabled:opacity-60">
                 <Plus className="w-3.5 h-3.5" /> פוסט חדש
               </button>
               <button onClick={() => setShowBulkSetup(true)} disabled={!bpId}
