@@ -1,14 +1,7 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Loader2, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp } from 'lucide-react';
-
-const TOPIC_HE = {
-  service: 'שירות', price: 'מחיר', quality: 'איכות', cleanliness: 'ניקיון',
-  atmosphere: 'אווירה', availability: 'זמינות', delivery: 'משלוח',
-  food_quality: 'איכות המזון', menu_variety: 'מגוון תפריט', wait_time: 'זמן המתנה',
-  portion_size: 'גודל מנה', freshness: 'טריות',
-};
-const th = id => TOPIC_HE[id] || id;
+import { th } from './topicLabels';
 
 const TREND_ICON = {
   improving: <TrendingUp  className="w-3.5 h-3.5 text-success inline-block" />,

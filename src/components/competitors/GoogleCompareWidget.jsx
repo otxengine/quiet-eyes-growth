@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
+import { th } from './topicLabels';
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api').replace(/\/$/, '');
 
 const CHIP = {
   positive: 'bg-green-100 text-green-700',
   negative: 'bg-red-100 text-red-600',
-  neutral:  'bg-amber-100 text-amber-600',
 };
-const PREFIX = { positive: '+', negative: '−', neutral: '' };
 
 function dominant(a) {
   if (a.positive > a.negative && a.positive > a.neutral) return 'positive';
@@ -18,18 +17,32 @@ function dominant(a) {
 }
 
 function AspectChips({ aspects }) {
-  const top = (aspects || []).slice(0, 4);
-  if (!top.length) return null;
+  const top = (aspects || []).slice(0, 6);
+  const good = top.filter(a => dominant(a) === 'positive');
+  const bad = top.filter(a => dominant(a) === 'negative');
+  if (!good.length && !bad.length) return null;
   return (
-    <div className="flex flex-wrap gap-1">
-      {top.map(a => {
-        const pol = dominant(a);
-        return (
-          <span key={a.theme} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${CHIP[pol]}`}>
-            {PREFIX[pol]}{a.theme}
-          </span>
-        );
-      })}
+    <div className="space-y-1">
+      {good.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-[9px] text-green-700 font-medium">בולט לטובה:</span>
+          {good.map(a => (
+            <span key={a.theme} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${CHIP.positive}`}>
+              {th(a.theme)}
+            </span>
+          ))}
+        </div>
+      )}
+      {bad.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-[9px] text-red-600 font-medium">לשיפור:</span>
+          {bad.map(a => (
+            <span key={a.theme} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${CHIP.negative}`}>
+              {th(a.theme)}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
