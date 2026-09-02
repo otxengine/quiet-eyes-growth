@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useStaleInsight } from '@/hooks/useStaleInsight';
 import { apiFetch } from '@/components/competitors/socialShared';
+import { th } from '@/components/competitors/topicLabels';
 import ReviewsInsightsRadar from '@/components/competitors/ReviewsInsightsRadar';
 import PillarRefreshBadge from './PillarRefreshBadge';
 
@@ -68,20 +69,25 @@ function OwnReviewsBlock({ businessProfile, queryClient }) {
       </div>
       {insight && <p className="text-[13px] leading-relaxed text-foreground">{insight}</p>}
       {examples.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {examples.slice(0, 4).map((ex, i) => (
-            <span
-              key={i}
-              className={`text-[10px] px-2 py-1 rounded-full border max-w-full truncate ${
-                ex.polarity === 'negative'
-                  ? 'bg-red-50 text-red-700 border-red-200'
-                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-              }`}
-              title={ex.text}
-            >
-              {ex.polarity === 'negative' ? '⚠️' : '💚'} {ex.theme}: "{ex.text}"
-            </span>
-          ))}
+        <div className="space-y-1.5">
+          {examples.slice(0, 4).map((ex, i) => {
+            const negative = ex.polarity === 'negative';
+            const Icon = negative ? ThumbsDown : ThumbsUp;
+            return (
+              <div
+                key={i}
+                className={`flex items-start gap-2 rounded-lg border px-3 py-2 ${
+                  negative ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${negative ? 'text-red-600' : 'text-emerald-600'}`} />
+                <p className="text-[12px] leading-relaxed text-foreground min-w-0">
+                  <span className={`font-semibold ${negative ? 'text-red-700' : 'text-emerald-700'}`}>{th(ex.theme)}</span>
+                  {' — '}"{ex.text}"
+                </p>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -118,19 +124,21 @@ function CompetitorReviewsBlock({ businessProfile, queryClient, trackedCompetito
       {insight && <p className="text-[13px] leading-relaxed text-foreground">{insight}</p>}
       {stats.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {stats.slice(0, 6).map((t, i) => (
-            <span
-              key={i}
-              className={`text-[10px] px-2 py-1 rounded-full border ${
-                t.negative > t.positive
-                  ? 'bg-red-50 text-red-700 border-red-200'
-                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-              }`}
-            >
-              {t.negative > t.positive ? '⚠️' : '💚'} {t.theme}
-              {competitorsTotal > 0 && ` · ${t.competitors_mentioning}/${competitorsTotal} מתחרים`}
-            </span>
-          ))}
+          {stats.slice(0, 6).map((t, i) => {
+            const negative = t.negative > t.positive;
+            const Icon = negative ? ThumbsDown : ThumbsUp;
+            return (
+              <span
+                key={i}
+                className={`inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full border ${
+                  negative ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                }`}
+              >
+                <Icon className="w-3 h-3" /> {th(t.theme)}
+                {competitorsTotal > 0 && ` · ${t.competitors_mentioning}/${competitorsTotal} מתחרים`}
+              </span>
+            );
+          })}
         </div>
       )}
     </div>
