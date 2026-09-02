@@ -155,7 +155,7 @@ async function _invokeLLMRaw(
       return await _callGemini(prompt, modelId, maxTokens, response_json_schema, imageBase64, imageMediaType);
     } catch (err: any) {
       console.warn('[invokeLLM] Gemini failed, trying OpenAI fallback:', err.message);
-      if (process.env.OPENAI_API_KEY) {
+      if (process.env.OPENAI_API_KEY && !imageBase64) {
         return await _callOpenAI(prompt, response_json_schema, maxTokens);
       }
       throw err;
@@ -188,8 +188,9 @@ async function _invokeLLMRaw(
     }
   }
 
-  // Fallback: OpenAI GPT-4o-mini (cheaper than GPT-4o) — text-only, image dropped
-  if (process.env.OPENAI_API_KEY) {
+  // Fallback: OpenAI GPT-4o-mini (cheaper than GPT-4o) — text-only, so it's skipped
+  // for vision calls (it would silently hallucinate a description instead of seeing the image).
+  if (process.env.OPENAI_API_KEY && !imageBase64) {
     try {
       return await _callOpenAI(prompt, response_json_schema, maxTokens);
     } catch (err: any) {
@@ -197,7 +198,9 @@ async function _invokeLLMRaw(
     }
   }
 
-  throw new Error('No AI provider available — set ANTHROPIC_API_KEY, GEMINI_API_KEY, or OPENAI_API_KEY');
+  throw new Error(imageBase64
+    ? 'No vision-capable AI provider available — Anthropic and Gemini both failed (OpenAI fallback is text-only, skipped)'
+    : 'No AI provider available — set ANTHROPIC_API_KEY, GEMINI_API_KEY, or OPENAI_API_KEY');
 }
 
 async function _callGemini(
