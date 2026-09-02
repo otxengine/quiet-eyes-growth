@@ -122,25 +122,38 @@ function CompetitorReviewsBlock({ businessProfile, queryClient, trackedCompetito
         <PillarRefreshBadge updatedAt={updatedAt} refreshing={refreshing} onRefresh={manualRefresh} />
       </div>
       {insight && <p className="text-[13px] leading-relaxed text-foreground">{insight}</p>}
-      {stats.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {stats.slice(0, 6).map((t, i) => {
-            const negative = t.negative > t.positive;
-            const Icon = negative ? ThumbsDown : ThumbsUp;
-            return (
-              <span
-                key={i}
-                className={`inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full border ${
-                  negative ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                }`}
-              >
-                <Icon className="w-3 h-3" /> {th(t.theme)}
-                {competitorsTotal > 0 && ` · ${t.competitors_mentioning}/${competitorsTotal} מתחרים`}
-              </span>
-            );
-          })}
-        </div>
-      )}
+      {stats.length > 0 && (() => {
+        const top = stats.slice(0, 6);
+        const good = top.filter(t => t.positive > t.negative);
+        const bad = top.filter(t => t.negative > t.positive);
+        const chip = (t, negative) => (
+          <span
+            key={t.theme}
+            className={`inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full border ${
+              negative ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            }`}
+          >
+            {negative ? <ThumbsDown className="w-3 h-3" /> : <ThumbsUp className="w-3 h-3" />} {th(t.theme)}
+            {competitorsTotal > 0 && ` · ${t.competitors_mentioning}/${competitorsTotal} מתחרים`}
+          </span>
+        );
+        return (
+          <div className="space-y-1.5">
+            {good.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] text-emerald-700 font-medium">בולט לטובה:</span>
+                {good.map(t => chip(t, false))}
+              </div>
+            )}
+            {bad.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] text-red-600 font-medium">לשיפור:</span>
+                {bad.map(t => chip(t, true))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
