@@ -199,7 +199,7 @@ export default function CompetitorsOffers() {
   const [selectedPost, setSelectedPost] = useState(null);
   const [selectedAd,   setSelectedAd]   = useState(null);
 
-  const { data: competitors = [], isLoading: loadingComps } = useQuery({
+  const { data: competitors = [], isLoading: loadingComps, error: compsError, refetch: refetchComps } = useQuery({
     queryKey: ['offersCompetitors', bpId],
     queryFn:  () => base44.entities.Competitor.filter({ linked_business: bpId, is_dismissed: { not: true }, not_relevant: { not: true } }),
     enabled:  !!bpId,
@@ -207,19 +207,21 @@ export default function CompetitorsOffers() {
 
   const compIds = competitors.map(c => c.id);
 
-  const { data: offerPosts = [], isLoading: loadingPosts } = useQuery({
+  const { data: offerPosts = [], isLoading: loadingPosts, error: postsError, refetch: refetchPosts } = useQuery({
     queryKey: ['offerPosts', bpId, compIds],
     queryFn:  () => base44.entities.CompetitorPost.filter({ competitor_id: { in: compIds }, has_offer: true }, '-posted_at', 300),
     enabled:  !!bpId && compIds.length > 0,
   });
 
-  const { data: offerAds = [], isLoading: loadingAds } = useQuery({
+  const { data: offerAds = [], isLoading: loadingAds, error: adsError, refetch: refetchAds } = useQuery({
     queryKey: ['offerAds', bpId, compIds],
     queryFn:  () => base44.entities.CompetitorAdHistory.filter({ competitor_id: { in: compIds }, has_offer: true }, '-last_seen_at', 300),
     enabled:  !!bpId && compIds.length > 0,
   });
 
   const loading = loadingComps || loadingPosts || loadingAds;
+  const queryError = compsError || postsError || adsError;
+  const retry = () => { refetchComps(); refetchPosts(); refetchAds(); };
 
   const allOffers = [
     ...offerPosts.map(p => ({ ...p, source: 'post' })),
@@ -242,6 +244,11 @@ export default function CompetitorsOffers() {
       {loading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : queryError ? (
+        <div className="text-center py-12 space-y-2">
+          <p className="text-sm text-destructive">שגיאה בטעינת מבצעי מתחרים — {queryError.message}</p>
+          <button onClick={retry} className="text-xs underline text-muted-foreground">נסה שוב</button>
         </div>
       ) : groups.length === 0 ? (
         <p className="text-center text-muted-foreground py-12 text-sm">
