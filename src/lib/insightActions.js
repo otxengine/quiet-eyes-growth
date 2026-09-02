@@ -49,7 +49,7 @@ const ACTION_DEFS = {
     label: 'צור פוסט',
     icon: 'Megaphone',
     type: 'navigate',
-    url: `/marketing?create=organic&summary=${encodeURIComponent(insight?.title || '')}&action=${encodeURIComponent(insight?.description || '')}`,
+    url: `/posts?create=organic&summary=${encodeURIComponent(insight?.title || '')}&action=${encodeURIComponent(insight?.description || '')}`,
   }),
 
   create_campaign: (insight) => ({
@@ -180,7 +180,6 @@ const INSIGHT_ACTION_MAP = {
     'create_campaign',
     'whatsapp_blast',
     'create_task',
-    'view_leads',
   ],
   market_opportunity: [
     'draft_post',
@@ -192,7 +191,6 @@ const INSIGHT_ACTION_MAP = {
     'create_campaign_with_audience',
     'draft_post',
     'create_task',
-    'view_leads',
   ],
   action_needed: [
     'create_task',
