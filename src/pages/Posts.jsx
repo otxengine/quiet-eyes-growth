@@ -30,6 +30,15 @@ function fmtDateTime(d) {
   return new Date(d).toLocaleString('he-IL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
+// Local (not UTC) Y-M-D — Date#toISOString() is UTC and shifts the calendar
+// day for any non-UTC timezone (e.g. Israel's UTC+3 turns local midnight into
+// the previous day), which breaks day-bucketing in CalendarView below.
+function localYMD(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  const pad = n => String(n).padStart(2, '0');
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+}
+
 // datetime-local <input> uses the browser's local time, with no timezone info —
 // this just formats/parses that local wall-clock string, no conversion needed.
 function isoToLocalInputValue(iso) {
@@ -821,14 +830,15 @@ function CalendarView({ posts }) {
 
   const postsByDay = {};
   posts.forEach(post => {
-    const dateStr = (post.scheduled_at || post.published_at || post.created_date || '').slice(0, 10);
-    if (!dateStr) return;
+    const rawDate = post.scheduled_at || post.published_at || post.created_date;
+    if (!rawDate) return;
+    const dateStr = localYMD(rawDate);
     if (!postsByDay[dateStr]) postsByDay[dateStr] = [];
     postsByDay[dateStr].push(post);
   });
 
   const weekLabel = `${days[0].toLocaleDateString('he-IL', { day: 'numeric', month: 'long' })} – ${days[6].toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' })}`;
-  const todayStr = today.toISOString().slice(0, 10);
+  const todayStr = localYMD(today);
 
   return (
     <div>
@@ -845,7 +855,7 @@ function CalendarView({ posts }) {
       </div>
       <div className="grid grid-cols-7 gap-1.5">
         {days.map((day, i) => {
-          const dateKey = day.toISOString().slice(0, 10);
+          const dateKey = localYMD(day);
           const dayPosts = postsByDay[dateKey] || [];
           const isToday = dateKey === todayStr;
           return (
