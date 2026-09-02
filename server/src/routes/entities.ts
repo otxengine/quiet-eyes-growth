@@ -103,6 +103,7 @@ const ENTITY_MAP: Record<string, string> = {
   SocialSignal: 'socialSignal',
   AutoAction: 'autoAction',
   Campaign: 'campaign',
+  AudienceSegment: 'audienceSegment',
   MediaAsset: 'mediaAsset',
   OrganicPost: 'organicPost',
   SupportTicket: 'supportTicket',

@@ -1030,6 +1030,19 @@ model Campaign {
   @@map("campaigns")
 }
 
+model AudienceSegment {
+  id              String   @id @default(cuid())
+  created_date    DateTime @default(now())
+  created_by      String?
+  linked_business String?
+  name            String   // display name — defaults to the AI's segment_name, user-editable
+  description     String?  // one-line description, for list rendering without parsing JSON
+  segment_json    String   // full segment object from getAudienceSegments, JSON.stringify'd
+  source          String?  @default("ai_generated") // 'ai_generated' | 'manual'
+
+  @@map("audience_segments")
+}
+
 model SocialComment {
   id                  String    @id @default(cuid())
   created_date        DateTime  @default(now())

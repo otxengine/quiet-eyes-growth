@@ -9,6 +9,7 @@ import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
 import BusinessSocialSnapshot from '@/components/marketing/BusinessSocialSnapshot';
 import CompetitorContentTrends from '@/components/marketing/CompetitorContentTrends';
 import SocialProfileSuggestions from '@/components/marketing/SocialProfileSuggestions';
+import AudienceTab from '@/components/marketing/AudienceTab';
 import { PLATFORM_LABELS } from '@/components/competitors/socialShared';
 const PLATFORM_CONFIG = {
   meta:      { label: 'Facebook',   icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
@@ -398,6 +399,11 @@ const STATUS_FILTER_TABS = [
   { key: 'completed',      label: 'הסתיימו',             match: ['completed'] },
 ];
 
+const TABS = [
+  { id: 'paid',     label: 'ממומן',    icon: '💰' },
+  { id: 'audience', label: 'קהל יעד',  icon: '🎯' },
+];
+
 
 
 export default function Marketing() {
@@ -413,6 +419,7 @@ export default function Marketing() {
   ].filter(Boolean);
   const [activeSocialPlatform, setActiveSocialPlatform] = useState(null);
   const currentSocialPlatform = activeSocialPlatform || availableSocialPlatforms[0] || 'facebook';
+  const [activeTab,       setActiveTab]       = useState('paid');
   const [showWaBlast,     setShowWaBlast]     = useState(false);
   const [waBlastCtx,      setWaBlastCtx]      = useState(null);
   const [statusFilter,    setStatusFilter]    = useState('active');
@@ -547,7 +554,25 @@ export default function Marketing() {
 
       <CompetitorContentTrends businessProfile={businessProfile} />
 
+      {/* Secondary tab bar */}
+      <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit">
+        {TABS.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 ${
+              activeTab === tab.id ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
+            }`}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'audience' && <AudienceTab businessProfileId={bpId} />}
+
       {/* Campaigns table */}
+      {activeTab === 'paid' && (
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         {/* Section header with search */}
         <div dir="rtl" className="flex items-center gap-3 px-4 py-3 border-b border-border">
@@ -619,6 +644,7 @@ export default function Marketing() {
           </div>
         )}
       </div>
+      )}
 
       {showWaBlast && (
         <WhatsAppBlastDrawer

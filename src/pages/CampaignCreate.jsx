@@ -1,5 +1,6 @@
 ﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import {
   Loader2, RefreshCw, ChevronDown, ChevronUp, Send, ArrowRight,
@@ -7,6 +8,7 @@ import {
   Upload, Sparkles, X, Info, ExternalLink, AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import AudienceSegmentCard from '@/components/marketing/AudienceSegmentCard';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -79,39 +81,6 @@ function MetricCard({ icon: Icon, label, low, high, unit = '', accent }) {
   );
 }
 
-function InterestChip({ label, platform }) {
-  const colors = {
-    facebook:  { bg: '#e7f3ff', color: '#1877f2' },
-    meta:      { bg: '#e7f3ff', color: '#1877f2' },
-    instagram: { bg: '#fde8f0', color: '#e1306c' },
-    google:    { bg: '#e8f0fe', color: '#4285f4' },
-  };
-  const c = colors[platform] || colors.facebook;
-  return (
-    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full border" style={{ background: c.bg, color: c.color, borderColor: c.color + '33' }}>
-      {label}
-    </span>
-  );
-}
-
-function KeywordRow({ term, match }) {
-  const matchConfig = {
-    exact:   { label: 'מדויק',  bg: '#dcfce7', color: '#166534' },
-    phrase:  { label: 'ביטוי',  bg: '#fef9c3', color: '#854d0e' },
-    broad:   { label: 'רחב',    bg: '#f3f4f6', color: '#374151' },
-    negative:{ label: 'שלילה',  bg: '#fee2e2', color: '#991b1b' },
-  };
-  const mc = matchConfig[match] || matchConfig.broad;
-  return (
-    <div className="flex items-center gap-2 py-1.5 border-b border-border/40 last:border-0">
-      <span className="text-[11px] font-medium text-foreground flex-1">{term}</span>
-      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: mc.bg, color: mc.color }}>
-        {mc.label}
-      </span>
-    </div>
-  );
-}
-
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function CampaignCreate() {
@@ -166,6 +135,14 @@ export default function CampaignCreate() {
   const [successScreen, setSuccessScreen] = useState(null); // { asDraft, platform }
 
   const platConfig = PLATFORMS.find(p => p.id === platform) || PLATFORMS[0];
+
+  // Saved audiences (built in the Marketing "קהל יעד" tab) — offered as a
+  // pick-first alternative to generating a fresh one below.
+  const { data: savedAudiences = [] } = useQuery({
+    queryKey: ['audienceSegments', bpId],
+    queryFn: () => base44.entities.AudienceSegment.filter({ linked_business: bpId }, '-created_date', 50),
+    enabled: !!bpId,
+  });
 
   // ── Auto-generate post on load ────────────────────────────────────────────
 
@@ -741,6 +718,25 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
           )}
           {!audienceData && (
             <div className="space-y-3">
+              {savedAudiences.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-semibold text-foreground-muted">קהלים שמורים</p>
+                  {savedAudiences.map(row => (
+                    <button
+                      key={row.id}
+                      onClick={() => {
+                        const parsed = JSON.parse(row.segment_json);
+                        setAudienceData({ segments: [parsed] });
+                        setChosenSeg(parsed);
+                      }}
+                      className="w-full text-right px-3 py-2 rounded-lg border border-border hover:bg-secondary/40 transition-colors"
+                    >
+                      <p className="text-[12px] font-semibold text-foreground">{row.name}</p>
+                      {row.description && <p className="text-[10px] text-foreground-muted truncate">{row.description}</p>}
+                    </button>
+                  ))}
+                </div>
+              )}
               <button
                 onClick={loadAudience}
                 disabled={loadingAudience}
@@ -760,58 +756,17 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
 
           {audienceData?.segments?.length > 0 && (
             <div className="space-y-3">
-              {audienceData.segments.map((seg, i) => {
-                const isChosen = chosenSeg === seg;
-                return (
-                  <button
-                    key={i}
-                    onClick={() => setChosenSeg(seg)}
-                    className="w-full text-right px-4 py-3 rounded-xl border-2 transition-all"
-                    style={{
-                      borderColor: isChosen ? platConfig.color : 'hsl(var(--border))',
-                      background: isChosen ? platConfig.bg : 'transparent',
-                    }}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[12px] font-bold text-foreground">{seg.segment_name}</span>
-                      <div className="flex items-center gap-2">
-                        {isChosen && <CheckCircle className="w-4 h-4" style={{ color: platConfig.color }} />}
-                        <span className="text-[10px] text-foreground-muted">{seg.estimated_audience_range}</span>
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-foreground-muted mb-2">{seg.description}</p>
-
-                    {/* FB interests */}
-                    {platform !== 'google' && seg.facebook_targeting?.interests?.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-1.5">
-                        {seg.facebook_targeting.interests.slice(0, 5).map((interest, j) => (
-                          <InterestChip key={j} label={interest} platform={platform} />
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Google keywords */}
-                    {platform === 'google' && seg.google_targeting?.keywords?.length > 0 && (
-                      <div className="border border-border rounded-lg overflow-hidden">
-                        {seg.google_targeting.keywords.slice(0, 3).map((kw, j) => (
-                          <KeywordRow key={j} term={kw} match="exact" />
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-3 mt-2 text-[10px] text-foreground-muted">
-                      <span>גיל: {seg.age_min}–{seg.age_max}</span>
-                      <span>{seg.genders}</span>
-                      <span>המרה: {Math.round((seg.conversion_probability || 0) * 100)}%</span>
-                    </div>
-                    {seg.ad_creative_tip && (
-                      <p className="mt-1.5 text-[10px] text-foreground-muted bg-secondary/50 rounded-lg px-2 py-1">
-                        💡 {seg.ad_creative_tip}
-                      </p>
-                    )}
-                  </button>
-                );
-              })}
+              {audienceData.segments.map((seg, i) => (
+                <AudienceSegmentCard
+                  key={i}
+                  segment={seg}
+                  platform={platform}
+                  selected={chosenSeg === seg}
+                  onClick={() => setChosenSeg(seg)}
+                  accentColor={platConfig.color}
+                  accentBg={platConfig.bg}
+                />
+              ))}
             </div>
           )}
         </div>
