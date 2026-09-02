@@ -90,6 +90,7 @@ export default function CampaignCreate() {
   const bpId = businessProfile?.id;
 
   // URL context from signal / campaign opportunity
+  const campaignId     = searchParams.get('campaignId') || '';
   const signalId       = searchParams.get('signalId') || '';
   const signalSummary  = searchParams.get('summary') || '';
   const signalAction   = searchParams.get('action')  || '';
@@ -144,6 +145,33 @@ export default function CampaignCreate() {
     enabled: !!bpId,
   });
 
+  // ── Load existing campaign (view/edit via ?campaignId=) ───────────────────
+
+  useEffect(() => {
+    if (!campaignId) return;
+    (async () => {
+      try {
+        const existing = await base44.entities.Campaign.get(campaignId);
+        if (!existing) { toast.error('קמפיין לא נמצא'); return; }
+        setPostContent(existing.post_content || '');
+        if (existing.platform) setPlatform(existing.platform);
+        if (existing.objective) setObjective(existing.objective);
+        if (existing.daily_budget_ils != null) setBudget(existing.daily_budget_ils);
+        if (existing.campaign_days != null) setDays(existing.campaign_days);
+        if (existing.image_url) setImageUrl(existing.image_url);
+        if (existing.audience_json) {
+          try {
+            const seg = JSON.parse(existing.audience_json);
+            setAudienceData({ segments: [seg] });
+            setChosenSeg(seg);
+          } catch { /* ignore malformed saved segment */ }
+        }
+      } catch {
+        toast.error('שגיאה בטעינת הקמפיין');
+      }
+    })();
+  }, [campaignId]);
+
   // ── Auto-generate post on load ────────────────────────────────────────────
 
   const generatePost = useCallback(async () => {
@@ -178,7 +206,7 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
   }, [businessProfile, signalSummary, signalAction, platConfig.label, objective]);
 
   useEffect(() => {
-    if (businessProfile && !postContent) generatePost();
+    if (businessProfile && !postContent && !campaignId) generatePost();
   }, [businessProfile]); // eslint-disable-line
 
   // Reset audience when post content changes significantly (so user can regenerate)
@@ -288,11 +316,7 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
     setSaving(true);
     try {
       const m = forecastData?.metrics;
-      await base44.entities.Campaign.create({
-        linked_business: bpId,
-        signal_id:        signalId || null,
-        signal_summary:   signalSummary || null,
-        title:            signalSummary ? `קמפיין: ${signalSummary.slice(0, 60)}` : `קמפיין ${platConfig.label}`,
+      const editableFields = {
         platform,
         objective,
         post_content:     postContent,
@@ -307,9 +331,20 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
         est_leads_high:   m?.total_leads?.high ?? null,
         status:           asDraft ? 'draft' : 'pending_launch',
         published_at:     asDraft ? null : new Date().toISOString(),
-      });
+      };
+      if (campaignId) {
+        await base44.entities.Campaign.update(campaignId, editableFields);
+      } else {
+        await base44.entities.Campaign.create({
+          linked_business: bpId,
+          signal_id:        signalId || null,
+          signal_summary:   signalSummary || null,
+          title:            signalSummary ? `קמפיין: ${signalSummary.slice(0, 60)}` : `קמפיין ${platConfig.label}`,
+          ...editableFields,
+        });
+      }
       if (asDraft) {
-        toast.success('נשמר כטיוטה');
+        toast.success(campaignId ? 'הקמפיין עודכן' : 'נשמר כטיוטה');
         navigate('/marketing');
       } else {
         setSuccessScreen({ platform });

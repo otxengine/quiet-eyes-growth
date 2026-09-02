@@ -1271,7 +1271,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           if (!compResponseChoice) { toast.error('בחר פעולה'); return; }
           if (compResponseChoice === 'counter_promo') {
             onClose();
-            navigate(`/marketing/create?context=counter_promo&signalId=${signal.id}`);
+            navigate(`/marketing/create?context=counter_promo&signalId=${signal.id}&summary=${encodeURIComponent(signal.summary || '')}`);
             return;
           }
           const taskTitle = compResponseChoice === 'adjust_price'
@@ -1430,7 +1430,7 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
           if (!compResponseChoice) { toast.error('בחר פעולה'); return; }
           if (compResponseChoice === 'campaign') {
             onClose();
-            navigate(`/marketing/create?context=pricing_promo&signalId=${signal.id}`);
+            navigate(`/marketing/create?context=pricing_promo&signalId=${signal.id}&summary=${encodeURIComponent(signal.summary || '')}`);
             return;
           }
           if (compResponseChoice === 'whatsapp') {

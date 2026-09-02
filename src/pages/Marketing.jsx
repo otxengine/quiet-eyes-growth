@@ -362,7 +362,11 @@ function CampaignRow({ campaign, onDelete, bpId, onToggle }) {
     : '—';
 
   return (
-    <div dir="rtl" className="flex items-center gap-3 px-4 py-3 border-b border-border/40 last:border-0 hover:bg-gray-50/40 transition-colors">
+    <div
+      dir="rtl"
+      onClick={() => navigate(`/marketing/create?campaignId=${campaign.id}`)}
+      className="flex items-center gap-3 px-4 py-3 border-b border-border/40 last:border-0 hover:bg-gray-50/60 transition-colors cursor-pointer"
+    >
       <span className="flex-1 text-[12px] font-medium text-foreground truncate min-w-0">
         {campaign.title}
       </span>
@@ -379,10 +383,10 @@ function CampaignRow({ campaign, onDelete, bpId, onToggle }) {
           </p>
         )}
       </div>
-      <div className="w-12 flex-shrink-0 flex justify-center">
+      <div className="w-12 flex-shrink-0 flex justify-center" onClick={(e) => e.stopPropagation()}>
         <ToggleSwitch active={isActive} onToggle={() => onToggle(campaign)} />
       </div>
-      <button onClick={() => { if (window.confirm('למחוק קמפיין?')) onDelete(campaign.id); }}
+      <button onClick={(e) => { e.stopPropagation(); if (window.confirm('למחוק קמפיין?')) onDelete(campaign.id); }}
         className="text-foreground-muted hover:text-foreground flex-shrink-0">
         <MoreVertical className="w-4 h-4" />
       </button>
