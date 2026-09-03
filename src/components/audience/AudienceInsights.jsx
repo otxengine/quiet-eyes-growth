@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react';
 import StatCards from '@/components/shared/StatCards';
 import TopThemesChart from '@/components/reputation/TopThemesChart';
 import LeadSourcesChart from '@/components/market-analysis/LeadSourcesChart';
-import { th } from '@/components/competitors/topicLabels';
+import { TOPIC_HE } from '@/components/competitors/topicLabels';
 
 const SENTIMENT_LABEL = { positive: 'חיובי', negative: 'שלילי', neutral: 'ניטרלי', mixed: 'מעורב' };
 
@@ -59,7 +59,7 @@ export default function AudienceInsights({ businessProfileId: bpId }) {
       <div className="bg-card border border-border rounded-xl p-4">
         <p className="text-[13px] font-semibold text-foreground mb-3">נושאים מרכזיים אצל הלקוחות שלך</p>
         {sentiment?.top_themes?.length > 0 ? (
-          <TopThemesChart topThemes={sentiment.top_themes} labelById={th} />
+          <TopThemesChart topThemes={sentiment.top_themes} labelById={TOPIC_HE} />
         ) : (
           <p className="text-[12px] text-foreground-muted text-center py-8">אין מספיק ביקורות לניתוח נושאים עדיין</p>
         )}
