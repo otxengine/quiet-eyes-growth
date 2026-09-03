@@ -74,6 +74,7 @@ import { describeBusinessMedia } from './describeBusinessMedia';
 import { generateBulkPosts } from './generateBulkPosts';
 import { revisePost } from './revisePost';
 import { suggestPostTime } from './suggestPostTime';
+import { pickRelevantMedia } from './pickRelevantMedia';
 import { scanServicesAndPrices } from './scanServicesAndPrices';
 import { snapshotCompetitor } from './snapshotCompetitor';
 import { diffCompetitorSnapshot } from './diffCompetitorSnapshot';
@@ -230,6 +231,7 @@ const FUNCTION_MAP: Record<string, any> = {
   generateBulkPosts,
   revisePost,
   suggestPostTime,
+  pickRelevantMedia,
   scanServicesAndPrices,
   snapshotCompetitor,
   diffCompetitorSnapshot,

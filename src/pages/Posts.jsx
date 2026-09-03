@@ -368,6 +368,7 @@ function OrganicCreateDrawer({ businessProfile, signalContext, audienceData, rec
   const [platform, setPlatform]   = useState('instagram');
   const [postType, setPostType]   = useState(signalContext?.type || 'post');
   const [content,  setContent]    = useState('');
+  const [specialRequest, setSpecialRequest] = useState('');
   const [imageUrl, setImageUrl]   = useState('');
   const [mediaId,  setMediaId]    = useState(null);
   const [imageDesc, setImageDesc] = useState('');
@@ -413,12 +414,6 @@ function OrganicCreateDrawer({ businessProfile, signalContext, audienceData, rec
 
   const platCfg = ORGANIC_PLATFORMS.find(p => p.id === platform) || ORGANIC_PLATFORMS[0];
 
-  // Auto-generate content on open
-  useEffect(() => {
-    if (!businessProfile || content) return;
-    generateContent();
-  }, []); // eslint-disable-line
-
   const generateContent = useCallback(async () => {
     setGenContent(true);
     try {
@@ -449,6 +444,7 @@ function OrganicCreateDrawer({ businessProfile, signalContext, audienceData, rec
 עסק: "${businessProfile.name}" | תחום: ${businessProfile.category} | עיר: ${businessProfile.city || ''}
 ${businessProfile.description ? `תיאור: ${businessProfile.description}` : ''}
 ${signalContext?.summary ? `הקשר / תובנה: "${signalContext.summary}"` : ''}
+${specialRequest.trim() ? `בקשה ספציפית מבעל העסק — חובה לשלב בפוסט: "${specialRequest.trim()}"` : ''}
 ${imageDesc ? `תמונת הפוסט מציגה: ${imageDesc}` : ''}
 ${audienceCtx ? `\n${audienceCtx}` : ''}
 ${signalBlock ? `\n${signalBlock}` : ''}
@@ -463,7 +459,7 @@ ${formatInstr}
       setContent(typeof result === 'string' ? result.trim() : (result?.content || ''));
     } catch { toast.error('שגיאה ביצירת תוכן'); }
     setGenContent(false);
-  }, [businessProfile, postType, platCfg.label, platform, signalContext, audienceData, recentSignals, imageDesc]);
+  }, [businessProfile, postType, platCfg.label, platform, signalContext, audienceData, recentSignals, imageDesc, specialRequest]);
 
   // Generate AI image
   const handleGenImage = async () => {
@@ -551,6 +547,22 @@ ${formatInstr}
     if (!content.trim()) { toast.error('יש להזין תוכן'); return; }
     setSaving(true);
     try {
+      // If the owner didn't pick/generate/upload an image, let the system
+      // match one from the media library — never invent one, better no image
+      // than an irrelevant one (same guardrail as bulk-generate).
+      let finalImageUrl = imageUrl;
+      let finalMediaId = mediaId;
+      if (!finalImageUrl) {
+        try {
+          const res = await base44.functions.invoke('pickRelevantMedia', { businessProfileId: businessProfile.id, content });
+          const data = res?.data || res;
+          if (data?.media_asset_id) {
+            finalMediaId = data.media_asset_id;
+            finalImageUrl = data.image_url;
+          }
+        } catch { /* no match / call failed — post is saved without an image */ }
+      }
+
       // 1. Save to DB (as draft first, so we have an ID)
       const post = await base44.entities.OrganicPost.create({
         linked_business: businessProfile.id,
@@ -559,8 +571,8 @@ ${formatInstr}
         platform,
         post_type:       postType,
         content,
-        media_asset_id:  mediaId || null,
-        image_url:       imageUrl || null,
+        media_asset_id:  finalMediaId || null,
+        image_url:       finalImageUrl || null,
         status:          'draft',
         published_at:    null,
         scheduled_at:    scheduleMode !== 'none' && scheduledAt ? new Date(scheduledAt).toISOString() : null,
@@ -576,8 +588,8 @@ ${formatInstr}
             businessProfileId: businessProfile.id,
             postId:        post.id,
             content,
-            imageUrl:      imageUrl || null,
-            mediaAssetId:  mediaId  || null,
+            imageUrl:      finalImageUrl || null,
+            mediaAssetId:  finalMediaId  || null,
             platform,
           }),
         });
@@ -688,6 +700,18 @@ ${formatInstr}
             </div>
           </div>
 
+          {/* Special request */}
+          <div>
+            <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">משהו ספציפי שתרצו שיופיע בפוסט? (אופציונלי)</p>
+            <textarea
+              value={specialRequest}
+              onChange={e => setSpecialRequest(e.target.value)}
+              placeholder="לדוגמה: מבצע 20% לרגל יום האהבה, השקת מוצר חדש..."
+              rows={2}
+              className="w-full text-[13px] text-foreground bg-secondary border border-border rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed"
+            />
+          </div>
+
           {/* Image section */}
           <div>
             <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">תמונה</p>
@@ -739,17 +763,26 @@ ${formatInstr}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <p className="text-[10px] font-semibold text-foreground-muted">תוכן</p>
-              <button onClick={generateContent} disabled={genContent}
-                className="flex items-center gap-1 text-[10px] text-foreground-muted hover:text-foreground transition-colors">
-                {genContent ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                {genContent ? 'יוצר...' : 'צור מחדש'}
-              </button>
+              {content && (
+                <button onClick={generateContent} disabled={genContent}
+                  className="flex items-center gap-1 text-[10px] text-foreground-muted hover:text-foreground transition-colors">
+                  {genContent ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                  {genContent ? 'יוצר...' : 'צור מחדש'}
+                </button>
+              )}
             </div>
+            {!content && (
+              <button onClick={generateContent} disabled={genContent}
+                className="w-full flex items-center justify-center gap-2 py-2.5 mb-2 bg-foreground text-background rounded-xl text-[13px] font-bold hover:opacity-90 disabled:opacity-60 transition-all">
+                {genContent ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                {genContent ? 'יוצר תוכן...' : 'צור תוכן עם AI'}
+              </button>
+            )}
             <textarea
               value={content}
               onChange={e => setContent(e.target.value)}
               rows={postType === 'story' ? 3 : 5}
-              placeholder={postType === 'story' ? 'טקסט לסטורי...' : 'תוכן הפוסט...'}
+              placeholder={postType === 'story' ? 'טקסט לסטורי... (או השתמשו ב-AI למעלה)' : 'תוכן הפוסט... (או השתמשו ב-AI למעלה)'}
               className="w-full text-[13px] text-foreground bg-secondary border border-border rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed"
             />
           </div>
