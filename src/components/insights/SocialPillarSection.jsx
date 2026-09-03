@@ -129,14 +129,16 @@ function SocialKpiTextRow({ label, ownVal, compVal, fmt }) {
 }
 
 /**
- * "סה״כ עוקבים" + "שיעור מעורבות" as plain own-vs-competitor-avg text rows
- * (a bar chart doesn't work here — one mega-follower-count competitor
- * outlier flattens the own bar to invisible on a linear scale) — plus
- * "עוקבים חדשים" as the one metric that still works well as a bar chart
- * (comparable, usually-small delta values). A live comparison query, not an
- * LLM insight, so unlike the two blocks above it doesn't need
- * useStaleInsight — just gated on having any tracked competitors, same as
- * ReviewsPillarSection's TopicRadarBlock.
+ * "שיעור מעורבות" as a plain own-vs-competitor-avg text row (engagement
+ * rate is a 0-100% metric, not sensitive to one outlier the way raw
+ * follower counts are, but two isolated bars didn't read well either) —
+ * plus "סה״כ עוקבים" and "עוקבים חדשים" as bar charts. The competitor side
+ * of "סה״כ עוקבים" is a MEDIAN (see the kpi-comparison route), not a mean,
+ * so one chain/franchise competitor's follower count doesn't put both bars
+ * on wildly different scales. A live comparison query, not an LLM insight,
+ * so unlike the two blocks above it doesn't need useStaleInsight — just
+ * gated on having any tracked competitors, same as ReviewsPillarSection's
+ * TopicRadarBlock.
  */
 function SocialKpiComparisonBlock({ businessProfile, trackedCompetitors }) {
   const bpId = businessProfile?.id;
@@ -150,37 +152,45 @@ function SocialKpiComparisonBlock({ businessProfile, trackedCompetitors }) {
   if (!trackedCompetitors.length || !data) return null;
   const { own, competitors_avg } = data;
 
-  const followersChartData = [
-    ...(own.followers_gained_30d != null ? [{ id: 'own', name: 'העסק שלי', value: own.followers_gained_30d, isOwn: true }] : []),
-    ...(competitors_avg.followers_gained_30d != null ? [{ id: 'avg', name: 'ממוצע מתחרים', value: competitors_avg.followers_gained_30d, isOwn: false }] : []),
+  const toChartData = (ownVal, compVal, compLabel = 'ממוצע מתחרים') => [
+    ...(ownVal != null ? [{ id: 'own', name: 'העסק שלי', value: ownVal, isOwn: true }] : []),
+    ...(compVal != null ? [{ id: 'avg', name: compLabel, value: compVal, isOwn: false }] : []),
   ];
+  const totalFollowersChartData = toChartData(own.followers, competitors_avg.followers, 'חציון מתחרים');
+  const followersChartData = toChartData(own.followers_gained_30d, competitors_avg.followers_gained_30d);
 
-  const hasAnything = own.followers != null || competitors_avg.followers != null
-    || followersChartData.length > 0
+  const hasAnything = totalFollowersChartData.length > 0 || followersChartData.length > 0
     || own.engagement_rate_30d != null || competitors_avg.engagement_rate_30d != null;
   if (!hasAnything) return null;
 
   return (
     <div className="p-5 space-y-3 border-t border-border">
       <h4 className="text-[13px] font-bold text-foreground">העסק שלך מול ממוצע המתחרים</h4>
-      <div className="space-y-1.5">
-        <SocialKpiTextRow label="סה״כ עוקבים" ownVal={own.followers} compVal={competitors_avg.followers} fmt={fmtCount} />
-        <SocialKpiTextRow
-          label="שיעור מעורבות (30 יום)"
-          ownVal={own.engagement_rate_30d}
-          compVal={competitors_avg.engagement_rate_30d}
-          fmt={(v) => `${v.toFixed(1)}%`}
-        />
+      <SocialKpiTextRow
+        label="שיעור מעורבות (30 יום)"
+        ownVal={own.engagement_rate_30d}
+        compVal={competitors_avg.engagement_rate_30d}
+        fmt={(v) => `${v.toFixed(1)}%`}
+      />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {totalFollowersChartData.length > 0 && (
+          <ComparisonChart
+            title="סה״כ עוקבים"
+            subtitle="חציון המתחרים"
+            data={totalFollowersChartData}
+            dataKey="value"
+          />
+        )}
+        {followersChartData.length > 0 && (
+          <ComparisonChart
+            title="עוקבים חדשים"
+            subtitle="30 הימים האחרונים"
+            data={followersChartData}
+            dataKey="value"
+            valueFormatter={fmtFollowersGained}
+          />
+        )}
       </div>
-      {followersChartData.length > 0 && (
-        <ComparisonChart
-          title="עוקבים חדשים"
-          subtitle="30 הימים האחרונים"
-          data={followersChartData}
-          dataKey="value"
-          valueFormatter={fmtFollowersGained}
-        />
-      )}
     </div>
   );
 }
