@@ -3,15 +3,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 import { Sparkles, Loader2, Users, Trash2, Check } from 'lucide-react';
-import AudienceSegmentCard from './AudienceSegmentCard';
+import AudienceSegmentCard from '@/components/marketing/AudienceSegmentCard';
 
 /**
- * Audience tab in Marketing: generate AI audience candidates (grounded in
- * real reviews/leads/signals/competitor data via getAudienceSegments) and
- * save the ones worth keeping as named, reusable AudienceSegment rows —
- * picked from later when creating a campaign (CampaignCreate.jsx).
+ * Generate AI audience candidates (grounded in real reviews/leads/signals/
+ * competitor data via getAudienceSegments) and save the ones worth keeping
+ * as named, reusable AudienceSegment rows — picked from later when
+ * creating a campaign (CampaignCreate.jsx).
  */
-export default function AudienceTab({ businessProfileId: bpId }) {
+export default function AudienceSegments({ businessProfileId: bpId }) {
   const queryClient = useQueryClient();
 
   const { data: audiences = [], isLoading } = useQuery({

@@ -4,12 +4,12 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recha
 const COLORS = ['#111111', '#10b981', '#d97706', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280'];
 
 const sourceLabels = {
-  'Google': 'גוגל',
-  'Instagram': 'אינסטגרם',
-  'Facebook': 'פייסבוק',
-  'WhatsApp': 'וואטסאפ',
-  'אתר': 'אתר',
-  'המלצה': 'המלצה',
+  google: 'גוגל',
+  instagram: 'אינסטגרם',
+  facebook: 'פייסבוק',
+  whatsapp: 'וואטסאפ',
+  web: 'אתר',
+  manual: 'ידני',
 };
 
 export default function LeadSourcesChart({ leads }) {
