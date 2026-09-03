@@ -4,6 +4,7 @@ import { isS3Url, downloadFromS3 } from '../lib/s3';
 import { findPlaceId } from '../lib/googlePlaces';
 import { enrichCompetitorUrls } from './functions/enrichCompetitorUrls';
 import { computeThemeRollup, computeReviewTrend, REVIEWS_INSIGHTS_WINDOW_DAYS } from './functions/computeThemeRollup';
+import { computeEntityKpis } from '../lib/socialKpis';
 
 const router = Router();
 
@@ -296,6 +297,49 @@ router.get('/social/leaderboard', async (req: Request, res: Response) => {
       : null;
 
     return res.json({ leaderboard, own, window_days: WINDOW_DAYS });
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/competitors/social/kpi-comparison?businessProfileId=
+// Two Insights-pillar KPIs — followers gained and engagement rate, both over a
+// fixed 30-day window — for the business vs. the average of its tracked
+// competitors. Tracked = approved + not irrelevant, the same definition the
+// rest of Insights uses (matches the reviews pillar's "X/Y מתחרים" counts),
+// stricter than /social/leaderboard's not_relevant-only filter above.
+// engagement_rate_30d for competitors_avg is the mean of each competitor's
+// OWN rate (not pooled totals ÷ pooled followers), so one large competitor
+// doesn't dominate the average.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/social/kpi-comparison', async (req: Request, res: Response) => {
+  try {
+    const { businessProfileId } = req.query as Record<string, string>;
+    if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+
+    const competitors = await prisma.competitor.findMany({
+      where: { linked_business: businessProfileId, tracking_status: 'approved', not_relevant: false },
+      select: { id: true },
+    });
+
+    const own = await computeEntityKpis({ linked_business: businessProfileId, competitor_id: null });
+    const perCompetitor = await Promise.all(
+      competitors.map(c => computeEntityKpis({ linked_business: businessProfileId, competitor_id: c.id })),
+    );
+
+    const avg = (vals: (number | null)[]): number | null => {
+      const present = vals.filter((v): v is number => v != null);
+      return present.length ? present.reduce((a, b) => a + b, 0) / present.length : null;
+    };
+
+    const competitors_avg = {
+      followers: avg(perCompetitor.map(c => c.followers)),
+      followers_gained_30d: avg(perCompetitor.map(c => c.followers_gained_30d)),
+      engagement_rate_30d: avg(perCompetitor.map(c => c.engagement_rate_30d)),
+    };
+
+    return res.json({ own, competitors_avg, tracked_competitors_count: competitors.length, window_days: 30 });
   } catch (e: any) {
     return res.status(500).json({ error: e.message });
   }

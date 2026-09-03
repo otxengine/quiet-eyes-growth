@@ -5,6 +5,7 @@ import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { findDonorCandidates } from '../../lib/competitorDonor';
+import { recordFollowerSnapshot } from '../../lib/followerSnapshot';
 
 // Competitor twin of collectOwnSocialProfile.ts, per-platform and donor-cache-aware like
 // collectCompetitorSocialPosts.ts and detectCompetitorAds.ts (the same real-world competitor
@@ -172,6 +173,7 @@ async function scrapeAndSave(comp: any, businessProfileId: string, platform: 'in
       create: { competitor_id: comp.id, linked_business: businessProfileId, platform, ...fields },
       update: { ...fields, fetched_at: new Date() },
     });
+    await recordFollowerSnapshot({ linked_business: businessProfileId, competitor_id: comp.id, platform, follower_count: fields.follower_count });
     return { competitor: comp.name, platform, saved: true, source: 'donor' };
   }
 
@@ -190,6 +192,7 @@ async function scrapeAndSave(comp: any, businessProfileId: string, platform: 'in
     create: { competitor_id: comp.id, linked_business: businessProfileId, platform, ...fields, profile_picture_url, cover_photo_url },
     update: { ...fields, profile_picture_url, cover_photo_url, fetched_at: new Date() },
   });
+  await recordFollowerSnapshot({ linked_business: businessProfileId, competitor_id: comp.id, platform, follower_count: fields.follower_count });
 
   return { competitor: comp.name, platform, saved: true, source: 'scrape' };
 }

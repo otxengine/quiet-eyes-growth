@@ -4,6 +4,7 @@ import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
+import { recordFollowerSnapshot } from '../../lib/followerSnapshot';
 
 // Twin of collectCompetitorSocialProfile.ts — same per-platform loop (Instagram +
 // Facebook), same two actors, same field-mapping guesses for Facebook (no documented
@@ -159,6 +160,7 @@ async function scrapeAndSave(businessProfileId: string, url: string, platform: '
     create: { linked_business: businessProfileId, platform, ...fields, profile_picture_url, cover_photo_url },
     update: { ...fields, profile_picture_url, cover_photo_url, fetched_at: new Date() },
   });
+  await recordFollowerSnapshot({ linked_business: businessProfileId, platform, follower_count: fields.follower_count });
 
   return { platform, url, saved: true };
 }

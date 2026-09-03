@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useStaleInsight } from '@/hooks/useStaleInsight';
-import { apiFetch, computeOutlierPosts, usePooledCompetitorOutlierPosts } from '@/components/competitors/socialShared';
+import { apiFetch, computeOutlierPosts, usePooledCompetitorOutlierPosts, fmtCount } from '@/components/competitors/socialShared';
+import { RADAR_OWN_COLOR, RADAR_COMPETITOR_COLOR } from '@/components/competitors/RadarComparisonChart';
 import PillarRefreshBadge from './PillarRefreshBadge';
 
 function CompetitorContentBlock({ businessProfile, queryClient }) {
@@ -104,13 +105,85 @@ function OwnContentBlock({ businessProfile, queryClient }) {
   );
 }
 
+function SocialKpiRow({ label, ownVal, compVal, fmt }) {
+  const ownStr = ownVal == null ? null : fmt(ownVal);
+  const compStr = compVal == null ? null : fmt(compVal);
+  if (ownStr == null && compStr == null) return null;
+  return (
+    <div className="flex items-center justify-between gap-3 text-[12px]">
+      <span className="text-foreground-muted">{label}</span>
+      <div className="flex items-center gap-3">
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: RADAR_OWN_COLOR }} />
+          <span className="font-semibold text-foreground">{ownStr ?? 'אין מספיק נתונים עדיין'}</span>
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: RADAR_COMPETITOR_COLOR }} />
+          <span className="font-semibold text-foreground">{compStr ?? 'אין מספיק נתונים עדיין'}</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+const fmtFollowersGained = (v) => `${v > 0 ? '+' : ''}${fmtCount(v)}`;
+const fmtEngagementRate = (v) => `${v.toFixed(1)}%`;
+
+/**
+ * "עוקבים חדשים" + "שיעור מעורבות" (both over a fixed 30-day window) — own
+ * business vs. average of tracked competitors. A live comparison query, not
+ * an LLM insight, so unlike the two blocks above it doesn't need
+ * useStaleInsight — just gated on having any tracked competitors, same as
+ * ReviewsPillarSection's TopicRadarBlock.
+ */
+function SocialKpiComparisonBlock({ businessProfile, trackedCompetitors }) {
+  const bpId = businessProfile?.id;
+
+  const { data } = useQuery({
+    queryKey: ['socialKpiComparison', bpId],
+    queryFn: () => apiFetch(`/competitors/social/kpi-comparison?businessProfileId=${bpId}`),
+    enabled: !!bpId && trackedCompetitors.length > 0,
+  });
+
+  if (!trackedCompetitors.length || !data) return null;
+  const { own, competitors_avg } = data;
+
+  return (
+    <div className="p-5 space-y-2 border-t border-border">
+      <h4 className="text-[13px] font-bold text-foreground">העסק שלך מול ממוצע המתחרים</h4>
+      <SocialKpiRow
+        label="עוקבים חדשים (30 יום)"
+        ownVal={own.followers_gained_30d}
+        compVal={competitors_avg.followers_gained_30d}
+        fmt={fmtFollowersGained}
+      />
+      <SocialKpiRow
+        label="שיעור מעורבות (30 יום)"
+        ownVal={own.engagement_rate_30d}
+        compVal={competitors_avg.engagement_rate_30d}
+        fmt={fmtEngagementRate}
+      />
+    </div>
+  );
+}
+
 /**
  * "מה עובד אצל המתחרים" (pooled cross-competitor content trends) + "מה עובד
  * אצלך" (own outlier posts) — reuses the existing analyzeContentTrends /
- * analyzeTopOwnPosts functions via useStaleInsight for auto-refresh-if-stale.
+ * analyzeTopOwnPosts functions via useStaleInsight for auto-refresh-if-stale
+ * — plus a live own-vs-competitor-avg KPI comparison block.
  */
 export default function SocialPillarSection({ businessProfile }) {
   const queryClient = useQueryClient();
+  const bpId = businessProfile?.id;
+
+  // Same "tracked competitor" definition ReviewsPillarSection uses, so
+  // counts/comparisons stay consistent across Insights pillars.
+  const { data: trackedCompetitors = [] } = useQuery({
+    queryKey: ['socialPillarCompetitors', bpId],
+    queryFn: () => base44.entities.Competitor.filter({ linked_business: bpId, tracking_status: 'approved', not_relevant: false }),
+    enabled: !!bpId,
+  });
 
   // CompetitorContentBlock/OwnContentBlock always mount (not gated on
   // businessProfile data already existing) — each owns a useStaleInsight
@@ -125,6 +198,7 @@ export default function SocialPillarSection({ businessProfile }) {
       </div>
       <CompetitorContentBlock businessProfile={businessProfile} queryClient={queryClient} />
       <OwnContentBlock businessProfile={businessProfile} queryClient={queryClient} />
+      <SocialKpiComparisonBlock businessProfile={businessProfile} trackedCompetitors={trackedCompetitors} />
     </div>
   );
 }

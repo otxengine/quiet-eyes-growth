@@ -637,10 +637,12 @@ model MetricsSnapshot {
   created_date    DateTime @default(now())
   created_by      String?
   linked_business String?
+  competitor_id   String?   // set for a competitor snapshot, null for own-business
   metric_name     String?
   metric_value    Float?
-  snapshot_date   String?
+  snapshot_date   String?   // "YYYY-MM-DD"
 
+  @@index([linked_business, competitor_id, metric_name, snapshot_date])
   @@map("metrics_snapshots")
 }
 
