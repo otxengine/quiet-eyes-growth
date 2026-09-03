@@ -6,7 +6,6 @@ import { Plus, Loader2, ChevronDown, Search, MoreVertical, Radio, Sparkles, Send
 import { toast } from 'sonner';
 import StatCards from '@/components/shared/StatCards';
 import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
-import CompetitorContentTrends from '@/components/marketing/CompetitorContentTrends';
 import AudienceInsights from '@/components/audience/AudienceInsights';
 import AudienceSegments from '@/components/audience/AudienceSegments';
 const PLATFORM_CONFIG = {
@@ -518,8 +517,6 @@ export default function Marketing() {
       {urgentActions.length > 0 && (
         <UrgentActionsSection actions={urgentActions} />
       )}
-
-      <CompetitorContentTrends businessProfile={businessProfile} />
 
       {/* Campaigns table */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
