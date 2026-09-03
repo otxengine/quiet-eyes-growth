@@ -132,15 +132,22 @@ function SocialKpiComparisonBlock({ businessProfile, trackedCompetitors }) {
     ...(ownVal != null ? [{ id: 'own', name: 'העסק שלי', value: ownVal, isOwn: true }] : []),
     ...(compVal != null ? [{ id: 'avg', name: 'ממוצע מתחרים', value: compVal, isOwn: false }] : []),
   ];
+  const totalFollowersChartData = toChartData(own.followers, competitors_avg.followers);
   const followersChartData = toChartData(own.followers_gained_30d, competitors_avg.followers_gained_30d);
   const engagementChartData = toChartData(own.engagement_rate_30d, competitors_avg.engagement_rate_30d);
 
-  if (!followersChartData.length && !engagementChartData.length) return null;
+  if (!totalFollowersChartData.length && !followersChartData.length && !engagementChartData.length) return null;
 
   return (
     <div className="p-5 space-y-3 border-t border-border">
       <h4 className="text-[13px] font-bold text-foreground">העסק שלך מול ממוצע המתחרים</h4>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <ComparisonChart
+          title="סה״כ עוקבים"
+          subtitle="נכון להיום"
+          data={totalFollowersChartData}
+          dataKey="value"
+        />
         <ComparisonChart
           title="עוקבים חדשים"
           subtitle="30 הימים האחרונים"
