@@ -9,6 +9,8 @@ import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
 import BusinessSocialSnapshot from '@/components/marketing/BusinessSocialSnapshot';
 import CompetitorContentTrends from '@/components/marketing/CompetitorContentTrends';
 import SocialProfileSuggestions from '@/components/marketing/SocialProfileSuggestions';
+import AudienceInsights from '@/components/audience/AudienceInsights';
+import AudienceSegments from '@/components/audience/AudienceSegments';
 import { PLATFORM_LABELS } from '@/components/competitors/socialShared';
 const PLATFORM_CONFIG = {
   meta:      { label: 'Facebook',   icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
@@ -623,6 +625,16 @@ export default function Marketing() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Audience discovery — informs who to target with the campaigns above */}
+      <div className="space-y-3">
+        <div>
+          <h2 className="text-[15px] font-bold text-foreground">קהל יעד לקמפיינים ממומנים</h2>
+          <p className="text-xs text-foreground-muted">הכירו את הלקוחות שלכם ובנו קהלי יעד לטרגוט מדויק בפרסום ממומן</p>
+        </div>
+        <AudienceInsights businessProfileId={bpId} />
+        <AudienceSegments businessProfileId={bpId} />
       </div>
 
       {showWaBlast && (

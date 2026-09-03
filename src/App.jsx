@@ -40,7 +40,6 @@ const SocialConnections = lazyPage(() => import('@/pages/SocialConnections.jsx')
 const OTXDashboard = lazyPage(() => import('@/pages/OTXDashboard'));
 const LearningCenter = lazyPage(() => import('@/pages/LearningCenter.jsx'));
 const Marketing = lazyPage(() => import('@/pages/Marketing.jsx'));
-const Audience = lazyPage(() => import('@/pages/Audience.jsx'));
 const Posts = lazyPage(() => import('@/pages/Posts.jsx'));
 const CampaignCreate = lazyPage(() => import('@/pages/CampaignCreate.jsx'));
 const TaskDetail = lazyPage(() => import('@/pages/TaskDetail.jsx'));
@@ -166,7 +165,6 @@ const AuthenticatedApp = () => {
         <Route path="/otx" element={<Suspense fallback={null}><OTXDashboard /></Suspense>} />
         <Route path="/learning" element={<LearningCenter />} />
         <Route path="/marketing" element={<Marketing />} />
-        <Route path="/audience" element={<Audience />} />
         <Route path="/posts" element={<Posts />} />
         <Route path="/marketing/create" element={<CampaignCreate />} />
         <Route path="/signals/:signalId" element={<Navigate to="/insights" replace />} />
