@@ -42,6 +42,7 @@ import { runMLLearningCycle } from './runMLLearningCycle';
 import { analyzeSentiment } from './analyzeSentiment';
 import { detectCompetitorChanges } from './detectCompetitorChanges';
 import { getAudienceSegments } from './getAudienceSegments';
+import { discussTargetAudience } from './discussTargetAudience';
 import { analyzeCompetitorSocial } from './analyzeCompetitorSocial';
 import { detectCompetitorAds } from './detectCompetitorAds';
 import { detectEvents } from './detectEvents';
@@ -75,6 +76,7 @@ import { generateBulkPosts } from './generateBulkPosts';
 import { revisePost } from './revisePost';
 import { suggestPostTime } from './suggestPostTime';
 import { pickRelevantMedia } from './pickRelevantMedia';
+import { regenerateMediaDescriptions } from './regenerateMediaDescriptions';
 import { scanServicesAndPrices } from './scanServicesAndPrices';
 import { snapshotCompetitor } from './snapshotCompetitor';
 import { diffCompetitorSnapshot } from './diffCompetitorSnapshot';
@@ -195,6 +197,7 @@ const FUNCTION_MAP: Record<string, any> = {
   analyzeSentiment,
   detectCompetitorChanges,
   getAudienceSegments,
+  discussTargetAudience,
   analyzeCompetitorSocial,
   detectCompetitorAds,
   detectEvents,
@@ -232,6 +235,7 @@ const FUNCTION_MAP: Record<string, any> = {
   revisePost,
   suggestPostTime,
   pickRelevantMedia,
+  regenerateMediaDescriptions,
   scanServicesAndPrices,
   snapshotCompetitor,
   diffCompetitorSnapshot,

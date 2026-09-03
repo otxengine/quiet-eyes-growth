@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { invokeLLM } from '../../lib/llm';
+import { describeImage } from '../../lib/describeImage';
 
 /**
  * describeBusinessMedia
@@ -18,17 +18,7 @@ export async function describeBusinessMedia(req: Request, res: Response) {
 
   try {
     const base64Data = imageBase64.replace(/^data:[^;]+;base64,/, '');
-
-    const result = await invokeLLM({
-      model:      'sonnet',
-      maxTokens:  100,
-      systemPrompt: 'Return ONLY the description text. No markdown, no explanation, no surrounding quotes.',
-      prompt:     'תאר בקצרה (עד 20 מילים) בעברית מה רואים בתמונה הזו, לשימוש כהקשר ליצירת פוסטים לרשתות חברתיות עבור העסק.',
-      imageBase64: base64Data,
-      imageMediaType: mimeType,
-    });
-
-    const description = (typeof result === 'string' ? result : String(result || '')).trim();
+    const description = await describeImage(base64Data, mimeType);
     return res.json({ description });
   } catch (err: any) {
     console.error('[describeBusinessMedia]', err.message);

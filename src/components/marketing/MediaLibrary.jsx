@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
-import { Upload, Loader2, Trash2, Video, Pencil } from 'lucide-react';
+import { Upload, Loader2, Trash2, Video, Pencil, RefreshCw } from 'lucide-react';
 
 const MAX_FILE_BYTES = 35 * 1024 * 1024; // raw ceiling matching the server's 50MB base64-JSON body limit
 const UPLOAD_CONCURRENCY = 3; // parallel LLM+upload calls per batch — keeps bulk uploads snappy without hammering the LLM
@@ -38,6 +38,7 @@ export default function MediaLibrary({ businessProfileId, onSelect }) {
   const [progress, setProgress] = useState(null); // { done, total }
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
+  const [regenerating, setRegenerating] = useState(false);
 
   const { data: rawAssets = [], isLoading } = useQuery({
     queryKey: ['mediaLibrary', businessProfileId],
@@ -56,6 +57,20 @@ export default function MediaLibrary({ businessProfileId, onSelect }) {
       toast.success('נמחק');
     },
   });
+
+  const handleRegenerateDescriptions = async () => {
+    setRegenerating(true);
+    try {
+      const res = await base44.functions.invoke('regenerateMediaDescriptions', { businessProfileId });
+      const data = res?.data || res;
+      if (!data?.total) toast('לא נמצאו תיאורים שדורשים תיקון', { duration: 3000 });
+      else toast.success(`עודכנו ${data.updated ?? 0} מתוך ${data.total} תיאורים${data.failed ? `, ${data.failed} נכשלו` : ''}`);
+      queryClient.invalidateQueries({ queryKey: ['mediaLibrary', businessProfileId] });
+    } catch (err) {
+      toast.error('שגיאה ברענון תיאורים: ' + (err?.message || 'נסה שוב'));
+    }
+    setRegenerating(false);
+  };
 
   const updateDescriptionMutation = useMutation({
     mutationFn: ({ id, description }) => base44.entities.MediaAsset.update(id, { description }),
@@ -120,10 +135,20 @@ export default function MediaLibrary({ businessProfileId, onSelect }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-[13px] font-semibold text-foreground">ספריית מדיה</h3>
-        <button onClick={() => fileRef.current?.click()} disabled={!!progress}
-          className="flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg border border-dashed border-border text-foreground-muted hover:bg-secondary transition-colors disabled:opacity-60">
-          <Upload className="w-3.5 h-3.5" /> העלה מדיה
-        </button>
+        <div className="flex items-center gap-2">
+          {!onSelect && (
+            <button onClick={handleRegenerateDescriptions} disabled={regenerating || !!progress}
+              title="מתקן תיאורים שנוצרו שגויים בזמן תקלה בספק ה-AI"
+              className="flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg border border-dashed border-border text-foreground-muted hover:bg-secondary transition-colors disabled:opacity-60">
+              {regenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              רענן תיאורים
+            </button>
+          )}
+          <button onClick={() => fileRef.current?.click()} disabled={!!progress}
+            className="flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-lg border border-dashed border-border text-foreground-muted hover:bg-secondary transition-colors disabled:opacity-60">
+            <Upload className="w-3.5 h-3.5" /> העלה מדיה
+          </button>
+        </div>
         <input ref={fileRef} type="file" accept="image/*,video/*" multiple className="hidden"
           onChange={e => { handleFilesChange(e.target.files); e.target.value = ''; }} />
       </div>
