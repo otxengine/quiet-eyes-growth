@@ -139,6 +139,11 @@ function CompetitorReviewsBlock({ businessProfile, queryClient, trackedCompetito
         );
         return (
           <div className="space-y-1.5">
+            {competitorsTotal > 0 && (
+              <p className="text-[10px] text-foreground-muted">
+                המספר מציין כמה מהמתחרים שאתה עוקב אחריהם קיבלו ביקורות שהזכירו את הנושא — לא כמה מהם מצטיינים בו
+              </p>
+            )}
             {good.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-[10px] text-emerald-700 font-medium">בולט לטובה:</span>
