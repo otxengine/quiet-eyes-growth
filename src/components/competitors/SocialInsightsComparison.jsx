@@ -91,7 +91,7 @@ function SortButton({ label, active, dir, onClick }) {
   );
 }
 
-function ComparisonChart({ title, subtitle, data, dataKey }) {
+export function ComparisonChart({ title, subtitle, data, dataKey, valueFormatter = fmtCount }) {
   if (data.length === 0) return null;
   return (
     <div className="bg-white rounded-[10px] border border-border/50 p-5">
@@ -102,8 +102,8 @@ function ComparisonChart({ title, subtitle, data, dataKey }) {
           <BarChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#999' }} angle={-20} textAnchor="end" height={50} />
-            <YAxis tick={{ fontSize: 10, fill: '#999' }} tickFormatter={fmtCount} />
-            <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #f0f0f0' }} formatter={v => fmtCount(v)} />
+            <YAxis tick={{ fontSize: 10, fill: '#999' }} tickFormatter={valueFormatter} />
+            <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #f0f0f0' }} formatter={v => valueFormatter(v)} />
             <Bar dataKey={dataKey} radius={[4, 4, 0, 0]} barSize={20}>
               {data.map(d => <Cell key={d.id} fill={d.isOwn ? OWN_COLOR : COMPETITOR_COLOR} />)}
             </Bar>
