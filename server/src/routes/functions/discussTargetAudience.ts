@@ -13,6 +13,39 @@ import { Request, Response } from 'express';
 import { invokeLLM } from '../../lib/llm';
 import { buildAudienceIntelligence } from './getAudienceSegments';
 
+// ponytail: the LLM occasionally emits a stray extra `}`/`]` (or drops a
+// trailing one) in the multi-segment JSON — walk the string with a bracket
+// stack, respecting quoted strings/escapes, drop closers that don't match
+// the top of the stack, and close anything still open at the end.
+function repairJson(str: string): string {
+  const stack: string[] = [];
+  const pairs: Record<string, string> = { '}': '{', ']': '[' };
+  let out = '';
+  let inString = false;
+  let escaped = false;
+  for (const ch of str) {
+    if (inString) {
+      out += ch;
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; out += ch; continue; }
+    if (ch === '{' || ch === '[') { stack.push(ch); out += ch; continue; }
+    if (ch === '}' || ch === ']') {
+      if (stack.length && stack[stack.length - 1] === pairs[ch]) {
+        stack.pop();
+        out += ch;
+      }
+      continue; // stray closer — drop it
+    }
+    out += ch;
+  }
+  while (stack.length) out += stack.pop() === '{' ? '}' : ']';
+  return out;
+}
+
 export async function discussTargetAudience(req: Request, res: Response) {
   const { businessProfileId, message, history = [] } = req.body;
   if (!businessProfileId || !message) {
@@ -63,7 +96,11 @@ ${fullContext}
     try {
       parsed = JSON.parse(jsonStr);
     } catch {
-      parsed = { reply: rawText.replace(/```(?:json)?|```/g, '').trim(), segments: [] };
+      try {
+        parsed = JSON.parse(repairJson(jsonStr));
+      } catch {
+        parsed = { reply: rawText.replace(/```(?:json)?|```/g, '').trim(), segments: [] };
+      }
     }
 
     return res.json({
