@@ -1080,7 +1080,7 @@ export default function Posts() {
     <div className="space-y-5">
       <PageHeader
         count={organicPosts.length}
-        title="פוסטים"
+        title="ניהול סושיאל"
         subtitle="יצירת פוסטים אורגניים, תמונות ופרסום לרשתות החברתיות"
       />
 
