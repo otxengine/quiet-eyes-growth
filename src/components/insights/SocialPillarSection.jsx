@@ -106,15 +106,37 @@ function OwnContentBlock({ businessProfile, queryClient }) {
 }
 
 const fmtFollowersGained = (v) => `${v > 0 ? '+' : ''}${fmtCount(v)}`;
-const fmtEngagementRate = (v) => `${v.toFixed(1)}%`;
+
+function SocialKpiTextRow({ label, ownVal, compVal, fmt }) {
+  const ownStr = ownVal == null ? null : fmt(ownVal);
+  const compStr = compVal == null ? null : fmt(compVal);
+  if (ownStr == null && compStr == null) return null;
+  return (
+    <div className="flex items-center justify-between gap-3 text-[12px]">
+      <span className="text-foreground-muted">{label}</span>
+      <div className="flex items-center gap-3">
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full shrink-0 bg-[#2a78d6]" />
+          <span className="font-semibold text-foreground">{ownStr ?? 'אין מספיק נתונים עדיין'}</span>
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full shrink-0 bg-[#eb6834]" />
+          <span className="font-semibold text-foreground">{compStr ?? 'אין מספיק נתונים עדיין'}</span>
+        </span>
+      </div>
+    </div>
+  );
+}
 
 /**
- * "עוקבים חדשים" + "שיעור מעורבות" (both over a fixed 30-day window) — own
- * business vs. average of tracked competitors, as two bar charts (own-blue
- * vs. competitor-avg-orange), reusing SocialInsightsComparison's
- * ComparisonChart. A live comparison query, not an LLM insight, so unlike
- * the two blocks above it doesn't need useStaleInsight — just gated on
- * having any tracked competitors, same as ReviewsPillarSection's TopicRadarBlock.
+ * "סה״כ עוקבים" + "שיעור מעורבות" as plain own-vs-competitor-avg text rows
+ * (a bar chart doesn't work here — one mega-follower-count competitor
+ * outlier flattens the own bar to invisible on a linear scale) — plus
+ * "עוקבים חדשים" as the one metric that still works well as a bar chart
+ * (comparable, usually-small delta values). A live comparison query, not an
+ * LLM insight, so unlike the two blocks above it doesn't need
+ * useStaleInsight — just gated on having any tracked competitors, same as
+ * ReviewsPillarSection's TopicRadarBlock.
  */
 function SocialKpiComparisonBlock({ businessProfile, trackedCompetitors }) {
   const bpId = businessProfile?.id;
@@ -128,26 +150,29 @@ function SocialKpiComparisonBlock({ businessProfile, trackedCompetitors }) {
   if (!trackedCompetitors.length || !data) return null;
   const { own, competitors_avg } = data;
 
-  const toChartData = (ownVal, compVal) => [
-    ...(ownVal != null ? [{ id: 'own', name: 'העסק שלי', value: ownVal, isOwn: true }] : []),
-    ...(compVal != null ? [{ id: 'avg', name: 'ממוצע מתחרים', value: compVal, isOwn: false }] : []),
+  const followersChartData = [
+    ...(own.followers_gained_30d != null ? [{ id: 'own', name: 'העסק שלי', value: own.followers_gained_30d, isOwn: true }] : []),
+    ...(competitors_avg.followers_gained_30d != null ? [{ id: 'avg', name: 'ממוצע מתחרים', value: competitors_avg.followers_gained_30d, isOwn: false }] : []),
   ];
-  const totalFollowersChartData = toChartData(own.followers, competitors_avg.followers);
-  const followersChartData = toChartData(own.followers_gained_30d, competitors_avg.followers_gained_30d);
-  const engagementChartData = toChartData(own.engagement_rate_30d, competitors_avg.engagement_rate_30d);
 
-  if (!totalFollowersChartData.length && !followersChartData.length && !engagementChartData.length) return null;
+  const hasAnything = own.followers != null || competitors_avg.followers != null
+    || followersChartData.length > 0
+    || own.engagement_rate_30d != null || competitors_avg.engagement_rate_30d != null;
+  if (!hasAnything) return null;
 
   return (
     <div className="p-5 space-y-3 border-t border-border">
       <h4 className="text-[13px] font-bold text-foreground">העסק שלך מול ממוצע המתחרים</h4>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <ComparisonChart
-          title="סה״כ עוקבים"
-          subtitle="נכון להיום"
-          data={totalFollowersChartData}
-          dataKey="value"
+      <div className="space-y-1.5">
+        <SocialKpiTextRow label="סה״כ עוקבים" ownVal={own.followers} compVal={competitors_avg.followers} fmt={fmtCount} />
+        <SocialKpiTextRow
+          label="שיעור מעורבות (30 יום)"
+          ownVal={own.engagement_rate_30d}
+          compVal={competitors_avg.engagement_rate_30d}
+          fmt={(v) => `${v.toFixed(1)}%`}
         />
+      </div>
+      {followersChartData.length > 0 && (
         <ComparisonChart
           title="עוקבים חדשים"
           subtitle="30 הימים האחרונים"
@@ -155,14 +180,7 @@ function SocialKpiComparisonBlock({ businessProfile, trackedCompetitors }) {
           dataKey="value"
           valueFormatter={fmtFollowersGained}
         />
-        <ComparisonChart
-          title="שיעור מעורבות"
-          subtitle="30 הימים האחרונים"
-          data={engagementChartData}
-          dataKey="value"
-          valueFormatter={fmtEngagementRate}
-        />
-      </div>
+      )}
     </div>
   );
 }
