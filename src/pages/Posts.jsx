@@ -3,7 +3,7 @@ import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { LONG_SCAN_TIMEOUT_MS } from '@/api/client';
-import { Plus, Loader2, Sparkles, Upload, RefreshCw, Send, Image as ImageIcon, X, Trash2, CheckCircle2, Calendar, Wand2 } from 'lucide-react';
+import { Plus, Loader2, Sparkles, Upload, RefreshCw, Send, Image as ImageIcon, X, Trash2, CheckCircle2, Calendar, Wand2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import MediaLibrary from '@/components/marketing/MediaLibrary';
@@ -111,14 +111,159 @@ function OrganicCard({ post, onDelete, onOpen }) {
 
 // ── Organic Post Detail / Approve Modal ───────────────────────────────────────
 
-function OrganicPostDetailModal({ post, onClose, onToggleApprove, toggling, onPublish, publishing }) {
+function OrganicPostDetailModal({ post, businessProfile, onClose, onToggleApprove, toggling, onPublish, publishing }) {
+  const queryClient = useQueryClient();
   const platCfg = ORGANIC_PLATFORMS.find(p => p.id === post.platform) || ORGANIC_PLATFORMS[0];
   const status  = ORGANIC_STATUS[post.status] || ORGANIC_STATUS.draft;
   const approved = !!post.approved_at;
   const published = post.status === 'published';
 
+  const [editing,  setEditing]  = useState(false);
+  const [content,  setContent]  = useState(post.content || '');
+  const [imageUrl, setImageUrl] = useState(post.image_url || '');
+  const [mediaId,  setMediaId]  = useState(post.media_asset_id || null);
+  const [imageDesc, setImageDesc] = useState('');
+  const [genImage,  setGenImage]  = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const fileRef = useRef(null);
+
+  const [scheduleMode, setScheduleMode] = useState(post.scheduled_at ? 'manual' : 'none');
+  const [scheduledAt,  setScheduledAt]  = useState(post.scheduled_at ? isoToLocalInputValue(post.scheduled_at) : '');
+  const [aiTimeReason, setAiTimeReason] = useState('');
+  const [suggestingTime, setSuggestingTime] = useState(false);
+
+  const handleAiSchedule = useCallback(async () => {
+    setScheduleMode('auto');
+    setSuggestingTime(true);
+    try {
+      const res = await base44.functions.invoke('suggestPostTime', {
+        businessProfileId: businessProfile.id, platform: post.platform, postType: post.post_type, content,
+      });
+      const data = res?.data || res;
+      if (data?.scheduled_at) {
+        setScheduledAt(isoToLocalInputValue(data.scheduled_at));
+        setAiTimeReason(data.reasoning || '');
+      }
+    } catch { toast.error('שגיאה בבחירת מועד'); setScheduleMode('none'); }
+    setSuggestingTime(false);
+  }, [businessProfile?.id, post.platform, post.post_type, content]);
+
+  const handlePickFromLibrary = (asset) => {
+    const src = asset.url || (asset.image_base64 ? `data:${asset.mime_type || 'image/jpeg'};base64,${asset.image_base64}` : '');
+    if (!src) return;
+    setImageUrl(src);
+    setMediaId(asset.id);
+    setImageDesc(asset.description || '');
+    setShowPicker(false);
+  };
+
+  const handleGenImage = async () => {
+    setGenImage(true);
+    try {
+      const res = await base44.functions.invoke('generateImage', {
+        businessProfileId: businessProfile.id,
+        post_text: content,
+      });
+      const data = res?.data || res;
+      if (data?.url) {
+        setImageUrl(data.url);
+        try {
+          if (data.url.startsWith('data:')) {
+            const b64 = data.url.split(',')[1];
+            const asset = await base44.entities.MediaAsset.create({
+              linked_business: businessProfile.id,
+              image_base64: b64,
+              mime_type: 'image/png',
+              source: 'ai_generated',
+              description: content.slice(0, 80),
+              used_in: post.post_type,
+            });
+            setMediaId(asset.id);
+          }
+        } catch {}
+      }
+    } catch { toast.error('שגיאה ביצירת תמונה'); }
+    setGenImage(false);
+  };
+
+  const handleUpload = async (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const dataUrl = e.target.result;
+      setImageUrl(dataUrl);
+      setAnalyzing(true);
+      try {
+        const b64 = dataUrl.split(',')[1];
+        const mime = file.type || 'image/jpeg';
+        try {
+          const asset = await base44.entities.MediaAsset.create({
+            linked_business: businessProfile.id,
+            image_base64:    b64,
+            mime_type:       mime,
+            source:          'uploaded',
+            used_in:         post.post_type,
+          });
+          setMediaId(asset.id);
+        } catch { /* DB save failed — publish will fall back to error */ }
+
+        try {
+          const res = await base44.functions.invoke('describeBusinessMedia', { imageBase64: dataUrl, mimeType: mime });
+          const data = res?.data || res;
+          if (data?.description) setImageDesc(data.description);
+        } catch { /* description failed — image still works */ }
+      } catch { toast.error('שגיאה בטעינת התמונה'); }
+      setAnalyzing(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!content.trim()) { toast.error('יש להזין תוכן'); return; }
+    setSaving(true);
+    try {
+      let finalImageUrl = imageUrl;
+      let finalMediaId = mediaId;
+      if (!finalImageUrl) {
+        try {
+          const res = await base44.functions.invoke('pickRelevantMedia', { businessProfileId: businessProfile.id, content });
+          const data = res?.data || res;
+          if (data?.media_asset_id) { finalMediaId = data.media_asset_id; finalImageUrl = data.image_url; }
+        } catch { /* no match / call failed — post is saved without an image */ }
+      }
+
+      await base44.entities.OrganicPost.update(post.id, {
+        content,
+        media_asset_id: finalMediaId || null,
+        image_url:      finalImageUrl || null,
+        scheduled_at:   scheduleMode !== 'none' && scheduledAt ? new Date(scheduledAt).toISOString() : null,
+        approved_at:    null, // edited after approval — needs a fresh look before it can publish
+      });
+      queryClient.invalidateQueries({ queryKey: ['organicPosts', businessProfile.id] });
+      toast.success('הפוסט עודכן');
+      onClose();
+    } catch (err) {
+      toast.error('שגיאה בשמירה: ' + (err?.message || 'נסה שוב'));
+    }
+    setSaving(false);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40" dir="rtl" onClick={onClose}>
+      {showPicker && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowPicker(false)}>
+          <div className="relative max-w-lg w-full max-h-[80vh] overflow-y-auto bg-card rounded-2xl shadow-2xl p-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[13px] font-bold text-foreground">בחר מהספרייה</h3>
+              <button onClick={() => setShowPicker(false)} className="text-foreground-muted hover:text-foreground"><X className="w-5 h-5" /></button>
+            </div>
+            <MediaLibrary businessProfileId={businessProfile.id} onSelect={handlePickFromLibrary} />
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-lg bg-card rounded-t-2xl md:rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2 px-5 py-4 border-b border-border sticky top-0 bg-card z-10">
           <span className="text-[14px]">{platCfg.icon}</span>
@@ -127,42 +272,163 @@ function OrganicPostDetailModal({ post, onClose, onToggleApprove, toggling, onPu
             {post.post_type === 'story' ? '📱 סטורי' : '📄 פוסט'}
           </span>
           <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${status.cls}`}>{status.label}</span>
-          <button onClick={onClose} className="mr-auto text-foreground-muted hover:text-foreground"><X className="w-5 h-5" /></button>
+          {!editing && !published && (
+            <button onClick={() => setEditing(true)} className="mr-auto text-foreground-muted hover:text-foreground" title="ערוך פוסט">
+              <Pencil className="w-4 h-4" />
+            </button>
+          )}
+          <button onClick={onClose} className={editing || published ? 'mr-auto text-foreground-muted hover:text-foreground' : 'text-foreground-muted hover:text-foreground'}>
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        <div className="p-5 space-y-4">
-          {post.signal_summary && (
-            <p className="text-[11px] text-foreground-muted opacity-70">💡 {post.signal_summary}</p>
-          )}
-          {post.scheduled_at && (
-            <p className="flex items-center gap-1.5 text-[11px] text-foreground-muted">
-              <Calendar className="w-3.5 h-3.5" /> מתוזמן לפרסום: {fmtDateTime(post.scheduled_at)}
-            </p>
-          )}
-          {post.image_url && (
-            <img src={post.image_url} alt="" className="w-full max-h-96 object-cover rounded-xl border border-border" />
-          )}
-          <p className="text-[13px] text-foreground leading-relaxed whitespace-pre-wrap">{post.content || '(אין תוכן)'}</p>
-        </div>
+        {!editing ? (
+          <div className="p-5 space-y-4">
+            {post.signal_summary && (
+              <p className="text-[11px] text-foreground-muted opacity-70">💡 {post.signal_summary}</p>
+            )}
+            {post.scheduled_at && (
+              <p className="flex items-center gap-1.5 text-[11px] text-foreground-muted">
+                <Calendar className="w-3.5 h-3.5" /> מתוזמן לפרסום: {fmtDateTime(post.scheduled_at)}
+              </p>
+            )}
+            {post.image_url && (
+              <img src={post.image_url} alt="" className="w-full max-h-96 object-cover rounded-xl border border-border" />
+            )}
+            <p className="text-[13px] text-foreground leading-relaxed whitespace-pre-wrap">{post.content || '(אין תוכן)'}</p>
+          </div>
+        ) : (
+          <div className="p-5 space-y-4">
+            {/* Image */}
+            <div>
+              <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">תמונה</p>
+              {imageUrl ? (
+                <div className="relative">
+                  <img src={imageUrl} alt=""
+                    className={`w-full object-cover rounded-xl border border-border ${post.post_type === 'story' ? 'aspect-[9/16] max-h-64' : 'h-40'}`} />
+                  {analyzing && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl">
+                      <div className="text-white text-[12px] flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" /> מנתח תמונה...
+                      </div>
+                    </div>
+                  )}
+                  <button onClick={() => { setImageUrl(''); setMediaId(null); setImageDesc(''); }}
+                    className="absolute top-2 left-2 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-black/80">
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <button onClick={handleGenImage} disabled={genImage}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-border rounded-xl text-[12px] text-foreground-muted hover:bg-secondary transition-colors">
+                    {genImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    {genImage ? 'יוצר...' : 'תמונה AI'}
+                  </button>
+                  <button onClick={() => fileRef.current?.click()}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-border rounded-xl text-[12px] text-foreground-muted hover:bg-secondary transition-colors">
+                    <Upload className="w-4 h-4" /> העלה תמונה
+                  </button>
+                  <button onClick={() => setShowPicker(true)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-border rounded-xl text-[12px] text-foreground-muted hover:bg-secondary transition-colors">
+                    <ImageIcon className="w-4 h-4" /> מהספרייה
+                  </button>
+                  <input ref={fileRef} type="file" accept="image/*" className="hidden"
+                    onChange={e => handleUpload(e.target.files?.[0])} />
+                </div>
+              )}
+            </div>
+
+            {/* Content */}
+            <div>
+              <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">תוכן</p>
+              <textarea
+                value={content}
+                onChange={e => setContent(e.target.value)}
+                rows={post.post_type === 'story' ? 3 : 5}
+                className="w-full text-[13px] text-foreground bg-secondary border border-border rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed"
+              />
+            </div>
+
+            {/* Scheduling */}
+            <div>
+              <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">מתי לפרסם? (אופציונלי)</p>
+              <div className="flex items-center gap-1 p-1 bg-secondary rounded-lg w-fit mb-2">
+                {[
+                  { id: 'none', label: 'לא לתזמן' },
+                  { id: 'manual', label: 'אני אבחר' },
+                ].map(m => (
+                  <button key={m.id} onClick={() => setScheduleMode(m.id)}
+                    className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
+                      scheduleMode === m.id ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
+                    }`}>
+                    {m.label}
+                  </button>
+                ))}
+                <button onClick={handleAiSchedule} disabled={suggestingTime}
+                  className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-all disabled:opacity-60 ${
+                    scheduleMode === 'auto' ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
+                  }`}>
+                  {suggestingTime ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                  AI יבחר
+                </button>
+              </div>
+              {scheduleMode !== 'none' && (
+                <input
+                  type="datetime-local"
+                  value={scheduledAt}
+                  onChange={e => { setScheduledAt(e.target.value); setScheduleMode('manual'); setAiTimeReason(''); }}
+                  className="w-full text-[13px] text-foreground bg-secondary border border-border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              )}
+              {scheduleMode === 'auto' && aiTimeReason && (
+                <p className="text-[10px] text-foreground-muted mt-1">✨ {aiTimeReason}</p>
+              )}
+            </div>
+
+            {approved && (
+              <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                שינויים בפוסט מאושר יבטלו את האישור — יהיה צריך לאשר מחדש לפני פרסום.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="flex gap-2 px-5 py-4 border-t border-border">
-          <button onClick={onClose}
-            className="flex-1 py-2.5 border border-border rounded-xl text-[13px] text-foreground-muted hover:text-foreground transition-colors">
-            סגור
-          </button>
-          <button onClick={() => onToggleApprove(post)} disabled={toggling}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-bold transition-all disabled:opacity-60 ${
-              approved ? 'border border-green-300 text-green-700 hover:bg-green-50' : 'bg-green-600 text-white hover:opacity-90'
-            }`}>
-            {toggling ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-            {approved ? 'בטל אישור' : 'אשר פוסט'}
-          </button>
-          {approved && !published && (
-            <button onClick={() => onPublish(post)} disabled={publishing}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-foreground text-background rounded-xl text-[13px] font-bold hover:opacity-90 transition-all disabled:opacity-60">
-              {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {publishing ? 'מפרסם...' : 'פרסם עכשיו'}
-            </button>
+          {editing ? (
+            <>
+              <button onClick={() => { setEditing(false); setContent(post.content || ''); setImageUrl(post.image_url || ''); setMediaId(post.media_asset_id || null); }}
+                disabled={saving}
+                className="flex-1 py-2.5 border border-border rounded-xl text-[13px] text-foreground-muted hover:text-foreground transition-colors disabled:opacity-60">
+                ביטול
+              </button>
+              <button onClick={handleSaveEdit} disabled={saving}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-foreground text-background rounded-xl text-[13px] font-bold hover:opacity-90 transition-all disabled:opacity-60">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                {saving ? 'שומר...' : 'שמור שינויים'}
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={onClose}
+                className="flex-1 py-2.5 border border-border rounded-xl text-[13px] text-foreground-muted hover:text-foreground transition-colors">
+                סגור
+              </button>
+              <button onClick={() => onToggleApprove(post)} disabled={toggling}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-bold transition-all disabled:opacity-60 ${
+                  approved ? 'border border-green-300 text-green-700 hover:bg-green-50' : 'bg-green-600 text-white hover:opacity-90'
+                }`}>
+                {toggling ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                {approved ? 'בטל אישור' : 'אשר פוסט'}
+              </button>
+              {approved && !published && (
+                <button onClick={() => onPublish(post)} disabled={publishing}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-foreground text-background rounded-xl text-[13px] font-bold hover:opacity-90 transition-all disabled:opacity-60">
+                  {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  {publishing ? 'מפרסם...' : 'פרסם עכשיו'}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -1195,6 +1461,7 @@ export default function Posts() {
       {detailPost && (
         <OrganicPostDetailModal
           post={detailPost}
+          businessProfile={businessProfile}
           onClose={() => setDetailPost(null)}
           onToggleApprove={(post) => approveOrganic.mutate({ id: post.id, approve: !post.approved_at })}
           toggling={approveOrganic.isPending}
