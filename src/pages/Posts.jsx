@@ -7,6 +7,9 @@ import { Plus, Loader2, Sparkles, Upload, RefreshCw, Send, Image as ImageIcon, X
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
 import MediaLibrary from '@/components/marketing/MediaLibrary';
+import BusinessSocialSnapshot from '@/components/marketing/BusinessSocialSnapshot';
+import SocialProfileSuggestions from '@/components/marketing/SocialProfileSuggestions';
+import { PLATFORM_LABELS } from '@/components/competitors/socialShared';
 
 const _apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api').replace(/\/$/, '');
 
@@ -938,6 +941,13 @@ export default function Posts() {
   const [showOrgCreate, setShowOrgCreate] = useState(false);
   const [organicCtx,    setOrganicCtx]    = useState(null);
 
+  const availableSocialPlatforms = [
+    (businessProfile?.facebook_url || businessProfile?.facebook_page_id) ? 'facebook' : null,
+    businessProfile?.instagram_url ? 'instagram' : null,
+  ].filter(Boolean);
+  const [activeSocialPlatform, setActiveSocialPlatform] = useState(null);
+  const currentSocialPlatform = activeSocialPlatform || availableSocialPlatforms[0] || 'facebook';
+
   // Auto-open composer if URL says so (e.g. deep-linked from a signal)
   useEffect(() => {
     if (searchParams.get('create') === 'organic') {
@@ -1083,6 +1093,30 @@ export default function Posts() {
         title="ניהול סושיאל"
         subtitle="יצירת פוסטים אורגניים, תמונות ופרסום לרשתות החברתיות"
       />
+
+      {availableSocialPlatforms.length > 1 && (
+        <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-xl w-fit">
+          {availableSocialPlatforms.map(p => (
+            <button
+              key={p}
+              onClick={() => setActiveSocialPlatform(p)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                currentSocialPlatform === p ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
+              }`}
+            >
+              {PLATFORM_LABELS[p]}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <SocialProfileSuggestions
+        businessProfile={businessProfile}
+        platform={currentSocialPlatform}
+        onCreatePost={() => setShowOrgCreate(true)}
+      />
+
+      <BusinessSocialSnapshot businessProfile={businessProfile} platform={currentSocialPlatform} />
 
       {/* Sub-tab bar */}
       <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit">

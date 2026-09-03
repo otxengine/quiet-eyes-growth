@@ -6,12 +6,9 @@ import { Plus, Loader2, ChevronDown, Search, MoreVertical, Radio, Sparkles, Send
 import { toast } from 'sonner';
 import StatCards from '@/components/shared/StatCards';
 import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
-import BusinessSocialSnapshot from '@/components/marketing/BusinessSocialSnapshot';
 import CompetitorContentTrends from '@/components/marketing/CompetitorContentTrends';
-import SocialProfileSuggestions from '@/components/marketing/SocialProfileSuggestions';
 import AudienceInsights from '@/components/audience/AudienceInsights';
 import AudienceSegments from '@/components/audience/AudienceSegments';
-import { PLATFORM_LABELS } from '@/components/competitors/socialShared';
 const PLATFORM_CONFIG = {
   meta:      { label: 'Facebook',   icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
   instagram: { label: 'Instagram',  icon: '📸', color: '#e1306c', bg: '#fde8f0' },
@@ -414,12 +411,6 @@ export default function Marketing() {
   const [searchParams] = useSearchParams();
 
   const bpId = businessProfile?.id;
-  const availableSocialPlatforms = [
-    (businessProfile?.facebook_url || businessProfile?.facebook_page_id) ? 'facebook' : null,
-    businessProfile?.instagram_url ? 'instagram' : null,
-  ].filter(Boolean);
-  const [activeSocialPlatform, setActiveSocialPlatform] = useState(null);
-  const currentSocialPlatform = activeSocialPlatform || availableSocialPlatforms[0] || 'facebook';
   const [showWaBlast,     setShowWaBlast]     = useState(false);
   const [waBlastCtx,      setWaBlastCtx]      = useState(null);
   const [statusFilter,    setStatusFilter]    = useState('active');
@@ -527,30 +518,6 @@ export default function Marketing() {
       {urgentActions.length > 0 && (
         <UrgentActionsSection actions={urgentActions} />
       )}
-
-      {availableSocialPlatforms.length > 1 && (
-        <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-xl w-fit">
-          {availableSocialPlatforms.map(p => (
-            <button
-              key={p}
-              onClick={() => setActiveSocialPlatform(p)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                currentSocialPlatform === p ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
-              }`}
-            >
-              {PLATFORM_LABELS[p]}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <SocialProfileSuggestions
-        businessProfile={businessProfile}
-        platform={currentSocialPlatform}
-        onCreatePost={() => navigate('/posts')}
-      />
-
-      <BusinessSocialSnapshot businessProfile={businessProfile} platform={currentSocialPlatform} />
 
       <CompetitorContentTrends businessProfile={businessProfile} />
 
