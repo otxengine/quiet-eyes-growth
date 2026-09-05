@@ -66,7 +66,11 @@ test('force bypasses a fresh cache and recomputes', async () => {
   ]);
   queryRawUnsafe
     .mockResolvedValueOnce([ // posts
-      { competitor_id: 'c1', posted_at: new Date(), likes: 100, comments_count: 10, analysis: JSON.stringify({ has_offer: true, offer_mechanic: 'discount', offer_details: 'הנחה 20%' }) },
+      {
+        id: 'post-1', competitor_id: 'c1', platform: 'instagram', posted_at: new Date(),
+        likes: 100, comments_count: 10, caption: 'כיתוב מלא של הפוסט', media_url: 'https://example.com/img.jpg', video_url: null,
+        analysis: JSON.stringify({ has_offer: true, offer_mechanic: 'discount', offer_details: 'הנחה 20%' }),
+      },
     ])
     .mockResolvedValueOnce([]); // ads
   (synthesizeOffersLandscape as jest.Mock).mockResolvedValue('נרטיב חדש');
@@ -85,7 +89,11 @@ test('force bypasses a fresh cache and recomputes', async () => {
   expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
     insight: 'נרטיב חדש',
     cached: false,
-    examples: [expect.objectContaining({ competitorName: 'מתחרה א', offer_details: 'הנחה 20%' })],
+    examples: [expect.objectContaining({
+      competitorName: 'מתחרה א', offer_details: 'הנחה 20%',
+      type: 'post', platform: 'instagram', caption: 'כיתוב מלא של הפוסט',
+      media_url: 'https://example.com/img.jpg', likes: 100, comments_count: 10,
+    })],
   }));
 });
 

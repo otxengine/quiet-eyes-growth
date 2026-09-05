@@ -15,3 +15,5 @@ export const AUDIENCE_INTENT_LABELS = {
 };
 
 export const VALUE_FRAMING_LABELS = { relative: 'הנחה יחסית (%)', absolute: 'הנחה מוחלטת (₪)', both: 'יחסית ומוחלטת' };
+
+export const CHANNEL_LABELS = { organic: 'אורגני', paid: 'ממומן' };

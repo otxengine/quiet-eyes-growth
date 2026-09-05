@@ -7,23 +7,43 @@ const PER_COMP_INTERVAL_MS = 48 * 60 * 60 * 1000; // 48h — matches analyzeSoci
 const ACTIVE_OFFER_WINDOW_MS = 14 * 24 * 60 * 60 * 1000; // "currently running an offer" post recency window
 
 interface PostRow {
+  id: string;
   competitor_id: string;
+  platform: string;
   posted_at: Date | null;
   likes: number | null;
   comments_count: number | null;
+  caption: string | null;
+  media_url: string | null;
+  video_url: string | null;
   analysis: string | null;
 }
 
 interface AdRow {
+  id: string;
   competitor_id: string;
+  platform: string;
   is_active: boolean;
+  title: string | null;
+  body: string | null;
+  cta: string | null;
+  media_url: string | null;
+  video_url: string | null;
   analysis: string | null;
   first_seen_at: Date | null;
 }
 
 interface LandscapeItem extends OfferAnalysisItem {
+  id: string;
   competitorId: string;
   competitorName: string;
+  platform: string;
+  media_url: string | null;
+  video_url: string | null;
+  caption?: string | null; // posts only
+  title?: string | null;   // ads only
+  body?: string | null;    // ads only
+  cta?: string | null;     // ads only
 }
 
 function parseAnalysis(raw: string | null): any {
@@ -31,9 +51,12 @@ function parseAnalysis(raw: string | null): any {
   try { return JSON.parse(raw); } catch { return null; }
 }
 
-/** Picks 2-4 representative real offer examples for the LLM prompt, most recent
- * first, spread across different competitors where possible (never fabricated —
- * pulled straight from each item's own extracted offer_details/topic). */
+/** Picks 2-4 representative real offer examples, most recent first, spread
+ * across different competitors where possible (never fabricated — pulled
+ * straight from each item's own extracted offer_details/topic). Carries the
+ * full underlying post/ad (media, caption/body) too, not just the short
+ * extracted phrase, so the frontend can render an expandable "see the full
+ * post/ad" view — not just a one-line quote. */
 function pickExamples(items: LandscapeItem[], limit = 4): OffersLandscapeExample[] {
   const dated = items
     .map(it => ({ it, date: it.posted_at ?? it.first_seen_at }))
@@ -47,7 +70,21 @@ function pickExamples(items: LandscapeItem[], limit = 4): OffersLandscapeExample
     if (usedCompetitors.has(it.competitorName)) continue;
     const details = it.a.offer_details || it.a.topic;
     if (!details) continue;
-    examples.push({ competitorName: it.competitorName, offer_details: details, date: new Date(date).toISOString().slice(0, 10) });
+    examples.push({
+      competitorName: it.competitorName,
+      offer_details: details,
+      date: new Date(date).toISOString().slice(0, 10),
+      type: it.type,
+      platform: it.platform,
+      media_url: it.media_url ?? null,
+      video_url: it.video_url ?? null,
+      caption: it.caption ?? null,
+      title: it.title ?? null,
+      body: it.body ?? null,
+      cta: it.cta ?? null,
+      likes: it.likes ?? null,
+      comments_count: it.comments_count ?? null,
+    });
     usedCompetitors.add(it.competitorName);
   }
   return examples;
@@ -97,13 +134,13 @@ export async function getOffersLandscapeData(businessProfileId: string, force: b
   // Raw SQL to avoid Prisma P2023 on Render (TIMESTAMPTZ OID mismatch) — same
   // pattern as analyzeSocialPosts.ts / analyzeContentTrends.ts.
   const posts = await (prisma as any).$queryRawUnsafe(
-    `SELECT competitor_id, posted_at, likes, comments_count, analysis
+    `SELECT id, competitor_id, platform, posted_at, likes, comments_count, caption, media_url, video_url, analysis
      FROM competitor_posts WHERE competitor_id = ANY($1::text[]) AND analysis IS NOT NULL`,
     competitorIds,
   ) as PostRow[];
 
   const ads = await (prisma as any).$queryRawUnsafe(
-    `SELECT competitor_id, is_active, analysis, first_seen_at
+    `SELECT id, competitor_id, platform, is_active, title, body, cta, media_url, video_url, analysis, first_seen_at
      FROM competitor_ad_history WHERE competitor_id = ANY($1::text[]) AND analysis IS NOT NULL`,
     competitorIds,
   ) as AdRow[];
@@ -113,12 +150,14 @@ export async function getOffersLandscapeData(businessProfileId: string, force: b
 
   const allItems: LandscapeItem[] = [
     ...analyzedPosts.map(p => ({
-      type: 'post' as const, competitorId: p.competitor_id, competitorName: nameById.get(p.competitor_id) || '?',
-      posted_at: p.posted_at, likes: p.likes, comments_count: p.comments_count, a: p.a,
+      type: 'post' as const, id: p.id, competitorId: p.competitor_id, competitorName: nameById.get(p.competitor_id) || '?',
+      platform: p.platform, posted_at: p.posted_at, likes: p.likes, comments_count: p.comments_count,
+      caption: p.caption, media_url: p.media_url, video_url: p.video_url, a: p.a,
     })),
     ...analyzedAds.map(a => ({
-      type: 'ad' as const, competitorId: a.competitor_id, competitorName: nameById.get(a.competitor_id) || '?',
-      first_seen_at: a.first_seen_at, a: a.a,
+      type: 'ad' as const, id: a.id, competitorId: a.competitor_id, competitorName: nameById.get(a.competitor_id) || '?',
+      platform: a.platform, first_seen_at: a.first_seen_at,
+      title: a.title, body: a.body, cta: a.cta, media_url: a.media_url, video_url: a.video_url, a: a.a,
     })),
   ];
   // Pooled across ALL competitors, not per-competitor — the differentiator from CompetitorsOffers.jsx.

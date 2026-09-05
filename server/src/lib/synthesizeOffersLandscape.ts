@@ -5,6 +5,18 @@ export interface OffersLandscapeExample {
   competitorName: string;
   offer_details: string;
   date: string; // YYYY-MM-DD
+  // Full underlying post/ad — carried so the frontend can render an
+  // expandable "see the full post/ad" view, not just the short quote above.
+  type: 'post' | 'ad';
+  platform: string;
+  media_url: string | null;
+  video_url: string | null;
+  caption: string | null;         // posts only
+  title: string | null;           // ads only
+  body: string | null;            // ads only
+  cta: string | null;             // ads only
+  likes: number | null;           // posts only
+  comments_count: number | null;  // posts only
 }
 
 /** OfferStats plus the landscape-only fields computed by analyzeOffersLandscape.ts
