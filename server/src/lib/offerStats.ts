@@ -51,6 +51,8 @@ export interface OfferStats {
   value_framing_breakdown: OfferBreakdownEntry[];
   audience_intent_breakdown: OfferBreakdownEntry[];
   redemption_breakdown: OfferBreakdownEntry[];
+  // 'organic' (regular post) vs 'paid' (ad) — which channel offers actually run through.
+  channel_breakdown: OfferBreakdownEntry[];
   urgency_pct: number;
   conditions_pct: number;
   in_image_pct: number;
@@ -126,6 +128,13 @@ export function computeOfferStats(
     avg_comments_offer_posts: avgCommentsOffer, avg_comments_regular_posts: avgCommentsRegular,
   } : null;
 
+  const channelCounts: Record<string, number> = { organic: 0, paid: 0 };
+  for (const it of offerItems) channelCounts[it.type === 'ad' ? 'paid' : 'organic']++;
+  const channelBreakdown = Object.entries(channelCounts)
+    .filter(([, count]) => count > 0)
+    .sort((x, y) => y[1] - x[1])
+    .map(([value, count]) => ({ value, count }));
+
   return {
     total_offers: offerItems.length,
     peak_day: peakDay,
@@ -135,6 +144,7 @@ export function computeOfferStats(
     value_framing_breakdown: tally(offerItems, 'offer_value_framing'),
     audience_intent_breakdown: tally(offerItems, 'offer_audience_intent'),
     redemption_breakdown: tally(offerItems, 'offer_redemption').slice(0, 3),
+    channel_breakdown: channelBreakdown,
     urgency_pct: Math.round((urgencyCount / offerItems.length) * 100),
     conditions_pct: Math.round((conditionsCount / offerItems.length) * 100),
     in_image_pct: Math.round((inImageCount / offerItems.length) * 100),

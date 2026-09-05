@@ -16,10 +16,22 @@ export interface PooledOfferStats extends OfferStats {
   active_offer_pct: number;
 }
 
+const CHANNEL_LABELS_HE: Record<string, string> = { organic: 'פוסטים אורגניים', paid: 'מודעות ממומנות' };
+
+type OfferBreakdownEntryLike = { value: string; count: number };
+
+/** Renders a breakdown array as "a (x/n), b (y/n)" for the top `limit` entries — used to
+ * give the LLM more than just the #1 value so it can elaborate on the real spread. */
+function topEntries(breakdown: OfferBreakdownEntryLike[], total: number, limit = 3, labels?: Record<string, string>): string {
+  if (!breakdown.length) return '—';
+  return breakdown.slice(0, limit).map(e => `${labels?.[e.value] || e.value} (${e.count}/${total})`).join(', ');
+}
+
 /**
- * Synthesizes ONE Hebrew narrative (2-4 sentences) describing the offer
- * landscape pooled across ALL of a business's tracked competitors — e.g.
- * "3 מתוך 5 מתחרים מריצים כרגע מבצע פעיל...".
+ * Synthesizes ONE elaborated Hebrew narrative describing the offer landscape
+ * pooled across ALL of a business's tracked competitors — not just "X% have an
+ * active offer" but what kinds of offers (top mechanics), when they run (peak
+ * day/cadence), and through which channel (organic posts vs paid ads).
  *
  * Same "rollup is authoritative, LLM narrative is gloss only" discipline used
  * elsewhere in this codebase (see computeThemeRollup / getCompetitorReviewInsights):
@@ -36,11 +48,14 @@ export async function synthesizeOffersLandscape(
   try {
     const statsSummary = [
       `${stats.competitors_with_active_offer}/${stats.competitors_total} מתחרים מריצים כרגע מבצע פעיל (${stats.active_offer_pct}%).`,
-      `${stats.total_offers} מבצעים נותחו בסך הכול. מנגנון נפוץ ביותר: ${stats.mechanic_breakdown[0]?.value || '—'} (${stats.mechanic_breakdown[0]?.count || 0}/${stats.total_offers}).`,
+      `${stats.total_offers} מבצעים נותחו בסך הכול.`,
+      `סוגי מבצעים (מנגנון), מהנפוץ לפחות נפוץ: ${topEntries(stats.mechanic_breakdown, stats.total_offers)}.`,
+      `ערוץ הפצת המבצעים: ${topEntries(stats.channel_breakdown, stats.total_offers, 2, CHANNEL_LABELS_HE)}.`,
       stats.peak_day ? `היום הנפוץ ביותר למבצעים: יום ${stats.peak_day} (${stats.peak_day_count}/${stats.total_offers}).` : null,
       stats.avg_interval_days != null ? `מרווח ממוצע בין מבצעים: כ-${stats.avg_interval_days} ימים.` : null,
       `${stats.urgency_pct}% מהמבצעים משתמשים במסגור דחיפות/מחסור. ${stats.conditions_pct}% כוללים תנאים (מינימום קנייה/קוד/החרגות).`,
-      `מסגור ערך עיקרי: ${stats.value_framing_breakdown[0]?.value || '—'}. כוונת קהל עיקרית: ${stats.audience_intent_breakdown[0]?.value || '—'}.`,
+      `מסגור ערך, מהנפוץ לפחות נפוץ: ${topEntries(stats.value_framing_breakdown, stats.total_offers, 2)}.`,
+      `כוונת קהל, מהנפוץ לפחות נפוץ: ${topEntries(stats.audience_intent_breakdown, stats.total_offers, 2)}.`,
     ].filter(Boolean).join('\n');
 
     const examplesSummary = examples.length
@@ -49,7 +64,7 @@ export async function synthesizeOffersLandscape(
 
     const result = await invokeLLM({
       model: 'sonnet',
-      maxTokens: 400,
+      maxTokens: 600,
       skipCache: true,
       response_json_schema: { type: 'object' },
       prompt: `You are a marketing analyst. Below is the DETERMINISTIC, pre-computed offer landscape pooled across ALL of a business's tracked competitors (these numbers are ground truth — do not invent or contradict them), plus a few real example offers:
@@ -60,7 +75,7 @@ Real examples:
 ${examplesSummary}
 
 Return ONLY valid JSON. The string value MUST be in Hebrew:
-{"insight": "2-4 sentences summarizing the offer landscape across competitors — cadence, mechanic, timing, and what share of competitors are currently running an active offer. Ground every claim in the numbers above, do not fabricate additional detail. If there isn't enough data for a strong pattern, say so honestly instead of forcing one."}`,
+{"insight": "A short elaborated paragraph (5-8 sentences) covering, as separate points grounded in the numbers above: (1) what TYPES of offers competitors run — name the top mechanics with their share, not just the single most common one; (2) WHEN offers happen — peak day and typical cadence/interval between offers; (3) WHICH CHANNEL offers run through — organic posts vs paid ads, and what that split suggests; (4) how offers are framed — value framing, urgency/scarcity use, and any conditions; (5) what share of competitors currently have an active offer running. Do not fabricate any number or detail beyond what's given. If a dimension has too little data for a real pattern (e.g. only one channel present, or too few offers for cadence), say so honestly for that point instead of forcing a conclusion — but still cover the dimensions where data exists."}`,
     });
 
     return typeof result?.insight === 'string' && result.insight.trim() ? result.insight.trim() : null;

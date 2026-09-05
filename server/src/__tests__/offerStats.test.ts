@@ -103,6 +103,22 @@ describe('computeOfferStats', () => {
     expect(result.performance).toBeNull();
   });
 
+  test('tallies channel_breakdown (organic posts vs paid ads), sorted desc', () => {
+    const items: OfferAnalysisItem[] = [
+      post({ a: { has_offer: true } }),
+      post({ a: { has_offer: true } }),
+      ad({ a: { has_offer: true } }),
+    ];
+    const result = computeOfferStats(items, items)!;
+    expect(result.channel_breakdown).toEqual([{ value: 'organic', count: 2 }, { value: 'paid', count: 1 }]);
+  });
+
+  test('channel_breakdown omits a channel with zero offers', () => {
+    const items: OfferAnalysisItem[] = [post({ a: { has_offer: true } })];
+    const result = computeOfferStats(items, items)!;
+    expect(result.channel_breakdown).toEqual([{ value: 'organic', count: 1 }]);
+  });
+
   test('pools items across multiple competitors (order-independent aggregation)', () => {
     const items: OfferAnalysisItem[] = [
       post({ posted_at: '2024-02-01T00:00:00Z', a: { has_offer: true, offer_mechanic: 'discount' } }), // Thursday
