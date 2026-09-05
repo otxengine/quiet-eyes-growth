@@ -31,8 +31,11 @@ export default function OffersPillarSection({ businessProfile }) {
   const queryClient = useQueryClient();
   const [selectedExample, setSelectedExample] = useState(null);
 
-  const insight = businessProfile?.offers_landscape_insight;
   const updatedAt = businessProfile?.offers_landscape_insight_at;
+  const insight = useMemo(() => {
+    try { return businessProfile?.offers_landscape_insight ? JSON.parse(businessProfile.offers_landscape_insight) : null; }
+    catch { return null; }
+  }, [businessProfile?.offers_landscape_insight]);
   const stats = useMemo(() => {
     try { return businessProfile?.offers_landscape_stats ? JSON.parse(businessProfile.offers_landscape_stats) : null; }
     catch { return null; }
