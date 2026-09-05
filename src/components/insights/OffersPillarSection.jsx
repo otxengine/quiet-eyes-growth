@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { Maximize2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useStaleInsight } from '@/hooks/useStaleInsight';
 import { OFFER_MECHANIC_LABELS, CHANNEL_LABELS } from '@/lib/offerLabels';
-import { API_BASE, PLATFORM_LABELS, PLATFORM_COLORS, fmtCount } from '@/components/competitors/socialShared';
+import { PostDetailModal, AdDetailModal } from '@/components/competitors/socialShared';
 import PillarRefreshBadge from './PillarRefreshBadge';
 
 /**
@@ -16,12 +16,7 @@ import PillarRefreshBadge from './PillarRefreshBadge';
 export default function OffersPillarSection({ businessProfile }) {
   const bpId = businessProfile?.id;
   const queryClient = useQueryClient();
-  const [expanded, setExpanded] = useState(() => new Set());
-  const toggleExpanded = (i) => setExpanded(prev => {
-    const next = new Set(prev);
-    next.has(i) ? next.delete(i) : next.add(i);
-    return next;
-  });
+  const [selectedExample, setSelectedExample] = useState(null);
 
   const insight = businessProfile?.offers_landscape_insight;
   const updatedAt = businessProfile?.offers_landscape_insight_at;
@@ -61,62 +56,35 @@ export default function OffersPillarSection({ businessProfile }) {
         {insight && <p className="text-[13px] leading-relaxed text-foreground">{insight}</p>}
 
         {examples.length > 0 && (
-          <div className="space-y-1.5">
-            {examples.slice(0, 4).map((ex, i) => {
-              const isOpen = expanded.has(i);
-              const thumb = ex.media_url || ex.video_url;
-              return (
-                <div key={i} className="border border-border/60 rounded-lg overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => toggleExpanded(i)}
-                    className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-[11px] text-foreground-muted hover:bg-muted/40 transition-colors text-right"
-                  >
-                    <span className="flex-1 truncate">
-                      <span className="font-semibold">{ex.competitorName}</span> ({ex.date}): "{ex.offer_details}"
-                    </span>
-                    {isOpen ? <ChevronUp className="w-3.5 h-3.5 shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 shrink-0" />}
-                  </button>
-                  {isOpen && (
-                    <div className="border-t border-border/60 p-2.5 space-y-2 bg-muted/20">
-                      {thumb && (
-                        <img
-                          src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(thumb)}`}
-                          alt=""
-                          className="w-full max-h-56 rounded object-cover"
-                          loading="lazy"
-                          onError={e => { e.currentTarget.style.display = 'none'; }}
-                        />
-                      )}
-                      <div className="flex items-center gap-2 text-[10px] flex-wrap">
-                        <span className={`px-1.5 py-0.5 rounded ${PLATFORM_COLORS[ex.platform] || 'bg-gray-100 text-gray-700'}`}>
-                          {PLATFORM_LABELS[ex.platform] || ex.platform}
-                        </span>
-                        <span className="text-foreground-muted">{ex.type === 'ad' ? 'מודעה ממומנת' : 'פוסט אורגני'}</span>
-                        {(ex.likes != null || ex.comments_count != null) && (
-                          <span className="text-foreground-muted">
-                            {ex.likes != null && `❤️ ${fmtCount(ex.likes)}`}{' '}
-                            {ex.comments_count != null && `💬 ${fmtCount(ex.comments_count)}`}
-                          </span>
-                        )}
-                      </div>
-                      {ex.type === 'ad' ? (
-                        <>
-                          {ex.title && <p className="text-[12px] font-semibold text-foreground">{ex.title}</p>}
-                          {ex.body && <p className="text-[12px] leading-relaxed text-foreground whitespace-pre-wrap">{ex.body}</p>}
-                          {ex.cta && (
-                            <span className="inline-block bg-primary/10 text-primary text-[10px] px-1.5 py-0.5 rounded">{ex.cta}</span>
-                          )}
-                        </>
-                      ) : (
-                        ex.caption && <p className="text-[12px] leading-relaxed text-foreground whitespace-pre-wrap">{ex.caption}</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          <div className="space-y-1">
+            {examples.slice(0, 4).map((ex, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setSelectedExample(ex)}
+                className="w-full flex items-center justify-between gap-2 px-2 py-1 -mx-2 rounded-lg text-[11px] text-foreground-muted hover:bg-muted/40 transition-colors text-right"
+              >
+                <span className="flex-1 truncate">
+                  <span className="font-semibold">{ex.competitorName}</span> ({ex.date}): "{ex.offer_details}"
+                </span>
+                <Maximize2 className="w-3 h-3 shrink-0" />
+              </button>
+            ))}
           </div>
+        )}
+
+        {selectedExample && (
+          selectedExample.type === 'ad' ? (
+            <AdDetailModal
+              ad={{ ...selectedExample, page_name: selectedExample.competitorName, first_seen_at: selectedExample.date }}
+              onClose={() => setSelectedExample(null)}
+            />
+          ) : (
+            <PostDetailModal
+              post={{ ...selectedExample, posted_at: selectedExample.date }}
+              onClose={() => setSelectedExample(null)}
+            />
+          )
         )}
 
         {stats && (
