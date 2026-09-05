@@ -93,7 +93,11 @@ export async function synthesizeOffersLandscape(
 
     const result = await invokeLLM({
       model: 'sonnet',
-      maxTokens: 700,
+      // 7 Hebrew sentences in one flat JSON object needs real headroom — a
+      // truncated flat object (unlike an array-of-items shape) can't be
+      // salvaged by _parseJson's bracket-recovery fallback, so it's better
+      // to avoid truncation outright than to rely on recovering from it.
+      maxTokens: 3000,
       skipCache: true,
       response_json_schema: { type: 'object' },
       prompt: `You are a marketing analyst. Below is the DETERMINISTIC, pre-computed offer landscape pooled across ALL of a business's tracked competitors (these numbers are ground truth — do not invent or contradict them), plus a few real example offers:
