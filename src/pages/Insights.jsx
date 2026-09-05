@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
-import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
 import DataTable from '@/components/shared/DataTable';
 import SignalCard from '@/components/intelligence/SignalCard';
 import AiInsightBox from '@/components/ai/AiInsightBox';
@@ -763,13 +762,6 @@ export default function Insights() {
     { count: trendRows.length,  label: 'מגמות וטרנדים',      borderColor: 'none' },
   ];
 
-  const urgentActions = urgentRows.slice(0, 3).map(r => ({
-    title:       r.title.slice(0, 60),
-    description: r.summary?.slice(0, 80),
-    ctaLabel:    getActionLabel(r),
-    onCta:       () => navigate(`/insights/${r.id}?kind=${r.kind}`),
-  }));
-
   const FILTER_TABS = [
     { key: 'all',        label: 'הכל',       count: freshRows.length },
     { key: 'risk',       label: 'סיכונים',   count: risks.length },
@@ -794,10 +786,6 @@ export default function Insights() {
       <OffersPillarSection businessProfile={businessProfile} />
 
       <StatCards cards={statCards} />
-
-      {urgentActions.length > 0 && (
-        <UrgentActionsSection actions={urgentActions} />
-      )}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-16">

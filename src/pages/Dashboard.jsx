@@ -2,10 +2,11 @@ import React, { useState, useRef } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { ChevronLeft, X, ArrowUpRight, Sparkles, Zap, Flame, Clock } from 'lucide-react';
+import { ChevronLeft, ArrowUpRight, Sparkles, Zap, Flame } from 'lucide-react';
 import LiveStreamCard from '@/components/shared/LiveStreamCard';
 import KoriAvatar from '@/components/onboarding/KoriAvatar';
 import DailyBriefPanel from '@/components/dashboard/DailyBriefPanel';
+import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -52,8 +53,6 @@ export default function Dashboard() {
   const threadRef = useRef(null);
   const inputRef = useRef(null);
 
-  const [urgentDismissed, setUrgentDismissed] = useState(false);
-
   const { data: allLeads = [] } = useQuery({
     queryKey: ['allLeads', bpId],
     queryFn: () => base44.entities.Lead.filter({ linked_business: bpId }, '-score', 50),
@@ -72,6 +71,12 @@ export default function Dashboard() {
     enabled: !!bpId,
   });
 
+  const { data: alerts = [] } = useQuery({
+    queryKey: ['proactiveAlerts', bpId],
+    queryFn: () => base44.entities.ProactiveAlert.filter({ linked_business: bpId }, '-created_at', 100),
+    enabled: !!bpId,
+  });
+
   const { data: eventBusStats } = useQuery({
     queryKey: ['eventBusStats', bpId],
     queryFn: () => base44.functions.invoke('getEventBusStats', { businessProfileId: bpId }),
@@ -85,8 +90,31 @@ export default function Dashboard() {
   const hotLeads = allLeads.filter(l => l.status === 'hot');
   const actionsCompleted = allLeads.filter(l => l.status === 'completed' || l.lifecycle_stage === 'closed_won');
   const urgentSignals = allSignals.filter(s => !s.is_read && s.impact_level === 'high');
-  const urgentItem = urgentSignals[0] || allSignals[0];
   const urgentReview = allReviews.find(r => r.response_status === 'pending' && (r.sentiment === 'negative' || (r.rating && r.rating <= 2)));
+
+  // Up to 3 gradient cards, moved here from the Insights page — same alert/signal
+  // sources, kept simple (no dedup/relevance-scoring pipeline) since this is just
+  // a home-page teaser; the full picture is one click away via "צפה בתובנה".
+  const urgentActions = [
+    ...(urgentReview ? [{
+      title: 'ביקורת שלילית חדשה בגוגל – לא נענתה',
+      description: urgentReview.content?.slice(0, 80) || 'תגובה מהירה מעלה את הציון הכולל ומגבירה את שביעות רצון הלקוחות.',
+      ctaLabel: 'קרא ואשר תגובה',
+      onCta: () => navigate('/reputation'),
+    }] : []),
+    ...alerts.filter(a => !a.is_dismissed && (a.priority === 'critical' || a.priority === 'high')).map(a => ({
+      title: (a.title || a.message || '').slice(0, 60),
+      description: (a.message || '').slice(0, 80),
+      ctaLabel: 'צפה בתובנה',
+      onCta: () => navigate(`/insights/${a.id}?kind=alert`),
+    })),
+    ...urgentSignals.map(s => ({
+      title: (s.title || s.summary || '').slice(0, 60),
+      description: (s.summary || '').slice(0, 80),
+      ctaLabel: 'צפה בתובנה',
+      onCta: () => navigate(`/insights/${s.id}?kind=signal`),
+    })),
+  ].slice(0, 3);
 
   // Live stream items
   const pendingActions = eventBusStats?.pending_actions || [];
@@ -371,63 +399,25 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── 2×2 Shortcuts + Urgent card ──────────────────────────────────── */}
-      <div className="flex gap-4">
-        {/* 2×2 Shortcut grid */}
-        <div className="grid grid-cols-2 gap-3" style={{ flex: '0 0 55%' }}>
-          {shortcuts.map((sc, i) => (
-            <button
-              key={i}
-              onClick={() => navigate(sc.path)}
-              className="text-right p-4 rounded-2xl border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow flex flex-col gap-2"
-            >
-              <sc.Icon className="w-5 h-5 text-[#e8344d]" />
-              <div>
-                <div className="font-semibold text-[13px] text-gray-900">{sc.label}</div>
-                <div className="text-[11px] text-gray-400 mt-0.5 leading-snug">{sc.sub}</div>
-              </div>
-            </button>
-          ))}
-        </div>
-
-        {/* Urgent card */}
-        {(urgentReview || urgentItem) && !urgentDismissed ? (
-          <div className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-3">
-            <div className="flex items-start justify-between gap-2">
-              <button onClick={() => setUrgentDismissed(true)} className="text-gray-300 hover:text-gray-500 flex-shrink-0">
-                <X className="w-4 h-4" />
-              </button>
-              <div className="flex-1 text-right space-y-1.5">
-                <div className="text-[10px] text-gray-400">אתמול</div>
-                <div className="font-bold text-[13px] text-gray-900 leading-snug">
-                  {urgentReview ? 'ביקורת שלילית חדשה בגוגל – לא נענתה' : (urgentItem?.title || 'תובנה דחופה מהמערכת')}
-                </div>
-                <div className="text-[12px] text-gray-500 leading-relaxed">
-                  {urgentReview
-                    ? (urgentReview.content?.slice(0, 120) || 'תגובה מהירה מעלה את הציון הכולל ומגבירה את שביעות רצון הלקוחות.')
-                    : (urgentItem?.summary?.slice(0, 120) || '')}
-                </div>
-              </div>
+      {/* ── 2×2 Shortcuts ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3">
+        {shortcuts.map((sc, i) => (
+          <button
+            key={i}
+            onClick={() => navigate(sc.path)}
+            className="text-right p-4 rounded-2xl border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow flex flex-col gap-2"
+          >
+            <sc.Icon className="w-5 h-5 text-[#e8344d]" />
+            <div>
+              <div className="font-semibold text-[13px] text-gray-900">{sc.label}</div>
+              <div className="text-[11px] text-gray-400 mt-0.5 leading-snug">{sc.sub}</div>
             </div>
-            <div className="flex items-center justify-between mt-auto">
-              <div className="flex items-center gap-1 text-gray-400 text-[11px]">
-                <Clock className="w-3.5 h-3.5" />
-                <span>2 דק'</span>
-              </div>
-              <button
-                onClick={() => navigate(urgentReview ? '/reputation' : '/insights')}
-                className="bg-[#e8344d] text-white text-[12px] font-semibold px-4 py-2 rounded-full hover:bg-[#c92b40] transition-colors"
-              >
-                {urgentReview ? 'קרא ואשר תגובה' : 'צפה בתובנה'}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center justify-center">
-            <p className="text-[13px] text-gray-300">אין פריטים דחופים</p>
-          </div>
-        )}
+          </button>
+        ))}
       </div>
+
+      {/* ── Urgent actions — moved here from the Insights page ──────────── */}
+      <UrgentActionsSection actions={urgentActions} />
 
       {/* ── זרם חי ───────────────────────────────────────────────────────── */}
       {liveItems.length > 0 && (
