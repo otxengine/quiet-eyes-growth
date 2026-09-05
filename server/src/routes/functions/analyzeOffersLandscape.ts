@@ -204,7 +204,8 @@ export async function getOffersLandscapeData(businessProfileId: string, force: b
     ...(stats || {
       total_offers: 0, peak_day: null, peak_day_count: 0, avg_interval_days: null,
       mechanic_breakdown: [], value_framing_breakdown: [], audience_intent_breakdown: [],
-      redemption_breakdown: [], urgency_pct: 0, conditions_pct: 0, in_image_pct: 0, performance: null,
+      redemption_breakdown: [], topic_breakdown: [], channel_breakdown: [],
+      urgency_pct: 0, conditions_pct: 0, in_image_pct: 0, performance: null,
     }),
     competitors_total: competitors.length,
     competitors_with_active_offer: activeCompetitorIds.size,

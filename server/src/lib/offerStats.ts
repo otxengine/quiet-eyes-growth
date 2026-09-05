@@ -51,6 +51,9 @@ export interface OfferStats {
   value_framing_breakdown: OfferBreakdownEntry[];
   audience_intent_breakdown: OfferBreakdownEntry[];
   redemption_breakdown: OfferBreakdownEntry[];
+  // Free-text `topic` the LLM gave each offer post/ad (e.g. "מבצע יין", "תפריט חדש")
+  // — not a fixed enum like the breakdowns above, so this can have many distinct values.
+  topic_breakdown: OfferBreakdownEntry[];
   // 'organic' (regular post) vs 'paid' (ad) — which channel offers actually run through.
   channel_breakdown: OfferBreakdownEntry[];
   urgency_pct: number;
@@ -75,9 +78,9 @@ function avg(arr: any[], key: string): number | null {
 
 /**
  * Computes the deterministic offer stats (peak day-of-week, average interval
- * between offers, mechanic/value-framing/audience-intent/redemption breakdowns,
- * urgency/conditions/in-image percentages, and offer-vs-regular-post performance)
- * from a pooled set of has_offer=true analyzed items.
+ * between offers, mechanic/value-framing/audience-intent/redemption/topic/channel
+ * breakdowns, urgency/conditions/in-image percentages, and offer-vs-regular-post
+ * performance) from a pooled set of has_offer=true analyzed items.
  *
  * @param offerItems Items where `a.has_offer` is true — the population the stats
  *   are computed over. May be from one competitor or pooled across many.
@@ -144,6 +147,7 @@ export function computeOfferStats(
     value_framing_breakdown: tally(offerItems, 'offer_value_framing'),
     audience_intent_breakdown: tally(offerItems, 'offer_audience_intent'),
     redemption_breakdown: tally(offerItems, 'offer_redemption').slice(0, 3),
+    topic_breakdown: tally(offerItems, 'topic'),
     channel_breakdown: channelBreakdown,
     urgency_pct: Math.round((urgencyCount / offerItems.length) * 100),
     conditions_pct: Math.round((conditionsCount / offerItems.length) * 100),

@@ -88,38 +88,53 @@ export default function OffersPillarSection({ businessProfile }) {
         )}
 
         {stats && (
-          <div className="flex flex-wrap gap-1.5 text-[10px]">
-            {stats.competitors_total > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                🏷️ {stats.competitors_with_active_offer}/{stats.competitors_total} מתחרים עם מבצע פעיל
-              </span>
+          <>
+            <div className="flex flex-wrap gap-1.5 text-[10px]">
+              {stats.competitors_total > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                  🏷️ {stats.competitors_with_active_offer}/{stats.competitors_total} מתחרים עם מבצע פעיל
+                </span>
+              )}
+              {stats.peak_day && (
+                <span className="px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                  📅 שיא ב{stats.peak_day} ({stats.peak_day_count}/{stats.total_offers})
+                </span>
+              )}
+              {stats.avg_interval_days != null && (
+                <span className="px-1.5 py-0.5 rounded-full bg-secondary text-foreground-muted">
+                  ⏱️ מבצע כל ~{stats.avg_interval_days} ימים
+                </span>
+              )}
+              {topMechanic && (
+                <span className="px-1.5 py-0.5 rounded-full bg-secondary text-foreground-muted">
+                  💰 {OFFER_MECHANIC_LABELS[topMechanic.value] || topMechanic.value} ({topMechanic.count}/{stats.total_offers})
+                </span>
+              )}
+              {stats.channel_breakdown?.length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-secondary text-foreground-muted">
+                  📢 {stats.channel_breakdown.map(c => `${CHANNEL_LABELS[c.value] || c.value} ${c.count}/${stats.total_offers}`).join(' · ')}
+                </span>
+              )}
+              {stats.urgency_pct > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+                  ⚡ {stats.urgency_pct}% עם תחושת דחיפות
+                </span>
+              )}
+            </div>
+
+            {stats.topic_breakdown?.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-[10px] font-semibold text-foreground-muted">נושאי המבצעים שזוהו</p>
+                <div className="flex flex-wrap gap-1.5 text-[10px]">
+                  {stats.topic_breakdown.map((t, i) => (
+                    <span key={i} className="px-1.5 py-0.5 rounded-full bg-secondary text-foreground-muted">
+                      {t.value} ({t.count})
+                    </span>
+                  ))}
+                </div>
+              </div>
             )}
-            {stats.peak_day && (
-              <span className="px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                📅 שיא ב{stats.peak_day} ({stats.peak_day_count}/{stats.total_offers})
-              </span>
-            )}
-            {stats.avg_interval_days != null && (
-              <span className="px-1.5 py-0.5 rounded-full bg-secondary text-foreground-muted">
-                ⏱️ מבצע כל ~{stats.avg_interval_days} ימים
-              </span>
-            )}
-            {topMechanic && (
-              <span className="px-1.5 py-0.5 rounded-full bg-secondary text-foreground-muted">
-                💰 {OFFER_MECHANIC_LABELS[topMechanic.value] || topMechanic.value} ({topMechanic.count}/{stats.total_offers})
-              </span>
-            )}
-            {stats.channel_breakdown?.length > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-secondary text-foreground-muted">
-                📢 {stats.channel_breakdown.map(c => `${CHANNEL_LABELS[c.value] || c.value} ${c.count}/${stats.total_offers}`).join(' · ')}
-              </span>
-            )}
-            {stats.urgency_pct > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
-                ⚡ {stats.urgency_pct}% עם תחושת דחיפות
-              </span>
-            )}
-          </div>
+          </>
         )}
       </div>
     </div>

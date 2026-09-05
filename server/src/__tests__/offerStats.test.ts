@@ -38,17 +38,18 @@ describe('computeOfferStats', () => {
     expect(result.avg_interval_days).toBeNull();
   });
 
-  test('tallies mechanic/value_framing/audience_intent/redemption breakdowns, sorted desc', () => {
+  test('tallies mechanic/value_framing/audience_intent/redemption/topic breakdowns, sorted desc', () => {
     const items: OfferAnalysisItem[] = [
-      post({ a: { has_offer: true, offer_mechanic: 'discount', offer_value_framing: 'savings', offer_audience_intent: 'new_customers', offer_redemption: 'in_store' } }),
-      post({ a: { has_offer: true, offer_mechanic: 'discount', offer_value_framing: 'savings', offer_audience_intent: 'existing_customers', offer_redemption: 'in_store' } }),
-      post({ a: { has_offer: true, offer_mechanic: 'bogo', offer_value_framing: 'urgency', offer_audience_intent: 'new_customers', offer_redemption: 'online' } }),
+      post({ a: { has_offer: true, offer_mechanic: 'discount', offer_value_framing: 'savings', offer_audience_intent: 'new_customers', offer_redemption: 'in_store', topic: 'מבצע יין' } }),
+      post({ a: { has_offer: true, offer_mechanic: 'discount', offer_value_framing: 'savings', offer_audience_intent: 'existing_customers', offer_redemption: 'in_store', topic: 'מבצע יין' } }),
+      post({ a: { has_offer: true, offer_mechanic: 'bogo', offer_value_framing: 'urgency', offer_audience_intent: 'new_customers', offer_redemption: 'online', topic: 'תפריט חדש' } }),
     ];
     const result = computeOfferStats(items, items)!;
     expect(result.mechanic_breakdown).toEqual([{ value: 'discount', count: 2 }, { value: 'bogo', count: 1 }]);
     expect(result.value_framing_breakdown[0]).toEqual({ value: 'savings', count: 2 });
     expect(result.audience_intent_breakdown[0]).toEqual({ value: 'new_customers', count: 2 });
     expect(result.redemption_breakdown[0]).toEqual({ value: 'in_store', count: 2 });
+    expect(result.topic_breakdown).toEqual([{ value: 'מבצע יין', count: 2 }, { value: 'תפריט חדש', count: 1 }]);
   });
 
   test('caps redemption_breakdown at top 3 entries', () => {
