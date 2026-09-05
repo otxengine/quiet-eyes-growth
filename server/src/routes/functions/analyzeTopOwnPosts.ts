@@ -36,6 +36,10 @@ export async function analyzeTopOwnPosts(req: Request, res: Response) {
       select: { id: true },
     });
     const ownedIds = new Set(owned.map(r => r.id));
+    // TEMP DEBUG — remove once root cause of empty `owned` is confirmed.
+    const debugCountByIdOnly = await prisma.businessPost.count({ where: { OR: ids.map((id: string) => ({ id })) } });
+    const debugCountByBizOnly = await prisma.businessPost.count({ where: { linked_business: businessProfileId } });
+    console.log('[analyzeTopOwnPosts DEBUG]', JSON.stringify({ businessProfileId, ids, ownedCount: owned.length, debugCountByIdOnly, debugCountByBizOnly }));
 
     let analyzed = 0, skipped = 0;
     for (const p of requested) {
@@ -78,7 +82,7 @@ export async function analyzeTopOwnPosts(req: Request, res: Response) {
       }
     }
 
-    return res.json({ analyzed, skipped, requested: posts.length, outlier_insight: outlierInsight });
+    return res.json({ analyzed, skipped, requested: posts.length, outlier_insight: outlierInsight, _debug: { businessProfileId, ids, ownedCount: owned.length, debugCountByIdOnly, debugCountByBizOnly } });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
