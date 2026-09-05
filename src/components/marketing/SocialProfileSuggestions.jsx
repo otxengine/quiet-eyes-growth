@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { X, Loader2, CheckCircle2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import {
@@ -271,6 +271,24 @@ function BioReviewModal({ platform, suggestion, loading, busy, onAccept, onRejec
   );
 }
 
+// Mirrors HealthScoreCard.jsx's inline ScoreBar (same color thresholds/style)
+// — kept as its own small copy here rather than a shared import, consistent
+// with how HealthScoreCard itself already exists as two independent copies.
+function ScoreBar({ label, value, max }) {
+  const pct = max ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+  const color = pct >= 75 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-400' : 'bg-red-400';
+  const textColor = pct >= 75 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-red-500';
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[11px] text-foreground-secondary w-24 shrink-0 text-right">{label}</span>
+      <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className={`text-[11px] font-bold w-10 text-right ${textColor}`}>{Math.round(value ?? 0)}/{max}</span>
+    </div>
+  );
+}
+
 /**
  * Combined "analyze profile" popup — one entry point covering both the bio
  * and the logo, each its own section with its own "generate a fix" action:
@@ -281,16 +299,32 @@ function BioReviewModal({ platform, suggestion, loading, busy, onAccept, onRejec
  *   exists for "is this logo good"); when it flags needs_redesign, its two
  *   generate buttons hand off to LogoReviewModal, same as before.
  */
-function ProfileAnalysisModal({ platform, bioReason, bioAccepted, logoCritique, logoLoading, onFixBio, onGenerateLogo, onClose }) {
+function ProfileAnalysisModal({ platform, bioReason, bioAccepted, logoCritique, logoLoading, onFixBio, onGenerateLogo, onClose, profileScore, profileScoreLoading }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40" dir="rtl">
       <div className="w-full max-w-lg bg-card rounded-t-2xl md:rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto">
         <div className="flex items-center gap-2 px-5 py-4 border-b border-border sticky top-0 bg-card z-10">
           <span className="text-[13px] font-semibold text-foreground">ניתוח פרופיל — {platform === 'instagram' ? 'אינסטגרם' : 'פייסבוק'}</span>
+          {profileScore && !profileScoreLoading && (
+            <span className="text-[13px] font-bold text-foreground-muted">{Math.round(profileScore.overall_score)}/100</span>
+          )}
           <button onClick={onClose} className="text-foreground-muted hover:text-foreground mr-auto"><X className="w-5 h-5" /></button>
         </div>
 
         <div className="p-5 space-y-5">
+          {profileScoreLoading && (
+            <div className="flex items-center justify-center h-10">
+              <Loader2 className="w-4 h-4 animate-spin text-foreground-muted" />
+            </div>
+          )}
+
+          {profileScore && !profileScoreLoading && (
+            <div className="space-y-1.5">
+              <ScoreBar label="מבנה ביו" value={profileScore.bio_structure_score} max={20} />
+              <ScoreBar label="שכנוע ובהירות" value={profileScore.bio_persuasiveness_score} max={30} />
+            </div>
+          )}
+
           {bioReason && (
             <div className="space-y-2">
               <p className="text-[11px] font-semibold text-foreground-muted">ביו</p>
@@ -307,6 +341,13 @@ function ProfileAnalysisModal({ platform, bioReason, bioAccepted, logoCritique, 
                   🔧 תקנו לי את הביו
                 </button>
               )}
+            </div>
+          )}
+
+          {profileScore && !profileScoreLoading && (
+            <div className="space-y-1.5">
+              <ScoreBar label="נוכחות תמונה" value={profileScore.picture_technical_score} max={20} />
+              <ScoreBar label="מקצועיות תמונה" value={profileScore.picture_professionalism_score} max={30} />
             </div>
           )}
 
@@ -366,6 +407,8 @@ function ProfileAnalysisModal({ platform, bioReason, bioAccepted, logoCritique, 
  */
 export default function SocialProfileSuggestions({ businessProfile, platform, onCreatePost }) {
   const bpId = businessProfile?.id;
+  const queryClient = useQueryClient();
+  const [profileScoreLoading, setProfileScoreLoading] = useState(false);
   // Single object, not an array — this component is already scoped to one
   // `platform`, so suggestBioFix/critiqueLogo only ever return one entry.
   const [bioState, setBioState] = useState({ loading: false, suggestion: null, accepted: false });
@@ -391,7 +434,15 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
     setProfileAnalysisOpen(false);
     setLogoGenState({});
     setLogoReviewPlatform(null);
+    setProfileScoreLoading(false);
   }, [platform]);
+
+  const { data: profileScoreRows = [] } = useQuery({
+    queryKey: ['profileScore', bpId, platform],
+    queryFn:  () => base44.entities.ProfileScore.filter({ linked_business: bpId, platform }, '-created_date', 1),
+    enabled:  !!bpId,
+  });
+  const profileScore = profileScoreRows[0] || null;
 
   const { data: competitors = [] } = useQuery({
     queryKey: ['socialCompetitors', bpId],
@@ -496,9 +547,21 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
     }
   };
 
+  const calculateProfileScoreNow = async () => {
+    setProfileScoreLoading(true);
+    try {
+      await base44.functions.invoke('calculateProfileScore', { businessProfileId: bpId, platform }, 60000);
+      queryClient.invalidateQueries({ queryKey: ['profileScore', bpId, platform] });
+    } catch (e) {
+      console.warn('[SocialProfileSuggestions] calculateProfileScoreNow failed:', e.message);
+    }
+    setProfileScoreLoading(false);
+  };
+
   const analyzeProfileNow = () => {
     setProfileAnalysisOpen(true);
     if (!logoCritique.critique) critiqueLogoNow();
+    calculateProfileScoreNow();
   };
 
   const generateLogoNow = async (critiquePlatform, feedback, styleArg) => {
@@ -569,6 +632,15 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
                 >
                   {logoCritique.critique || bioState.suggestion ? '🔎 צפו בניתוח' : '🔎 נתחו את הפרופיל שלי'}
                 </button>
+                {profileScore && (
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                    profileScore.overall_score >= 75 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
+                    : profileScore.overall_score >= 50 ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400'
+                    : 'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400'
+                  }`}>
+                    {Math.round(profileScore.overall_score)}/100
+                  </span>
+                )}
                 {bioState.accepted && (
                   <span className="flex items-center gap-1 text-[11px] font-medium text-green-700 dark:text-green-400">
                     <CheckCircle2 className="w-3.5 h-3.5" /> הביו אושר
@@ -641,6 +713,8 @@ export default function SocialProfileSuggestions({ businessProfile, platform, on
           onFixBio={() => fixBioNow()}
           onGenerateLogo={(style) => generateLogoNow(platform, undefined, style)}
           onClose={() => setProfileAnalysisOpen(false)}
+          profileScore={profileScore}
+          profileScoreLoading={profileScoreLoading}
         />
       )}
 

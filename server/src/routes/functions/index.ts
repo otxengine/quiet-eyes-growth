@@ -144,6 +144,7 @@ import { analyzeBioProfiles } from './analyzeBioProfiles';
 import { suggestBioFix } from './suggestBioFix';
 import { analyzeLogoTrends } from './analyzeLogoTrends';
 import { critiqueLogo } from './critiqueLogo';
+import { calculateProfileScore } from './calculateProfileScore';
 import { generateLogo } from './generateLogo';
 import { reviewSuggestedLogo } from './reviewSuggestedLogo';
 import { reviewSuggestedBio } from './reviewSuggestedBio';
@@ -306,6 +307,7 @@ const FUNCTION_MAP: Record<string, any> = {
   suggestBioFix,
   analyzeLogoTrends,
   critiqueLogo,
+  calculateProfileScore,
   generateLogo,
   reviewSuggestedLogo,
   reviewSuggestedBio,
