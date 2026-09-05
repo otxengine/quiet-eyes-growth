@@ -23,10 +23,15 @@ export async function analyzeTopOwnPosts(req: Request, res: Response) {
     const ids = requested.map((p: any) => p.id);
     const multById = new Map(requested.map((p: any) => [p.id, Number(p.engagementMultiple) || 2]));
 
-    const owned = await (prisma as any).$queryRawUnsafe(
-      `SELECT id FROM business_posts WHERE linked_business = $1 AND id = ANY($2::text[])`,
-      businessProfileId, ids,
-    ) as { id: string }[];
+    // Typed Prisma, not raw SQL — this only selects `id` (clean cuid text), so
+    // it doesn't need the invalid-byte-sequence workaround other queries in
+    // this codebase use for TEXT columns with scraped caption/analysis content.
+    // (A raw $queryRawUnsafe version of this exact query silently returned zero
+    // rows in production despite matching rows existing — confirmed live.)
+    const owned = await prisma.businessPost.findMany({
+      where: { linked_business: businessProfileId, id: { in: ids } },
+      select: { id: true },
+    });
     const ownedIds = new Set(owned.map(r => r.id));
 
     let analyzed = 0, skipped = 0;
@@ -40,10 +45,10 @@ export async function analyzeTopOwnPosts(req: Request, res: Response) {
     // Synthesize a cross-post insight for this business's own outlier set.
     let outlierInsight: string | null = null;
     if (ownedIds.size) {
-      const rows = await (prisma as any).$queryRawUnsafe(
-        `SELECT id, platform, analysis FROM business_posts WHERE id = ANY($1::text[])`,
-        [...ownedIds],
-      ) as { id: string; platform: string; analysis: string | null }[];
+      const rows = await prisma.businessPost.findMany({
+        where: { id: { in: [...ownedIds] } },
+        select: { id: true, platform: true, analysis: true },
+      });
 
       const summaries: OutlierPostSummary[] = rows.flatMap(r => {
         let a: any = null;

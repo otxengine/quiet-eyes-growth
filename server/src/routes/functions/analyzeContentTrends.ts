@@ -24,12 +24,17 @@ export async function analyzeContentTrends(req: Request, res: Response) {
     const ids = requested.map((p: any) => p.id);
     const multById = new Map(requested.map((p: any) => [p.id, Number(p.engagementMultiple) || 2]));
 
-    const owned = await (prisma as any).$queryRawUnsafe(
-      `SELECT p.id FROM competitor_posts p
-       JOIN competitors c ON c.id = p.competitor_id
-       WHERE p.linked_business = $1 AND p.id = ANY($2::text[]) AND c.tracking_status = 'approved'`,
-      businessProfileId, ids,
-    ) as { id: string }[];
+    // Typed Prisma, not raw SQL — see analyzeTopOwnPosts.ts for why: a raw
+    // $queryRawUnsafe version of this exact ownership check silently returned
+    // zero rows in production despite matching rows existing (confirmed live).
+    const owned = await prisma.competitorPost.findMany({
+      where: {
+        linked_business: businessProfileId,
+        id: { in: ids },
+        competitor: { tracking_status: 'approved' },
+      },
+      select: { id: true },
+    });
     const ownedIds = new Set(owned.map(r => r.id));
 
     let analyzed = 0, skipped = 0;
@@ -44,12 +49,11 @@ export async function analyzeContentTrends(req: Request, res: Response) {
     let visualInsight: string | null = null;
     let copyExamples: { competitorName: string; text: string }[] = [];
     if (ownedIds.size) {
-      const rows = await (prisma as any).$queryRawUnsafe(
-        `SELECT p.id, p.platform, p.analysis, c.name AS competitor_name
-         FROM competitor_posts p JOIN competitors c ON c.id = p.competitor_id
-         WHERE p.id = ANY($1::text[])`,
-        [...ownedIds],
-      ) as { id: string; platform: string; analysis: string | null; competitor_name: string }[];
+      const postRows = await prisma.competitorPost.findMany({
+        where: { id: { in: [...ownedIds] } },
+        select: { id: true, platform: true, analysis: true, competitor: { select: { name: true } } },
+      });
+      const rows = postRows.map(r => ({ id: r.id, platform: r.platform, analysis: r.analysis, competitor_name: r.competitor.name }));
 
       const summaries: ContentTrendPostSummary[] = rows.flatMap(r => {
         let a: any = null;
