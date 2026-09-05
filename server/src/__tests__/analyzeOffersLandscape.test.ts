@@ -36,6 +36,7 @@ test('cache-hit path: fresh insight within 48h returns cached without recomputin
   (prisma.businessProfile.findUnique as jest.Mock).mockResolvedValue({
     offers_landscape_insight: 'תובנה קיימת',
     offers_landscape_stats: JSON.stringify({ total_offers: 3 }),
+    offers_landscape_examples: JSON.stringify([{ competitorName: 'מתחרה א', offer_details: 'הנחה 20%', date: '2024-01-01' }]),
     offers_landscape_insight_at: new Date().toISOString(), // just computed, well within 48h
   });
 
@@ -48,6 +49,7 @@ test('cache-hit path: fresh insight within 48h returns cached without recomputin
   expect(res.json).toHaveBeenCalledWith({
     insight: 'תובנה קיימת',
     stats: { total_offers: 3 },
+    examples: [{ competitorName: 'מתחרה א', offer_details: 'הנחה 20%', date: '2024-01-01' }],
     cached: true,
   });
 });
@@ -80,7 +82,11 @@ test('force bypasses a fresh cache and recomputes', async () => {
     where: { id: 'bp-1' },
     data: expect.objectContaining({ offers_landscape_insight: 'נרטיב חדש' }),
   }));
-  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ insight: 'נרטיב חדש', cached: false }));
+  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+    insight: 'נרטיב חדש',
+    cached: false,
+    examples: [expect.objectContaining({ competitorName: 'מתחרה א', offer_details: 'הנחה 20%' })],
+  }));
 });
 
 test('zero-competitor edge case returns a null result without throwing', async () => {
@@ -98,7 +104,7 @@ test('zero-competitor edge case returns a null result without throwing', async (
   expect(queryRawUnsafe).not.toHaveBeenCalled();
   expect(synthesizeOffersLandscape).not.toHaveBeenCalled();
   expect(prisma.businessProfile.update).not.toHaveBeenCalled();
-  expect(res.json).toHaveBeenCalledWith({ insight: null, stats: null, cached: false });
+  expect(res.json).toHaveBeenCalledWith({ insight: null, stats: null, examples: [], cached: false });
   expect(res.status).not.toHaveBeenCalledWith(500);
 });
 

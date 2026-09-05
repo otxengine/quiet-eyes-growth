@@ -63,7 +63,10 @@ function pickExamples(items: LandscapeItem[], limit = 4): OffersLandscapeExample
 export async function getOffersLandscapeData(businessProfileId: string, force: boolean) {
   const bp = await prisma.businessProfile.findUnique({
     where: { id: businessProfileId },
-    select: { offers_landscape_insight: true, offers_landscape_stats: true, offers_landscape_insight_at: true },
+    select: {
+      offers_landscape_insight: true, offers_landscape_stats: true,
+      offers_landscape_examples: true, offers_landscape_insight_at: true,
+    },
   });
 
   if (!force && bp?.offers_landscape_insight_at) {
@@ -72,6 +75,7 @@ export async function getOffersLandscapeData(businessProfileId: string, force: b
       return {
         insight: bp.offers_landscape_insight,
         stats: bp.offers_landscape_stats ? JSON.parse(bp.offers_landscape_stats) : null,
+        examples: bp.offers_landscape_examples ? JSON.parse(bp.offers_landscape_examples) : [],
         cached: true,
       };
     }
@@ -84,7 +88,7 @@ export async function getOffersLandscapeData(businessProfileId: string, force: b
   });
 
   if (competitors.length === 0) {
-    return { insight: null, stats: null, cached: false };
+    return { insight: null, stats: null, examples: [], cached: false };
   }
 
   const competitorIds = competitors.map(c => c.id);
@@ -178,11 +182,12 @@ export async function getOffersLandscapeData(businessProfileId: string, force: b
     data: {
       offers_landscape_insight: insight,
       offers_landscape_stats: JSON.stringify(finalStats),
+      offers_landscape_examples: JSON.stringify(examples),
       offers_landscape_insight_at: analyzedAt,
     },
   });
 
-  return { insight, stats: finalStats, cached: false };
+  return { insight, stats: finalStats, examples, cached: false };
 }
 
 /** POST /api/functions/analyzeOffersLandscape — pooled cross-competitor offer

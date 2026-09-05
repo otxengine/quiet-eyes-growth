@@ -158,6 +158,7 @@ model BusinessProfile {
   offers_landscape_stats       String?  // JSON: {competitors_total, competitors_with_active_offer, active_offer_pct,
                                          //   mechanic_breakdown, peak_day, peak_day_count, avg_interval_days,
                                          //   urgency_pct, conditions_pct, per_competitor:[...]}
+  offers_landscape_examples    String?  // JSON array of {competitorName, offer_details, date} — real verbatim offers exemplifying offers_landscape_insight
   offers_landscape_insight_at  String?  // ISO timestamp
 
   @@map("business_profiles")
@@ -476,6 +477,27 @@ model HealthScore {
   reviews_needed_for_top3  Float?
 
   @@map("health_scores")
+}
+
+// Per-platform 0-100 score for a business's own social profile (bio + profile
+// picture), broken into deterministic + LLM-judged categories — see
+// calculateProfileScore.ts. Unlike HealthScore this is per-platform, matching
+// BusinessSocialProfile's own per-platform shape.
+model ProfileScore {
+  id                             String   @id @default(cuid())
+  created_date                   DateTime @default(now())
+  linked_business                String
+  platform                       String   // instagram|facebook|tiktok
+  overall_score                  Float
+  bio_structure_score            Float?
+  bio_persuasiveness_score       Float?
+  picture_technical_score        Float?
+  picture_professionalism_score  Float?
+  improvements                   String?  // JSON.stringify'd array of {area, text}
+  snapshot_date                  String?  // ISO timestamp
+
+  @@unique([linked_business, platform])
+  @@map("profile_scores")
 }
 
 model OutcomeLog {

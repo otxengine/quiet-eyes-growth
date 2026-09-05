@@ -21,6 +21,10 @@ export default function OffersPillarSection({ businessProfile }) {
     try { return businessProfile?.offers_landscape_stats ? JSON.parse(businessProfile.offers_landscape_stats) : null; }
     catch { return null; }
   }, [businessProfile?.offers_landscape_stats]);
+  const examples = useMemo(() => {
+    try { return businessProfile?.offers_landscape_examples ? JSON.parse(businessProfile.offers_landscape_examples) : []; }
+    catch { return []; }
+  }, [businessProfile?.offers_landscape_examples]);
 
   const { refreshing, manualRefresh } = useStaleInsight({
     value: insight,
@@ -47,6 +51,16 @@ export default function OffersPillarSection({ businessProfile }) {
 
       <div className="p-5 space-y-3">
         {insight && <p className="text-[13px] leading-relaxed text-foreground">{insight}</p>}
+
+        {examples.length > 0 && (
+          <ul className="space-y-1">
+            {examples.slice(0, 4).map((ex, i) => (
+              <li key={i} className="text-[11px] text-foreground-muted">
+                <span className="font-semibold">{ex.competitorName}</span> ({ex.date}): "{ex.offer_details}"
+              </li>
+            ))}
+          </ul>
+        )}
 
         {stats && (
           <div className="flex flex-wrap gap-1.5 text-[10px]">
