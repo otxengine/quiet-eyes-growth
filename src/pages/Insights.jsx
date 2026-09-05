@@ -13,7 +13,6 @@ import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
 import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
 import DataTable from '@/components/shared/DataTable';
-import DailyBriefPanel from '@/components/dashboard/DailyBriefPanel';
 import SignalCard from '@/components/intelligence/SignalCard';
 import AiInsightBox from '@/components/ai/AiInsightBox';
 import WeeklyReportsTab from '@/components/intelligence/WeeklyReportsTab';
@@ -787,8 +786,6 @@ export default function Insights() {
   return (
     <div className="space-y-5">
       <PageHeader count={freshRows.length} title="תובנות" />
-
-      <DailyBriefPanel businessProfile={businessProfile} />
 
       <SocialPillarSection businessProfile={businessProfile} />
 
