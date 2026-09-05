@@ -154,7 +154,9 @@ model BusinessProfile {
   competitor_reviews_pillar_stats       String?  // JSON: [{theme, positive, negative, neutral, total, competitors_mentioning}]
   competitor_reviews_pillar_insight_at  String?  // ISO timestamp
   // ── Offers pillar (Insights page) ────────────────────────────────────
-  offers_landscape_insight     String?  // 2-4 sentences (Hebrew) — pooled promo cadence/mechanic/timing narrative
+  offers_landscape_insight     String?  // JSON: {active_offer_prevalence, mechanism_breakdown, distribution_channel,
+                                         //   timing_cadence, value_framing, urgency_scarcity, conditions_restrictions}
+                                         //   — each a short Hebrew sentence or null (see OFFERS_LANDSCAPE_TOPICS)
   offers_landscape_stats       String?  // JSON: {competitors_total, competitors_with_active_offer, active_offer_pct,
                                          //   mechanic_breakdown, peak_day, peak_day_count, avg_interval_days,
                                          //   urgency_pct, conditions_pct, per_competitor:[...]}

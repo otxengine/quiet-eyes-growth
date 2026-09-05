@@ -110,7 +110,7 @@ export async function getOffersLandscapeData(businessProfileId: string, force: b
     const age = Date.now() - new Date(bp.offers_landscape_insight_at).getTime();
     if (age < PER_COMP_INTERVAL_MS) {
       return {
-        insight: bp.offers_landscape_insight,
+        insight: bp.offers_landscape_insight ? JSON.parse(bp.offers_landscape_insight) : null,
         stats: bp.offers_landscape_stats ? JSON.parse(bp.offers_landscape_stats) : null,
         examples: bp.offers_landscape_examples ? JSON.parse(bp.offers_landscape_examples) : [],
         cached: true,
@@ -220,7 +220,7 @@ export async function getOffersLandscapeData(businessProfileId: string, force: b
   await prisma.businessProfile.update({
     where: { id: businessProfileId },
     data: {
-      offers_landscape_insight: insight,
+      offers_landscape_insight: insight ? JSON.stringify(insight) : null,
       offers_landscape_stats: JSON.stringify(finalStats),
       offers_landscape_examples: JSON.stringify(examples),
       offers_landscape_insight_at: analyzedAt,

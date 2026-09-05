@@ -39,11 +39,28 @@ function topEntries(breakdown: OfferBreakdownEntryLike[], total: number, limit =
   return breakdown.slice(0, limit).map(e => `${labels?.[e.value] || e.value} (${e.count}/${total})`).join(', ');
 }
 
+// The 7 topics the offer landscape is broken into — one short grounded sentence
+// each, instead of one merged paragraph. Order here is the order shown in the UI.
+export const OFFERS_LANDSCAPE_TOPICS = [
+  'active_offer_prevalence',
+  'mechanism_breakdown',
+  'distribution_channel',
+  'timing_cadence',
+  'value_framing',
+  'urgency_scarcity',
+  'conditions_restrictions',
+] as const;
+
+export type OffersLandscapeTopic = typeof OFFERS_LANDSCAPE_TOPICS[number];
+export type OffersLandscapeInsight = Record<OffersLandscapeTopic, string | null>;
+
 /**
- * Synthesizes ONE elaborated Hebrew narrative describing the offer landscape
- * pooled across ALL of a business's tracked competitors — not just "X% have an
- * active offer" but what kinds of offers (top mechanics), when they run (peak
- * day/cadence), and through which channel (organic posts vs paid ads).
+ * Synthesizes the offer landscape pooled across ALL of a business's tracked
+ * competitors as 7 separate topic sentences (active-offer prevalence, offer
+ * mechanism breakdown, distribution channel, timing/cadence, value framing,
+ * urgency/scarcity, conditions/restrictions) instead of one merged paragraph
+ * — each topic is null when there isn't enough data for it, rather than the
+ * LLM forcing a claim.
  *
  * Same "rollup is authoritative, LLM narrative is gloss only" discipline used
  * elsewhere in this codebase (see computeThemeRollup / getCompetitorReviewInsights):
@@ -54,7 +71,7 @@ function topEntries(breakdown: OfferBreakdownEntryLike[], total: number, limit =
 export async function synthesizeOffersLandscape(
   stats: PooledOfferStats | null,
   examples: OffersLandscapeExample[],
-): Promise<string | null> {
+): Promise<OffersLandscapeInsight | null> {
   if (!stats || !stats.total_offers) return null;
 
   try {
@@ -76,7 +93,7 @@ export async function synthesizeOffersLandscape(
 
     const result = await invokeLLM({
       model: 'sonnet',
-      maxTokens: 600,
+      maxTokens: 700,
       skipCache: true,
       response_json_schema: { type: 'object' },
       prompt: `You are a marketing analyst. Below is the DETERMINISTIC, pre-computed offer landscape pooled across ALL of a business's tracked competitors (these numbers are ground truth — do not invent or contradict them), plus a few real example offers:
@@ -86,11 +103,26 @@ ${statsSummary}
 Real examples:
 ${examplesSummary}
 
-Return ONLY valid JSON. The string value MUST be in Hebrew:
-{"insight": "A short elaborated paragraph (5-8 sentences) covering, as separate points grounded in the numbers above: (1) what TYPES of offers competitors run — name the top mechanics with their share, not just the single most common one; (2) WHEN offers happen — peak day and typical cadence/interval between offers; (3) WHICH CHANNEL offers run through — organic posts vs paid ads, and what that split suggests; (4) how offers are framed — value framing, urgency/scarcity use, and any conditions; (5) what share of competitors currently have an active offer running. Do not fabricate any number or detail beyond what's given. If a dimension has too little data for a real pattern (e.g. only one channel present, or too few offers for cadence), say so honestly for that point instead of forcing a conclusion — but still cover the dimensions where data exists."}`,
+Return ONLY valid JSON with exactly these 7 keys, each a SHORT standalone Hebrew sentence (1-2 sentences) grounded strictly in the numbers above — not one merged paragraph, each key covers only its own topic:
+{
+  "active_offer_prevalence": "what share of competitors currently have an active offer running",
+  "mechanism_breakdown": "the top offer mechanics/types with their share — name more than just the single most common one when the data supports it",
+  "distribution_channel": "organic posts vs paid ads split, and what that suggests",
+  "timing_cadence": "peak day and typical interval/cadence between offers",
+  "value_framing": "relative vs absolute value framing split",
+  "urgency_scarcity": "share of offers using urgency/scarcity framing",
+  "conditions_restrictions": "share of offers with restrictive conditions (minimum purchase, code, exclusions)"
+}
+If a specific topic has too little data for a real pattern (e.g. no dated offers for cadence, or only one channel present), set that key to null instead of forcing a claim — but still fill in every topic where data exists. Do not fabricate any number or detail beyond what's given above.`,
     });
 
-    return typeof result?.insight === 'string' && result.insight.trim() ? result.insight.trim() : null;
+    if (!result || typeof result !== 'object') return null;
+    const insight = {} as OffersLandscapeInsight;
+    for (const topic of OFFERS_LANDSCAPE_TOPICS) {
+      const v = result[topic];
+      insight[topic] = typeof v === 'string' && v.trim() ? v.trim() : null;
+    }
+    return Object.values(insight).some(v => v) ? insight : null;
   } catch (err: any) {
     console.warn('[synthesizeOffersLandscape] failed:', err.message);
     return null;

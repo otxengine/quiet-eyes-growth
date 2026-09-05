@@ -33,8 +33,9 @@ beforeEach(() => {
 });
 
 test('cache-hit path: fresh insight within 48h returns cached without recomputing', async () => {
+  const cachedInsight = { active_offer_prevalence: 'תובנה קיימת', mechanism_breakdown: null, distribution_channel: null, timing_cadence: null, value_framing: null, urgency_scarcity: null, conditions_restrictions: null };
   (prisma.businessProfile.findUnique as jest.Mock).mockResolvedValue({
-    offers_landscape_insight: 'תובנה קיימת',
+    offers_landscape_insight: JSON.stringify(cachedInsight),
     offers_landscape_stats: JSON.stringify({ total_offers: 3 }),
     offers_landscape_examples: JSON.stringify([{ competitorName: 'מתחרה א', offer_details: 'הנחה 20%', date: '2024-01-01' }]),
     offers_landscape_insight_at: new Date().toISOString(), // just computed, well within 48h
@@ -47,7 +48,7 @@ test('cache-hit path: fresh insight within 48h returns cached without recomputin
   expect(prisma.competitor.findMany).not.toHaveBeenCalled();
   expect(queryRawUnsafe).not.toHaveBeenCalled();
   expect(res.json).toHaveBeenCalledWith({
-    insight: 'תובנה קיימת',
+    insight: cachedInsight,
     stats: { total_offers: 3 },
     examples: [{ competitorName: 'מתחרה א', offer_details: 'הנחה 20%', date: '2024-01-01' }],
     cached: true,
@@ -73,7 +74,11 @@ test('force bypasses a fresh cache and recomputes', async () => {
       },
     ])
     .mockResolvedValueOnce([]); // ads
-  (synthesizeOffersLandscape as jest.Mock).mockResolvedValue('נרטיב חדש');
+  const newInsight = {
+    active_offer_prevalence: 'תובנה חדשה', mechanism_breakdown: null, distribution_channel: null,
+    timing_cadence: null, value_framing: null, urgency_scarcity: null, conditions_restrictions: null,
+  };
+  (synthesizeOffersLandscape as jest.Mock).mockResolvedValue(newInsight);
 
   const req: any = { body: { businessProfileId: 'bp-1', force: true } };
   const res = mockRes();
@@ -84,10 +89,10 @@ test('force bypasses a fresh cache and recomputes', async () => {
   expect(synthesizeOffersLandscape).toHaveBeenCalled();
   expect(prisma.businessProfile.update).toHaveBeenCalledWith(expect.objectContaining({
     where: { id: 'bp-1' },
-    data: expect.objectContaining({ offers_landscape_insight: 'נרטיב חדש' }),
+    data: expect.objectContaining({ offers_landscape_insight: JSON.stringify(newInsight) }),
   }));
   expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-    insight: 'נרטיב חדש',
+    insight: newInsight,
     cached: false,
     examples: [expect.objectContaining({
       competitorName: 'מתחרה א', offer_details: 'הנחה 20%',

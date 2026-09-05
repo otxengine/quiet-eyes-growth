@@ -7,6 +7,19 @@ import { OFFER_MECHANIC_LABELS, CHANNEL_LABELS } from '@/lib/offerLabels';
 import { PostDetailModal, AdDetailModal } from '@/components/competitors/socialShared';
 import PillarRefreshBadge from './PillarRefreshBadge';
 
+// Mirrors OFFERS_LANDSCAPE_TOPICS in server/src/lib/synthesizeOffersLandscape.ts —
+// same 7 keys, same order, so each topic gets its own labeled line instead of
+// one merged paragraph.
+const INSIGHT_TOPICS = [
+  { key: 'active_offer_prevalence', label: '🏷️ שיעור מבצעים פעילים' },
+  { key: 'mechanism_breakdown',     label: '💰 סוגי מבצעים' },
+  { key: 'distribution_channel',    label: '📢 ערוץ הפצה' },
+  { key: 'timing_cadence',          label: '📅 תזמון ותדירות' },
+  { key: 'value_framing',           label: '🔖 מסגור ערך' },
+  { key: 'urgency_scarcity',        label: '⚡ דחיפות ומחסור' },
+  { key: 'conditions_restrictions', label: '⚠️ תנאים והגבלות' },
+];
+
 /**
  * "מבצעי מתחרים" — pooled cross-competitor offers landscape narrative +
  * deterministic stat chips (BusinessProfile.offers_landscape_*). Auto-
@@ -53,7 +66,16 @@ export default function OffersPillarSection({ businessProfile }) {
       </div>
 
       <div className="p-5 space-y-3">
-        {insight && <p className="text-[13px] leading-relaxed text-foreground">{insight}</p>}
+        {insight && (
+          <div className="space-y-2">
+            {INSIGHT_TOPICS.map(({ key, label }) => insight[key] && (
+              <div key={key}>
+                <p className="text-[11px] font-semibold text-foreground-muted">{label}</p>
+                <p className="text-[13px] leading-relaxed text-foreground">{insight[key]}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
         {examples.length > 0 && (
           <div className="space-y-1">
