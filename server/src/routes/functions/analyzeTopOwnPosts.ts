@@ -26,10 +26,13 @@ export async function analyzeTopOwnPosts(req: Request, res: Response) {
     // Typed Prisma, not raw SQL — this only selects `id` (clean cuid text), so
     // it doesn't need the invalid-byte-sequence workaround other queries in
     // this codebase use for TEXT columns with scraped caption/analysis content.
-    // (A raw $queryRawUnsafe version of this exact query silently returned zero
-    // rows in production despite matching rows existing — confirmed live.)
+    // Also avoid `id: { in: ids } }` — Prisma compiles that to an `= ANY($N)`
+    // array-bind param, which silently returned zero rows in production here
+    // (both as raw SQL and as typed Prisma) — looks like Supabase's PgBouncer
+    // transaction-pooling mishandling array-bound params. `OR` of equality
+    // checks sidesteps that wire path entirely — confirmed live.
     const owned = await prisma.businessPost.findMany({
-      where: { linked_business: businessProfileId, id: { in: ids } },
+      where: { linked_business: businessProfileId, OR: ids.map((id: string) => ({ id })) },
       select: { id: true },
     });
     const ownedIds = new Set(owned.map(r => r.id));
@@ -46,7 +49,7 @@ export async function analyzeTopOwnPosts(req: Request, res: Response) {
     let outlierInsight: string | null = null;
     if (ownedIds.size) {
       const rows = await prisma.businessPost.findMany({
-        where: { id: { in: [...ownedIds] } },
+        where: { OR: [...ownedIds].map(id => ({ id })) },
         select: { id: true, platform: true, analysis: true },
       });
 

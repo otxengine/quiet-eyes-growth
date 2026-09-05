@@ -24,13 +24,16 @@ export async function analyzeContentTrends(req: Request, res: Response) {
     const ids = requested.map((p: any) => p.id);
     const multById = new Map(requested.map((p: any) => [p.id, Number(p.engagementMultiple) || 2]));
 
-    // Typed Prisma, not raw SQL — see analyzeTopOwnPosts.ts for why: a raw
-    // $queryRawUnsafe version of this exact ownership check silently returned
-    // zero rows in production despite matching rows existing (confirmed live).
+    // Typed Prisma, not raw SQL — see analyzeTopOwnPosts.ts for why. Also
+    // avoid `id: { in: ids } }` there and here — it compiles to an `= ANY($N)`
+    // array-bind param, which silently returned zero rows in production
+    // (both as raw SQL and as typed Prisma) — looks like Supabase's PgBouncer
+    // transaction-pooling mishandling array-bound params. `OR` of equality
+    // checks sidesteps that wire path entirely — confirmed live.
     const owned = await prisma.competitorPost.findMany({
       where: {
         linked_business: businessProfileId,
-        id: { in: ids },
+        OR: ids.map((id: string) => ({ id })),
         competitor: { tracking_status: 'approved' },
       },
       select: { id: true },
@@ -50,7 +53,7 @@ export async function analyzeContentTrends(req: Request, res: Response) {
     let copyExamples: { competitorName: string; text: string }[] = [];
     if (ownedIds.size) {
       const postRows = await prisma.competitorPost.findMany({
-        where: { id: { in: [...ownedIds] } },
+        where: { OR: [...ownedIds].map(id => ({ id })) },
         select: { id: true, platform: true, analysis: true, competitor: { select: { name: true } } },
       });
       const rows = postRows.map(r => ({ id: r.id, platform: r.platform, analysis: r.analysis, competitor_name: r.competitor.name }));
