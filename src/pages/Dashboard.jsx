@@ -297,10 +297,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Daily Brief ────────────────────────────────────────────────────── */}
-      <DailyBriefPanel businessProfile={businessProfile} />
-
       {/* ── Chat thread ────────────────────────────────────────────────────── */}
+      {/* Rendered right under the hero input, before the Daily Brief, so a
+          sent message doesn't appear to vanish below the brief panel. */}
       {messages.length > 0 && (
         <div className="flex flex-col gap-3">
           {messages.map((msg, i) => (
@@ -398,6 +397,9 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* ── Daily Brief ────────────────────────────────────────────────────── */}
+      <DailyBriefPanel businessProfile={businessProfile} />
 
       {/* ── 2×2 Shortcuts ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3">
