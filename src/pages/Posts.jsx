@@ -151,7 +151,9 @@ function OrganicPostDetailModal({ post, businessProfile, onClose, onToggleApprov
   }, [businessProfile?.id, post.platform, post.post_type, content]);
 
   const handlePickFromLibrary = (asset) => {
-    const src = asset.url || (asset.image_base64 ? `data:${asset.mime_type || 'image/jpeg'};base64,${asset.image_base64}` : '');
+    // The S3 bucket is private — serve S3-backed assets through the proxy
+    // (matches MediaLibrary.jsx's assetSrc), never the raw (inaccessible) S3 URL.
+    const src = asset.url ? `${_apiBase}/social/media/${asset.id}` : (asset.image_base64 ? `data:${asset.mime_type || 'image/jpeg'};base64,${asset.image_base64}` : '');
     if (!src) return;
     setImageUrl(src);
     setMediaId(asset.id);
@@ -673,7 +675,9 @@ function OrganicCreateDrawer({ businessProfile, signalContext, audienceData, rec
   const fileRef = useRef(null);
 
   const handlePickFromLibrary = (asset) => {
-    const src = asset.url || (asset.image_base64 ? `data:${asset.mime_type || 'image/jpeg'};base64,${asset.image_base64}` : '');
+    // The S3 bucket is private — serve S3-backed assets through the proxy
+    // (matches MediaLibrary.jsx's assetSrc), never the raw (inaccessible) S3 URL.
+    const src = asset.url ? `${_apiBase}/social/media/${asset.id}` : (asset.image_base64 ? `data:${asset.mime_type || 'image/jpeg'};base64,${asset.image_base64}` : '');
     if (!src) return;
     setImageUrl(src);
     setMediaId(asset.id);
