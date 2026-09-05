@@ -80,19 +80,13 @@ export default function OffersPillarSection({ businessProfile }) {
                   {isOpen && (
                     <div className="border-t border-border/60 p-2.5 space-y-2 bg-muted/20">
                       {thumb && (
-                        ex.video_url ? (
-                          <video
-                            src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(thumb)}`}
-                            className="w-full max-h-56 rounded object-cover"
-                            controls muted
-                          />
-                        ) : (
-                          <img
-                            src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(thumb)}`}
-                            alt=""
-                            className="w-full max-h-56 rounded object-cover"
-                          />
-                        )
+                        <img
+                          src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(thumb)}`}
+                          alt=""
+                          className="w-full max-h-56 rounded object-cover"
+                          loading="lazy"
+                          onError={e => { e.currentTarget.style.display = 'none'; }}
+                        />
                       )}
                       <div className="flex items-center gap-2 text-[10px] flex-wrap">
                         <span className={`px-1.5 py-0.5 rounded ${PLATFORM_COLORS[ex.platform] || 'bg-gray-100 text-gray-700'}`}>
