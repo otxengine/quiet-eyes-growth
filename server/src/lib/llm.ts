@@ -76,8 +76,8 @@ export interface LLMOptions {
   usePromptCache?: boolean;
   costTrackingId?: string;
   /**
-   * Optional image to send alongside the prompt (vision). Anthropic and Gemini
-   * both support it; the OpenAI fallback ignores it (text-only last resort).
+   * Optional image to send alongside the prompt (vision). Anthropic, Gemini,
+   * and the OpenAI fallback (gpt-4o-mini) all support it.
    */
   imageBase64?: string;
   imageMediaType?: string; // e.g. 'image/jpeg' — defaults to 'image/jpeg'
@@ -155,8 +155,8 @@ async function _invokeLLMRaw(
       return await _callGemini(prompt, modelId, maxTokens, response_json_schema, imageBase64, imageMediaType);
     } catch (err: any) {
       console.warn('[invokeLLM] Gemini failed, trying OpenAI fallback:', err.message);
-      if (process.env.OPENAI_API_KEY && !imageBase64) {
-        return await _callOpenAI(prompt, response_json_schema, maxTokens);
+      if (process.env.OPENAI_API_KEY) {
+        return await _callOpenAI(prompt, response_json_schema, maxTokens, imageBase64, imageMediaType);
       }
       throw err;
     }
@@ -188,19 +188,17 @@ async function _invokeLLMRaw(
     }
   }
 
-  // Fallback: OpenAI GPT-4o-mini (cheaper than GPT-4o) — text-only, so it's skipped
-  // for vision calls (it would silently hallucinate a description instead of seeing the image).
-  if (process.env.OPENAI_API_KEY && !imageBase64) {
+  // Fallback: OpenAI GPT-4o-mini (cheaper than GPT-4o) — also vision-capable via
+  // the Chat Completions image_url content part, so it covers imageBase64 calls too.
+  if (process.env.OPENAI_API_KEY) {
     try {
-      return await _callOpenAI(prompt, response_json_schema, maxTokens);
+      return await _callOpenAI(prompt, response_json_schema, maxTokens, imageBase64, imageMediaType);
     } catch (err: any) {
       console.warn('[invokeLLM] OpenAI fallback also failed:', err.message);
     }
   }
 
-  throw new Error(imageBase64
-    ? 'No vision-capable AI provider available — Anthropic and Gemini both failed (OpenAI fallback is text-only, skipped)'
-    : 'No AI provider available — set ANTHROPIC_API_KEY, GEMINI_API_KEY, or OPENAI_API_KEY');
+  throw new Error('No AI provider available — set ANTHROPIC_API_KEY, GEMINI_API_KEY, or OPENAI_API_KEY');
 }
 
 async function _callGemini(
@@ -291,7 +289,13 @@ async function _callAnthropic(
   return rawText;
 }
 
-async function _callOpenAI(prompt: string, response_json_schema: any, maxTokens = 1600): Promise<any> {
+async function _callOpenAI(
+  prompt: string,
+  response_json_schema: any,
+  maxTokens = 1600,
+  imageBase64?: string,
+  imageMediaType?: string,
+): Promise<any> {
   const OPENAI_KEY = process.env.OPENAI_API_KEY || '';
   const messages: any[] = [
     {
@@ -300,7 +304,17 @@ async function _callOpenAI(prompt: string, response_json_schema: any, maxTokens 
         ? 'You are a helpful assistant. Return ONLY valid JSON. No markdown, no explanation. ALL string values must be in Hebrew.'
         : 'You are a helpful assistant.',
     },
-    { role: 'user', content: prompt },
+    {
+      role: 'user',
+      // gpt-4o-mini is vision-capable via an image_url content part (data URI) —
+      // same base64 payload Anthropic/Gemini receive, no re-fetch needed.
+      content: imageBase64
+        ? [
+            { type: 'image_url', image_url: { url: `data:${imageMediaType || 'image/jpeg'};base64,${imageBase64}` } },
+            { type: 'text', text: prompt },
+          ]
+        : prompt,
+    },
   ];
 
   const body: any = {
