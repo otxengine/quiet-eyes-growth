@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { requireBusinessAccess } from '../../middleware/businessAccess';
 import { invokeLLM } from '../../lib/llm';
 import { generateMorningBriefing } from './generateMorningBriefing';
 import { generateLeadFirstContact } from './generateLeadFirstContact';
@@ -331,7 +332,7 @@ const FUNCTION_MAP: Record<string, any> = {
 };
 
 // POST /api/functions/:name
-router.post('/:name', (req, res) => {
+router.post('/:name', requireBusinessAccess, (req: Request<{ name: string }>, res: Response) => {
   const handler = FUNCTION_MAP[req.params.name];
   if (!handler) {
     return res.status(404).json({ error: `Unknown function: ${req.params.name}` });

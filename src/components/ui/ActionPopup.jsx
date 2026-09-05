@@ -7,9 +7,6 @@ import { toast } from 'sonner';
 import { classifyInsight, popupTypeToActionType, getPlatformSetupConfig } from '@/lib/popup_classifier';
 import CampaignPlanner from './CampaignPlanner';
 
-const _apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3007/api';
-const SERVER_BASE = _apiUrl.replace(/\/api\/?$/, '');
-
 /**
  * ActionPopup — 4-step action modal for a MarketSignal.
  *
@@ -406,18 +403,12 @@ export default function ActionPopup({ signal, businessProfile, onClose }) {
     if (!businessProfile?.id) { toast.error('נדרש חשבון עסקי'); return; }
     setPublishing(true);
     try {
-      const res = await fetch(`${SERVER_BASE}/api/functions/publishPost`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          businessProfileId: businessProfile.id,
-          caption: text,
-          imageUrl: imageUrl || null,
-          platform,
-        }),
+      const { data } = await base44.functions.invoke('publishPost', {
+        businessProfileId: businessProfile.id,
+        caption: text,
+        imageUrl: imageUrl || null,
+        platform,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'שגיאה בפרסום');
       setPublishResult('ok');
       toast.success(data.message || 'הפוסט נשלח לפרסום ✓');
     } catch (err) {
