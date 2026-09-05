@@ -46,6 +46,7 @@ export default function BusinessSocialSnapshot({ businessProfile, platform }) {
   const posts = (feedData?.posts ?? []).filter(p => p.platform === platform);
   const ads = (adsData?.ads ?? []).filter(a => a.platform === platform);
   const profiles = (profileData?.profiles ?? []).filter(p => p.platform === platform);
+  const latestPostAt = posts.reduce((max, p) => (p.posted_at && (!max || p.posted_at > max)) ? p.posted_at : max, null);
   const activeAdCount = ads.filter(a => a.is_active).length;
   const outlierPosts = useMemo(() => computeOutlierPosts(posts), [posts]);
   const { analyzing, analyzeNow, insight } = useAnalyzeTopPerformers(outlierPosts, {
@@ -59,9 +60,12 @@ export default function BusinessSocialSnapshot({ businessProfile, platform }) {
     setRefreshing(true);
     const parts = [];
     try {
-      const result = await base44.functions.invoke('collectOwnSocialPosts', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
+      const { data: result } = await base44.functions.invoke('collectOwnSocialPosts', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
       queryClient.invalidateQueries({ queryKey: ['businessSnapshotFeed', bpId] });
       if (result?.upserted > 0) parts.push(`${result.upserted} פוסטים חדשים`);
+      (result?.diagnostics || []).filter(d => d.error).forEach(d => {
+        toast.error(`סריקת ${PLATFORM_LABELS[d.platform] || d.platform} נכשלה: ${d.error}`);
+      });
     } catch (e) { toast.error(`שגיאה בעדכון הפיד: ${e.message}`); }
 
     try {
@@ -111,7 +115,7 @@ export default function BusinessSocialSnapshot({ businessProfile, platform }) {
         {profiles.length > 0 && (
           <div className="space-y-3">
             {profiles.map(profile => (
-              <ProfileHeader key={profile.id} profile={profile} />
+              <ProfileHeader key={profile.id} profile={profile} latestPostAt={latestPostAt} />
             ))}
           </div>
         )}

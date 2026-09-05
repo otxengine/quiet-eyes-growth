@@ -687,9 +687,13 @@ export function useSuggestBioFix(canSuggest, { businessProfileId, onDone, initia
   return { analyzing, analyzeNow, suggestions };
 }
 
-export function ProfileHeader({ profile }) {
+export function ProfileHeader({ profile, latestPostAt = undefined }) {
   let highlights = [];
   try { highlights = profile.highlights ? JSON.parse(profile.highlights) : []; } catch { /* ignore malformed */ }
+  // Own-business callers pass the real max BusinessPost.posted_at so this can't
+  // disagree with the actual feed below it; competitor callers omit it and keep
+  // the separately-scraped profile.last_post_at (no equivalent local feed there).
+  const effectiveLastPostAt = latestPostAt !== undefined ? latestPostAt : profile.last_post_at;
 
   return (
     <div className="rounded-xl border border-border bg-background overflow-hidden">
@@ -739,8 +743,8 @@ export function ProfileHeader({ profile }) {
             <p className="text-sm leading-relaxed whitespace-pre-line">{profile.bio}</p>
           )}
 
-          {stalenessNote(profile.last_post_at) && (
-            <p className="text-xs text-amber-600 dark:text-amber-500">{stalenessNote(profile.last_post_at)}</p>
+          {stalenessNote(effectiveLastPostAt) && (
+            <p className="text-xs text-amber-600 dark:text-amber-500">{stalenessNote(effectiveLastPostAt)}</p>
           )}
 
           {(profile.contact_phone || profile.contact_email || profile.contact_address || profile.external_url) && (
