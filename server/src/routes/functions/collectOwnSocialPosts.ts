@@ -79,6 +79,10 @@ async function scrapeAndSave(businessProfileId: string, platform: string, url: s
   // First-ever scrape (no cursor yet) pulls a deeper one-time backfill; repeat
   // scrapes stay at the steady-state cap since onlyPostsNewerThan already scopes them.
   const platformCap = onlyPostsNewerThan ? POSTS_CAP : BACKFILL_CAP;
+  // A 150-post backfill run takes noticeably longer on Apify's side than a
+  // steady-state few-posts run — give it more polling time or it gets cut off
+  // (rawPosts=[]) while the actor is still legitimately working.
+  const backfillWaitMs = onlyPostsNewerThan ? null : 240_000;
 
   if (platform === 'instagram') {
     rawPosts = await runApifyActor('apify~instagram-scraper', {
@@ -86,13 +90,13 @@ async function scrapeAndSave(businessProfileId: string, platform: string, url: s
       resultsType: 'posts',
       resultsLimit: platformCap,
       ...(onlyPostsNewerThan ? { onlyPostsNewerThan } : {}),
-    }, 90_000, 160, (msg) => { apifyError = msg; });
+    }, backfillWaitMs ?? 90_000, 160, (msg) => { apifyError = msg; });
   } else if (platform === 'facebook') {
     rawPosts = await runApifyActor('apify~facebook-posts-scraper', {
       startUrls: [{ url }],
       resultsLimit: platformCap,
       ...(onlyPostsNewerThan ? { onlyPostsNewerThan } : {}),
-    }, 120_000, 160, (msg) => { apifyError = msg; });
+    }, backfillWaitMs ?? 120_000, 160, (msg) => { apifyError = msg; });
   }
 
   let upserted = 0;
