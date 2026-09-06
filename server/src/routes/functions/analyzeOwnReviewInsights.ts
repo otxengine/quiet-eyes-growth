@@ -47,6 +47,7 @@ export async function analyzeOwnReviewInsights(req: Request, res: Response) {
       select: {
         own_reviews_pillar_insight: true,
         own_reviews_pillar_examples: true,
+        own_reviews_pillar_stats: true,
         own_reviews_pillar_insight_at: true,
       },
     });
@@ -58,6 +59,7 @@ export async function analyzeOwnReviewInsights(req: Request, res: Response) {
         return res.json({
           insight: profile.own_reviews_pillar_insight,
           examples: profile.own_reviews_pillar_examples ? JSON.parse(profile.own_reviews_pillar_examples) : [],
+          stats: profile.own_reviews_pillar_stats ? JSON.parse(profile.own_reviews_pillar_stats) : [],
           cached: true,
         });
       }
@@ -66,7 +68,7 @@ export async function analyzeOwnReviewInsights(req: Request, res: Response) {
     const themes: ThemeCount[] = await computeThemeRollup(businessProfileId, REVIEWS_INSIGHTS_WINDOW_DAYS);
     if (!themes.length) {
       // ponytail: no reviews yet — omit rather than fabricate, don't throw.
-      return res.json({ insight: null, examples: [], cached: false });
+      return res.json({ insight: null, examples: [], stats: [], cached: false });
     }
 
     const topPositive = themes.filter(t => t.positive > t.negative).slice(0, TOP_THEME_LIMIT);
@@ -86,12 +88,13 @@ export async function analyzeOwnReviewInsights(req: Request, res: Response) {
         data: {
           own_reviews_pillar_insight: insight,
           own_reviews_pillar_examples: examples.length ? JSON.stringify(examples) : null,
+          own_reviews_pillar_stats: JSON.stringify(themes),
           own_reviews_pillar_insight_at: new Date().toISOString(),
         },
       }).catch(() => {});
     }
 
-    return res.json({ insight, examples, cached: false });
+    return res.json({ insight, examples, stats: themes, cached: false });
   } catch (err: any) {
     console.error('[analyzeOwnReviewInsights]', err.message);
     return res.status(500).json({ error: err.message });

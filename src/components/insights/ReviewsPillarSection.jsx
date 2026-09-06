@@ -30,6 +30,28 @@ function TrendBadge({ trend }) {
   );
 }
 
+// The single topic with the most complaints — genuinely net-negative (more
+// negative than positive mentions), not just the highest-total-mentions
+// theme that happens to lean negative (stats is sorted by total, not by
+// how bad it is).
+function mostComplainedTheme(stats) {
+  const candidates = stats.filter(t => t.negative > 0 && t.negative > t.positive);
+  if (!candidates.length) return null;
+  return candidates.reduce((worst, t) => (t.negative > worst.negative ? t : worst));
+}
+
+function TopComplaintCallout({ theme }) {
+  if (!theme) return null;
+  return (
+    <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+      <ThumbsDown className="w-4 h-4 text-red-600 shrink-0" />
+      <p className="text-[12px] text-red-700">
+        <span className="font-semibold">הנושא עם הכי הרבה תלונות:</span> {th(theme.theme)} ({theme.negative}/{theme.total} ביקורות שליליות)
+      </p>
+    </div>
+  );
+}
+
 function OwnReviewsBlock({ businessProfile, queryClient }) {
   const bpId = businessProfile?.id;
   const insight = businessProfile?.own_reviews_pillar_insight;
@@ -38,6 +60,11 @@ function OwnReviewsBlock({ businessProfile, queryClient }) {
     () => parseJson(businessProfile?.own_reviews_pillar_examples, []),
     [businessProfile?.own_reviews_pillar_examples],
   );
+  const stats = useMemo(
+    () => parseJson(businessProfile?.own_reviews_pillar_stats, []),
+    [businessProfile?.own_reviews_pillar_stats],
+  );
+  const topComplaint = useMemo(() => mostComplainedTheme(stats), [stats]);
 
   const { refreshing, manualRefresh } = useStaleInsight({
     value: insight,
@@ -68,6 +95,7 @@ function OwnReviewsBlock({ businessProfile, queryClient }) {
         <PillarRefreshBadge updatedAt={updatedAt} refreshing={refreshing} onRefresh={manualRefresh} />
       </div>
       {insight && <p className="text-[13px] leading-relaxed text-foreground">{insight}</p>}
+      <TopComplaintCallout theme={topComplaint} />
       {examples.length > 0 && (
         <div className="space-y-1.5">
           {examples.slice(0, 4).map((ex, i) => {
@@ -102,6 +130,7 @@ function CompetitorReviewsBlock({ businessProfile, queryClient, trackedCompetito
     () => parseJson(businessProfile?.competitor_reviews_pillar_stats, []),
     [businessProfile?.competitor_reviews_pillar_stats],
   );
+  const topComplaint = useMemo(() => mostComplainedTheme(stats), [stats]);
   const competitorsTotal = trackedCompetitors.length;
 
   const { refreshing, manualRefresh } = useStaleInsight({
@@ -122,6 +151,7 @@ function CompetitorReviewsBlock({ businessProfile, queryClient, trackedCompetito
         <PillarRefreshBadge updatedAt={updatedAt} refreshing={refreshing} onRefresh={manualRefresh} />
       </div>
       {insight && <p className="text-[13px] leading-relaxed text-foreground">{insight}</p>}
+      <TopComplaintCallout theme={topComplaint} />
       {stats.length > 0 && (() => {
         const top = stats.slice(0, 6);
         const good = top.filter(t => t.positive > t.negative);

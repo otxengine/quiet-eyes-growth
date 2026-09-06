@@ -64,9 +64,8 @@ test('force bypasses a fresh cache and recomputes', async () => {
     own_reviews_pillar_examples: null,
     own_reviews_pillar_insight_at: new Date().toISOString(),
   });
-  mockComputeThemeRollup.mockResolvedValue([
-    { theme: 'שירות', positive: 5, negative: 1, neutral: 0, total: 6 },
-  ]);
+  const themes = [{ theme: 'שירות', positive: 5, negative: 1, neutral: 0, total: 6 }];
+  mockComputeThemeRollup.mockResolvedValue(themes);
   mockSynthesize.mockResolvedValue('תובנה חדשה');
 
   const res = makeRes();
@@ -75,9 +74,9 @@ test('force bypasses a fresh cache and recomputes', async () => {
   expect(computeThemeRollup).toHaveBeenCalledWith('bp-1', 365);
   expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
     where: { id: 'bp-1' },
-    data: expect.objectContaining({ own_reviews_pillar_insight: 'תובנה חדשה' }),
+    data: expect.objectContaining({ own_reviews_pillar_insight: 'תובנה חדשה', own_reviews_pillar_stats: JSON.stringify(themes) }),
   }));
-  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ insight: 'תובנה חדשה', cached: false }));
+  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ insight: 'תובנה חדשה', stats: themes, cached: false }));
 });
 
 test('stale cache (older than 48h) recomputes even without force', async () => {
@@ -112,7 +111,7 @@ test('zero reviews: returns null insight gracefully without throwing or writing 
 
   expect(synthesizeReviewThemeInsight).not.toHaveBeenCalled();
   expect(mockUpdate).not.toHaveBeenCalled();
-  expect(res.json).toHaveBeenCalledWith({ insight: null, examples: [], cached: false });
+  expect(res.json).toHaveBeenCalledWith({ insight: null, examples: [], stats: [], cached: false });
 });
 
 test('missing businessProfileId returns 400', async () => {

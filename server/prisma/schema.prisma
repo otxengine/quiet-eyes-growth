@@ -160,6 +160,7 @@ model BusinessProfile {
   // ── Reviews pillar (Insights page) ───────────────────────────────────
   own_reviews_pillar_insight            String?  // 3-5 sentences (Hebrew) — own customers' pain points + what they love
   own_reviews_pillar_examples           String?  // JSON array of {theme, polarity, text} verbatim snippets
+  own_reviews_pillar_stats              String?  // JSON: [{theme, positive, negative, neutral, total}] — same shape as competitor_reviews_pillar_stats
   own_reviews_pillar_insight_at         String?  // ISO timestamp
   competitor_reviews_pillar_insight     String?  // 2-4 sentences (Hebrew) — pooled across ALL tracked competitors
   competitor_reviews_pillar_stats       String?  // JSON: [{theme, positive, negative, neutral, total, competitors_mentioning}]
