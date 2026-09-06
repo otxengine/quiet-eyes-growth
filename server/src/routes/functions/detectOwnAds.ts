@@ -122,7 +122,7 @@ export async function detectOwnAds(req: Request, res: Response) {
     const fbHandle = profile.facebook_url
       ? profile.facebook_url.replace(/^https?:\/\/(www\.)?facebook\.com\//, '').split(/[/?#]/)[0].replace(/^@/, '') || null
       : null;
-    const ads = await searchAllAds(profile.name, profile.category || '', profile.city || '', fbHandle);
+    const ads = await searchAllAds(profile.name, profile.category || '', profile.city || '', fbHandle, profile.facebook_url || null);
 
     if (ads.length === 0) {
       await prisma.businessAdHistory.updateMany({
