@@ -229,7 +229,7 @@ function AnalysisTab({ competitor, posts, bpId }) {
           <div className="space-y-1 text-xs">
             {competitor.ad_strategy_summary && <p><span className="text-muted-foreground">אסטרטגיה: </span>{competitor.ad_strategy_summary}</p>}
             {competitor.ad_target_audience  && <p><span className="text-muted-foreground">קהל: </span>{competitor.ad_target_audience}</p>}
-            {competitor.ad_spend_signal     && <p><span className="text-muted-foreground">תקציב: </span>{spendIcon} {competitor.ad_spend_signal}</p>}
+            {competitor.ad_spend_signal     && <p><span className="text-muted-foreground">תקציב: </span>{spendIcon} {competitor.ad_spend_signal} <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">הערכה</span></p>}
             {competitor.ad_gaps && (
               <div className="bg-green-50 border border-green-200 rounded-lg p-2 text-green-800">💡 {competitor.ad_gaps}</div>
             )}
@@ -482,7 +482,7 @@ function RivalCard({ competitor, posts, ads, stories, profiles, defaultSec, bpId
                       <p><span className="text-muted-foreground">אסטרטגיה: </span>{competitor.ad_strategy_summary}</p>
                     )}
                     {competitor.ad_spend_signal && (
-                      <p><span className="text-muted-foreground">תקציב: </span>{competitor.ad_spend_signal}</p>
+                      <p><span className="text-muted-foreground">תקציב: </span>{competitor.ad_spend_signal} <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">הערכה</span></p>
                     )}
                   </div>
                 )}
@@ -621,9 +621,9 @@ export default function SocialCompetition() {
     } catch (e) { toast.error(`שגיאה בעדכון הפיד: ${e.message}`); }
 
     try {
-      await base44.functions.invoke('detectCompetitorAds', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
+      const adsResult = await base44.functions.invoke('detectCompetitorAds', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
       queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] });
-      parts.push('מודעות עודכנו');
+      if (!adsResult?.skipped) parts.push('מודעות עודכנו');
     } catch { toast.error('שגיאה בעדכון המודעות'); }
 
     try {
@@ -656,7 +656,11 @@ export default function SocialCompetition() {
     try {
       const result = await base44.functions.invoke('detectCompetitorAds', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
       queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] });
-      toast.success(result?.alerts_created > 0 ? `מודעות עודכנו — ${result.alerts_created} התראות חדשות` : 'מודעות עודכנו');
+      if (result?.skipped) {
+        toast.info(result.reason === 'ran_recently' ? 'המודעות נסרקו לאחרונה' : 'לא הוגדר ספק חיפוש מודעות');
+      } else {
+        toast.success(result?.alerts_created > 0 ? `מודעות עודכנו — ${result.alerts_created} התראות חדשות` : 'מודעות עודכנו');
+      }
     } catch (e) {
       toast.error(`שגיאה בעדכון המודעות: ${e.message}`);
     } finally {

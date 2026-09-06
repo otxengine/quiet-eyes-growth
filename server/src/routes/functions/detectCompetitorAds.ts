@@ -40,7 +40,7 @@ async function upsertAdHistory(competitorId: string, businessProfileId: string, 
     const existing = await (prisma as any).$queryRawUnsafe(
       `SELECT id, analyzed_at FROM "competitor_ad_history" WHERE ${lookup} LIMIT 1`,
       competitorId, ad.platform, external_ad_id ?? content_hash,
-    ).catch(() => []) as { id: string; analyzed_at: string | null }[];
+    ).catch((e: any) => { console.warn('[detectCompetitorAds] ad history lookup failed:', e.message); return []; }) as { id: string; analyzed_at: string | null }[];
 
     const caption = [ad.title, ad.body].filter(Boolean).join(' — ');
 
@@ -55,7 +55,7 @@ async function upsertAdHistory(competitorId: string, businessProfileId: string, 
         ad.title || null, ad.body || null, ad.cta || null, ad.link || null,
         media_url, video_url, ad.page_name || null, ad.end_date || null,
         existing[0].id,
-      ).catch(() => {});
+      ).catch((e: any) => console.warn('[detectCompetitorAds] ad history update failed:', e.message));
       if (!existing[0].analyzed_at && media_url) {
         rowsNeedingAnalysis.push({ id: existing[0].id, media_url, caption, cta: ad.cta || null, platform: ad.platform });
       }
@@ -72,7 +72,7 @@ async function upsertAdHistory(competitorId: string, businessProfileId: string, 
         ad.title || null, ad.body || null, ad.cta || null, ad.link || null,
         media_url, video_url, ad.page_name || null,
         ad.start_date || null, ad.end_date || null,
-      ).catch(() => {});
+      ).catch((e: any) => console.warn('[detectCompetitorAds] ad history insert failed:', e.message));
       rowsNeedingAnalysis.push({ id: newId, media_url, caption, cta: ad.cta || null, platform: ad.platform });
     }
   }
@@ -115,10 +115,10 @@ async function cloneAdsFromDonor(competitorId: string, businessProfileId: string
     `INSERT INTO "competitor_ad_history"
        (id, competitor_id, linked_business, platform, external_ad_id, content_hash,
         title, body, cta, link, media_url, video_url, page_name, start_date, end_date,
-        is_active, first_seen_at, last_seen_at, analysis, analyzed_at, has_offer, has_cta)
+        is_active, first_seen_at, last_seen_at, analysis, analyzed_at, has_offer, has_cta, cloned_from_donor)
      SELECT gen_random_uuid()::text, $1, $2, d.platform, d.external_ad_id, d.content_hash,
             d.title, d.body, d.cta, d.link, d.media_url, d.video_url, d.page_name, d.start_date, d.end_date,
-            d.is_active, NOW(), NOW(), d.analysis, d.analyzed_at, d.has_offer, d.has_cta
+            d.is_active, NOW(), NOW(), d.analysis, d.analyzed_at, d.has_offer, d.has_cta, true
      FROM "competitor_ad_history" d
      WHERE d.competitor_id = $3
        AND NOT EXISTS (
@@ -146,7 +146,7 @@ async function cloneAdsFromDonor(competitorId: string, businessProfileId: string
         ad_gaps:                  donorComp.ad_gaps,
         ad_intel_updated_at:      donorComp.ad_intel_updated_at,
       },
-    }).catch(() => {});
+    }).catch((e: any) => console.warn('[detectCompetitorAds] donor-clone competitor update failed:', e.message));
   }
   return clonedCount as number;
 }
@@ -270,14 +270,14 @@ export async function detectCompetitorAds(req: Request, res: Response) {
           compUpdate.ad_intel_updated_at      = null;
         }
 
-        await prisma.competitor.update({ where: { id: comp.id }, data: compUpdate }).catch(() => {});
+        await prisma.competitor.update({ where: { id: comp.id }, data: compUpdate }).catch((e: any) => console.warn('[detectCompetitorAds] competitor update failed:', e.message));
 
         if (ads.length === 0) {
           // Mark all history rows for this competitor inactive
           await prisma.competitorAdHistory.updateMany({
             where: { competitor_id: comp.id },
             data:  { is_active: false },
-          }).catch(() => {});
+          }).catch((e: any) => console.warn('[detectCompetitorAds] mark-inactive update failed:', e.message));
           processed++;
           return;
         }
@@ -300,7 +300,7 @@ export async function detectCompetitorAds(req: Request, res: Response) {
                   await (prisma as any).$executeRawUnsafe(
                     `UPDATE "competitor_ad_history" SET analysis=$1, analyzed_at=NOW(), has_offer=$2, has_cta=$3 WHERE id=$4`,
                     JSON.stringify(creative), creative.has_offer, creative.has_cta, row.id,
-                  ).catch(() => {});
+                  ).catch((e: any) => console.warn('[detectCompetitorAds] creative analysis write failed:', e.message));
                 }
               } catch (analysisErr: any) {
                 console.warn('[detectCompetitorAds] creative analysis failed:', analysisErr.message);
@@ -351,7 +351,7 @@ Analyze and return ONLY valid JSON. ALL string values MUST be in Hebrew:
               last_promo_detected:    `${analysis.platforms_summary}: ${analysis.promoted_product}`,
               last_promo_detected_at: new Date().toISOString(),
             },
-          }).catch(() => {});
+          }).catch((e: any) => console.warn('[detectCompetitorAds] last_promo_detected update failed:', e.message));
         }
 
         // ── Claude Sonnet deep intel analysis ────────────────────────────────
@@ -387,7 +387,7 @@ Return ONLY valid JSON. ALL string values MUST be in Hebrew:
               ad_gaps:             deepIntel.ad_gaps             || null,
               ad_intel_updated_at: new Date().toISOString(),
             },
-          }).catch(() => {});
+          }).catch((e: any) => console.warn('[detectCompetitorAds] deep intel update failed:', e.message));
         }
 
         // ── ProactiveAlert ───────────────────────────────────────────────────
@@ -439,7 +439,7 @@ Return ONLY valid JSON. ALL string values MUST be in Hebrew:
               is_acted_on:  false,
               created_at:   new Date().toISOString(),
             },
-          }).catch(() => {});
+          }).catch((e: any) => console.warn('[detectCompetitorAds] alert create failed:', e.message));
 
           alertsCreated++;
         }
@@ -459,7 +459,7 @@ Return ONLY valid JSON. ALL string values MUST be in Hebrew:
             is_dismissed:       false,
             detected_at:        new Date().toISOString(),
           },
-        }).catch(() => {});
+        }).catch((e: any) => console.warn('[detectCompetitorAds] market signal create failed:', e.message));
 
         processed++;
       } catch (e: any) {

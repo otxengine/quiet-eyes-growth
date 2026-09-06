@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useNavigate } from 'react-router-dom';
-import { Bell, X, AlertTriangle, Target, TrendingUp, Trophy, Zap, ClipboardList, Copy, CheckCheck, Send, Loader2 } from 'lucide-react';
+import { Bell, X, AlertTriangle, Target, TrendingUp, Trophy, Zap, ClipboardList, Copy, CheckCheck, Send, Loader2, Megaphone } from 'lucide-react';
 import { toast } from 'sonner';
 import ActionPopup from '@/components/ui/ActionPopup';
 import FeedbackWidget from '@/components/FeedbackWidget';
@@ -20,6 +20,7 @@ const typeConfig = {
   risk:               { icon: AlertTriangle,  color: '#f59e0b', bg: 'bg-yellow-50' },
   retention_risk:     { icon: AlertTriangle,  color: '#f59e0b', bg: 'bg-yellow-50' },
   competitor_move:    { icon: Trophy,         color: '#6366f1', bg: 'bg-purple-50' },
+  competitor_ads:     { icon: Megaphone,      color: '#f97316', bg: 'bg-orange-50' },
   milestone:          { icon: Trophy,         color: '#6366f1', bg: 'bg-purple-50' },
   challenge:          { icon: Trophy,         color: '#ec4899', bg: 'bg-pink-50' },
 };

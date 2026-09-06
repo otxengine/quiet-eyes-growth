@@ -7,7 +7,7 @@ import {
   ArrowRight, CheckCircle2, Circle, ClipboardList, ChevronLeft,
   Loader2, Clock, CheckCheck, Bot, Send, ChevronDown, ChevronUp,
   Sparkles, RotateCcw, Database, Copy, ExternalLink, DollarSign,
-  Users, BarChart2, MessageSquare,
+  Users, BarChart2, MessageSquare, Megaphone,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { fetchBusinessSnapshot, snapshotToPromptContext, logCompletedAction } from '@/lib/businessSnapshot';
@@ -24,6 +24,7 @@ const TYPE_META = {
   risk:               { label: 'סיכון',          color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-100',  icon: AlertTriangle },
   retention_risk:     { label: 'סיכון שימור',   color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-100',  icon: AlertTriangle },
   competitor_move:    { label: 'מהלך מתחרה',    color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-100', icon: Trophy },
+  competitor_ads:     { label: 'מודעת מתחרה',   color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-100', icon: Megaphone },
   milestone:          { label: 'אבן דרך',        color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100', icon: Trophy },
   hot_lead:           { label: 'ליד חם',         color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-100',  icon: Zap },
   competitive:        { label: 'תחרותי',         color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-100', icon: Target },

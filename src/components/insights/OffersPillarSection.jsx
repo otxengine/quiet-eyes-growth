@@ -45,7 +45,7 @@ export default function OffersPillarSection({ businessProfile }) {
     catch { return []; }
   }, [businessProfile?.offers_landscape_examples]);
 
-  const { refreshing, manualRefresh } = useStaleInsight({
+  const { refreshing, error, manualRefresh } = useStaleInsight({
     value: insight,
     updatedAt,
     enabled: !!bpId,
@@ -69,6 +69,12 @@ export default function OffersPillarSection({ businessProfile }) {
       </div>
 
       <div className="p-5 space-y-3">
+        {error && (
+          <p className="text-[11px] text-destructive flex items-center justify-between">
+            <span>רענון נכשל — {error}</span>
+            <button onClick={manualRefresh} className="underline text-muted-foreground">נסה שוב</button>
+          </p>
+        )}
         {insight && (
           <div className="space-y-2">
             {INSIGHT_TOPICS.map(({ key, label }) => insight[key] && (

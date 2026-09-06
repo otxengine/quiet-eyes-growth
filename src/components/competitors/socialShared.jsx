@@ -308,6 +308,9 @@ export function AdCard({ ad, onSelect }) {
             ? <span className="bg-green-100 text-green-700 px-1 py-0.5 rounded mr-auto">פעיל</span>
             : <span className="mr-auto">{timeAgo(ad.last_seen_at)}</span>
           }
+          {ad.cloned_from_donor && (
+            <span className="bg-slate-100 text-slate-600 px-1 py-0.5 rounded" title="מבוסס על סריקה של עסק אחר שעוקב אחרי אותו מתחרה">משוער</span>
+          )}
           {ad.link && (
             <a
               href={ad.link}

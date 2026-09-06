@@ -5,6 +5,7 @@ import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { searchAllAds, hasSearchApiKey, AdResult } from '../../lib/searchapi';
+import { hasApifyKey } from '../../lib/apify';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
 
@@ -59,7 +60,7 @@ async function upsertAdHistory(businessProfileId: string, ads: AdResult[]) {
           page_name: ad.page_name || null,
           end_date: ad.end_date || null,
         },
-      }).catch(() => {});
+      }).catch((e: any) => console.warn('[detectOwnAds] ad history update failed:', e.message));
       if (!existing.analyzed_at && media_url) {
         rowsNeedingAnalysis.push({ id: existing.id, media_url, caption, cta: ad.cta || null, platform: ad.platform });
       }
@@ -81,7 +82,7 @@ async function upsertAdHistory(businessProfileId: string, ads: AdResult[]) {
           end_date: ad.end_date || null,
           is_active: true,
         },
-      }).catch(() => null);
+      }).catch((e: any) => { console.warn('[detectOwnAds] ad history create failed:', e.message); return null; });
       if (created) rowsNeedingAnalysis.push({ id: created.id, media_url, caption, cta: ad.cta || null, platform: ad.platform });
     }
   }
@@ -97,7 +98,7 @@ async function upsertAdHistory(businessProfileId: string, ads: AdResult[]) {
  * ProactiveAlert, since "you are running your own ad" isn't an actionable alert
  * the way a competitor's new campaign is.
  *
- * Requires: SEARCHAPI_API_KEY env var
+ * Requires: SEARCHAPI_API_KEY or APIFY_API_KEY env var
  */
 export async function detectOwnAds(req: Request, res: Response) {
   const { businessProfileId, force } = req.body;
@@ -105,9 +106,9 @@ export async function detectOwnAds(req: Request, res: Response) {
 
   const startTime = new Date().toISOString();
 
-  if (!hasSearchApiKey()) {
+  if (!hasSearchApiKey() && !hasApifyKey()) {
     await writeAutomationLog('detectOwnAds', businessProfileId, startTime, 0);
-    return res.json({ processed: 0, skipped: true, reason: 'SEARCHAPI_API_KEY not set' });
+    return res.json({ processed: 0, skipped: true, reason: 'no ad search provider configured' });
   }
 
   if (!force && shouldSkipAgent(businessProfileId, 'detectOwnAds', MIN_INTERVAL_MS)) {
@@ -127,7 +128,7 @@ export async function detectOwnAds(req: Request, res: Response) {
       await prisma.businessAdHistory.updateMany({
         where: { linked_business: businessProfileId },
         data: { is_active: false },
-      }).catch(() => {});
+      }).catch((e: any) => console.warn('[detectOwnAds] mark-inactive update failed:', e.message));
       setLastRun(businessProfileId, 'detectOwnAds');
       await writeAutomationLog('detectOwnAds', businessProfileId, startTime, 0);
       return res.json({ processed: 0, note: 'No active ads found' });
@@ -144,7 +145,7 @@ export async function detectOwnAds(req: Request, res: Response) {
           await prisma.businessAdHistory.update({
             where: { id: row.id },
             data: { analysis: JSON.stringify(creative), analyzed_at: new Date(), has_offer: creative.has_offer, has_cta: creative.has_cta },
-          }).catch(() => {});
+          }).catch((e: any) => console.warn('[detectOwnAds] creative analysis write failed:', e.message));
         }
       } catch (analysisErr: any) {
         console.warn('[detectOwnAds] creative analysis failed:', analysisErr.message);
@@ -196,7 +197,7 @@ Assess our own ad strategy. Return ONLY valid JSON. ALL string values MUST be in
           is_dismissed: false,
           detected_at: new Date().toISOString(),
         },
-      }).catch(() => {});
+      }).catch((e: any) => console.warn('[detectOwnAds] market signal create failed:', e.message));
     }
 
     setLastRun(businessProfileId, 'detectOwnAds');

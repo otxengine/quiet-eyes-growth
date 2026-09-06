@@ -1171,6 +1171,7 @@ model CompetitorAdHistory {
   analyzed_at     DateTime?
   has_offer       Boolean?  // null = not yet analyzed
   has_cta         Boolean?
+  cloned_from_donor Boolean? @default(false) // true = copied from another business's scan of the same real-world competitor
 
   @@index([competitor_id, last_seen_at])
   @@unique([competitor_id, platform, external_ad_id])

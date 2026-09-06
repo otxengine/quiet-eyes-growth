@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { LONG_SCAN_TIMEOUT_MS } from '@/api/client';
 import { Loader2, Users, Plus } from 'lucide-react';
+import { toast } from 'sonner';
 import { getLimits } from '@/lib/planConfig';
 import { addCompetitorManually } from '@/lib/addCompetitorManually';
 import KoriAvatar from './KoriAvatar';
@@ -151,7 +152,10 @@ export default function OnboardingDiscoverCompetitors() {
     // requests); results show up next time the user opens the competitors page.
     const bp = businessProfile.id;
     const invoke = (fn, params, timeoutMs) =>
-      base44.functions.invoke(fn, params, timeoutMs).catch((err) => console.error(`${fn} failed:`, err));
+      base44.functions.invoke(fn, params, timeoutMs).catch((err) => {
+        console.error(`${fn} failed:`, err);
+        toast.error(`עדכון ברקע נכשל (${fn})`);
+      });
 
     invoke('collectCompetitorSocialPosts', { businessProfileId: bp, force: true }, LONG_SCAN_TIMEOUT_MS);
     invoke('collectCompetitorSocialProfile', { businessProfileId: bp, force: true }, LONG_SCAN_TIMEOUT_MS);
