@@ -9,12 +9,12 @@ import PillarRefreshBadge from './PillarRefreshBadge';
 // Mirrors CONTENT_TRENDS_TOPICS in server/src/lib/contentTrendStats.ts — same
 // 6 keys, same order, shared by both content blocks below (own + competitors).
 const CONTENT_TREND_TOPICS = [
-  { key: 'content_themes',         label: '🎯 נושאי תוכן חוזרים' },
-  { key: 'hook_patterns',          label: '🪝 דפוסי הוק' },
-  { key: 'engagement_drivers',     label: '💬 קריאות לפעולה' },
-  { key: 'visual_style',           label: '🎨 סגנון ויזואלי' },
-  { key: 'platform_performance',   label: '📱 ביצועי פלטפורמה' },
-  { key: 'improvement_opportunity',label: '💡 הזדמנות לשיפור' },
+  { key: 'content_themes',         label: 'נושאי תוכן חוזרים' },
+  { key: 'hook_patterns',          label: 'דפוסי הוק' },
+  { key: 'engagement_drivers',     label: 'קריאות לפעולה' },
+  { key: 'visual_style',           label: 'סגנון ויזואלי' },
+  { key: 'platform_performance',   label: 'ביצועי פלטפורמה' },
+  { key: 'improvement_opportunity',label: 'הזדמנות לשיפור' },
 ];
 
 function ContentTrendsTopics({ topics }) {
@@ -23,7 +23,7 @@ function ContentTrendsTopics({ topics }) {
     <div className="space-y-2">
       {CONTENT_TREND_TOPICS.map(({ key, label }) => topics[key] && (
         <div key={key}>
-          <p className="text-[11px] font-semibold text-foreground-muted">{label}</p>
+          <p className="text-[12px] font-bold text-foreground">{label}</p>
           <p className="text-[13px] leading-relaxed text-foreground">{topics[key]}</p>
         </div>
       ))}

@@ -11,13 +11,13 @@ import PillarRefreshBadge from './PillarRefreshBadge';
 // same 7 keys, same order, so each topic gets its own labeled line instead of
 // one merged paragraph.
 const INSIGHT_TOPICS = [
-  { key: 'active_offer_prevalence', label: '🏷️ שיעור מבצעים פעילים' },
-  { key: 'mechanism_breakdown',     label: '💰 סוגי מבצעים' },
-  { key: 'distribution_channel',    label: '📢 ערוץ הפצה' },
-  { key: 'timing_cadence',          label: '📅 תזמון ותדירות' },
-  { key: 'value_framing',           label: '🔖 מסגור ערך' },
-  { key: 'urgency_scarcity',        label: '⚡ דחיפות ומחסור' },
-  { key: 'conditions_restrictions', label: '⚠️ תנאים והגבלות' },
+  { key: 'active_offer_prevalence', label: 'שיעור מבצעים פעילים' },
+  { key: 'mechanism_breakdown',     label: 'סוגי מבצעים' },
+  { key: 'distribution_channel',    label: 'ערוץ הפצה' },
+  { key: 'timing_cadence',          label: 'תזמון ותדירות' },
+  { key: 'value_framing',           label: 'מסגור ערך' },
+  { key: 'urgency_scarcity',        label: 'דחיפות ומחסור' },
+  { key: 'conditions_restrictions', label: 'תנאים והגבלות' },
 ];
 
 /**
@@ -79,7 +79,7 @@ export default function OffersPillarSection({ businessProfile }) {
           <div className="space-y-2">
             {INSIGHT_TOPICS.map(({ key, label }) => insight[key] && (
               <div key={key}>
-                <p className="text-[11px] font-semibold text-foreground-muted">{label}</p>
+                <p className="text-[12px] font-bold text-foreground">{label}</p>
                 <p className="text-[13px] leading-relaxed text-foreground">{insight[key]}</p>
               </div>
             ))}
