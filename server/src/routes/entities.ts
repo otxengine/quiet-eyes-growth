@@ -52,6 +52,7 @@ const ENTITY_MAP: Record<string, string> = {
   WeeklyReport: 'weeklyReport',
   HealthScore: 'healthScore',
   ProfileScore: 'profileScore',
+  DismissedBriefTopic: 'dismissedBriefTopic',
   OutcomeLog: 'outcomeLog',
   SectorKnowledge: 'sectorKnowledge',
   Action: 'action',

@@ -514,6 +514,25 @@ model ProfileScore {
   @@map("profile_scores")
 }
 
+// Permanent "not relevant, never show again" marks for Daily Brief action
+// topics (DailyBriefPanel.jsx). Those actions are freshly LLM-generated free
+// text every day with no underlying DB row of their own, so dismissal can't
+// reuse the is_dismissed-on-a-row pattern the rest of the app uses (Competitor,
+// MarketSignal, ProactiveAlert) — topic_key is a stable snake_case slug the
+// LLM is asked to emit so a recurring topic can be recognized and suppressed
+// across days.
+model DismissedBriefTopic {
+  id              String   @id @default(cuid())
+  created_date    DateTime @default(now())
+  linked_business String
+  topic_key       String
+  title           String?
+  dismissed_at    String
+
+  @@unique([linked_business, topic_key])
+  @@map("dismissed_brief_topics")
+}
+
 model OutcomeLog {
   id                  String   @id @default(cuid())
   created_date        DateTime @default(now())

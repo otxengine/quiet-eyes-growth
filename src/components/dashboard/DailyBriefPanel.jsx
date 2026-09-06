@@ -9,7 +9,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import { Loader2, RefreshCw, Sparkles, X } from 'lucide-react';
 
 const PRIORITY = {
   0: { dot: 'bg-red-500',    border: 'border-r-red-400',    badge: 'bg-red-50 text-red-700',       label: 'דחוף'   },
@@ -34,7 +34,7 @@ function writeCache(bpId, data) {
 }
 
 // ── Action row ────────────────────────────────────────────────────────────────
-function BriefAction({ action, index, navigate }) {
+function BriefAction({ action, index, navigate, onDismiss }) {
   const p = PRIORITY[action.priority] ?? PRIORITY[1];
   const link = VALID_LINKS.has(action.cta_link) ? action.cta_link : '/insights';
 
@@ -78,6 +78,15 @@ function BriefAction({ action, index, navigate }) {
         >
           {action.cta_label || 'פעל'} →
         </button>
+        {onDismiss && action.topic_key && (
+          <button
+            onClick={e => { e.stopPropagation(); onDismiss(action); }}
+            title="לא רלוונטי — אל תציג שוב"
+            className="text-foreground-muted/60 hover:text-foreground-muted opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -129,12 +138,28 @@ export default function DailyBriefPanel({ businessProfile }) {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Permanent "not relevant" marks — see DismissedBriefTopic in schema.prisma.
+  // Daily brief actions have no DB row of their own (freshly LLM-generated
+  // free text every day), so dismissal keys off a stable topic_key slug the
+  // LLM is asked to emit instead of an entity id.
+  const { data: dismissedTopics = [] } = useQuery({
+    queryKey: ['briefDismissedTopics', bpId],
+    queryFn: () => base44.entities.DismissedBriefTopic.filter({ linked_business: bpId }),
+    enabled: !!bpId,
+    staleTime: 60 * 1000,
+  });
+
   const generate = useCallback(async (force = false) => {
     if (!bpId || !businessProfile) return;
+    const dismissedKeys = new Set(dismissedTopics.map(d => d.topic_key));
 
     if (!force) {
       const cached = readCache(bpId);
-      if (cached?.actions?.length) { setBrief(cached); return; }
+      if (cached?.actions?.length) {
+        const filtered = { ...cached, actions: cached.actions.filter(a => !dismissedKeys.has(a.topic_key)) };
+        if (filtered.actions.length) { setBrief(filtered); return; }
+        // Cache was fully made of now-dismissed topics — fall through and regenerate.
+      }
     }
 
     setLoading(true);
@@ -161,7 +186,9 @@ export default function DailyBriefPanel({ businessProfile }) {
         a.status !== 'dismissed' && (a.priority === 'critical' || a.priority === 'high')
       ).length;
 
-      const prompt = `אתה יועץ עסקי AI לעסקים קטנים ישראלים. תפקידך: לנתח את כל הנתונים שלהלן ולהפיק בריף יומי ממוקד עם 3-4 פעולות שבעל העסק חייב לעשות היום.
+      const avoidTopics = dismissedTopics.map(d => d.title || d.topic_key).filter(Boolean).join(', ');
+
+      const prompt = `אתה יועץ עסקי AI לעסקים קטנים ישראלים. תפקידך: לנתח את כל הנתונים שלהלן ולהפיק בריף יומי ממוקד עם 3-6 פעולות שבעל העסק יכול לעשות היום, מדורגות מהחשובה ביותר.
 
 עסק: "${businessProfile.name}" | תחום: ${businessProfile.category || 'לא צוין'} | עיר: ${businessProfile.city || ''}
 
@@ -173,12 +200,14 @@ export default function DailyBriefPanel({ businessProfile }) {
 אותות שוק שנאספו (${signals.length} סה"כ — מציגים הכי חשובים):
 ${topSignals || 'אין אותות זמינים כרגע'}
 
+${avoidTopics ? `נושאים שבעל העסק כבר סימן כ"לא רלוונטי" — אסור להציע אותם שוב, גם לא בניסוח שונה: ${avoidTopics}\n` : ''}
 הנחיות קריטיות:
 1. כל פעולה חייבת להיות ספציפית לעסק הזה — לא גנרית
 2. אם יש ביקורות שליליות → זה תמיד priority 0
 3. אם יש לידים חמים → priority 0 או 1
 4. אל תמציא נתונים שלא קיימים ברשימה
 5. כל "why" חייב להכיל מספר קונקרטי ("3 לקוחות", "40% מהחיפושים", "48 שעות") כשאפשר
+6. topic_key הוא מזהה יציב באנגלית (snake_case, למשל pending_reviews או hot_leads) שמזהה את סוג הנושא — אותו נושא חוזר צריך תמיד לקבל את אותו topic_key, גם בבריפים הבאים, כדי שדחייה שלו תישאר תקפה
 
 החזר JSON בלבד (ללא \`\`\`json ולא טקסט נוסף):
 {
@@ -187,6 +216,7 @@ ${topSignals || 'אין אותות זמינים כרגע'}
     {
       "priority": 0,
       "emoji": "⭐",
+      "topic_key": "pending_reviews",
       "title": "פעולה ספציפית (עד 8 מילים)",
       "why": "למה עכשיו — עם מספר קונקרטי (עד 12 מילים)",
       "cta_label": "פועל + יעד (עד 4 מילים)",
@@ -209,6 +239,7 @@ cta_link חייב להיות אחד בדיוק מ: /reviews, /leads, /retention,
       if (!match) throw new Error('no JSON in response');
       const parsed = JSON.parse(match[0]);
       if (!Array.isArray(parsed.actions) || parsed.actions.length === 0) throw new Error('empty actions');
+      parsed.actions = parsed.actions.filter(a => !dismissedKeys.has(a.topic_key));
 
       writeCache(bpId, parsed);
       setBrief(parsed);
@@ -218,7 +249,27 @@ cta_link חייב להיות אחד בדיוק מ: /reviews, /leads, /retention,
     }
 
     setLoading(false);
-  }, [bpId, businessProfile, signals, alerts, reviews, leads]);
+  }, [bpId, businessProfile, signals, alerts, reviews, leads, dismissedTopics]);
+
+  const handleDismiss = useCallback(async (action) => {
+    if (!bpId || !action.topic_key) return;
+    setBrief(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, actions: prev.actions.filter(a => a.topic_key !== action.topic_key) };
+      writeCache(bpId, next);
+      return next;
+    });
+    try {
+      await base44.entities.DismissedBriefTopic.create({
+        linked_business: bpId,
+        topic_key: action.topic_key,
+        title: action.title,
+        dismissed_at: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.warn('[DailyBriefPanel] dismiss failed:', err.message);
+    }
+  }, [bpId]);
 
   // Auto-generate on first load (uses cache if available)
   useEffect(() => {
@@ -307,7 +358,7 @@ cta_link חייב להיות אחד בדיוק מ: /reviews, /leads, /retention,
       {brief && !loading && (
         <div className="divide-y divide-white/50">
           {(brief.actions || []).slice(0, 4).map((action, i) => (
-            <BriefAction key={i} action={action} index={i} navigate={navigate} />
+            <BriefAction key={action.topic_key || i} action={action} index={i} navigate={navigate} onDismiss={handleDismiss} />
           ))}
         </div>
       )}

@@ -208,7 +208,7 @@ const ENTITIES = [
   'MetricsSnapshot', 'SocialAccount', 'SocialSignal', 'AutoAction', 'Campaign',
   'AudienceSegment',
   'MediaAsset', 'OrganicPost', 'CompetitorPost', 'CompetitorAdHistory', 'CompetitorStory',
-  'CompetitorSocialProfile', 'BusinessSocialProfile', 'ProfileScore',
+  'CompetitorSocialProfile', 'BusinessSocialProfile', 'ProfileScore', 'DismissedBriefTopic',
 ];
 
 // ── raw API access ────────────────────────────────────────────────────────────
