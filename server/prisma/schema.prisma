@@ -524,6 +524,7 @@ model ProfileScore {
 model DismissedBriefTopic {
   id              String   @id @default(cuid())
   created_date    DateTime @default(now())
+  created_by      String?
   linked_business String
   topic_key       String
   title           String?
