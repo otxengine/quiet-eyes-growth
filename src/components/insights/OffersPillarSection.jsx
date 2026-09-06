@@ -152,19 +152,6 @@ export default function OffersPillarSection({ businessProfile }) {
                 </span>
               )}
             </div>
-
-            {stats.topic_breakdown?.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-[10px] font-semibold text-foreground-muted">נושאי המבצעים שזוהו</p>
-                <div className="flex flex-wrap gap-1.5 text-[10px]">
-                  {stats.topic_breakdown.map((t, i) => (
-                    <span key={i} className="px-1.5 py-0.5 rounded-full bg-secondary text-foreground-muted">
-                      {t.value} ({t.count})
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
           </>
         )}
       </div>
