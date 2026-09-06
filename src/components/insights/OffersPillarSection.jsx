@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Maximize2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useStaleInsight } from '@/hooks/useStaleInsight';
 import { OFFER_MECHANIC_LABELS, CHANNEL_LABELS } from '@/lib/offerLabels';
-import { PostDetailModal, AdDetailModal } from '@/components/competitors/socialShared';
+import { PostDetailModal, AdDetailModal, PostCard, AdCard } from '@/components/competitors/socialShared';
 import PillarRefreshBadge from './PillarRefreshBadge';
 
 // Mirrors OFFERS_LANDSCAPE_TOPICS in server/src/lib/synthesizeOffersLandscape.ts —
@@ -91,19 +90,16 @@ export default function OffersPillarSection({ businessProfile }) {
             <summary className="cursor-pointer text-[12px] font-bold text-foreground">
               צפה במבצעי המתחרים האחרונים
             </summary>
-            <div className="space-y-1 mt-2">
+            <div className="flex gap-3 overflow-x-auto mt-2 pb-1">
               {examples.slice(0, 8).map((ex, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setSelectedExample(ex)}
-                  className="w-full flex items-center justify-between gap-2 px-2 py-1 -mx-2 rounded-lg text-[11px] text-foreground-muted hover:bg-muted/40 transition-colors text-right"
-                >
-                  <span className="flex-1 truncate">
-                    <span className="font-semibold">{ex.competitorName}</span> ({ex.date}): "{ex.offer_details}"
-                  </span>
-                  <Maximize2 className="w-3 h-3 shrink-0" />
-                </button>
+                <div key={i} className="shrink-0 w-36">
+                  <p className="text-[10px] font-semibold text-foreground-muted mb-1 truncate">{ex.competitorName}</p>
+                  {ex.type === 'ad' ? (
+                    <AdCard ad={{ ...ex, last_seen_at: ex.date }} onSelect={() => setSelectedExample(ex)} />
+                  ) : (
+                    <PostCard post={{ ...ex, posted_at: ex.date }} onSelect={() => setSelectedExample(ex)} />
+                  )}
+                </div>
               ))}
             </div>
           </details>
