@@ -2,15 +2,20 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { applyOutlierAnalysis } from '../../lib/outlierPostAnalysis';
 import { synthesizeContentTrends, ContentTrendPostSummary } from '../../lib/synthesizeContentTrends';
+import { computeContentTrendStats, deriveCopySummary, ContentTrendsInsight, ContentTrendStats } from '../../lib/contentTrendStats';
 
 const MAX_POSTS_PER_CALL = 20; // pooled across all competitors, so a bit higher than the single-competitor cap
 
 /**
  * analyzeContentTrends — like analyzeTopCompetitorPosts, but pools engagement-
  * outlier posts from ALL of a business's tracked competitors and synthesizes
- * a copy insight + a visual insight (BusinessProfile.content_trends_copy_insight /
- * content_trends_visual_insight) describing the pattern(s) recurring across the
- * whole competitive set, not one competitor.
+ * a 6-topic insight (BusinessProfile.content_trends_topics, JSON — content
+ * themes, hook patterns, engagement drivers, visual style, platform
+ * performance, improvement opportunity) describing the pattern(s) recurring
+ * across the whole competitive set, not one competitor. Also derives
+ * content_trends_copy_insight/content_trends_visual_insight, two backward-
+ * compatible plain-text fields for CompetitorContentTrends.jsx (Marketing
+ * page), which still renders them as single paragraphs.
  *
  * Body: { businessProfileId, posts: [{ id, competitorId, engagementMultiple }], force? }
  */
@@ -48,8 +53,8 @@ export async function analyzeContentTrends(req: Request, res: Response) {
       if (result.skipped) skipped++;
     }
 
-    let copyInsight: string | null = null;
-    let visualInsight: string | null = null;
+    let insight: ContentTrendsInsight | null = null;
+    let stats: ContentTrendStats | null = null;
     let copyExamples: { competitorName: string; text: string }[] = [];
     if (ownedIds.size) {
       const postRows = await prisma.competitorPost.findMany({
@@ -78,17 +83,19 @@ export async function analyzeContentTrends(req: Request, res: Response) {
       });
 
       if (summaries.length) {
+        stats = computeContentTrendStats(summaries);
         const trends = await synthesizeContentTrends(summaries);
-        copyInsight = trends.copy_insight;
-        visualInsight = trends.visual_insight;
+        insight = trends.insight;
         copyExamples = trends.copy_examples;
-        if (copyInsight || visualInsight) {
+        if (insight) {
           await prisma.businessProfile.update({
             where: { id: businessProfileId },
             data: {
-              content_trends_copy_insight: copyInsight,
+              content_trends_topics: JSON.stringify(insight),
+              content_trends_stats: stats ? JSON.stringify(stats) : null,
+              content_trends_copy_insight: deriveCopySummary(insight),
+              content_trends_visual_insight: insight.visual_style,
               content_trends_copy_examples: copyExamples.length ? JSON.stringify(copyExamples) : null,
-              content_trends_visual_insight: visualInsight,
               content_trends_insight_at: new Date().toISOString(),
             },
           }).catch(() => {});
@@ -98,9 +105,11 @@ export async function analyzeContentTrends(req: Request, res: Response) {
 
     return res.json({
       analyzed, skipped, requested: posts.length,
-      content_trends_copy_insight: copyInsight,
+      content_trends_topics: insight,
+      content_trends_stats: stats,
+      content_trends_copy_insight: deriveCopySummary(insight),
+      content_trends_visual_insight: insight?.visual_style ?? null,
       content_trends_copy_examples: copyExamples,
-      content_trends_visual_insight: visualInsight,
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });

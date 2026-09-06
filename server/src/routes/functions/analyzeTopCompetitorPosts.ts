@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { applyOutlierAnalysis } from '../../lib/outlierPostAnalysis';
 import { synthesizeOutlierInsight, OutlierPostSummary } from '../../lib/synthesizeOutlierInsight';
+import { deriveCopySummary } from '../../lib/contentTrendStats';
 
 const MAX_POSTS_PER_CALL = 15; // outlier sets are small by construction; this is just a defensive cap
 
@@ -61,11 +62,20 @@ export async function analyzeTopCompetitorPosts(req: Request, res: Response) {
           hook: a.hook,
           content_pillar: a.content_pillar ?? null,
           audience_action_driver: a.audience_action_driver ?? null,
+          text_hooks: Array.isArray(a.text_hooks) ? a.text_hooks : [],
+          cta: a.cta ?? null,
+          visual_hooks: Array.isArray(a.visual_hooks) ? a.visual_hooks : [],
+          style: a.style ?? null,
         }];
       });
 
       if (summaries.length) {
-        outlierInsight = await synthesizeOutlierInsight(summaries);
+        // synthesizeOutlierInsight now returns a structured 6-topic object (see
+        // SocialPillarSection.jsx's use of the same function via analyzeTopOwnPosts) —
+        // this route's only consumer (SocialCompetition.jsx) still renders one
+        // plain paragraph, so derive that from the copy-related topics.
+        const topics = await synthesizeOutlierInsight(summaries);
+        outlierInsight = deriveCopySummary(topics);
         if (outlierInsight) {
           await prisma.competitor.update({
             where: { id: competitorId },

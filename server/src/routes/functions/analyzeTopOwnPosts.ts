@@ -2,14 +2,19 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { applyOutlierAnalysis } from '../../lib/outlierPostAnalysis';
 import { synthesizeOutlierInsight, OutlierPostSummary } from '../../lib/synthesizeOutlierInsight';
+import { computeContentTrendStats, deriveCopySummary } from '../../lib/contentTrendStats';
 
 const MAX_POSTS_PER_CALL = 15; // outlier sets are small by construction; this is just a defensive cap
 
 /**
  * analyzeTopOwnPosts — AI hook/content-pillar/audience-action-driver analysis
  * for the business's own detected engagement-outlier posts, plus a synthesized
- * cross-post insight (BusinessProfile.outlier_insight) explaining the common
- * pattern(s) across the whole outlier set.
+ * 6-topic insight (BusinessProfile.outlier_topics, JSON — content themes, hook
+ * patterns, engagement drivers, visual style, platform performance,
+ * improvement opportunity) explaining the pattern(s) across the whole outlier
+ * set. Also derives BusinessProfile.outlier_insight, a single backward-
+ * compatible paragraph for BusinessSocialSnapshot.jsx (Marketing page), which
+ * still renders one plain-text field.
  *
  * Body: { businessProfileId, posts: [{ id, engagementMultiple }], force? }
  */
@@ -45,7 +50,9 @@ export async function analyzeTopOwnPosts(req: Request, res: Response) {
       if (result.skipped) skipped++;
     }
 
-    // Synthesize a cross-post insight for this business's own outlier set.
+    // Synthesize a 6-topic cross-post insight for this business's own outlier set.
+    let outlierTopics: Awaited<ReturnType<typeof synthesizeOutlierInsight>> = null;
+    let outlierStats: ReturnType<typeof computeContentTrendStats> = null;
     let outlierInsight: string | null = null;
     if (ownedIds.size) {
       const rows = await prisma.businessPost.findMany({
@@ -64,21 +71,37 @@ export async function analyzeTopOwnPosts(req: Request, res: Response) {
           hook: a.hook,
           content_pillar: a.content_pillar ?? null,
           audience_action_driver: a.audience_action_driver ?? null,
+          text_hooks: Array.isArray(a.text_hooks) ? a.text_hooks : [],
+          cta: a.cta ?? null,
+          visual_hooks: Array.isArray(a.visual_hooks) ? a.visual_hooks : [],
+          style: a.style ?? null,
         }];
       });
 
       if (summaries.length) {
-        outlierInsight = await synthesizeOutlierInsight(summaries);
-        if (outlierInsight) {
+        outlierStats = computeContentTrendStats(summaries);
+        outlierTopics = await synthesizeOutlierInsight(summaries);
+        outlierInsight = deriveCopySummary(outlierTopics);
+        if (outlierTopics) {
           await prisma.businessProfile.update({
             where: { id: businessProfileId },
-            data: { outlier_insight: outlierInsight, outlier_insight_at: new Date().toISOString() },
+            data: {
+              outlier_insight: outlierInsight,
+              outlier_topics: JSON.stringify(outlierTopics),
+              outlier_stats: outlierStats ? JSON.stringify(outlierStats) : null,
+              outlier_insight_at: new Date().toISOString(),
+            },
           }).catch(() => {});
         }
       }
     }
 
-    return res.json({ analyzed, skipped, requested: posts.length, outlier_insight: outlierInsight });
+    return res.json({
+      analyzed, skipped, requested: posts.length,
+      outlier_insight: outlierInsight,
+      outlier_topics: outlierTopics,
+      outlier_stats: outlierStats,
+    });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

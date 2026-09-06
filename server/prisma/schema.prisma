@@ -125,16 +125,27 @@ model BusinessProfile {
   about_source_excerpts       String?  // JSON: {source_type: {url?, excerpt}} raw provenance (KAN-202)
   about_generated_at          String?  // ISO timestamp of last generate/regenerate
   about_approved_at           String?  // ISO timestamp of last Approve
-  // Synthesized explanation of the common pattern(s) across this business's
-  // own current outlier/top-performing posts.
-  outlier_insight              String?  // 2-4 sentences (Hebrew)
+  // Synthesized 6-topic explanation of the common pattern(s) across this
+  // business's own current outlier/top-performing posts (content themes, hook
+  // patterns, engagement drivers, visual style, platform performance,
+  // improvement opportunity — see CONTENT_TRENDS_TOPICS). outlier_insight
+  // itself is now a DERIVED single paragraph kept for BusinessSocialSnapshot.jsx
+  // (Marketing page), which still renders one plain-text field.
+  outlier_insight              String?  // derived single paragraph (Hebrew) — backward compat only
+  outlier_topics               String?  // JSON: ContentTrendsInsight (6 keys, see contentTrendStats.ts)
+  outlier_stats                String?  // JSON: ContentTrendStats — content_pillar/audience_action_driver/platform breakdowns
   outlier_insight_at           String?  // ISO timestamp
-  // Synthesized explanation of the pattern(s) recurring across the top posts
-  // pooled from ALL of this business's tracked competitors (not one competitor),
-  // split into copy (caption/CTA/text hooks) vs visual (creative/style/visual hooks).
-  content_trends_copy_insight    String?  // 2-4 sentences (Hebrew)
+  // Synthesized 6-topic explanation of the pattern(s) recurring across the top
+  // posts pooled from ALL of this business's tracked competitors (not one
+  // competitor) — same CONTENT_TRENDS_TOPICS structure as outlier_topics above.
+  // content_trends_copy_insight/content_trends_visual_insight are now DERIVED
+  // single paragraphs kept for CompetitorContentTrends.jsx (Marketing page),
+  // which still renders them as two plain-text fields.
+  content_trends_copy_insight    String?  // derived single paragraph (Hebrew) — backward compat only
   content_trends_copy_examples   String?  // JSON array of {competitorName, text} — real verbatim quotes exemplifying content_trends_copy_insight
-  content_trends_visual_insight  String?  // 2-4 sentences (Hebrew)
+  content_trends_visual_insight  String?  // derived — same value as content_trends_topics.visual_style
+  content_trends_topics           String?  // JSON: ContentTrendsInsight (6 keys, see contentTrendStats.ts)
+  content_trends_stats            String?  // JSON: ContentTrendStats — content_pillar/audience_action_driver/platform breakdowns
   content_trends_insight_at      String?  // ISO timestamp
   // Synthesized explanation of what competitors' social bios commonly contain
   // and how they're structured, pooled from ALL tracked competitors' profiles.

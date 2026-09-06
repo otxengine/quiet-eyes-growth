@@ -6,11 +6,38 @@ import { apiFetch, computeOutlierPosts, usePooledCompetitorOutlierPosts, fmtCoun
 import { ComparisonChart } from '@/components/competitors/SocialInsightsComparison';
 import PillarRefreshBadge from './PillarRefreshBadge';
 
+// Mirrors CONTENT_TRENDS_TOPICS in server/src/lib/contentTrendStats.ts — same
+// 6 keys, same order, shared by both content blocks below (own + competitors).
+const CONTENT_TREND_TOPICS = [
+  { key: 'content_themes',         label: '🎯 נושאי תוכן חוזרים' },
+  { key: 'hook_patterns',          label: '🪝 דפוסי הוק' },
+  { key: 'engagement_drivers',     label: '💬 קריאות לפעולה' },
+  { key: 'visual_style',           label: '🎨 סגנון ויזואלי' },
+  { key: 'platform_performance',   label: '📱 ביצועי פלטפורמה' },
+  { key: 'improvement_opportunity',label: '💡 הזדמנות לשיפור' },
+];
+
+function ContentTrendsTopics({ topics }) {
+  if (!topics) return null;
+  return (
+    <div className="space-y-2">
+      {CONTENT_TREND_TOPICS.map(({ key, label }) => topics[key] && (
+        <div key={key}>
+          <p className="text-[11px] font-semibold text-foreground-muted">{label}</p>
+          <p className="text-[13px] leading-relaxed text-foreground">{topics[key]}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CompetitorContentBlock({ businessProfile, queryClient }) {
   const bpId = businessProfile?.id;
-  const copyInsight = businessProfile?.content_trends_copy_insight;
-  const visualInsight = businessProfile?.content_trends_visual_insight;
   const updatedAt = businessProfile?.content_trends_insight_at;
+  const topics = useMemo(() => {
+    try { return businessProfile?.content_trends_topics ? JSON.parse(businessProfile.content_trends_topics) : null; }
+    catch { return null; }
+  }, [businessProfile?.content_trends_topics]);
   const copyExamples = useMemo(() => {
     try { return businessProfile?.content_trends_copy_examples ? JSON.parse(businessProfile.content_trends_copy_examples) : []; }
     catch { return []; }
@@ -19,7 +46,7 @@ function CompetitorContentBlock({ businessProfile, queryClient }) {
   const { pooledOutlierPosts } = usePooledCompetitorOutlierPosts(bpId);
 
   const { refreshing, manualRefresh } = useStaleInsight({
-    value: copyInsight,
+    value: topics,
     updatedAt,
     enabled: !!bpId && pooledOutlierPosts.length > 0,
     refresh: (opts) =>
@@ -35,7 +62,7 @@ function CompetitorContentBlock({ businessProfile, queryClient }) {
     onRefreshed: () => queryClient.invalidateQueries({ queryKey: ['businessProfiles'] }),
   });
 
-  if (!copyInsight && !visualInsight) return null;
+  if (!topics) return null;
 
   return (
     <div className="p-5 space-y-3">
@@ -43,22 +70,15 @@ function CompetitorContentBlock({ businessProfile, queryClient }) {
         <h4 className="text-[13px] font-bold text-foreground">מה עובד אצל המתחרים</h4>
         <PillarRefreshBadge updatedAt={updatedAt} refreshing={refreshing} onRefresh={manualRefresh} />
       </div>
-      {copyInsight && (
-        <div className="space-y-1.5">
-          <p className="text-[13px] leading-relaxed text-foreground">{copyInsight}</p>
-          {copyExamples.slice(0, 3).length > 0 && (
-            <ul className="space-y-1">
-              {copyExamples.slice(0, 3).map((ex, i) => (
-                <li key={i} className="text-[11px] text-foreground-muted">
-                  <span className="font-semibold">{ex.competitorName}:</span> "{ex.text}"
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-      {visualInsight && (
-        <p className="text-[12px] leading-relaxed text-foreground-muted border-t border-border pt-2">🎨 {visualInsight}</p>
+      <ContentTrendsTopics topics={topics} />
+      {copyExamples.slice(0, 3).length > 0 && (
+        <ul className="space-y-1 border-t border-border pt-2">
+          {copyExamples.slice(0, 3).map((ex, i) => (
+            <li key={i} className="text-[11px] text-foreground-muted">
+              <span className="font-semibold">{ex.competitorName}:</span> "{ex.text}"
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
@@ -66,8 +86,11 @@ function CompetitorContentBlock({ businessProfile, queryClient }) {
 
 function OwnContentBlock({ businessProfile, queryClient }) {
   const bpId = businessProfile?.id;
-  const insight = businessProfile?.outlier_insight;
   const updatedAt = businessProfile?.outlier_insight_at;
+  const topics = useMemo(() => {
+    try { return businessProfile?.outlier_topics ? JSON.parse(businessProfile.outlier_topics) : null; }
+    catch { return null; }
+  }, [businessProfile?.outlier_topics]);
 
   // Same "own posts feed" source BusinessSocialSnapshot.jsx uses — unfiltered
   // by platform, since computeOutlierPosts already buckets by platform
@@ -80,7 +103,7 @@ function OwnContentBlock({ businessProfile, queryClient }) {
   const ownOutlierPosts = useMemo(() => computeOutlierPosts(feedData?.posts ?? []), [feedData?.posts]);
 
   const { refreshing, manualRefresh } = useStaleInsight({
-    value: insight,
+    value: topics,
     updatedAt,
     enabled: !!bpId && ownOutlierPosts.length > 0,
     refresh: (opts) =>
@@ -92,7 +115,7 @@ function OwnContentBlock({ businessProfile, queryClient }) {
     onRefreshed: () => queryClient.invalidateQueries({ queryKey: ['businessProfiles'] }),
   });
 
-  if (!insight) return null;
+  if (!topics) return null;
 
   return (
     <div className="p-5 space-y-3 border-t border-border">
@@ -100,7 +123,7 @@ function OwnContentBlock({ businessProfile, queryClient }) {
         <h4 className="text-[13px] font-bold text-foreground">מה עובד אצלך</h4>
         <PillarRefreshBadge updatedAt={updatedAt} refreshing={refreshing} onRefresh={manualRefresh} />
       </div>
-      <p className="text-[13px] leading-relaxed text-foreground">{insight}</p>
+      <ContentTrendsTopics topics={topics} />
     </div>
   );
 }
