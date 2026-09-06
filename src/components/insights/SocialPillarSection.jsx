@@ -47,7 +47,11 @@ function CompetitorContentBlock({ businessProfile, queryClient }) {
 
   const { refreshing, manualRefresh } = useStaleInsight({
     value: topics,
-    updatedAt,
+    // Force staleness (ignore the real timestamp) until the new 6-topic field
+    // exists — businesses with a pre-migration timestamp would otherwise look
+    // "fresh" and never auto-refresh into the new format, staying invisible
+    // for up to 48h instead of self-healing on next load.
+    updatedAt: topics ? updatedAt : null,
     enabled: !!bpId && pooledOutlierPosts.length > 0,
     refresh: (opts) =>
       base44.functions.invoke(
@@ -104,7 +108,9 @@ function OwnContentBlock({ businessProfile, queryClient }) {
 
   const { refreshing, manualRefresh } = useStaleInsight({
     value: topics,
-    updatedAt,
+    // Force staleness (ignore the real timestamp) until the new 6-topic field
+    // exists — see the matching comment in CompetitorContentBlock above.
+    updatedAt: topics ? updatedAt : null,
     enabled: !!bpId && ownOutlierPosts.length > 0,
     refresh: (opts) =>
       base44.functions.invoke(
