@@ -87,21 +87,26 @@ export default function OffersPillarSection({ businessProfile }) {
         )}
 
         {examples.length > 0 && (
-          <div className="space-y-1">
-            {examples.slice(0, 4).map((ex, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setSelectedExample(ex)}
-                className="w-full flex items-center justify-between gap-2 px-2 py-1 -mx-2 rounded-lg text-[11px] text-foreground-muted hover:bg-muted/40 transition-colors text-right"
-              >
-                <span className="flex-1 truncate">
-                  <span className="font-semibold">{ex.competitorName}</span> ({ex.date}): "{ex.offer_details}"
-                </span>
-                <Maximize2 className="w-3 h-3 shrink-0" />
-              </button>
-            ))}
-          </div>
+          <details className="group">
+            <summary className="cursor-pointer text-[12px] font-bold text-foreground">
+              צפה במבצעי המתחרים האחרונים
+            </summary>
+            <div className="space-y-1 mt-2">
+              {examples.slice(0, 8).map((ex, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setSelectedExample(ex)}
+                  className="w-full flex items-center justify-between gap-2 px-2 py-1 -mx-2 rounded-lg text-[11px] text-foreground-muted hover:bg-muted/40 transition-colors text-right"
+                >
+                  <span className="flex-1 truncate">
+                    <span className="font-semibold">{ex.competitorName}</span> ({ex.date}): "{ex.offer_details}"
+                  </span>
+                  <Maximize2 className="w-3 h-3 shrink-0" />
+                </button>
+              ))}
+            </div>
+          </details>
         )}
 
         {selectedExample && (

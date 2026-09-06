@@ -51,13 +51,13 @@ function parseAnalysis(raw: string | null): any {
   try { return JSON.parse(raw); } catch { return null; }
 }
 
-/** Picks 2-4 representative real offer examples, most recent first, spread
- * across different competitors where possible (never fabricated — pulled
- * straight from each item's own extracted offer_details/topic). Carries the
- * full underlying post/ad (media, caption/body) too, not just the short
- * extracted phrase, so the frontend can render an expandable "see the full
- * post/ad" view — not just a one-line quote. */
-function pickExamples(items: LandscapeItem[], limit = 4): OffersLandscapeExample[] {
+/** Picks up to `limit` representative real offer examples, most recent
+ * first, one per competitor (never fabricated — pulled straight from each
+ * item's own extracted offer_details/topic). Carries the full underlying
+ * post/ad (media, caption/body) too, not just the short extracted phrase,
+ * so the frontend can render an expandable "see the full post/ad" view —
+ * not just a one-line quote. */
+function pickExamples(items: LandscapeItem[], limit = 8): OffersLandscapeExample[] {
   const dated = items
     .map(it => ({ it, date: it.posted_at ?? it.first_seen_at }))
     .filter((x): x is { it: LandscapeItem; date: Date | string } => !!x.date)
