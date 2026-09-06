@@ -33,6 +33,16 @@ function writeCache(bpId, data) {
   try { localStorage.setItem(cacheKey(bpId), JSON.stringify(data)); } catch {}
 }
 
+// Fallback identity for an action the LLM didn't tag with topic_key —
+// derived from its fixed cta_link bucket + a slug of its title, so a dismiss
+// still has something stable to key off within the same generated brief.
+function slugifyTopic(action) {
+  const base = `${action.cta_link || 'other'}_${action.title || ''}`;
+  let hash = 0;
+  for (let i = 0; i < base.length; i++) hash = (hash * 31 + base.charCodeAt(i)) | 0;
+  return `auto_${(action.cta_link || 'other').replace(/\W+/g, '')}_${Math.abs(hash)}`;
+}
+
 // ── Action row ────────────────────────────────────────────────────────────────
 function BriefAction({ action, index, navigate, onDismiss }) {
   const p = PRIORITY[action.priority] ?? PRIORITY[1];
@@ -156,7 +166,12 @@ export default function DailyBriefPanel({ businessProfile }) {
     if (!force) {
       const cached = readCache(bpId);
       if (cached?.actions?.length) {
-        const filtered = { ...cached, actions: cached.actions.filter(a => !dismissedKeys.has(a.topic_key)) };
+        const filtered = {
+          ...cached,
+          actions: cached.actions
+            .map(a => ({ ...a, topic_key: a.topic_key || slugifyTopic(a) }))
+            .filter(a => !dismissedKeys.has(a.topic_key)),
+        };
         if (filtered.actions.length) { setBrief(filtered); return; }
         // Cache was fully made of now-dismissed topics — fall through and regenerate.
       }
@@ -231,6 +246,7 @@ cta_link חייב להיות אחד בדיוק מ: /reviews, /leads, /retention,
       const result = await base44.integrations.Core.InvokeLLM({
         model: 'sonnet',
         maxTokens: 700,
+        response_json_schema: { type: 'object' },
         prompt,
       });
 
@@ -239,7 +255,13 @@ cta_link חייב להיות אחד בדיוק מ: /reviews, /leads, /retention,
       if (!match) throw new Error('no JSON in response');
       const parsed = JSON.parse(match[0]);
       if (!Array.isArray(parsed.actions) || parsed.actions.length === 0) throw new Error('empty actions');
-      parsed.actions = parsed.actions.filter(a => !dismissedKeys.has(a.topic_key));
+      // The LLM is asked for topic_key but free-form prose compliance isn't
+      // guaranteed — fall back to a derived key so dismiss always works today,
+      // even on a run where the model omits it (loses cross-day stability for
+      // that one action, not the dismiss feature itself).
+      parsed.actions = parsed.actions
+        .map(a => ({ ...a, topic_key: a.topic_key || slugifyTopic(a) }))
+        .filter(a => !dismissedKeys.has(a.topic_key));
 
       writeCache(bpId, parsed);
       setBrief(parsed);
