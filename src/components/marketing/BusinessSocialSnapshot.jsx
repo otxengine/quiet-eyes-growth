@@ -28,8 +28,12 @@ export default function BusinessSocialSnapshot({ businessProfile, platform }) {
   const queryClient = useQueryClient();
 
   const { data: feedData, isLoading: loadingFeed } = useQuery({
-    queryKey: ['businessSnapshotFeed', bpId],
-    queryFn: () => apiFetch(`/social/snapshot/feed?businessProfileId=${bpId}`),
+    queryKey: ['businessSnapshotFeed', bpId, platform],
+    // Scoped server-side by platform — the route caps at 50 posts, and an
+    // unscoped fetch lets one platform's more-recent posts crowd the other
+    // out of that shared cap entirely (e.g. Instagram's recent posts leaving
+    // almost none of Facebook's older backfilled history visible).
+    queryFn: () => apiFetch(`/social/snapshot/feed?businessProfileId=${bpId}&platform=${platform}`),
     enabled: !!bpId && hasPlatformUrl,
   });
   const { data: adsData, isLoading: loadingAds } = useQuery({
@@ -43,7 +47,7 @@ export default function BusinessSocialSnapshot({ businessProfile, platform }) {
     enabled: !!bpId && hasPlatformUrl,
   });
 
-  const posts = (feedData?.posts ?? []).filter(p => p.platform === platform);
+  const posts = feedData?.posts ?? [];
   const ads = (adsData?.ads ?? []).filter(a => a.platform === platform);
   const profiles = (profileData?.profiles ?? []).filter(p => p.platform === platform);
   const latestPostAt = posts.reduce((max, p) => (p.posted_at && (!max || p.posted_at > max)) ? p.posted_at : max, null);
