@@ -6,6 +6,7 @@ import { getSectorContentStrategy } from '../../lib/sectorPrompts';
 import { getSectorContext as getAccumulatedSectorCtx } from '../../lib/sectorContext';
 import { buildAgentPromptContext, isSignalRelevant } from '../../lib/businessProfile';
 import { publishEvent } from '../../lib/eventBus';
+import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
 
 export async function synthesizeMarketInsights(req: Request, res: Response) {
   const { businessProfileId } = req.body;
@@ -41,6 +42,10 @@ export async function synthesizeMarketInsights(req: Request, res: Response) {
     const sectorCtx = getSectorContentStrategy(profile.category);
     const profileCtx = buildAgentPromptContext(profile);
 
+    const bizCtx = await loadBusinessContext(businessProfileId);
+    const ctxPrompt = formatContextForPrompt(bizCtx, 'synthesizeMarketInsights');
+    const rejectedPatterns: string[] = bizCtx?.rejectedPatterns || [];
+
     // ── Cold-start: no raw signals yet — generate sector-level insights from context alone ──
     if (signals.length === 0) {
       const coldResult = await invokeLLM({
@@ -55,6 +60,7 @@ ${competitorContext}
 
 ${sectorCtx}
 ${accumulatedSectorCtx ? `\n${accumulatedSectorCtx}` : ''}
+${ctxPrompt}
 Generate 4-5 initial market insights that are specific and actionable for this sector and city in Israel.
 Each insight must:
 • stem from understanding of the specific sector (not generic)
@@ -88,6 +94,7 @@ Return ONLY valid JSON:
       for (const insight of coldInsights) {
         if (!insight.summary || existingSumsCold.has(insight.summary)) continue;
         if ((insight.confidence ?? 100) < 40) continue; // skip low-confidence insights
+        if (rejectedPatterns.some(p => p && insight.summary.toLowerCase().includes(p))) continue;
         const actionMeta = JSON.stringify({
           action_label:    insight.action_label || 'פתח משימה',
           action_type:     insight.action_type || 'task',
@@ -147,6 +154,7 @@ ${competitorContext}
 
 ${sectorCtx}
 ${accumulatedSectorCtx ? `\n${accumulatedSectorCtx}` : ''}
+${ctxPrompt}
 Raw signals (${signals.length} signals):
 ${contextBlock}
 
@@ -189,6 +197,7 @@ Return ONLY valid JSON:
     for (const insight of insights) {
       if (!insight.summary || existingSummaries.has(insight.summary)) { dupes++; continue; }
       if ((insight.confidence ?? 100) < 40) continue; // skip low-confidence insights
+      if (rejectedPatterns.some(p => p && insight.summary.toLowerCase().includes(p))) continue;
       const sourceUrls = (insight.source_urls || []).filter((u: string) => u?.startsWith('http'));
       // Store action metadata in source_description as JSON for use by UI
       const actionMeta = JSON.stringify({

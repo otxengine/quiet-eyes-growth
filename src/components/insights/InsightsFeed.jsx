@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Loader2, Archive } from 'lucide-react';
 import StatCards from '@/components/shared/StatCards';
 import DataTable from '@/components/shared/DataTable';
+import DismissMenu from '@/components/ui/DismissMenu';
 
 /**
  * InsightsFeed — the deduped/relevance-scored ProactiveAlert + MarketSignal
@@ -169,6 +170,7 @@ function getActionLabel(row) {
 
 export default function InsightsFeed({ businessProfile }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const bpId = businessProfile?.id;
   const [showArchived,   setShowArchived]   = useState(false);
   const [activeCategory, setActiveCategory] = useState('all');
@@ -364,12 +366,26 @@ export default function InsightsFeed({ businessProfile }) {
               }
 
               if (col.key === 'action') return (
-                <button
-                  onClick={() => navigate(`/insights/${row.kind}-${row.id}`)}
-                  className="text-xs font-semibold text-[#e8344d] hover:underline whitespace-nowrap"
-                >
-                  {getActionLabel(row)} &rarr;
-                </button>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => navigate(`/insights/${row.kind}-${row.id}`)}
+                    className="text-xs font-semibold text-[#e8344d] hover:underline whitespace-nowrap"
+                  >
+                    {getActionLabel(row)} &rarr;
+                  </button>
+                  <DismissMenu
+                    entityType={row.kind}
+                    entityId={row.id}
+                    title={row.title}
+                    businessProfileId={bpId}
+                    buttonLabel=""
+                    buttonClassName="text-foreground-muted hover:text-red-500 opacity-60 hover:opacity-100 transition-all flex items-center"
+                    onDismissed={() => {
+                      queryClient.invalidateQueries({ queryKey: ['proactiveAlerts', bpId] });
+                      queryClient.invalidateQueries({ queryKey: ['allSignals', bpId] });
+                    }}
+                  />
+                </div>
               );
 
               return null;

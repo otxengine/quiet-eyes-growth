@@ -20,7 +20,7 @@ export async function updateInsightMemory(req: Request, res: Response) {
   try {
     // ── Entity-level dismiss: mark the specific DB record as dismissed ──────
     if (action === 'dismissed' && entityId) {
-      const dismissData = { is_dismissed: true, ...(reason ? { dismiss_reason: reason } : {}) };
+      const dismissData = { is_dismissed: true };
       if (entityType === 'signal') {
         await prisma.marketSignal.update({ where: { id: entityId }, data: dismissData }).catch(() => {});
       } else if (entityType === 'alert') {

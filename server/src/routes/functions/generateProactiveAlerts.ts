@@ -247,9 +247,7 @@ Generate ${maxNewAlerts} diverse, non-duplicate alerts. Return ONLY valid JSON:
     const rawAlerts: any[] = result?.alerts || [];
 
     // Memory suppression — filter alerts matching rejected patterns
-    const rejectedPatterns: string[] = (bizCtx as any)?.rejected_patterns
-      ? ((bizCtx as any).rejected_patterns as string).split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean)
-      : [];
+    const rejectedPatterns: string[] = bizCtx?.rejectedPatterns || [];
 
     const filteredAlerts = rawAlerts.filter(alert => {
       if (!alert.title) return false;

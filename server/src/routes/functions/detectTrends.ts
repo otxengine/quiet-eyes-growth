@@ -5,6 +5,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { getAgentMission } from '../../lib/missionPlanner';
 import { filterSignals, getSectorProfile } from '../../lib/businessProfile';
 import { tavilyAdvancedSearch } from '../../lib/tavily';
+import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
 
 const SERP_API_KEY = process.env.SERP_API_KEY || '';
 
@@ -133,6 +134,10 @@ export async function detectTrends(req: Request, res: Response) {
     // Filter out irrelevant signals before analysis
     const relevantSignals = filterSignals(rawSignals, profile);
 
+    const bizCtx = await loadBusinessContext(businessProfileId);
+    const ctxPrompt = formatContextForPrompt(bizCtx, 'detectTrends');
+    const rejectedPatterns: string[] = bizCtx?.rejectedPatterns || [];
+
     // Build ignore list from missions for prompt
     const ignoreSignalsBlock = marketMission?.ignore_signals_he?.length
       ? `\nSignals to IGNORE (not relevant to this business): ${marketMission.ignore_signals_he.join(', ')}`
@@ -159,6 +164,7 @@ export async function detectTrends(req: Request, res: Response) {
 Return ONLY valid JSON. ALL string values must be in Hebrew.
 ${marketContextBlock}
 ${ignoreSignalsBlock}
+${ctxPrompt}
 
 Data:
 ${combinedContext.substring(0, 3200)}
@@ -198,6 +204,7 @@ Return ONLY valid JSON:
     for (const trend of trends) {
       if (!trend.evidence) continue;
       if (!trend.trend_name || existingSummaries.has(trend.trend_name)) continue;
+      if (rejectedPatterns.some(p => p && trend.trend_name.toLowerCase().includes(p))) continue;
 
       // Boost impact for early trends (30%+ rise from Google Trends)
       const isEarlyTrend = trend.urgency === 'high' || trend.growth_stage === 'emerging';
