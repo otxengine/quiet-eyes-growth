@@ -304,17 +304,12 @@ router.get('/social/leaderboard', async (req: Request, res: Response) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/competitors/social/kpi-comparison?businessProfileId=
-// Two Insights-pillar KPIs — followers gained and engagement rate, both over a
-// fixed 30-day window — for the business vs. the average of its tracked
-// competitors. Tracked = approved + not irrelevant, the same definition the
-// rest of Insights uses (matches the reviews pillar's "X/Y מתחרים" counts),
-// stricter than /social/leaderboard's not_relevant-only filter above.
-// engagement_rate_30d for competitors_avg is the mean of each competitor's
-// OWN rate (not pooled totals ÷ pooled followers), so one large competitor
-// doesn't dominate the average. followers uses the MEDIAN instead — follower
-// counts can span orders of magnitude (one chain/franchise competitor can
-// dwarf every small business by 1000x), so a mean there would just report
-// that one outlier's scale rather than "a typical competitor."
+// Two Insights-pillar KPIs — followers and engagement, both over a fixed
+// 30-day window — for the business vs. each individually-named tracked
+// competitor (not an aggregate). Tracked = approved + not irrelevant, the
+// same definition the rest of Insights uses (matches the reviews pillar's
+// "X/Y מתחרים" counts), stricter than /social/leaderboard's
+// not_relevant-only filter above.
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/social/kpi-comparison', async (req: Request, res: Response) => {
   try {
@@ -323,37 +318,19 @@ router.get('/social/kpi-comparison', async (req: Request, res: Response) => {
 
     const competitors = await prisma.competitor.findMany({
       where: { linked_business: businessProfileId, tracking_status: 'approved', not_relevant: false },
-      select: { id: true },
+      select: { id: true, name: true },
     });
 
     const own = await computeEntityKpis({ linked_business: businessProfileId, competitor_id: null });
-    const perCompetitor = await Promise.all(
-      competitors.map(c => computeEntityKpis({ linked_business: businessProfileId, competitor_id: c.id })),
+    const per_competitor = await Promise.all(
+      competitors.map(async c => ({
+        id: c.id,
+        name: c.name,
+        ...(await computeEntityKpis({ linked_business: businessProfileId, competitor_id: c.id })),
+      })),
     );
 
-    const avg = (vals: (number | null)[]): number | null => {
-      const present = vals.filter((v): v is number => v != null);
-      return present.length ? present.reduce((a, b) => a + b, 0) / present.length : null;
-    };
-
-    // Follower counts, unlike engagement rate, can span orders of magnitude
-    // (a single chain/franchise competitor can dwarf every small business by
-    // 1000x) — a mean gets dragged entirely by that one outlier and no longer
-    // represents "a typical competitor." Median is robust to that.
-    const median = (vals: (number | null)[]): number | null => {
-      const present = vals.filter((v): v is number => v != null).sort((a, b) => a - b);
-      if (!present.length) return null;
-      const mid = Math.floor(present.length / 2);
-      return present.length % 2 !== 0 ? present[mid] : (present[mid - 1] + present[mid]) / 2;
-    };
-
-    const competitors_avg = {
-      followers: median(perCompetitor.map(c => c.followers)),
-      followers_gained_30d: avg(perCompetitor.map(c => c.followers_gained_30d)),
-      engagement_rate_30d: avg(perCompetitor.map(c => c.engagement_rate_30d)),
-    };
-
-    return res.json({ own, competitors_avg, tracked_competitors_count: competitors.length, window_days: 30 });
+    return res.json({ own, per_competitor, tracked_competitors_count: competitors.length, window_days: 30 });
   } catch (e: any) {
     return res.status(500).json({ error: e.message });
   }

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useStaleInsight } from '@/hooks/useStaleInsight';
-import { apiFetch, computeOutlierPosts, usePooledCompetitorOutlierPosts, fmtCount } from '@/components/competitors/socialShared';
+import { apiFetch, computeOutlierPosts, usePooledCompetitorOutlierPosts } from '@/components/competitors/socialShared';
 import { ComparisonChart } from '@/components/competitors/SocialInsightsComparison';
 import PillarRefreshBadge from './PillarRefreshBadge';
 
@@ -120,37 +120,15 @@ function OwnContentBlock({ businessProfile, queryClient }) {
   );
 }
 
-const fmtFollowersGained = (v) => `${v > 0 ? '+' : ''}${fmtCount(v)}`;
-
-function SocialKpiTextRow({ label, ownVal, compVal, fmt }) {
-  const ownStr = ownVal == null ? null : fmt(ownVal);
-  const compStr = compVal == null ? null : fmt(compVal);
-  if (ownStr == null && compStr == null) return null;
-  return (
-    <div className="flex items-center justify-between gap-3 text-[12px]">
-      <span className="text-foreground-muted">{label}</span>
-      <div className="flex items-center gap-3">
-        <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full shrink-0 bg-[#2a78d6]" />
-          <span className="font-semibold text-foreground">{ownStr ?? 'אין מספיק נתונים עדיין'}</span>
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full shrink-0 bg-[#eb6834]" />
-          <span className="font-semibold text-foreground">{compStr ?? 'אין מספיק נתונים עדיין'}</span>
-        </span>
-      </div>
-    </div>
-  );
+function truncateCompetitorName(name) {
+  return (name || '').length > 12 ? name.slice(0, 12) + '…' : name;
 }
 
 /**
- * "שיעור מעורבות" as a plain own-vs-competitor-avg text row (engagement
- * rate is a 0-100% metric, not sensitive to one outlier the way raw
- * follower counts are, but two isolated bars didn't read well either) —
- * plus "סה״כ עוקבים" and "עוקבים חדשים" as bar charts. The competitor side
- * of "סה״כ עוקבים" is a MEDIAN (see the kpi-comparison route), not a mean,
- * so one chain/franchise competitor's follower count doesn't put both bars
- * on wildly different scales. A live comparison query, not an LLM insight,
+ * "עוקבים" and "מעורבות" as per-competitor bar charts — one named bar per
+ * tracked competitor plus the business's own bar — same chart style and
+ * ComparisonChart component SocialCompetition.jsx uses, instead of a single
+ * own-vs-aggregate comparison. A live comparison query, not an LLM insight,
  * so unlike the two blocks above it doesn't need useStaleInsight — just
  * gated on having any tracked competitors, same as ReviewsPillarSection's
  * TopicRadarBlock.
@@ -165,44 +143,38 @@ function SocialKpiComparisonBlock({ businessProfile, trackedCompetitors }) {
   });
 
   if (!trackedCompetitors.length || !data) return null;
-  const { own, competitors_avg } = data;
+  const { own, per_competitor = [] } = data;
 
-  const toChartData = (ownVal, compVal, compLabel = 'ממוצע מתחרים') => [
-    ...(ownVal != null ? [{ id: 'own', name: 'העסק שלי', value: ownVal, isOwn: true }] : []),
-    ...(compVal != null ? [{ id: 'avg', name: compLabel, value: compVal, isOwn: false }] : []),
+  const toChartData = (ownVal, key) => [
+    ...(ownVal != null ? [{ id: 'own', name: 'העסק שלי', [key]: ownVal, isOwn: true }] : []),
+    ...per_competitor
+      .filter(c => c[key] != null)
+      .map(c => ({ id: c.id, name: truncateCompetitorName(c.name), [key]: c[key], isOwn: false })),
   ];
-  const totalFollowersChartData = toChartData(own.followers, competitors_avg.followers, 'חציון מתחרים');
-  const followersChartData = toChartData(own.followers_gained_30d, competitors_avg.followers_gained_30d);
 
-  const hasAnything = totalFollowersChartData.length > 0 || followersChartData.length > 0
-    || own.engagement_rate_30d != null || competitors_avg.engagement_rate_30d != null;
-  if (!hasAnything) return null;
+  const followersChartData = toChartData(own.followers, 'followers');
+  const engagementChartData = toChartData(own.avg_interactions_30d, 'avg_interactions_30d');
+
+  if (!followersChartData.length && !engagementChartData.length) return null;
 
   return (
     <div className="p-5 space-y-3 border-t border-border">
-      <h4 className="text-[13px] font-bold text-foreground">העסק שלך מול ממוצע המתחרים</h4>
-      <SocialKpiTextRow
-        label="שיעור מעורבות (30 יום)"
-        ownVal={own.engagement_rate_30d}
-        compVal={competitors_avg.engagement_rate_30d}
-        fmt={(v) => `${v.toFixed(1)}%`}
-      />
+      <h4 className="text-[13px] font-bold text-foreground">העסק שלך מול המתחרים</h4>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {totalFollowersChartData.length > 0 && (
-          <ComparisonChart
-            title="סה״כ עוקבים"
-            subtitle="חציון המתחרים"
-            data={totalFollowersChartData}
-            dataKey="value"
-          />
-        )}
         {followersChartData.length > 0 && (
           <ComparisonChart
-            title="עוקבים חדשים"
-            subtitle="30 הימים האחרונים"
+            title="עוקבים"
+            subtitle="סה״כ עוקבים לפי עסק"
             data={followersChartData}
-            dataKey="value"
-            valueFormatter={fmtFollowersGained}
+            dataKey="followers"
+          />
+        )}
+        {engagementChartData.length > 0 && (
+          <ComparisonChart
+            title="מעורבות"
+            subtitle="מעורבות ממוצעת לפוסט — 30 יום אחרונים"
+            data={engagementChartData}
+            dataKey="avg_interactions_30d"
           />
         )}
       </div>
