@@ -38,11 +38,6 @@ function CompetitorContentBlock({ businessProfile, queryClient }) {
     try { return businessProfile?.content_trends_topics ? JSON.parse(businessProfile.content_trends_topics) : null; }
     catch { return null; }
   }, [businessProfile?.content_trends_topics]);
-  const copyExamples = useMemo(() => {
-    try { return businessProfile?.content_trends_copy_examples ? JSON.parse(businessProfile.content_trends_copy_examples) : []; }
-    catch { return []; }
-  }, [businessProfile?.content_trends_copy_examples]);
-
   const { pooledOutlierPosts } = usePooledCompetitorOutlierPosts(bpId);
 
   const { refreshing, manualRefresh } = useStaleInsight({
@@ -75,15 +70,6 @@ function CompetitorContentBlock({ businessProfile, queryClient }) {
         <PillarRefreshBadge updatedAt={updatedAt} refreshing={refreshing} onRefresh={manualRefresh} />
       </div>
       <ContentTrendsTopics topics={topics} />
-      {copyExamples.slice(0, 3).length > 0 && (
-        <ul className="space-y-1 border-t border-border pt-2">
-          {copyExamples.slice(0, 3).map((ex, i) => (
-            <li key={i} className="text-[11px] text-foreground-muted">
-              <span className="font-semibold">{ex.competitorName}:</span> "{ex.text}"
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }
