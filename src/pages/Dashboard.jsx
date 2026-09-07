@@ -1,9 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { ChevronLeft } from 'lucide-react';
-import LiveStreamCard from '@/components/shared/LiveStreamCard';
 import KoriAvatar from '@/components/onboarding/KoriAvatar';
 import InsightsFeed from '@/components/insights/InsightsFeed';
 
@@ -31,14 +29,6 @@ const NAV_CHIPS = [
   { pattern: /קמפיין|שיווק/, label: 'שיווק →', path: '/marketing' },
 ];
 
-const ACTION_TYPE_LABELS = {
-  social_post:   'פוסט',
-  review_reply:  'תגובה',
-  lead_followup: 'ליד',
-  email:         'מייל',
-  whatsapp:      'WhatsApp',
-};
-
 export default function Dashboard() {
   const { businessProfile } = useOutletContext();
   const navigate = useNavigate();
@@ -51,60 +41,6 @@ export default function Dashboard() {
   const [aiInput, setAiInput] = useState('');
   const threadRef = useRef(null);
   const inputRef = useRef(null);
-
-  const { data: allLeads = [] } = useQuery({
-    queryKey: ['allLeads', bpId],
-    queryFn: () => base44.entities.Lead.filter({ linked_business: bpId }, '-score', 50),
-    enabled: !!bpId,
-  });
-
-  const { data: allSignals = [] } = useQuery({
-    queryKey: ['allSignals', bpId],
-    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId }, '-detected_at', 30),
-    enabled: !!bpId,
-  });
-
-  const { data: eventBusStats } = useQuery({
-    queryKey: ['eventBusStats', bpId],
-    queryFn: () => base44.functions.invoke('getEventBusStats', { businessProfileId: bpId }),
-    enabled: !!bpId,
-    refetchInterval: 60000,
-  });
-
-  // Computed stats
-  const hotLeads = allLeads.filter(l => l.status === 'hot');
-  const urgentSignals = allSignals.filter(s => !s.is_read && s.impact_level === 'high');
-
-  // Live stream items
-  const pendingActions = eventBusStats?.pending_actions || [];
-  const liveItems = pendingActions.length > 0
-    ? pendingActions.slice(0, 4).map(action => ({
-        type: ACTION_TYPE_LABELS[action.action_type] || action.action_type || 'פעולה',
-        typeBg: 'bg-purple-100 text-purple-700',
-        time: 'ממתין לאישור',
-        description: action.prefilled_text || action.decision_reason || 'פעולה ממתינה לאישורך',
-        ctaLabel: 'צפיה ואישור',
-        onCta: () => navigate('/approvals'),
-        timerMinutes: action.auto_execute_minutes_remaining || 2,
-      }))
-    : [
-        ...hotLeads.slice(0, 2).map(l => ({
-          type: 'לידים',
-          typeBg: 'bg-green-100 text-green-700',
-          time: 'לפני 5 דקות',
-          description: `${l.name || 'ליד חדש'} — ${l.company || l.source || 'ממתין לטיפול'}`,
-          ctaLabel: 'צפיה ושליחה',
-          timerMinutes: 2,
-        })),
-        ...urgentSignals.slice(0, 2).map(s => ({
-          type: 'תוכן',
-          typeBg: 'bg-purple-100 text-purple-700',
-          time: 'לפני 12 דקות',
-          description: s.title || s.summary || 'תובנה חדשה מהמערכת',
-          ctaLabel: 'צפיה ופרסום',
-          timerMinutes: 3,
-        })),
-      ];
 
   const quickChips = [
     { label: 'בנה קמפיין חדש',   path: '/marketing/create' },
@@ -351,26 +287,6 @@ export default function Dashboard() {
 
       {/* ── Insights feed (replaces the old LLM-generated Daily Brief) ──────── */}
       <InsightsFeed businessProfile={businessProfile} show24hActivity />
-
-      {/* ── זרם חי ───────────────────────────────────────────────────────── */}
-      {liveItems.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <div className="flex items-baseline justify-between mb-1">
-            <button onClick={() => navigate('/approvals')} className="text-[12px] font-semibold text-[#e8344d] flex items-center gap-0.5">
-              כל הפעולות <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
-            <h3 className="text-[15px] font-bold text-gray-900">
-              זרם חי {pendingActions.length > 0 && <span className="text-[#e8344d]">· {pendingActions.length}</span>}
-            </h3>
-          </div>
-          <p className="text-[11px] text-gray-400 text-right mb-4">פעולות שהמערכת ביצעה וממתינות לאישור שלך</p>
-          <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'thin' }}>
-            {liveItems.map((item, i) => (
-              <LiveStreamCard key={i} {...item} />
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── Upgrade banner ────────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-[#fce4ec] p-5 flex items-center justify-between gap-4">
