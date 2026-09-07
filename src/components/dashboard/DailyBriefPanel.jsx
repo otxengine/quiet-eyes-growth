@@ -250,10 +250,11 @@ cta_link חייב להיות אחד בדיוק מ: /reviews, /leads, /retention,
         prompt,
       });
 
-      const text = typeof result === 'string' ? result : (result?.content || '{}');
-      const match = text.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error('no JSON in response');
-      const parsed = JSON.parse(match[0]);
+      // response_json_schema is set above, so the server already returns the
+      // parsed object directly — only raw-string providers need regex extraction.
+      const parsed = typeof result === 'string'
+        ? JSON.parse((result.match(/\{[\s\S]*\}/) || [])[0] || '{}')
+        : (result || {});
       if (!Array.isArray(parsed.actions) || parsed.actions.length === 0) throw new Error('empty actions');
       // The LLM is asked for topic_key but free-form prose compliance isn't
       // guaranteed — fall back to a derived key so dismiss always works today,
