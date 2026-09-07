@@ -527,7 +527,7 @@ router.get('/proxy-image', async (req: Request, res: Response) => {
   if (!allowed) return res.status(403).json({ error: 'Host not allowed' });
 
   try {
-    const upstream = await fetch(url, { headers: { Referer: parsed.origin } });
+    const upstream = await fetch(url, { headers: { Referer: parsed.origin }, signal: AbortSignal.timeout(15_000) });
     if (!upstream.ok) return res.status(upstream.status).end();
     res.setHeader('Content-Type', upstream.headers.get('content-type') || 'image/jpeg');
     res.setHeader('Cache-Control', 'public, max-age=3600');

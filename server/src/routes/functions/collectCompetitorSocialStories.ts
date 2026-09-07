@@ -108,7 +108,8 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
            AND NOT EXISTS (
              SELECT 1 FROM competitor_stories o
              WHERE o.competitor_id = $2 AND o.external_story_id = d.external_story_id
-           )`,
+           )
+         ON CONFLICT (competitor_id, external_story_id) DO NOTHING`,
         businessProfileId, comp.id, donors.map(d => d.id),
       ) as number;
       donorCloned += Number(cloned) || 0;
