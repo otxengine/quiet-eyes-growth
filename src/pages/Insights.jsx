@@ -22,7 +22,6 @@ import { getLimits } from '@/lib/planConfig';
 import OffersPillarSection from '@/components/insights/OffersPillarSection';
 import ReviewsPillarSection from '@/components/insights/ReviewsPillarSection';
 import SocialPillarSection from '@/components/insights/SocialPillarSection';
-import InsightsFeed from '@/components/insights/InsightsFeed';
 
 // ─── Demand Gap section (merged from the former /demand-gap page) ─────────────
 
@@ -637,8 +636,6 @@ export default function Insights() {
       <ReviewsPillarSection businessProfile={businessProfile} />
 
       <OffersPillarSection businessProfile={businessProfile} />
-
-      <InsightsFeed businessProfile={businessProfile} />
 
       <DemandGapSection bpId={bpId} />
 
