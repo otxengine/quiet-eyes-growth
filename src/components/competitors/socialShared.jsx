@@ -249,9 +249,9 @@ export function StoryCard({ story, onSelect }) {
       className={`shrink-0 w-36 rounded-xl border border-border bg-background overflow-hidden relative ${onSelect ? 'hover:shadow-md transition-shadow cursor-pointer' : ''}`}
     >
       {story.media_url ? (
-        story.media_type === 'video' ? (
+        story.media_type === 'video' && story.video_url ? (
           <video
-            src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(story.media_url)}`}
+            src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(story.video_url)}`}
             className="w-full h-52 object-cover"
             muted loop playsInline
           />
@@ -389,9 +389,9 @@ export function StoryDetailModal({ story, onClose }) {
     <Dialog open={!!story} onOpenChange={v => !v && onClose()}>
       <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto p-0">
         {story.media_url && (
-          story.media_type === 'video' ? (
+          story.media_type === 'video' && story.video_url ? (
             <video
-              src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(story.media_url)}`}
+              src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(story.video_url)}`}
               className="w-full max-h-96 object-cover"
               controls muted loop
             />

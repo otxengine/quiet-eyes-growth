@@ -5,7 +5,7 @@ import { base44 } from '@/api/base44Client';
 import { ChevronLeft, ArrowUpRight, Sparkles, Zap, Flame } from 'lucide-react';
 import LiveStreamCard from '@/components/shared/LiveStreamCard';
 import KoriAvatar from '@/components/onboarding/KoriAvatar';
-import DailyBriefPanel from '@/components/dashboard/DailyBriefPanel';
+import InsightsFeed from '@/components/insights/InsightsFeed';
 import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
 
 function getGreeting() {
@@ -398,8 +398,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── Daily Brief ────────────────────────────────────────────────────── */}
-      <DailyBriefPanel businessProfile={businessProfile} />
+      {/* ── Insights feed (replaces the old LLM-generated Daily Brief) ──────── */}
+      <InsightsFeed businessProfile={businessProfile} />
 
       {/* ── 2×2 Shortcuts ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3">
