@@ -6,6 +6,7 @@ import { ChevronLeft } from 'lucide-react';
 import LiveStreamCard from '@/components/shared/LiveStreamCard';
 import KoriAvatar from '@/components/onboarding/KoriAvatar';
 import InsightsFeed from '@/components/insights/InsightsFeed';
+import RecentActivitySummary from '@/components/dashboard/RecentActivitySummary';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -72,10 +73,7 @@ export default function Dashboard() {
   });
 
   // Computed stats
-  const today = new Date().toISOString().slice(0, 10);
-  const newLeadsToday = allLeads.filter(l => (l.created_at || '').startsWith(today));
   const hotLeads = allLeads.filter(l => l.status === 'hot');
-  const actionsCompleted = allLeads.filter(l => l.status === 'completed' || l.lifecycle_stage === 'closed_won');
   const urgentSignals = allSignals.filter(s => !s.is_read && s.impact_level === 'high');
 
   // Live stream items
@@ -375,36 +373,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── בזמן שישנת ───────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-        <div className="flex items-start justify-between mb-4">
-          <button onClick={() => navigate('/insights')} className="text-[12px] font-semibold text-[#e8344d] flex items-center gap-0.5 mt-1">
-            כל התובנות <ChevronLeft className="w-3.5 h-3.5" />
-          </button>
-          <div className="text-right">
-            <h3 className="text-[15px] font-bold text-gray-900">בזמן שישנת</h3>
-            <p className="text-[11px] text-gray-400 mt-0.5">הינה כל מה שהמערכת עשתה עבורך בימה האחרונה</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { label: 'לידים חדשים שנמצאו', value: newLeadsToday.length },
-            { label: 'נטישות',              value: 0 },
-            { label: 'פעולות בוצעו',        value: actionsCompleted.length },
-            { label: 'שעות שנחסכו',          value: (actionsCompleted.length * 0.5).toFixed(1) },
-          ].map((kpi, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                <span className="text-green-500 text-xs font-bold">✓</span>
-              </div>
-              <div className="text-right">
-                <div className="text-xl font-bold text-gray-900">{kpi.value}</div>
-                <div className="text-[11px] text-gray-400 leading-snug">{kpi.label}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* ── פעילות ב-24 השעות האחרונות ──────────────────────────────────── */}
+      <RecentActivitySummary businessProfile={businessProfile} />
 
       {/* ── Upgrade banner ────────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-[#fce4ec] p-5 flex items-center justify-between gap-4">
