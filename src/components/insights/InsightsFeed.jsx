@@ -192,17 +192,19 @@ export default function InsightsFeed({ businessProfile }) {
   // ── Dismissed items — lazy-loaded restore list ────────────────────────────
   const [showDismissed, setShowDismissed] = useState(false);
 
-  const { data: dismissedAlerts = [] } = useQuery({
+  const { data: dismissedAlerts = [], isLoading: loadingDismissedAlerts } = useQuery({
     queryKey: ['dismissedAlerts', bpId],
     queryFn: () => base44.entities.ProactiveAlert.filter({ linked_business: bpId, is_dismissed: true }, '-created_at', 50),
     enabled: !!bpId && showDismissed,
   });
 
-  const { data: dismissedSignals = [] } = useQuery({
+  const { data: dismissedSignals = [], isLoading: loadingDismissedSignals } = useQuery({
     queryKey: ['dismissedSignals', bpId],
     queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, is_dismissed: true }, '-detected_at', 50),
     enabled: !!bpId && showDismissed,
   });
+
+  const loadingDismissed = loadingDismissedAlerts || loadingDismissedSignals;
 
   const dismissedItems = useMemo(() => [
     ...dismissedAlerts.map(a => ({ id: a.id, kind: 'alert', title: a.title || a.message || '' })),
@@ -456,7 +458,11 @@ export default function InsightsFeed({ businessProfile }) {
             </button>
             {showDismissed && (
               <div className="border-t border-gray-100 divide-y divide-gray-50">
-                {dismissedItems.length === 0 ? (
+                {loadingDismissed ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="w-4 h-4 animate-spin text-foreground-muted" />
+                  </div>
+                ) : dismissedItems.length === 0 ? (
                   <p className="px-4 py-3 text-[12px] text-foreground-muted">אין פריטים שהוסרו</p>
                 ) : dismissedItems.map(item => (
                   <div key={`${item.kind}-${item.id}`} className="px-4 py-2.5 flex items-center gap-3">
