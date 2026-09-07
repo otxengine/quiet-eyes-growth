@@ -10,6 +10,7 @@ import {
   Eye, AlertTriangle, Sparkles, MessageSquare, Users, Calendar, ChevronDown,
 } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import DismissMenu from '@/components/ui/DismissMenu';
 import PageHeader from '@/components/shared/PageHeader';
 import SignalCard from '@/components/intelligence/SignalCard';
 import AiInsightBox from '@/components/ai/AiInsightBox';
@@ -51,17 +52,28 @@ function parseGapTags(signal) {
   return { score, timeKey };
 }
 
-function TopGapOpportunity({ signal, onOpen }) {
+function TopGapOpportunity({ signal, onOpen, bpId, onDismissed }) {
   const { timeKey } = parseGapTags(signal);
   const time = GAP_TIME_STYLES[timeKey] || GAP_TIME_STYLES.weeks;
   return (
-    <button onClick={onOpen} className="card-base p-5 border-2 border-primary/30 bg-primary/3 text-right w-full hover:shadow-md transition-shadow">
+    <div onClick={onOpen} className="card-base p-5 border-2 border-primary/30 bg-primary/3 text-right w-full hover:shadow-md transition-shadow cursor-pointer">
       <div className="flex items-center gap-2 mb-3">
         <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
         <span className="text-[12px] font-bold text-foreground">הזדמנות מובילה</span>
         <span className={`mr-auto text-[9px] font-bold px-2 py-0.5 rounded-full ${time.badge}`}>
           <Clock className="w-2.5 h-2.5 inline ml-0.5" />{time.label}
         </span>
+        <div onClick={e => e.stopPropagation()}>
+          <DismissMenu
+            entityType="demand_gap"
+            entityId={signal.id}
+            title={signal.summary}
+            businessProfileId={bpId}
+            onDismissed={onDismissed}
+            buttonLabel=""
+            buttonClassName="text-foreground-muted hover:text-red-500 opacity-60 hover:opacity-100 transition-all flex items-center"
+          />
+        </div>
       </div>
       <p className="text-[14px] font-bold text-foreground mb-1.5">{signal.summary}</p>
       {signal.source_description && (
@@ -73,17 +85,17 @@ function TopGapOpportunity({ signal, onOpen }) {
           <p className="text-[12px] text-primary font-semibold">{signal.recommended_action}</p>
         </div>
       )}
-    </button>
+    </div>
   );
 }
 
-function GapCard({ signal, onOpen }) {
+function GapCard({ signal, onOpen, bpId, onDismissed }) {
   const { score, timeKey } = parseGapTags(signal);
   const impact = GAP_IMPACT_STYLES[signal.impact_level] || GAP_IMPACT_STYLES.medium;
   const time   = GAP_TIME_STYLES[timeKey] || GAP_TIME_STYLES.weeks;
 
   return (
-    <button onClick={onOpen} className="card-base p-4 hover:shadow-md transition-shadow flex flex-col gap-3 text-right">
+    <div onClick={onOpen} className="card-base p-4 hover:shadow-md transition-shadow flex flex-col gap-3 text-right cursor-pointer">
       <div className="flex items-center gap-2">
         <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
           <div className="h-full rounded-full transition-all duration-700"
@@ -97,6 +109,17 @@ function GapCard({ signal, onOpen }) {
         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${time.badge}`}>
           <Clock className="w-2.5 h-2.5" />{time.label}
         </span>
+        <div className="mr-auto" onClick={e => e.stopPropagation()}>
+          <DismissMenu
+            entityType="demand_gap"
+            entityId={signal.id}
+            title={signal.summary}
+            businessProfileId={bpId}
+            onDismissed={onDismissed}
+            buttonLabel=""
+            buttonClassName="text-foreground-muted hover:text-red-500 opacity-60 hover:opacity-100 transition-all flex items-center"
+          />
+        </div>
       </div>
 
       <div>
@@ -112,7 +135,7 @@ function GapCard({ signal, onOpen }) {
           <p className="text-[10px] text-foreground-muted leading-snug">{signal.recommended_action}</p>
         </div>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -194,7 +217,7 @@ function DemandGapSection({ bpId }) {
 
   const { data: gaps = [], isLoading } = useQuery({
     queryKey: ['demandGaps', bpId],
-    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'demand_gap' }),
+    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'demand_gap', is_dismissed: false }),
     enabled: !!bpId,
     select: data => [...(data || [])].sort((a, b) => {
       const sA = parseInt((a.tags || '').match(/score:(\d+)/)?.[1] || '50');
@@ -239,12 +262,25 @@ function DemandGapSection({ bpId }) {
             )}
           </div>
 
-          {top && <TopGapOpportunity signal={top} onOpen={() => setSelectedGap(top)} />}
+          {top && (
+            <TopGapOpportunity
+              signal={top}
+              onOpen={() => setSelectedGap(top)}
+              bpId={bpId}
+              onDismissed={() => queryClient.invalidateQueries({ queryKey: ['demandGaps', bpId] })}
+            />
+          )}
 
           {rest.length > 0 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {rest.map(gap => (
-                <GapCard key={gap.id} signal={gap} onOpen={() => setSelectedGap(gap)} />
+                <GapCard
+                  key={gap.id}
+                  signal={gap}
+                  onOpen={() => setSelectedGap(gap)}
+                  bpId={bpId}
+                  onDismissed={() => queryClient.invalidateQueries({ queryKey: ['demandGaps', bpId] })}
+                />
               ))}
             </div>
           )}

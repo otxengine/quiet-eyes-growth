@@ -11,6 +11,7 @@ const REASON_CHIPS = {
   signal:     ['כבר ביצעתי', 'לא ריאלי', 'מידע שגוי', 'לא רלוונטי'],
   retention:  ['לקוח לא פעיל', 'כבר פנינו ללקוח', 'לא מתאים לתוכנית', 'בוטל'],
   trend:      ['לא רלוונטי לסקטור שלי', 'ידוע לי כבר', 'כבר יישמתי', 'לא מתאים לקהל שלי'],
+  demand_gap: ['לא ריאלי לעסק שלי', 'כבר מטפלים בזה', 'לא בתקציב כרגע', 'לא רלוונטי'],
 };
 
 /**
@@ -78,6 +79,7 @@ export default function DismissMenu({
     signal:     'MarketSignal',
     trend:      'MarketSignal',
     event:      'MarketSignal',
+    demand_gap: 'MarketSignal',
     competitor: 'Competitor',
     action:     'Action',
   };
