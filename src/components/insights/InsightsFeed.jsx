@@ -457,7 +457,7 @@ export default function InsightsFeed({ businessProfile }) {
               <ChevronDown className={`w-3.5 h-3.5 mr-auto transition-transform ${showDismissed ? 'rotate-180' : ''}`} />
             </button>
             {showDismissed && (
-              <div className="border-t border-gray-100 divide-y divide-gray-50">
+              <div className="border-t border-gray-100 divide-y divide-gray-50 max-h-72 overflow-y-auto">
                 {loadingDismissed ? (
                   <div className="flex items-center justify-center py-6">
                     <Loader2 className="w-4 h-4 animate-spin text-foreground-muted" />
