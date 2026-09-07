@@ -213,6 +213,7 @@ function DemandGapSection({ bpId }) {
   const queryClient = useQueryClient();
   const [scanning, setScanning] = useState(false);
   const [selectedGap, setSelectedGap] = useState(null);
+  const [showDismissed, setShowDismissed] = useState(false);
 
   const { data: gaps = [], isLoading } = useQuery({
     queryKey: ['demandGaps', bpId],
@@ -223,6 +224,20 @@ function DemandGapSection({ bpId }) {
       const sB = parseInt((b.tags || '').match(/score:(\d+)/)?.[1] || '50');
       return sB - sA;
     }),
+  });
+
+  const { data: dismissedGaps = [] } = useQuery({
+    queryKey: ['dismissedDemandGaps', bpId],
+    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, category: 'demand_gap', is_dismissed: true }, '-detected_at', 50),
+    enabled: !!bpId && showDismissed,
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (id) => base44.entities.MarketSignal.update(id, { is_dismissed: false }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['demandGaps', bpId] });
+      queryClient.invalidateQueries({ queryKey: ['dismissedDemandGaps', bpId] });
+    },
   });
 
   const runScan = async (fn) => {
@@ -266,7 +281,10 @@ function DemandGapSection({ bpId }) {
               signal={top}
               onOpen={() => setSelectedGap(top)}
               bpId={bpId}
-              onDismissed={() => queryClient.invalidateQueries({ queryKey: ['demandGaps', bpId] })}
+              onDismissed={() => {
+                queryClient.invalidateQueries({ queryKey: ['demandGaps', bpId] });
+                queryClient.invalidateQueries({ queryKey: ['dismissedDemandGaps', bpId] });
+              }}
             />
           )}
 
@@ -278,7 +296,10 @@ function DemandGapSection({ bpId }) {
                   signal={gap}
                   onOpen={() => setSelectedGap(gap)}
                   bpId={bpId}
-                  onDismissed={() => queryClient.invalidateQueries({ queryKey: ['demandGaps', bpId] })}
+                  onDismissed={() => {
+                queryClient.invalidateQueries({ queryKey: ['demandGaps', bpId] });
+                queryClient.invalidateQueries({ queryKey: ['dismissedDemandGaps', bpId] });
+              }}
                 />
               ))}
             </div>
@@ -295,6 +316,38 @@ function DemandGapSection({ bpId }) {
           navigate(`/insights/signal-${id}`);
         }}
       />
+
+      <div className="card-base fade-in-up">
+        <button
+          onClick={() => setShowDismissed(v => !v)}
+          className="px-5 py-3 flex items-center gap-2 text-[12px] text-foreground-muted hover:text-foreground w-full"
+        >
+          <Archive className="w-3.5 h-3.5" />
+          פריטים שהוסרו
+          {showDismissed && dismissedGaps.length > 0 && (
+            <span className="text-[10px] font-semibold">({dismissedGaps.length})</span>
+          )}
+          <ChevronDown className={`w-3.5 h-3.5 mr-auto transition-transform ${showDismissed ? 'rotate-180' : ''}`} />
+        </button>
+        {showDismissed && (
+          <div className="border-t border-border divide-y divide-border">
+            {dismissedGaps.length === 0 ? (
+              <p className="px-5 py-4 text-[12px] text-foreground-muted">אין פריטים שהוסרו</p>
+            ) : dismissedGaps.map(g => (
+              <div key={g.id} className="px-5 py-3 flex items-center gap-3">
+                <p className="text-[12px] text-foreground-muted flex-1 truncate">{g.summary}</p>
+                <button
+                  onClick={() => restoreMutation.mutate(g.id)}
+                  disabled={restoreMutation.isPending}
+                  className="text-[11px] text-primary hover:underline flex-shrink-0 disabled:opacity-40"
+                >
+                  שחזר
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
