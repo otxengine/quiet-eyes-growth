@@ -6,7 +6,6 @@ import { ChevronLeft } from 'lucide-react';
 import LiveStreamCard from '@/components/shared/LiveStreamCard';
 import KoriAvatar from '@/components/onboarding/KoriAvatar';
 import InsightsFeed from '@/components/insights/InsightsFeed';
-import RecentActivitySummary from '@/components/dashboard/RecentActivitySummary';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -351,7 +350,7 @@ export default function Dashboard() {
       )}
 
       {/* ── Insights feed (replaces the old LLM-generated Daily Brief) ──────── */}
-      <InsightsFeed businessProfile={businessProfile} />
+      <InsightsFeed businessProfile={businessProfile} show24hActivity />
 
       {/* ── זרם חי ───────────────────────────────────────────────────────── */}
       {liveItems.length > 0 && (
@@ -372,9 +371,6 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-
-      {/* ── פעילות ב-24 השעות האחרונות ──────────────────────────────────── */}
-      <RecentActivitySummary businessProfile={businessProfile} />
 
       {/* ── Upgrade banner ────────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-[#fce4ec] p-5 flex items-center justify-between gap-4">

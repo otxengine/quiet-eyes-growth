@@ -153,6 +153,13 @@ function rowAgeInDays(row) {
   return Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+function isWithinLast24h(dateStr) {
+  if (!dateStr) return false;
+  const t = new Date(dateStr).getTime();
+  return !Number.isNaN(t) && Date.now() - t < DAY_MS;
+}
+
 // Context-aware CTA label instead of generic "פעולה"
 /** @param {Record<string, any>} row */
 function getActionLabel(row) {
@@ -168,12 +175,31 @@ function getActionLabel(row) {
   return 'נצל הזדמנות';
 }
 
-export default function InsightsFeed({ businessProfile }) {
+export default function InsightsFeed({ businessProfile, show24hActivity = false }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const bpId = businessProfile?.id;
   const [showArchived,   setShowArchived]   = useState(false);
   const [activeCategory, setActiveCategory] = useState('all');
+
+  // ── 24h activity stats — Home only, replaces the risk/opportunity stat row ──
+  const { data: recentReviews = [] } = useQuery({
+    queryKey: ['recentActivityReviews', bpId],
+    queryFn: () => base44.entities.Review.filter({ linked_business: bpId }, '-created_date', 100),
+    enabled: !!bpId && show24hActivity,
+  });
+
+  const { data: recentCompetitorPosts = [] } = useQuery({
+    queryKey: ['recentActivityCompetitorPosts', bpId],
+    queryFn: () => base44.entities.CompetitorPost.filter({ linked_business: bpId }, '-first_seen_at', 100),
+    enabled: !!bpId && show24hActivity,
+  });
+
+  const { data: recentCompetitorAds = [] } = useQuery({
+    queryKey: ['recentActivityCompetitorAds', bpId],
+    queryFn: () => base44.entities.CompetitorAdHistory.filter({ linked_business: bpId }, '-first_seen_at', 100),
+    enabled: !!bpId && show24hActivity,
+  });
 
   const { data: alerts = [], isLoading: loadingAlerts } = useQuery({
     queryKey: ['proactiveAlerts', bpId],
@@ -277,6 +303,20 @@ export default function InsightsFeed({ businessProfile }) {
   const trendRows  = freshRows.filter(r => classifyCategory(r) === 'trend');
   const compRows   = freshRows.filter(r => classifyCategory(r) === 'competitor');
 
+  // ── 24h activity counts (Home only) — reuses alerts/signals already fetched above ──
+  const newReviewsCount = recentReviews.filter(r => isWithinLast24h(r.created_date)).length;
+  const newPostsCount   = recentCompetitorPosts.filter(p => isWithinLast24h(p.first_seen_at)).length;
+  const newAdsCount     = recentCompetitorAds.filter(a => isWithinLast24h(a.first_seen_at)).length;
+  const newInsightsCount = alerts.filter(a => isWithinLast24h(a.created_at)).length
+    + signals.filter(s => isWithinLast24h(s.detected_at)).length;
+
+  const activityStatCards = [
+    { count: newReviewsCount, label: 'ביקורות חדשות',        borderColor: 'blue' },
+    { count: newPostsCount,   label: 'פוסטים חדשים ממתחרים', borderColor: 'yellow' },
+    { count: newAdsCount,     label: 'מודעות חדשות ממתחרים', borderColor: 'none' },
+    { count: newInsightsCount,label: 'תובנות חדשות',         borderColor: 'green' },
+  ];
+
   const statCards = [
     { count: risks.length,      label: 'סיכונים',           borderColor: 'red' },
     { count: urgentRows.length, label: 'דורש פעולה מיידית', borderColor: 'yellow' },
@@ -299,7 +339,7 @@ export default function InsightsFeed({ businessProfile }) {
 
   return (
     <div className="space-y-4">
-      <StatCards cards={statCards} />
+      <StatCards cards={show24hActivity ? activityStatCards : statCards} />
 
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
