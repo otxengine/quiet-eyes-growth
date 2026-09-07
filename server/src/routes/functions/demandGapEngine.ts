@@ -3,6 +3,7 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { getSectorContext } from '../../lib/sectorPrompts';
+import { loadBusinessContext, formatContextForPrompt } from '../../lib/businessContext';
 
 /**
  * demandGapEngine — scans local demand signals to find unmet needs in the area.
@@ -32,6 +33,10 @@ export async function demandGapEngine(req: Request, res: Response) {
 
     const existingGapTexts = new Set(existingGaps.map(g => g.summary.substring(0, 50)));
 
+    const bizCtx = await loadBusinessContext(businessProfileId);
+    const ctxPrompt = formatContextForPrompt(bizCtx, 'demandGapEngine');
+    const rejectedPatterns: string[] = bizCtx?.rejectedPatterns || [];
+
     const competitorServices = competitors.map(c => `${c.name}: ${c.services || c.category}`).join('\n');
     const recentSignals = signals.slice(0, 8).map(s => `- ${s.summary}`).join('\n');
     const sectorCtx = getSectorContext(profile.category);
@@ -51,7 +56,7 @@ ${competitorServices || 'none identified'}
 
 Recent market signals:
 ${recentSignals || 'none'}
-
+${ctxPrompt}
 Identify 3-5 concrete demand gaps — real unmet local demand. Return ONLY a JSON object. ALL string values must be in Hebrew except "time_to_capture":
 {
   "gaps": [
@@ -80,6 +85,7 @@ Identify 3-5 concrete demand gaps — real unmet local demand. Return ONLY a JSO
       if (!gap.demand) continue;
       const key = gap.demand.substring(0, 50);
       if (existingGapTexts.has(key)) continue;
+      if (rejectedPatterns.some(p => p && gap.demand.toLowerCase().includes(p))) continue;
 
       await prisma.marketSignal.create({
         data: {

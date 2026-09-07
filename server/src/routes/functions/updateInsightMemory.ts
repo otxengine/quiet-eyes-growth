@@ -106,6 +106,7 @@ export async function updateInsightMemory(req: Request, res: Response) {
       const agentName = entityType === 'signal' ? 'runIntelligenceEngines'
         : entityType === 'competitor' ? 'runCompetitorIdentification'
         : entityType === 'event' ? 'detectEvents'
+        : entityType === 'demand_gap' ? 'demandGapEngine'
         : 'generateProactiveAlerts';
       weights[agentName] = Math.max(0.1, (weights[agentName] ?? 0.5) - 0.03);
       weights['generateProactiveAlerts'] = Math.max(0.1, current - 0.02);
