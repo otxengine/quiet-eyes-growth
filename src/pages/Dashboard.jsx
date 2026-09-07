@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { ChevronLeft, ArrowUpRight, Sparkles, Zap, Flame } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import LiveStreamCard from '@/components/shared/LiveStreamCard';
 import KoriAvatar from '@/components/onboarding/KoriAvatar';
 import InsightsFeed from '@/components/insights/InsightsFeed';
@@ -108,14 +108,6 @@ export default function Dashboard() {
           timerMinutes: 3,
         })),
       ];
-
-  // Shortcut cards
-  const shortcuts = [
-    { label: 'בוצע לאחרונה',  sub: `הצג את הפעולות שבוצעו לאחרונה במערכת`, path: '/approvals',  Icon: ArrowUpRight },
-    { label: 'תמונת מצב',      sub: `הצג את תמונת המצב העדכנית של designeed`, path: '/leads',       Icon: Sparkles    },
-    { label: 'התובנות שלי',    sub: `הצג את כל התובנות וההמלצות המותאמות אישית`, path: '/insights',    Icon: Zap         },
-    { label: 'דחוף להיום',     sub: `הצג את התובנות החשובות ביותר להיום`,      path: '/insights',    Icon: Flame       },
-  ];
 
   const quickChips = [
     { label: 'בנה קמפיין חדש',   path: '/marketing/create' },
@@ -362,23 +354,6 @@ export default function Dashboard() {
 
       {/* ── Insights feed (replaces the old LLM-generated Daily Brief) ──────── */}
       <InsightsFeed businessProfile={businessProfile} />
-
-      {/* ── 2×2 Shortcuts ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3">
-        {shortcuts.map((sc, i) => (
-          <button
-            key={i}
-            onClick={() => navigate(sc.path)}
-            className="text-right p-4 rounded-2xl border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow flex flex-col gap-2"
-          >
-            <sc.Icon className="w-5 h-5 text-[#e8344d]" />
-            <div>
-              <div className="font-semibold text-[13px] text-gray-900">{sc.label}</div>
-              <div className="text-[11px] text-gray-400 mt-0.5 leading-snug">{sc.sub}</div>
-            </div>
-          </button>
-        ))}
-      </div>
 
       {/* ── זרם חי ───────────────────────────────────────────────────────── */}
       {liveItems.length > 0 && (
