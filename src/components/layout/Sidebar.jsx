@@ -5,7 +5,7 @@ import {
   ChevronRight, LogOut,
   Building2, GitBranch, User,
   Eye, Settings, Star, Users,
-  Calendar, Megaphone, Lightbulb, Home, CreditCard, Percent, Image
+  Calendar, Megaphone, Lightbulb, Home, CreditCard, Percent, Image, ClipboardList
 } from 'lucide-react';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { cn } from '@/lib/utils';
@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 const NAV_STRUCTURE = [
   { path: '/',                   label: 'בית',           icon: Home },
   { path: '/insights',           label: 'תובנות',        icon: Lightbulb, badgeKey: 'activeInsights' },
+  { path: '/tasks',              label: 'משימות',        icon: ClipboardList },
   { path: '/competitors',        label: 'מתחרים',        icon: Eye },
   { path: '/marketing',          label: 'מרכז השיווק',   icon: Megaphone },
   { path: '/posts',              label: 'ניהול סושיאל',  icon: Image },
