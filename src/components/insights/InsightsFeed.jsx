@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Loader2, Archive } from 'lucide-react';
+import { Loader2, Archive, ChevronDown } from 'lucide-react';
 import StatCards from '@/components/shared/StatCards';
 import DataTable from '@/components/shared/DataTable';
 import DismissMenu from '@/components/ui/DismissMenu';
@@ -188,6 +188,42 @@ export default function InsightsFeed({ businessProfile }) {
   });
 
   const isLoading = loadingAlerts || loadingSignals;
+
+  // ── Dismissed items — lazy-loaded restore list ────────────────────────────
+  const [showDismissed, setShowDismissed] = useState(false);
+
+  const { data: dismissedAlerts = [] } = useQuery({
+    queryKey: ['dismissedAlerts', bpId],
+    queryFn: () => base44.entities.ProactiveAlert.filter({ linked_business: bpId, is_dismissed: true }, '-created_at', 50),
+    enabled: !!bpId && showDismissed,
+  });
+
+  const { data: dismissedSignals = [] } = useQuery({
+    queryKey: ['dismissedSignals', bpId],
+    queryFn: () => base44.entities.MarketSignal.filter({ linked_business: bpId, is_dismissed: true }, '-detected_at', 50),
+    enabled: !!bpId && showDismissed,
+  });
+
+  const dismissedItems = useMemo(() => [
+    ...dismissedAlerts.map(a => ({ id: a.id, kind: 'alert', title: a.title || a.message || '' })),
+    ...dismissedSignals.map(s => ({ id: s.id, kind: 'signal', title: s.title || s.summary || '' })),
+  ], [dismissedAlerts, dismissedSignals]);
+
+  // ponytail: restore only flips is_dismissed back — it doesn't retract the
+  // keyword updateInsightMemory already added to BusinessMemory.rejected_patterns,
+  // since that keyword may be shared with other dismissals. Acceptable because
+  // it's a soft prompt-avoidance signal, not a hard per-item block.
+  const restoreMutation = useMutation({
+    mutationFn: ({ kind, id }) => kind === 'alert'
+      ? base44.entities.ProactiveAlert.update(id, { is_dismissed: false })
+      : base44.entities.MarketSignal.update(id, { is_dismissed: false }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['proactiveAlerts', bpId] });
+      queryClient.invalidateQueries({ queryKey: ['allSignals', bpId] });
+      queryClient.invalidateQueries({ queryKey: ['dismissedAlerts', bpId] });
+      queryClient.invalidateQueries({ queryKey: ['dismissedSignals', bpId] });
+    },
+  });
 
   // ── Step 1: merge + sort ──────────────────────────────────────────────────
   const allRows = useMemo(() => {
@@ -404,6 +440,39 @@ export default function InsightsFeed({ businessProfile }) {
               </button>
             </div>
           )}
+
+          {/* Dismissed items — restore flow */}
+          <div dir="rtl" className="bg-white rounded-xl border border-gray-100">
+            <button
+              onClick={() => setShowDismissed(v => !v)}
+              className="w-full px-4 py-3 flex items-center gap-2 text-[11px] text-foreground-muted hover:text-foreground transition-colors"
+            >
+              <Archive className="w-3.5 h-3.5" />
+              פריטים שהוסרו
+              {showDismissed && dismissedItems.length > 0 && (
+                <span className="text-[10px] font-semibold">({dismissedItems.length})</span>
+              )}
+              <ChevronDown className={`w-3.5 h-3.5 mr-auto transition-transform ${showDismissed ? 'rotate-180' : ''}`} />
+            </button>
+            {showDismissed && (
+              <div className="border-t border-gray-100 divide-y divide-gray-50">
+                {dismissedItems.length === 0 ? (
+                  <p className="px-4 py-3 text-[12px] text-foreground-muted">אין פריטים שהוסרו</p>
+                ) : dismissedItems.map(item => (
+                  <div key={`${item.kind}-${item.id}`} className="px-4 py-2.5 flex items-center gap-3">
+                    <p className="text-[12px] text-foreground-muted flex-1 truncate">{item.title}</p>
+                    <button
+                      onClick={() => restoreMutation.mutate({ kind: item.kind, id: item.id })}
+                      disabled={restoreMutation.isPending}
+                      className="text-[11px] text-primary hover:underline flex-shrink-0 disabled:opacity-40"
+                    >
+                      שחזר
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>
