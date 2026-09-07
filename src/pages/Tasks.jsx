@@ -1,30 +1,29 @@
 import React, { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Plus, ClipboardList, CalendarDays, Loader2 } from 'lucide-react';
+import { Plus, CalendarDays, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import TaskCard from '@/components/tasks/TaskCard';
+import KanbanBoard from '@/components/tasks/KanbanBoard';
+import TaskDetailModal from '@/components/tasks/TaskDetailModal';
 import TaskStatsBar from '@/components/tasks/TaskStatsBar';
 import AddTaskModal from '@/components/tasks/AddTaskModal';
 import AiInsightBox from '@/components/ai/AiInsightBox';
 import { ApprovalsPanel } from './Approvals';
-import EmptyState from '@/components/ui/EmptyState';
 
-const filterTabs = [
-  { key: 'all', label: 'הכל' },
-  { key: 'pending', label: 'ממתינות' },
-  { key: 'in_progress', label: 'בביצוע' },
-  { key: 'done', label: 'הושלמו' },
-  { key: 'overdue', label: 'באיחור' },
+const viewTabs = [
+  { key: 'board', label: 'לוח משימות' },
   { key: 'approvals', label: 'אישורי סוכן' },
 ];
 
 export default function Tasks() {
   const { businessProfile } = useOutletContext();
+  const { taskId } = useParams();
+  const navigate = useNavigate();
   const bpId = businessProfile?.id;
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState('all');
+  const [activeTab, setActiveTab] = useState('board');
+  const [selectedTaskId, setSelectedTaskId] = useState(taskId || null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [prefill, setPrefill] = useState(null);
   const [planningContent, setPlanningContent] = useState(false);
@@ -54,20 +53,6 @@ export default function Tasks() {
   });
 
   const now = new Date();
-  const filtered = tasks.filter(t => {
-    if (activeTab === 'overdue') return t.due_date && new Date(t.due_date) < now && t.status !== 'done' && t.status !== 'cancelled';
-    if (activeTab === 'all') return t.status !== 'cancelled';
-    return t.status === activeTab;
-  });
-
-  const sorted = [...filtered].sort((a, b) => {
-    const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
-    if (a.status !== b.status) {
-      const statusOrder = { in_progress: 0, pending: 1, done: 2, cancelled: 3 };
-      return (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9);
-    }
-    return (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9);
-  });
 
   return (
     <div className="space-y-5">
@@ -113,7 +98,7 @@ export default function Tasks() {
       )}
 
       <div className="flex gap-1 p-1 bg-secondary/50 rounded-xl w-fit">
-        {filterTabs.map(tab => (
+        {viewTabs.map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
             className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-all ${
               activeTab === tab.key ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
@@ -125,18 +110,8 @@ export default function Tasks() {
 
       {activeTab === 'approvals' ? (
         <ApprovalsPanel bpId={bpId} />
-      ) : sorted.length === 0 ? (
-        <EmptyState
-          icon={ClipboardList}
-          title={activeTab === 'all' ? 'עוד אין משימות' : 'אין משימות בפילטר הנוכחי'}
-          description={activeTab === 'all' ? 'צור משימה חדשה או הפוך התראת AI למשימה' : undefined}
-          action={activeTab === 'all' ? () => setShowAddModal(true) : undefined}
-          actionLabel="+ משימה ראשונה"
-        />
       ) : (
-        <div className="space-y-2">
-          {sorted.map(task => <TaskCard key={task.id} task={task} />)}
-        </div>
+        <KanbanBoard tasks={tasks} bpId={bpId} onSelectTask={setSelectedTaskId} />
       )}
 
       {showAddModal && (
@@ -145,6 +120,13 @@ export default function Tasks() {
           onClose={() => { setShowAddModal(false); setPrefill(null); }}
           onAdded={() => { setShowAddModal(false); setPrefill(null); }}
           prefill={prefill}
+        />
+      )}
+
+      {selectedTaskId && (
+        <TaskDetailModal
+          taskId={selectedTaskId}
+          onClose={() => { setSelectedTaskId(null); if (taskId) navigate('/tasks'); }}
         />
       )}
     </div>

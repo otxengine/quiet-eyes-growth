@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { ArrowRight, Loader2, Plus, X, Check, Sparkles } from 'lucide-react';
+import { Loader2, Plus, X, Check, Calendar, Bot, AlertTriangle, Lightbulb, BarChart2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 
 const STATUS_CONFIG = {
   pending:     { label: 'ממתין',   bg: 'bg-secondary',    text: 'text-foreground-muted' },
@@ -67,10 +69,14 @@ function formatDate(dateStr) {
   });
 }
 
-export default function TaskDetail() {
-  const { taskId } = useParams();
-  const navigate = useNavigate();
-  const { businessProfile } = useOutletContext();
+/**
+ * TaskDetailModal — the task detail view, as an overlay instead of a
+ * standalone page, so opening it from the Kanban board never navigates
+ * away. Same fields/mutations as the former TaskDetail.jsx page, restyled
+ * onto the app's shared card-base + lucide-icon conventions (that page
+ * never used card-base and leaned on raw emoji for icons).
+ */
+export default function TaskDetailModal({ taskId, onClose }) {
   const queryClient = useQueryClient();
 
   const [editingTitle, setEditingTitle] = useState(false);
@@ -163,25 +169,42 @@ export default function TaskDetail() {
     });
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20" dir="rtl">
-        <Loader2 className="w-6 h-6 animate-spin text-foreground-muted" />
-      </div>
-    );
-  }
+  return (
+    <Dialog open={!!taskId} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" dir="rtl">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-6 h-6 animate-spin text-foreground-muted" />
+          </div>
+        ) : !task ? (
+          <p className="py-10 text-center text-foreground-muted">המשימה לא נמצאה</p>
+        ) : (
+          <TaskDetailBody
+            task={task}
+            editingTitle={editingTitle} setEditingTitle={setEditingTitle}
+            editingDesc={editingDesc} setEditingDesc={setEditingDesc}
+            editingNotes={editingNotes} setEditingNotes={setEditingNotes}
+            titleDraft={titleDraft} setTitleDraft={setTitleDraft}
+            descDraft={descDraft} setDescDraft={setDescDraft}
+            notesDraft={notesDraft} setNotesDraft={setNotesDraft}
+            newSubtask={newSubtask} setNewSubtask={setNewSubtask}
+            titleInputRef={titleInputRef} descInputRef={descInputRef}
+            saveTitle={saveTitle} saveDesc={saveDesc} saveNotes={saveNotes}
+            toggleSubtask={toggleSubtask} addSubtask={addSubtask} removeSubtask={removeSubtask}
+            updateStatus={updateStatus} updateMutation={updateMutation}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
 
-  if (!task) {
-    return (
-      <div className="p-6 text-center text-foreground-muted" dir="rtl">
-        <p className="mb-3">המשימה לא נמצאה</p>
-        <button onClick={() => navigate('/tasks')} className="text-primary text-[13px] hover:underline">
-          ← חזור למשימות
-        </button>
-      </div>
-    );
-  }
-
+function TaskDetailBody({
+  task, editingTitle, setEditingTitle, editingDesc, setEditingDesc, editingNotes, setEditingNotes,
+  titleDraft, setTitleDraft, descDraft, setDescDraft, notesDraft, setNotesDraft,
+  newSubtask, setNewSubtask, titleInputRef, descInputRef,
+  saveTitle, saveDesc, saveNotes, toggleSubtask, addSubtask, removeSubtask, updateStatus, updateMutation,
+}) {
   const { signalId, checklist, plainText } = parseDescription(task.description || '');
   const statusCfg = STATUS_CONFIG[task.status] || STATUS_CONFIG.pending;
   const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
@@ -190,15 +213,29 @@ export default function TaskDetail() {
   const doneItems = checklist.items.filter(i => i.done).length;
 
   return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto" dir="rtl">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-start justify-between mb-4 gap-3">
-        <button
-          onClick={() => navigate('/tasks')}
-          className="flex items-center gap-1.5 text-[12px] text-foreground-muted hover:text-foreground transition-colors mt-0.5 flex-shrink-0"
-        >
-          <ArrowRight className="w-4 h-4" /> משימות
-        </button>
+      <div className="flex items-start justify-between gap-3">
+        {editingTitle ? (
+          <input
+            ref={titleInputRef}
+            value={titleDraft}
+            onChange={e => setTitleDraft(e.target.value)}
+            onBlur={saveTitle}
+            onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditingTitle(false); }}
+            className="flex-1 text-[18px] font-bold text-foreground bg-secondary border border-border rounded-xl px-3 py-2 outline-none focus:border-primary"
+          />
+        ) : (
+          <h1
+            className={`flex-1 text-[18px] font-bold cursor-pointer hover:bg-secondary rounded-lg px-1 -mx-1 py-0.5 transition-colors ${
+              task.status === 'done' ? 'text-foreground-muted line-through' : 'text-foreground'
+            }`}
+            onClick={() => setEditingTitle(true)}
+            title="לחץ לעריכה"
+          >
+            {task.title}
+          </h1>
+        )}
 
         <div className="flex items-center gap-2 flex-shrink-0">
           {task.status === 'pending' && (
@@ -209,59 +246,30 @@ export default function TaskDetail() {
           )}
           {task.status === 'in_progress' && (
             <button onClick={() => updateStatus('done')}
-              className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[12px] font-semibold hover:bg-emerald-700 transition-all">
-              סיים ✓
+              className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[12px] font-semibold hover:bg-emerald-700 transition-all">
+              <Check className="w-3.5 h-3.5" /> סיים
             </button>
           )}
           {task.status === 'done' && (
-            <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-[12px] font-semibold border border-emerald-200">
-              ✓ הושלם
+            <span className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-[12px] font-semibold border border-emerald-200">
+              <Check className="w-3.5 h-3.5" /> הושלם
             </span>
           )}
         </div>
       </div>
 
-      {/* Title */}
-      {editingTitle ? (
-        <div className="mb-3">
-          <input
-            ref={titleInputRef}
-            value={titleDraft}
-            onChange={e => setTitleDraft(e.target.value)}
-            onBlur={saveTitle}
-            onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditingTitle(false); }}
-            className="w-full text-[18px] font-bold text-foreground bg-secondary border border-border rounded-xl px-3 py-2 outline-none focus:border-primary"
-            dir="rtl"
-          />
-        </div>
-      ) : (
-        <h1
-          className={`text-[18px] font-bold mb-3 cursor-pointer hover:bg-secondary rounded-lg px-1 -mx-1 py-0.5 transition-colors ${
-            task.status === 'done' ? 'text-foreground-muted line-through' : 'text-foreground'
-          }`}
-          onClick={() => setEditingTitle(true)}
-          title="לחץ לעריכה"
-        >
-          {task.title}
-        </h1>
-      )}
-
       {/* Meta badges row */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        {/* Status dropdown */}
-        <div className="relative group">
-          <button className={`inline-flex items-center gap-1.5 px-3 py-1 text-[12px] font-semibold rounded-full border ${statusCfg.bg} ${statusCfg.text} border-border`}>
-            {statusCfg.label} ▾
-          </button>
-          <div className="absolute top-full mt-1 right-0 bg-card border border-border rounded-xl shadow-lg overflow-hidden z-10 hidden group-hover:block min-w-[110px]">
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={task.status} onValueChange={updateStatus}>
+          <SelectTrigger className={`h-auto w-auto gap-1.5 px-3 py-1 text-[12px] font-semibold rounded-full border ${statusCfg.bg} ${statusCfg.text} border-border`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
             {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-              <button key={key} onClick={() => updateStatus(key)}
-                className={`w-full text-right px-4 py-2 text-[12px] hover:bg-secondary transition-colors ${task.status === key ? 'font-bold text-foreground' : 'text-foreground-muted'}`}>
-                {cfg.label}
-              </button>
+              <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
             ))}
-          </div>
-        </div>
+          </SelectContent>
+        </Select>
 
         <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-[12px] font-medium rounded-full border ${priorityCfg.badge}`}>
           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${priorityCfg.dot}`} />
@@ -272,13 +280,13 @@ export default function TaskDetail() {
           <span className={`inline-flex items-center gap-1 px-3 py-1 text-[12px] font-medium rounded-full border ${
             isOverdue ? 'bg-red-50 text-red-600 border-red-200' : 'bg-secondary text-foreground-muted border-border'
           }`}>
-            📅 {dueInfo.text}
+            <Calendar className="w-3.5 h-3.5" /> {dueInfo.text}
           </span>
         )}
 
         {task.source_type === 'alert' && (
           <span className="inline-flex items-center gap-1 px-3 py-1 text-[12px] font-medium rounded-full border bg-purple-50 text-purple-600 border-purple-200">
-            🤖 AI
+            <Bot className="w-3.5 h-3.5" /> AI
           </span>
         )}
 
@@ -287,9 +295,9 @@ export default function TaskDetail() {
         </span>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {/* Description */}
-        <div className="bg-card border border-border rounded-xl px-4 py-3">
+        <div className="card-base px-4 py-3">
           <div className="flex items-center justify-between mb-2">
             <p className="text-[11px] font-semibold text-foreground-muted">תיאור</p>
             {!editingDesc && (
@@ -305,7 +313,6 @@ export default function TaskDetail() {
                 onChange={e => setDescDraft(e.target.value)}
                 rows={4}
                 className="w-full text-[12px] text-foreground bg-secondary border border-border rounded-lg px-3 py-2 outline-none focus:border-primary resize-none"
-                dir="rtl"
                 placeholder="תיאור המשימה..."
               />
               <div className="flex gap-2 mt-2">
@@ -313,7 +320,7 @@ export default function TaskDetail() {
                   className="px-3 py-1.5 bg-primary text-background rounded-lg text-[11px] font-medium hover:opacity-90">
                   שמור
                 </button>
-                <button onClick={() => { setEditingDesc(false); setDescDraft(plainText); }}
+                <button onClick={() => setEditingDesc(false)}
                   className="px-3 py-1.5 border border-border text-foreground-muted rounded-lg text-[11px] hover:bg-secondary">
                   ביטול
                 </button>
@@ -328,12 +335,10 @@ export default function TaskDetail() {
         </div>
 
         {/* Source signal */}
-        {signalId && (
-          <SourceSignalCard signalId={signalId} navigate={navigate} />
-        )}
+        {signalId && <SourceSignalCard signalId={signalId} />}
 
         {/* Sub-tasks checklist */}
-        <div className="bg-card border border-border rounded-xl px-4 py-3">
+        <div className="card-base px-4 py-3">
           <div className="flex items-center justify-between mb-3">
             <p className="text-[11px] font-semibold text-foreground-muted">
               תת-משימות
@@ -378,7 +383,6 @@ export default function TaskDetail() {
               onKeyDown={e => { if (e.key === 'Enter') addSubtask(); }}
               placeholder="הוסף תת-משימה..."
               className="flex-1 text-[12px] bg-secondary border border-border rounded-lg px-3 py-1.5 outline-none focus:border-primary"
-              dir="rtl"
             />
             <button onClick={addSubtask} disabled={!newSubtask.trim()}
               className="p-1.5 bg-primary text-background rounded-lg hover:opacity-90 disabled:opacity-40 transition-all">
@@ -388,7 +392,7 @@ export default function TaskDetail() {
         </div>
 
         {/* Notes */}
-        <div className="bg-card border border-border rounded-xl px-4 py-3">
+        <div className="card-base px-4 py-3">
           <div className="flex items-center justify-between mb-2">
             <p className="text-[11px] font-semibold text-foreground-muted">הערות</p>
             {!editingNotes && (
@@ -404,7 +408,6 @@ export default function TaskDetail() {
                 rows={3}
                 autoFocus
                 className="w-full text-[12px] text-foreground bg-secondary border border-border rounded-lg px-3 py-2 outline-none focus:border-primary resize-none"
-                dir="rtl"
                 placeholder="הערות חופשיות..."
               />
               <div className="flex gap-2 mt-2">
@@ -412,7 +415,7 @@ export default function TaskDetail() {
                   className="px-3 py-1.5 bg-primary text-background rounded-lg text-[11px] font-medium hover:opacity-90">
                   שמור
                 </button>
-                <button onClick={() => { setEditingNotes(false); setNotesDraft(task.notes || ''); }}
+                <button onClick={() => setEditingNotes(false)}
                   className="px-3 py-1.5 border border-border text-foreground-muted rounded-lg text-[11px] hover:bg-secondary">
                   ביטול
                 </button>
@@ -426,9 +429,9 @@ export default function TaskDetail() {
           )}
         </div>
 
-        {/* Delete / cancel */}
+        {/* Cancel */}
         {task.status !== 'done' && task.status !== 'cancelled' && (
-          <div className="pt-2">
+          <div className="pt-1">
             <button
               onClick={() => { updateMutation.mutate({ status: 'cancelled' }); toast.info('המשימה בוטלה'); }}
               className="text-[11px] text-foreground-muted hover:text-danger transition-colors"
@@ -442,7 +445,8 @@ export default function TaskDetail() {
   );
 }
 
-function SourceSignalCard({ signalId, navigate }) {
+function SourceSignalCard({ signalId }) {
+  const navigate = useNavigate();
   const { data: signal, isLoading } = useQuery({
     queryKey: ['signal', signalId],
     queryFn: () => base44.entities.MarketSignal.get(signalId),
@@ -451,7 +455,7 @@ function SourceSignalCard({ signalId, navigate }) {
 
   if (isLoading) {
     return (
-      <div className="bg-card border border-border rounded-xl px-4 py-3">
+      <div className="card-base px-4 py-3">
         <p className="text-[11px] font-semibold text-foreground-muted mb-2">מקור: תובנה</p>
         <div className="flex items-center gap-2 text-foreground-muted text-[12px]">
           <Loader2 className="w-3.5 h-3.5 animate-spin" /> טוען...
@@ -466,14 +470,13 @@ function SourceSignalCard({ signalId, navigate }) {
     threat: 'איום', opportunity: 'הזדמנות', trend: 'מגמה',
     mention: 'אזכור', competitor_move: 'מתחרים',
   };
+  const CategoryIcon = signal.category === 'threat' ? AlertTriangle : signal.category === 'opportunity' ? Lightbulb : BarChart2;
 
   return (
-    <div className="bg-card border border-border rounded-xl px-4 py-3">
+    <div className="card-base px-4 py-3">
       <p className="text-[11px] font-semibold text-foreground-muted mb-2">מקור: תובנה</p>
       <div className="flex items-start gap-3">
-        <span className="text-lg flex-shrink-0">
-          {signal.category === 'threat' ? '⚠️' : signal.category === 'opportunity' ? '💡' : '📊'}
-        </span>
+        <CategoryIcon className="w-5 h-5 flex-shrink-0 text-foreground-muted mt-0.5" />
         <div className="flex-1 min-w-0">
           <p className="text-[12px] font-medium text-foreground leading-snug mb-1 line-clamp-2">
             {signal.summary}
@@ -492,7 +495,7 @@ function SourceSignalCard({ signalId, navigate }) {
           </div>
         </div>
         <button
-          onClick={() => navigate(`/signals/${signalId}`)}
+          onClick={() => navigate(`/insights/signal-${signalId}`)}
           className="flex-shrink-0 text-[11px] text-primary hover:underline flex items-center gap-1"
         >
           פתח <span className="text-[10px]">←</span>

@@ -403,6 +403,7 @@ model Task {
   source_type    String?
   completed_at   String?
   notes          String?
+  position       Int?     @default(0) // order within its status column, for Kanban drag-to-reorder
 
   @@map("tasks")
 }
