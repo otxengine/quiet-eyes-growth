@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { fetchBusinessSnapshot, snapshotToPromptContext, logCompletedAction } from '@/lib/businessSnapshot';
 import { getActionsForInsight, getActionByKey, getRelevantSnapshotContext } from '@/lib/insightActions';
 import ActionChip from '@/components/insights/ActionChip';
+import AddTaskModal from '@/components/tasks/AddTaskModal';
 
 // ── Meta configs ────────────────────────────────────────────────────────────
 
@@ -174,7 +175,7 @@ function detectActionsFromText(text, typeKey, snapshot, insight) {
     .filter(Boolean);
 }
 
-function AgentAdvisor({ insight, snapshot, bpId, insightId }) {
+function AgentAdvisor({ insight, snapshot, bpId, insightId, onCreateTask }) {
   const [guidance, setGuidance]       = useState(null);
   const [loading, setLoading]         = useState(false);
   const [question, setQuestion]       = useState('');
@@ -364,7 +365,7 @@ ${insight.description ? `הקשר: ${(insight.description).slice(0, 150)}` : ''}
                     {msg.role === 'assistant' && msg.actions?.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-1.5 max-w-[88%] justify-end">
                         {msg.actions.map((action, ai) => (
-                          <ActionChip key={ai} action={action} bpId={bpId} insightId={insightId} size="sm" />
+                          <ActionChip key={ai} action={action} bpId={bpId} insightId={insightId} size="sm" onCreateTask={onCreateTask} />
                         ))}
                       </div>
                     )}
@@ -693,6 +694,7 @@ export default function InsightDetail() {
   const { businessProfile } = useOutletContext();
   const queryClient = useQueryClient();
   const bpId = businessProfile?.id;
+  const [taskModal, setTaskModal] = useState(null);
 
   // Parse: "alert-{uuid}" | "action-{uuid}" | "signal-{uuid}"
   const kind     = id?.startsWith('action-') ? 'action' : id?.startsWith('signal-') ? 'signal' : 'alert';
@@ -764,6 +766,13 @@ export default function InsightDetail() {
   const typeMeta    = TYPE_META[typeKey] || TYPE_META.general;
   const priorityMeta = PRIORITY_BADGE[priority] || PRIORITY_BADGE.medium;
   const TypeIcon    = typeMeta.icon;
+
+  const openTaskModal = (params) => setTaskModal({
+    title: params?.title || title,
+    description: params?.description || description,
+    priority: params?.priority || (priority === 'critical' || priority === 'high' ? priority : 'medium'),
+    source_alert_id: id,
+  });
 
   const steps = parseSteps(stepsText);
   const { checks, toggle } = useStepChecks(id, steps.length);
@@ -897,7 +906,7 @@ export default function InsightDetail() {
           </div>
           <div className="flex flex-wrap gap-2">
             {quickActions.map((action) => (
-              <ActionChip key={action.key} action={action} bpId={bpId} insightId={id} size="md" />
+              <ActionChip key={action.key} action={action} bpId={bpId} insightId={id} size="md" onCreateTask={openTaskModal} />
             ))}
           </div>
         </div>
@@ -929,7 +938,7 @@ export default function InsightDetail() {
       <TypeContextPanel typeKey={typeKey} title={title} description={description} actionMeta={actionMeta} />
 
       {/* ── C. AI Agent Advisor ── */}
-      <AgentAdvisor insight={insightForAgent} snapshot={snapshot} bpId={bpId} insightId={id} />
+      <AgentAdvisor insight={insightForAgent} snapshot={snapshot} bpId={bpId} insightId={id} onCreateTask={openTaskModal} />
 
       {/* ── D. שלבי ביצוע ── */}
       {steps.length > 0 && (
@@ -978,11 +987,11 @@ export default function InsightDetail() {
             </button>
           )}
           <button
-            onClick={() => navigate(`/tasks?from_insight=${id}&title=${encodeURIComponent(title)}&desc=${encodeURIComponent(description)}&priority=${priority === 'critical' || priority === 'high' ? priority : 'medium'}`)}
+            onClick={() => openTaskModal({ title, description, priority })}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border bg-white text-[12px] font-medium text-foreground hover:bg-secondary/30 transition-all"
           >
             <ClipboardList className="w-3.5 h-3.5" />
-            המר למשימה
+            צור משימה
           </button>
         </div>
       </div>
@@ -997,6 +1006,15 @@ export default function InsightDetail() {
             ))}
           </div>
         </div>
+      )}
+
+      {taskModal && (
+        <AddTaskModal
+          bpId={bpId}
+          prefill={taskModal}
+          onClose={() => setTaskModal(null)}
+          onAdded={() => setTaskModal(null)}
+        />
       )}
     </div>
   );

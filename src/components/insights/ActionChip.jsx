@@ -26,7 +26,7 @@ const ICON_MAP = {
  *   size       — 'sm' | 'md' (default 'md')
  *   onDone     — callback after successful execute
  */
-export default function ActionChip({ action, bpId, insightId, size = 'md', onDone }) {
+export default function ActionChip({ action, bpId, insightId, size = 'md', onDone, onCreateTask }) {
   const navigate     = useNavigate();
   const queryClient  = useQueryClient();
   const [loading, setLoading]   = useState(false);
@@ -54,6 +54,12 @@ export default function ActionChip({ action, bpId, insightId, size = 'md', onDon
       // Log so agents know this was acted on (e.g. "opened Google Business registration")
       logCompletedAction(bpId, 'external_link', action.label, insightId);
       window.open(action.href, '_blank', 'noopener');
+      return;
+    }
+
+    // ── execute: createTask — hand off to the parent's review modal when available ──
+    if (action.type === 'execute' && action.fn === 'createTask' && onCreateTask) {
+      onCreateTask(action.params);
       return;
     }
 
