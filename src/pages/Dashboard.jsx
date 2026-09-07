@@ -6,7 +6,6 @@ import { ChevronLeft, ArrowUpRight, Sparkles, Zap, Flame } from 'lucide-react';
 import LiveStreamCard from '@/components/shared/LiveStreamCard';
 import KoriAvatar from '@/components/onboarding/KoriAvatar';
 import InsightsFeed from '@/components/insights/InsightsFeed';
-import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -65,18 +64,6 @@ export default function Dashboard() {
     enabled: !!bpId,
   });
 
-  const { data: allReviews = [] } = useQuery({
-    queryKey: ['allReviews', bpId],
-    queryFn: () => base44.entities.Review.filter({ linked_business: bpId }, '-created_date', 20),
-    enabled: !!bpId,
-  });
-
-  const { data: alerts = [] } = useQuery({
-    queryKey: ['proactiveAlerts', bpId],
-    queryFn: () => base44.entities.ProactiveAlert.filter({ linked_business: bpId }, '-created_at', 100),
-    enabled: !!bpId,
-  });
-
   const { data: eventBusStats } = useQuery({
     queryKey: ['eventBusStats', bpId],
     queryFn: () => base44.functions.invoke('getEventBusStats', { businessProfileId: bpId }),
@@ -90,31 +77,6 @@ export default function Dashboard() {
   const hotLeads = allLeads.filter(l => l.status === 'hot');
   const actionsCompleted = allLeads.filter(l => l.status === 'completed' || l.lifecycle_stage === 'closed_won');
   const urgentSignals = allSignals.filter(s => !s.is_read && s.impact_level === 'high');
-  const urgentReview = allReviews.find(r => r.response_status === 'pending' && (r.sentiment === 'negative' || (r.rating && r.rating <= 2)));
-
-  // Up to 3 gradient cards, moved here from the Insights page — same alert/signal
-  // sources, kept simple (no dedup/relevance-scoring pipeline) since this is just
-  // a home-page teaser; the full picture is one click away via "צפה בתובנה".
-  const urgentActions = [
-    ...(urgentReview ? [{
-      title: 'ביקורת שלילית חדשה בגוגל – לא נענתה',
-      description: urgentReview.content?.slice(0, 80) || 'תגובה מהירה מעלה את הציון הכולל ומגבירה את שביעות רצון הלקוחות.',
-      ctaLabel: 'קרא ואשר תגובה',
-      onCta: () => navigate('/reputation'),
-    }] : []),
-    ...alerts.filter(a => !a.is_dismissed && (a.priority === 'critical' || a.priority === 'high')).map(a => ({
-      title: (a.title || a.message || '').slice(0, 60),
-      description: (a.message || '').slice(0, 80),
-      ctaLabel: 'צפה בתובנה',
-      onCta: () => navigate(`/insights/${a.id}?kind=alert`),
-    })),
-    ...urgentSignals.map(s => ({
-      title: (s.title || s.summary || '').slice(0, 60),
-      description: (s.summary || '').slice(0, 80),
-      ctaLabel: 'צפה בתובנה',
-      onCta: () => navigate(`/insights/${s.id}?kind=signal`),
-    })),
-  ].slice(0, 3);
 
   // Live stream items
   const pendingActions = eventBusStats?.pending_actions || [];
@@ -417,9 +379,6 @@ export default function Dashboard() {
           </button>
         ))}
       </div>
-
-      {/* ── Urgent actions — moved here from the Insights page ──────────── */}
-      <UrgentActionsSection actions={urgentActions} />
 
       {/* ── זרם חי ───────────────────────────────────────────────────────── */}
       {liveItems.length > 0 && (
