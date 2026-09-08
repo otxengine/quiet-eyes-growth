@@ -116,3 +116,41 @@ test('fullBackfill bypasses an existing Facebook cursor and re-requests the back
   expect(fbCall![1]).toMatchObject({ resultsLimit: 150 });
   expect(fbCall![1]).not.toHaveProperty('onlyPostsNewerThan');
 });
+
+test('platformCapOverrides {kind:"skip"} prevents the Apify call on the steady-state path', async () => {
+  businessPostFindMany.mockResolvedValue([
+    { id: 'p1', external_post_id: 'x1', post_url: null, content_hash: null, media_url: 'http://img', video_url: null, analyzed_at: new Date(), video_analyzed_at: null, posted_at: new Date('2026-01-01T00:00:00Z') },
+  ]);
+
+  await collectOwnSocialPosts({
+    body: { businessProfileId: 'b1', force: true, platformCapOverrides: { facebook: { kind: 'skip' } } },
+  } as any, mockRes());
+
+  const fbCall = mockRunApifyActor.mock.calls.find(([actorId]) => actorId === 'apify~facebook-posts-scraper');
+  expect(fbCall).toBeUndefined();
+});
+
+test('platformCapOverrides {kind:"clamped"} sets resultsLimit to the override limit, not POSTS_CAP', async () => {
+  businessPostFindMany.mockResolvedValue([
+    { id: 'p1', external_post_id: 'x1', post_url: null, content_hash: null, media_url: 'http://img', video_url: null, analyzed_at: new Date(), video_analyzed_at: null, posted_at: new Date('2026-01-01T00:00:00Z') },
+  ]);
+
+  await collectOwnSocialPosts({
+    body: { businessProfileId: 'b1', force: true, platformCapOverrides: { facebook: { kind: 'clamped', limit: 3 } } },
+  } as any, mockRes());
+
+  const fbCall = mockRunApifyActor.mock.calls.find(([actorId]) => actorId === 'apify~facebook-posts-scraper');
+  expect(fbCall![1]).toMatchObject({ resultsLimit: 3 });
+});
+
+test('platformCapOverrides is ignored on the first-ever backfill path (never suppressed)', async () => {
+  businessPostFindMany.mockResolvedValue([]); // no existing posts -> no cursor yet, backfill path
+
+  await collectOwnSocialPosts({
+    body: { businessProfileId: 'b1', force: true, platformCapOverrides: { facebook: { kind: 'skip' } } },
+  } as any, mockRes());
+
+  const fbCall = mockRunApifyActor.mock.calls.find(([actorId]) => actorId === 'apify~facebook-posts-scraper');
+  expect(fbCall).toBeTruthy();
+  expect(fbCall![1]).toMatchObject({ resultsLimit: 150 });
+});

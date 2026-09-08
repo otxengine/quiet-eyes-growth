@@ -80,12 +80,10 @@ import { sectorBenchmark } from './routes/functions/sectorBenchmark';
 import { intentClassification } from './routes/functions/intentClassification';
 import { collectOTXCompetitorChanges } from './routes/functions/collectOTXCompetitorChanges';
 import { runOTXSyncBridge } from './routes/functions/runOTXSyncBridge';
-import { collectCompetitorSocialPosts } from './routes/functions/collectCompetitorSocialPosts';
-import { collectOwnSocialPosts } from './routes/functions/collectOwnSocialPosts';
-import { collectOwnSocialProfile } from './routes/functions/collectOwnSocialProfile';
+import { collectOwnSocialProfileAndPosts } from './routes/functions/collectOwnSocialProfileAndPosts';
+import { collectCompetitorSocialProfileAndPosts } from './routes/functions/collectCompetitorSocialProfileAndPosts';
 import { collectOwnBusinessInfo } from './routes/functions/collectOwnBusinessInfo';
 import { detectOwnAds } from './routes/functions/detectOwnAds';
-import { collectCompetitorSocialProfile } from './routes/functions/collectCompetitorSocialProfile';
 import { collectCompetitorSocialStories } from './routes/functions/collectCompetitorSocialStories';
 import { reconcileDataForSeoReviewTasks } from './routes/functions/reconcileDataForSeoReviewTasks';
 
@@ -213,11 +211,12 @@ export function startScheduler() {
     runAgentForAll('CollectReviews', collectReviews);
     runAgentForAll('CollectWebSignals', collectWebSignals);
     runAgentForAll('FindSocialLeads', findSocialLeads);
-    runAgentForAll('CollectCompetitorSocialPosts', collectCompetitorSocialPosts);
-    runAgentForAll('CollectCompetitorSocialProfile', collectCompetitorSocialProfile);
+    // Profile scraped first, then posts scraped with the profile-derived skip/size
+    // signal (see postsDeltaSignal.ts) — chained inside each orchestrator call, so
+    // this needs no cron reordering.
+    runAgentForAll('CollectCompetitorSocialProfileAndPosts', collectCompetitorSocialProfileAndPosts);
     runAgentForAll('CollectCompetitorSocialStories', collectCompetitorSocialStories);
-    runAgentForAll('CollectOwnSocialPosts', collectOwnSocialPosts);
-    runAgentForAll('CollectOwnSocialProfile', collectOwnSocialProfile);
+    runAgentForAll('CollectOwnSocialProfileAndPosts', collectOwnSocialProfileAndPosts);
     runAgentForAll('CollectOwnBusinessInfo', collectOwnBusinessInfo);
     // Enrich newly created leads with Haiku intent classification (5min after lead gen)
     setTimeout(() => enrichNewLeadsWithIntent()

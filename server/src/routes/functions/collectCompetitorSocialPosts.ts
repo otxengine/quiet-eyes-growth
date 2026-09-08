@@ -8,6 +8,7 @@ import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
 import { postContentHash } from '../../lib/postContentHash';
 import { findDonorCandidates, DonorPlatform } from '../../lib/competitorDonor';
+import { PostsDeltaSignal } from '../../lib/postsDeltaSignal';
 
 const MIN_INTERVAL_MS = 20 * 60 * 60 * 1000; // 20h
 // ponytail: steady-state cap sized for the actual delta (a few posts/day), not the backfill.
@@ -70,6 +71,7 @@ async function scrapeAndSave(
   url: string | null,
   businessProfileId: string,
   fullBackfill = false,
+  override?: PostsDeltaSignal,
 ): Promise<{ competitor: string; platform: string; url: string; upserted: number; apify_returned: number; media_found: number; media_uploaded: number; first_post_keys?: string[]; first_post_media_sample?: Record<string, any>; elapsed_ms: number; error: string | null; insert_errors?: any[] }> {
   // One-time backfill: delete posts with no media so they get re-inserted with correct field extraction
   await (prisma as any).$executeRawUnsafe(
@@ -209,9 +211,19 @@ async function scrapeAndSave(
 
   // First-ever scrape (no cursor yet) pulls a deeper one-time backfill; repeat
   // scrapes stay at the steady-state cap since onlyPostsNewerThan already scopes them.
-  const platformCap = onlyPostsNewerThan ? POSTS_CAP : BACKFILL_CAP;
+  let platformCap = onlyPostsNewerThan ? POSTS_CAP : BACKFILL_CAP;
 
-  if (platform === 'instagram') {
+  // Profile-scrape cost signal (see postsDeltaSignal.ts) — only consulted on the
+  // steady-state path; never allowed to suppress or shrink the first-ever backfill pull.
+  let skipApifyCall = false;
+  if (onlyPostsNewerThan && override) {
+    if (override.kind === 'skip') skipApifyCall = true;
+    else if (override.kind === 'clamped') platformCap = override.limit;
+  }
+
+  if (skipApifyCall) {
+    rawPosts = [];
+  } else if (platform === 'instagram') {
     rawPosts = await runApifyActor('apify~instagram-scraper', {
       directUrls: [url],
       resultsType: 'posts',
@@ -427,7 +439,10 @@ async function scrapeAndSave(
 }
 
 export async function collectCompetitorSocialPosts(req: Request, res: Response) {
-  const { businessProfileId, force, fullBackfill } = req.body;
+  const { businessProfileId, force, fullBackfill, competitorPlatformOverrides } = req.body as {
+    businessProfileId: string; force?: boolean; fullBackfill?: boolean;
+    competitorPlatformOverrides?: Record<string, Partial<Record<'instagram' | 'facebook', PostsDeltaSignal>>>;
+  };
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
   if (!force && shouldSkipAgent(businessProfileId, 'collectCompetitorSocialPosts', MIN_INTERVAL_MS)) {
@@ -483,7 +498,10 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
     for (let i = 0; i < tasks.length; i += POSTS_BATCH_CONCURRENCY) {
       const batch = await Promise.allSettled(
         tasks.slice(i, i + POSTS_BATCH_CONCURRENCY).map(({ comp, platform, url }) =>
-          scrapeAndSave(comp, platform, url, businessProfileId, platform === 'facebook' && !!fullBackfill),
+          scrapeAndSave(
+            comp, platform, url, businessProfileId, platform === 'facebook' && !!fullBackfill,
+            competitorPlatformOverrides?.[comp.id]?.[platform as 'instagram' | 'facebook'],
+          ),
         ),
       );
       results.push(...batch);

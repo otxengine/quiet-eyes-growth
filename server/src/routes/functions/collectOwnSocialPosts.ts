@@ -6,6 +6,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
 import { postContentHash } from '../../lib/postContentHash';
+import { PostsDeltaSignal } from '../../lib/postsDeltaSignal';
 
 // Own-business twin of collectCompetitorSocialPosts.ts — same Apify actors, same
 // dedup/analysis logic, but scrapes the business's own pages into business_posts
@@ -30,7 +31,10 @@ function normalizeUrl(url: string | null): string | null {
   }
 }
 
-async function scrapeAndSave(businessProfileId: string, platform: string, url: string, fullBackfill = false) {
+async function scrapeAndSave(
+  businessProfileId: string, platform: string, url: string, fullBackfill = false,
+  override?: PostsDeltaSignal,
+) {
   const existing = await prisma.businessPost.findMany({
     where: { linked_business: businessProfileId, platform },
     select: { id: true, external_post_id: true, post_url: true, content_hash: true, media_url: true, video_url: true, analyzed_at: true, video_analyzed_at: true, posted_at: true },
@@ -78,13 +82,23 @@ async function scrapeAndSave(businessProfileId: string, platform: string, url: s
 
   // First-ever scrape (no cursor yet) pulls a deeper one-time backfill; repeat
   // scrapes stay at the steady-state cap since onlyPostsNewerThan already scopes them.
-  const platformCap = onlyPostsNewerThan ? POSTS_CAP : BACKFILL_CAP;
+  let platformCap = onlyPostsNewerThan ? POSTS_CAP : BACKFILL_CAP;
   // A 150-post backfill run takes noticeably longer on Apify's side than a
   // steady-state few-posts run — give it more polling time or it gets cut off
   // (rawPosts=[]) while the actor is still legitimately working.
   const backfillWaitMs = onlyPostsNewerThan ? null : 240_000;
 
-  if (platform === 'instagram') {
+  // Profile-scrape cost signal (see postsDeltaSignal.ts) — only consulted on the
+  // steady-state path; never allowed to suppress or shrink the first-ever backfill pull.
+  let skipApifyCall = false;
+  if (onlyPostsNewerThan && override) {
+    if (override.kind === 'skip') skipApifyCall = true;
+    else if (override.kind === 'clamped') platformCap = override.limit;
+  }
+
+  if (skipApifyCall) {
+    rawPosts = [];
+  } else if (platform === 'instagram') {
     rawPosts = await runApifyActor('apify~instagram-scraper', {
       directUrls: [url],
       resultsType: 'posts',
@@ -210,7 +224,10 @@ async function scrapeAndSave(businessProfileId: string, platform: string, url: s
 }
 
 export async function collectOwnSocialPosts(req: Request, res: Response) {
-  const { businessProfileId, force, fullBackfill } = req.body;
+  const { businessProfileId, force, fullBackfill, platformCapOverrides } = req.body as {
+    businessProfileId: string; force?: boolean; fullBackfill?: boolean;
+    platformCapOverrides?: Partial<Record<'instagram' | 'facebook', PostsDeltaSignal>>;
+  };
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
   if (!force && shouldSkipAgent(businessProfileId, 'collectOwnSocialPosts', MIN_INTERVAL_MS)) {
@@ -234,7 +251,10 @@ export async function collectOwnSocialPosts(req: Request, res: Response) {
     const tasks = Object.entries(urls).filter(([, url]) => !!url) as [string, string][];
 
     const results = await Promise.allSettled(
-      tasks.map(([platform, url]) => scrapeAndSave(businessProfileId, platform, url, platform === 'facebook' && !!fullBackfill)),
+      tasks.map(([platform, url]) => scrapeAndSave(
+        businessProfileId, platform, url, platform === 'facebook' && !!fullBackfill,
+        platformCapOverrides?.[platform as 'instagram' | 'facebook'],
+      )),
     );
 
     const diagnostics = results.map((r, i) =>

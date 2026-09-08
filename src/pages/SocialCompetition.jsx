@@ -614,23 +614,24 @@ export default function SocialCompetition() {
     const parts = [];
 
     try {
-      const feedResult = await base44.functions.invoke('collectCompetitorSocialPosts', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
+      // Profile scraped first, then posts — the posts scrape reads the profile's
+      // fresh post_count/last_post_at delta to decide whether/how much to fetch
+      // (see server/src/lib/postsDeltaSignal.ts). force:true still bypasses each
+      // step's own cadence guard, but not this delta-based skip — a quiet account
+      // can still report "0 new posts" here even on a manual refresh.
+      const feedResult = await base44.functions.invoke('collectCompetitorSocialProfileAndPosts', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
       queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] });
+      queryClient.invalidateQueries({ queryKey: ['socialProfiles', bpId] });
       if (feedResult?.upserted > 0) parts.push(`${feedResult.upserted} פוסטים חדשים`);
       else console.info('[refresh-all] feed diagnostics:', feedResult?.diagnostics);
-    } catch (e) { toast.error(`שגיאה בעדכון הפיד: ${e.message}`); }
+      parts.push('פרופילים עודכנו');
+    } catch (e) { toast.error(`שגיאה בעדכון הפיד/פרופילים: ${e.message}`); }
 
     try {
       const adsResult = await base44.functions.invoke('detectCompetitorAds', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
       queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] });
       if (!adsResult?.skipped) parts.push('מודעות עודכנו');
     } catch { toast.error('שגיאה בעדכון המודעות'); }
-
-    try {
-      await base44.functions.invoke('collectCompetitorSocialProfile', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
-      queryClient.invalidateQueries({ queryKey: ['socialProfiles', bpId] });
-      parts.push('פרופילים עודכנו');
-    } catch (e) { toast.error(`שגיאה בעדכון הפרופילים: ${e.message}`); }
 
     try {
       const storiesResult = await base44.functions.invoke('collectCompetitorSocialStories', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);

@@ -83,3 +83,38 @@ test('fullBackfill bypasses an existing cursor and re-requests the backfill cap'
   expect(fbCall()![1]).toMatchObject({ resultsLimit: 75 });
   expect(fbCall()![1]).not.toHaveProperty('onlyPostsNewerThan');
 });
+
+test('competitorPlatformOverrides {kind:"skip"} prevents the Apify call on the steady-state path', async () => {
+  queryRawUnsafe.mockResolvedValueOnce([
+    { id: 'p1', external_post_id: 'x1', post_url: null, content_hash: null, media_url: 'http://img', video_url: null, analyzed_at: null, video_analyzed_at: null, posted_at: '2026-01-01T00:00:00.000Z' },
+  ]);
+
+  await collectCompetitorSocialPosts({
+    body: { businessProfileId: 'b1', competitorPlatformOverrides: { [COMP.id]: { facebook: { kind: 'skip' } } } },
+  } as any, mockRes());
+
+  expect(fbCall()).toBeUndefined();
+});
+
+test('competitorPlatformOverrides {kind:"clamped"} sets resultsLimit to the override limit', async () => {
+  queryRawUnsafe.mockResolvedValueOnce([
+    { id: 'p1', external_post_id: 'x1', post_url: null, content_hash: null, media_url: 'http://img', video_url: null, analyzed_at: null, video_analyzed_at: null, posted_at: '2026-01-01T00:00:00.000Z' },
+  ]);
+
+  await collectCompetitorSocialPosts({
+    body: { businessProfileId: 'b1', competitorPlatformOverrides: { [COMP.id]: { facebook: { kind: 'clamped', limit: 2 } } } },
+  } as any, mockRes());
+
+  expect(fbCall()![1]).toMatchObject({ resultsLimit: 2 });
+});
+
+test('competitorPlatformOverrides is ignored on the first-ever backfill path (never suppressed)', async () => {
+  queryRawUnsafe.mockResolvedValueOnce([]); // no existing rows -> no cursor yet
+
+  await collectCompetitorSocialPosts({
+    body: { businessProfileId: 'b1', competitorPlatformOverrides: { [COMP.id]: { facebook: { kind: 'skip' } } } },
+  } as any, mockRes());
+
+  expect(fbCall()).toBeTruthy();
+  expect(fbCall()![1]).toMatchObject({ resultsLimit: 75 });
+});
