@@ -12,6 +12,24 @@ if (process.env.NODE_ENV === 'production') {
   }
 }
 
+// META_ENCRYPTION_KEY must be a 64-char hex string (32 bytes) — see lib/crypto.ts.
+// Without it, tryEncryptToken/tryDecryptToken silently fall back to storing/reading
+// tokens as plaintext instead of failing the request. Loud at boot, not mid-request.
+{
+  const key = process.env.META_ENCRYPTION_KEY || '';
+  if (key.length !== 64 || !/^[0-9a-f]+$/i.test(key)) {
+    const msg = 'META_ENCRYPTION_KEY is missing or malformed — tokens (Google, Meta, WhatsApp) ' +
+      'will be stored/read as PLAINTEXT until this is fixed. Generate one with: ' +
+      'node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"';
+    if (process.env.NODE_ENV === 'production') {
+      console.error(`FATAL: ${msg}`);
+      process.exit(1);
+    } else {
+      console.warn(`WARNING: ${msg}`);
+    }
+  }
+}
+
 import { registerAllHandlers } from './events/EventChoreographer';
 import express from 'express';
 import cors from 'cors';

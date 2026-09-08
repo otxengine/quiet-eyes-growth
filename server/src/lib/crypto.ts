@@ -11,6 +11,9 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+import { createLogger } from '../infra/logger';
+
+const logger = createLogger('crypto');
 
 const ALGORITHM  = 'aes-256-gcm';
 const IV_LENGTH  = 12; // bytes — NIST recommended for GCM
@@ -50,15 +53,30 @@ export function encryptToken(plaintext: string): string {
 // Regex matches the iv:tag:ciphertext format produced by encryptToken (all lowercase hex)
 const ENCRYPTED_RE = /^[0-9a-f]+:[0-9a-f]+:[0-9a-f]+$/;
 
+/** True if `stored` is already in encryptToken()'s iv:tag:ciphertext format. */
+export function isEncryptedToken(stored: string): boolean {
+  return ENCRYPTED_RE.test(stored);
+}
+
 /** Encrypt if META_ENCRYPTION_KEY is configured; return plaintext otherwise. */
 export function tryEncryptToken(plaintext: string): string {
-  try { return encryptToken(plaintext); } catch { return plaintext; }
+  try {
+    return encryptToken(plaintext);
+  } catch (e: any) {
+    logger.error('Token encryption failed — storing as plaintext', { error: e.message });
+    return plaintext;
+  }
 }
 
 /** Decrypt if the stored value looks like an encrypted token; return as-is otherwise. */
 export function tryDecryptToken(stored: string): string {
   if (!ENCRYPTED_RE.test(stored)) return stored;
-  try { return decryptToken(stored); } catch { return stored; }
+  try {
+    return decryptToken(stored);
+  } catch (e: any) {
+    logger.error('Token decryption failed — returning stored value as-is', { error: e.message });
+    return stored;
+  }
 }
 
 /**

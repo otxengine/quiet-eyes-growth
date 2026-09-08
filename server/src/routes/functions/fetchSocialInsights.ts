@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { tryDecryptToken } from '../../lib/crypto';
 
 /**
  * fetchSocialInsights — pulls real performance metrics from connected social accounts.
@@ -101,7 +102,9 @@ export async function fetchSocialInsights(req: Request, res: Response) {
 
     // ── Google Business Performance API ─────────────────────────────────────
     const gmbAcct = byPlatform['google_business'];
-    const gmbToken = gmbAcct?.access_token || (profile as any).google_access_token;
+    const rawProfileGmbToken = (profile as any).google_access_token as string | null;
+    const gmbToken = (gmbAcct?.access_token ? tryDecryptToken(gmbAcct.access_token) : null)
+      || (rawProfileGmbToken ? tryDecryptToken(rawProfileGmbToken) : null);
     const gmbLocationPath = gmbAcct?.page_id; // "accounts/123/locations/456"
 
     if (gmbToken && gmbLocationPath && gmbLocationPath.includes('/')) {

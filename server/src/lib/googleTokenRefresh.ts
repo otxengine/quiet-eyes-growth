@@ -28,8 +28,9 @@ export async function refreshGoogleToken(businessProfileId: string): Promise<str
   });
   if (!account) return null;
 
-  const refreshToken = (account as any).refresh_token as string | null;
-  if (!refreshToken) return null;
+  const rawRefreshToken = (account as any).refresh_token as string | null;
+  if (!rawRefreshToken) return null;
+  const refreshToken = tryDecryptToken(rawRefreshToken);
 
   try {
     const res = await fetch(GOOGLE_TOKEN_URL, {
@@ -60,10 +61,10 @@ export async function refreshGoogleToken(businessProfileId: string): Promise<str
       tryEncryptToken(newToken), expiresAt, new Date().toISOString(), account.id,
     );
 
-    // Mirror to BusinessProfile
+    // Mirror to BusinessProfile — encrypted, same as the SocialAccount copy
     await prisma.businessProfile.updateMany({
       where: { id: businessProfileId },
-      data:  { google_access_token: newToken },
+      data:  { google_access_token: tryEncryptToken(newToken) },
     });
 
     logger.info(`Google token refreshed for business ${businessProfileId}`);

@@ -5,6 +5,7 @@ import { getSectorProfile } from '../lib/businessProfile';
 import { resolveTopicSet } from '../lib/reviewTopicPacks';
 import { downloadFromS3 } from '../lib/s3';
 import { tryDecryptToken } from '../lib/crypto';
+import { requireOwnsBusiness } from '../middleware/businessAccess';
 import FormData from 'form-data';
 import fetch from 'node-fetch';
 import { randomUUID } from 'crypto';
@@ -742,7 +743,7 @@ router.delete('/comments/:id', async (req: Request, res: Response) => {
 // POST /api/social/reviews/:id/reply
 // Body: { businessProfileId, replyText }
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/reviews/:id/reply', async (req: Request, res: Response) => {
+router.post('/reviews/:id/reply', requireOwnsBusiness(req => req.body?.businessProfileId), async (req: Request, res: Response) => {
   const reviewId = req.params.id as string;
   const { businessProfileId, replyText } = req.body;
   if (!businessProfileId || !replyText) {
@@ -751,6 +752,9 @@ router.post('/reviews/:id/reply', async (req: Request, res: Response) => {
   try {
     const review = await prisma.review.findUnique({ where: { id: reviewId } });
     if (!review) return res.status(404).json({ error: 'Review not found' });
+    if (review.linked_business !== businessProfileId) {
+      return res.status(403).json({ error: 'Review does not belong to this business' });
+    }
     const { postReviewReply } = await import('../services/execution/GoogleBusinessClient');
     const result = await postReviewReply(businessProfileId, {
       reviewId,

@@ -18,7 +18,8 @@
 import { Router, Request, Response } from 'express';
 import { randomBytes } from 'crypto';
 import { prisma } from '../db';
-import { tryEncryptToken } from '../lib/crypto';
+import { tryEncryptToken, tryDecryptToken } from '../lib/crypto';
+import { requireOwnsBusiness } from '../middleware/businessAccess';
 
 const router = Router();
 
@@ -126,7 +127,7 @@ export async function upsertSocialAccount(
 }
 
 // ── Initiate OAuth ────────────────────────────────────────────────────────────
-router.get('/initiate/:platform', async (req: Request, res: Response) => {
+router.get('/initiate/:platform', requireOwnsBusiness(req => req.query.businessId as string | undefined), async (req: Request, res: Response) => {
   const { platform } = req.params;
   const businessId   = String(req.query.businessId || '');
 
@@ -441,7 +442,8 @@ async function handleGoogleCallback(code: string, businessId: string) {
   const existing = await prisma.socialAccount.findFirst({
     where: { linked_business: businessId, platform: 'google_business' },
   });
-  const encAccessToken = tryEncryptToken(accessToken);
+  const encAccessToken  = tryEncryptToken(accessToken);
+  const encRefreshToken = refreshToken ? tryEncryptToken(refreshToken) : null;
   if (existing) {
     await prisma.$executeRawUnsafe(
       `UPDATE social_accounts
@@ -449,7 +451,7 @@ async function handleGoogleCallback(code: string, businessId: string) {
            last_sync=$4, refresh_token=$5, expires_at=$6
        WHERE id=$7`,
       accountName, encAccessToken, locationPath, new Date().toISOString(),
-      refreshToken || null, expiresAt, existing.id,
+      encRefreshToken, expiresAt, existing.id,
     );
   } else {
     await prisma.$executeRawUnsafe(
@@ -457,14 +459,14 @@ async function handleGoogleCallback(code: string, businessId: string) {
          (id, created_date, linked_business, platform, account_name, access_token, page_id, is_connected, last_sync, refresh_token, expires_at)
        VALUES (gen_random_uuid()::text, now(), $1, 'google_business', $2, $3, $4, true, $5, $6, $7)`,
       businessId, accountName, encAccessToken, locationPath,
-      new Date().toISOString(), refreshToken || null, expiresAt,
+      new Date().toISOString(), encRefreshToken, expiresAt,
     );
   }
 
-  // Mirror access token into BusinessProfile (plaintext — separate field)
+  // Mirror access token into BusinessProfile — encrypted, same as the SocialAccount copy
   await prisma.businessProfile.updateMany({
     where: { id: businessId },
-    data:  { google_access_token: accessToken },
+    data:  { google_access_token: encAccessToken },
   });
 
   return { page_name: accountName, platform: 'google_business' };
@@ -595,7 +597,8 @@ async function handleGoogleAdsCallback(code: string, businessId: string) {
   const existing = await prisma.socialAccount.findFirst({
     where: { linked_business: businessId, platform: 'google_ads' },
   });
-  const encGAdsToken = tryEncryptToken(accessToken);
+  const encGAdsToken        = tryEncryptToken(accessToken);
+  const encGAdsRefreshToken = refreshToken ? tryEncryptToken(refreshToken) : null;
   if (existing) {
     await prisma.$executeRawUnsafe(
       `UPDATE social_accounts
@@ -603,7 +606,7 @@ async function handleGoogleAdsCallback(code: string, businessId: string) {
            last_sync=$4, refresh_token=$5, expires_at=$6
        WHERE id=$7`,
       accountName, encGAdsToken, customerId, new Date().toISOString(),
-      refreshToken || null, expiresAt, existing.id,
+      encGAdsRefreshToken, expiresAt, existing.id,
     );
   } else {
     await prisma.$executeRawUnsafe(
@@ -611,7 +614,7 @@ async function handleGoogleAdsCallback(code: string, businessId: string) {
          (id, created_date, linked_business, platform, account_name, access_token, page_id, is_connected, last_sync, refresh_token, expires_at)
        VALUES (gen_random_uuid()::text, now(), $1, 'google_ads', $2, $3, $4, true, $5, $6, $7)`,
       businessId, accountName, encGAdsToken, customerId,
-      new Date().toISOString(), refreshToken || null, expiresAt,
+      new Date().toISOString(), encGAdsRefreshToken, expiresAt,
     );
   }
 
@@ -729,8 +732,22 @@ body{font-family:sans-serif;display:flex;align-items:center;justify-content:cent
   }
 });
 
+// Best-effort — revoke at Google so the token is actually dead, not just locally forgotten.
+// Failure here shouldn't block the customer's disconnect action.
+async function revokeGoogleToken(account: { access_token: string | null; refresh_token: string | null }) {
+  const raw = account.refresh_token || account.access_token;
+  if (!raw) return;
+  try {
+    const token = tryDecryptToken(raw);
+    const res = await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, { method: 'POST' });
+    if (!res.ok) console.warn(`[oauth/disconnect] Google revoke returned ${res.status}`);
+  } catch (e: any) {
+    console.warn('[oauth/disconnect] Google revoke failed:', e.message);
+  }
+}
+
 // ── Disconnect ────────────────────────────────────────────────────────────────
-router.post('/disconnect', async (req: Request, res: Response) => {
+router.post('/disconnect', requireOwnsBusiness(req => req.body?.businessId), async (req: Request, res: Response) => {
   const { businessId, platform } = req.body;
   if (!businessId || !platform) return res.status(400).json({ error: 'Missing params' });
 
@@ -739,9 +756,12 @@ router.post('/disconnect', async (req: Request, res: Response) => {
       where: { linked_business: businessId, platform },
     });
     if (account) {
+      if (platform === 'google_business' || platform === 'google_ads') {
+        await revokeGoogleToken(account);
+      }
       await prisma.socialAccount.update({
         where: { id: account.id },
-        data: { is_connected: false, access_token: null },
+        data: { is_connected: false, access_token: null, refresh_token: null },
       });
     }
 

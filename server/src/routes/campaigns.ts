@@ -10,11 +10,15 @@ import { prisma } from '../db';
 import { createGoogleAdsCampaign, getGoogleAdsCampaignStats } from '../lib/googleAdsApi';
 import { createMetaAdsCampaign } from '../lib/metaAdsApi';
 import type { MetaAdPlacement, MetaAdType } from '../lib/metaAdsApi';
+import { requireOwnsBusiness } from '../middleware/businessAccess';
+import { tryDecryptToken, tryEncryptToken } from '../lib/crypto';
+
+const requireOwnsBusinessId = requireOwnsBusiness(req => req.body?.businessId);
 
 const router = Router();
 
 // ── Publish campaign to Google Ads ───────────────────────────────────────────
-router.post('/publish-google-ads', async (req: Request, res: Response) => {
+router.post('/publish-google-ads', requireOwnsBusinessId, async (req: Request, res: Response) => {
   const { campaignId, businessId } = req.body;
   if (!campaignId || !businessId) {
     return res.status(400).json({ error: 'Missing campaignId or businessId' });
@@ -48,7 +52,7 @@ router.post('/publish-google-ads', async (req: Request, res: Response) => {
     }
 
     // Refresh token if expired (Google tokens last 1 hour)
-    let accessToken = adsAccount.access_token;
+    let accessToken = tryDecryptToken(adsAccount.access_token);
     if (adsAccount.refresh_token) {
       try {
         const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -57,7 +61,7 @@ router.post('/publish-google-ads', async (req: Request, res: Response) => {
           body:    new URLSearchParams({
             client_id:     process.env.GOOGLE_CLIENT_ID     || '',
             client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
-            refresh_token: adsAccount.refresh_token,
+            refresh_token: tryDecryptToken(adsAccount.refresh_token),
             grant_type:    'refresh_token',
           }).toString(),
         });
@@ -67,7 +71,7 @@ router.post('/publish-google-ads', async (req: Request, res: Response) => {
             accessToken = td.access_token;
             await prisma.$executeRawUnsafe(
               `UPDATE social_accounts SET access_token=$1 WHERE linked_business=$2 AND platform='google_ads'`,
-              accessToken, businessId,
+              tryEncryptToken(accessToken), businessId,
             );
           }
         }
@@ -127,7 +131,7 @@ router.post('/publish-google-ads', async (req: Request, res: Response) => {
 });
 
 // ── Publish campaign to Meta Ads ─────────────────────────────────────────────
-router.post('/publish-meta-ads', async (req: Request, res: Response) => {
+router.post('/publish-meta-ads', requireOwnsBusinessId, async (req: Request, res: Response) => {
   const { campaignId, businessId } = req.body;
   if (!campaignId || !businessId) {
     return res.status(400).json({ error: 'Missing campaignId or businessId' });
@@ -252,7 +256,7 @@ router.post('/publish-meta-ads', async (req: Request, res: Response) => {
 });
 
 // ── Sync actual stats from Google Ads ────────────────────────────────────────
-router.post('/sync-stats', async (req: Request, res: Response) => {
+router.post('/sync-stats', requireOwnsBusinessId, async (req: Request, res: Response) => {
   const { campaignId, businessId } = req.body;
   if (!campaignId || !businessId) {
     return res.status(400).json({ error: 'Missing campaignId or businessId' });
@@ -284,7 +288,7 @@ router.post('/sync-stats', async (req: Request, res: Response) => {
     const endDate   = new Date().toISOString().slice(0, 10);
 
     const stats = await getGoogleAdsCampaignStats(
-      adsAccount.access_token,
+      tryDecryptToken(adsAccount.access_token),
       adsAccount.page_id,
       campaign.external_campaign_id,
       startDate,

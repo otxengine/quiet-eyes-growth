@@ -11,6 +11,7 @@
 import { prisma } from '../../db';
 import { createLogger } from '../../infra/logger';
 import { getValidGoogleToken } from '../../lib/googleTokenRefresh';
+import { tryDecryptToken } from '../../lib/crypto';
 
 const logger = createLogger('GoogleBusinessClient');
 
@@ -43,7 +44,8 @@ export async function postReviewReply(
 
   // Use auto-refreshing token (handles 1-hour expiry automatically)
   const freshToken = await getValidGoogleToken(businessProfileId).catch(() => null);
-  const gmbToken = freshToken || gmbAccount?.access_token || profile?.google_access_token;
+  const gmbToken = freshToken || gmbAccount?.access_token
+    || (profile?.google_access_token ? tryDecryptToken(profile.google_access_token) : undefined);
   // gmbAccount.page_id is the full location path "accounts/123/locations/456"
   const locationPath = gmbAccount?.page_id;
 
