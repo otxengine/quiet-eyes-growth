@@ -311,10 +311,10 @@ export default function InsightsFeed({ businessProfile, show24hActivity = false 
     + signals.filter(s => isWithinLast24h(s.detected_at)).length;
 
   const activityStatCards = [
-    { count: newReviewsCount, label: 'ביקורות חדשות',        borderColor: 'blue' },
-    { count: newPostsCount,   label: 'פוסטים חדשים ממתחרים', borderColor: 'yellow' },
-    { count: newAdsCount,     label: 'מודעות חדשות ממתחרים', borderColor: 'none' },
-    { count: newInsightsCount,label: 'תובנות חדשות',         borderColor: 'green' },
+    { count: newReviewsCount, label: 'ביקורות חדשות',        borderColor: 'blue',   onClick: () => navigate('/reviews') },
+    { count: newPostsCount,   label: 'פוסטים חדשים ממתחרים', borderColor: 'yellow', onClick: () => navigate('/competitors') },
+    { count: newAdsCount,     label: 'מודעות חדשות ממתחרים', borderColor: 'none',   onClick: () => navigate('/competitors') },
+    { count: newInsightsCount,label: 'תובנות חדשות',         borderColor: 'green',  onClick: () => navigate('/insights') },
   ];
 
   const statCards = [

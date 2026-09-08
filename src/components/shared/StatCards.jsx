@@ -3,10 +3,11 @@ import React from 'react';
 /**
  * StatCards — 4-card row with colored right borders
  * Props:
- *   cards: Array of { count, label, borderColor?, change?, changeColor? }
+ *   cards: Array of { count, label, borderColor?, change?, changeColor?, onClick? }
  *   borderColor options: 'blue' | 'red' | 'yellow' | 'green' | 'none'
  *   change: optional text shown below the number (e.g. "+12% מהחודש שעבר")
  *   changeColor: optional Tailwind text color class (e.g. 'text-green-600', 'text-red-500')
+ *   onClick: optional — when present, the card renders as a clickable button
  */
 const BORDER_COLORS = {
   blue:   'border-r-blue-500',
@@ -21,17 +22,20 @@ export default function StatCards({ cards = [] }) {
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
       {cards.map((card, i) => {
         const borderClass = BORDER_COLORS[card.borderColor] || BORDER_COLORS.none;
-        return (
-          <div
-            key={i}
-            className={`bg-white rounded-xl p-4 border-r-4 ${borderClass} shadow-sm flex flex-col gap-1`}
-          >
+        const className = `bg-white rounded-xl p-4 border-r-4 ${borderClass} shadow-sm flex flex-col gap-1 text-right w-full ${card.onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`;
+        const content = (
+          <>
             <span className="text-2xl font-bold text-foreground">{card.count ?? '—'}</span>
             <span className="text-xs text-foreground-secondary font-medium leading-tight">{card.label}</span>
             {card.change && (
               <span className={`text-[10px] font-semibold mt-0.5 ${card.changeColor || 'text-foreground-muted'}`}>{card.change}</span>
             )}
-          </div>
+          </>
+        );
+        return card.onClick ? (
+          <button key={i} type="button" onClick={card.onClick} className={className}>{content}</button>
+        ) : (
+          <div key={i} className={className}>{content}</div>
         );
       })}
     </div>
