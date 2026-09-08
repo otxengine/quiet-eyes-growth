@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { getAuthHeaders } from '@/api/client';
 import { toast } from 'sonner';
 import { CheckCircle, ExternalLink, Loader2, X, AlertTriangle, Clock } from 'lucide-react';
 import HubSpotConfig from '@/components/integrations/HubSpotConfig';
@@ -387,7 +388,8 @@ const _apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3007/api';
 const SERVER_BASE = _apiUrl.replace(/\/api\/?$/, '');
 
 async function initiateOAuth(platformId, businessId) {
-  const res = await fetch(`${SERVER_BASE}/api/oauth/initiate/${platformId}?businessId=${businessId}`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${SERVER_BASE}/api/oauth/initiate/${platformId}?businessId=${businessId}`, { headers });
   const data = await res.json();
   return data; // { url, state } or { error, demo }
 }
@@ -485,9 +487,10 @@ export default function Integrations() {
 
   const disconnectSocial = async (platformId) => {
     try {
+      const authHeaders = await getAuthHeaders();
       await fetch(`${SERVER_BASE}/api/oauth/disconnect`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ businessId: bp?.id, platform: platformId }),
       });
     } catch (_) {}

@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { getAuthHeaders } from '@/api/client';
 import { Star, Search, Loader2, Bot, Send, X, ChevronDown, MoreVertical, Copy, CheckCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import RequestReviewModal from '@/components/reputation/RequestReviewModal';
@@ -179,9 +180,10 @@ function ReviewReplyPanel({ review, bpId, businessProfile, topicSet, onClose, on
     if (!replyText.trim()) { toast.error('יש להזין תגובה'); return; }
     setSending(true);
     try {
+      const authHeaders = await getAuthHeaders();
       const res  = await fetch(`${API_BASE}/social/reviews/${review.id}/reply`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ businessProfileId: bpId, replyText }),
       });
       const data = await res.json();

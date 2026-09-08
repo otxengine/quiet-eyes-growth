@@ -2,6 +2,7 @@
 import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { getAuthHeaders } from '@/api/client';
 import { Plus, Loader2, ChevronDown, Search, MoreVertical, Radio, Sparkles, Send, ExternalLink, X, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import StatCards from '@/components/shared/StatCards';
@@ -47,9 +48,10 @@ function PublishGoogleAdsButton({ campaign, bpId, onPublished }) {
   const handlePublish = async () => {
     setLoading(true);
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`${_apiBase}/campaigns/publish-google-ads`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ campaignId: campaign.id, businessId: bpId }),
       });
       const data = await res.json();
@@ -83,9 +85,10 @@ function PublishMetaAdsButton({ campaign, bpId, onPublished }) {
   const handlePublish = async () => {
     setLoading(true);
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`${_apiBase}/campaigns/publish-meta-ads`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ campaignId: campaign.id, businessId: bpId }),
       });
       const data = await res.json();

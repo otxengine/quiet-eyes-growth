@@ -40,6 +40,15 @@ function getDevUserId() {
   return localStorage.getItem('dev_user_id') || 'dev-user';
 }
 
+// Auth headers for hand-rolled fetch() calls that bypass apiFetch/base44
+// (e.g. the OAuth connect/disconnect flow, review-reply) — same token
+// resolution apiFetch uses internally, so those routes' auth middleware
+// (requireOwnsBusiness/requireBusinessAccess) sees the same identity.
+export async function getAuthHeaders() {
+  const token = await getToken();
+  return token ? { Authorization: `Bearer ${token}` } : { 'x-dev-user': getDevUserId() };
+}
+
 async function apiFetch(path, options = {}, timeoutMs = 30000) {
   const token = await getToken();
   const headers = {
