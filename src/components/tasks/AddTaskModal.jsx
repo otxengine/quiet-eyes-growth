@@ -21,6 +21,7 @@ export default function AddTaskModal({ bpId, onClose, onAdded, prefill }) {
     priority: prefill?.priority || 'medium',
     assignee: '',
     branch: '',
+    start_date: '',
     due_date: '',
     source_alert_id: prefill?.source_alert_id || '',
     source_type: prefill?.source_alert_id ? 'alert' : 'manual',
@@ -71,12 +72,16 @@ export default function AddTaskModal({ bpId, onClose, onAdded, prefill }) {
               <input className={inputClass} placeholder="שם הסניף" value={form.branch} onChange={e => setForm({ ...form, branch: e.target.value })} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="text-[11px] font-medium text-foreground-muted mb-1.5 block">עדיפות</label>
               <select className={inputClass} value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}>
                 {priorities.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-foreground-muted mb-1.5 block">תאריך התחלה</label>
+              <input type="date" className={inputClass} value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} />
             </div>
             <div>
               <label className="text-[11px] font-medium text-foreground-muted mb-1.5 block">תאריך יעד</label>

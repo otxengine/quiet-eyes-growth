@@ -276,11 +276,17 @@ function TaskDetailBody({
           {priorityCfg.label}
         </span>
 
+        {task.start_date && (
+          <span className="inline-flex items-center gap-1 px-3 py-1 text-[12px] font-medium rounded-full border bg-secondary text-foreground-muted border-border">
+            <Calendar className="w-3.5 h-3.5" /> התחלה: {formatDate(task.start_date)}
+          </span>
+        )}
+
         {task.due_date && (
           <span className={`inline-flex items-center gap-1 px-3 py-1 text-[12px] font-medium rounded-full border ${
             isOverdue ? 'bg-red-50 text-red-600 border-red-200' : 'bg-secondary text-foreground-muted border-border'
           }`}>
-            <Calendar className="w-3.5 h-3.5" /> {dueInfo.text}
+            <Calendar className="w-3.5 h-3.5" /> יעד: {dueInfo.text}
           </span>
         )}
 
