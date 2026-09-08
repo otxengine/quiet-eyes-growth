@@ -15,8 +15,9 @@ import {
  *   rows:    Array of objects (keyed by column.key) OR Array of ReactNode arrays
  *   renderCell: optional function(row, col) => ReactNode
  *   emptyText: string shown when rows is empty
+ *   onRowClick: optional function(row) — makes each row clickable
  */
-export default function DataTable({ columns = [], rows = [], renderCell, emptyText = 'אין נתונים' }) {
+export default function DataTable({ columns = [], rows = [], renderCell, emptyText = 'אין נתונים', onRowClick = null }) {
   return (
     <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
       <Table>
@@ -41,7 +42,11 @@ export default function DataTable({ columns = [], rows = [], renderCell, emptyTe
             </TableRow>
           ) : (
             rows.map((row, i) => (
-              <TableRow key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+              <TableRow
+                key={i}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
+              >
                 {columns.map((col) => (
                   <TableCell key={col.key} className={`text-right py-3 px-4 text-sm ${col.cellClassName || ''}`}>
                     {renderCell ? renderCell(row, col) : row[col.key]}

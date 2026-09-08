@@ -430,6 +430,69 @@ ${insight.description ? `הקשר: ${(insight.description).slice(0, 150)}` : ''}
 
 // ── Source badge for trends ───────────────────────────────────────────────────
 
+const SOURCE_TYPE_LABEL = {
+  agent:     'ניתוח AI',
+  web_scan:  'סריקת אינטרנט',
+  social:    'רשתות חברתיות',
+};
+
+function normalizeConfidence(c) {
+  if (c == null) return null;
+  return Math.round(c <= 1 ? c * 100 : c);
+}
+
+function SourceCard({ entity }) {
+  const confidence = normalizeConfidence(entity.confidence);
+  const urls = (entity.source_urls || '').split(',').map(u => u.trim()).filter(Boolean);
+  const hasContent = entity.agent_name || entity.source_type || confidence != null
+    || entity.data_freshness || entity.source_description || urls.length > 0;
+  if (!hasContent) return null;
+
+  return (
+    <div className="card-base p-5 space-y-3">
+      <h2 className="text-[13px] font-semibold text-foreground flex items-center gap-2">
+        <Database className="w-4 h-4 text-primary opacity-60" />
+        מקור המידע
+      </h2>
+      <div className="flex flex-wrap gap-2">
+        {entity.agent_name && (
+          <span className="text-[10px] font-semibold px-2 py-1 rounded-full bg-secondary border border-border text-foreground-secondary">
+            {entity.agent_name}
+          </span>
+        )}
+        {entity.source_type && (
+          <span className="text-[10px] font-semibold px-2 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700">
+            {SOURCE_TYPE_LABEL[entity.source_type] || entity.source_type}
+          </span>
+        )}
+        {confidence != null && (
+          <span className="text-[10px] font-semibold px-2 py-1 rounded-full bg-green-50 border border-green-100 text-green-700">
+            {confidence}% ביטחון
+          </span>
+        )}
+        {entity.data_freshness && (
+          <span className="text-[10px] px-2 py-1 rounded-full bg-secondary border border-border text-foreground-muted">
+            עודכן: {entity.data_freshness}
+          </span>
+        )}
+      </div>
+      {entity.source_description && (
+        <p className="text-[12px] text-foreground-secondary leading-relaxed">{entity.source_description}</p>
+      )}
+      {urls.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          {urls.map((u, i) => (
+            <a key={i} href={u} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[11px] text-primary hover:underline">
+              <ExternalLink className="w-3 h-3" /> מקור {i + 1}
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const TREND_SOURCE_META = {
   instagram: { label: 'Instagram',     color: 'text-pink-600',   bg: 'bg-pink-50',    border: 'border-pink-100' },
   facebook:  { label: 'Facebook',      color: 'text-blue-700',   bg: 'bg-blue-50',    border: 'border-blue-100' },
@@ -939,6 +1002,9 @@ export default function InsightDetail() {
 
       {/* ── B2. Type-specific context panel ── */}
       <TypeContextPanel typeKey={typeKey} title={title} description={description} actionMeta={actionMeta} />
+
+      {/* ── B3. מקור המידע — real source fields, signals only (alerts don't carry them) ── */}
+      {kind === 'signal' && <SourceCard entity={entity} />}
 
       {/* ── C. AI Agent Advisor ── */}
       <AgentAdvisor insight={insightForAgent} snapshot={snapshot} bpId={bpId} insightId={id} onCreateTask={openTaskModal} />

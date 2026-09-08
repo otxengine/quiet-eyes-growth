@@ -394,6 +394,7 @@ export default function InsightsFeed({ businessProfile, show24hActivity = false 
           <DataTable
             columns={COLUMNS}
             rows={visibleRows}
+            onRowClick={(row) => navigate(`/insights/${row.kind}-${row.id}`)}
             emptyText={
               activeCategory !== 'all'
                 ? `אין תובנות בקטגוריה זו`
