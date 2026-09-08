@@ -26,7 +26,11 @@ const ACTION_DEFS = {
     fn: 'createTask',
     params: {
       title: insight?.title || '',
-      description: insight?.description || '',
+      // Short and decisive — not the full "how to execute" recommended_action
+      // text. Actually producing the post/ad/reply already has its own
+      // dedicated flow (create_post, create_campaign, etc.); the task is
+      // just a reminder to go do it.
+      description: insight?.action_label || '',
       priority: insight?.priority === 'critical' || insight?.priority === 'high' ? insight.priority : 'medium',
     },
   }),

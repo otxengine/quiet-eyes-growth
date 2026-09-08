@@ -767,9 +767,12 @@ export default function InsightDetail() {
   const priorityMeta = PRIORITY_BADGE[priority] || PRIORITY_BADGE.medium;
   const TypeIcon    = typeMeta.icon;
 
+  // Short and decisive — not the full "how to execute" recommended_action/
+  // description text. Actually producing the post/ad/reply already has its
+  // own dedicated flow; the task is just a reminder to go do it.
   const openTaskModal = (params) => setTaskModal({
     title: params?.title || title,
-    description: params?.description || description,
+    description: params?.description ?? (actionMeta?.action_label || ''),
     priority: params?.priority || (priority === 'critical' || priority === 'high' ? priority : 'medium'),
     source_alert_id: id,
   });
@@ -987,7 +990,7 @@ export default function InsightDetail() {
             </button>
           )}
           <button
-            onClick={() => openTaskModal({ title, description, priority })}
+            onClick={() => openTaskModal({ title, priority })}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border bg-white text-[12px] font-medium text-foreground hover:bg-secondary/30 transition-all"
           >
             <ClipboardList className="w-3.5 h-3.5" />
