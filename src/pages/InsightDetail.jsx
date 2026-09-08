@@ -444,8 +444,10 @@ function normalizeConfidence(c) {
 function SourceCard({ entity }) {
   const confidence = normalizeConfidence(entity.confidence);
   const urls = (entity.source_urls || '').split(',').map(u => u.trim()).filter(Boolean);
+  // Some agents write JSON action-metadata into source_description instead of source_agent — skip it here, it's not a human-readable description.
+  const description = entity.source_description?.trim().startsWith('{') ? null : entity.source_description;
   const hasContent = entity.agent_name || entity.source_type || confidence != null
-    || entity.data_freshness || entity.source_description || urls.length > 0;
+    || entity.data_freshness || description || urls.length > 0;
   if (!hasContent) return null;
 
   return (
@@ -476,8 +478,8 @@ function SourceCard({ entity }) {
           </span>
         )}
       </div>
-      {entity.source_description && (
-        <p className="text-[12px] text-foreground-secondary leading-relaxed">{entity.source_description}</p>
+      {description && (
+        <p className="text-[12px] text-foreground-secondary leading-relaxed">{description}</p>
       )}
       {urls.length > 0 && (
         <div className="flex flex-wrap gap-3">
