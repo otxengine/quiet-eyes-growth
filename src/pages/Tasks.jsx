@@ -9,12 +9,6 @@ import TaskDetailModal from '@/components/tasks/TaskDetailModal';
 import TaskStatsBar from '@/components/tasks/TaskStatsBar';
 import AddTaskModal from '@/components/tasks/AddTaskModal';
 import AiInsightBox from '@/components/ai/AiInsightBox';
-import { ApprovalsPanel } from './Approvals';
-
-const viewTabs = [
-  { key: 'board', label: 'לוח משימות' },
-  { key: 'approvals', label: 'אישורי סוכן' },
-];
 
 export default function Tasks() {
   const { businessProfile } = useOutletContext();
@@ -22,7 +16,6 @@ export default function Tasks() {
   const navigate = useNavigate();
   const bpId = businessProfile?.id;
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState('board');
   const [selectedTaskId, setSelectedTaskId] = useState(taskId || null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [prefill, setPrefill] = useState(null);
@@ -84,35 +77,16 @@ export default function Tasks() {
         </div>
       </div>
 
-      {activeTab !== 'approvals' && (
-        <>
-          <TaskStatsBar tasks={tasks} />
-          <AiInsightBox
-            title="ניתוח משימות וסדר עדיפויות — AI"
-            prompt={`אתה מנהל משימות מומחה. העסק "${businessProfile?.name}" (${businessProfile?.category}).
+      <TaskStatsBar tasks={tasks} />
+      <AiInsightBox
+        title="ניתוח משימות וסדר עדיפויות — AI"
+        prompt={`אתה מנהל משימות מומחה. העסק "${businessProfile?.name}" (${businessProfile?.category}).
 משימות פתוחות: ${tasks.filter(t => t.status !== 'done' && t.status !== 'cancelled').length}, באיחור: ${tasks.filter(t => t.due_date && new Date(t.due_date) < now && t.status !== 'done' && t.status !== 'cancelled').length}.
 משימות אחרונות: ${tasks.slice(0, 8).map(t => `"${t.title}" (${t.status}, ${t.priority}, ${t.assignee || 'לא מוקצה'}, יעד: ${t.due_date || '?'})`).join('; ')}.
 הצע: 1) סדר עדיפויות מומלץ 2) משימות שדורשות תשומת לב מיידית 3) שיפורים לתהליך העבודה. בעברית, Markdown.`}
-          />
-        </>
-      )}
+      />
 
-      <div className="flex gap-1 p-1 bg-secondary/50 rounded-xl w-fit">
-        {viewTabs.map(tab => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-            className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-all ${
-              activeTab === tab.key ? 'bg-white shadow-sm text-foreground' : 'text-foreground-muted hover:text-foreground'
-            }`}>
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {activeTab === 'approvals' ? (
-        <ApprovalsPanel bpId={bpId} />
-      ) : (
-        <KanbanBoard tasks={tasks} bpId={bpId} onSelectTask={setSelectedTaskId} />
-      )}
+      <KanbanBoard tasks={tasks} bpId={bpId} onSelectTask={setSelectedTaskId} />
 
       {showAddModal && (
         <AddTaskModal
