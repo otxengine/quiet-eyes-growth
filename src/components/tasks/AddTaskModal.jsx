@@ -19,8 +19,6 @@ export default function AddTaskModal({ bpId, onClose, onAdded, prefill }) {
     title: prefill?.title || '',
     description: prefill?.description || '',
     priority: prefill?.priority || 'medium',
-    assignee: '',
-    branch: '',
     start_date: '',
     due_date: '',
     source_alert_id: prefill?.source_alert_id || '',
@@ -61,16 +59,6 @@ export default function AddTaskModal({ bpId, onClose, onAdded, prefill }) {
           <div>
             <label className="text-[11px] font-medium text-foreground-muted mb-1.5 block">תיאור</label>
             <textarea className={`${inputClass} h-20 resize-none`} placeholder="פרטים נוספים..." value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[11px] font-medium text-foreground-muted mb-1.5 block">הקצה לעובד</label>
-              <input className={inputClass} placeholder="שם העובד" value={form.assignee} onChange={e => setForm({ ...form, assignee: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-[11px] font-medium text-foreground-muted mb-1.5 block">סניף</label>
-              <input className={inputClass} placeholder="שם הסניף" value={form.branch} onChange={e => setForm({ ...form, branch: e.target.value })} />
-            </div>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
