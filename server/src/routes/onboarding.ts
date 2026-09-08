@@ -14,6 +14,7 @@ import { createLogger } from '../infra/logger';
 import { writeAutomationLog } from '../lib/automationLog';
 import { fetchWebsiteSource } from '../lib/websiteFetch';
 import { getPlaceDetails } from '../lib/googlePlaces';
+import { getOwnLocationInfo } from '../lib/googleBusinessInfo';
 import { autoConfigOsint } from './functions/stubs';
 import { fetchSocialPageAbout } from '../lib/fetchSocialPageAbout';
 import { getUserId } from '../middleware/auth';
@@ -193,9 +194,16 @@ router.post('/generate-about', async (req: Request, res: Response) => {
     const websiteUrlToUse = website_url || profile.website_url || profile.channels_website;
     const websiteSource = hasWebsite && websiteUrlToUse ? await fetchWebsiteSource(websiteUrlToUse) : null;
 
+    // Prefer the business owner's own GBP description (mybusinessbusinessinformation)
+    // over the Places editorial summary — GBP's is owner-authored and always present
+    // once set, vs. Places' Google-written blurb which often doesn't exist. Falls back
+    // to Places when no GBP account is connected or GBP has no description set.
+    const ownLocationInfo = await getOwnLocationInfo(businessProfileId);
+    const gbpDescription = ownLocationInfo?.description || '';
+
     // KAN-202 AC2: pull the Places editorial summary when a place is linked; nothing invented when absent
     const placeIdToUse = google_place_id || profile.google_place_id;
-    const placeDetails = hasPlace && placeIdToUse ? await getPlaceDetails(placeIdToUse) : null;
+    const placeDetails = !gbpDescription && hasPlace && placeIdToUse ? await getPlaceDetails(placeIdToUse) : null;
     const placeExcerpt = placeDetails?.editorialSummary || '';
 
     // KAN-203 AC1/AC4: fetch social bios via shared helper; TTL cache suppresses Apify re-burn unless force=true
@@ -214,6 +222,7 @@ router.post('/generate-about', async (req: Request, res: Response) => {
       profile.city        ? `City: ${profile.city}` : null,
       websiteSource ? `Website (${websiteSource.sourceUrl}): ${websiteSource.text}`
         : (hasWebsite ? `Website: ${websiteUrlToUse}` : null),
+      gbpDescription ? `Google Business Profile description (owner-authored): ${gbpDescription}` : null,
       placeExcerpt ? `Google Place editorial summary: ${placeExcerpt}`
         : (hasPlace ? `Google Place ID: ${placeIdToUse}` : null),
       ...socialResults.map(r => `${r.platform} bio (${r.profileUrl}): ${r.aboutText}`),
@@ -268,6 +277,7 @@ Respond ONLY with valid JSON matching this exact schema (no markdown):
       hasDesc                  ? 'profile_description' : null,
       hasWebsite               ? 'website' : null,
       socialResults.length > 0 ? 'social' : null,
+      gbpDescription            ? 'google_business_profile' : null,
       hasPlace                 ? 'google_place' : null,
       hasSeed                  ? 'seed_info' : null,
     ].filter(Boolean);
@@ -275,6 +285,7 @@ Respond ONLY with valid JSON matching this exact schema (no markdown):
     // KAN-202/KAN-203 AC3: raw excerpt + provenance per source (only for sources actually fetched)
     const sourceExcerpts: Record<string, { url?: string; excerpt: string }> = {};
     if (websiteSource) sourceExcerpts.website = { url: websiteSource.sourceUrl, excerpt: websiteSource.text };
+    if (gbpDescription) sourceExcerpts.google_business_profile = { excerpt: gbpDescription };
     if (placeExcerpt)  sourceExcerpts.google_place = { excerpt: placeExcerpt };
     for (const r of socialResults) sourceExcerpts[r.platform] = { url: r.profileUrl, excerpt: r.aboutText };
 

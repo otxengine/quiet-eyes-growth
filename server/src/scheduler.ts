@@ -83,6 +83,7 @@ import { runOTXSyncBridge } from './routes/functions/runOTXSyncBridge';
 import { collectCompetitorSocialPosts } from './routes/functions/collectCompetitorSocialPosts';
 import { collectOwnSocialPosts } from './routes/functions/collectOwnSocialPosts';
 import { collectOwnSocialProfile } from './routes/functions/collectOwnSocialProfile';
+import { collectOwnBusinessInfo } from './routes/functions/collectOwnBusinessInfo';
 import { detectOwnAds } from './routes/functions/detectOwnAds';
 import { collectCompetitorSocialProfile } from './routes/functions/collectCompetitorSocialProfile';
 import { collectCompetitorSocialStories } from './routes/functions/collectCompetitorSocialStories';
@@ -217,6 +218,7 @@ export function startScheduler() {
     runAgentForAll('CollectCompetitorSocialStories', collectCompetitorSocialStories);
     runAgentForAll('CollectOwnSocialPosts', collectOwnSocialPosts);
     runAgentForAll('CollectOwnSocialProfile', collectOwnSocialProfile);
+    runAgentForAll('CollectOwnBusinessInfo', collectOwnBusinessInfo);
     // Enrich newly created leads with Haiku intent classification (5min after lead gen)
     setTimeout(() => enrichNewLeadsWithIntent()
       .catch(err => logger.error('enrichNewLeadsWithIntent error', { error: err.message })),

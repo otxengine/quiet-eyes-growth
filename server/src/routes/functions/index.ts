@@ -132,6 +132,7 @@ import { collectCompetitorSocialPosts } from './collectCompetitorSocialPosts';
 import { collectCompetitorSocialStories } from './collectCompetitorSocialStories';
 import { collectOwnSocialPosts } from './collectOwnSocialPosts';
 import { collectOwnSocialProfile } from './collectOwnSocialProfile';
+import { collectOwnBusinessInfo } from './collectOwnBusinessInfo';
 import { collectCompetitorSocialProfile } from './collectCompetitorSocialProfile';
 import { detectOwnAds } from './detectOwnAds';
 import { analyzeSocialPosts } from './analyzeSocialPosts';
@@ -295,6 +296,7 @@ const FUNCTION_MAP: Record<string, any> = {
   collectCompetitorSocialStories,
   collectOwnSocialPosts,
   collectOwnSocialProfile,
+  collectOwnBusinessInfo,
   collectCompetitorSocialProfile,
   detectOwnAds,
   analyzeSocialPosts,

@@ -75,7 +75,8 @@ export async function collectReviews(req: Request, res: Response) {
     });
     const gmbLocationPath = gmbAccount?.page_id;
     const rawGmbToken = gmbAccount?.access_token;
-    const gmbToken = (rawGmbToken ? tryDecryptToken(rawGmbToken) : null) || (profile as any).google_access_token;
+    const rawProfileToken = (profile as any).google_access_token as string | null;
+    const gmbToken = (rawGmbToken ? tryDecryptToken(rawGmbToken) : null) || (rawProfileToken ? tryDecryptToken(rawProfileToken) : null);
 
     if (gmbToken && gmbLocationPath) {
       if (!gmbLocationPath.includes('/')) {
@@ -537,6 +538,23 @@ export async function collectReviews(req: Request, res: Response) {
 
     // ── Snapshot current avg rating → rating_history for trend graph ─────────
     await snapshotRatingHistory(businessProfileId, newReviews, 'collectReviews');
+
+    // ── Recompute own google_rating/google_review_count from ingested Google reviews ──
+    // GBP's Business Information API doesn't expose an aggregate rating — compute it
+    // from the reviews already pulled via the GMB v4 API above, same source as everywhere else.
+    if (googleAdded > 0) {
+      const ownGoogleReviews = await prisma.review.findMany({
+        where: { linked_business: businessProfileId, linked_competitor: null, platform: 'Google' },
+        select: { rating: true },
+      });
+      if (ownGoogleReviews.length > 0) {
+        const avgRating = ownGoogleReviews.reduce((s: number, r: typeof ownGoogleReviews[0]) => s + (r.rating || 0), 0) / ownGoogleReviews.length;
+        await prisma.businessProfile.update({
+          where: { id: businessProfileId },
+          data: { google_rating: parseFloat(avgRating.toFixed(2)), google_review_count: ownGoogleReviews.length },
+        }).catch(() => {});
+      }
+    }
 
     // ── Real-time alert: create ProactiveAlert for new negative reviews ───────
     if (newReviews > 0) {
