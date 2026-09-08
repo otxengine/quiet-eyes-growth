@@ -339,6 +339,12 @@ export default function InsightsFeed({ businessProfile, show24hActivity = false 
 
   return (
     <div className="space-y-4">
+      {show24hActivity && (
+        <div dir="rtl">
+          <h3 className="text-[15px] font-bold text-gray-900">פעילות ב-24 השעות האחרונות</h3>
+          <p className="text-[11px] text-gray-400 mt-0.5">כל מה שהתגלה ונאסף עבור העסק שלך ביממה האחרונה</p>
+        </div>
+      )}
       <StatCards cards={show24hActivity ? activityStatCards : statCards} />
 
       {isLoading ? (
