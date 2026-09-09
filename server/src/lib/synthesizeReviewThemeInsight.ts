@@ -58,7 +58,7 @@ export async function synthesizeReviewThemeInsight(
 ${examplesBlock}
 
 כתוב תובנה קצרה (${lengthInstruction}), מבוססת אך ורק על הנתונים והציטוטים שסופקו למעלה. אל תמציא נושאים, מספרים או פרטים שלא הופיעו כאן.`,
-      model: 'claude-haiku-4-5-20251001',
+      model: 'haiku',
       maxTokens: 300,
     });
     return typeof raw === 'string' && raw.trim() ? raw.trim() : null;

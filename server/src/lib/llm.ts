@@ -1,9 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { cacheGet, cacheSet, TTL, hashPrompt } from './agentCache';
 import { buildAgentPromptContext } from './businessProfile';
-import { callGemini, isGeminiRateLimited } from './gemini';
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' });
 
 // ── Surrogate sanitizer — prevents Anthropic 400 "no low surrogate in string" ──
 // Scraped social/review text can carry a truncated 4-byte emoji (a lone UTF-16
@@ -27,22 +23,21 @@ export function sanitizeSurrogates(s: string): string {
 
 // ── LLM cost tracking (per-business accumulator, keyed by businessId) ─────────
 const _costAccumulator = new Map<string, number>();
-// Pricing per 1M tokens (input / output)
-const _PRICE: Record<string, [number, number]> = {
-  'claude-haiku-4-5-20251001': [0.80,  4.00],
-  'claude-sonnet-4-6':         [3.00, 15.00],
-  'claude-opus-4-6':           [15.00, 75.00],
-};
 export function startCostTracking(id: string) { _costAccumulator.set(id, 0); }
 export function popCost(id: string): number {
   const c = _costAccumulator.get(id) ?? 0;
   _costAccumulator.delete(id);
   return c;
 }
-function _addCost(id: string | undefined, modelId: string, inputTokens: number, outputTokens: number) {
+// OpenRouter reports real per-call cost directly (correct for whichever model in
+// the fallback list actually served the request) — no hardcoded price table needed.
+function _addCost(id: string | undefined, modelId: string, usage: any) {
   if (!id) return;
-  const [pIn, pOut] = _PRICE[modelId] ?? [1.00, 5.00];
-  const usd = (inputTokens / 1e6) * pIn + (outputTokens / 1e6) * pOut;
+  const usd = usage?.cost;
+  if (typeof usd !== 'number') {
+    console.warn('[LLM] OpenRouter response missing usage.cost — skipping cost accumulation for', modelId);
+    return;
+  }
   _costAccumulator.set(id, (_costAccumulator.get(id) ?? 0) + usd);
 }
 
@@ -65,30 +60,36 @@ export interface LLMOptions {
     price_tier?: string | null;
   };
   /**
-   * Pass a separate system prompt. When combined with usePromptCache, the system
-   * prompt is sent with Anthropic cache_control so it's cached for 5 min (80% token savings).
+   * Pass a separate system prompt. When combined with usePromptCache, the request
+   * sets OpenRouter's top-level cache_control so it's cached (Claude models only).
    */
   systemPrompt?: string;
   /**
-   * Enable Anthropic prompt caching on the system prompt block (requires systemPrompt).
-   * Only applies to Claude models. Cuts input token cost ~80% for repeat callers.
+   * Enable prompt caching on the system prompt block (requires systemPrompt).
+   * Only takes effect when the model that ends up serving the request is a
+   * Claude model — a harmless no-op otherwise. Cuts input token cost for repeat callers.
    */
   usePromptCache?: boolean;
   costTrackingId?: string;
   /**
-   * Optional image to send alongside the prompt (vision). Anthropic, Gemini,
-   * and the OpenAI fallback (gpt-4o-mini) all support it.
+   * Optional image to send alongside the prompt (vision) — supported by every
+   * model in the OpenRouter fallback list this request can land on.
    */
   imageBase64?: string;
   imageMediaType?: string; // e.g. 'image/jpeg' — defaults to 'image/jpeg'
 }
 
-const MODEL_MAP: Record<string, string> = {
-  haiku:         'claude-haiku-4-5-20251001',
-  sonnet:        'claude-sonnet-4-6',
-  opus:          'claude-opus-4-6',
-  'gemini-flash': 'gemini-3.5-flash',
-  'gemini-pro':   'gemini-3-pro-image',
+// Short key -> ordered OpenRouter fallback list. OpenRouter tries each slug
+// server-side on failure/rate-limit — no client-side retry loop needed.
+// 'gemini-pro' (image-generation output, not text/vision-input) is deliberately
+// excluded — nothing calls invokeLLM with that key; it still routes through the
+// legacy raw-passthrough path in _invokeLLMRaw and fails loud via OpenRouter's
+// own 400 if it's ever used, rather than silently misbehaving.
+const OPENROUTER_MODEL_MAP: Record<string, string[]> = {
+  haiku:  ['anthropic/claude-haiku-4.5', 'google/gemini-3.5-flash', 'openai/gpt-4o-mini'],
+  sonnet: ['anthropic/claude-sonnet-4.6', 'anthropic/claude-haiku-4.5', 'openai/gpt-4o-mini'],
+  opus:   ['anthropic/claude-opus-4.6', 'anthropic/claude-sonnet-4.6', 'anthropic/claude-haiku-4.5'],
+  'gemini-flash': ['google/gemini-3.5-flash', 'anthropic/claude-haiku-4.5', 'openai/gpt-4o-mini'],
 };
 
 // Hard output caps per model — keeps token burn predictable
@@ -104,14 +105,14 @@ const MAX_TOKENS_DEFAULT: Record<string, number> = {
  * Drop-in replacement for base44 InvokeLLM.
  * Returns parsed JSON if response_json_schema is provided, otherwise raw text.
  * model: 'haiku' (fast, cheap — DEFAULT), 'sonnet' (analysis), 'opus' (deep)
- * Automatically falls back to OpenAI GPT-4o-mini when Anthropic fails.
+ * Routes through OpenRouter with a per-key fallback list (see OPENROUTER_MODEL_MAP).
  * Caches responses for 4 hours to avoid duplicate AI calls across pipeline runs.
  */
 export async function invokeLLM(options: { prompt: string } & LLMOptions): Promise<any> {
   const { prompt, response_json_schema, model, maxTokens: maxTokensOverride, skipCache, profile, systemPrompt, usePromptCache, costTrackingId, imageBase64, imageMediaType } = options;
 
   const modelKey = model || 'haiku'; // default to Haiku (cheapest)
-  const modelId = MODEL_MAP[modelKey] || model || 'claude-haiku-4-5-20251001';
+  const modelId = modelKey; // resolved to an OpenRouter fallback array inside _invokeLLMRaw
   const maxTokens = maxTokensOverride ?? MAX_TOKENS_DEFAULT[modelKey] ?? 350;
 
   // Auto-inject sector + mission context block when profile is provided
@@ -139,7 +140,7 @@ export async function invokeLLM(options: { prompt: string } & LLMOptions): Promi
 
 async function _invokeLLMRaw(
   prompt: string,
-  modelId: string,
+  modelKey: string,
   maxTokens: number,
   response_json_schema: any,
   systemPrompt?: string,
@@ -148,92 +149,17 @@ async function _invokeLLMRaw(
   imageBase64?: string,
   imageMediaType?: string,
 ): Promise<any> {
-
-  // Gemini models — route directly without trying Anthropic first
-  if (modelId.startsWith('gemini')) {
-    try {
-      return await _callGemini(prompt, modelId, maxTokens, response_json_schema, imageBase64, imageMediaType);
-    } catch (err: any) {
-      console.warn('[invokeLLM] Gemini failed, trying OpenAI fallback:', err.message);
-      if (process.env.OPENAI_API_KEY) {
-        return await _callOpenAI(prompt, response_json_schema, maxTokens, imageBase64, imageMediaType);
-      }
-      throw err;
-    }
-  }
-
-  // Try Anthropic first
-  if (process.env.ANTHROPIC_API_KEY) {
-    try {
-      return await _callAnthropic(prompt, modelId, maxTokens, response_json_schema, systemPrompt, usePromptCache, costTrackingId, imageBase64, imageMediaType);
-    } catch (err: any) {
-      const isTokenExhausted = err.status === 429 || /credit|quota|rate.limit|overloaded/i.test(err.message || '');
-      if (isTokenExhausted) {
-        console.warn('[invokeLLM] Anthropic tokens/rate-limit — falling back to Gemini Flash');
-      } else {
-        console.warn('[invokeLLM] Anthropic failed, trying Gemini Flash fallback:', err.message);
-      }
-      // Fallback chain: Claude → Gemini Flash → OpenAI
-      // Prepend systemPrompt so Gemini gets the full business context
-      if (process.env.GEMINI_API_KEY && !isGeminiRateLimited()) {
-        try {
-          const geminiPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
-          return await _callGemini(geminiPrompt, 'gemini-3.5-flash', maxTokens, response_json_schema, imageBase64, imageMediaType);
-        } catch (geminiErr: any) {
-          console.warn('[invokeLLM] Gemini Flash fallback failed:', geminiErr.message);
-        }
-      } else if (isGeminiRateLimited()) {
-        console.warn('[invokeLLM] Gemini already rate-limited — skipping straight to OpenAI');
-      }
-    }
-  }
-
-  // Fallback: OpenAI GPT-4o-mini (cheaper than GPT-4o) — also vision-capable via
-  // the Chat Completions image_url content part, so it covers imageBase64 calls too.
-  if (process.env.OPENAI_API_KEY) {
-    try {
-      return await _callOpenAI(prompt, response_json_schema, maxTokens, imageBase64, imageMediaType);
-    } catch (err: any) {
-      console.warn('[invokeLLM] OpenAI fallback also failed:', err.message);
-    }
-  }
-
-  throw new Error('No AI provider available — set ANTHROPIC_API_KEY, GEMINI_API_KEY, or OPENAI_API_KEY');
+  // Raw-string passthrough for any unmapped key — fails loud via OpenRouter's
+  // own 400 (invalid model) rather than silently misbehaving.
+  const models = OPENROUTER_MODEL_MAP[modelKey] ?? [modelKey];
+  return _callOpenRouter(prompt, models, maxTokens, response_json_schema, systemPrompt, usePromptCache, costTrackingId, imageBase64, imageMediaType);
 }
 
-async function _callGemini(
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+async function _callOpenRouter(
   prompt: string,
-  modelId: string,
-  maxTokens: number,
-  response_json_schema: any,
-  imageBase64?: string,
-  imageMediaType?: string,
-): Promise<any> {
-  // Map full model IDs back to keys for callGemini
-  const modelKey = modelId === 'gemini-3-pro-image' ? 'gemini-pro' : 'gemini-flash';
-
-  const systemPrompt = response_json_schema
-    ? 'You are a JSON-only assistant. Respond with a single valid JSON object only. No preamble, no explanation, no markdown fences. ALL string values must be in Hebrew unless the field explicitly requires English.'
-    : undefined;
-
-  const text = await callGemini(prompt, modelKey as 'gemini-flash' | 'gemini-pro', maxTokens, {
-    jsonMode: !!response_json_schema,
-    systemPrompt,
-    imageBase64,
-    mediaMimeType: imageMediaType,
-  });
-
-  if (response_json_schema) {
-    const parsed = _parseJson(text);
-    if (!parsed) console.error('[LLM] Gemini _parseJson failed, raw (300):', text.substring(0, 300));
-    return parsed;
-  }
-  return text;
-}
-
-async function _callAnthropic(
-  prompt: string,
-  modelId: string,
+  models: string[],
   maxTokens: number,
   response_json_schema: any,
   callerSystemPrompt?: string,
@@ -242,43 +168,63 @@ async function _callAnthropic(
   imageBase64?: string,
   imageMediaType?: string,
 ): Promise<any> {
+  const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY || '';
+  if (!OPENROUTER_KEY) throw new Error('No AI provider available — set OPENROUTER_API_KEY');
 
   const defaultSystem = response_json_schema
     ? 'You are a JSON-only assistant. Respond with a single valid JSON object only. No preamble, no explanation, no markdown fences. ALL string values must be in Hebrew unless the field explicitly requires English.'
     : 'You are a helpful assistant.';
 
-  const finalSystem = callerSystemPrompt || defaultSystem;
-  const messages: Anthropic.MessageParam[] = [{
-    role: 'user',
-    content: imageBase64
-      ? [
-          { type: 'image', source: { type: 'base64', media_type: (imageMediaType || 'image/jpeg') as any, data: imageBase64 } },
-          { type: 'text', text: prompt },
-        ]
-      : prompt,
-  }];
+  // Text before image, per OpenRouter's documented recommendation.
+  const userContent: any = imageBase64
+    ? [
+        { type: 'text', text: prompt },
+        { type: 'image_url', image_url: { url: `data:${imageMediaType || 'image/jpeg'};base64,${imageBase64}` } },
+      ]
+    : prompt;
 
-  // Use prompt caching when requested — caches the system prompt for 5 min (~80% input token savings)
-  const systemParam: any = (usePromptCache && callerSystemPrompt)
-    ? [{ type: 'text', text: finalSystem, cache_control: { type: 'ephemeral' } }]
-    : finalSystem;
+  const body: any = {
+    models, // ordered fallback array — OpenRouter tries each server-side, no client-side retry
+    max_tokens: maxTokens,
+    temperature: 0.3,
+    messages: [
+      { role: 'system', content: callerSystemPrompt || defaultSystem },
+      { role: 'user', content: userContent },
+    ],
+  };
+  if (response_json_schema) body.response_format = { type: 'json_object' };
 
+  // Top-level (not per-block) — caches everything up to the last cacheable block
+  // for Claude models. Harmless no-op if the model that actually served the
+  // request isn't Claude.
   if (usePromptCache && callerSystemPrompt) {
+    body.cache_control = { type: 'ephemeral' };
     console.log('[LLM] prompt cache enabled for system prompt');
   }
 
-  const response = await anthropic.messages.create({
-    model: modelId,
-    max_tokens: maxTokens,
-    system: systemParam,
-    messages,
+  const res = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENROUTER_KEY}` },
+    body: JSON.stringify(body),
   });
 
-  const rawText = ((response.content || [])[0] as any)?.text || '';
-  if (response.usage) _addCost(costTrackingId, modelId, response.usage.input_tokens, response.usage.output_tokens);
+  if (!res.ok) {
+    const err: any = await res.json().catch(() => ({}));
+    throw new Error(`OpenRouter ${res.status}: ${err.error?.message || res.statusText}`);
+  }
 
-  if (response.stop_reason === 'max_tokens') {
-    console.warn('[LLM] stop_reason=max_tokens — response truncated. model:', modelId, 'maxTokens:', maxTokens);
+  const data: any = await res.json();
+  const choice = data.choices?.[0];
+  // A provider error can arrive on an HTTP 200 as an embedded finish_reason.
+  if (choice?.finish_reason === 'error') {
+    throw new Error(`OpenRouter provider error: ${choice.error?.message || JSON.stringify(choice.error)}`);
+  }
+
+  const rawText = choice?.message?.content || '';
+  _addCost(costTrackingId, data.model, data.usage); // data.model = whichever model actually served it
+
+  if (choice?.finish_reason === 'length') {
+    console.warn('[LLM] finish_reason=length — response truncated. models:', models, 'maxTokens:', maxTokens);
   }
 
   if (response_json_schema) {
@@ -287,62 +233,6 @@ async function _callAnthropic(
     return parsed;
   }
   return rawText;
-}
-
-async function _callOpenAI(
-  prompt: string,
-  response_json_schema: any,
-  maxTokens = 1600,
-  imageBase64?: string,
-  imageMediaType?: string,
-): Promise<any> {
-  const OPENAI_KEY = process.env.OPENAI_API_KEY || '';
-  const messages: any[] = [
-    {
-      role: 'system',
-      content: response_json_schema
-        ? 'You are a helpful assistant. Return ONLY valid JSON. No markdown, no explanation. ALL string values must be in Hebrew.'
-        : 'You are a helpful assistant.',
-    },
-    {
-      role: 'user',
-      // gpt-4o-mini is vision-capable via an image_url content part (data URI) —
-      // same base64 payload Anthropic/Gemini receive, no re-fetch needed.
-      content: imageBase64
-        ? [
-            { type: 'image_url', image_url: { url: `data:${imageMediaType || 'image/jpeg'};base64,${imageBase64}` } },
-            { type: 'text', text: prompt },
-          ]
-        : prompt,
-    },
-  ];
-
-  const body: any = {
-    model: 'gpt-4o-mini',
-    max_tokens: maxTokens,
-    temperature: 0.3,
-    messages,
-  };
-  if (response_json_schema) body.response_format = { type: 'json_object' };
-
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_KEY}` },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const err: any = await res.json().catch(() => ({}));
-    throw new Error(`OpenAI GPT-4o ${res.status}: ${err.error?.message || res.statusText}`);
-  }
-
-  const data: any = await res.json();
-  const text = data.choices?.[0]?.message?.content || '';
-
-  if (response_json_schema) {
-    return _parseJson(text);
-  }
-  return text;
 }
 
 function _parseJson(text: string): any {

@@ -55,7 +55,7 @@ ${deltaLine}
 ${trend ? `מגמה: ${trend}` : ''}
 
 כתוב סיכום השוואתי קצר (2-3 משפטים) בעברית — השווה את המתחרה לעסקך. ציין אם הדירוג טוב או רע ביחס אליך.`,
-      model: 'claude-haiku-4-5-20251001',
+      model: 'haiku',
       maxTokens: 200,
     });
     hebrew_summary = typeof raw === 'string' ? raw.trim() : null;
