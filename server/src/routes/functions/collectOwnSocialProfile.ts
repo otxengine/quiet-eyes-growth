@@ -33,6 +33,15 @@ function strOrNull(v: any): string | null {
   return v && v !== 'None' ? v : null;
 }
 
+// The IG/FB actors sometimes return the address as a structured object
+// (city_name/city_id/latitude/longitude/street_address) instead of a plain
+// string — contact_address is String? in the DB, so stringify defensively
+// instead of crashing prisma.businessSocialProfile.upsert() on a type mismatch.
+function addressToString(v: any): string | null {
+  if (!v) return null;
+  return typeof v === 'string' ? v : JSON.stringify(v);
+}
+
 type ProfileFields = {
   profile_picture_url: string | null;
   cover_photo_url: string | null;
@@ -70,7 +79,7 @@ async function scrapeInstagram(url: string): Promise<ProfileFields | null> {
     category: strOrNull(item.businessCategoryName),
     contact_phone: item.publicPhoneNumber || item.businessPhoneNumber || null,
     contact_email: item.publicEmail || item.businessEmail || null,
-    contact_address: item.publicAddress || item.businessAddress || null,
+    contact_address: addressToString(item.publicAddress || item.businessAddress),
     highlight_count: numOrNull(item.highlightReelCount),
     highlights: null,
     checkin_count: null,
@@ -119,7 +128,7 @@ async function scrapeFacebook(url: string): Promise<ProfileFields | null> {
     category: strOrNull(item.category),
     contact_phone: item.primaryPhone || item.phones?.[0] || null,
     contact_email: item.primaryEmail || item.emails?.[0] || null,
-    contact_address: item.address || null,
+    contact_address: addressToString(item.address),
     highlight_count: null,
     highlights: null,
     checkin_count: parseCheckinCount(item.bio),
