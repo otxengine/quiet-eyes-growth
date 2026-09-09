@@ -1,17 +1,11 @@
 /**
  * ai_router.ts — Multi-Brain AI Router
  *
- * Routes AI tasks to the optimal model:
- *   Anthropic Claude  → deep analysis, strategy, audience segmentation
- *   OpenAI GPT-4o     → marketing copy, posts, captions
- *   OpenAI GPT-4o-mini → fast translation, classification
- *   OpenAI DALL-E 3   → images (via generateImage endpoint)
- *   OpenAI Embeddings → semantic search (future)
- *   Gemini Flash      → fast/cheap posts, captions, translation, vision
- *   Gemini Pro        → multimodal, advanced vision
+ * Routes AI tasks to the optimal model via OpenRouter (one account/key, one
+ * dashboard) — each task's `models` array is an ordered fallback list that
+ * OpenRouter itself retries server-side on failure/rate-limit, no client-side
+ * retry loop needed.
  */
-
-import { callGemini, isGeminiRateLimited } from './gemini';
 
 export type AITask =
   | 'analyze_market'
@@ -24,153 +18,123 @@ export type AITask =
   | 'generate_caption_fast'
   | 'translate_hebrew'
   | 'translate_hebrew_fast'
-  | 'embed_text'
   | 'competitor_analysis'
   | 'multimodal_vision'
   | 'page_parsing'
   | 'draft_strategy';
 
 interface AIConfig {
-  provider: 'anthropic' | 'openai' | 'gemini';
-  model: string;
+  models: string[];    // ordered OpenRouter fallback array — server-side retry, no client-side loop
   max_tokens: number;
   temperature: number;
   reason: string;
 }
 
 export const AI_ROUTER: Record<AITask, AIConfig> = {
-  // ── Claude — deep analysis + strategy ─────────────────────────────────────
+  // ── Claude-primary — deep analysis + strategy ─────────────────────────────
   analyze_market: {
-    provider:    'anthropic',
-    model:       'claude-sonnet-4-6',
+    models:      ['anthropic/claude-sonnet-4.6', 'google/gemini-3.5-flash', 'openai/gpt-4o-mini'],
     max_tokens:  1000,
     temperature: 0.3,
     reason:      'ניתוח שוק — Sonnet לניתוח עמוק עם תובנות ספציפיות',
   },
   classify_intent: {
-    provider:    'anthropic',
-    model:       'claude-haiku-4-5-20251001',
+    models:      ['anthropic/claude-haiku-4.5', 'google/gemini-3.5-flash', 'openai/gpt-4o-mini'],
     max_tokens:  200,
     temperature: 0.1,
     reason:      'סיווג מהיר — Haiku זול ומהיר לסיווג בינארי',
   },
   build_audience: {
-    provider:    'anthropic',
-    model:       'claude-sonnet-4-6',
+    models:      ['anthropic/claude-sonnet-4.6', 'google/gemini-3.5-flash', 'openai/gpt-4o-mini'],
     max_tokens:  900,
     temperature: 0.4,
     reason:      'פילוח קהל — Sonnet לפרופיל קהל מדויק עם תובנות שוק',
   },
   competitor_analysis: {
-    provider:    'anthropic',
-    model:       'claude-sonnet-4-6',
+    models:      ['anthropic/claude-sonnet-4.6', 'google/gemini-3.5-flash', 'openai/gpt-4o-mini'],
     max_tokens:  1000,
     temperature: 0.3,
     reason:      'ניתוח מתחרים — Sonnet לזיהוי הזדמנויות ופגיעויות ממשיות',
   },
 
-  // ── GPT-4o — creative marketing content ───────────────────────────────────
+  // ── GPT-4o-primary — creative marketing content ───────────────────────────
   generate_post: {
-    provider:    'openai',
-    model:       'gpt-4o',
+    models:      ['openai/gpt-4o', 'google/gemini-3.5-flash', 'anthropic/claude-haiku-4.5'],
     max_tokens:  800,
     temperature: 0.8,
     reason:      'כתיבת פוסט — GPT-4o מצטיין בקופי שיווקי יצירתי',
   },
   generate_caption: {
-    provider:    'openai',
-    model:       'gpt-4o',
+    models:      ['openai/gpt-4o', 'google/gemini-3.5-flash', 'anthropic/claude-haiku-4.5'],
     max_tokens:  200,
     temperature: 0.9,
     reason:      'כיתוב תמונה — GPT-4o יצירתי לטקסטים קצרים',
   },
   translate_hebrew: {
-    provider:    'openai',
-    model:       'gpt-4o-mini',
+    models:      ['openai/gpt-4o-mini', 'google/gemini-3.5-flash', 'anthropic/claude-haiku-4.5'],
     max_tokens:  60,
     temperature: 0.1,
     reason:      'תרגום מהיר — gpt-4o-mini זול ומדויק לתרגום',
   },
 
-  // ── Gemini Flash — fast/cheap tasks ───────────────────────────────────────
+  // ── Gemini Flash-primary — fast/cheap tasks ───────────────────────────────
   generate_post_fast: {
-    provider:    'gemini',
-    model:       'gemini-3.5-flash',
+    models:      ['google/gemini-3.5-flash', 'openai/gpt-4o-mini', 'anthropic/claude-haiku-4.5'],
     max_tokens:  800,
     temperature: 0.8,
     reason:      'פוסט מהיר — Gemini Flash מהיר וזול לתוכן שיווקי',
   },
   generate_caption_fast: {
-    provider:    'gemini',
-    model:       'gemini-3.5-flash',
+    models:      ['google/gemini-3.5-flash', 'openai/gpt-4o-mini', 'anthropic/claude-haiku-4.5'],
     max_tokens:  200,
     temperature: 0.9,
     reason:      'כיתוב מהיר — Gemini Flash לטקסטים קצרים במחיר נמוך',
   },
   translate_hebrew_fast: {
-    provider:    'gemini',
-    model:       'gemini-3.5-flash',
+    models:      ['google/gemini-3.5-flash', 'openai/gpt-4o-mini', 'anthropic/claude-haiku-4.5'],
     max_tokens:  80,
     temperature: 0.1,
     reason:      'תרגום מהיר/זול — Gemini Flash לתרגום רב-כמות',
   },
   multimodal_vision: {
-    provider:    'gemini',
-    model:       'gemini-3.5-flash',
+    models:      ['google/gemini-3.5-flash', 'openai/gpt-4o-mini', 'anthropic/claude-haiku-4.5'],
     max_tokens:  600,
     temperature: 0.3,
     reason:      'vision/multimodal — Gemini Flash לניתוח תמונות',
   },
 
-  // ── Gemini Flash — web page parsing (Gatherers layer) ────────────────────
+  // ── Gemini Flash-primary — web page parsing (Gatherers layer) ────────────
   // Gemini Flash excels at extracting structured data from noisy HTML/web
   // pages across ANY business sector — no hard-coded domain assumptions.
   // Large context window handles full Tavily raw_content without truncation.
   page_parsing: {
-    provider:    'gemini',
-    model:       'gemini-3.5-flash',
+    models:      ['google/gemini-3.5-flash', 'openai/gpt-4o-mini', 'anthropic/claude-haiku-4.5'],
     max_tokens:  600,
     temperature: 0.1,
     reason:      'חילוץ נתונים מדפי web — Gemini Flash מצטיין בניקוי רעשי HTML עם הקשר רחב',
   },
 
-  // ── Claude Haiku — sector-agnostic fast classification ───────────────────
+  // ── Claude Haiku-primary — sector-agnostic fast classification ───────────
   // Sector-universal intent/topic classification — works identically for
   // a hair salon, a law firm, or a restaurant without prompt changes.
   classify_sector: {
-    provider:    'anthropic',
-    model:       'claude-haiku-4-5-20251001',
+    models:      ['anthropic/claude-haiku-4.5', 'google/gemini-3.5-flash', 'openai/gpt-4o-mini'],
     max_tokens:  300,
     temperature: 0.1,
     reason:      'סיווג אגנוסטי לסקטור — Haiku מהיר לזיהוי נושאים/כוונות בכל סוג עסק',
   },
 
-  // ── Claude Sonnet — Human-in-the-loop strategic drafts ───────────────────
+  // ── Claude Sonnet-primary — Human-in-the-loop strategic drafts ───────────
   // All Strategist agents output pending_approval AutoAction records.
   // Sonnet produces richer, more nuanced recommendations than Haiku
   // but the human still approves/rejects before any real-world action.
   draft_strategy: {
-    provider:    'anthropic',
-    model:       'claude-sonnet-4-6',
+    models:      ['anthropic/claude-sonnet-4.6', 'google/gemini-3.5-flash', 'openai/gpt-4o-mini'],
     max_tokens:  1200,
     temperature: 0.4,
     reason:      'טיוטת אסטרטגיה לאישור — Sonnet לניתוח עמוק, פלט ממתין לאישור אנושי',
   },
-
-  // ── Embeddings (placeholder) ───────────────────────────────────────────────
-  embed_text: {
-    provider:    'openai',
-    model:       'text-embedding-3-small',
-    max_tokens:  0,
-    temperature: 0,
-    reason:      'embeddings — OpenAI הוא הסטנדרט לvector search',
-  },
 };
-
-// ── env keys ──────────────────────────────────────────────────────────────────
-const ANTHROPIC_KEY = () => process.env.ANTHROPIC_API_KEY || '';
-const OPENAI_KEY    = () => process.env.OPENAI_API_KEY    || '';
-const GEMINI_KEY    = () => process.env.GEMINI_API_KEY    || '';
 
 const TIMEOUT_MS = 35_000;
 
@@ -193,174 +157,56 @@ export async function callAI(
   const config = AI_ROUTER[task];
   const start  = Date.now();
 
-  console.log(`[AI_ROUTER] task=${task} provider=${config.provider} model=${config.model}`);
+  console.log(`[AI_ROUTER] task=${task} models=${config.models.join(',')}`);
 
-  try {
-    let result: string;
-    if (config.provider === 'anthropic') {
-      result = await withTimeout(callClaude(prompt, config, options), TIMEOUT_MS);
-    } else if (config.provider === 'gemini') {
-      result = await withTimeout(callGeminiProvider(prompt, config, options), TIMEOUT_MS);
-    } else {
-      result = await withTimeout(callGPT(prompt, config, options), TIMEOUT_MS);
-    }
-    console.log(`[AI_ROUTER] task=${task} done in ${Date.now() - start}ms`);
-    return result;
-  } catch (err: any) {
-    console.warn(`[AI_ROUTER] task=${task} FAILED (${err.message}), trying fallback`);
-    return callFallback(task, prompt, options, err);
-  }
+  const result = await withTimeout(callOpenRouter(prompt, config, options), TIMEOUT_MS);
+  console.log(`[AI_ROUTER] task=${task} done in ${Date.now() - start}ms`);
+  return result;
 }
 
-async function callFallback(
-  task: AITask,
-  prompt: string,
-  options: { systemPrompt?: string; jsonMode?: boolean },
-  originalErr: Error,
-): Promise<string> {
-  const config = AI_ROUTER[task];
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-  if (config.provider === 'gemini') {
-    // Gemini failed → OpenAI GPT-4o-mini fallback
-    if (OPENAI_KEY()) {
-      console.warn(`[AI_ROUTER] fallback: gemini→openai(mini) for task=${task}`);
-      return callGPT(prompt, { ...config, provider: 'openai', model: 'gpt-4o-mini' }, options);
-    }
-    if (ANTHROPIC_KEY()) {
-      console.warn(`[AI_ROUTER] fallback: gemini→anthropic(haiku) for task=${task}`);
-      return callClaude(prompt, { ...config, provider: 'anthropic', model: 'claude-haiku-4-5-20251001' }, options);
-    }
-  } else if (config.provider === 'openai') {
-    // OpenAI failed → Gemini Flash → Claude Haiku
-    if (GEMINI_KEY() && !isGeminiRateLimited()) {
-      console.warn(`[AI_ROUTER] fallback: openai→gemini(flash) for task=${task}`);
-      try {
-        return await callGeminiProvider(prompt, { ...config, provider: 'gemini', model: 'gemini-3.5-flash' }, options);
-      } catch (geminiErr: any) {
-        console.warn(`[AI_ROUTER] Gemini fallback also failed: ${geminiErr.message}`);
-      }
-    }
-    if (ANTHROPIC_KEY()) {
-      console.warn(`[AI_ROUTER] fallback: openai→anthropic(haiku) for task=${task}`);
-      return callClaude(prompt, { ...config, provider: 'anthropic', model: 'claude-haiku-4-5-20251001' }, options);
-    }
-  } else if (config.provider === 'anthropic') {
-    // Claude failed → Gemini Flash → GPT-4o-mini
-    if (GEMINI_KEY() && !isGeminiRateLimited()) {
-      console.warn(`[AI_ROUTER] fallback: anthropic→gemini(flash) for task=${task}`);
-      try {
-        return await callGeminiProvider(prompt, { ...config, provider: 'gemini', model: 'gemini-3.5-flash' }, options);
-      } catch (geminiErr: any) {
-        console.warn(`[AI_ROUTER] Gemini fallback also failed: ${geminiErr.message}`);
-      }
-    }
-    if (OPENAI_KEY()) {
-      console.warn(`[AI_ROUTER] fallback: anthropic→openai(mini) for task=${task}`);
-      return callGPT(prompt, { ...config, provider: 'openai', model: 'gpt-4o-mini' }, options);
-    }
-  }
-
-  throw originalErr;
-}
-
-// ── Gemini call ───────────────────────────────────────────────────────────────
-async function callGeminiProvider(
-  prompt: string,
-  config: AIConfig,
-  options: { systemPrompt?: string; jsonMode?: boolean; imageBase64?: string },
-): Promise<string> {
-  const key = GEMINI_KEY();
-  if (!key) throw new Error('GEMINI_API_KEY not set');
-
-  // Normalize model to key
-  const modelKey = config.model === 'gemini-3-pro-image' ? 'gemini-pro' : 'gemini-flash';
-
-  return callGemini(prompt, modelKey as 'gemini-flash' | 'gemini-pro', config.max_tokens || 800, {
-    jsonMode:     options.jsonMode,
-    systemPrompt: options.systemPrompt,
-    imageBase64:  (options as any).imageBase64,
-  });
-}
-
-// ── Claude call ───────────────────────────────────────────────────────────────
-async function callClaude(
+async function callOpenRouter(
   prompt: string,
   config: AIConfig,
   options: { systemPrompt?: string; jsonMode?: boolean },
 ): Promise<string> {
-  const key = ANTHROPIC_KEY();
-  if (!key) throw new Error('ANTHROPIC_API_KEY not set');
+  const key = process.env.OPENROUTER_API_KEY || '';
+  if (!key) throw new Error('OPENROUTER_API_KEY not set');
 
-  const body: any = {
-    model:      config.model,
-    max_tokens: config.max_tokens || 512,
-    messages:   [{ role: 'user', content: prompt }],
-  };
-
-  if (options.systemPrompt) body.system = options.systemPrompt;
-
-  // Claude 4.x does not support assistant-turn prefill — rely on system prompt for JSON
-  if (options.jsonMode && !body.system) {
-    body.system = 'Return ONLY valid JSON. No markdown, no explanation.';
-  }
-
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method:  'POST',
-    headers: {
-      'Content-Type':      'application/json',
-      'x-api-key':         key,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const err: any = await res.json().catch(() => ({}));
-    throw new Error(`Claude ${config.model} ${res.status}: ${err.error?.message || res.statusText}`);
-  }
-
-  const data: any = await res.json();
-  return data.content?.[0]?.text || '';
-}
-
-// ── GPT call ──────────────────────────────────────────────────────────────────
-async function callGPT(
-  prompt: string,
-  config: AIConfig,
-  options: { systemPrompt?: string; jsonMode?: boolean },
-): Promise<string> {
-  const key = OPENAI_KEY();
-  if (!key) throw new Error('OPENAI_API_KEY not set');
+  const systemPrompt = options.systemPrompt
+    || (options.jsonMode ? 'Return ONLY valid JSON. No markdown, no explanation.' : undefined);
 
   const messages: any[] = [];
-  if (options.systemPrompt) messages.push({ role: 'system', content: options.systemPrompt });
+  if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
   messages.push({ role: 'user', content: prompt });
 
   const body: any = {
-    model:       config.model,
-    max_tokens:  config.max_tokens || 512,
+    models: config.models, // ordered fallback array — OpenRouter tries each server-side
+    max_tokens: config.max_tokens || 512,
     temperature: config.temperature,
     messages,
   };
-
   if (options.jsonMode) body.response_format = { type: 'json_object' };
 
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method:  'POST',
-    headers: {
-      'Content-Type':  'application/json',
-      'Authorization': `Bearer ${key}`,
-    },
+  const res = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
     body: JSON.stringify(body),
   });
 
   if (!res.ok) {
     const err: any = await res.json().catch(() => ({}));
-    throw new Error(`GPT ${config.model} ${res.status}: ${err.error?.message || res.statusText}`);
+    throw new Error(`OpenRouter ${res.status}: ${err.error?.message || res.statusText}`);
   }
 
   const data: any = await res.json();
-  return data.choices?.[0]?.message?.content || '';
+  const choice = data.choices?.[0];
+  // A provider error can arrive on an HTTP 200 as an embedded finish_reason.
+  if (choice?.finish_reason === 'error') {
+    throw new Error(`OpenRouter provider error: ${choice.error?.message || JSON.stringify(choice.error)}`);
+  }
+  return choice?.message?.content || '';
 }
 
 // ── JSON helper ───────────────────────────────────────────────────────────────
