@@ -33,7 +33,8 @@
     "node-cron": "^4.2.1",
     "node-fetch": "^2.7.0",
     "prisma": "^6.0.0",
-    "stripe": "^14.14.0"
+    "stripe": "^14.14.0",
+    "svix": "^2.3.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

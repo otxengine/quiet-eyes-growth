@@ -10,6 +10,7 @@ import { createLogger } from '../infra/logger';
 import { bulkBootstrapAllBusinesses, bootstrapBusinessIntelligence } from '../lib/bootstrapIntelligence';
 import { searchCompetitorsByKeyword } from '../lib/dataforseo';
 import { getCollectorMetrics, checkAndAlertFailureRate, getTrendMetrics } from '../lib/collectorMetrics';
+import { getUserEmail } from '../lib/ownership';
 
 const logger = createLogger('AdminUsers');
 const router = Router();
@@ -36,6 +37,36 @@ router.post('/bulk-bootstrap', async (req: Request, res: Response) => {
   // Bulk mode — responds immediately, runs in background
   res.json({ ok: true, message: 'Bulk bootstrap started in background — check server logs for progress' });
   bulkBootstrapAllBusinesses().catch(e => logger.warn(`bulk-bootstrap error: ${e.message}`));
+});
+
+// ── POST /api/admin/backfill-owner-email ───────────────────────────────────────
+// One-off: resolves owner_email (via Clerk) for currently-active profiles that
+// don't have it yet, so the reactivation-on-Clerk-delete flow (see
+// routes/webhooks/clerk.ts, routes/reactivation.ts) has an email to match on
+// even for accounts created before this feature shipped.
+router.post('/backfill-owner-email', async (req: Request, res: Response) => {
+  if (!isAdminKeyRequest(req)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const rows = await prisma.$queryRawUnsafe<{ id: string; created_by: string | null }[]>(
+    `SELECT id, created_by FROM business_profiles
+     WHERE (is_active IS NULL OR is_active = true) AND owner_email IS NULL`,
+  );
+
+  let updated = 0;
+  const skipped: string[] = [];
+  for (const row of rows) {
+    if (!row.created_by) { skipped.push(row.id); continue; }
+    const email = await getUserEmail(row.created_by);
+    if (!email) { skipped.push(row.id); continue; }
+    await prisma.$executeRawUnsafe(
+      `UPDATE business_profiles SET owner_email = $1 WHERE id = $2`, email, row.id,
+    );
+    updated++;
+  }
+
+  return res.json({ ok: true, checked: rows.length, updated, skipped });
 });
 
 // ── DELETE /api/admin/users/:businessId ───────────────────────────────────────

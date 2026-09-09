@@ -51,6 +51,13 @@ export const orgApi = {
   deleteBranch: (orgId, branchId) => apiFetch(`/orgs/${orgId}/branches/${branchId}`, { method: 'DELETE' }),
 };
 
+// ── Reactivation endpoints ────────────────────────────────────────────────────
+
+export const reactivationApi = {
+  getCandidates: () => apiFetch('/reactivation/candidates'),
+  reactivate: (id) => apiFetch(`/reactivation/${id}/reactivate`, { method: 'POST' }),
+};
+
 // ── Agency endpoints ──────────────────────────────────────────────────────────
 
 export const agencyApi = {

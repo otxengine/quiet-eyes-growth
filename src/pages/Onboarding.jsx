@@ -1,12 +1,46 @@
-import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
+import { reactivationApi } from '@/api/orgApi';
 import OnboardingForm from '@/components/onboarding/OnboardingForm';
+import ReactivationChoice from '@/components/onboarding/ReactivationChoice';
 import OnboardingSelectPlan from '@/components/onboarding/OnboardingSelectPlan';
 import OnboardingScanning from '@/components/onboarding/OnboardingScanning';
 import OnboardingApproveIdentity from '@/components/onboarding/OnboardingApproveIdentity';
 import OnboardingDiscoverCompetitors from '@/components/onboarding/OnboardingDiscoverCompetitors';
 import OnboardingInsights from '@/components/onboarding/OnboardingInsights';
+
+function OnboardingIndex() {
+  const navigate = useNavigate();
+  const [candidates, setCandidates] = useState(null); // null = loading
+  const [startFresh, setStartFresh] = useState(false);
+
+  useEffect(() => {
+    reactivationApi.getCandidates()
+      .then(setCandidates)
+      .catch(() => setCandidates([])); // fail open — just show the normal form
+  }, []);
+
+  if (candidates === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-secondary/50">
+        <div className="w-8 h-8 border-4 border-border border-t-gray-800 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (candidates.length > 0 && !startFresh) {
+    return (
+      <ReactivationChoice
+        candidates={candidates}
+        onReactivated={() => navigate('/')}
+        onStartFresh={() => setStartFresh(true)}
+      />
+    );
+  }
+
+  return <OnboardingForm />;
+}
 
 export default function Onboarding() {
   const { isLoadingAuth, logout } = useAuth();
@@ -31,7 +65,7 @@ export default function Onboarding() {
         </button>
       </div>
       <Routes>
-        <Route index element={<OnboardingForm />} />
+        <Route index element={<OnboardingIndex />} />
         <Route path="select-plan" element={<OnboardingSelectPlan />} />
         <Route path="scanning" element={<OnboardingScanning />} />
         <Route path="approve-identity" element={<OnboardingApproveIdentity />} />

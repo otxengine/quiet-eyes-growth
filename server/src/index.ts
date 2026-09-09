@@ -45,6 +45,7 @@ import migrateRouter from './routes/migrate';
 import metaAuthRouter from './routes/meta/auth';
 import metaWebhookRouter from './routes/meta/webhook';
 import dataforseoWebhookRouter from './routes/webhooks/dataforseo';
+import clerkWebhookRouter from './routes/webhooks/clerk';
 import conversationsRouter from './routes/conversations';
 import orchestratorRouter from './routes/orchestrator';
 import approvalsRouter from './routes/approvals';
@@ -58,6 +59,7 @@ import socialRouter from './routes/social';
 import competitorsRouter from './routes/competitors';
 import campaignsRouter from './routes/campaigns';
 import organizationsRouter from './routes/organizations';
+import reactivationRouter from './routes/reactivation';
 import agencyRouter from './routes/agency';
 import stripeRouter from './routes/stripe';
 import uxEventsRouter from './routes/uxEvents';
@@ -175,6 +177,7 @@ app.use('/api/migrate', migrateRouter);
 app.use('/api/meta/auth', metaAuthRouter);
 app.use('/api/webhooks/meta', metaWebhookRouter);
 app.use('/api/webhooks/dataforseo', dataforseoWebhookRouter);
+app.use('/api/webhooks/clerk', clerkWebhookRouter);
 app.use('/api/conversations', conversationsRouter);
 app.use('/api/orchestrator', orchestratorRouter);
 app.use('/api/approvals', approvalsRouter);
@@ -189,6 +192,7 @@ app.use('/api/social', socialRouter);
 app.use('/api/competitors', competitorsRouter);
 app.use('/api/campaigns', campaignsRouter);
 app.use('/api/orgs', organizationsRouter);
+app.use('/api/reactivation', reactivationRouter);
 app.use('/api/agency', agencyRouter);
 app.use('/api/stripe', stripeRouter);
 
@@ -906,6 +910,16 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS is_active            BOOLEAN DEFAULT true`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_bp_org ON business_profiles(organization_id) WHERE organization_id IS NOT NULL`);
 
+  // ── Clerk deletion sync + reactivation ────────────────────────────────────
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS owner_email    TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_bp_owner_email ON business_profiles(owner_email) WHERE owner_email IS NOT NULL`);
+  await sql(`CREATE TABLE IF NOT EXISTS clerk_user_cache (
+    user_id    TEXT PRIMARY KEY,
+    email      TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+
   // ── Stripe billing columns on organizations ───────────────────────────────
   await sql(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS stripe_customer_id     TEXT`);
   await sql(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT`);
@@ -1202,6 +1216,13 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS phone TEXT`);
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS outlier_insight TEXT`);
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS outlier_insight_at TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS gbp_hours TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS gbp_service_area TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS gbp_labels TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS gbp_attributes TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS gbp_store_code TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS gbp_verification_status TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS gbp_synced_at TEXT`);
   await sql(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS discovered_at TEXT`);
   await sql(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS freshness_score DOUBLE PRECISION DEFAULT 100`);
   await sql(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_contact_at TEXT`);
