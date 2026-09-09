@@ -96,10 +96,11 @@ const CONCURRENCY = 4;
 
 async function getActiveProfiles(): Promise<string[]> {
   try {
-    const profiles = await prisma.businessProfile.findMany({
-      where: { onboarding_completed: true },
-      select: { id: true, name: true },
-    });
+    // ponytail: is_active isn't in schema.prisma (DB column predates it, added via raw SQL
+    // elsewhere — see organizations.ts) — raw query until schema.prisma is reconciled.
+    const profiles = await prisma.$queryRawUnsafe<{ id: string }[]>(
+      `SELECT id FROM business_profiles WHERE onboarding_completed = true AND is_active = true`,
+    );
     return profiles.map((p: { id: string }) => p.id);
   } catch (err: any) {
     logger.error('Failed to fetch active profiles', { error: err.message });

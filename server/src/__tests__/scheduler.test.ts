@@ -1,7 +1,7 @@
 // ── Mocks must be declared before imports ─────────────────────────────────────
 
 jest.mock('node-cron',                        () => ({ schedule: jest.fn() }));
-jest.mock('../db',                            () => ({ prisma: { businessProfile: { findMany: jest.fn() } } }));
+jest.mock('../db',                            () => ({ prisma: { $queryRawUnsafe: jest.fn() } }));
 jest.mock('../lib/agentMonitor',              () => ({ writeHeartbeat: jest.fn() }));
 jest.mock('../infra/logger',                  () => ({ createLogger: () => ({ info: jest.fn(), error: jest.fn(), warn: jest.fn() }) }));
 jest.mock('../orchestration/MasterOrchestrator', () => ({ runPipeline: jest.fn() }));
@@ -42,7 +42,7 @@ import { prisma } from '../db';
 import { writeHeartbeat } from '../lib/agentMonitor';
 import { runAgentForAll, startScheduler } from '../scheduler';
 
-const bpFindMany = prisma.businessProfile.findMany as jest.Mock;
+const bpFindMany = prisma.$queryRawUnsafe as jest.Mock;
 const heartbeat  = writeHeartbeat as jest.Mock;
 
 afterEach(() => jest.useRealTimers());
