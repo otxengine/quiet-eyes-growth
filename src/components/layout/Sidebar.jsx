@@ -112,8 +112,10 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, 
         {/* Main nav */}
         <ul className={cn('space-y-1', collapsed ? 'px-2' : 'px-5')}>
           {NAV_STRUCTURE.map((node) => {
-            const isActive =
-              (node.path === '/' ? (location.pathname === '/' || location.pathname === '/dashboard') : location.pathname === node.path);
+            // active also on sub-routes (/insights/:id) — the sidebar is now the only page indicator
+            const isActive = node.path === '/'
+              ? (location.pathname === '/' || location.pathname === '/dashboard')
+              : (location.pathname === node.path || location.pathname.startsWith(node.path + '/'));
             const badgeCount = node.badgeKey ? (badges[node.badgeKey] || 0) : 0;
             const Icon = node.icon;
 
@@ -141,10 +143,10 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, 
                 <Link
                   to={node.path}
                   onClick={() => onNavigate?.()}
-                  className="flex items-center justify-between h-9 text-[14px] transition-colors group"
-                  style={{ color: isActive ? '#111111' : '#888888', fontWeight: isActive ? '600' : '400', textDecoration: isActive ? 'underline' : 'none', textUnderlineOffset: '3px' }}
-                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = '#333333'; }}
-                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = '#888888'; }}
+                  className="flex items-center justify-between h-9 -mx-2 px-2 rounded-lg text-[14px] transition-colors group"
+                  style={{ background: isActive ? 'hsl(var(--sidebar-accent-active))' : 'transparent', color: isActive ? 'hsl(var(--sidebar-primary))' : '#888888', fontWeight: isActive ? '600' : '400' }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'hsl(var(--sidebar-accent))'; }}
+                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                 >
                   <span>{node.label}</span>
                   {badgeCount > 0 && (

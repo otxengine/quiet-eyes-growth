@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { getAuthHeaders } from '@/api/client';
-import { Star, Search, Loader2, Bot, Send, X, ChevronDown, MoreVertical, Copy, CheckCheck } from 'lucide-react';
+import { Star, Search, Loader2, Bot, Send, X, ChevronDown, MoreVertical, Copy, CheckCheck, Radar } from 'lucide-react';
 import { toast } from 'sonner';
 import RequestReviewModal from '@/components/reputation/RequestReviewModal';
 import ScheduledReviewRequests from '@/components/reputation/ScheduledReviewRequests';
@@ -290,7 +290,7 @@ export default function Reputation() {
   const bpId = businessProfile?.id;
   const queryClient = useQueryClient();
   const [showRequestModal, setShowRequestModal] = useState(false);
-  const [_scanning, setScanning] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [selectedReview, setSelectedReview] = useState(null);
   const [selectedSources] = useState(['google']);
 
@@ -474,6 +474,14 @@ export default function Reputation() {
           <p className="text-xs text-foreground-muted mt-0.5">מעקב אחר ביקורות, דירוג העסק והמלצות לשיפור המוניטין</p>
         </div>
         <div className="flex items-center gap-2 mt-1">
+          <button
+            onClick={handleCollectReviews}
+            disabled={scanning || !bpId}
+            className="flex items-center gap-1.5 bg-foreground text-background px-4 py-2 rounded-full text-sm font-semibold hover:opacity-85 disabled:opacity-50 transition-opacity shadow-sm"
+          >
+            {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radar className="w-4 h-4" />}
+            {scanning ? 'סורק...' : 'סרוק ביקורות'}
+          </button>
           <Link
             to="/reviews/compare"
             className="flex items-center gap-1.5 border border-border px-4 py-2 rounded-full text-sm font-semibold text-foreground hover:bg-secondary transition-colors shadow-sm"

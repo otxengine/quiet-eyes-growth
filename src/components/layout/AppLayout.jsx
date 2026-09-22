@@ -36,43 +36,9 @@ import { cn } from '@/lib/utils';
 import { registerServiceWorker } from '@/lib/pushNotifications';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
-const pageTitles = {
-  '/':              'בית',
-  '/dashboard':     'בית',
-  '/command':       'בית',
-  '/leads':         'לידים',
-  '/insights':      'תובנות',
-  '/competitors':   'מתחרים',
-  '/marketing':     'מרכז השיווק',
-  '/marketing/create': 'יצירת קמפיין',
-  '/posts':         'ניהול סושיאל',
-  '/events':        'אירועים',
-  '/reviews':       'מוניטין / נראות עסקית',
-  '/retention':     'ניהול לקוחות',
-  '/tasks':         'משימות',
-  '/reports':       'דוחות',
-  '/strategy':      'אסטרטגיה',
-  '/signals':       'תובנות',
-  '/approvals':     'לאישור',
-  '/market-analysis':'ניתוח שוק',
-  '/data-sources':  'מקורות מידע',
-  '/subscription':  'מנוי',
-  '/agents':        'סוכנים',
-  '/learning':      'למידה',
-  '/integrations':  'אינטגרציות',
-  '/settings':      'הגדרות',
-  '/social':             'רשתות חברתיות',
-  '/social-competition': 'תחרות סושיאל',
-  '/otx':           'Cortexi Dashboard',
-  '/org/settings':  'הגדרות ארגון',
-  '/agency':        'סוכנות',
-  '/chat':          'יועץ AI',
-};
-
 export default function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [selectedLocationId, setSelectedLocationId] = useState(null);
   const [showGlobalScan, setShowGlobalScan] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -168,74 +134,59 @@ export default function AppLayout() {
     return () => { clearTimeout(t); if (window.__cortexi_scan === handler) delete window.__cortexi_scan; };
   }, [isOnDashboard, scanQuota.isExhausted, scanQuota.plan, scanQuota.quota, location.pathname]);
 
-  // Fetch badge counts
-  const { data: unreadSignals } = useQuery({
-    queryKey: ['unreadSignals', businessProfile?.id],
-    queryFn: () => base44.entities.MarketSignal.filter({ 
-      linked_business: businessProfile?.id, 
-      is_read: false 
-    }),
-    enabled: !!businessProfile?.id
+  // Fetch badge counts.
+  // Queries stay time-unfiltered so the react-query key is stable across navigation;
+  // the "new since you last looked" cut happens client-side against pageVisits below.
+  const bizId = businessProfile?.id;
+  const bizQuery = (key, fn, extra) => ({
+    queryKey: [key, bizId], queryFn: fn, enabled: !!bizId, ...extra,
   });
 
-  const { data: pendingReviews } = useQuery({
-    queryKey: ['pendingReviews', businessProfile?.id],
-    queryFn: () => base44.entities.Review.filter({ 
-      linked_business: businessProfile?.id, 
-      response_status: 'pending' 
-    }),
-    enabled: !!businessProfile?.id
+  // Own reviews awaiting a response (also drives the sidebar badge on /reviews)
+  const { data: pendingReviews } = useQuery(bizQuery('pendingReviews', () =>
+    base44.entities.Review.filter({ linked_business: bizId, response_status: 'pending' })));
+
+  // Insights alerts (drives the sidebar badge on /insights)
+  const { data: activeInsightAlerts } = useQuery(bizQuery('activeInsights', () =>
+    base44.entities.ProactiveAlert.filter({ linked_business: bizId, is_dismissed: false, is_acted_on: false }),
+    { refetchInterval: 120000 }));
+
+  // Competitor activity. Posts and ads come back newest-first (ENTITY_DEFAULT_ORDER),
+  // then split into offers vs plain content so the two bell rows never double-count.
+  const { data: competitorPosts } = useQuery(bizQuery('competitorPosts', () =>
+    base44.entities.CompetitorPost.filter({ linked_business: bizId }, null, 200),
+    { refetchInterval: 300000 }));
+
+  const { data: competitorAds } = useQuery(bizQuery('competitorAds', () =>
+    base44.entities.CompetitorAdHistory.filter({ linked_business: bizId }, null, 200),
+    { refetchInterval: 300000 }));
+
+  // linked_competitor must be passed explicitly — the entities route defaults Review to own-business rows
+  const { data: competitorReviews } = useQuery(bizQuery('competitorReviews', () =>
+    base44.entities.Review.filter({ linked_business: bizId, linked_competitor: { not: null } }, null, 200),
+    { refetchInterval: 300000 }));
+
+  // Only count items that arrived AFTER the user last visited the relevant page
+  const seen = (path) => pageVisits[path] || 0;
+  const newerThan = (rows, ts, ...fields) => (rows || []).filter((r) => {
+    const raw = fields.map((f) => r[f]).find(Boolean);
+    return raw ? new Date(raw).getTime() > ts : true; // undated rows count as new
   });
 
-  const { data: hotLeads } = useQuery({
-    queryKey: ['hotLeads', businessProfile?.id],
-    queryFn: () => base44.entities.Lead.filter({
-      linked_business: businessProfile?.id,
-      status: 'hot'
-    }),
-    enabled: !!businessProfile?.id
-  });
-
-  const { data: activeInsightAlerts } = useQuery({
-    queryKey: ['activeInsights', businessProfile?.id],
-    queryFn: () => base44.entities.ProactiveAlert.filter({
-      linked_business: businessProfile?.id,
-      is_dismissed: false,
-      is_acted_on: false,
-    }),
-    enabled: !!businessProfile?.id,
-    refetchInterval: 120000,
-  });
-
-  // FIX 4: Only count items that arrived AFTER the user last visited the relevant page
-  const signalsLastSeen = pageVisits['/signals'] || 0;
-  const reviewsLastSeen = pageVisits['/reviews'] || 0;
-  const leadsLastSeen   = pageVisits['/leads'] || 0;
-
-  const insightsLastSeen = pageVisits['/insights'] || 0;
+  const contentSeen = seen('/social-competition');
+  const offersSeen  = seen('/competitors-offers');
+  const newPosts = newerThan(competitorPosts, contentSeen, 'first_seen_at', 'posted_at');
+  const newAds   = newerThan(competitorAds,   contentSeen, 'first_seen_at');
+  const newOfferPosts = newerThan(competitorPosts, offersSeen, 'first_seen_at', 'posted_at').filter(p => p.has_offer === true);
+  const newOfferAds   = newerThan(competitorAds,   offersSeen, 'first_seen_at').filter(a => a.has_offer === true);
 
   const badges = {
-    unreadSignals: (unreadSignals || []).filter(
-      s => new Date(s.detected_at || s.created_date || 0).getTime() > signalsLastSeen
-    ).length,
-    pendingReviews: (pendingReviews || []).filter(r => {
-      const ts = r.created_at || r.created_date;
-      return !ts || new Date(ts).getTime() > reviewsLastSeen;
-    }).length,
-    hotLeads: (hotLeads || []).filter(
-      l => new Date(l.created_at || l.created_date || 0).getTime() > leadsLastSeen
-    ).length,
-    activeInsights: (activeInsightAlerts || []).filter(
-      a => new Date(a.created_date || a.created_at || 0).getTime() > insightsLastSeen
-    ).length,
+    pendingReviews: newerThan(pendingReviews, seen('/reviews'), 'created_at', 'created_date').length,
+    activeInsights: newerThan(activeInsightAlerts, seen('/insights'), 'created_date', 'created_at').length,
+    competitorContent: newPosts.filter(p => p.has_offer !== true).length + newAds.filter(a => a.has_offer !== true).length,
+    competitorOffers: newOfferPosts.length + newOfferAds.length,
+    competitorReviews: newerThan(competitorReviews, seen('/reviews/compare'), 'created_at', 'created_date').length,
   };
-
-  // Dynamic page title: exact match first, then prefix-based for sub-routes
-  const pageTitle = pageTitles[location.pathname]
-    || (location.pathname.startsWith('/insights/') ? 'תובנה' : null)
-    || (location.pathname.startsWith('/tasks/')    ? 'פרטי משימה' : null)
-    || (location.pathname.startsWith('/signals/')  ? 'פרטי סיגנל' : null)
-    || 'Cortexi';
 
   if (stillLoading) {
     return (
@@ -282,18 +233,13 @@ export default function AppLayout() {
         sidebarCollapsed ? "lg:mr-16" : "lg:mr-64"
       )}>
         <TopBar 
-          pageTitle={pageTitle}
-          user={user}
           badges={badges}
           onMenuClick={() => setMobileMenuOpen(true)}
           showMenuButton={true}
-          businessProfileId={businessProfile?.id}
-          selectedLocationId={selectedLocationId}
-          onLocationChange={setSelectedLocationId}
         />
         {/* FIX 1: prevent horizontal scroll in main content */}
         <main className="px-4 md:px-6 py-4 overflow-x-hidden bg-dot-grid min-h-screen">
-          <Outlet context={{ businessProfile, user, badges, selectedLocationId }} />
+          <Outlet context={{ businessProfile, user, badges }} />
         </main>
       </div>
       <SupportWidget businessProfile={businessProfile} />

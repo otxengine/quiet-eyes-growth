@@ -1,16 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Bell, Menu, Eye, Star, CheckCircle, LogOut, Radar, Lightbulb } from 'lucide-react';
-import LocationSwitcher from './LocationSwitcher';
-import BranchSwitcher from './BranchSwitcher';
+import { Bell, Menu, Star, LogOut, Megaphone, Tag, MessageSquare } from 'lucide-react';
 
-export default function TopBar({ pageTitle, user, badges = {}, onMenuClick, showMenuButton, businessProfileId, selectedLocationId, onLocationChange }) {
-  const userInitial = user?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U';
+export default function TopBar({ badges = {}, onMenuClick, showMenuButton }) {
   const [bellOpen, setBellOpen] = useState(false);
   const bellRef = useRef(null);
   const navigate = useNavigate();
-  const totalCount = (badges.unreadSignals || 0) + (badges.pendingReviews || 0) + (badges.hotLeads || 0) + (badges.activeInsights || 0);
+
+  const notifItems = [
+    { count: badges.pendingReviews    || 0, label: 'ביקורות ממתינות למענה',        icon: Star,           path: '/reviews'           },
+    { count: badges.competitorContent || 0, label: 'פוסטים ומודעות חדשים של מתחרים', icon: Megaphone,      path: '/social-competition' },
+    { count: badges.competitorOffers  || 0, label: 'מבצעים חדשים של מתחרים',        icon: Tag,            path: '/competitors-offers' },
+    { count: badges.competitorReviews || 0, label: 'ביקורות חדשות על מתחרים',       icon: MessageSquare,  path: '/reviews/compare'    },
+  ];
+  const totalCount = notifItems.reduce((sum, i) => sum + i.count, 0);
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -19,13 +23,6 @@ export default function TopBar({ pageTitle, user, badges = {}, onMenuClick, show
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
-
-  const notifItems = [
-    { count: badges.unreadSignals  || 0, label: 'סיגנלים חדשים',   icon: Eye,       path: '/signals'  },
-    { count: badges.pendingReviews || 0, label: 'ביקורות ממתינות', icon: Star,       path: '/reviews'  },
-    { count: badges.hotLeads       || 0, label: 'לידים חמים היום', icon: CheckCircle,path: '/leads'    },
-    { count: badges.activeInsights || 0, label: 'תובנות פעילות',   icon: Lightbulb,  path: '/insights' },
-  ];
 
   return (
     <header className="sticky top-0 z-30 h-14 glass border-b border-white/40">
@@ -36,31 +33,16 @@ export default function TopBar({ pageTitle, user, badges = {}, onMenuClick, show
               <Menu className="w-5 h-5 text-foreground" />
             </button>
           )}
-          <h1 className="text-[15px] font-semibold text-foreground">{pageTitle}</h1>
-          <BranchSwitcher />
-          {businessProfileId && onLocationChange && (
-            <LocationSwitcher businessProfileId={businessProfileId} selectedLocationId={selectedLocationId} onLocationChange={onLocationChange} />
-          )}
+          <button
+            onClick={() => base44.auth.logout('/')}
+            title="התנתק"
+            className="p-1.5 rounded-md hover:bg-secondary transition-colors"
+          >
+            <LogOut className="w-4 h-4 text-foreground-muted hover:text-danger" />
+          </button>
         </div>
 
         <div className="flex items-center gap-3 md:gap-4">
-          {/* Scan button - available on all pages */}
-          <button
-            onClick={() => window.__cortexi_scan?.()}
-            className="btn-subtle hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-medium text-foreground-muted border border-border hover:border-border-hover hover:text-foreground transition-all"
-          >
-            <Radar className="w-3 h-3" />
-            סרוק עכשיו
-          </button>
-
-          {/* LIVE indicator */}
-          <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 border border-emerald-100">
-            <span className="w-[5px] h-[5px] rounded-full bg-emerald-500 pulse-glow" />
-            <span className="text-[9px] font-semibold text-emerald-600 tracking-wide">LIVE</span>
-          </div>
-
-          {/* Search - removed until functional */}
-
           {/* Bell */}
           <div ref={bellRef} className="relative">
             <button
@@ -101,19 +83,6 @@ export default function TopBar({ pageTitle, user, badges = {}, onMenuClick, show
             )}
           </div>
 
-          {/* User avatar + logout */}
-          <div className="flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-semibold text-[12px]">
-              {userInitial}
-            </span>
-            <button
-              onClick={() => base44.auth.logout('/')}
-              title="התנתק"
-              className="p-1.5 rounded-md hover:bg-secondary transition-colors"
-            >
-              <LogOut className="w-4 h-4 text-foreground-muted hover:text-danger" />
-            </button>
-          </div>
         </div>
       </div>
     </header>

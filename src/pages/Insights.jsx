@@ -7,7 +7,7 @@ import { trackUxEvent } from '@/lib/trackUxEvent';
 import {
   Loader2, Archive, Search, Zap, TrendingUp,
   ChevronLeft, Clock, Star, ArrowUpRight,
-  Eye, AlertTriangle, Sparkles, MessageSquare, Users, Calendar, ChevronDown,
+  Eye, AlertTriangle, Sparkles, MessageSquare, Users, Calendar, ChevronDown, Radar,
 } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import DismissMenu from '@/components/ui/DismissMenu';
@@ -499,9 +499,19 @@ function IntelligenceSection({ businessProfile }) {
           onClose={() => setShowScan(false)}
         />
       )}
-      <div>
-        <h2 className="text-[16px] font-bold text-foreground tracking-tight">מודיעין שוק</h2>
-        <p className="text-[12px] text-foreground-muted mt-0.5">תובנות חכמות מחיפושים, רשתות חברתיות, קבוצות ומתחרים</p>
+      <div className="flex items-start justify-between">
+        <button
+          onClick={() => setShowScan(true)}
+          disabled={showScan || !bpId}
+          className="flex items-center gap-1.5 bg-foreground text-background px-4 py-2 rounded-full text-sm font-semibold hover:opacity-85 disabled:opacity-50 transition-opacity shadow-sm"
+        >
+          <Radar className="w-4 h-4" />
+          סרוק עכשיו
+        </button>
+        <div className="text-right">
+          <h2 className="text-[16px] font-bold text-foreground tracking-tight">מודיעין שוק</h2>
+          <p className="text-[12px] text-foreground-muted mt-0.5">תובנות חכמות מחיפושים, רשתות חברתיות, קבוצות ומתחרים</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
