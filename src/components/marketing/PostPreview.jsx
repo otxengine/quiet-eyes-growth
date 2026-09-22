@@ -10,6 +10,8 @@ function handleFromUrl(url) {
   return m ? m[1] : null;
 }
 
+const textDir = (text) => (/[֐-׿]/.test(text || '') ? 'rtl' : 'ltr');
+
 function Avatar({ src, name, size = 32 }) {
   const style = { width: size, height: size };
   return src ? (
@@ -77,9 +79,13 @@ export default function PostPreview({ post, businessProfile, profilePicture, ful
           <Heart className="w-6 h-6" /><MessageCircle className="w-6 h-6 -scale-x-100" /><Send className="w-6 h-6" />
           <Bookmark className="w-6 h-6 ml-auto" />
         </div>
-        <p dir="auto" className={`px-3 pb-3 leading-snug ${clamp}`}>
-          <span className="font-semibold">{handle}</span>{' '}<Caption text={post.content} />
-        </p>
+        {/* dir from the caption, not dir="auto" — that would lock onto the Latin handle.
+            Padding lives on the wrapper: line-clamp leaks the next line into its own padding. */}
+        <div className="px-3 pb-3">
+          <p dir={textDir(post.content)} className={`leading-snug ${clamp}`}>
+            <span className="font-semibold">{handle}</span>{' '}<Caption text={post.content} />
+          </p>
+        </div>
       </div>
     );
   }
@@ -95,9 +101,11 @@ export default function PostPreview({ post, businessProfile, profilePicture, ful
         </div>
         <MoreHorizontal className="w-5 h-5 mr-auto text-[#65676b]" />
       </div>
-      <p dir="auto" className={`px-3 pb-3 leading-snug ${full ? 'whitespace-pre-wrap' : 'line-clamp-3'}`}>
-        <Caption text={post.content} />
-      </p>
+      <div className="px-3 pb-3">
+        <p dir={textDir(post.content)} className={`leading-snug ${full ? 'whitespace-pre-wrap' : 'line-clamp-3'}`}>
+          <Caption text={post.content} />
+        </p>
+      </div>
       <Media url={post.image_url} aspect="aspect-[1.91/1]" />
       <div className="flex justify-around py-1.5 mx-3 border-t border-[#ced0d4] text-[13px] font-semibold text-[#65676b]">
         <span className="flex items-center gap-1.5"><ThumbsUp className="w-4 h-4" /> לייק</span>
