@@ -41,9 +41,32 @@ function Media({ url, aspect }) {
   );
 }
 
-export default function PostPreview({ post, businessProfile, profilePicture, full = false }) {
+function domainOf(url) {
+  try { return new URL(/^https?:/.test(url) ? url : `https://${url}`).hostname.replace(/^www\./, ''); } catch { return null; }
+}
+
+// `ad` = { cta, title } turns the preview into a sponsored placement: "ממומן"
+// label, CTA strip, and (for Google) a search-results ad instead of a feed post.
+export default function PostPreview({ post, businessProfile, profilePicture, full = false, ad = null }) {
   const name = businessProfile?.name || '';
   const clamp = full ? 'whitespace-pre-wrap' : 'line-clamp-2';
+  const domain = domainOf(businessProfile?.website_url || '');
+
+  if (post.platform === 'google') {
+    return (
+      <div className="bg-white p-4 text-[14px]" dir="rtl">
+        <div className="flex items-center gap-2.5 mb-1">
+          <Avatar src={profilePicture} name={name} size={28} />
+          <div className="leading-tight min-w-0">
+            <p className="text-[14px] text-[#202124] truncate">{name}</p>
+            <p className="text-[12px] text-[#4d5156] truncate" dir="ltr"><b className="text-[#202124]">ממומן</b> · {domain || 'האתר שלכם'}</p>
+          </div>
+        </div>
+        <p className="text-[20px] leading-snug text-[#1a0dab] line-clamp-2">{ad?.title || name}</p>
+        <p dir={textDir(post.content)} className="text-[14px] text-[#4d5156] leading-snug line-clamp-2 mt-1">{post.content}</p>
+      </div>
+    );
+  }
 
   if (post.post_type === 'story') {
     return (
@@ -71,10 +94,18 @@ export default function PostPreview({ post, businessProfile, profilePicture, ful
       <div className="bg-white text-[#0f1419] text-[13px]" dir="ltr">
         <div className="flex items-center gap-2.5 px-3 py-2.5">
           <Avatar src={profilePicture} name={name} />
-          <span className="font-semibold text-[13px]">{handle}</span>
+          <div className="leading-tight">
+            <p className="font-semibold text-[13px]">{handle}</p>
+            {ad && <p className="text-[11px]">ממומן</p>}
+          </div>
           <MoreHorizontal className="w-5 h-5 ml-auto" />
         </div>
         <Media url={post.image_url} aspect="aspect-square" />
+        {ad && (
+          <div dir="rtl" className="flex items-center justify-between px-3 py-2.5 border-b border-gray-200 text-[13px] font-semibold text-[#0095f6]">
+            {ad.cta} <span aria-hidden>‹</span>
+          </div>
+        )}
         <div className="flex items-center gap-4 px-3 pt-2.5 pb-1.5">
           <Heart className="w-6 h-6" /><MessageCircle className="w-6 h-6 -scale-x-100" /><Send className="w-6 h-6" />
           <Bookmark className="w-6 h-6 ml-auto" />
@@ -97,7 +128,7 @@ export default function PostPreview({ post, businessProfile, profilePicture, ful
         <Avatar src={profilePicture} name={name} size={40} />
         <div className="leading-tight">
           <p className="font-semibold text-[14px]">{name}</p>
-          <p className="text-[12px] text-[#65676b] flex items-center gap-1">עכשיו · <Globe className="w-3 h-3" /></p>
+          <p className="text-[12px] text-[#65676b] flex items-center gap-1">{ad ? 'ממומן' : 'עכשיו'} · <Globe className="w-3 h-3" /></p>
         </div>
         <MoreHorizontal className="w-5 h-5 mr-auto text-[#65676b]" />
       </div>
@@ -107,6 +138,15 @@ export default function PostPreview({ post, businessProfile, profilePicture, ful
         </p>
       </div>
       <Media url={post.image_url} aspect="aspect-[1.91/1]" />
+      {ad && (
+        <div className="flex items-center gap-3 px-3 py-2.5 bg-[#f0f2f5]">
+          <div className="min-w-0 flex-1 leading-tight">
+            {domain && <p className="text-[12px] text-[#65676b] uppercase truncate" dir="ltr">{domain}</p>}
+            <p className="text-[15px] font-semibold truncate">{ad.title || name}</p>
+          </div>
+          <span className="shrink-0 px-3 py-1.5 rounded-md bg-[#e2e5e9] text-[14px] font-semibold">{ad.cta}</span>
+        </div>
+      )}
       <div className="flex justify-around py-1.5 mx-3 border-t border-[#ced0d4] text-[13px] font-semibold text-[#65676b]">
         <span className="flex items-center gap-1.5"><ThumbsUp className="w-4 h-4" /> לייק</span>
         <span className="flex items-center gap-1.5"><MessageCircle className="w-4 h-4" /> תגובה</span>

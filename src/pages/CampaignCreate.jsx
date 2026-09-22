@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import AudienceSegmentCard from '@/components/marketing/AudienceSegmentCard';
+import PostPreview from '@/components/marketing/PostPreview';
+import { apiFetch } from '@/components/competitors/socialShared';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -26,6 +28,9 @@ const OBJECTIVES = [
 ];
 
 const DURATIONS = [7, 14, 30];
+
+// CTA button text Meta shows for each objective (Hebrew UI labels).
+const OBJECTIVE_CTA = { awareness: 'מידע נוסף', traffic: 'מידע נוסף', leads: 'שליחת הודעה', conversions: 'לקנייה' };
 
 const ADS_MANAGER_URLS = {
   facebook:  'https://adsmanager.facebook.com/adsmanager/manage/campaigns',
@@ -88,6 +93,13 @@ export default function CampaignCreate() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const bpId = businessProfile?.id;
+
+  // Same query key as BusinessSocialSnapshot — shared cache for the ad preview's avatar.
+  const { data: socialProfiles } = useQuery({
+    queryKey: ['businessSnapshotProfile', bpId],
+    queryFn: () => apiFetch(`/social/snapshot/profile?businessProfileId=${bpId}`),
+    enabled: !!bpId,
+  });
 
   // URL context from signal / campaign opportunity
   const campaignId     = searchParams.get('campaignId') || '';
@@ -639,6 +651,20 @@ ${urlBestTime ? `שעת פרסום מומלצת: ${urlBestTime}` : ''}
               />
             </div>
           )}
+        </div>
+      </SectionCard>
+
+      {/* ── Live ad preview ── */}
+      <SectionCard title="איך המודעה תיראה" subtitle="כך הלקוחות יראו אותה בפיד — מתעדכן תוך כדי עריכה">
+        <div className="p-4 bg-secondary/40">
+          <div className="max-w-[380px] mx-auto rounded-xl border border-border overflow-hidden shadow-sm">
+            <PostPreview
+              post={{ platform, content: postContent, image_url: imageUrl || null }}
+              businessProfile={businessProfile}
+              profilePicture={(socialProfiles?.profiles ?? []).find(p => p.platform === (platform === 'google' ? 'facebook' : platform))?.profile_picture_url || null}
+              ad={{ cta: OBJECTIVE_CTA[objective] || 'מידע נוסף' }}
+            />
+          </div>
         </div>
       </SectionCard>
 
