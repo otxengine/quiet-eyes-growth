@@ -11,6 +11,7 @@ import StatCards from '@/components/shared/StatCards';
 import StrategicAnalysisPanel from '@/components/competitors/StrategicAnalysisPanel';
 import CompetitorDetailCard from '@/components/competitors/CompetitorDetailCard';
 import ActionPopup from '@/components/ui/ActionPopup';
+import SectionTabs from '@/components/layout/SectionTabs';
 
 
 function timeAgo(dateStr) {
@@ -149,6 +150,7 @@ export default function Competitors() {
 
   return (
     <div className="space-y-5">
+      <SectionTabs section="competitors" />
       <PageHeader
         count={competitors.length}
         title="מתחרים"
@@ -223,7 +225,7 @@ export default function Competitors() {
                   onClick={() => setSelectedMove(topChange)}
                   className="text-[11px] font-medium text-violet-600 hover:text-violet-800 bg-white/60 hover:bg-white rounded-lg px-3 py-1.5 transition-colors"
                 >
-                  ⚡ פעל על זה
+                  הצג פרטים
                 </button>
               </div>
             )}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { LONG_SCAN_TIMEOUT_MS } from '@/api/client';
+import { LONG_SCAN_TIMEOUT_MS, getAuthHeaders } from '@/api/client';
 import { Plus, Loader2, Sparkles, Upload, RefreshCw, Send, Image as ImageIcon, X, Trash2, CheckCircle2, Calendar, Wand2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
@@ -10,12 +10,14 @@ import MediaLibrary from '@/components/marketing/MediaLibrary';
 import BusinessSocialSnapshot from '@/components/marketing/BusinessSocialSnapshot';
 import SocialProfileSuggestions from '@/components/marketing/SocialProfileSuggestions';
 import { PLATFORM_LABELS } from '@/components/competitors/socialShared';
+import SectionTabs from '@/components/layout/SectionTabs';
 
 const _apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api').replace(/\/$/, '');
 
 const ORGANIC_PLATFORMS = [
-  { id: 'instagram', label: 'Instagram', icon: '📸', color: '#e1306c', bg: '#fde8f0' },
-  { id: 'facebook',  label: 'Facebook',  icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
+  { id: 'instagram',      label: 'Instagram',      icon: '📸', color: '#e1306c', bg: '#fde8f0' },
+  { id: 'facebook',       label: 'Facebook',       icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
+  { id: 'google_business', label: 'Google Business', icon: '🔍', color: '#4285F4', bg: '#EBF3FF' },
 ];
 
 const ORGANIC_STATUS = {
@@ -854,9 +856,10 @@ ${formatInstr}
       if (publish) {
         // 2. Actually publish to social platform via API
         const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api');
+        const authHeaders = await getAuthHeaders();
         const res = await fetch(`${apiBase}/social/publish-organic`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-dev-user': 'dev-user' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify({
             businessProfileId: businessProfile.id,
             postId:        post.id,
@@ -943,7 +946,7 @@ ${formatInstr}
               <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">פלטפורמה</p>
               <div className="flex gap-1.5 flex-wrap">
                 {ORGANIC_PLATFORMS.map(p => (
-                  <button key={p.id} onClick={() => setPlatform(p.id)}
+                  <button key={p.id} onClick={() => { setPlatform(p.id); if (p.id === 'google_business') setPostType('post'); }}
                     className="text-[11px] px-2.5 py-1 rounded-full border transition-all"
                     style={{
                       background: platform === p.id ? p.color + '20' : 'transparent',
@@ -955,6 +958,7 @@ ${formatInstr}
                 ))}
               </div>
             </div>
+            {platform !== 'google_business' && (
             <div>
               <p className="text-[10px] font-semibold text-foreground-muted mb-1.5">סוג</p>
               <div className="flex gap-1.5">
@@ -971,6 +975,7 @@ ${formatInstr}
                 ))}
               </div>
             </div>
+            )}
           </div>
 
           {/* Special request */}
@@ -1259,9 +1264,10 @@ export default function Posts() {
   const handlePublish = async (post) => {
     setPublishingId(post.id);
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`${_apiBase}/social/publish-organic`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-dev-user': 'dev-user' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           businessProfileId: bpId,
           postId: post.id,
@@ -1358,9 +1364,10 @@ export default function Posts() {
 
   return (
     <div className="space-y-5">
+      <SectionTabs section="business" />
       <PageHeader
         count={organicPosts.length}
-        title="ניהול סושיאל"
+        title="פוסטים"
         subtitle="יצירת פוסטים אורגניים, תמונות ופרסום לרשתות החברתיות"
       />
 

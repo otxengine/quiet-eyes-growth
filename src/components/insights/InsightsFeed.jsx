@@ -172,7 +172,7 @@ function getActionLabel(row) {
   if (cat === 'content')     return 'פרסם תוכן';
   if (cat === 'trend')       return 'נצל טרנד';
   if (cat === 'lead')        return 'פנה ללקוח';
-  return 'נצל הזדמנות';
+  return 'הצג פרטים';
 }
 
 export default function InsightsFeed({ businessProfile, show24hActivity = false }) {
@@ -342,7 +342,6 @@ export default function InsightsFeed({ businessProfile, show24hActivity = false 
       {show24hActivity && (
         <div dir="rtl">
           <h3 className="text-[15px] font-bold text-gray-900">פעילות ב-24 השעות האחרונות</h3>
-          <p className="text-[11px] text-gray-400 mt-0.5">כל מה שהתגלה ונאסף עבור העסק שלך ביממה האחרונה</p>
         </div>
       )}
       <StatCards cards={show24hActivity ? activityStatCards : statCards} />
@@ -353,18 +352,6 @@ export default function InsightsFeed({ businessProfile, show24hActivity = false 
         </div>
       ) : (
         <>
-          {/* Dedup + relevance notice */}
-          {(removedByDedup > 0 || removedByRelevance > 0) && (
-            <div dir="rtl" className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg text-[11px] text-blue-700">
-              <span>✨</span>
-              <span>
-                מציגים <strong>{freshRows.length}</strong> תובנות רלוונטיות מתוך {allRows.length}
-                {removedByDedup > 0 && <span className="opacity-70"> · סוננו {removedByDedup} כפילויות</span>}
-                {removedByRelevance > 0 && <span className="opacity-70"> · סוננו {removedByRelevance} תובנות נמוכות-ערך</span>}
-              </span>
-            </div>
-          )}
-
           {/* Filter tabs + archived toggle */}
           <div dir="rtl" className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">

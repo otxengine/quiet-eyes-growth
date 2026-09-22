@@ -254,7 +254,7 @@ export default function CompetitorDetailCard({
 
           {/* KAN-178: thin teasers → deep-link to Social Competition */}
           <div className="space-y-2">
-            <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide">תחרות סושיאל</p>
+            <p className="text-[10px] font-semibold text-foreground-muted uppercase tracking-wide">מה הם מפרסמים</p>
             <Link
               to={`/social-competition?competitorId=${comp.id}&section=feed`}
               className="flex items-center justify-between px-3 py-2 rounded-lg bg-secondary border border-border hover:border-primary/30 transition-colors"

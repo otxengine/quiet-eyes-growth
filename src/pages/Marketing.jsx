@@ -9,6 +9,7 @@ import StatCards from '@/components/shared/StatCards';
 import UrgentActionsSection from '@/components/shared/UrgentActionsSection';
 import AudienceInsights from '@/components/audience/AudienceInsights';
 import AudienceSegments from '@/components/audience/AudienceSegments';
+import SectionTabs from '@/components/layout/SectionTabs';
 const PLATFORM_CONFIG = {
   meta:      { label: 'Facebook',   icon: '📘', color: '#1877f2', bg: '#e7f3ff' },
   instagram: { label: 'Instagram',  icon: '📸', color: '#e1306c', bg: '#fde8f0' },
@@ -471,13 +472,14 @@ export default function Marketing() {
 
   return (
     <div className="space-y-5">
+      <SectionTabs section="business" />
       {/* Header row: title + status filter tabs + new campaign button */}
       <div dir="rtl" className="flex items-center gap-3 mb-6 flex-wrap">
         {/* Title */}
         <div className="text-right">
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-bold text-foreground">{campaigns.length}</span>
-            <span className="text-lg font-semibold text-foreground">מרכז השיווק</span>
+            <span className="text-lg font-semibold text-foreground">פרסום ממומן</span>
           </div>
           <p className="text-xs text-foreground-muted mt-0.5">ניהול קמפיינים ממומנים, פוסטים אורגניים וניתוח קהל יעד</p>
         </div>

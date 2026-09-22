@@ -4,24 +4,20 @@ import { base44 } from '@/api/base44Client';
 import {
   ChevronRight, LogOut,
   Building2, GitBranch, User,
-  Eye, Settings, Star, Users,
-  Calendar, Megaphone, Lightbulb, Home, CreditCard, Percent, Image, ClipboardList
+  Eye, Settings, Star,
+  Home, CreditCard
 } from 'lucide-react';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { isInSection } from './SectionTabs';
 import { cn } from '@/lib/utils';
 
-// Main nav structure — Cortexi design: flat list, no nested groups
+// Main nav — three items, one per question the owner actually has:
+// what needs doing / how am I doing / what are they doing.
+// The old ten pages live on as tabs inside each section (see SectionTabs).
 const NAV_STRUCTURE = [
-  { path: '/',                   label: 'בית',           icon: Home },
-  { path: '/insights',           label: 'תובנות',        icon: Lightbulb, badgeKey: 'activeInsights' },
-  { path: '/tasks',              label: 'משימות',        icon: ClipboardList },
-  { path: '/competitors',        label: 'מתחרים',        icon: Eye },
-  { path: '/marketing',          label: 'מרכז השיווק',   icon: Megaphone },
-  { path: '/posts',              label: 'ניהול סושיאל',  icon: Image },
-  { path: '/events',             label: 'אירועים',       icon: Calendar },
-  { path: '/reviews',            label: 'מוניטין',        icon: Star, badgeKey: 'pendingReviews' },
-  { path: '/social-competition', label: 'תחרות סושיאל',  icon: Users },
-  { path: '/competitors-offers', label: 'מבצעי מתחרים',  icon: Percent },
+  { path: '/',            label: 'היום',     icon: Home, section: 'today',       badgeKey: 'activeInsights' },
+  { path: '/reviews',     label: 'העסק שלי', icon: Star, section: 'business',    badgeKey: 'pendingReviews' },
+  { path: '/competitors', label: 'מתחרים',   icon: Eye,  section: 'competitors' },
 ];
 
 export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, user }) {
@@ -112,10 +108,8 @@ export default function Sidebar({ collapsed, onToggle, badges = {}, onNavigate, 
         {/* Main nav */}
         <ul className={cn('space-y-1', collapsed ? 'px-2' : 'px-5')}>
           {NAV_STRUCTURE.map((node) => {
-            // active also on sub-routes (/insights/:id) — the sidebar is now the only page indicator
-            const isActive = node.path === '/'
-              ? (location.pathname === '/' || location.pathname === '/dashboard')
-              : (location.pathname === node.path || location.pathname.startsWith(node.path + '/'));
+            // active on any route in the section, so the tabs inside it keep the group lit
+            const isActive = isInSection(node.section, location.pathname);
             const badgeCount = node.badgeKey ? (badges[node.badgeKey] || 0) : 0;
             const Icon = node.icon;
 

@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { ChevronLeft } from 'lucide-react';
 import KoriAvatar from '@/components/onboarding/KoriAvatar';
 import InsightsFeed from '@/components/insights/InsightsFeed';
+import SectionTabs from '@/components/layout/SectionTabs';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -133,6 +134,7 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col gap-5 max-w-4xl mx-auto pb-8" dir="rtl">
+      <SectionTabs section="today" />
 
       {/* ── Hero: Kori avatar + greeting + input ──────────────────────────── */}
       <div className="flex flex-col items-center text-center gap-5 pt-2">

@@ -63,7 +63,7 @@ export default function OffersPillarSection({ businessProfile }) {
   return (
     <div className="card-base fade-in-up">
       <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
-        <h3 className="text-[16px] font-bold text-foreground">מבצעי מתחרים</h3>
+        <h3 className="text-[16px] font-bold text-foreground">מבצעים שלהם</h3>
         <PillarRefreshBadge updatedAt={updatedAt} refreshing={refreshing} onRefresh={manualRefresh} />
       </div>
 

@@ -9,6 +9,7 @@ import {
   PostDetailModal, AdDetailModal, useDeepAnalysis,
 } from '@/components/competitors/socialShared';
 import { OFFER_MECHANIC_LABELS, AUDIENCE_INTENT_LABELS, VALUE_FRAMING_LABELS } from '@/lib/offerLabels';
+import SectionTabs from '@/components/layout/SectionTabs';
 
 function pctDelta(offerVal, regularVal) {
   if (offerVal == null || regularVal == null || regularVal === 0) return null;
@@ -239,7 +240,8 @@ export default function CompetitorsOffers() {
 
   return (
     <div className="p-4 space-y-4 max-w-5xl mx-auto">
-      <PageHeader title="מבצעי מתחרים" />
+      <SectionTabs section="competitors" />
+      <PageHeader title="מבצעים שלהם" />
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -247,12 +249,12 @@ export default function CompetitorsOffers() {
         </div>
       ) : queryError ? (
         <div className="text-center py-12 space-y-2">
-          <p className="text-sm text-destructive">שגיאה בטעינת מבצעי מתחרים — {queryError.message}</p>
+          <p className="text-sm text-destructive">שגיאה בטעינת המבצעים — {queryError.message}</p>
           <button onClick={retry} className="text-xs underline text-muted-foreground">נסה שוב</button>
         </div>
       ) : groups.length === 0 ? (
         <p className="text-center text-muted-foreground py-12 text-sm">
-          לא זוהו מבצעים אצל מתחרים עדיין — נסה לרענן ולנתח את הפיד במסך תחרות סושיאל
+          לא זוהו מבצעים אצל מתחרים עדיין — נסה לרענן ולנתח את הפיד במסך "מה הם מפרסמים"
         </p>
       ) : (
         <div className="space-y-3">

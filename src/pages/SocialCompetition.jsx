@@ -13,6 +13,7 @@ import {
   computeOutlierPosts, useAnalyzeTopPerformers, CollapsibleSection,
 } from '@/components/competitors/socialShared';
 import SocialInsightsComparison from '@/components/competitors/SocialInsightsComparison';
+import SectionTabs from '@/components/layout/SectionTabs';
 
 function resolveSection(param) {
   if (!param) return null;
@@ -684,6 +685,7 @@ export default function SocialCompetition() {
 
   return (
     <div className="p-4 space-y-4 max-w-5xl mx-auto">
+      <SectionTabs section="competitors" />
       {refreshingAll && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center" dir="rtl">
           <div className="bg-background rounded-xl shadow-xl p-6 flex flex-col items-center gap-3 max-w-xs text-center">
@@ -694,7 +696,7 @@ export default function SocialCompetition() {
         </div>
       )}
 
-      <PageHeader title="תחרות סושיאל" />
+      <PageHeader title="מה הם מפרסמים" />
 
       <div className="flex flex-wrap items-center gap-2">
         {FILTER_TABS.map(f => (

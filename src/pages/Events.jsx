@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { Copy, CheckCheck, ListPlus, X, AlertCircle } from 'lucide-react';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCards from '@/components/shared/StatCards';
+import SectionTabs from '@/components/layout/SectionTabs';
 
 const PROVENANCE_LABELS = {
   hebcal:              'HebCal',
@@ -361,6 +362,7 @@ export default function Events() {
 
   return (
     <div className="space-y-5">
+      <SectionTabs section="today" />
       <PageHeader
         count={allItems.length}
         title="אירועים"

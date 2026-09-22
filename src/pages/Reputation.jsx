@@ -14,6 +14,7 @@ import ReviewsFilterBar from '@/components/reputation/ReviewsFilterBar';
 import StatCards from '@/components/shared/StatCards';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from '@/components/ui/dropdown-menu';
+import SectionTabs from '@/components/layout/SectionTabs';
 
 const PLATFORM_ICONS = {
   google:    { icon: '🔍', label: 'Google',    color: '#4285f4' },
@@ -468,9 +469,10 @@ export default function Reputation() {
 
   return (
     <div className="space-y-5">
+      <SectionTabs section="business" />
       <div className="flex items-start justify-between mb-6">
         <div className="text-right">
-          <span className="text-lg font-semibold text-foreground">מוניטין/נראות עסקית</span>
+          <span className="text-lg font-semibold text-foreground">ביקורות</span>
           <p className="text-xs text-foreground-muted mt-0.5">מעקב אחר ביקורות, דירוג העסק והמלצות לשיפור המוניטין</p>
         </div>
         <div className="flex items-center gap-2 mt-1">

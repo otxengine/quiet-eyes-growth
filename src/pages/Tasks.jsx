@@ -9,6 +9,7 @@ import TaskDetailModal from '@/components/tasks/TaskDetailModal';
 import TaskStatsBar from '@/components/tasks/TaskStatsBar';
 import AddTaskModal from '@/components/tasks/AddTaskModal';
 import AiInsightBox from '@/components/ai/AiInsightBox';
+import SectionTabs from '@/components/layout/SectionTabs';
 
 export default function Tasks() {
   const { businessProfile } = useOutletContext();
@@ -49,6 +50,7 @@ export default function Tasks() {
 
   return (
     <div className="space-y-5">
+      <SectionTabs section="today" />
       <div className="flex items-center justify-between">
         <h1 className="text-[16px] font-bold text-foreground tracking-tight">משימות</h1>
         <div className="flex gap-2">
