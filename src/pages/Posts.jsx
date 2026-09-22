@@ -9,7 +9,8 @@ import PageHeader from '@/components/shared/PageHeader';
 import MediaLibrary from '@/components/marketing/MediaLibrary';
 import BusinessSocialSnapshot from '@/components/marketing/BusinessSocialSnapshot';
 import SocialProfileSuggestions from '@/components/marketing/SocialProfileSuggestions';
-import { PLATFORM_LABELS } from '@/components/competitors/socialShared';
+import { PLATFORM_LABELS, apiFetch } from '@/components/competitors/socialShared';
+import PostPreview from '@/components/marketing/PostPreview';
 import SectionTabs from '@/components/layout/SectionTabs';
 
 const _apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api').replace(/\/$/, '');
@@ -61,7 +62,7 @@ const TABS = [
 
 // ── Organic Post Card ─────────────────────────────────────────────────────────
 
-function OrganicCard({ post, onDelete, onOpen }) {
+function OrganicCard({ post, businessProfile, profilePicture, onDelete, onOpen }) {
   const platCfg = ORGANIC_PLATFORMS.find(p => p.id === post.platform) || ORGANIC_PLATFORMS[0];
   const status  = ORGANIC_STATUS[post.status] || ORGANIC_STATUS.draft;
 
@@ -80,20 +81,8 @@ function OrganicCard({ post, onDelete, onOpen }) {
         )}
         <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${post.approved_at ? '' : 'mr-auto'} ${status.cls}`}>{status.label}</span>
       </div>
-      <button onClick={() => onOpen(post)} className="flex gap-3 p-4 w-full text-right hover:bg-secondary/30 transition-colors">
-        {post.image_url && (
-          <img
-            src={post.image_url.startsWith('data:') ? post.image_url : post.image_url}
-            alt=""
-            className="w-16 h-16 object-cover rounded-lg flex-shrink-0 border border-border"
-          />
-        )}
-        <div className="flex-1 min-w-0">
-          {post.signal_summary && (
-            <p className="text-[9px] text-foreground-muted opacity-60 mb-1 truncate">💡 {post.signal_summary}</p>
-          )}
-          <p className="text-[12px] text-foreground leading-relaxed line-clamp-3">{post.content || '(אין תוכן)'}</p>
-        </div>
+      <button onClick={() => onOpen(post)} className="block w-full text-right hover:opacity-90 transition-opacity">
+        <PostPreview post={post} businessProfile={businessProfile} profilePicture={profilePicture} />
       </button>
       <div className="flex items-center gap-2 px-4 py-2 border-t border-border bg-secondary/30">
         {post.scheduled_at && post.status !== 'published' ? (
@@ -113,7 +102,7 @@ function OrganicCard({ post, onDelete, onOpen }) {
 
 // ── Organic Post Detail / Approve Modal ───────────────────────────────────────
 
-function OrganicPostDetailModal({ post, businessProfile, onClose, onToggleApprove, toggling, onPublish, publishing }) {
+function OrganicPostDetailModal({ post, businessProfile, profilePicture, onClose, onToggleApprove, toggling, onPublish, publishing }) {
   const queryClient = useQueryClient();
   const platCfg = ORGANIC_PLATFORMS.find(p => p.id === post.platform) || ORGANIC_PLATFORMS[0];
   const status  = ORGANIC_STATUS[post.status] || ORGANIC_STATUS.draft;
@@ -288,18 +277,14 @@ function OrganicPostDetailModal({ post, businessProfile, onClose, onToggleApprov
 
         {!editing ? (
           <div className="p-5 space-y-4">
-            {post.signal_summary && (
-              <p className="text-[11px] text-foreground-muted opacity-70">💡 {post.signal_summary}</p>
-            )}
             {post.scheduled_at && (
               <p className="flex items-center gap-1.5 text-[11px] text-foreground-muted">
                 <Calendar className="w-3.5 h-3.5" /> מתוזמן לפרסום: {fmtDateTime(post.scheduled_at)}
               </p>
             )}
-            {post.image_url && (
-              <img src={post.image_url} alt="" className="w-full max-h-96 object-cover rounded-xl border border-border" />
-            )}
-            <p className="text-[13px] text-foreground leading-relaxed whitespace-pre-wrap">{post.content || '(אין תוכן)'}</p>
+            <div className="rounded-xl border border-border overflow-hidden">
+              <PostPreview post={post} businessProfile={businessProfile} profilePicture={profilePicture} full />
+            </div>
           </div>
         ) : (
           <div className="p-5 space-y-4">
@@ -1236,6 +1221,15 @@ export default function Posts() {
     }
   }, []); // eslint-disable-line
 
+  // Same query key as BusinessSocialSnapshot, so react-query shares the fetch.
+  const { data: profileData } = useQuery({
+    queryKey: ['businessSnapshotProfile', bpId],
+    queryFn: () => apiFetch(`/social/snapshot/profile?businessProfileId=${bpId}`),
+    enabled: !!bpId && availableSocialPlatforms.length > 0,
+  });
+  const profilePictureFor = (platform) =>
+    (profileData?.profiles ?? []).find(p => p.platform === platform)?.profile_picture_url || null;
+
   const { data: organicPosts = [], isLoading: loadingOrganic } = useQuery({
     queryKey: ['organicPosts', bpId],
     queryFn: () => base44.entities.OrganicPost.filter({ linked_business: bpId }, '-created_date', 50),
@@ -1440,9 +1434,9 @@ export default function Posts() {
               <p className="text-[13px] text-foreground-muted">אין פוסטים עדיין</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
               {organicPosts.map(p => (
-                <OrganicCard key={p.id} post={p} onDelete={(id) => deleteOrganic.mutate(id)} onOpen={(post) => setDetailPost(post)} />
+                <OrganicCard key={p.id} post={p} businessProfile={businessProfile} profilePicture={profilePictureFor(p.platform)} onDelete={(id) => deleteOrganic.mutate(id)} onOpen={(post) => setDetailPost(post)} />
               ))}
             </div>
           )}
@@ -1473,6 +1467,7 @@ export default function Posts() {
         <OrganicPostDetailModal
           post={detailPost}
           businessProfile={businessProfile}
+          profilePicture={profilePictureFor(detailPost.platform)}
           onClose={() => setDetailPost(null)}
           onToggleApprove={(post) => approveOrganic.mutate({ id: post.id, approve: !post.approved_at })}
           toggling={approveOrganic.isPending}
