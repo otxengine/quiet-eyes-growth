@@ -1,20 +1,33 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
 import { Bell, Menu, Star, LogOut, Megaphone, Tag, MessageSquare } from 'lucide-react';
 
-export default function TopBar({ badges = {}, onMenuClick, showMenuButton }) {
+const KIND_ICON = {
+  review:           Star,
+  competitorReview: MessageSquare,
+  content:          Megaphone,
+  offer:            Tag,
+};
+
+// Intl does the pluralisation and Hebrew wording; we only pick the unit.
+const rtf = new Intl.RelativeTimeFormat('he', { numeric: 'auto' });
+const UNITS = [['day', 86400e3], ['hour', 3600e3], ['minute', 60e3]];
+function timeAgo(ts) {
+  const diff = ts - Date.now();
+  for (const [unit, ms] of UNITS) {
+    if (Math.abs(diff) >= ms) return rtf.format(Math.round(diff / ms), unit);
+  }
+  return 'הרגע';
+}
+
+export default function TopBar({ badges = {}, notifications = [], onMenuClick, showMenuButton }) {
   const [bellOpen, setBellOpen] = useState(false);
   const bellRef = useRef(null);
   const navigate = useNavigate();
 
-  const notifItems = [
-    { count: badges.pendingReviews    || 0, label: 'ביקורות ממתינות למענה',        icon: Star,           path: '/reviews'           },
-    { count: badges.competitorContent || 0, label: 'פוסטים ומודעות חדשים של מתחרים', icon: Megaphone,      path: '/social-competition' },
-    { count: badges.competitorOffers  || 0, label: 'מבצעים חדשים של מתחרים',        icon: Tag,            path: '/competitors-offers' },
-    { count: badges.competitorReviews || 0, label: 'ביקורות חדשות על מתחרים',       icon: MessageSquare,  path: '/reviews/compare'    },
-  ];
-  const totalCount = notifItems.reduce((sum, i) => sum + i.count, 0);
+  const unreadCount = notifications.filter((n) => n.unread).length;
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -50,35 +63,46 @@ export default function TopBar({ badges = {}, onMenuClick, showMenuButton }) {
               className="relative p-2 rounded-md hover:bg-secondary transition-colors"
             >
               <Bell className="w-5 h-5 text-foreground-muted" />
-              {totalCount > 0 && (
+              {unreadCount > 0 && (
                 <span className="absolute top-1 left-1 w-4 h-4 flex items-center justify-center text-[9px] font-bold bg-primary text-primary-foreground rounded-full">
-                  {totalCount > 9 ? '9+' : totalCount}
+                  {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
             </button>
 
             {bellOpen && (
-              <div className="absolute left-0 top-full mt-2 w-72 bg-card border border-border rounded-xl shadow-lg shadow-black/5 z-50 overflow-hidden fade-in-up">
-                <div className="px-3 py-2.5 border-b border-border">
+              <div className="absolute left-0 top-full mt-2 w-80 bg-card border border-border rounded-xl shadow-lg shadow-black/5 z-50 overflow-hidden fade-in-up" dir="rtl">
+                <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
                   <span className="text-[12px] font-semibold text-foreground">התראות</span>
+                  {unreadCount > 0 && (
+                    <span className="text-[10px] text-foreground-muted">{unreadCount} חדשות</span>
+                  )}
                 </div>
-                {notifItems.map((item) => {
-                  if (item.count === 0) return null;
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.path}
-                      onClick={() => { navigate(item.path); setBellOpen(false); }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-secondary transition-colors text-right"
-                    >
-                      <Icon className="w-4 h-4 text-foreground-muted flex-shrink-0" />
-                      <span className="text-[12px] text-foreground-secondary flex-1">{item.count} {item.label}</span>
-                    </button>
-                  );
-                })}
-                {totalCount === 0 && (
-                  <div className="px-3 py-4 text-center text-[11px] text-foreground-muted">אין התראות חדשות</div>
-                )}
+
+                <div className="max-h-96 overflow-y-auto">
+                  {notifications.map((n) => {
+                    const Icon = KIND_ICON[n.kind] || Bell;
+                    return (
+                      <button
+                        key={n.id}
+                        onClick={() => { navigate(n.path); setBellOpen(false); }}
+                        className="w-full flex items-start gap-2.5 px-3 py-2.5 hover:bg-secondary transition-colors text-right border-b border-border/50 last:border-0"
+                      >
+                        <Icon className={cn('w-4 h-4 mt-0.5 flex-shrink-0', n.unread ? 'text-primary' : 'text-foreground-muted')} />
+                        <span className="flex-1 min-w-0">
+                          <span className={cn('block text-[12px] truncate', n.unread ? 'text-foreground font-medium' : 'text-foreground-secondary')}>
+                            {n.text}
+                          </span>
+                          <span className="block text-[10px] text-foreground-muted mt-0.5">{timeAgo(n.ts)}</span>
+                        </span>
+                        {n.unread && <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />}
+                      </button>
+                    );
+                  })}
+                  {notifications.length === 0 && (
+                    <div className="px-3 py-6 text-center text-[11px] text-foreground-muted">אין התראות</div>
+                  )}
+                </div>
               </div>
             )}
           </div>

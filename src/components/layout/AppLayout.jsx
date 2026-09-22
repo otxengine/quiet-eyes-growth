@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useScanQuota } from '@/lib/useScanQuota';
 import { PLAN_LABELS } from '@/lib/usePlan';
 import ScanOverlay from '@/components/dashboard/ScanOverlay';
+import { buildNotificationFeed } from '@/lib/notificationFeed';
 
 // Track page visits in sessionStorage so badge counts clear after visiting the relevant page
 // Sub-paths (e.g. /insights/:id) also mark the parent path as visited
@@ -166,26 +167,23 @@ export default function AppLayout() {
     base44.entities.Review.filter({ linked_business: bizId, linked_competitor: { not: null } }, null, 200),
     { refetchInterval: 300000 }));
 
-  // Only count items that arrived AFTER the user last visited the relevant page
-  const seen = (path) => pageVisits[path] || 0;
-  const newerThan = (rows, ts, ...fields) => (rows || []).filter((r) => {
-    const raw = fields.map((f) => r[f]).find(Boolean);
-    return raw ? new Date(raw).getTime() > ts : true; // undated rows count as new
-  });
+  // Competitor names, for readable notification text
+  const { data: competitors } = useQuery(bizQuery('competitorNames', () =>
+    base44.entities.Competitor.filter({ linked_business: bizId }, null, 100)));
 
-  const contentSeen = seen('/social-competition');
-  const offersSeen  = seen('/competitors-offers');
-  const newPosts = newerThan(competitorPosts, contentSeen, 'first_seen_at', 'posted_at');
-  const newAds   = newerThan(competitorAds,   contentSeen, 'first_seen_at');
-  const newOfferPosts = newerThan(competitorPosts, offersSeen, 'first_seen_at', 'posted_at').filter(p => p.has_offer === true);
-  const newOfferAds   = newerThan(competitorAds,   offersSeen, 'first_seen_at').filter(a => a.has_offer === true);
+  const notifications = useMemo(() => buildNotificationFeed({
+    pendingReviews, competitorReviews, competitorPosts, competitorAds,
+    competitors, pageVisits,
+  }), [pendingReviews, competitorReviews, competitorPosts, competitorAds, competitors, pageVisits]);
 
+  const unreadBy = (kind) => notifications.filter((n) => n.unread && n.kind === kind).length;
+
+  // Sidebar badges. activeInsights isn't part of the bell feed — it drives /insights only.
   const badges = {
-    pendingReviews: newerThan(pendingReviews, seen('/reviews'), 'created_at', 'created_date').length,
-    activeInsights: newerThan(activeInsightAlerts, seen('/insights'), 'created_date', 'created_at').length,
-    competitorContent: newPosts.filter(p => p.has_offer !== true).length + newAds.filter(a => a.has_offer !== true).length,
-    competitorOffers: newOfferPosts.length + newOfferAds.length,
-    competitorReviews: newerThan(competitorReviews, seen('/reviews/compare'), 'created_at', 'created_date').length,
+    pendingReviews: unreadBy('review'),
+    activeInsights: (activeInsightAlerts || []).filter(
+      (a) => new Date(a.created_date || a.created_at || 0).getTime() > (pageVisits['/insights'] || 0)
+    ).length,
   };
 
   if (stillLoading) {
@@ -230,10 +228,11 @@ export default function AppLayout() {
       {/* Main Content */}
       <div className={cn(
         "transition-all duration-300",
-        sidebarCollapsed ? "lg:mr-16" : "lg:mr-64"
+        sidebarCollapsed ? "lg:mr-14" : "lg:mr-52"
       )}>
         <TopBar 
           badges={badges}
+          notifications={notifications}
           onMenuClick={() => setMobileMenuOpen(true)}
           showMenuButton={true}
         />
