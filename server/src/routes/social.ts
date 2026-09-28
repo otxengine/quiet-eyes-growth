@@ -844,6 +844,8 @@ const TONE_CLOSE: Record<string, string> = {
   warm:         'warm and personal — offer a direct conversation or follow-up',
   professional: 'professional — offer to discuss further or invite them to return',
   friendly:     'friendly — thank them and invite them back',
+  inspirational: 'uplifting — thank them for helping the business grow and invite them back',
+  technical:    'precise — state what was checked or fixed and offer a direct follow-up',
 };
 
 router.post('/reviews/:id/suggest-reply', async (req: Request, res: Response) => {

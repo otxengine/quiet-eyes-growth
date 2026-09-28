@@ -16,6 +16,7 @@ jest.mock('../lib/missionPlanner', () => ({ generateAgentMissions: jest.fn() }))
 jest.mock('../lib/websiteFetch',         () => ({ fetchWebsiteSource:    jest.fn() }));
 jest.mock('../lib/googlePlaces',         () => ({ getPlaceDetails:       jest.fn() }));
 jest.mock('../lib/fetchSocialPageAbout', () => ({ fetchSocialPageAbout:  jest.fn() }));
+jest.mock('../lib/googleBusinessInfo',   () => ({ getOwnLocationInfo:    jest.fn().mockResolvedValue(null) }));
 jest.mock('../infra/logger', () => ({
   createLogger: jest.fn(() => ({ warn: jest.fn(), info: jest.fn(), error: jest.fn() })),
 }));
@@ -80,6 +81,15 @@ describe('POST /api/onboarding/generate-about', () => {
     expect(body.ok).toBe(true);
     const NINE = ['business_name','sector_key','sub_sector_key','business_type','service_model','target_audience','relevant_topics','content_tone','business_description'];
     for (const k of NINE) expect(body.draft).toHaveProperty(k);
+  });
+
+  it('normalizes content_tone to a Settings tone key (Hebrew → key, unknown → empty)', async () => {
+    findUnique.mockResolvedValue(BASE_PROFILE);
+    llm.mockResolvedValue(JSON.stringify({ ...VALID_DRAFT, content_tone: 'מקצועי' }));
+    expect((await post({ businessProfileId: 'bp1' })).body.draft.content_tone).toBe('professional');
+
+    llm.mockResolvedValue(JSON.stringify({ ...VALID_DRAFT, content_tone: 'sarcastic' }));
+    expect((await post({ businessProfileId: 'bp1' })).body.draft.content_tone).toBe('');
   });
 
   it('AC2: writes only about_draft + about_status=pending, not canonical fields', async () => {

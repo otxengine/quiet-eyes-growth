@@ -51,9 +51,10 @@ function buildPrompt(type, review, bp) {
   const city = bp?.city || '';
   const toneGuide = `TONE GUIDELINES:
 If tone is 'friendly': warm, personal, empathetic, use the reviewer's first name, add a personal touch.
-If tone is 'formal': professional, respectful, structured, address as 'כבוד/ה [name]'.
-If tone is 'direct': short, to the point, acknowledge issue, offer solution immediately, no fluff.
-If tone is 'humorous': light humor to defuse tension, but still take the complaint seriously, self-deprecating humor works.`;
+If tone is 'professional': respectful, structured, courteous language, no slang.
+If tone is 'casual': relaxed and light, a touch of humor is fine, but still take the complaint seriously.
+If tone is 'inspirational': positive and uplifting, frame feedback as helping the business grow.
+If tone is 'technical': precise and factual, explain what was checked or fixed, no fluff.`;
 
   if (type === 'professional') {
     return `You are a customer service expert for an Israeli small business.

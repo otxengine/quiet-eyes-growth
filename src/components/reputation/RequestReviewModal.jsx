@@ -36,9 +36,10 @@ export default function RequestReviewModal({ businessProfile, onClose, onSent })
     setGenerating(true);
     const toneInstructions = {
       friendly: `כתוב הודעה חמה וידידותית עם אימוג'ים. פנה ללקוח בשם. התחל עם "היי" ופנה בגוף שני.`,
-      formal: `כתוב הודעה מנומסת ורשמית. פנה ב"שלום" ובלשון מכבדת.`,
-      direct: `כתוב הודעה קצרה וישירה ללא מילים מיותרות. שורה אחת עם קישור.`,
-      humorous: `כתוב הודעה קלילה עם הומור קל ואימוג'ים. תהיה מצחיק אבל לא מוגזם.`,
+      professional: `כתוב הודעה מנומסת ורשמית. פנה ב"שלום" ובלשון מכבדת.`,
+      casual: `כתוב הודעה קלילה עם הומור קל ואימוג'ים. תהיה מצחיק אבל לא מוגזם.`,
+      inspirational: `כתוב הודעה חיובית ומעוררת השראה — הדגש שהביקורת של הלקוח עוזרת לעסק לצמוח.`,
+      technical: `כתוב הודעה קצרה וישירה ללא מילים מיותרות. שורה אחת עם קישור.`,
     };
     const result = await base44.integrations.Core.InvokeLLM({
       model: 'sonnet',

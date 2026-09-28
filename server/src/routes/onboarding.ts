@@ -27,6 +27,13 @@ const PAID_PLANS = new Set(['starter', 'growth', 'pro']);
 
 // §5.0/§5.2 identity draft — 9 keys shared by generate-about + approve-about
 const ABOUT_KEYS = ['business_name','sector_key','sub_sector_key','business_type','service_model','target_audience','relevant_topics','content_tone','business_description'];
+// content_tone becomes tone_preference on approve, so it must match Settings → טון תקשורת options.
+const TONE_KEYS = ['professional', 'friendly', 'inspirational', 'technical', 'casual'];
+// The LLM sometimes answers in Hebrew despite the enum in the prompt.
+const TONE_HE: Record<string, string> = {
+  'מקצועי': 'professional', 'חברי': 'friendly', 'ידידותי': 'friendly',
+  'מעורר השראה': 'inspirational', 'טכני': 'technical', 'קליל': 'casual',
+};
 
 router.post('/parse-profile', async (req: Request, res: Response) => {
   const { businessProfileId, description, category, city, goal, price_tier, customer_sources } = req.body;
@@ -232,7 +239,7 @@ router.post('/generate-about', async (req: Request, res: Response) => {
     const SECTOR_KEYS  = 'restaurant|beauty|fitness|legal|medical|real_estate|retail|auto|cleaning|education|tech_services|accounting|construction|events|design|marketing|photography|childcare|health|other';
     const BUSINESS_TYPES = 'B2B|B2C|B2B2C';
     const SERVICE_MODELS = 'project_based|subscription|appointment|walk_in|ecommerce';
-    const TONES         = 'professional|friendly|inspirational|technical|casual';
+    const TONES         = TONE_KEYS.join('|');
 
     const prompt = `You are a business identity writer. Based ONLY on the sources below, produce a JSON identity draft.
 Do NOT invent services, cities, or claims not supported by the sources.
@@ -271,6 +278,8 @@ Respond ONLY with valid JSON matching this exact schema (no markdown):
     for (const key of ABOUT_KEYS) {
       if (!(key in draft)) draft[key] = key === 'relevant_topics' ? [] : '';
     }
+    const tone = String(draft.content_tone ?? '').trim();
+    draft.content_tone = TONE_KEYS.includes(tone) ? tone : (TONE_HE[tone] ?? '');
 
     // AC2: write only to draft fields — never touch canonical profile
     const sourcesUsed = [

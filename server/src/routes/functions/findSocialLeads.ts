@@ -28,14 +28,12 @@ export async function findSocialLeads(req: Request, res: Response) {
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
     const { name, category, city } = profile;
-    const leadCriteria = (profile as any).lead_criteria
-      ? JSON.parse((profile as any).lead_criteria)
-      : {};
-    const minBudget = leadCriteria.min_budget || '';
-    const relevantServices = leadCriteria.relevant_services || '';
-    const preferredArea = leadCriteria.preferred_area || city;
-    const intentSignals = leadCriteria.lead_intent_signals || '';
-    const qualityNotes = leadCriteria.lead_quality_notes || '';
+    // Lead criteria saved from Settings → קריטריונים ללידים
+    const minBudget = profile.min_budget || '';
+    const relevantServices = profile.relevant_services || '';
+    const preferredArea = profile.preferred_area || city;
+    const intentSignals = profile.lead_intent_signals || '';
+    const qualityNotes = profile.lead_quality_notes || '';
     const leadCriteriaContext = [
       minBudget ? `תקציב מינימלי: ${minBudget}` : '',
       relevantServices ? `שירותים רלוונטיים: ${relevantServices}` : '',

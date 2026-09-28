@@ -449,6 +449,7 @@ export default function SettingsPage() {
     crm_webhook_url: '', crm_webhook_enabled: false, crm_sync_events: 'create,update',
     crm_zapier_url: '', crm_zapier_enabled: false,
     bot_enabled: false, bot_greeting: '', bot_qualification_questions: '', bot_good_lead_criteria: '', bot_bad_lead_criteria: '', bot_services_info: '',
+    bot_working_hours_start: '09:00', bot_working_hours_end: '20:00', bot_off_hours_message: '',
     channels_whatsapp: '', channels_whatsapp_enabled: false,
     channels_instagram: '', channels_instagram_enabled: false,
     channels_facebook: '', channels_facebook_enabled: false,
@@ -513,6 +514,10 @@ export default function SettingsPage() {
         bot_good_lead_criteria: businessProfile.bot_good_lead_criteria || '',
         bot_bad_lead_criteria: businessProfile.bot_bad_lead_criteria || '',
         bot_services_info: businessProfile.bot_services_info || '',
+        // Same defaults the time inputs display, so what's shown is what gets saved
+        bot_working_hours_start: businessProfile.bot_working_hours_start || '09:00',
+        bot_working_hours_end: businessProfile.bot_working_hours_end || '20:00',
+        bot_off_hours_message: businessProfile.bot_off_hours_message || '',
       });
     }
   }, [businessProfile]);
