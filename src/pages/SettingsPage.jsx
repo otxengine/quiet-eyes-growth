@@ -65,95 +65,6 @@ function SettingsSearchRadius({ businessProfile, onSave }) {
   );
 }
 
-function SettingsBranches({ businessProfile, onSave }) {
-  const parseBranches = () => {
-    try { return JSON.parse(businessProfile?.branches || '[]'); } catch { return []; }
-  };
-  const [branches, setBranches] = useState(parseBranches);
-  const [adding, setAdding] = useState(false);
-  const [newBranch, setNewBranch] = useState({ name: '', address: '', city: '' });
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => { setBranches(parseBranches()); }, [businessProfile?.branches]);
-
-  const handleAdd = () => {
-    if (!newBranch.name.trim()) return;
-    const updated = [...branches, { ...newBranch, id: Date.now() }];
-    setBranches(updated);
-    setNewBranch({ name: '', address: '', city: '' });
-    setAdding(false);
-  };
-
-  const handleRemove = (id) => setBranches(branches.filter(b => b.id !== id));
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await onSave({ branches: JSON.stringify(branches) });
-      toast.success('סניפים עודכנו ✓');
-    } catch { toast.error('שגיאה בשמירה'); }
-    setSaving(false);
-  };
-
-  return (
-    <div className="card-base p-5">
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-2">
-          <MapPin className="w-4 h-4 text-primary" />
-          <h2 className="text-[14px] font-semibold text-foreground">סניפים</h2>
-        </div>
-        <button onClick={() => setAdding(v => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary border border-border text-[11px] font-medium text-foreground-muted hover:text-foreground transition-colors">
-          <Plus className="w-3.5 h-3.5" /> הוסף סניף
-        </button>
-      </div>
-      <p className="text-[11px] text-foreground-muted mb-4">הגדר סניפים נוספים — הסוכנים יסרקו גם עבורם</p>
-
-      {branches.length > 0 && (
-        <div className="space-y-2 mb-3">
-          {branches.map(b => (
-            <div key={b.id} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg bg-secondary border border-border">
-              <div>
-                <p className="text-[12px] font-medium text-foreground">{b.name}</p>
-                {(b.address || b.city) && <p className="text-[10px] text-foreground-muted">{[b.address, b.city].filter(Boolean).join(', ')}</p>}
-              </div>
-              <button onClick={() => handleRemove(b.id)} className="text-foreground-muted hover:text-danger transition-colors">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {adding && (
-        <div className="bg-secondary/50 border border-border rounded-lg p-3 mb-3 space-y-2">
-          <input value={newBranch.name} onChange={e => setNewBranch(b => ({ ...b, name: e.target.value }))}
-            placeholder="שם הסניף"
-            className="w-full border border-border rounded-lg px-3 py-2 text-[12px] bg-white focus:outline-none focus:ring-1 focus:ring-primary" />
-          <input value={newBranch.address} onChange={e => setNewBranch(b => ({ ...b, address: e.target.value }))}
-            placeholder="כתובת"
-            className="w-full border border-border rounded-lg px-3 py-2 text-[12px] bg-white focus:outline-none focus:ring-1 focus:ring-primary" />
-          <input value={newBranch.city} onChange={e => setNewBranch(b => ({ ...b, city: e.target.value }))}
-            placeholder="עיר"
-            className="w-full border border-border rounded-lg px-3 py-2 text-[12px] bg-white focus:outline-none focus:ring-1 focus:ring-primary" />
-          <div className="flex gap-2">
-            <button onClick={handleAdd} className="px-3 py-1.5 bg-primary text-white rounded-lg text-[11px] font-medium hover:opacity-90 transition-all">הוסף</button>
-            <button onClick={() => setAdding(false)} className="px-3 py-1.5 bg-secondary border border-border rounded-lg text-[11px] font-medium text-foreground-muted hover:text-foreground transition-colors">בטל</button>
-          </div>
-        </div>
-      )}
-
-      {branches.length > 0 && (
-        <button onClick={handleSave} disabled={saving}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-[11px] font-medium hover:opacity-90 transition-all disabled:opacity-60">
-          {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-          {saving ? 'שומר...' : 'שמור סניפים'}
-        </button>
-      )}
-    </div>
-  );
-}
-
 const AUTONOMY_OPTIONS = [
   {
     value: 'manual',
@@ -244,9 +155,6 @@ function AutonomySelector({ businessProfile, onSave }) {
 import SettingsBusinessDetails from '@/components/settings/SettingsBusinessDetails';
 import SettingsTone from '@/components/settings/SettingsTone';
 import SettingsLeadCriteria from '@/components/settings/SettingsLeadCriteria';
-import SettingsAlerts from '@/components/settings/SettingsAlerts';
-import SettingsPushNotifications from '@/components/settings/SettingsPushNotifications';
-import SettingsChannels from '@/components/settings/SettingsChannels';
 import SettingsDataSources from '@/components/settings/SettingsDataSources.jsx';
 import SettingsAutoRespond from '@/components/settings/SettingsAutoRespond.jsx';
 import SettingsWhatsAppBot from '@/components/settings/SettingsWhatsAppBot';
@@ -316,10 +224,10 @@ function ConstraintsSection({ businessProfileId }) {
     <div className="card-base p-5 space-y-5">
       <div className="flex items-center gap-2">
         <ShieldAlert className="w-4 h-4 text-orange-500" />
-        <h2 className="text-[14px] font-semibold text-foreground">הגבלות ומדיניות תוכן</h2>
+        <h2 className="text-[14px] font-semibold text-foreground">מילים אסורות בתוכן</h2>
       </div>
       <p className="text-[11px] text-foreground-muted -mt-3">
-        הגבלות שהסוכנים יישמרו עליהן בעת יצירת תוכן ופעולות אוטומטיות
+        מילים אלה יוסרו אוטומטית מטיוטות תגובה לביקורות ומהודעות WhatsApp שהסוכנים כותבים
       </p>
 
       {/* Prohibited keywords */}
@@ -350,84 +258,10 @@ function ConstraintsSection({ businessProfileId }) {
         </div>
       </div>
 
-      {/* Numeric limits */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-[11px] font-medium text-foreground block mb-1">הנחה מקסימלית (%)</label>
-          <input type="number" min={0} max={100}
-            value={form.max_discount_pct}
-            onChange={e => setForm(f => ({ ...f, max_discount_pct: +e.target.value }))}
-            className="w-full border border-border rounded-lg px-2.5 py-1.5 text-[12px] bg-secondary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </div>
-        <div>
-          <label className="text-[11px] font-medium text-foreground block mb-1">תקציב יומי מקסימלי (₪)</label>
-          <input type="number" min={0}
-            value={form.budget_cap_daily_ils}
-            onChange={e => setForm(f => ({ ...f, budget_cap_daily_ils: +e.target.value }))}
-            className="w-full border border-border rounded-lg px-2.5 py-1.5 text-[12px] bg-secondary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </div>
-        <div>
-          <label className="text-[11px] font-medium text-foreground block mb-1">שעת פרסום מוקדמת</label>
-          <input type="number" min={0} max={23}
-            value={form.posting_hours_start}
-            onChange={e => setForm(f => ({ ...f, posting_hours_start: +e.target.value }))}
-            className="w-full border border-border rounded-lg px-2.5 py-1.5 text-[12px] bg-secondary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </div>
-        <div>
-          <label className="text-[11px] font-medium text-foreground block mb-1">שעת פרסום מאוחרת</label>
-          <input type="number" min={0} max={23}
-            value={form.posting_hours_end}
-            onChange={e => setForm(f => ({ ...f, posting_hours_end: +e.target.value }))}
-            className="w-full border border-border rounded-lg px-2.5 py-1.5 text-[12px] bg-secondary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </div>
-      </div>
-
-      {/* Confidence thresholds (OTX-003) */}
-      <div className="space-y-3 border-t border-border pt-4">
-        <p className="text-[11px] font-semibold text-foreground">סף ביצוע אוטומטי</p>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-[11px] font-medium text-foreground block mb-1">
-              ביטחון מינימלי לביצוע אוטומטי ({form.min_confidence_auto}%)
-            </label>
-            <input type="range" min={60} max={99}
-              value={form.min_confidence_auto}
-              onChange={e => setForm(f => ({ ...f, min_confidence_auto: +e.target.value }))}
-              className="w-full accent-primary"
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-medium text-foreground block mb-1">
-              ביטחון מינימלי להצעה ({form.min_confidence_suggest}%)
-            </label>
-            <input type="range" min={30} max={85}
-              value={form.min_confidence_suggest}
-              onChange={e => setForm(f => ({ ...f, min_confidence_suggest: +e.target.value }))}
-              className="w-full accent-primary"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Toggle */}
-      <label className="flex items-center gap-3 cursor-pointer">
-        <div
-          onClick={() => setForm(f => ({ ...f, allow_competitor_mention: !f.allow_competitor_mention }))}
-          className={`relative w-10 h-5 rounded-full transition-colors ${form.allow_competitor_mention ? 'bg-primary' : 'bg-border'}`}
-        >
-          <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.allow_competitor_mention ? 'translate-x-5' : 'translate-x-0.5'}`} />
-        </div>
-        <span className="text-[12px] text-foreground">אפשר אזכור מתחרים בתוכן שנוצר</span>
-      </label>
-
       <button onClick={handleSave} disabled={saving}
         className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-[11px] font-medium hover:opacity-90 disabled:opacity-60 transition-all">
         {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-        שמור הגבלות
+        שמור מילים אסורות
       </button>
     </div>
   );
@@ -569,27 +403,6 @@ export default function SettingsPage() {
       )}
       <SettingsTone form={form} onToneChange={(tone) => { setForm({ ...form, tone_preference: tone }); saveField({ tone_preference: tone }); toast.success('הטון עודכן ✓'); }} />
       <SettingsLeadCriteria form={form} setForm={setForm} onSave={() => saveField({ min_budget: form.min_budget, relevant_services: form.relevant_services, preferred_area: form.preferred_area, lead_intent_signals: form.lead_intent_signals, lead_quality_notes: form.lead_quality_notes })} />
-      <SettingsChannels
-        form={form}
-        setForm={setForm}
-        saving={saving}
-        onSave={async () => {
-          setSaving(true);
-          await saveField({
-            channels_whatsapp: form.channels_whatsapp,
-            channels_whatsapp_enabled: form.channels_whatsapp_enabled,
-            channels_instagram: form.channels_instagram,
-            channels_instagram_enabled: form.channels_instagram_enabled,
-            channels_facebook: form.channels_facebook,
-            channels_facebook_enabled: form.channels_facebook_enabled,
-            channels_website: form.channels_website,
-            channels_website_enabled: form.channels_website_enabled,
-            channels_webhook_secret: form.channels_webhook_secret,
-          });
-          setSaving(false);
-          toast.success('הגדרות ערוצים נשמרו ✓');
-        }}
-      />
       <SettingsWhatsAppBot
         form={form}
         setForm={setForm}
@@ -612,14 +425,6 @@ export default function SettingsPage() {
         }}
         businessProfile={businessProfile}
       />
-      <SettingsPushNotifications
-        form={form}
-        onToggle={(key, val) => saveField({ [key]: val })}
-        onFieldChange={(key, val) => {
-          setForm(f => ({ ...f, [key]: val }));
-          saveField({ [key]: val });
-        }}
-      />
       <SettingsDataSources
         form={form}
         setForm={setForm}
@@ -641,7 +446,6 @@ export default function SettingsPage() {
       <SettingsAutoRespond
         form={form}
         onToggle={(key, val) => { setForm(f => ({ ...f, [key]: val })); saveField({ [key]: val }); }}
-        onFieldChange={(key, val) => { setForm(f => ({ ...f, [key]: val })); saveField({ [key]: val }); }}
       />
 
       {/* Autonomy Level */}
@@ -649,11 +453,6 @@ export default function SettingsPage() {
 
       {/* Search Radius */}
       <SettingsSearchRadius businessProfile={businessProfile} onSave={saveField} />
-
-      {/* Branches */}
-      <SettingsBranches businessProfile={businessProfile} onSave={saveField} />
-
-      <SettingsAlerts form={form} onToggle={(key, val) => saveField({ [key]: val })} />
 
       {/* OTX-004: Constraint-based validation settings */}
       <ConstraintsSection businessProfileId={businessProfile?.id} />

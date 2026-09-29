@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Switch } from '@/components/ui/switch';
-import { Bot, MessageSquare, ThumbsUp, ThumbsDown, Sparkles, Save, Loader2, Copy, Check, ExternalLink, Send } from 'lucide-react';
+import { Bot, ThumbsUp, ThumbsDown, Sparkles, Save, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const defaultGreeting = 'היי! 👋 ברוכים הבאים. אשמח לעזור לך. ספר לי במה אוכל לסייע?';
@@ -12,24 +12,10 @@ const defaultQuestions = `מה השירות שאתה מחפש?
 באיזה אזור אתה נמצא?`;
 
 export default function SettingsWhatsAppBot({ form, setForm, onSave, saving, businessProfile }) {
-  const [copied, setCopied] = useState(false);
   const [generatingDefaults, setGeneratingDefaults] = useState(false);
 
   const inputCls = "w-full bg-secondary/50 border border-border/60 rounded-lg px-3 py-2 text-[13px] text-[#111111] placeholder-[#cccccc] focus:outline-none focus:border-border";
   const textareaCls = `${inputCls} resize-none`;
-
-  const whatsappUrl = base44.agents?.getWhatsAppConnectURL
-    ? base44.agents.getWhatsAppConnectURL('whatsapp_lead_bot')
-    : null;
-
-  const copyLink = () => {
-    if (whatsappUrl) {
-      navigator.clipboard.writeText(whatsappUrl);
-      setCopied(true);
-      toast.success('הלינק הועתק!');
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
 
   const generateSmartDefaults = async () => {
     setGeneratingDefaults(true);
@@ -85,75 +71,9 @@ export default function SettingsWhatsAppBot({ form, setForm, onSave, saving, bus
 
       {form.bot_enabled && (
         <>
-          {/* WhatsApp Link */}
-          {whatsappUrl && (
-            <div className="bg-[#f0fdf8] border border-[#d1fae5] rounded-lg p-3">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[12px] font-medium text-[#10b981]">🔗 לינק וואטסאפ לשיתוף</span>
-                <div className="flex gap-1.5">
-                  <button onClick={copyLink}
-                    className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium bg-white border border-[#d1fae5] text-[#10b981] hover:bg-[#f0fdf8] transition-colors">
-                    {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                    {copied ? 'הועתק!' : 'העתק'}
-                  </button>
-                  <a href={whatsappUrl} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium bg-[#10b981] text-white hover:bg-[#059669] transition-colors">
-                    <ExternalLink className="w-3 h-3" /> פתח
-                  </a>
-                </div>
-              </div>
-              <p className="text-[10px] text-[#10b981]/70">שתף את הלינק הזה בפרסומות, אתר, כרטיס ביקור, או רשתות חברתיות</p>
-            </div>
-          )}
-
-          {/* Meta Cloud API — optional real sending */}
-          <div className="border border-border/50 rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-md bg-[#f0fdf8] flex items-center justify-center">
-                <Send className="w-3.5 h-3.5 text-[#10b981]" />
-              </div>
-              <div className="flex-1">
-                <p className="text-[12px] font-semibold text-[#222]">שליחה אמיתית דרך Meta API</p>
-                <p className="text-[10px] text-[#999]">אופציונלי — ללא הגדרה הבוט ישלח קישורי WhatsApp</p>
-              </div>
-              <Switch
-                checked={!!form.meta_wa_real_send_enabled}
-                onCheckedChange={(val) => setForm(f => ({ ...f, meta_wa_real_send_enabled: val }))}
-              />
-            </div>
-
-            {form.meta_wa_real_send_enabled && (
-              <div className="space-y-2.5">
-                <div>
-                  <label className="text-[10px] font-medium text-[#666] mb-1 block">Phone Number ID</label>
-                  <input
-                    value={form.meta_wa_phone_number_id || ''}
-                    onChange={(e) => setForm(f => ({ ...f, meta_wa_phone_number_id: e.target.value }))}
-                    placeholder="123456789012345"
-                    dir="ltr"
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-medium text-[#666] mb-1 block">Access Token</label>
-                  <input
-                    type="password"
-                    value={form.meta_wa_access_token || ''}
-                    onChange={(e) => setForm(f => ({ ...f, meta_wa_access_token: e.target.value }))}
-                    placeholder="EAABsY..."
-                    dir="ltr"
-                    className={inputCls}
-                  />
-                </div>
-                <div className="bg-[#fffbeb] border border-[#fef3c7] rounded-lg p-3">
-                  <p className="text-[10px] text-[#92400e] leading-relaxed">
-                    <strong>איך להגדיר:</strong> פתח את Meta Developers, צור WhatsApp Business App, קבל Phone Number ID ו-System User Token.
-                    ה-Webhook URL שלך: <code className="bg-white px-1 rounded text-[9px]">[Function URL]/channelWebhook</code>
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
+          <p className="text-[11px] text-foreground-muted bg-secondary/50 border border-border/60 rounded-lg px-3 py-2">
+            הבוט עונה ללקוחות רק אחרי חיבור חשבון WhatsApp או Facebook בדף האינטגרציות.
+          </p>
 
           {/* Smart generate */}
           <button onClick={generateSmartDefaults} disabled={generatingDefaults}
@@ -310,50 +230,7 @@ export default function SettingsWhatsAppBot({ form, setForm, onSave, saving, bus
                 </div>
               </div>
             </div>
-            <p className="text-[10px] text-[#aaa]">
-              * לאחר הסינון, לידים חמים מקבלים התראה ישירות לבעל העסק
-            </p>
           </div>
-
-          {/* Meta Setup Guide */}
-          <details className="border border-border/50 rounded-xl">
-            <summary className="flex items-center gap-2 px-4 py-3 cursor-pointer text-[12px] font-semibold text-[#444] list-none">
-              <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-              מדריך הגדרת WhatsApp Cloud API — צעד אחר צעד
-            </summary>
-            <div className="px-4 pb-4 pt-2 space-y-3">
-              <div className="space-y-2">
-                {[
-                  'צור Business Account ב-Meta Business Suite',
-                  'היכנס ל-Meta Developers → צור App חדש → בחר "Business"',
-                  'הוסף מוצר "WhatsApp" ל-App',
-                  'ב-WhatsApp → Getting Started: קבל Phone Number ID ו-Token',
-                  'הוסף את מספר הטלפון העסקי שלך (WhatsApp Business)',
-                  'ב-Configuration: הגדר Webhook URL + Verify Token',
-                  'הרץ Verification → Subscribe לשדה "messages"',
-                  'צור System User → קבל Access Token עם הרשאת whatsapp_business_messaging',
-                  'הדבק Phone Number ID + Access Token בשדות למעלה ושמור',
-                ].map((step, i) => (
-                  <div key={i} className="flex gap-2">
-                    <span className="shrink-0 w-5 h-5 rounded-full bg-[#f0fdf8] text-[#10b981] text-[10px] font-bold flex items-center justify-center mt-0.5">{i + 1}</span>
-                    <span className="text-[11px] text-[#666] leading-relaxed">{step}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="bg-secondary/50 rounded-lg p-3 space-y-2">
-                <p className="text-[10px] font-medium text-[#999]">Webhook URL</p>
-                <code className="text-[10px] text-[#444] block break-all">
-                  [Base44 Project URL]/functions/channelWebhook
-                </code>
-                <p className="text-[10px] font-medium text-[#999] mt-2">Verify Token</p>
-                <code className="text-[10px] text-[#444] block">
-                  {form.channels_webhook_secret || '[הגדר Webhook Secret בהגדרות ערוצים]'}
-                </code>
-                <p className="text-[10px] font-medium text-[#999] mt-2">Webhook Fields</p>
-                <code className="text-[10px] text-[#444] block">messages</code>
-              </div>
-            </div>
-          </details>
 
           {/* Save button */}
           <button onClick={onSave} disabled={saving}

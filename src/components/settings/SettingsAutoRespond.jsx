@@ -2,7 +2,7 @@ import React from 'react';
 import { Switch } from '@/components/ui/switch';
 import { MessageSquare } from 'lucide-react';
 
-export default function SettingsAutoRespond({ form, onToggle, onFieldChange }) {
+export default function SettingsAutoRespond({ form, onToggle }) {
   return (
     <div className="card-base p-5 space-y-4">
       <div className="flex items-start gap-3">
@@ -20,36 +20,6 @@ export default function SettingsAutoRespond({ form, onToggle, onFieldChange }) {
           onCheckedChange={(val) => onToggle('auto_respond_enabled', val)}
         />
       </div>
-
-      {form.auto_respond_enabled && (
-        <div className="space-y-3 pt-1">
-          <div className="space-y-2">
-            <label className="text-[11px] font-medium text-foreground-muted">הגב על ביקורות עם דירוג:</label>
-            <div className="flex gap-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="auto_respond_min" checked={form.auto_respond_min_rating === 5}
-                  onChange={() => onFieldChange('auto_respond_min_rating', 5)}
-                  className="accent-foreground" />
-                <span className="text-[12px] text-foreground">5 כוכבים בלבד</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="auto_respond_min" checked={form.auto_respond_min_rating === 4}
-                  onChange={() => onFieldChange('auto_respond_min_rating', 4)}
-                  className="accent-foreground" />
-                <span className="text-[12px] text-foreground">4-5 כוכבים</span>
-              </label>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between py-2 border-t border-border">
-            <span className="text-[12px] text-foreground">הודע לי כשהמערכת הגיבה</span>
-            <Switch
-              checked={form.auto_respond_notify !== false}
-              onCheckedChange={(val) => onToggle('auto_respond_notify', val)}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
