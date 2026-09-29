@@ -32,7 +32,7 @@ function SettingsSearchRadius({ businessProfile, onSave }) {
         <MapPin className="w-4 h-4 text-primary" />
         <h2 className="text-[14px] font-semibold text-foreground">טווח חיפוש</h2>
       </div>
-      <p className="text-[11px] text-foreground-muted mb-4">קבע עד כמה רחוק הסוכנים יחפשו לידים, מתחרים וסיגנלים</p>
+      <p className="text-[11px] text-foreground-muted mb-4">קבע באיזה טווח מהעסק הסוכנים יחפשו מתחרים</p>
 
       {/* Radius pills */}
       <div className="mb-4">
@@ -49,7 +49,7 @@ function SettingsSearchRadius({ businessProfile, onSave }) {
 
       {/* Additional city */}
       <div className="mb-4">
-        <label className="text-[11px] font-medium text-foreground block mb-1">עיר נוספת לסריקה (אופציונלי)</label>
+        <label className="text-[11px] font-medium text-foreground block mb-1">ערים נוספות לחיפוש מתחרים (אופציונלי)</label>
         <input value={cities} onChange={e => setCities(e.target.value)}
           placeholder="לדוגמה: תל אביב, רמת גן"
           className="w-full border border-border rounded-lg px-3 py-2 text-[12px] bg-secondary focus:outline-none focus:ring-1 focus:ring-primary" />
@@ -164,13 +164,13 @@ const AUTONOMY_OPTIONS = [
   {
     value: 'semi_auto',
     label: 'חצי אוטומטי',
-    desc: 'הסוכנים מציעים פעולות — ואחרי 24 שעות (או לפי הגדרה) מבצעים אוטומטית אם לא דחית.',
+    desc: 'הסוכנים מציעים פעולות — ואם לא דחית, מבצעים אותן אוטומטית אחרי 2–24 שעות, לפי סוג הפעולה.',
     color: '#d97706',
   },
   {
     value: 'full_auto',
     label: 'מלא אוטומטי',
-    desc: 'הסוכנים פועלים מיד — תגובות לביקורות, שליחת WhatsApp, פרסום תוכן. לידים תמיד ידניים.',
+    desc: 'הסוכנים פועלים מיד — שליחת WhatsApp ופרסום תוכן, בלי לחכות לאישורך.',
     color: '#10b981',
   },
 ];
@@ -203,7 +203,7 @@ function AutonomySelector({ businessProfile, onSave }) {
         <h2 className="text-[14px] font-semibold text-foreground">רמת אוטונומיה של הסוכנים</h2>
       </div>
       <p className="text-[11px] text-foreground-muted mb-4">
-        קבע כמה כסף ומאמץ הסוכנים יחסכו לך אוטומטית. לידים תמיד ידניים ללא קשר להגדרה זו.
+        קבע אילו פעולות הסוכנים מבצעים בלי לחכות לאישורך. תגובות לביקורות ופניות ללידים תמיד ממתינות לאישורך, בכל רמה.
       </p>
       <div className="flex flex-col gap-2">
         {AUTONOMY_OPTIONS.map(opt => (
@@ -317,7 +317,6 @@ function ConstraintsSection({ businessProfileId }) {
       <div className="flex items-center gap-2">
         <ShieldAlert className="w-4 h-4 text-orange-500" />
         <h2 className="text-[14px] font-semibold text-foreground">הגבלות ומדיניות תוכן</h2>
-        <span className="text-[10px] text-foreground-muted">(OTX-004)</span>
       </div>
       <p className="text-[11px] text-foreground-muted -mt-3">
         הגבלות שהסוכנים יישמרו עליהן בעת יצירת תוכן ופעולות אוטומטיות
@@ -389,7 +388,7 @@ function ConstraintsSection({ businessProfileId }) {
 
       {/* Confidence thresholds (OTX-003) */}
       <div className="space-y-3 border-t border-border pt-4">
-        <p className="text-[11px] font-semibold text-foreground">סף ביצוע אוטומטי (OTX-003)</p>
+        <p className="text-[11px] font-semibold text-foreground">סף ביצוע אוטומטי</p>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="text-[11px] font-medium text-foreground block mb-1">
