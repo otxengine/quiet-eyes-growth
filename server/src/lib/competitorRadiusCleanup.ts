@@ -38,7 +38,8 @@ export async function cleanupCompetitorsByRadius(businessProfileId: string): Pro
     const userExtraCities: string[] = ((profile as any).additional_cities || '')
       .split(',').map((c: string) => c.trim()).filter(Boolean);
 
-    const cityCoords = await geocodeAddress(city);
+    // Same center as runCompetitorIdentification: street address first, then city
+    const cityCoords = (profile.full_address && await geocodeAddress(profile.full_address)) || await geocodeAddress(city);
     if (!cityCoords) {
       console.log(`competitorRadiusCleanup: could not geocode "${city}", skipping`);
       return;

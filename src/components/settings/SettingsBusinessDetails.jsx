@@ -12,6 +12,7 @@ export default function SettingsBusinessDetails({ form, setForm, onSave, saving 
       <div>
         <label className="text-[12px] text-foreground-muted mb-1 block">כתובת מלאה</label>
         <input value={form.full_address || ''} onChange={(e) => setForm({ ...form, full_address: e.target.value })} placeholder="רחוב, מספר, עיר" className={inputCls} />
+        <p className="text-[9px] text-foreground-muted/50 mt-0.5">משמש כמרכז לחיפוש מתחרים בטווח שהגדרת</p>
       </div>
       <div><label className="text-[12px] text-foreground-muted mb-1 block">קהל יעד</label><input value={form.target_market} onChange={(e) => setForm({ ...form, target_market: e.target.value })} placeholder="לדוגמה: משפחות צעירות באזור המרכז" className={inputCls} /></div>
       <button onClick={onSave} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[12px] font-medium bg-[#111111] text-white hover:bg-[#333333] transition-colors disabled:opacity-50">

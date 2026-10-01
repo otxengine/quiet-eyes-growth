@@ -238,7 +238,8 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     // ── Step 2: Google Places — radius-based search for precision ─────────────
     // Geocode the primary city to get coordinates, then use nearbysearch with
     // the exact radius so we don't pull in businesses 60km away.
-    const cityCoords = await geocodeCity(city);
+    // Center on the street address when set — more precise than the city centroid
+    const cityCoords = (profile.full_address && await geocodeCity(profile.full_address)) || await geocodeCity(city);
     const radiusM = radiusKm * 1000;
 
     const googleSearchPromises = cityCoords

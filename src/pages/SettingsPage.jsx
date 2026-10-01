@@ -267,92 +267,39 @@ function ConstraintsSection({ businessProfileId }) {
   );
 }
 
+// Only the fields the visible cards edit. Settings without a card keep their stored
+// values untouched — nothing here loads or re-saves them.
+function toForm(bp = {}) {
+  return {
+    name: bp.name || '', category: bp.category || '', city: bp.city || '',
+    full_address: bp.full_address || '', target_market: bp.target_market || '',
+    tone_preference: bp.tone_preference || 'friendly',
+    min_budget: bp.min_budget || '', relevant_services: bp.relevant_services || '', preferred_area: bp.preferred_area || '',
+    lead_intent_signals: bp.lead_intent_signals || '', lead_quality_notes: bp.lead_quality_notes || '',
+    auto_respond_enabled: bp.auto_respond_enabled === true,
+    bot_enabled: bp.bot_enabled === true,
+    bot_greeting: bp.bot_greeting || '', bot_qualification_questions: bp.bot_qualification_questions || '',
+    bot_good_lead_criteria: bp.bot_good_lead_criteria || '', bot_bad_lead_criteria: bp.bot_bad_lead_criteria || '',
+    bot_services_info: bp.bot_services_info || '',
+    // Same defaults the time inputs display, so what's shown is what gets saved
+    bot_working_hours_start: bp.bot_working_hours_start || '09:00',
+    bot_working_hours_end: bp.bot_working_hours_end || '20:00',
+    bot_off_hours_message: bp.bot_off_hours_message || '',
+    custom_keywords: bp.custom_keywords || '', custom_urls: bp.custom_urls || '',
+    facebook_url: bp.facebook_url || '', instagram_url: bp.instagram_url || '', website_url: bp.website_url || '',
+    monitor_competitors_social: bp.monitor_competitors_social !== false,
+  };
+}
+
 export default function SettingsPage() {
   const { businessProfile } = useOutletContext();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({
-    name: '', category: '', city: '', full_address: '', description: '', target_market: '',
-    tone_preference: 'friendly', min_budget: '', relevant_services: '', preferred_area: '',
-    lead_intent_signals: '', lead_quality_notes: '',
-    weekly_report: true, hot_lead_alerts: true, monthly_summary: false,
-    push_email_alerts: false, push_whatsapp_alerts: false, push_whatsapp_number: '', push_min_score: 80,
-    auto_respond_enabled: false, auto_respond_min_rating: 5, auto_respond_notify: true,
-    wa_alert_phone: '', wa_alert_negative_review: true, wa_alert_hot_lead: true, wa_alert_high_impact: false,
-    crm_webhook_url: '', crm_webhook_enabled: false, crm_sync_events: 'create,update',
-    crm_zapier_url: '', crm_zapier_enabled: false,
-    bot_enabled: false, bot_greeting: '', bot_qualification_questions: '', bot_good_lead_criteria: '', bot_bad_lead_criteria: '', bot_services_info: '',
-    bot_working_hours_start: '09:00', bot_working_hours_end: '20:00', bot_off_hours_message: '',
-    channels_whatsapp: '', channels_whatsapp_enabled: false,
-    channels_instagram: '', channels_instagram_enabled: false,
-    channels_facebook: '', channels_facebook_enabled: false,
-    channels_website: '', channels_website_enabled: false,
-    channels_webhook_secret: '',
-    custom_keywords: '', custom_urls: '',
-    facebook_url: '', instagram_url: '', website_url: '',
-    monitor_competitors_social: true,
-    survey_enabled: false, survey_q1: '', survey_q2: '', survey_q3: '',
-  });
+  const [form, setForm] = useState(toForm);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (businessProfile) {
-      setForm({
-        name: businessProfile.name || '', category: businessProfile.category || '', city: businessProfile.city || '',
-        full_address: businessProfile.full_address || '',
-        description: businessProfile.description || '', target_market: businessProfile.target_market || '',
-        tone_preference: businessProfile.tone_preference || 'friendly', min_budget: businessProfile.min_budget || '',
-        relevant_services: businessProfile.relevant_services || '', preferred_area: businessProfile.preferred_area || '',
-        lead_intent_signals: businessProfile.lead_intent_signals || '', lead_quality_notes: businessProfile.lead_quality_notes || '',
-        weekly_report: businessProfile.weekly_report !== false, hot_lead_alerts: businessProfile.hot_lead_alerts !== false,
-        monthly_summary: businessProfile.monthly_summary === true,
-        push_email_alerts: businessProfile.push_email_alerts === true,
-        push_whatsapp_alerts: businessProfile.push_whatsapp_alerts === true,
-        push_whatsapp_number: businessProfile.push_whatsapp_number || '',
-        push_min_score: businessProfile.push_min_score || 80,
-        auto_respond_enabled: businessProfile.auto_respond_enabled === true,
-        auto_respond_min_rating: businessProfile.auto_respond_min_rating || 5,
-        auto_respond_notify: businessProfile.auto_respond_notify !== false,
-        wa_alert_phone: businessProfile.wa_alert_phone || '',
-        wa_alert_negative_review: businessProfile.wa_alert_negative_review !== false,
-        wa_alert_hot_lead: businessProfile.wa_alert_hot_lead !== false,
-        wa_alert_high_impact: businessProfile.wa_alert_high_impact === true,
-        crm_webhook_url: businessProfile.crm_webhook_url || '',
-        crm_webhook_enabled: businessProfile.crm_webhook_enabled === true,
-        crm_sync_events: businessProfile.crm_sync_events || 'create,update',
-        crm_zapier_url: businessProfile.crm_zapier_url || '',
-        crm_zapier_enabled: businessProfile.crm_zapier_enabled === true,
-        channels_whatsapp: businessProfile.channels_whatsapp || '',
-        channels_whatsapp_enabled: businessProfile.channels_whatsapp_enabled === true,
-        channels_instagram: businessProfile.channels_instagram || '',
-        channels_instagram_enabled: businessProfile.channels_instagram_enabled === true,
-        channels_facebook: businessProfile.channels_facebook || '',
-        channels_facebook_enabled: businessProfile.channels_facebook_enabled === true,
-        channels_website: businessProfile.channels_website || '',
-        channels_website_enabled: businessProfile.channels_website_enabled === true,
-        channels_webhook_secret: businessProfile.channels_webhook_secret || '',
-        custom_keywords: businessProfile.custom_keywords || '',
-        custom_urls: businessProfile.custom_urls || '',
-        facebook_url: businessProfile.facebook_url || '',
-        instagram_url: businessProfile.instagram_url || '',
-        website_url: businessProfile.website_url || '',
-        monitor_competitors_social: businessProfile.monitor_competitors_social !== false,
-        survey_enabled: businessProfile.survey_enabled === true,
-        survey_q1: businessProfile.survey_q1 || 'איך היית מדרג/ת את החוויה שלך?',
-        survey_q2: businessProfile.survey_q2 || 'מה הכי אהבת?',
-        survey_q3: businessProfile.survey_q3 || 'מה אפשר לשפר?',
-        bot_enabled: businessProfile.bot_enabled === true,
-        bot_greeting: businessProfile.bot_greeting || '',
-        bot_qualification_questions: businessProfile.bot_qualification_questions || '',
-        bot_good_lead_criteria: businessProfile.bot_good_lead_criteria || '',
-        bot_bad_lead_criteria: businessProfile.bot_bad_lead_criteria || '',
-        bot_services_info: businessProfile.bot_services_info || '',
-        // Same defaults the time inputs display, so what's shown is what gets saved
-        bot_working_hours_start: businessProfile.bot_working_hours_start || '09:00',
-        bot_working_hours_end: businessProfile.bot_working_hours_end || '20:00',
-        bot_off_hours_message: businessProfile.bot_off_hours_message || '',
-      });
-    }
+    if (businessProfile) setForm(toForm(businessProfile));
   }, [businessProfile]);
 
   const saveField = async (partial) => {
@@ -366,11 +313,17 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSaveAll = async () => {
+  const handleSaveDetails = async () => {
     if (!businessProfile?.id) return;
     setSaving(true);
     try {
-      await base44.entities.BusinessProfile.update(businessProfile.id, form);
+      // Only what changed — a new address re-centers the competitor search and prunes out-of-range ones
+      const changed = Object.fromEntries(
+        ['name', 'city', 'full_address', 'target_market']
+          .filter(k => form[k] !== (businessProfile[k] || ''))
+          .map(k => [k, form[k]]),
+      );
+      if (Object.keys(changed).length) await base44.entities.BusinessProfile.update(businessProfile.id, changed);
       queryClient.invalidateQueries({ queryKey: ['businessProfiles'] });
       toast.success('ההגדרות נשמרו בהצלחה');
     } catch (err) {
@@ -401,7 +354,7 @@ export default function SettingsPage() {
         </button>
       </div>
 
-      <SettingsBusinessDetails form={form} setForm={setForm} onSave={handleSaveAll} saving={saving} />
+      <SettingsBusinessDetails form={form} setForm={setForm} onSave={handleSaveDetails} saving={saving} />
       {businessProfile?.id && (
         <SettingsLearnBusiness businessProfile={businessProfile} onApproved={() => queryClient.invalidateQueries({ queryKey: ['businessProfiles'] })} />
       )}
