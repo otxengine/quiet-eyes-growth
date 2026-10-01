@@ -27,7 +27,7 @@ export async function contentCalendarAgent(req: Request, res: Response) {
 
     // Load business context
     const bizCtx = await loadBusinessContext(businessProfileId);
-    const tone = bizCtx?.preferredTone || profile.tone_preference || 'professional';
+    const tone = profile.tone_preference || bizCtx?.preferredTone || 'professional';
     const contentStyle = (bizCtx as any)?.contentStyle || '';
     const preferredChannels = (bizCtx as any)?.preferredChannels || 'instagram,facebook';
 

@@ -22,6 +22,7 @@ import { prisma } from '../../db';
 import { decryptToken } from '../../lib/crypto';
 import { metaApi } from '../../lib/metaApi';
 import { invokeLLM } from '../../lib/llm';
+import { isWithinIsraelHours } from '../../lib/timezone';
 
 const router = Router();
 
@@ -277,10 +278,7 @@ async function handleIncomingMessage(msg: IncomingMessage): Promise<void> {
 
   // 4c. Working hours check — reply with off-hours message if outside window
   if (businessProfile?.bot_working_hours_start && businessProfile?.bot_working_hours_end) {
-    const nowHour    = new Date().getHours();
-    const startHour  = parseInt(businessProfile.bot_working_hours_start, 10);
-    const endHour    = parseInt(businessProfile.bot_working_hours_end, 10);
-    const inWindow   = nowHour >= startHour && nowHour < endHour;
+    const inWindow = isWithinIsraelHours(businessProfile.bot_working_hours_start, businessProfile.bot_working_hours_end);
     if (!inWindow && businessProfile.bot_off_hours_message) {
       await metaApi.sendTextMessage({
         platform:      msg.platform,

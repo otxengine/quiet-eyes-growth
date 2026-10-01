@@ -38,7 +38,7 @@ export async function smartLeadNurture(req: Request, res: Response) {
 
     // Tone: mission > bizCtx > profile > default
     const missionTone = nurtureMission?.tone_he || '';
-    const bizTone = bizCtx?.preferredTone || profile.tone_preference || 'professional';
+    const bizTone = profile.tone_preference || bizCtx?.preferredTone || 'professional';
     const toneInstruction = missionTone
       ? missionTone
       : bizTone === 'casual'

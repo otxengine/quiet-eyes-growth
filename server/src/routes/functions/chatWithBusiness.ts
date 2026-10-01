@@ -68,7 +68,7 @@ export async function chatWithBusiness(req: Request, res: Response) {
 
     // Load learned business preferences (tone, rejected patterns)
     const bizCtx = await loadBusinessContext(businessProfileId).catch(() => null);
-    const preferredTone = (bizCtx as any)?.preferredTone || (profile as any)?.tone_preference || 'professional';
+    const preferredTone = (profile as any)?.tone_preference || (bizCtx as any)?.preferredTone || 'professional';
 
     // Build context blocks
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();

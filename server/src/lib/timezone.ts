@@ -23,6 +23,25 @@ export function israelLocalToUTC(dateStr: string, timeStr: string): Date {
   return new Date(guess.getTime() + (guess.getTime() - readAsUTC));
 }
 
+const toMinutes = (hhmm: string) => {
+  const [h, m = 0] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+};
+
+/**
+ * Whether `now` falls inside a daily [start, end) window given as Israel-local
+ * "HH:MM" strings — the server clock is UTC. Handles overnight windows
+ * (e.g. 20:00–02:00).
+ */
+export function isWithinIsraelHours(start: string, end: string, now: Date = new Date()): boolean {
+  const cur = toMinutes(new Intl.DateTimeFormat('en-GB', {
+    timeZone: IL_TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).format(now));
+  const s = toMinutes(start);
+  const e = toMinutes(end);
+  return s <= e ? cur >= s && cur < e : cur >= s || cur < e;
+}
+
 /** Today's date (YYYY-MM-DD) in Israel local time, plus dayOffset days. */
 export function israelDateOffset(dayOffset: number): string {
   const todayIL = new Intl.DateTimeFormat('en-CA', { timeZone: IL_TZ }).format(new Date());

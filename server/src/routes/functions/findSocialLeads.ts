@@ -44,10 +44,10 @@ export async function findSocialLeads(req: Request, res: Response) {
 
     // Load learned business context for personalized messaging
     const bizCtx = await loadBusinessContext(businessProfileId);
-    const tone = bizCtx?.preferredTone || 'professional';
+    const tone = profile.tone_preference || bizCtx?.preferredTone || 'professional';
     const toneInstruction = tone === 'casual'
       ? 'טון קליל וחברותי, עם אמוג\'י אחד לכל היותר'
-      : tone === 'warm'
+      : tone === 'warm' || tone === 'friendly'
       ? 'טון חם ואישי, מבלי להיות מכירתי'
       : 'טון מקצועי ואמין';
 

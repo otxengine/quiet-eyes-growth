@@ -33,7 +33,7 @@ export async function autoRespondToReviews(req: Request, res: Response) {
 
     // Load business tone preference
     const bizCtx = await loadBusinessContext(businessProfileId);
-    const tone = bizCtx?.preferredTone || profile.tone_preference || 'professional';
+    const tone = profile.tone_preference || bizCtx?.preferredTone || 'professional';
     const toneInstruction = tone === 'casual'
       ? 'casual and friendly tone, short and human reply'
       : tone === 'warm'

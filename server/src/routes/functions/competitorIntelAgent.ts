@@ -35,7 +35,7 @@ export async function competitorIntelAgent(req: Request, res: Response) {
     const { name, category, city } = profile;
 
     const bizCtx = await loadBusinessContext(businessProfileId);
-    const tone = bizCtx?.preferredTone || profile.tone_preference || 'professional';
+    const tone = profile.tone_preference || bizCtx?.preferredTone || 'professional';
     const toneInstruction = tone === 'casual' ? 'קליל וחברותי' : tone === 'warm' ? 'חם ואנושי' : 'מקצועי ואמין';
 
     // ── 1. Load competitors from DB ───────────────────────────────────────────

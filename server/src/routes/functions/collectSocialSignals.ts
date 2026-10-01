@@ -330,7 +330,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
 
     // Load business context for personalized response templates
     const bizCtx = await loadBusinessContext(businessProfileId);
-    const bTone = bizCtx?.preferredTone || 'professional';
+    const bTone = profile.tone_preference || bizCtx?.preferredTone || 'professional';
 
     // ── Post-process: surface negative social mentions as actionable MarketSignals ──
     const NEGATIVE_KEYWORDS = [
@@ -366,7 +366,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
       // Personalize response template based on learned business tone
       const responseTemplate = bTone === 'casual'
         ? `היי! מצטערים לשמוע 🙏 ניצור קשר אישית לפתרון. ${name}`
-        : bTone === 'warm'
+        : bTone === 'warm' || bTone === 'friendly'
         ? `שלום, מצטערים מאוד על החוויה. חשוב לנו מאוד לפתור את הבעיה — נשמח אם תפנה אלינו ישירות ב${dmChannel}. ${name}`
         : `שלום, תודה שפנית אלינו. אנחנו מצטערים לשמוע על חוויתך ונשמח ליצור קשר ולפתור את הבעיה. נא פנה אלינו ב${dmChannel} או בטלפון. צוות ${name}`;
 

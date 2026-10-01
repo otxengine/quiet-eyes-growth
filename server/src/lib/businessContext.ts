@@ -6,7 +6,7 @@
 import { prisma } from '../db';
 
 export interface BusinessContext {
-  preferredTone: string;
+  preferredTone: string;  // learned fallback — callers put profile.tone_preference (Settings) first
   preferredChannels: string[];
   rejectedPatterns: string[];
   acceptedPatterns: string[];
