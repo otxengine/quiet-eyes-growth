@@ -2,6 +2,7 @@ import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
 import KoriAvatar from './KoriAvatar';
 
 const GOAL_LABELS = {
@@ -42,6 +43,18 @@ export default function OnboardingInsights() {
   const completeOnboarding = async (targetPath = '/') => {
     if (businessProfile?.id) {
       await base44.entities.BusinessProfile.update(businessProfile.id, { onboarding_completed: true });
+      // Re-onboarding from Settings: retire the profile this one replaces, or the
+      // scheduler keeps running every agent for both.
+      const replacedId = sessionStorage.getItem('otx_replaces_profile');
+      sessionStorage.removeItem('otx_replaces_profile');
+      if (replacedId && replacedId !== businessProfile.id) {
+        try {
+          await base44.raw.post('/reactivation/retire-replaced', { newProfileId: businessProfile.id, replacedProfileId: replacedId });
+        } catch (err) {
+          toast.error('לא הצלחנו להשבית את הפרופיל הקודם — הוא עדיין פעיל');
+          console.error('retire-replaced failed', err);
+        }
+      }
       try { base44.functions.invoke('runFullScan', { businessProfileId: businessProfile.id }, 360000); } catch (_) {}
     }
     sessionStorage.setItem('otx_just_onboarded', String(Date.now()));

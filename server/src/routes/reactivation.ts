@@ -5,6 +5,7 @@
  *
  * GET  /api/reactivation/candidates          → deactivated businesses matching the caller's email
  * POST /api/reactivation/:businessProfileId/reactivate → reclaim one of them
+ * POST /api/reactivation/retire-replaced     → deactivate the profile a re-onboarding replaced
  *
  * Deliberately does NOT touch organizations/organization_members — org
  * ownership/membership is never auto-restored, only business_profiles
@@ -71,5 +72,43 @@ export async function reactivateHandler(req: Request, res: Response) {
 }
 
 router.post('/:businessProfileId/reactivate', reactivateHandler);
+
+// ── POST /api/reactivation/retire-replaced ────────────────────────────────
+// Re-running onboarding (Settings → "בצע קליטה מחדש") creates a NEW profile.
+// Once it completes, retire the one it replaces — otherwise the scheduler keeps
+// running every daily agent for both. Same is_active/deactivated_at/owner_email
+// convention as the Clerk-deletion sync, so the old one is offered back by
+// /candidates above. Only profiles the caller created directly (no org access).
+
+export async function retireReplacedHandler(req: Request, res: Response) {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  const { newProfileId, replacedProfileId } = req.body ?? {};
+  if (!newProfileId || !replacedProfileId || newProfileId === replacedProfileId) {
+    return res.status(400).json({ error: 'newProfileId and a different replacedProfileId are required' });
+  }
+
+  const email = await getUserEmail(userId);
+  const owned = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT id, onboarding_completed FROM business_profiles
+     WHERE id IN ($1, $2) AND (created_by = $3 OR lower(created_by) = lower($4))`,
+    newProfileId, replacedProfileId, userId, email ?? userId,
+  );
+  const fresh = owned?.find(p => p.id === newProfileId);
+  if (owned?.length !== 2 || !fresh) return res.status(404).json({ error: 'Not found' });
+  if (!fresh.onboarding_completed) {
+    return res.status(409).json({ error: 'New profile has not finished onboarding' });
+  }
+
+  await prisma.$executeRawUnsafe(
+    `UPDATE business_profiles
+     SET is_active = false, deactivated_at = NOW(), owner_email = COALESCE(owner_email, $2)
+     WHERE id = $1 AND (is_active IS NULL OR is_active = true)`,
+    replacedProfileId, email,
+  );
+  return res.json({ ok: true });
+}
+
+router.post('/retire-replaced', retireReplacedHandler);
 
 export default router;

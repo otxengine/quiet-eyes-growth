@@ -387,10 +387,14 @@ export default function SettingsPage() {
       <div className="card-base p-5 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-[14px] font-semibold text-foreground">תהליך קליטה (Onboarding)</h2>
-          <p className="text-[11px] text-foreground-muted mt-0.5">בצע מחדש את תהליך הקליטה כדי ליצור פרופיל עסקי חדש</p>
+          <p className="text-[11px] text-foreground-muted mt-0.5">בצע מחדש את תהליך הקליטה כדי ליצור פרופיל עסקי חדש. בסיום, הפרופיל הנוכחי יושבת — ותוכל לשחזר אותו בכניסה הבאה לתהליך הקליטה.</p>
         </div>
         <button
-          onClick={() => navigate('/onboarding')}
+          onClick={() => {
+            // OnboardingInsights retires this profile once the new one completes
+            if (businessProfile?.id) sessionStorage.setItem('otx_replaces_profile', businessProfile.id);
+            navigate('/onboarding');
+          }}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary border border-border text-[11px] font-medium text-foreground-muted hover:text-foreground transition-colors flex-shrink-0"
         >
           <RefreshCw className="w-3.5 h-3.5" /> בצע קליטה מחדש

@@ -11,7 +11,7 @@ jest.mock('../lib/ownership', () => ({ getUserEmail: jest.fn() }));
 import { prisma } from '../db';
 import { getUserId } from '../middleware/auth';
 import { getUserEmail } from '../lib/ownership';
-import { getCandidatesHandler, reactivateHandler } from '../routes/reactivation';
+import { getCandidatesHandler, reactivateHandler, retireReplacedHandler } from '../routes/reactivation';
 
 const queryRawUnsafe   = prisma.$queryRawUnsafe as jest.Mock;
 const executeRawUnsafe = prisma.$executeRawUnsafe as jest.Mock;
@@ -124,5 +124,48 @@ describe('POST /api/reactivation/:businessProfileId/reactivate', () => {
       ([sql]: [string]) => /organizations|organization_members/i.test(sql),
     );
     expect(orgWrites).toHaveLength(0);
+  });
+});
+
+describe('POST /api/reactivation/retire-replaced', () => {
+  const body = { newProfileId: 'new1', replacedProfileId: 'old1' };
+  function call(b: any) {
+    const ctx = makeReqRes();
+    ctx.req.body = b;
+    return retireReplacedHandler(ctx.req, ctx.res).then(() => ctx);
+  }
+
+  test('400 when ids are missing or identical', async () => {
+    mockGetUserId.mockReturnValue('u1');
+    expect((await call({ newProfileId: 'a', replacedProfileId: 'a' })).status).toHaveBeenCalledWith(400);
+    expect(executeRawUnsafe).not.toHaveBeenCalled();
+  });
+
+  test('404 unless the caller directly owns both profiles', async () => {
+    mockGetUserId.mockReturnValue('u1');
+    mockGetUserEmail.mockResolvedValue('a@b.com');
+    queryRawUnsafe.mockResolvedValue([{ id: 'new1', onboarding_completed: true }]); // old1 not owned
+    expect((await call(body)).status).toHaveBeenCalledWith(404);
+    expect(executeRawUnsafe).not.toHaveBeenCalled();
+  });
+
+  test('409 while the new profile has not finished onboarding', async () => {
+    mockGetUserId.mockReturnValue('u1');
+    mockGetUserEmail.mockResolvedValue('a@b.com');
+    queryRawUnsafe.mockResolvedValue([{ id: 'new1', onboarding_completed: false }, { id: 'old1', onboarding_completed: true }]);
+    expect((await call(body)).status).toHaveBeenCalledWith(409);
+    expect(executeRawUnsafe).not.toHaveBeenCalled();
+  });
+
+  test('deactivates only the replaced profile, recoverable by email', async () => {
+    mockGetUserId.mockReturnValue('u1');
+    mockGetUserEmail.mockResolvedValue('a@b.com');
+    queryRawUnsafe.mockResolvedValue([{ id: 'new1', onboarding_completed: true }, { id: 'old1', onboarding_completed: true }]);
+    const { json } = await call(body);
+    expect(json).toHaveBeenCalledWith({ ok: true });
+    const [sql, id, email] = executeRawUnsafe.mock.calls[0];
+    expect(sql).toMatch(/is_active = false/);
+    expect(id).toBe('old1');
+    expect(email).toBe('a@b.com');
   });
 });
