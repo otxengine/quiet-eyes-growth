@@ -30,6 +30,7 @@ pnpm-debug.log*
 .claude/
 
 # ── Editor ───────────────────────────────────────────────────────────────────
+.vscode/*
 !.vscode/extensions.json
 .idea/
 .DS_Store
