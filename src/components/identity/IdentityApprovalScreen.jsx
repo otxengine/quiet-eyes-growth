@@ -43,6 +43,21 @@ const emptyDraft = () => ({
   business_type: '', service_model: [], target_audience: '', relevant_topics: [], content_tone: '',
 });
 
+// ponytail: unapproved edits are kept in this browser only (per profile). Upgrade path if they
+// must follow the owner across devices: a server-side working-copy column. They can't go in
+// about_draft — that must stay the AI's text (computeAboutMetrics' edit rate compares it to
+// about_approved).
+const editsKey = (id) => `otx_about_edits_${id}`;
+const readEdits = (id) => {
+  try { return JSON.parse(localStorage.getItem(editsKey(id)) || 'null'); } catch { return null; }
+};
+const writeEdits = (id, value) => {
+  try {
+    if (value) localStorage.setItem(editsKey(id), JSON.stringify(value));
+    else localStorage.removeItem(editsKey(id));
+  } catch { /* storage unavailable — edits just won't survive a reload */ }
+};
+
 function Field({ label, children, old }) {
   return (
     <div className={old != null ? 'rounded-lg ring-1 ring-amber-300 bg-amber-50/30 px-1.5 pt-1 pb-0.5' : ''}>
@@ -66,6 +81,8 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
   const [approvedAt, setApprovedAt] = useState(null);
   const [approvedDraft, setApprovedDraft] = useState(null);
   const [diffMap, setDiffMap] = useState(null); // null=no regen yet, {}=no changes, {key:old}=changes
+  const [edited, setEdited] = useState(false);       // unapproved edits saved in this browser
+  const [generatedAt, setGeneratedAt] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -81,10 +98,24 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
     if (source) {
       try { setDraft(normSM({ ...emptyDraft(), ...JSON.parse(source) })); } catch { /* keep empty draft */ }
     }
+    setGeneratedAt(profile?.about_generated_at || null);
+    const saved = readEdits(businessProfileId);
+    if (saved?.draft && saved.basis === (profile?.about_generated_at || null)
+        && saved.savedAt > (profile?.about_approved_at || '')) {
+      setDraft(saved.draft);
+      setEdited(true);
+    } else {
+      writeEdits(businessProfileId, null);
+      setEdited(false);
+    }
     setLoading(false);
   };
 
   useEffect(() => { if (businessProfileId) load(); }, [businessProfileId]);
+
+  useEffect(() => {
+    if (edited) writeEdits(businessProfileId, { draft, basis: generatedAt, savedAt: new Date().toISOString() });
+  }, [draft, edited]);
 
   const generate = async () => {
     setBusy(true);
@@ -94,10 +125,13 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
         toast.error(res.prompt || 'צריך עוד מידע כדי לייצר טיוטה');
       } else if (res.ok) {
         const newDraft = normSM({ ...emptyDraft(), ...res.draft });
+        writeEdits(businessProfileId, null);
+        setEdited(false);
         setDraft(newDraft);
         setStatus('pending');
         if (approvedDraft) setDiffMap(computeDiff(newDraft, approvedDraft));
         const p = await base44.entities.BusinessProfile.get(businessProfileId);
+        setGeneratedAt(p?.about_generated_at || null);
         try { setSources(JSON.parse(p?.about_sources || '[]')); } catch { /* keep prior sources */ }
       } else {
         toast.error(res.error || 'יצירת הטיוטה נכשלה');
@@ -115,6 +149,8 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
       const res = await base44.raw.post('/onboarding/approve-about', { businessProfileId, draft });
       if (res.ok) {
         toast.success('הזהות העסקית אושרה ✓');
+        writeEdits(businessProfileId, null);
+        setEdited(false);
         setStatus('approved');
         setApprovedDraft(draft);
         setDiffMap(null);
@@ -129,10 +165,20 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
     }
   };
 
-  // AC6: Cancel makes no API call — the previously-approved identity (about_approved) is left untouched.
-  const cancel = () => onCancel?.();
+  // AC6: Cancel makes no write call — the previously-approved identity (about_approved) is left
+  // untouched. It discards this browser's unapproved edits and shows the saved draft again.
+  const cancel = () => {
+    const hadEdits = edited;
+    writeEdits(businessProfileId, null);
+    setEdited(false);
+    if (hadEdits) load();
+    onCancel?.();
+  };
 
-  const set = (key, value) => setDraft((d) => ({ ...d, [key]: value }));
+  const set = (key, value) => {
+    setEdited(true);
+    setDraft((d) => ({ ...d, [key]: value }));
+  };
 
   if (loading) {
     return <div className="text-center py-8"><Loader2 className="w-6 h-6 animate-spin text-foreground-muted mx-auto" /></div>;
@@ -147,7 +193,11 @@ export default function IdentityApprovalScreen({ businessProfileId, onApproved, 
           <h2 className="text-[14px] font-semibold text-[#222222]">זהות עסקית — סקירה לאישור</h2>
           <p className="text-[11px] text-foreground-muted mt-0.5">בדוק ועדכן את הפרטים שנוצרו אוטומטית לפני שהם הופכים לרשמיים</p>
         </div>
-        {status === 'approved' && approvedAt ? (
+        {edited ? (
+          <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2.5 py-1 flex-shrink-0 whitespace-nowrap">
+            השינויים נשמרו במכשיר זה — טרם אושרו
+          </span>
+        ) : status === 'approved' && approvedAt ? (
           <span className="text-[10px] text-foreground-muted flex-shrink-0 whitespace-nowrap">
             אושר {new Date(approvedAt).toLocaleDateString('he-IL')}
           </span>

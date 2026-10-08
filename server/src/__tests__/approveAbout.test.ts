@@ -1,6 +1,8 @@
 import router from '../routes/onboarding';
 import { prisma } from '../db';
 
+// Ownership is covered by onboarding.access.test.ts — these tests exercise the handlers.
+jest.mock('../middleware/businessAccess', () => ({ requireBusinessAccess: (_req: any, _res: any, next: any) => next() }));
 jest.mock('../db', () => ({
   prisma: {
     businessProfile: {

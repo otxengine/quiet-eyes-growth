@@ -18,11 +18,15 @@ import { getOwnLocationInfo } from '../lib/googleBusinessInfo';
 import { autoConfigOsint } from './functions/stubs';
 import { fetchSocialPageAbout } from '../lib/fetchSocialPageAbout';
 import { getUserId } from '../middleware/auth';
+import { requireBusinessAccess } from '../middleware/businessAccess';
 import { getOrCreateOrgForProfile } from '../lib/orgHelpers';
 import { syncBusinessToOTX } from '../lib/syncBusinessToOTX';
 
 const logger = createLogger('Onboarding');
 const router = Router();
+// Every route here acts on body.businessProfileId — require a signed-in owner of it
+// (otherwise anyone could rewrite another business's identity/name/category/tone).
+router.use(requireBusinessAccess);
 const PAID_PLANS = new Set(['starter', 'growth', 'pro']);
 
 // §5.0/§5.2 identity draft — 9 keys shared by generate-about + approve-about
