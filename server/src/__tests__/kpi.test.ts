@@ -37,13 +37,13 @@ describe('computeFunnelKPIs', () => {
   function setupMocks(overrides: {
     insights?: number; decisions?: number; recs?: number;
     dispatched?: number; completed?: number; outcomes?: [number, number];
-    feedback?: [number, number]; agents?: any[]; agents7d?: any[];
+    feedback?: [number, number]; agents?: any[]; agents7d?: any[]; hasDna?: boolean;
   } = {}) {
     const {
       insights = 10, decisions = 8, recs = 7,
       dispatched = 5, completed = 4,
       outcomes = [3, 1200], feedback = [6, 4],
-      agents = [], agents7d = [],
+      agents = [], agents7d = [], hasDna = false,
     } = overrides;
 
     mockQuery([{ n: String(insights) }]);
@@ -55,7 +55,15 @@ describe('computeFunnelKPIs', () => {
     mockQuery([{ total: String(feedback[0]), positive: String(feedback[1]) }]);
     mockQuery(agents);
     mockQuery(agents7d);
+    mockQuery([{ has_dna: String(hasDna) }]);
   }
+
+  test('has_winner_dna reflects the winner-DNA query (KAN-94)', async () => {
+    setupMocks({ hasDna: true });
+    expect((await computeFunnelKPIs('biz_001')).has_winner_dna).toBe(true);
+    setupMocks();
+    expect((await computeFunnelKPIs('biz_001')).has_winner_dna).toBe(false);
+  });
 
   test('computes insight_to_decision_rate correctly', async () => {
     setupMocks({ insights: 10, decisions: 8 });

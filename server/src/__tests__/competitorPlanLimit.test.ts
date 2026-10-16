@@ -27,10 +27,15 @@ jest.mock('../routes/functions/detectCompetitorAds', () => ({
   detectCompetitorAds: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../routes/functions/enrichCompetitorUrls', () => ({
+  enrichCompetitorUrls: jest.fn().mockResolvedValue(undefined),
+}));
+
 import router from '../routes/entities';
 import { prisma } from '../db';
 import { collectCompetitorSocialPosts } from '../routes/functions/collectCompetitorSocialPosts';
 import { detectCompetitorAds } from '../routes/functions/detectCompetitorAds';
+import { enrichCompetitorUrls } from '../routes/functions/enrichCompetitorUrls';
 
 function getPostHandler() {
   const layer = (router as any).stack.find(
@@ -125,7 +130,10 @@ describe('POST /entities/Competitor — manual add is auto-approved and scanned'
     const res = makeRes();
 
     await getPostHandler()(req, res);
+    // Scans are fire-and-forget and only start once URL enrichment resolves — let that tick run.
+    await new Promise(setImmediate);
 
+    expect(enrichCompetitorUrls).toHaveBeenCalledWith(['new_comp']);
     expect(collectCompetitorSocialPosts).toHaveBeenCalledWith(
       expect.objectContaining({ body: { businessProfileId: 'biz_1', force: true } }),
       expect.anything()

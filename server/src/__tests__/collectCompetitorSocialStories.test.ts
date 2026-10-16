@@ -118,7 +118,7 @@ test('a story already analyzed on a prior scrape is not re-analyzed', async () =
   const { analyzePostCreative } = require('../lib/analyzePostCreative');
   queryRawUnsafe.mockImplementationOnce(async (sql: string) =>
     String(sql).includes('SELECT competitor_id, external_story_id')
-      ? [{ competitor_id: 'c1', external_story_id: 'story-1' }]
+      ? [{ competitor_id: 'c1', external_story_id: 'story-1', analyzed_at: '2026-08-01T00:00:00.000Z', video_analyzed_at: null }]
       : [],
   );
   (runApifyActor as jest.Mock).mockResolvedValueOnce([
