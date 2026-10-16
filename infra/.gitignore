@@ -1,0 +1,4 @@
+node_modules
+cdk.out
+# Per-env build values and local secret files
+.env.*

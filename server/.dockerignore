@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+*.log
+src/__tests__
+# Never bake env files: dotenv runs with override:true and would replace the secrets ECS injects.
+.env
+.env.*

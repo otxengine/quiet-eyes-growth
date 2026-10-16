@@ -74,6 +74,10 @@ import { getAgentStatusSummary } from './lib/agentMonitor';
 const app = express();
 const PORT = process.env.PORT || 3002;
 
+// Behind CloudFront + ALB the client IP sits TRUST_PROXY_HOPS entries from the right of
+// X-Forwarded-For. Unset = Express default (no proxy trusted), as on Render.
+if (process.env.TRUST_PROXY_HOPS) app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS));
+
 // ── Security headers ───────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false })); // CSP handled by frontend
 
@@ -195,6 +199,17 @@ app.use('/api/orgs', organizationsRouter);
 app.use('/api/reactivation', reactivationRouter);
 app.use('/api/agency', agencyRouter);
 app.use('/api/stripe', stripeRouter);
+
+// Liveness for the load balancer: process up and DB reachable. Returns no data.
+app.get(['/healthz', '/api/healthz'], async (_req, res) => {
+  try {
+    const { prisma: db } = await import('./db');
+    await db.$queryRaw`SELECT 1`;
+    res.json({ ok: true });
+  } catch {
+    res.status(503).json({ ok: false });
+  }
+});
 
 app.get('/api/health', async (_req, res) => {
   const summary = await getAgentStatusSummary();
@@ -1464,6 +1479,10 @@ app.listen(PORT, async () => {
   if (!process.env.NODE_ENV) {
     console.warn('[WARN] NODE_ENV is not set. Set NODE_ENV=production on Render to enable security hardening and error sanitization.');
   }
+
+  // ROLE=web serves HTTP only; the worker service (ROLE=worker) runs background jobs.
+  // Unset = run everything in one process, as on Render.
+  if (process.env.ROLE === 'web') return;
 
   // ── Google token refresh scheduler — runs every 30 minutes ───────────────
   setInterval(() => {
