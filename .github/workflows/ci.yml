@@ -23,10 +23,7 @@ jobs:
           cache-dependency-path: server/package-lock.json
       - run: npm ci --no-audit --no-fund
       - run: npm run build # prisma generate + tsc
-      # ponytail: 22 tests in 9 suites already fail on the current code. Reported but not
-      # blocking until they're fixed; then delete continue-on-error so tests gate deploys.
       - run: npx jest --ci
-        continue-on-error: true
 
   web-and-infra:
     runs-on: ubuntu-24.04-arm
