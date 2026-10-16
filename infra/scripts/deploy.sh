@@ -19,5 +19,6 @@ git -C "$ROOT" worktree add --detach "$SRC" "$REF" >/dev/null
 trap 'git -C "$ROOT" worktree remove --force "$SRC"' EXIT
 echo "deploying $(git -C "$SRC" log -1 --format='%h %s') to $ENV"
 
-(cd "$SRC" && npm ci --no-audit --no-fund && VITE_API_URL=/api npm run build && bash scripts/scan-bundle-keys.sh dist)
+# The scanner is stored with CRLF line endings; strip them so bash can run it.
+(cd "$SRC" && npm ci --no-audit --no-fund && VITE_API_URL=/api npm run build && tr -d '\r' < scripts/scan-bundle-keys.sh | bash -s -- dist)
 (cd "$INFRA" && SRC_DIR="$SRC" AWS_REGION="$REGION" npx cdk deploy "Qe-$ENV" "$@")
