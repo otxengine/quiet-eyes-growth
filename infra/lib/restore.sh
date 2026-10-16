@@ -8,8 +8,13 @@ TARGET="host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER sslmode=requir
 FLAGS="--schema=public --no-owner --no-privileges --format=custom"
 if [ "$MODE" = "schema" ]; then FLAGS="$FLAGS --schema-only"; fi
 
+# The stored URL is Prisma-style (?pgbouncer=true&... on the 6543 transaction pooler);
+# libpq rejects those params and pg_dump needs a session, so drop the query string
+# and use Supabase's session pooler port instead.
+SOURCE="$(printf '%s' "${SOURCE_DATABASE_URL%%\?*}" | sed 's/:6543\//:5432\//')?sslmode=require"
+
 echo "[restore] dumping source ($MODE)"
-pg_dump "$SOURCE_DATABASE_URL" $FLAGS --file=/tmp/db.dump
+pg_dump "$SOURCE" $FLAGS --file=/tmp/db.dump
 ls -lh /tmp/db.dump
 
 echo "[restore] resetting target"
