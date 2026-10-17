@@ -10,10 +10,9 @@ import { runEventCollector } from "./event_collector.ts";
 import { runSectorTrendRadar } from "./sector_trend_radar.ts";
 import { runSystemHealthMonitor } from "./system_health_monitor.ts";
 
-// CompetitorSnapshot is intentionally not registered here — server/src/routes/functions/
-// collectOTXCompetitorChanges.ts (Express) is the canonical version of this job, on the
-// same 0 */6 * * * schedule (see server/src/scheduler.ts). This file (competitor_snapshot.ts)
-// used to also run it via this cron map, duplicating Apify spend for identical output; the
+// CompetitorSnapshot is intentionally not registered here. Its Express port
+// (collectOTXCompetitorChanges.ts) was deleted with the rest of the dead OTX REST leg.
+// This file (competitor_snapshot.ts) used to also run it via this cron map; the
 // agent itself stays importable for the separate event-driven config_updated bus trigger
 // (agents/orchestration/bus_listener.ts).
 const cronAgents: Record<string, () => Promise<void>> = {

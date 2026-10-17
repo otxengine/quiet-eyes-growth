@@ -27,13 +27,11 @@ async function tavilySearch(query: string, maxResults = 3): Promise<any[]> {
 }
 
 /**
- * detectCompetitorChanges — Express leg of the dual change pipeline.
+ * detectCompetitorChanges — competitor change detection.
  * Scans competitor online presence via Tavily+LLM for 6 change types:
  *   price_change | new_menu_item | new_promotion | website_change | review_delta | new_post
  * Writes results to market_signals (category='competitor_move').
  *
- * Dual pipeline: the OTX leg (collectOTXCompetitorChanges → competitor_changes → runOTXSyncBridge)
- * also writes to market_signals. Both sources are merged there by category.
  * Rate-limiting is handled by the 48h MarketSignal dedup below, not last_scanned,
  * to avoid a race with batchSnapshotCompetitors which shares that field.
  *

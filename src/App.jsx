@@ -37,7 +37,6 @@ const Subscription = lazyPage(() => import('@/pages/Subscription.jsx'));
 const Integrations = lazyPage(() => import('@/pages/Integrations.jsx'));
 const DataSources = lazyPage(() => import('@/pages/DataSources.jsx'));
 const SocialConnections = lazyPage(() => import('@/pages/SocialConnections.jsx'));
-const OTXDashboard = lazyPage(() => import('@/pages/OTXDashboard'));
 const LearningCenter = lazyPage(() => import('@/pages/LearningCenter.jsx'));
 const Marketing = lazyPage(() => import('@/pages/Marketing.jsx'));
 const Posts = lazyPage(() => import('@/pages/Posts.jsx'));
@@ -161,7 +160,6 @@ const AuthenticatedApp = () => {
         <Route path="/social" element={<SocialConnections />} />
         <Route path="/settings" element={<SettingsPage />} />
         {/* OTXEngine growth intelligence dashboard */}
-        <Route path="/otx" element={<Suspense fallback={null}><OTXDashboard /></Suspense>} />
         <Route path="/learning" element={<LearningCenter />} />
         <Route path="/marketing" element={<Marketing />} />
         <Route path="/posts" element={<Posts />} />

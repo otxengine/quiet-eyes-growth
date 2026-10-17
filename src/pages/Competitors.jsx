@@ -268,7 +268,6 @@ export default function Competitors() {
               profilePictureUrl={profilePicByCompId[comp.id]}
               businessName={businessProfile?.name}
               businessProfileId={bpId}
-              otxBizId={bpId}
               intelChanges={changes}
               onDelete={handleDelete}
               onDismissed={() => queryClient.invalidateQueries({ queryKey: ['competitorsPage', bpId] })}
