@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireBusinessAccess } from '../../middleware/businessAccess';
 import { invokeLLM } from '../../lib/llm';
+import { writeAutomationLog } from '../../lib/automationLog';
 import { generateMorningBriefing } from './generateMorningBriefing';
 import { generateLeadFirstContact } from './generateLeadFirstContact';
 import { generateBattlecard } from './generateBattlecard';
@@ -337,12 +338,54 @@ const FUNCTION_MAP: Record<string, any> = {
   weeklyEmailDigest,
 };
 
+// Scans that can outlast CloudFront's 120s origin timeout (automation_logs p95 up to
+// ~6,000s). A browser call gets 202 { started_at } right away and the handler keeps
+// running here; the screen polls automation_logs for the run's row
+// (src/api/client.js waitForAutomationLog). The scheduler calls these handlers
+// directly, not through this router, so it still awaits them to completion.
+const BACKGROUND_FUNCTIONS = new Set([
+  'collectCompetitorReviews',
+  'collectCompetitorSocialPosts',
+  'collectCompetitorSocialProfile',
+  'collectCompetitorSocialProfileAndPosts',
+  'collectCompetitorSocialStories',
+  'detectCompetitorAds',
+  'collectReviews',
+]);
+
+function runInBackground(name: string, handler: Function, req: Request, res: Response) {
+  const { businessProfileId } = req.body;
+  if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+  const startedAt = new Date().toISOString();
+  res.status(202).json({ started: true, started_at: startedAt });
+
+  let status = 200;
+  let body: any;
+  const bgRes: any = {
+    status: (code: number) => { status = code; return bgRes; },
+    json: (data: any) => { body = data; return bgRes; },
+  };
+  // Handlers log their own runs and their caught 500s — log what they don't: throws and 4xx exits.
+  Promise.resolve()
+    .then(() => handler(req, bgRes))
+    .then(() => {
+      if (status >= 400 && status < 500) {
+        return writeAutomationLog(name, businessProfileId, startedAt, 0, 'failed', body?.error || `HTTP ${status}`);
+      }
+    })
+    .catch((err: any) => {
+      console.error(`[functions] background ${name} failed:`, err?.message || err);
+      return writeAutomationLog(name, businessProfileId, startedAt, 0, 'failed', err?.message || String(err));
+    });
+}
+
 // POST /api/functions/:name
 router.post('/:name', requireBusinessAccess, (req: Request<{ name: string }>, res: Response) => {
   const handler = FUNCTION_MAP[req.params.name];
   if (!handler) {
     return res.status(404).json({ error: `Unknown function: ${req.params.name}` });
   }
+  if (BACKGROUND_FUNCTIONS.has(req.params.name)) return runInBackground(req.params.name, handler, req, res);
   return handler(req, res);
 });
 

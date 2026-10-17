@@ -174,6 +174,28 @@ const functions = {
   },
 };
 
+// Long scans (BACKGROUND_FUNCTIONS in server/src/routes/functions/index.ts, runFullScan)
+// answer right away with { started_at } and keep running on the server — CloudFront cuts
+// requests at 120s. Resolves with the first automation_logs row any of `names` wrote for
+// this business since started_at. The handler must log on the path being waited on, so
+// pass force:true to skip cadence guards that return without logging.
+// ponytail: matched by name + time, so a scheduler run of the same agent that finishes
+// first counts as this one — add a run id to automation_logs if that ever matters.
+export async function waitForAutomationLog(businessProfileId, names, since, timeoutMs = LONG_SCAN_TIMEOUT_MS) {
+  const filter = encodeURIComponent(JSON.stringify({
+    linked_business: businessProfileId,
+    automation_name: { in: [].concat(names) },
+    created_date: { gte: since },
+  }));
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 5000));
+    const [log] = await apiFetch(`/entities/AutomationLog?filter=${filter}&sort=created_date&limit=1`);
+    if (log) return log;
+  }
+  throw Object.assign(new Error('הסריקה עדיין רצה ברקע — הנתונים יתעדכנו כשתסתיים'), { status: 408 });
+}
+
 // ── integrations ──────────────────────────────────────────────────────────────
 
 const integrations = {

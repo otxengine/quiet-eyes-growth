@@ -76,18 +76,20 @@ describe('runFullScan', () => {
     (writeAutomationLog              as jest.Mock).mockResolvedValue(undefined);
   });
 
-  // AC1 — sync-first: response carries only the 3 immediate results
-  it('AC1: responds immediately with the first 3 results before deferred collectors run', async () => {
+  // AC1 — responds before any agent runs: even the first 3 can take 120s each, past
+  // CloudFront's 120s origin timeout. The UI polls automation_logs from started_at.
+  it('AC1: responds with started_at before any agent runs', async () => {
     const { res, json, getSnapshot } = makeRes();
     await runFullScan(makeReq(), res);
+    await new Promise(r => setTimeout(r, 50)); // drain background IIFE
 
     expect(json).toHaveBeenCalledTimes(1);
     const snap = getSnapshot();
-    expect(snap.success).toBe(true);
-    expect(Object.keys(snap.results)).toHaveLength(3);
-    expect(snap.results).toHaveProperty('cleanupInsights');
-    expect(snap.results).toHaveProperty('collectWebSignals');
-    expect(snap.results).toHaveProperty('collectSocialSignals');
+    expect(snap).toMatchObject({ success: true, started: true, started_at: expect.any(String) });
+    expect(snap.results).toBeUndefined();
+    // the immediate agents still run — after the response went out
+    expect(json.mock.invocationCallOrder[0]).toBeLessThan((collectWebSignals as jest.Mock).mock.invocationCallOrder[0]);
+    expect(collectSocialSignals).toHaveBeenCalled();
   });
 
   // AC2 — cooldown: scan ran < 24h ago → skip with cooldown flag
@@ -154,7 +156,7 @@ describe('runFullScan', () => {
     const { res, json, getSnapshot } = makeRes();
     await runFullScan(makeReq(), res);
 
-    // Response was already sent — success: true, only the 3 immediate results
+    // Response was already sent — success: true, before any collector ran
     expect(json).toHaveBeenCalledTimes(1);
     expect(getSnapshot().success).toBe(true);
 

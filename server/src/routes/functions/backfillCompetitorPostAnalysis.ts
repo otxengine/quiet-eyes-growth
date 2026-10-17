@@ -3,7 +3,10 @@ import { prisma } from '../../db';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
 
 const BATCH_LIMIT = 40; // rows fetched per DB query round
-const TIME_BUDGET_MS = 150_000; // stay under the frontend's 180s call timeout
+// Stay under CloudFront's 120s origin timeout, leaving ~60s for the in-flight analysis
+// (20s video download + LLM) that started just before the budget ran out.
+// Leftovers report as *_remaining for the next click.
+const TIME_BUDGET_MS = 60_000;
 
 // Hex-encode a string so it arrives at PostgreSQL as pure ASCII.
 // Bypasses Prisma's Linux query-engine bug that re-introduces 0x00 bytes
