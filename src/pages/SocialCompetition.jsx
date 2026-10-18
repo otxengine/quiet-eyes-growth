@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useOutletContext, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { LONG_SCAN_TIMEOUT_MS } from '@/api/client';
+import { waitForAutomationLog } from '@/api/client';
 import { Loader2, RefreshCw, ChevronDown, Megaphone } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
@@ -610,6 +610,16 @@ export default function SocialCompetition() {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [focusId, loadingComps, loadingPosts, loadingAds]);
 
+  // These scans run in the background on the server (202 + started_at) — wait for the
+  // automation_logs row the agent writes when done. `logName` is the agent that logs for
+  // a composite function; items_processed is its main count (posts/stories upserted).
+  const runScan = async (fn, logName = fn) => {
+    const { data } = await base44.functions.invoke(fn, { businessProfileId: bpId, force: true });
+    const log = await waitForAutomationLog(bpId, [fn, logName], data.started_at);
+    if (log.status === 'failed') throw new Error(log.error_message || fn);
+    return log;
+  };
+
   const handleRefreshAll = async () => {
     setRefreshingAll(true);
     const parts = [];
@@ -620,28 +630,28 @@ export default function SocialCompetition() {
       // (see server/src/lib/postsDeltaSignal.ts). force:true still bypasses each
       // step's own cadence guard, but not this delta-based skip — a quiet account
       // can still report "0 new posts" here even on a manual refresh.
-      const feedResult = await base44.functions.invoke('collectCompetitorSocialProfileAndPosts', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
+      const feedLog = await runScan('collectCompetitorSocialProfileAndPosts', 'collectCompetitorSocialPosts');
       queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] });
       queryClient.invalidateQueries({ queryKey: ['socialProfiles', bpId] });
-      if (feedResult?.upserted > 0) parts.push(`${feedResult.upserted} פוסטים חדשים`);
-      else console.info('[refresh-all] feed diagnostics:', feedResult?.diagnostics);
+      if (feedLog.items_processed > 0) parts.push(`${feedLog.items_processed} פוסטים חדשים`);
       parts.push('פרופילים עודכנו');
     } catch (e) { toast.error(`שגיאה בעדכון הפיד/פרופילים: ${e.message}`); }
 
     try {
-      const adsResult = await base44.functions.invoke('detectCompetitorAds', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
+      await runScan('detectCompetitorAds');
       queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] });
-      if (!adsResult?.skipped) parts.push('מודעות עודכנו');
+      parts.push('מודעות עודכנו');
     } catch { toast.error('שגיאה בעדכון המודעות'); }
 
     try {
-      const storiesResult = await base44.functions.invoke('collectCompetitorSocialStories', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
+      const storiesLog = await runScan('collectCompetitorSocialStories');
       queryClient.invalidateQueries({ queryKey: ['socialStories', bpId] });
-      if (storiesResult?.upserted > 0) parts.push(`${storiesResult.upserted} סטוריז חדשים`);
+      if (storiesLog.items_processed > 0) parts.push(`${storiesLog.items_processed} סטוריז חדשים`);
     } catch (e) { toast.error(`שגיאה בעדכון הסטוריז: ${e.message}`); }
 
     try {
-      const result = await base44.functions.invoke('backfillCompetitorPostAnalysis', { businessProfileId: bpId }, LONG_SCAN_TIMEOUT_MS);
+      // Synchronous, time-budgeted to stay under CloudFront's 120s (see the server file)
+      const { data: result } = await base44.functions.invoke('backfillCompetitorPostAnalysis', { businessProfileId: bpId }, 120000);
       queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] });
       queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] });
       const total = (result?.posts_analyzed || 0) + (result?.ads_analyzed || 0);
@@ -656,13 +666,9 @@ export default function SocialCompetition() {
   const handleScanAdsOnly = async () => {
     setScanningAds(true);
     try {
-      const result = await base44.functions.invoke('detectCompetitorAds', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
+      await runScan('detectCompetitorAds');
       queryClient.invalidateQueries({ queryKey: ['socialAds', bpId] });
-      if (result?.skipped) {
-        toast.info(result.reason === 'ran_recently' ? 'המודעות נסרקו לאחרונה' : 'לא הוגדר ספק חיפוש מודעות');
-      } else {
-        toast.success(result?.alerts_created > 0 ? `מודעות עודכנו — ${result.alerts_created} התראות חדשות` : 'מודעות עודכנו');
-      }
+      toast.success('מודעות עודכנו');
     } catch (e) {
       toast.error(`שגיאה בעדכון המודעות: ${e.message}`);
     } finally {

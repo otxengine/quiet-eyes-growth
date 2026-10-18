@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
+import { waitForAutomationLog } from '@/api/client';
 import { Check, Loader2, X, Zap } from 'lucide-react';
 
 // Animated label sequence shown while runFullScan runs on the backend
@@ -92,26 +93,23 @@ export default function ScanOverlay({ businessProfile, onComplete, onClose, step
         setCurrentStep(idx);
       }, LABEL_INTERVAL);
 
-      base44.functions.invoke('runFullScan', params, 360000) // 6 min — scan runs many agents
-        .then(res => {
+      base44.functions.invoke('runFullScan', params)
+        .then(async res => {
+          // runFullScan answers right away (CloudFront cuts requests at 120s) and runs its
+          // agents in the background. Done = the two collectors this summary shows have
+          // logged; the rest of the pipeline keeps going. No started_at = cooldown/plan limit.
+          const startedAt = res.data?.started_at;
+          const [web, social] = startedAt
+            ? await Promise.all(['collectWebSignals', 'collectSocialSignals']
+                .map(name => waitForAutomationLog(businessProfile.id, name, startedAt, 360000))) // 6 min
+            : [];
           clearInterval(timer);
           if (cancelledRef.current) return;
-          const r = res.data?.results || {};
-          setResults({
-            reviews:      r.collectReviews?.new_reviews || 0,
-            collect:      r.collectWebSignals?.new_signals_saved || 0,
-            social:       r.collectSocialSignals?.new_signals || 0,
-            compete:      r.runCompetitorIdentification?.competitors_found || 0,
-            leads:        (r.runLeadGeneration?.leads_generated || 0) + (r.findSocialLeads?.leads_created || 0),
-            trends:       r.detectTrends?.trends_created || 0,
-            early_trends: r.detectEarlyTrends?.trends_created || 0,
-            viral:        r.detectViralSignals?.signals_created || 0,
-            alerts:       r.generateProactiveAlerts?.alerts_created || 0,
-            advisory:     r.generateAdvisoryInsights?.insights_created || 0,
-            predictions:  r.runPredictions?.predictions_created || 0,
-            analyze:      r.synthesizeMarketInsights?.insights_generated || 0,
-          });
-          setDataforseoPending(!!r.collectReviews?.dataforseo_task_pending);
+          setResults(prev => ({
+            ...prev,
+            collect: web?.items_processed || 0,
+            social:  social?.items_processed || 0,
+          }));
           setLabelIdx(SCAN_LABELS.length - 1);
           setCurrentStep(SCAN_LABELS.length - 1);
           setDone(true);

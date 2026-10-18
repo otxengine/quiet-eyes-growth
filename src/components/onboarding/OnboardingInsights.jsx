@@ -55,7 +55,8 @@ export default function OnboardingInsights() {
           console.error('retire-replaced failed', err);
         }
       }
-      try { base44.functions.invoke('runFullScan', { businessProfileId: businessProfile.id }, 360000); } catch (_) {}
+      // Fire-and-forget — runFullScan answers right away and runs its agents in the background
+      base44.functions.invoke('runFullScan', { businessProfileId: businessProfile.id }).catch(() => {});
     }
     sessionStorage.setItem('otx_just_onboarded', String(Date.now()));
     navigate(targetPath, { state: { fromOnboarding: true } });
