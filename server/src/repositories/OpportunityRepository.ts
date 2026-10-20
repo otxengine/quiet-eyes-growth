@@ -28,7 +28,8 @@ export const opportunityRepository = {
            (id, business_id, type, source_signal_ids, source_event_ids, source_forecast_ids,
             opportunity_score, urgency, confidence, expected_window_start, expected_window_end,
             explanation, dedup_key, status, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::timestamptz,$16::timestamptz)
+         VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6::jsonb,$7,$8,$9,$10::timestamptz,$11::timestamptz,
+                 $12,$13,$14,$15::timestamptz,$16::timestamptz)
          ON CONFLICT (business_id, dedup_key) DO UPDATE SET
            opportunity_score  = GREATEST(otx_opportunities.opportunity_score, EXCLUDED.opportunity_score),
            urgency            = EXCLUDED.urgency,
@@ -37,7 +38,9 @@ export const opportunityRepository = {
            updated_at         = now()
          RETURNING id, (xmax = 0) AS is_new`,
         opp.id, opp.business_id, opp.type,
-        opp.source_signal_ids, opp.source_event_ids, opp.source_forecast_ids,
+        JSON.stringify(opp.source_signal_ids ?? []),
+        JSON.stringify(opp.source_event_ids ?? []),
+        JSON.stringify(opp.source_forecast_ids ?? []),
         opp.opportunity_score, opp.urgency, opp.confidence,
         opp.expected_window_start ?? null,
         opp.expected_window_end   ?? null,
@@ -107,9 +110,9 @@ export const threatRepository = {
     try {
       const result = await prisma.$queryRawUnsafe<Array<{ id: string; is_new: boolean }>>(
         `INSERT INTO otx_threats
-           (id, business_id, type, source_signal_ids, risk_score, urgency, confidence,
+           (id, business_id, type, signal_ids, risk_score, urgency, confidence,
             explanation, dedup_key, status, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::timestamptz,$12::timestamptz)
+         VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9,$10,$11::timestamptz,$12::timestamptz)
          ON CONFLICT (business_id, dedup_key) DO UPDATE SET
            risk_score   = GREATEST(otx_threats.risk_score, EXCLUDED.risk_score),
            urgency      = EXCLUDED.urgency,
@@ -118,7 +121,7 @@ export const threatRepository = {
            updated_at   = now()
          RETURNING id, (xmax = 0) AS is_new`,
         threat.id, threat.business_id, threat.type,
-        threat.source_signal_ids, threat.risk_score,
+        JSON.stringify(threat.source_signal_ids ?? []), threat.risk_score,
         threat.urgency, threat.confidence, threat.explanation,
         threat.dedup_key, threat.status,
         threat.created_at, threat.updated_at,

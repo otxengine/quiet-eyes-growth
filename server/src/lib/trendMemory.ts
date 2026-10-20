@@ -83,7 +83,7 @@ export async function saveCheckpoint(
     await prisma.$executeRawUnsafe(
       `INSERT INTO trend_scan_checkpoint
          (checkpoint_key, last_scan_at, scanned_item_ids, scanned_urls, scan_meta, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $6)
+       VALUES ($1, $2::timestamptz, $3, $4, $5, $6::timestamptz, $6::timestamptz)
        ON CONFLICT (checkpoint_key)
        DO UPDATE SET
          last_scan_at      = EXCLUDED.last_scan_at,

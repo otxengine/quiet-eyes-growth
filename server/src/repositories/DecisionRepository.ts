@@ -68,9 +68,9 @@ export class DecisionRepository {
         `INSERT INTO otx_decisions
           (id, business_id, insight_id, trace_id, action_type, urgency, rationale,
            final_score, roi_score, confidence_score, score_breakdown,
-           execution_mode, tags, context_snapshot, expires_at)
+           execution_mode, tags, context_snapshot, expires_at, decision_type, title)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8::numeric,$9::numeric,$10::numeric,$11::jsonb,
-                 $12,$13::text[],$14,$15::timestamptz)
+                 $12,$13::jsonb,$14,$15::timestamptz,$5,$16)
          ON CONFLICT (id) DO NOTHING`,
         decision.id,
         decision.business_id,
@@ -84,9 +84,10 @@ export class DecisionRepository {
         decision.confidence ?? null,
         JSON.stringify(decision.score_breakdown ?? {}),
         decision.execution_mode ?? 'suggest',
-        decision.tags ?? [],
+        JSON.stringify(decision.tags ?? []),
         decision.context_snapshot ?? null,
         decision.expires_at ?? null,
+        decision.title || rationale,
       );
     } catch (e: any) {
       if (!e.message?.includes('does not exist')) throw e;

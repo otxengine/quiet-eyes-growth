@@ -444,9 +444,9 @@ ALTER TABLE otx_decisions
   ADD COLUMN IF NOT EXISTS approval_required BOOLEAN  DEFAULT false,
   ADD COLUMN IF NOT EXISTS policy_version   INT       DEFAULT 1,
   ADD COLUMN IF NOT EXISTS score_breakdown  JSONB     DEFAULT '{}',
-  ADD COLUMN IF NOT EXISTS context_snapshot JSONB     DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS context_snapshot TEXT,
   ADD COLUMN IF NOT EXISTS expires_at       TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS tags             TEXT[];
+  ADD COLUMN IF NOT EXISTS tags             JSONB     DEFAULT '[]';
 
 -- Add recommendation_id and approval columns to otx_execution_tasks
 ALTER TABLE otx_execution_tasks
