@@ -9,6 +9,7 @@ import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -20,12 +21,14 @@ export interface QeStackProps extends cdk.StackProps {
   srcDir: string;
   /** Worker tasks (background jobs). Staging starts at 0 until copied data is confirmed safe. */
   workerCount: number;
+  /** Custom hostname; certificateArn must be an issued us-east-1 ACM cert. Unset = the cloudfront.net URL. */
+  domain?: { name: string; certificateArn: string };
 }
 
 export class QeStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: QeStackProps) {
     super(scope, id, props);
-    const { envName, srcDir, workerCount } = props;
+    const { envName, srcDir, workerCount, domain } = props;
     const isProd = envName === 'prod';
     const removal = isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY;
     cdk.Tags.of(this).add('app', 'quiet-eyes');
@@ -110,6 +113,10 @@ export class QeStack extends cdk.Stack {
     const distribution = new cloudfront.Distribution(this, 'Cdn', {
       comment: `quiet-eyes ${envName}`,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100, // North America, Europe, Israel
+      ...(domain && {
+        domainNames: [domain.name],
+        certificate: acm.Certificate.fromCertificateArn(this, 'Cert', domain.certificateArn),
+      }),
       defaultRootObject: 'index.html',
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(web),
@@ -132,7 +139,8 @@ export class QeStack extends cdk.Stack {
         },
       },
     });
-    const siteUrl = `https://${distribution.distributionDomainName}`;
+    // Also the API's CORS origin (FRONTEND_URL), so it must be the hostname browsers actually use.
+    const siteUrl = `https://${domain?.name ?? distribution.distributionDomainName}`;
 
     // Hashed build assets are immutable; everything else (HTML, logos, robots) revalidates.
     const webDist = path.join(srcDir, 'dist');
