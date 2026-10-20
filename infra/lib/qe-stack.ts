@@ -14,10 +14,12 @@ import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cwActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subs from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as budgets from 'aws-cdk-lib/aws-budgets';
 
 export interface QeStackProps extends cdk.StackProps {
   envName: 'staging' | 'prod';
@@ -27,6 +29,14 @@ export interface QeStackProps extends cdk.StackProps {
   workerCount: number;
   /** Custom hostname; certificateArn must be an issued us-east-1 ACM cert. Unset = the cloudfront.net URL. */
   domain?: { name: string; certificateArn: string };
+  /** API tasks. Default 1, like Render; 2+ needs the multi-instance fixes (page picker, job locks, shutdown). */
+  apiCount?: number;
+  /** Existing bucket for scraped media; tasks get read/write on its objects through their IAM role. */
+  mediaBucket?: { name: string; region: string };
+  /** CloudFront-scope WAF web ACL from the us-east-1 Qe-edge stack. Unset = no WAF. */
+  webAclArn?: string;
+  /** Account-wide monthly budget in USD, emailed to ALERT_EMAIL at 80% actual and 100% forecast. */
+  monthlyBudgetUsd?: number;
 }
 
 export class QeStack extends cdk.Stack {
@@ -116,6 +126,7 @@ export class QeStack extends cdk.Stack {
     });
     const distribution = new cloudfront.Distribution(this, 'Cdn', {
       comment: `quiet-eyes ${envName}`,
+      webAclId: props.webAclArn,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100, // North America, Europe, Israel
       ...(domain && {
         domainNames: [domain.name],
@@ -133,7 +144,7 @@ export class QeStack extends cdk.Stack {
         '/api/*': {
           origin: origins.VpcOrigin.withApplicationLoadBalancer(alb, {
             protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY, // stays inside the AWS network
-            // ponytail: 120s is the default quota ceiling. The 8 long scan endpoints need async jobs before prod.
+            // 120s is the default quota ceiling; long scans answer right away and finish in the background.
             readTimeout: cdk.Duration.seconds(120),
           }),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
@@ -182,6 +193,7 @@ export class QeStack extends cdk.Stack {
           TRUST_PROXY_HOPS: '2', // CloudFront + ALB
           FRONTEND_URL: siteUrl,
           SERVER_BASE_URL: siteUrl,
+          ...(props.mediaBucket && { AWS_S3_BUCKET: props.mediaBucket.name, AWS_S3_REGION: props.mediaBucket.region }),
         },
         secrets: appSecrets,
         portMappings: [{ containerPort: 3000 }],
@@ -191,13 +203,20 @@ export class QeStack extends cdk.Stack {
           logGroup: (logGroups[name] = new logs.LogGroup(this, `${name}Logs`, { retention: logs.RetentionDays.ONE_MONTH, removalPolicy: removal })),
         }),
       });
+      // Media uploads use the task role, so no AWS keys are stored anywhere (server/src/lib/s3.ts).
+      if (props.mediaBucket) {
+        td.addToTaskRolePolicy(new iam.PolicyStatement({
+          actions: ['s3:GetObject', 's3:PutObject'],
+          resources: [`arn:aws:s3:::${props.mediaBucket.name}/*`],
+        }));
+      }
       return td;
     };
 
     const api = new ecs.FargateService(this, 'Api', {
       cluster,
       taskDefinition: taskDef('Api', 'web', isProd ? 512 : 256),
-      desiredCount: isProd ? 2 : 1,
+      desiredCount: props.apiCount ?? 1,
       minHealthyPercent: 100,
       maxHealthyPercent: 200,
       assignPublicIp: true,
@@ -292,6 +311,23 @@ export class QeStack extends cdk.Stack {
     });
     alarm('WorkerErrors', 'Background jobs logged more than 20 errors in an hour',
       workerErrors.metric({ period: minutes(60), statistic: 'Sum' }), 20);
+
+    // Account-wide cost alert (one is enough, so only the prod stack sets it).
+    if (props.monthlyBudgetUsd) {
+      const subscribers = [{ subscriptionType: 'EMAIL', address: alertEmail }];
+      new budgets.CfnBudget(this, 'MonthlyBudget', {
+        budget: {
+          budgetName: 'quiet-eyes-monthly',
+          budgetType: 'COST',
+          timeUnit: 'MONTHLY',
+          budgetLimit: { amount: props.monthlyBudgetUsd, unit: 'USD' },
+        },
+        notificationsWithSubscribers: [
+          { notification: { notificationType: 'ACTUAL', comparisonOperator: 'GREATER_THAN', threshold: 80, thresholdType: 'PERCENTAGE' }, subscribers },
+          { notification: { notificationType: 'FORECASTED', comparisonOperator: 'GREATER_THAN', threshold: 100, thresholdType: 'PERCENTAGE' }, subscribers },
+        ],
+      });
+    }
 
     const output = (key: string, value: string) => new cdk.CfnOutput(this, key, { value });
     output('Url', siteUrl);
