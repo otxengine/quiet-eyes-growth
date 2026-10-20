@@ -1,6 +1,7 @@
 {
   "app": "npx tsx bin/app.ts",
   "context": {
-    "prodLive": false
+    "prodLive": false,
+    "prodWebAclArn": "arn:aws:wafv2:us-east-1:226635092863:global/webacl/quiet-eyes-prod/a112fce8-4058-47f5-af84-84326d1c3ca6"
   }
 }
