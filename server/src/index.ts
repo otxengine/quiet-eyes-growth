@@ -770,7 +770,14 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS action_type TEXT`);
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS urgency TEXT`);
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS rationale TEXT`);
-  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS final_score NUMERIC(5,3)`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS final_score NUMERIC(8,3)`);
+  // final_score is 0–100; NUMERIC(5,3) overflows at 100 (22003). Guarded so the lock is only taken once.
+  await sql(`DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema()
+               AND table_name = 'otx_decisions' AND column_name = 'final_score' AND numeric_precision < 8) THEN
+      ALTER TABLE otx_decisions ALTER COLUMN final_score TYPE NUMERIC(8,3);
+    END IF;
+  END $$`);
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS execution_mode TEXT DEFAULT 'suggest'`);
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS fused_insight_id TEXT`);
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS approval_required BOOLEAN DEFAULT false`);

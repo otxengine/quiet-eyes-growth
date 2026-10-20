@@ -245,7 +245,7 @@ router.post('/', async (req: Request, res: Response) => {
       action_type     TEXT        NOT NULL,
       urgency         TEXT        NOT NULL,
       rationale       TEXT        NOT NULL,
-      final_score     NUMERIC(5,3) NOT NULL,
+      final_score     NUMERIC(8,3) NOT NULL,
       roi_score       NUMERIC(5,3),
       confidence_score NUMERIC(5,3),
       business_fit_score NUMERIC(5,3),
@@ -392,6 +392,13 @@ router.post('/', async (req: Request, res: Response) => {
     `ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS expected_roi NUMERIC(8,3)`,
     `ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'`,
     `ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS context_snapshot TEXT`,
+    // final_score is 0–100; NUMERIC(5,3) overflows at 100 (22003). Guarded so the lock is only taken once.
+    `DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema()
+                 AND table_name = 'otx_decisions' AND column_name = 'final_score' AND numeric_precision < 8) THEN
+        ALTER TABLE otx_decisions ALTER COLUMN final_score TYPE NUMERIC(8,3);
+      END IF;
+    END $$`,
 
     // ── v3_approval_requests table ────────────────────────────────────────────
     `CREATE TABLE IF NOT EXISTS v3_approval_requests (

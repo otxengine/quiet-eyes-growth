@@ -400,10 +400,19 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
         const safeEntries = Object.entries(data).filter(([k]) => SAFE_COLUMN.test(k));
         if (safeEntries.length === 0) throw new Error('No valid fields to update');
 
+        // Prisma binds JS strings as text, so cast each value to its real column type
+        // (timestamptz/int/bool/jsonb reject text with 42804).
+        const cols = await prisma.$queryRawUnsafe<{ column_name: string; udt_name: string }[]>(
+          `SELECT column_name, udt_name FROM information_schema.columns
+           WHERE table_schema = current_schema() AND table_name = $1`,
+          table,
+        );
+        const udt = new Map(cols.map(c => [c.column_name, c.udt_name]));
         const setClauses = safeEntries
-          .map(([k], i) => `"${k}" = $${i + 2}`)
+          .map(([k], i) => `"${k}" = $${i + 2}${udt.has(k) ? `::"${udt.get(k)}"` : ''}`)
           .join(', ');
-        const values = [req.params.id, ...safeEntries.map(([, v]) => v)];
+        const values = [req.params.id, ...safeEntries.map(([k, v]) =>
+          /^jsonb?$/.test(udt.get(k) ?? '') && v !== null && typeof v === 'object' ? JSON.stringify(v) : v)];
         await prisma.$executeRawUnsafe(
           `UPDATE "${table}" SET ${setClauses} WHERE id = $1`,
           ...values
