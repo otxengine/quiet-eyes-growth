@@ -14,6 +14,10 @@ import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cwActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subs from 'aws-cdk-lib/aws-sns-subscriptions';
 
 export interface QeStackProps extends cdk.StackProps {
   envName: 'staging' | 'prod';
@@ -166,6 +170,7 @@ export class QeStack extends cdk.Stack {
     const cluster = new ecs.Cluster(this, 'Cluster', { vpc });
     const image = ecs.ContainerImage.fromAsset(path.join(srcDir, 'server'), { platform: Platform.LINUX_ARM64 });
     const arm64 = { cpuArchitecture: ecs.CpuArchitecture.ARM64, operatingSystemFamily: ecs.OperatingSystemFamily.LINUX };
+    const logGroups: Record<string, logs.LogGroup> = {};
     const taskDef = (name: string, role: 'web' | 'worker', cpu: number) => {
       const td = new ecs.FargateTaskDefinition(this, `${name}Task`, { cpu, memoryLimitMiB: 1024, runtimePlatform: arm64 });
       td.addContainer('app', {
@@ -183,7 +188,7 @@ export class QeStack extends cdk.Stack {
         stopTimeout: cdk.Duration.seconds(60),
         logging: ecs.LogDrivers.awsLogs({
           streamPrefix: name.toLowerCase(),
-          logGroup: new logs.LogGroup(this, `${name}Logs`, { retention: logs.RetentionDays.ONE_MONTH, removalPolicy: removal }),
+          logGroup: (logGroups[name] = new logs.LogGroup(this, `${name}Logs`, { retention: logs.RetentionDays.ONE_MONTH, removalPolicy: removal })),
         }),
       });
       return td;
@@ -200,7 +205,7 @@ export class QeStack extends cdk.Stack {
       circuitBreaker: { rollback: true },
       healthCheckGracePeriod: cdk.Duration.minutes(3), // boot runs the startup DDL
     });
-    listener.addTargets('Api', {
+    const apiTargets = listener.addTargets('Api', {
       port: 3000,
       protocol: elbv2.ApplicationProtocol.HTTP,
       targets: [api],
@@ -237,6 +242,56 @@ export class QeStack extends cdk.Stack {
       secrets: { ...dbEnv, SOURCE_DATABASE_URL: ssmSecret('SOURCE_DATABASE_URL') },
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'restore', logGroup: restoreLogs }),
     });
+
+    // ── Alarms → email. The address stays out of this public repo: CI passes the ALERT_EMAIL
+    // repo variable, scripts/deploy.sh reads it from infra/.env.<env>. Required, so a deploy
+    // can't silently drop the subscription.
+    // ponytail: a handful of coarse alarms; add per-job alarms if these prove too blunt.
+    const alertEmail = process.env.ALERT_EMAIL;
+    if (!alertEmail) throw new Error('Set ALERT_EMAIL (alarm recipient): GitHub repo variable in CI, infra/.env.<env> locally');
+    const alerts = new sns.Topic(this, 'Alerts', { displayName: `quiet-eyes ${envName} alerts` });
+    alerts.addSubscription(new subs.EmailSubscription(alertEmail));
+    const notify = new cwActions.SnsAction(alerts);
+    const minutes = (n: number) => cdk.Duration.minutes(n);
+    const alarm = (id: string, description: string, metric: cloudwatch.IMetric, threshold: number,
+      opts: { below?: boolean; periods?: number; missing?: cloudwatch.TreatMissingData } = {}) => {
+      const a = new cloudwatch.Alarm(this, id, {
+        alarmName: `qe-${envName}-${id}`,
+        alarmDescription: description,
+        metric,
+        threshold,
+        evaluationPeriods: opts.periods ?? 1,
+        comparisonOperator: opts.below
+          ? cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD
+          : cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        treatMissingData: opts.missing ?? cloudwatch.TreatMissingData.NOT_BREACHING,
+      });
+      a.addAlarmAction(notify);
+      a.addOkAction(notify);
+    };
+    alarm('ApiNoHealthyTask', 'No healthy API task behind the load balancer for 3 minutes',
+      apiTargets.metrics.healthyHostCount({ period: minutes(1), statistic: 'Minimum' }), 1,
+      { below: true, periods: 3, missing: cloudwatch.TreatMissingData.BREACHING });
+    alarm('Api5xx', 'API returned more than 20 server errors in 5 minutes',
+      apiTargets.metrics.httpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT, { period: minutes(5), statistic: 'Sum' }), 20);
+    alarm('Alb5xx', 'Load balancer returned more than 10 of its own 5xx (no/failing target) in 5 minutes',
+      alb.metrics.httpCodeElb(elbv2.HttpCodeElb.ELB_5XX_COUNT, { period: minutes(5), statistic: 'Sum' }), 10);
+    alarm('DbCpu', 'Database CPU above 80% for 15 minutes',
+      db.metricCPUUtilization({ period: minutes(5) }), 80, { periods: 3 });
+    alarm('DbStorage', 'Database free storage below 2 GiB',
+      db.metricFreeStorageSpace({ period: minutes(5), statistic: 'Minimum' }), 2 * 1024 ** 3, { below: true });
+    // max_connections ≈ RAM/9.5MB: ~110 on db.t4g.micro, ~220 on small.
+    alarm('DbConnections', 'Database connections near the instance limit',
+      db.metricDatabaseConnections({ period: minutes(5), statistic: 'Maximum' }), isProd ? 180 : 80);
+    const workerErrors = new logs.MetricFilter(this, 'WorkerErrorLines', {
+      logGroup: logGroups.Worker,
+      filterPattern: logs.FilterPattern.literal('"\\"level\\":\\"error\\""'),
+      metricNamespace: 'QuietEyes',
+      metricName: `${envName}-worker-errors`,
+      metricValue: '1',
+    });
+    alarm('WorkerErrors', 'Background jobs logged more than 20 errors in an hour',
+      workerErrors.metric({ period: minutes(60), statistic: 'Sum' }), 20);
 
     const output = (key: string, value: string) => new cdk.CfnOutput(this, key, { value });
     output('Url', siteUrl);

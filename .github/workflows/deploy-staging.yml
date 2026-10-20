@@ -56,6 +56,7 @@ jobs:
         working-directory: infra
         env:
           SRC_DIR: ${{ github.workspace }}
+          ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
         # CI has no terminal to answer CDK's prompt; the human gate is the protected
         # "staging" environment and the deploy-branch rules in GitHub.
         run: npx cdk deploy Qe-staging --require-approval never
