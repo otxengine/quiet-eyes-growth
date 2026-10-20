@@ -24,12 +24,14 @@ render_env "$BE_SERVICE" \
   > "$INFRA/.env.prod-secrets"
 
 # Frontend: public build values only. On AWS the API URL is the relative /api, and the
-# browser no longer talks to Supabase.
-render_env "$FE_SERVICE" \
-  | jq -r '.[].envVar | select(.key | startswith("VITE_"))
-      | select(.key | test("^VITE_(API_URL|API_BASE_URL|SERVER_URL|SUPABASE_.*)$") | not)
-      | "\(.key)=\(.value)"' \
-  > "$INFRA/.env.prod"
+# browser no longer talks to Supabase. Other lines already in .env.prod (ALERT_EMAIL) stay.
+{
+  grep -v '^VITE_' "$INFRA/.env.prod" 2>/dev/null || true
+  render_env "$FE_SERVICE" \
+    | jq -r '.[].envVar | select(.key | startswith("VITE_"))
+        | select(.key | test("^VITE_(API_URL|API_BASE_URL|SERVER_URL|SUPABASE_.*)$") | not)
+        | "\(.key)=\(.value)"'
+} > "$INFRA/.env.prod.tmp" && mv "$INFRA/.env.prod.tmp" "$INFRA/.env.prod"
 
 echo "backend: $(grep -c . "$INFRA/.env.prod-secrets") variables -> infra/.env.prod-secrets"
 cut -d= -f1 "$INFRA/.env.prod-secrets" | sort | sed 's/^/  /'
