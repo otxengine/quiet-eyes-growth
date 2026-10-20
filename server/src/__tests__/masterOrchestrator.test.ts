@@ -60,6 +60,7 @@ jest.mock('../services/learning/PolicyWeightUpdater', () => ({
 jest.mock('../repositories/DecisionRepository', () => ({
   decisionRepository: {
     savePipelineRun: jest.fn().mockResolvedValue(undefined),
+    saveFusedInsight: jest.fn().mockResolvedValue(undefined),
     getRunHistory:   jest.fn().mockResolvedValue([]),
   },
 }));

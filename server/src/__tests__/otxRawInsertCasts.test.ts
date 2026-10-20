@@ -43,8 +43,40 @@ describe('otx raw inserts', () => {
     const [sql, ...params] = exec.mock.calls[0];
     expect(sql).not.toContain('text[]');
     expect(castedParams(sql, params).jsonb).toContain(JSON.stringify(['post_content', 'urgency:high']));
-    expect(sql).toMatch(/decision_type, title\)/);
+    expect(sql).toMatch(/decision_type, title, score\)/);
     expect(params).toContain('Post a promo');
+  });
+
+  it('saveDecision also writes score (getRecentDecisions orders by it)', async () => {
+    await new DecisionRepository().saveDecision({ id: 'dec_2', business_id: 'biz', action_type: 'x', score: 100 } as any);
+
+    const [sql, ...params] = exec.mock.calls[0];
+    expect(sql).toMatch(/title, score\)/);
+    expect(sql).toMatch(/\$16,\$8::numeric\)/);
+    expect(params[7]).toBe(100);
+  });
+
+  it('saveFusedInsight writes the real otx_fused_insights columns, incl. NOT NULL summary', async () => {
+    await new DecisionRepository().saveFusedInsight({
+      id: 'ins_1', business_id: 'biz', trace_id: 'tr', top_summary: 'Headline', top_opportunity: 'long',
+      urgency: 'high', confidence: 0.8, expected_business_impact: '+10%', expected_impact: '+10%',
+      contributing_items: [{ type: 'signal', id: 's1', label: 'l', score: 1 }], contributing_signals: ['s1'],
+      suggested_action_types: ['content'], created_at: '2026-10-20T00:00:00.000Z',
+    } as any);
+
+    const [sql, ...params] = exec.mock.calls[0];
+    expect(sql).toMatch(/\(id, business_id, trace_id, urgency, confidence, summary,\s+key_signals, recommended_actions, predicted_impact, created_at\)/);
+    expect(sql).not.toMatch(/top_opportunity|explanation|contributing_signal_ids|raw_signals_count|trends_count/);
+    expect(params[5]).toBe('Headline');
+    expect(castedParams(sql, params).jsonb).toEqual([JSON.stringify([{ type: 'signal', id: 's1', label: 'l', score: 1 }]), '["content"]']);
+  });
+
+  it('updateTaskStatus sets error_message (there is no error column)', async () => {
+    await new DecisionRepository().updateTaskStatus('task_1', 'failed', 'boom');
+
+    const [sql, ...params] = exec.mock.calls[0];
+    expect(sql).toMatch(/error_message = \$3/);
+    expect(params).toEqual(['task_1', 'failed', 'boom']);
   });
 
   it('opportunity upsert sends id arrays as jsonb strings and windows as timestamptz', async () => {
