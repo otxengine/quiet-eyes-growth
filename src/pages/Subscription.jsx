@@ -128,13 +128,13 @@ function PlanCard({ plan, isCurrentPlan, branchCount, onSelect, loading }) {
           <span className="text-[26px] font-bold text-foreground tracking-tight">
             ₪{plan.pricePerBranch.toLocaleString()}
           </span>
-          <span className="text-[11px] text-foreground-muted">/סניף/חודש</span>
+          <span className="text-[11px] text-foreground-muted">/סניף/חודש + מע"מ</span>
         </div>
         {showBranchBreakdown && (
           <div className="mt-1 px-2 py-1 bg-secondary rounded-lg">
             <p className="text-[11px] text-foreground-muted">
               {branchCount} סניפים × ₪{plan.pricePerBranch.toLocaleString()} =
-              <span className="font-bold text-foreground mr-1">₪{totalMonthly.toLocaleString()}/חודש</span>
+              <span className="font-bold text-foreground mr-1">₪{totalMonthly.toLocaleString()}/חודש + מע"מ</span>
             </p>
           </div>
         )}
@@ -353,7 +353,7 @@ export default function Subscription() {
             <p className="text-[11px] text-foreground-muted">חיוב חודשי</p>
             <p className="text-[20px] font-bold text-foreground">₪{totalMonthly.toLocaleString()}</p>
             <p className="text-[10px] text-foreground-muted">
-              {branchCount} × ₪{currentPlan.pricePerBranch.toLocaleString()}
+              {branchCount} × ₪{currentPlan.pricePerBranch.toLocaleString()} · לפני מע"מ
             </p>
           </div>
         )}

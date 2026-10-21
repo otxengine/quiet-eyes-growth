@@ -57,6 +57,13 @@ const PRICING_PRODUCT = {
     name: o.name,
     price: o.price,
     priceCurrency: 'ILS',
+    // Prices are quoted before VAT; Paddle adds it at checkout.
+    priceSpecification: {
+      '@type': 'UnitPriceSpecification',
+      price: o.price,
+      priceCurrency: 'ILS',
+      valueAddedTaxIncluded: false,
+    },
     url: `${SITE_URL}/pricing`,
     availability: 'https://schema.org/InStock',
     category: 'SaaS',
