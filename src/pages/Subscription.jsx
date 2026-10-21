@@ -3,10 +3,11 @@
  * Pricing: plan_price × branch_count / month.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useOrganization } from '@/contexts/OrganizationContext';
-import { stripeApi } from '@/api/stripeApi';
+import { billingApi } from '@/api/billingApi';
+import { openPaddleCheckout } from '@/lib/paddle';
 import { toast } from 'sonner';
 import {
   Crown, Loader2, Check, X, Zap, GitBranch, CreditCard,
@@ -82,6 +83,7 @@ const STATUS_LABELS = {
   past_due:    { label: 'תשלום באיחור', color: 'text-amber-600' },
   cancelled:   { label: 'בוטל',         color: 'text-red-500' },
   trialing:    { label: 'תקופת ניסיון', color: 'text-blue-600' },
+  paused:      { label: 'מושהה',        color: 'text-amber-600' },
   none:        { label: 'ללא מנוי',    color: 'text-foreground-muted' },
   free_trial:  { label: 'ניסיון חינם', color: 'text-blue-600' },
 };
@@ -171,8 +173,21 @@ function PlanCard({ plan, isCurrentPlan, branchCount, onSelect, loading }) {
   );
 }
 
-function InvoiceRow({ inv }) {
+function InvoiceRow({ inv, orgId }) {
   const date = new Date(inv.date * 1000).toLocaleDateString('he-IL');
+  const [opening, setOpening] = useState(false);
+
+  // Paddle invoice links expire, so ask for a fresh one on each click.
+  const openInvoice = async () => {
+    setOpening(true);
+    try {
+      const { url } = await billingApi.invoicePdf(inv.id, orgId);
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      toast.error(e.message || 'החשבונית אינה זמינה כרגע');
+    }
+    setOpening(false);
+  };
   return (
     <div className="flex items-center justify-between py-2.5 px-4 hover:bg-secondary/50 transition-colors">
       <div className="flex items-center gap-2">
@@ -189,10 +204,11 @@ function InvoiceRow({ inv }) {
         )}>
           {inv.status === 'paid' ? 'שולם' : inv.status}
         </span>
-        {inv.url && (
-          <a href={inv.url} target="_blank" rel="noopener noreferrer" className="p-1 hover:text-primary text-foreground-muted">
-            <ExternalLink className="w-3 h-3" />
-          </a>
+        {inv.hasInvoice && (
+          <button onClick={openInvoice} disabled={opening} title="חשבונית"
+            className="p-1 hover:text-primary text-foreground-muted">
+            {opening ? <Loader2 className="w-3 h-3 animate-spin" /> : <ExternalLink className="w-3 h-3" />}
+          </button>
         )}
       </div>
     </div>
@@ -210,23 +226,11 @@ export default function Subscription() {
   const branchCount = Math.max(1, allBranches.length || currentOrg?.branch_count || 1);
 
   const { data: subData, isLoading, refetch } = useQuery({
-    queryKey: ['stripeStatus', orgId],
-    queryFn: () => stripeApi.getStatus(orgId),
+    queryKey: ['billingStatus', orgId],
+    queryFn: () => billingApi.getStatus(orgId),
     enabled: !!orgId,
     staleTime: 30_000,
   });
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('success') === 'true') {
-      toast.success('התשלום בוצע בהצלחה! המנוי עודכן ✓');
-      window.history.replaceState({}, '', window.location.pathname);
-      setTimeout(() => refetch(), 2000);
-    } else if (params.get('canceled') === 'true') {
-      toast.info('התשלום בוטל');
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, []);
 
   const currentPlanId = subData?.plan || currentOrg?.plan_id || 'free_trial';
   const subStatus     = subData?.status || 'none';
@@ -246,10 +250,23 @@ export default function Subscription() {
     }
     setCheckoutLoading(planId);
     try {
-      const result = await stripeApi.checkout(planId, orgId, window.location.origin + '/subscription');
-      if (result.url) window.location.href = result.url;
-      else if (result.devBypass) { toast.success('התוכנית עודכנה (מצב פיתוח, ללא Stripe)'); refetch(); }
-      else toast.error(result.error || 'שגיאה ביצירת הזמנה');
+      const result = await billingApi.checkout(planId, orgId);
+      if (result.transactionId) {
+        const outcome = await openPaddleCheckout(result.transactionId);
+        if (outcome === 'completed') {
+          toast.success('התשלום בוצע בהצלחה! המנוי מתעדכן ✓');
+          // Plan activation lands via Paddle's webhook a few seconds later.
+          setTimeout(() => refetch(), 4000);
+        }
+      } else if (result.changed) {
+        toast.success('התוכנית עודכנה ✓');
+        refetch();
+      } else if (result.devBypass) {
+        toast.success('התוכנית עודכנה (מצב פיתוח, ללא תשלום)');
+        refetch();
+      } else {
+        toast.error(result.error || 'שגיאה ביצירת התשלום');
+      }
     } catch (e) {
       toast.error(e.message || 'שגיאה — נסה שוב');
     }
@@ -260,7 +277,7 @@ export default function Subscription() {
     if (window.self !== window.top) { alert('ניהול תשלום זמין רק מחלון נפרד'); return; }
     setPortalLoading(true);
     try {
-      const result = await stripeApi.portal(orgId, window.location.origin + '/subscription');
+      const result = await billingApi.portal(orgId);
       if (result.url) window.location.href = result.url;
     } catch (e) {
       toast.error(e.message || 'שגיאה — נסה שוב');
@@ -341,9 +358,12 @@ export default function Subscription() {
         <div className="text-right">
           <p className="text-[11px] text-foreground-muted">חיוב הבא</p>
           <p className="text-[14px] font-semibold text-foreground">{nextBilling}</p>
+          {subData?.cancelAtPeriodEnd && (
+            <p className="text-[10px] text-red-500">המנוי יסתיים בתאריך זה</p>
+          )}
         </div>
 
-        {subData?.stripeSubscriptionId && (
+        {subData?.subscriptionId && (
           <button
             onClick={handlePortal}
             disabled={portalLoading}
@@ -411,7 +431,7 @@ export default function Subscription() {
             <p className="text-[13px] font-semibold text-foreground">היסטוריית חיובים</p>
           </div>
           <div className="divide-y divide-border">
-            {subData.invoices.map(inv => <InvoiceRow key={inv.id} inv={inv} />)}
+            {subData.invoices.map(inv => <InvoiceRow key={inv.id} inv={inv} orgId={orgId} />)}
           </div>
         </div>
       )}

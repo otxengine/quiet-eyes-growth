@@ -35,7 +35,7 @@ const SOFTWARE_APPLICATION = {
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'ILS' },
 };
 
-// Mirrors src/marketing/content/pricing.js (the Stripe-wired catalog).
+// Mirrors src/marketing/content/pricing.js (the billing catalog).
 // SoftwareApplication (not Product): SaaS subscriptions carry no shipping/
 // return semantics, so Google stops expecting shippingDetails /
 // hasMerchantReturnPolicy; brand must be an inline Brand object, not an @id ref.

@@ -3,21 +3,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Check } from 'lucide-react';
 import KoriAvatar from './KoriAvatar';
-import { ONBOARDING_STATE_KEY } from './OnboardingSelectPlan';
-
-// Stripe redirects (select-plan -> checkout -> back here) lose React Router
-// state, so fall back to the snapshot OnboardingSelectPlan stashed before redirecting.
-function useOnboardingState(location) {
-  if (location.state?.businessProfile) return location.state;
-  const isStripeReturn = new URLSearchParams(window.location.search).get('success') === 'true';
-  if (!isStripeReturn) return {};
-  try {
-    const saved = JSON.parse(sessionStorage.getItem(ONBOARDING_STATE_KEY) || 'null');
-    return saved || {};
-  } catch {
-    return {};
-  }
-}
 
 const API_BASE = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3007/api';
 
@@ -50,7 +35,7 @@ export default function OnboardingScanning() {
   const [currentStep, setCurrentStep] = useState(0);
   const [statusText, setStatusText] = useState('מתחיל ניתוח העסק שלך...');
   const [narrativeText, setNarrativeText] = useState('');
-  const onboardingState = useOnboardingState(location);
+  const onboardingState = location.state || {};
   const businessProfile = onboardingState.businessProfile;
   const onboardingData = onboardingState.onboardingData || {};
   const ranRef = useRef(false);
@@ -61,7 +46,6 @@ export default function OnboardingScanning() {
       return;
     }
     ranRef.current = true;
-    sessionStorage.removeItem(ONBOARDING_STATE_KEY);
 
     const run = async () => {
       const bp = businessProfile;

@@ -410,7 +410,7 @@ router.post('/reject-about', async (req: Request, res: Response) => {
 // ── POST /api/onboarding/select-plan ───────────────────────────────────────────
 // Onboarding plan step. Free: just stamp subscription_plan on the profile — no
 // org needed. Paid: ensure an org exists (none does yet for a brand-new profile)
-// seeded with the chosen plan, so the frontend's subsequent stripe/checkout call
+// seeded with the chosen plan, so the frontend's subsequent billing/checkout call
 // has an orgId to work with instead of 404ing.
 router.post('/select-plan', async (req: Request, res: Response) => {
   const { businessProfileId, planId } = req.body;

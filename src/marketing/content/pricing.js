@@ -1,7 +1,7 @@
 /**
- * Pricing content — mirrors the Stripe-wired catalog exactly:
+ * Pricing content — mirrors the billing catalog exactly:
  * src/lib/planCatalog.js (display) + src/lib/planConfig.js (quotas) +
- * server/src/lib/stripe.ts (billing: price × branch count, monthly only).
+ * server/src/lib/paddle.ts (billing: price × branch count, monthly only).
  * Duplicated here (not imported) so the marketing bundle never touches app code.
  * If plans change — update BOTH files.
  */
