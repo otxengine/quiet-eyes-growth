@@ -259,7 +259,7 @@ router.get('/invoices/:txnId/pdf', async (req: Request, res: Response) => {
 
   try {
     // Only hand out invoices that belong to this org's Paddle customer.
-    const txn = await paddleRequest('GET', `/transactions/${encodeURIComponent(req.params.txnId)}`);
+    const txn = await paddleRequest('GET', `/transactions/${encodeURIComponent(String(req.params.txnId))}`);
     if (txn.customer_id !== org.paddle_customer_id) return res.status(404).json({ error: 'Not found' });
 
     const pdf = await paddleRequest('GET', `/transactions/${txn.id}/invoice`);
