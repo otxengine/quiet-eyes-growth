@@ -24,13 +24,35 @@ export const PLAN_PRICES: Record<string, number> = {
   pro:     699,
 };
 
-/** API key as pasted into the dashboard, minus stray whitespace, quotes or a "Bearer " prefix. */
-function apiKey(): string {
-  return (process.env.PADDLE_API_KEY || '')
+/** A credential as pasted into the dashboard, minus stray whitespace, quotes or a "Bearer " prefix. */
+function cleanCredential(raw: string | undefined): string {
+  return (raw || '')
     .trim()
     .replace(/^["']|["']$/g, '')
     .replace(/^Bearer\s+/i, '')
     .trim();
+}
+
+function apiKey(): string {
+  return cleanCredential(process.env.PADDLE_API_KEY);
+}
+
+export function webhookSecret(): string {
+  return cleanCredential(process.env.PADDLE_WEBHOOK_SECRET);
+}
+
+/** Like describeApiKey, for the notification destination secret. */
+export function describeWebhookSecret(): string {
+  const raw = process.env.PADDLE_WEBHOOK_SECRET || '';
+  const s = webhookSecret();
+  if (!s) return 'not set';
+  const kind =
+    s.startsWith('pdl_ntfset_') ? 'destination secret key' :
+    s.startsWith('ntfset_') ? 'destination ID (wrong value: needs the Secret key from Edit destination)' :
+    s.startsWith('pdl_sdbx_apikey_') || s.startsWith('pdl_live_apikey_') ? 'API key (wrong value: needs the destination Secret key)' :
+    'unrecognized format';
+  const cleaned = raw !== s ? ', had extra whitespace/quotes (stripped)' : '';
+  return `${kind}, length ${s.length}${cleaned}`;
 }
 
 export function paddleEnabled(): boolean {

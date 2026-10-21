@@ -164,3 +164,22 @@ describe('describeApiKey / key cleanup', () => {
     expect(load().describeApiKey()).not.toContain('SUPERSECRET');
   });
 });
+
+describe('describeWebhookSecret', () => {
+  const load = () => require('../lib/paddle') as typeof import('../lib/paddle');
+
+  test('recognizes the destination secret, and the destination ID pasted by mistake', () => {
+    process.env.PADDLE_WEBHOOK_SECRET = 'pdl_ntfset_01abc_SECRETPART';
+    expect(load().describeWebhookSecret()).toBe('destination secret key, length 27');
+    process.env.PADDLE_WEBHOOK_SECRET = 'ntfset_01m5f0gepf8p3haydkxr2tp2xs';
+    expect(load().describeWebhookSecret()).toMatch(/^destination ID \(wrong value/);
+  });
+
+  test('cleaned secret still verifies a signature made with the real one', () => {
+    process.env.PADDLE_WEBHOOK_SECRET = `  ${SECRET}\n`;
+    const { webhookSecret, verifyPaddleSignature: verify } = load();
+    const body = '{"a":1}';
+    const now = 1_700_000_000;
+    expect(verify(Buffer.from(body), sign(body, now), webhookSecret(), now)).toBe(true);
+  });
+});

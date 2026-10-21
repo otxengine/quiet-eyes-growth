@@ -19,7 +19,7 @@ import { prisma } from '../db';
 import { getUserId } from '../middleware/auth';
 import {
   paddleEnabled, paddleRequest, priceIds, planFromPriceId,
-  verifyPaddleSignature, PLAN_PRICES,
+  verifyPaddleSignature, webhookSecret, describeWebhookSecret, PLAN_PRICES,
 } from '../lib/paddle';
 import { createLogger } from '../infra/logger';
 
@@ -274,13 +274,15 @@ router.get('/invoices/:txnId/pdf', async (req: Request, res: Response) => {
 // Raw body comes from the global express.json verify hook (req.rawBody).
 
 router.post('/webhooks', async (req: Request, res: Response) => {
-  const ok = verifyPaddleSignature(
-    (req as any).rawBody,
-    req.headers['paddle-signature'] as string | undefined,
-    process.env.PADDLE_WEBHOOK_SECRET,
-  );
+  const rawBody: Buffer | undefined = (req as any).rawBody;
+  const signature = req.headers['paddle-signature'] as string | undefined;
+  const ok = verifyPaddleSignature(rawBody, signature, webhookSecret());
   if (!ok) {
-    logger.warn('Paddle webhook signature verification failed');
+    logger.warn('Paddle webhook signature verification failed', {
+      hasRawBody: !!rawBody,
+      hasSignatureHeader: !!signature,
+      secret: describeWebhookSecret(),
+    });
     return res.status(401).json({ error: 'Invalid signature' });
   }
 

@@ -165,9 +165,9 @@ if (clerkEnabled) {
 }
 
 {
-  const { paddleEnabled, describeApiKey } = require('./lib/paddle');
+  const { paddleEnabled, describeApiKey, describeWebhookSecret } = require('./lib/paddle');
   console.log(paddleEnabled()
-    ? `Paddle billing enabled (${process.env.PADDLE_ENV || 'production'}): ${describeApiKey()}`
+    ? `Paddle billing enabled (${process.env.PADDLE_ENV || 'production'}): ${describeApiKey()}; webhook secret: ${describeWebhookSecret()}`
     : 'Paddle billing not configured — paid checkout disabled');
 }
 
