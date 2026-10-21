@@ -42,6 +42,16 @@ function loadPaddle() {
 }
 
 /**
+ * Paddle emails (e.g. "update your card" after a failed renewal) link to the
+ * default payment link with ?_ptxn=txn_…; Paddle.js opens that checkout by
+ * itself once initialized, so the page only has to load it.
+ */
+export function openLinkedPaddleCheckout() {
+  if (!new URLSearchParams(window.location.search).has('_ptxn')) return;
+  loadPaddle().catch(() => { /* payment link without billing configured: nothing to open */ });
+}
+
+/**
  * Opens the overlay for a server-created transaction.
  * Resolves 'completed' once payment succeeds, or 'closed' if the user closes it.
  * Plan activation itself arrives via webhook a few seconds after 'completed'.

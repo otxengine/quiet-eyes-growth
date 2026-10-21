@@ -3,11 +3,11 @@
  * Pricing: plan_price × branch_count / month.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { billingApi } from '@/api/billingApi';
-import { openPaddleCheckout } from '@/lib/paddle';
+import { openPaddleCheckout, openLinkedPaddleCheckout } from '@/lib/paddle';
 import { toast } from 'sonner';
 import {
   Crown, Loader2, Check, X, Zap, GitBranch, CreditCard,
@@ -231,6 +231,9 @@ export default function Subscription() {
     enabled: !!orgId,
     staleTime: 30_000,
   });
+
+  // This page is Paddle's default payment link: open checkouts linked from Paddle emails.
+  useEffect(() => { openLinkedPaddleCheckout(); }, []);
 
   const currentPlanId = subData?.plan || currentOrg?.plan_id || 'free_trial';
   const subStatus     = subData?.status || 'none';
