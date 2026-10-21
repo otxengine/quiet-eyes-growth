@@ -164,6 +164,13 @@ if (clerkEnabled) {
   console.log('Clerk not configured — running in dev mode (all requests as dev-user)');
 }
 
+{
+  const { paddleEnabled, describeApiKey } = require('./lib/paddle');
+  console.log(paddleEnabled()
+    ? `Paddle billing enabled (${process.env.PADDLE_ENV || 'production'}): ${describeApiKey()}`
+    : 'Paddle billing not configured — paid checkout disabled');
+}
+
 app.use('/api/entities', entityRouter);
 app.use('/api/functions', functionRouter);
 app.use('/api/agents/trigger', agentTriggerRouter);

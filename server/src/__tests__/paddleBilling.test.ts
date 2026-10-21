@@ -135,3 +135,32 @@ describe('handlePaddleEvent — subscription sync', () => {
     expect(executeRaw).not.toHaveBeenCalled();
   });
 });
+
+describe('describeApiKey / key cleanup', () => {
+  // Loaded per test so each sees its own env.
+  const load = () => require('../lib/paddle') as typeof import('../lib/paddle');
+
+  test('recognizes a sandbox key and flags an env mismatch', () => {
+    process.env.PADDLE_API_KEY = 'pdl_sdbx_apikey_abc123';
+    process.env.PADDLE_ENV = 'sandbox';
+    expect(load().describeApiKey()).toBe('sandbox API key, length 22');
+    delete process.env.PADDLE_ENV;
+    expect(load().describeApiKey()).toContain('does not match PADDLE_ENV=production');
+  });
+
+  test('flags a client-side token pasted in place of the API key', () => {
+    process.env.PADDLE_API_KEY = 'test_0123456789abcdef';
+    expect(load().describeApiKey()).toMatch(/^client-side token/);
+  });
+
+  test('strips whitespace, quotes and a Bearer prefix, and reports that it did', () => {
+    process.env.PADDLE_API_KEY = ' "Bearer pdl_sdbx_apikey_abc123"\n';
+    process.env.PADDLE_ENV = 'sandbox';
+    expect(load().describeApiKey()).toBe('sandbox API key, length 22, had extra whitespace/quotes (stripped)');
+  });
+
+  test('never includes the key itself', () => {
+    process.env.PADDLE_API_KEY = 'pdl_sdbx_apikey_SUPERSECRETVALUE';
+    expect(load().describeApiKey()).not.toContain('SUPERSECRET');
+  });
+});

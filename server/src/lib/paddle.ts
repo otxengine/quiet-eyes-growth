@@ -24,8 +24,39 @@ export const PLAN_PRICES: Record<string, number> = {
   pro:     699,
 };
 
+/** API key as pasted into the dashboard, minus stray whitespace, quotes or a "Bearer " prefix. */
+function apiKey(): string {
+  return (process.env.PADDLE_API_KEY || '')
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .replace(/^Bearer\s+/i, '')
+    .trim();
+}
+
 export function paddleEnabled(): boolean {
-  return !!process.env.PADDLE_API_KEY;
+  return !!apiKey();
+}
+
+/**
+ * Describes the configured key without revealing it, for diagnosing auth
+ * failures from logs: which kind of credential it looks like, its length,
+ * and whether it matches PADDLE_ENV.
+ */
+export function describeApiKey(): string {
+  const raw = process.env.PADDLE_API_KEY || '';
+  const key = apiKey();
+  const kind =
+    key.startsWith('pdl_sdbx_apikey_') ? 'sandbox API key' :
+    key.startsWith('pdl_live_apikey_') ? 'live API key' :
+    /^(test|live)_/.test(key) ? 'client-side token (wrong credential: needs the API key)' :
+    key.startsWith('pdl_ntfset_') ? 'webhook secret (wrong credential: needs the API key)' :
+    'unrecognized format';
+  const env = process.env.PADDLE_ENV === 'sandbox' ? 'sandbox' : 'production';
+  const mismatch =
+    (kind === 'sandbox API key' && env !== 'sandbox') || (kind === 'live API key' && env === 'sandbox')
+      ? ` — does not match PADDLE_ENV=${env}` : '';
+  const cleaned = raw !== key ? ', had extra whitespace/quotes (stripped)' : '';
+  return `${kind}, length ${key.length}${cleaned}${mismatch}`;
 }
 
 function apiBase(): string {
@@ -55,7 +86,7 @@ export async function paddleRequest<T = any>(method: string, path: string, body?
   const res = await fetch(`${apiBase()}${path}`, {
     method,
     headers: {
-      Authorization: `Bearer ${process.env.PADDLE_API_KEY}`,
+      Authorization: `Bearer ${apiKey()}`,
       'Content-Type': 'application/json',
       'Paddle-Version': '1',
     },
@@ -63,7 +94,8 @@ export async function paddleRequest<T = any>(method: string, path: string, body?
   });
   const json: any = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const detail = json?.error?.detail || json?.error?.code || res.statusText;
+    let detail = json?.error?.detail || json?.error?.code || res.statusText;
+    if (res.status === 401 || res.status === 403) detail += ` [configured key: ${describeApiKey()}]`;
     throw Object.assign(new Error(`Paddle ${method} ${path}: ${detail}`), { status: res.status });
   }
   return json.data as T;
