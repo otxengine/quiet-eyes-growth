@@ -42,6 +42,8 @@ jobs:
           VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
           VITE_FACEBOOK_APP_ID: ${{ vars.VITE_FACEBOOK_APP_ID }}
           VITE_META_CONFIG_ID: ${{ vars.VITE_META_CONFIG_ID }}
+          VITE_PADDLE_CLIENT_TOKEN: ${{ vars.VITE_PADDLE_CLIENT_TOKEN }}
+          VITE_PADDLE_ENV: ${{ vars.VITE_PADDLE_ENV }}
       - name: No server-side keys in the frontend bundle
         run: tr -d '\r' < scripts/scan-bundle-keys.sh | bash -s -- dist
 
