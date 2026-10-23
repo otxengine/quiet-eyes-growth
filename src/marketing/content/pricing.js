@@ -1,7 +1,7 @@
 /**
- * Pricing content — mirrors the Stripe-wired catalog exactly:
+ * Pricing content — mirrors the billing catalog exactly:
  * src/lib/planCatalog.js (display) + src/lib/planConfig.js (quotas) +
- * server/src/lib/stripe.ts (billing: price × branch count, monthly only).
+ * server/src/lib/paddle.ts (billing: price × branch count, monthly only).
  * Duplicated here (not imported) so the marketing bundle never touches app code.
  * If plans change — update BOTH files.
  */
@@ -27,7 +27,7 @@ export const PLANS = [
     name: 'Starter',
     description: 'לעסקים שמתחילים',
     price: '₪149',
-    period: 'לסניף / לחודש',
+    period: 'לסניף / לחודש + מע"מ',
     cta: 'התחילו בחינם',
     features: [
       'Dashboard + בריף בוקר',
@@ -44,7 +44,7 @@ export const PLANS = [
     name: 'Growth',
     description: 'לעסקים בצמיחה',
     price: '₪349',
-    period: 'לסניף / לחודש',
+    period: 'לסניף / לחודש + מע"מ',
     highlighted: true,
     cta: 'התחילו בחינם',
     features: [
@@ -63,7 +63,7 @@ export const PLANS = [
     name: 'Pro',
     description: 'לעסקים מתקדמים',
     price: '₪699',
-    period: 'לסניף / לחודש',
+    period: 'לסניף / לחודש + מע"מ',
     cta: 'התחילו בחינם',
     features: [
       'כל מה שב-Growth',
@@ -102,6 +102,10 @@ export const PRICING_FAQ = [
   {
     q: 'מה נחשב "סניף"?',
     a: 'מיקום עסקי אחד שהמערכת סורקת עבורו מתחרים, ביקורות ואותות. עסק עם כמה סניפים משלם לפי מספר הסניפים — כל סניף מקבל מעקב, מתחרים ותובנות משלו.',
+  },
+  {
+    q: 'המחירים כוללים מע"מ?',
+    a: 'לא. המחירים לפני מע"מ, שמתווסף בעת התשלום. מקבלים חשבונית על כל חיוב.',
   },
   {
     q: 'יש התחייבות או חוזה?',

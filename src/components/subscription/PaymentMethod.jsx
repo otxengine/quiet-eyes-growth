@@ -11,7 +11,7 @@ export default function PaymentMethod({ paymentMethod, hasSubscription, onManage
         {hasSubscription && (
           <button onClick={onManage}
             className="text-[10px] font-medium text-foreground-muted hover:text-foreground transition-colors flex items-center gap-1">
-            <ExternalLink className="w-3 h-3" /> נהל ב-Stripe
+            <ExternalLink className="w-3 h-3" /> ניהול תשלום
           </button>
         )}
       </div>

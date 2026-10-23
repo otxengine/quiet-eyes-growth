@@ -1,5 +1,5 @@
 /**
- * stripeApi.js — API helpers for Stripe billing endpoints.
+ * billingApi.js — API helpers for the Paddle billing endpoints (/api/billing).
  */
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -31,27 +31,36 @@ async function apiFetch(path, options = {}) {
   return data;
 }
 
-export const stripeApi = {
-  /** Get subscription status for the active org */
-  getStatus: (orgId) => apiFetch(`/stripe/status${orgId ? `?orgId=${orgId}` : ''}`),
+export const billingApi = {
+  /** Subscription status, card and recent charges for the active org */
+  getStatus: (orgId) => apiFetch(`/billing/status${orgId ? `?orgId=${orgId}` : ''}`),
 
-  /** Create a Checkout Session and redirect to Stripe */
-  checkout: (planId, orgId, returnUrl) =>
-    apiFetch('/stripe/checkout', {
+  /**
+   * Start or change a subscription.
+   * Returns { transactionId } for a new subscription (open it with openPaddleCheckout),
+   * { changed: true } when an existing subscription switched plan in place,
+   * or { devBypass: true } in local dev without Paddle configured.
+   */
+  checkout: (planId, orgId) =>
+    apiFetch('/billing/checkout', {
       method: 'POST',
-      body: JSON.stringify({ planId, orgId, returnUrl }),
+      body: JSON.stringify({ planId, orgId }),
     }),
 
-  /** Open Stripe Billing Portal */
-  portal: (orgId, returnUrl) =>
-    apiFetch('/stripe/portal', {
+  /** Paddle customer portal link: { url, updatePaymentUrl } */
+  portal: (orgId) =>
+    apiFetch('/billing/portal', {
       method: 'POST',
-      body: JSON.stringify({ orgId, returnUrl }),
+      body: JSON.stringify({ orgId }),
     }),
+
+  /** Short-lived invoice PDF link: { url } */
+  invoicePdf: (txnId, orgId) =>
+    apiFetch(`/billing/invoices/${encodeURIComponent(txnId)}/pdf${orgId ? `?orgId=${orgId}` : ''}`),
 
   /** Sync branch count to subscription quantity */
   updateQuantity: (orgId) =>
-    apiFetch('/stripe/update-quantity', {
+    apiFetch('/billing/update-quantity', {
       method: 'POST',
       body: JSON.stringify({ orgId }),
     }),

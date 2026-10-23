@@ -358,7 +358,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
     }
     // ── competitors_max plan guard — cap new creates, always allow updates ──
     // business_profiles.plan_id is never written after row creation (stays at its "free"
-    // default forever) — Stripe writes the live plan into subscription_plan instead.
+    // default forever) — billing webhooks write the live plan into subscription_plan instead.
     const planId: string = (profile as any).subscription_plan || 'free_trial';
     const maxCompetitors = PLAN_COMPETITOR_LIMITS[planId] ?? 3;
     if (maxCompetitors !== Infinity) {

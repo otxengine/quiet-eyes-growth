@@ -61,7 +61,7 @@ import campaignsRouter from './routes/campaigns';
 import organizationsRouter from './routes/organizations';
 import reactivationRouter from './routes/reactivation';
 import agencyRouter from './routes/agency';
-import stripeRouter from './routes/stripe';
+import billingRouter from './routes/billing';
 import uxEventsRouter from './routes/uxEvents';
 
 // Wire up all event choreography handlers at startup
@@ -138,9 +138,6 @@ app.get('/api/admin-verify', (req: any, res: any) => {
   return res.json({ ok: true });
 });
 
-// Stripe webhook — needs raw body before express.json() parses it
-app.use('/api/stripe/webhooks', stripeRouter);
-
 // Media library uploads (images/video as base64) need a higher body limit than
 // the rest of the API — mounted before the global express.json() below so only
 // this path gets the larger limit; express.json() no-ops once req.body is parsed.
@@ -171,6 +168,13 @@ if (clerkEnabled) {
   console.log('Clerk not configured — running in dev mode (all requests as dev-user)');
 }
 
+{
+  const { paddleEnabled, describeApiKey, describeWebhookSecret } = require('./lib/paddle');
+  console.log(paddleEnabled()
+    ? `Paddle billing enabled (${process.env.PADDLE_ENV || 'production'}): ${describeApiKey()}; webhook secret: ${describeWebhookSecret()}`
+    : 'Paddle billing not configured — paid checkout disabled');
+}
+
 app.use('/api/entities', entityRouter);
 app.use('/api/functions', functionRouter);
 app.use('/api/agents/trigger', agentTriggerRouter);
@@ -198,7 +202,7 @@ app.use('/api/campaigns', campaignsRouter);
 app.use('/api/orgs', organizationsRouter);
 app.use('/api/reactivation', reactivationRouter);
 app.use('/api/agency', agencyRouter);
-app.use('/api/stripe', stripeRouter);
+app.use('/api/billing', billingRouter);
 
 // Liveness for the load balancer: process up and DB reachable. Returns no data.
 app.get(['/healthz', '/api/healthz'], async (_req, res) => {
@@ -935,7 +939,7 @@ app.listen(PORT, async () => {
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
 
-  // ── Stripe billing columns on organizations ───────────────────────────────
+  // ── Stripe billing columns on organizations (legacy, pre-Paddle) ───────────────────────────────
   await sql(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS stripe_customer_id     TEXT`);
   await sql(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT`);
   await sql(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS stripe_price_id        TEXT`);
@@ -954,6 +958,12 @@ app.listen(PORT, async () => {
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_stripe_invoices_org ON stripe_invoices(org_id, created_at DESC)`);
+
+  // ── Paddle billing columns on organizations ───────────────────────────────
+  await sql(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS paddle_customer_id     TEXT`);
+  await sql(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS paddle_subscription_id TEXT`);
+  await sql(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS paddle_event_at        TIMESTAMPTZ`);
+  await sql(`CREATE UNIQUE INDEX IF NOT EXISTS idx_orgs_paddle_sub ON organizations(paddle_subscription_id) WHERE paddle_subscription_id IS NOT NULL`);
 
   // ── OTX Engine v2 / v3 tables (idempotent — also in /api/migrate) ─────────
   await sql(`CREATE TABLE IF NOT EXISTS otx_fused_insights (

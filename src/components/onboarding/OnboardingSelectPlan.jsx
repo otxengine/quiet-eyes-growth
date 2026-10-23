@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { stripeApi } from '@/api/stripeApi';
+import { billingApi } from '@/api/billingApi';
+import { openPaddleCheckout } from '@/lib/paddle';
 import { toast } from 'sonner';
 import { Loader2, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -13,10 +14,6 @@ const BG_STYLE = {
   backgroundImage: 'radial-gradient(circle, #d1d1d1 1px, transparent 1px)',
   backgroundSize: '24px 24px',
 };
-
-// sessionStorage fallback: a full-page Stripe redirect loses React Router state,
-// so OnboardingScanning re-hydrates from here when it returns with ?success=true.
-export const ONBOARDING_STATE_KEY = 'otx_onboarding_state';
 
 function PlanOption({ plan, selected, onSelect, loading }) {
   return (
@@ -84,16 +81,24 @@ export default function OnboardingSelectPlan() {
         return;
       }
 
-      sessionStorage.setItem(ONBOARDING_STATE_KEY, JSON.stringify({ businessProfile, onboardingData }));
-      const returnUrl = `${window.location.origin}/onboarding/scanning?success=true`;
-      const checkout = await stripeApi.checkout(planId, result.orgId, returnUrl);
-      if (checkout.url) {
-        window.location.href = checkout.url;
-      } else if (checkout.devBypass) {
-        toast.success('התוכנית עודכנה (מצב פיתוח, ללא Stripe)');
+      // Paddle's checkout opens as an overlay on this page, so router state survives.
+      const checkout = await billingApi.checkout(planId, result.orgId);
+      if (checkout.devBypass) {
+        toast.success('התוכנית עודכנה (מצב פיתוח, ללא תשלום)');
+        goToScanning();
+        return;
+      }
+      if (!checkout.transactionId) {
+        toast.error(checkout.error || 'שגיאה ביצירת התשלום');
+        setLoadingPlan(null);
+        return;
+      }
+
+      const outcome = await openPaddleCheckout(checkout.transactionId);
+      if (outcome === 'completed') {
+        toast.success('התשלום התקבל — המנוי יופעל תוך רגעים');
         goToScanning();
       } else {
-        toast.error(checkout.error || 'שגיאה ביצירת הזמנה');
         setLoadingPlan(null);
       }
     } catch (err) {
