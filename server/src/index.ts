@@ -82,10 +82,12 @@ if (process.env.TRUST_PROXY_HOPS) app.set('trust proxy', Number(process.env.TRUS
 app.use(helmet({ contentSecurityPolicy: false })); // CSP handled by frontend
 
 // ── Rate limiting ──────────────────────────────────────────────────────────
-// General API: 300 requests per 15 minutes per IP
+// General API: 1500 requests per 15 minutes per IP. A page load makes 12-25 API calls, so the
+// old 300 locked out a normal user after about 15 page views. Abuse is also capped at the edge
+// (prod WAF: 2000 requests per 5 minutes per IP); expensive endpoints keep strictLimiter below.
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: 1500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },
