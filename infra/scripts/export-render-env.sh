@@ -8,10 +8,13 @@
 #        (or set RENDER_API_KEY in the environment instead).
 set -euo pipefail
 RENDER_API_KEY=${RENDER_API_KEY:-$(pbpaste 2>/dev/null || true)}
+RENDER_API_KEY=$(printf '%s' "$RENDER_API_KEY" | tr -d '[:space:]') # copy buttons often add a newline
 # Only a Render key ever leaves this machine, never whatever else is on the clipboard.
 case "$RENDER_API_KEY" in
   rnd_*) ;;
-  *) echo "Copy a Render API key (starts with rnd_) to the clipboard first: Render > Account Settings > API Keys." >&2; exit 1 ;;
+  *) echo "Copy a Render API key (starts with rnd_) to the clipboard first: Render > Account Settings > API Keys." >&2
+     echo "(The clipboard held ${#RENDER_API_KEY} characters that don't start with rnd_; they were not sent anywhere.)" >&2
+     exit 1 ;;
 esac
 BE_SERVICE=${BE_SERVICE:-srv-d92gsueq1p3s73fp9tk0} # quiet-eyes-growth_DEV_BE
 FE_SERVICE=${FE_SERVICE:-srv-d92gqnbtqb8s73ff94fg} # quiet-eyes-growth_DEV_FE
