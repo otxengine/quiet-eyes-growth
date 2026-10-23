@@ -4,6 +4,7 @@ import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import { QeStack } from '../lib/qe-stack';
 import { EdgeStack } from '../lib/edge-stack';
 import { GithubOidcStack } from '../lib/github-oidc-stack';
+import { DnsStack } from '../lib/dns-stack';
 
 const app = new cdk.App();
 const account = process.env.CDK_DEFAULT_ACCOUNT;
@@ -56,6 +57,9 @@ new QeStack(app, 'Qe-prod', {
   monthlyBudgetUsd: 250,
   env: { account, region },
 });
+
+// cortexi.ai DNS zone, deployed by hand (`npx cdk deploy Qe-dns`), not by the pipelines.
+new DnsStack(app, 'Qe-dns', { env: { account, region } });
 
 // One-time: lets .github/workflows deploy without stored AWS keys.
 new GithubOidcStack(app, 'Qe-github', {

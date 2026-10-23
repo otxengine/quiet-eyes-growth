@@ -233,7 +233,7 @@ CREATE TABLE IF NOT EXISTS otx_decisions (
   action_type              TEXT        NOT NULL,
   urgency                  TEXT        NOT NULL,
   rationale                TEXT        NOT NULL,
-  final_score              NUMERIC(5,3) NOT NULL,
+  final_score              NUMERIC(8,3) NOT NULL,
   roi_score                NUMERIC(5,3),
   confidence_score         NUMERIC(5,3),
   business_fit_score       NUMERIC(5,3),

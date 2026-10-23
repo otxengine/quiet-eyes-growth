@@ -288,20 +288,48 @@ export class QeStack extends cdk.Stack {
       a.addAlarmAction(notify);
       a.addOkAction(notify);
     };
-    alarm('ApiNoHealthyTask', 'No healthy API task behind the load balancer for 3 minutes',
+    // Descriptions are what the alarm email shows (max 1024 chars): meaning, likely causes, first step.
+    alarm('ApiNoHealthyTask', [
+      'The API is down: no API container has passed the /healthz check for 3 minutes.',
+      'The site still loads (the frontend is served from CloudFront/S3), but every API call fails.',
+      'Likely causes: the container crashes at startup, runs out of memory, or cannot start after a config or secret change. A bad deploy rolls itself back, so it is rarely the cause.',
+      `First step: ECS console > ${cluster.clusterName} > Api service > Events, then the Api log group.`,
+    ].join('\n'),
       apiTargets.metrics.healthyHostCount({ period: minutes(1), statistic: 'Minimum' }), 1,
       { below: true, periods: 3, missing: cloudwatch.TreatMissingData.BREACHING });
-    alarm('Api5xx', 'API returned more than 20 server errors in 5 minutes',
+    alarm('Api5xx', [
+      'The API is up but failing: it returned more than 20 server errors (5xx) in 5 minutes.',
+      'Requests reach the app, but a code path or dependency is failing: a database error, an unhandled exception, or a third-party API that errors out.',
+      'First step: search the Api log group for errors around the alarm time.',
+    ].join('\n'),
       apiTargets.metrics.httpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT, { period: minutes(5), statistic: 'Sum' }), 20);
-    alarm('Alb5xx', 'Load balancer returned more than 10 of its own 5xx (no/failing target) in 5 minutes',
+    alarm('Alb5xx', [
+      'The load balancer cannot get an answer from the app: more than 10 of its own 5xx in 5 minutes.',
+      '502 = a container dropped the connection or crashed mid-request; 503 = no healthy container; 504 = over the 15-minute timeout. Usually fires with ApiNoHealthyTask or after an out-of-memory crash.',
+      "Note: CloudFront's own 120-second timeouts happen before the load balancer and are not counted here.",
+      'First step: ECS Api service events and the stopped-task reasons.',
+    ].join('\n'),
       alb.metrics.httpCodeElb(elbv2.HttpCodeElb.ELB_5XX_COUNT, { period: minutes(5), statistic: 'Sum' }), 10);
-    alarm('DbCpu', 'Database CPU above 80% for 15 minutes',
+    alarm('DbCpu', [
+      'The database is overworked: CPU above 80% for 15 minutes.',
+      'Usually a heavy or unindexed query, or too many jobs at once. On burstable (t4g) instances sustained load also burns CPU credits, after which the database slows sharply.',
+      'First step: find the running queries (pg_stat_activity), then fix the query or move to a bigger instance.',
+    ].join('\n'),
       db.metricCPUUtilization({ period: minutes(5) }), 80, { periods: 3 });
-    alarm('DbStorage', 'Database free storage below 2 GiB',
+    alarm('DbStorage', [
+      'The database disk is filling up: less than 2 GiB free.',
+      'When it fills, the database stops accepting writes. automation_logs is the usual source of growth.',
+      'First step: trim old automation_logs rows, or raise allocatedStorage in the stack (storage autoscaling is off).',
+    ].join('\n'),
       db.metricFreeStorageSpace({ period: minutes(5), statistic: 'Minimum' }), 2 * 1024 ** 3, { below: true });
     // max_connections ≈ RAM/9.5MB: ~110 on db.t4g.micro, ~220 on small.
-    alarm('DbConnections', 'Database connections near the instance limit',
-      db.metricDatabaseConnections({ period: minutes(5), statistic: 'Maximum' }), isProd ? 180 : 80);
+    const maxConnections = isProd ? 180 : 80;
+    alarm('DbConnections', [
+      `Close to the database connection limit: more than ${maxConnections} open connections (the instance allows about ${isProd ? 220 : 110}).`,
+      'Each API or worker container holds up to 8 (Prisma pool), so the cause is too many tasks, a connection leak, or one-off tasks (e.g. a DB restore) running at the same time. At the limit, requests fail with "too many clients".',
+      'First step: count running ECS tasks and look for idle or stuck connections in pg_stat_activity.',
+    ].join('\n'),
+      db.metricDatabaseConnections({ period: minutes(5), statistic: 'Maximum' }), maxConnections);
     const workerErrors = new logs.MetricFilter(this, 'WorkerErrorLines', {
       logGroup: logGroups.Worker,
       filterPattern: logs.FilterPattern.literal('"\\"level\\":\\"error\\""'),
@@ -309,7 +337,12 @@ export class QeStack extends cdk.Stack {
       metricName: `${envName}-worker-errors`,
       metricValue: '1',
     });
-    alarm('WorkerErrors', 'Background jobs logged more than 20 errors in an hour',
+    alarm('WorkerErrors', [
+      'Background jobs are failing in bulk: the worker logged more than 20 error lines in an hour.',
+      'Typical causes: an AI provider out of credits (e.g. OpenRouter 402), a database error in a job, or an external API that is down.',
+      'Note: only the app\'s structured error lines ("level":"error") are counted; plain console.error and raw prisma:error lines are not.',
+      'First step: search the Worker log group for "level":"error" around the alarm time.',
+    ].join('\n'),
       workerErrors.metric({ period: minutes(60), statistic: 'Sum' }), 20);
 
     // Account-wide cost alert (one is enough, so only the prod stack sets it).
