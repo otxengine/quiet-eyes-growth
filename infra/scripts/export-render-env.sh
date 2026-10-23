@@ -3,10 +3,16 @@
 #   backend  -> infra/.env.prod-secrets (gitignored, owner-only) for put-secrets.sh
 #   frontend -> infra/.env.prod (gitignored) with the public VITE_* build values for deploy.sh
 # Prints only variable NAMES, never values.
-# Needs a Render API key: Render dashboard -> Account Settings -> API Keys.
-# Usage: RENDER_API_KEY=... infra/scripts/export-render-env.sh
+# Needs a Render API key (Render dashboard -> Account Settings -> API Keys).
+# Usage: copy the key, then run infra/scripts/export-render-env.sh
+#        (or set RENDER_API_KEY in the environment instead).
 set -euo pipefail
-: "${RENDER_API_KEY:?create one in Render > Account Settings > API Keys}"
+RENDER_API_KEY=${RENDER_API_KEY:-$(pbpaste 2>/dev/null || true)}
+# Only a Render key ever leaves this machine, never whatever else is on the clipboard.
+case "$RENDER_API_KEY" in
+  rnd_*) ;;
+  *) echo "Copy a Render API key (starts with rnd_) to the clipboard first: Render > Account Settings > API Keys." >&2; exit 1 ;;
+esac
 BE_SERVICE=${BE_SERVICE:-srv-d92gsueq1p3s73fp9tk0} # quiet-eyes-growth_DEV_BE
 FE_SERVICE=${FE_SERVICE:-srv-d92gqnbtqb8s73ff94fg} # quiet-eyes-growth_DEV_FE
 INFRA=$(cd "$(dirname "$0")/.." && pwd)
