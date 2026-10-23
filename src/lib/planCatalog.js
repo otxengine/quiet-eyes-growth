@@ -25,7 +25,7 @@ export const PLAN_CATALOG = [
     name: 'Starter',
     description: 'לעסקים שמתחילים',
     price: '₪149',
-    period: 'סניף/חודש',
+    period: 'סניף/חודש + מע"מ',
     features: [
       'Dashboard + Morning Briefing',
       'ביקורות ומוניטין מלא',
@@ -41,7 +41,7 @@ export const PLAN_CATALOG = [
     name: 'Growth',
     description: 'לעסקים בצמיחה',
     price: '₪349',
-    period: 'סניף/חודש',
+    period: 'סניף/חודש + מע"מ',
     highlighted: true,
     features: [
       'משימות ללא הגבלה',
@@ -59,7 +59,7 @@ export const PLAN_CATALOG = [
     name: 'Pro',
     description: 'לעסקים מתקדמים',
     price: '₪699',
-    period: 'סניף/חודש',
+    period: 'סניף/חודש + מע"מ',
     features: [
       'כל מה שב-Growth',
       'סריקות ללא הגבלה',

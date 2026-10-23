@@ -9,7 +9,7 @@ export interface GithubOidcStackProps extends cdk.StackProps {
 
 /**
  * Lets GitHub Actions deploy without stored AWS keys: a workflow job exchanges its
- * GitHub-issued OIDC token for a short-lived session on this role.
+ * GitHub-issued OIDC token for a short-lived session on a deploy role.
  */
 export class GithubOidcStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: GithubOidcStackProps) {
@@ -20,29 +20,35 @@ export class GithubOidcStack extends cdk.Stack {
       clientIds: ['sts.amazonaws.com'],
     });
 
-    const deployStaging = new iam.Role(this, 'DeployStaging', {
-      roleName: 'qe-github-deploy-staging',
-      description: 'GitHub Actions deploys to Qe-staging',
-      maxSessionDuration: cdk.Duration.hours(1),
-      assumedBy: new iam.WebIdentityPrincipal(github.openIdConnectProviderArn, {
-        StringEquals: {
-          'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
-          // Only jobs that run in this repo's "staging" environment, which GitHub limits to the deploy branches.
-          'token.actions.githubusercontent.com:sub': `repo:${props.repo}:environment:staging`,
-        },
-      }),
-    });
-    // Deploys go through the CDK bootstrap roles, like the qe-claude operator role.
-    deployStaging.addToPolicy(new iam.PolicyStatement({
-      actions: ['sts:AssumeRole'],
-      resources: [`arn:aws:iam::${this.account}:role/cdk-hnb659fds-*`],
-    }));
-    // The smoke test reads the staging URL from the stack outputs.
-    deployStaging.addToPolicy(new iam.PolicyStatement({
-      actions: ['cloudformation:DescribeStacks'],
-      resources: [`arn:aws:cloudformation:${this.region}:${this.account}:stack/Qe-staging/*`],
-    }));
+    // One role per GitHub environment. A job can assume it only while running in that
+    // environment, which GitHub limits to the allowed branches (and, for production, to a
+    // run a reviewer approved). Same account for both, so the separation lives in GitHub.
+    const deployRole = (constructId: string, environment: string, stack: string) => {
+      const role = new iam.Role(this, constructId, {
+        roleName: `qe-github-deploy-${environment}`,
+        description: `GitHub Actions deploys to ${stack}`,
+        maxSessionDuration: cdk.Duration.hours(1),
+        assumedBy: new iam.WebIdentityPrincipal(github.openIdConnectProviderArn, {
+          StringEquals: {
+            'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
+            'token.actions.githubusercontent.com:sub': `repo:${props.repo}:environment:${environment}`,
+          },
+        }),
+      });
+      // Deploys go through the CDK bootstrap roles (eu-central-1 and us-east-1), like qe-claude.
+      role.addToPolicy(new iam.PolicyStatement({
+        actions: ['sts:AssumeRole'],
+        resources: [`arn:aws:iam::${this.account}:role/cdk-hnb659fds-*`],
+      }));
+      // The smoke test reads the site URL from the stack outputs.
+      role.addToPolicy(new iam.PolicyStatement({
+        actions: ['cloudformation:DescribeStacks'],
+        resources: [`arn:aws:cloudformation:${this.region}:${this.account}:stack/${stack}/*`],
+      }));
+      new cdk.CfnOutput(this, `${constructId}RoleArn`, { value: role.roleArn });
+    };
 
-    new cdk.CfnOutput(this, 'DeployStagingRoleArn', { value: deployStaging.roleArn });
+    deployRole('DeployStaging', 'staging', 'Qe-staging');
+    deployRole('DeployProduction', 'production', 'Qe-prod');
   }
 }

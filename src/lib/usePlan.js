@@ -42,7 +42,7 @@ export function usePlan() {
     refetchOnWindowFocus: true,
   });
 
-  // Stripe subscription status
+  // Billing subscription status
   const { data: subData, isLoading } = useQuery({
     queryKey: ['subscriptionStatus'],
     queryFn: async () => {
@@ -54,10 +54,10 @@ export function usePlan() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Admin override takes priority over Stripe
+  // Admin override takes priority over billing
   const bp = profiles?.find(p => p.onboarding_completed) || profiles?.[0];
   const adminOverride = bp?.subscription_plan || bp?.plan_id;
-  const stripePlan    = subData?.plan;
+  const billingPlan    = subData?.plan;
 
   // Normalize legacy plan IDs
   const normalize = (p) => {
@@ -66,7 +66,7 @@ export function usePlan() {
     return PLAN_ORDER.includes(p) ? p : null;
   };
 
-  const plan = normalize(adminOverride) || normalize(stripePlan) || 'free_trial';
+  const plan = normalize(adminOverride) || normalize(billingPlan) || 'free_trial';
 
   return {
     plan,

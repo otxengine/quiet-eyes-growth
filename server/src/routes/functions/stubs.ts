@@ -314,13 +314,13 @@ export async function getSubscriptionStatus(req: Request, res: Response) {
 }
 
 export async function createCheckoutSession(_req: Request, res: Response) {
-  // Legacy endpoint — forward to new Stripe checkout (307 preserves POST + body)
-  return res.redirect(307, '/api/stripe/checkout');
+  // Legacy endpoint — forward to billing checkout (307 preserves POST + body)
+  return res.redirect(307, '/api/billing/checkout');
 }
 
 export async function manageSubscription(_req: Request, res: Response) {
-  // Legacy endpoint — forward to new Stripe portal
-  return res.redirect(307, '/api/stripe/portal');
+  // Legacy endpoint — forward to billing portal
+  return res.redirect(307, '/api/billing/portal');
 }
 
 export async function collectSocialSignals(_req: Request, res: Response) {

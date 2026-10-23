@@ -1,19 +1,18 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
 
-const client = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId:     process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-});
+// The bucket's region, not the compute's: on ECS, AWS_REGION is the task's own region.
+const REGION = process.env.AWS_S3_REGION || process.env.AWS_REGION || 'us-east-1';
+
+// No explicit credentials: the SDK's default chain reads AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY
+// where they are set (Render) and the ECS task role on AWS.
+const client = new S3Client({ region: REGION });
 
 const BUCKET   = process.env.AWS_S3_BUCKET!;
-const CDN_BASE = process.env.AWS_CDN_URL || `https://${BUCKET}.s3.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com`;
+const CDN_BASE = process.env.AWS_CDN_URL || `https://${BUCKET}.s3.${REGION}.amazonaws.com`;
 
 export function isS3Configured(): boolean {
-  return !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.AWS_S3_BUCKET);
+  return !!process.env.AWS_S3_BUCKET;
 }
 
 /** Returns true if the given URL points to our S3 bucket or CloudFront CDN. */
@@ -21,8 +20,7 @@ export function isS3Url(url: string): boolean {
   if (!BUCKET) return false;
   try {
     const host = new URL(url).hostname;
-    const region = process.env.AWS_REGION || 'us-east-1';
-    if (host === `${BUCKET}.s3.${region}.amazonaws.com`) return true;
+    if (host === `${BUCKET}.s3.${REGION}.amazonaws.com`) return true;
     if (host === `${BUCKET}.s3.amazonaws.com`) return true;
     const cdnHost = process.env.AWS_CDN_URL ? new URL(process.env.AWS_CDN_URL).hostname : null;
     if (cdnHost && host === cdnHost) return true;

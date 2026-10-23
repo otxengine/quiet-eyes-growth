@@ -1,16 +1,11 @@
-name: deploy-staging
-# Every push to a deploy branch: run ci.yml, deploy Qe-staging, smoke-test it.
-# No stored AWS keys: the job trades GitHub's OIDC token for the short-lived
-# qe-github-deploy-staging role (infra/lib/github-oidc-stack.ts), which only trusts
-# jobs in this repo's "staging" environment.
+name: deploy
+# Every push to a deploy branch runs ci.yml, then deploys and smoke-tests staging.
+# Pushes to the-master-work-space then wait for a reviewer to approve the "production"
+# environment in GitHub before the same commit is deployed to prod.
 on:
   push:
     branches: [the-master-work-space, aws-staging]
   workflow_dispatch:
-
-concurrency:
-  group: deploy-staging
-  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -19,56 +14,31 @@ jobs:
   checks:
     uses: ./.github/workflows/ci.yml
 
-  deploy:
+  staging:
     needs: checks
-    runs-on: ubuntu-24.04-arm
-    environment:
-      name: staging
-      url: ${{ steps.smoke.outputs.url }}
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .node-version
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            infra/package-lock.json
-      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
-        with:
-          role-to-assume: arn:aws:iam::226635092863:role/qe-github-deploy-staging
-          aws-region: eu-central-1
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: staging
+      stack: Qe-staging
+      role: arn:aws:iam::226635092863:role/qe-github-deploy-staging
 
-      - run: npm ci --no-audit --no-fund
-      - run: npm run build
-        env:
-          VITE_API_URL: /api
-          VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
-      - name: No server-side keys in the frontend bundle
-        run: tr -d '\r' < scripts/scan-bundle-keys.sh | bash -s -- dist
-
-      - run: npm ci --no-audit --no-fund
-        working-directory: infra
-      - name: cdk deploy
-        working-directory: infra
-        env:
-          SRC_DIR: ${{ github.workspace }}
-          ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
-        # CI has no terminal to answer CDK's prompt; the human gate is the protected
-        # "staging" environment and the deploy-branch rules in GitHub.
-        run: npx cdk deploy Qe-staging --require-approval never
-
-      - name: Smoke test
-        id: smoke
-        run: |
-          URL=$(aws cloudformation describe-stacks --stack-name Qe-staging \
-            --query "Stacks[0].Outputs[?OutputKey=='Url'].OutputValue" --output text)
-          echo "url=$URL" >> "$GITHUB_OUTPUT"
-          curl -fsS --retry 6 --retry-delay 10 --retry-all-errors "$URL/api/healthz"
-          curl -fsS -o /dev/null "$URL/"
-          curl -fsS -o /dev/null "$URL/pricing"
-          code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/api/entities/BusinessProfile")
-          [ "$code" = 401 ] || { echo "expected 401 without a token, got $code"; exit 1; }
+  production:
+    needs: staging
+    if: github.ref == 'refs/heads/the-master-work-space'
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: production
+      stack: Qe-prod
+      role: arn:aws:iam::226635092863:role/qe-github-deploy-production

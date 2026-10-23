@@ -13,6 +13,11 @@ ROOT=$(git -C "$INFRA" rev-parse --show-toplevel)
 # Public build-time values for this env (VITE_CLERK_PUBLISHABLE_KEY etc.). Not secrets.
 if [ -f "$INFRA/.env.$ENV" ]; then set -a; . "$INFRA/.env.$ENV"; set +a; fi
 : "${VITE_CLERK_PUBLISHABLE_KEY:?set it in infra/.env.$ENV}"
+: "${ALERT_EMAIL:?set it in infra/.env.$ENV (alarm recipient)}"
+
+# Fail before the 5-minute build, not after it, when the SSO session has expired.
+aws sts get-caller-identity >/dev/null 2>&1 \
+  || { echo "AWS login expired or missing: run  aws sso login --profile ${AWS_PROFILE:-default}" >&2; exit 1; }
 
 SRC=$(mktemp -d)/src
 git -C "$ROOT" worktree add --detach "$SRC" "$REF" >/dev/null
