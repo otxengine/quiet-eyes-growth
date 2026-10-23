@@ -3,6 +3,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import { QeStack } from '../lib/qe-stack';
 import { GithubOidcStack } from '../lib/github-oidc-stack';
+import { DnsStack } from '../lib/dns-stack';
 
 const app = new cdk.App();
 const region = 'eu-central-1';
@@ -32,6 +33,9 @@ new QeStack(app, 'Qe-staging', {
   domain: stagingCertArn ? { name: STAGING_DOMAIN, certificateArn: stagingCertArn } : undefined,
   env: { account: process.env.CDK_DEFAULT_ACCOUNT, region },
 });
+
+// cortexi.ai DNS zone, deployed by hand (`npx cdk deploy Qe-dns`), not by the staging pipeline.
+new DnsStack(app, 'Qe-dns', { env: { account: process.env.CDK_DEFAULT_ACCOUNT, region } });
 
 // One-time: lets .github/workflows/deploy-staging.yml deploy without stored AWS keys.
 new GithubOidcStack(app, 'Qe-github', {
