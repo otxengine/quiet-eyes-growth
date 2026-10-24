@@ -8,6 +8,9 @@ import { useScanQuota } from '@/lib/useScanQuota';
 import { PLAN_LABELS } from '@/lib/usePlan';
 import ScanOverlay from '@/components/dashboard/ScanOverlay';
 import { buildNotificationFeed } from '@/lib/notificationFeed';
+import { appLayoutView } from '@/lib/appLayoutView';
+import { retryUnlessRateLimited } from '@/lib/query-client';
+import AppLoadError from '@/components/AppLoadError';
 
 // Track page visits in sessionStorage so badge counts clear after visiting the relevant page
 // Sub-paths (e.g. /insights/:id) also mark the parent path as visited
@@ -49,19 +52,22 @@ export default function AppLayout() {
   const { isLoadingAuth } = useAuth();
 
   // Organization context: active branch
-  const { currentBranch: orgBranch } = useOrganization();
+  const { currentBranch: orgBranch, isLoadingError: orgFailed, error: orgError } = useOrganization();
 
   // Get current user
-  const { data: user, isLoading: loadingUser, isError: userError } = useQuery({
+  // isPending, not isLoading: a retry paused in a background tab is still loading, not "no user"
+  const { data: user, isPending: loadingUser, isLoadingError: userFailed, error: userError } = useQuery({
     queryKey: ['currentUser'],
     queryFn: () => base44.auth.me(),
     enabled: !isLoadingAuth,
-    retry: 3,
-    retryDelay: 500,
+    retry: retryUnlessRateLimited(3),
   });
 
   // Get user's business profile
-  const { data: businessProfiles, isLoading: loadingProfiles } = useQuery({
+  const {
+    data: businessProfiles, isPending: loadingProfiles, isSuccess: profilesLoaded,
+    isLoadingError: profilesFailed, error: profilesError,
+  } = useQuery({
     queryKey: ['businessProfiles', user?.email],
     queryFn: () => base44.entities.BusinessProfile.filter({ created_by: user?.email }),
     enabled: !!user?.email
@@ -89,27 +95,27 @@ export default function AppLayout() {
   // Register service worker once on mount
   useEffect(() => { registerServiceWorker(); }, []);
 
-  // Redirect to onboarding if no business profile found
+  // Only a failed first load counts; a failed background refetch keeps the data we already have.
+  const loadError = (userFailed && userError) || (profilesFailed && profilesError) || (orgFailed && orgError) || null;
+  const view = appLayoutView({
+    loading: stillLoading || isLoadingAuth,
+    error: loadError,
+    profilesLoaded,
+    hasProfile: !!businessProfile,
+    fromOnboarding,
+  });
+  const retryLoad = () => queryClient.refetchQueries({ type: 'active', predicate: (q) => q.state.status === 'error' });
+
+  // Onboarding only for a confirmed "no business" — never for a failed request (see appLayoutView)
   useEffect(() => {
-    if (stillLoading) return;
-    if (isLoadingAuth) return;
+    if (view === 'loading') return;
     if (location.pathname.startsWith('/onboarding')) return;
     // If the profile loaded successfully, clear the onboarding guard flag
-    if (businessProfile) {
-      sessionStorage.removeItem('otx_just_onboarded');
-      return;
-    }
-    if (fromOnboarding) return;
-    // If user loaded but no profile — go to onboarding
-    if (user && !businessProfile) {
-      navigate('/onboarding');
-      return;
-    }
-    // If user failed to load (401 from Clerk) — also send to onboarding so they can register
-    if (userError && !user) {
-      navigate('/onboarding');
-    }
-  }, [businessProfile, stillLoading, isLoadingAuth, user, userError, navigate, location.pathname, fromOnboarding]);
+    if (businessProfile) sessionStorage.removeItem('otx_just_onboarded');
+    if (view === 'onboarding') navigate('/onboarding');
+    // The API rejects this Clerk session: sign out, or /sign-in would bounce straight back here
+    if (view === 'signin') base44.auth.logout('/sign-in');
+  }, [view, businessProfile, navigate, location.pathname]);
 
   // Global scan overlay — works on all pages (Dashboard overrides with its own when active)
   const scanQuota = useScanQuota(businessProfile?.id);
@@ -186,7 +192,9 @@ export default function AppLayout() {
     ).length,
   };
 
-  if (stillLoading) {
+  if (view === 'error') return <AppLoadError error={loadError} onRetry={retryLoad} />;
+
+  if (view !== 'app') {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-border border-t-primary rounded-full animate-spin" />

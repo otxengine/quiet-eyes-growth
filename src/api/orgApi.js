@@ -28,7 +28,10 @@ async function apiFetch(path, options = {}) {
   };
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(data.error || res.statusText), { status: res.status });
+  if (!res.ok) throw Object.assign(new Error(data.error || res.statusText), {
+    status: res.status,
+    retryAfter: Number(res.headers.get('retry-after') || res.headers.get('ratelimit-reset')) || undefined,
+  });
   return data;
 }
 

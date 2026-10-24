@@ -11,6 +11,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { useQuery } from '@tanstack/react-query';
 import { orgApi } from '@/api/orgApi';
 import { useAuth } from '@/lib/AuthContext';
+import { retryUnlessRateLimited } from '@/lib/query-client';
 
 const OrganizationContext = createContext(null);
 
@@ -20,12 +21,12 @@ const LS_BRANCH_KEY = 'otx_current_branch_id';
 export function OrganizationProvider({ children }) {
   const { isAuthenticated, isLoadingAuth } = useAuth();
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, isLoadingError, error, refetch } = useQuery({
     queryKey: ['myOrgs'],
     queryFn: () => orgApi.getMyOrgs(),
     enabled: !!isAuthenticated && !isLoadingAuth,
     staleTime: 60_000,
-    retry: 2,
+    retry: retryUnlessRateLimited(2),
   });
 
   const orgs          = data?.orgs || [];
@@ -87,6 +88,7 @@ export function OrganizationProvider({ children }) {
       setCurrentOrgId,
       setCurrentBranchId,
       isLoading,
+      isLoadingError,
       error,
       isAgency,
       hasMultiple,
