@@ -114,7 +114,7 @@ export async function fetchSocialInsights(req: Request, res: Response) {
         const fmt = (d: Date) => ({ year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() });
 
         const perfRes = await fetch(
-          `https://businessprofileperformance.googleapis.com/v1/${gmbLocationPath}:fetchMultiDailyMetricsTimeSeries`,
+          `https://businessprofileperformance.googleapis.com/v1/${gmbLocationPath.replace(/^accounts\/[^/]+\//, '')}:fetchMultiDailyMetricsTimeSeries`,
           {
             method: 'POST',
             headers: {

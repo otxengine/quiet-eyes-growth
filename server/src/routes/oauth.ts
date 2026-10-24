@@ -23,6 +23,8 @@ import { requireOwnsBusiness } from '../middleware/businessAccess';
 
 const router = Router();
 
+const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
 // Temporary in-memory store for page picker sessions (TTL 10 min)
 const pagePickerSessions = new Map<string, { businessId: string; platform: string; pages: any[]; expires: number }>();
 function createPickerSession(businessId: string, platform: string, pages: any[]): string {
@@ -387,6 +389,90 @@ async function handleWhatsAppCallback(code: string, businessId: string) {
 }
 
 // ── Google Business callback ──────────────────────────────────────────────────
+export interface GbpLocation {
+  id: string;        // v4 "accounts/X/locations/Y" — the Reviews API needs the account prefix v1 omits
+  name: string;      // listing title
+  detail: string;    // address, to tell branches apart in the picker
+  placeId?: string;
+}
+
+/** Every location the signed-in Google user manages. Throws when the API fails or there are none, so the connect fails visibly. */
+// ponytail: first 100 locations per account — paginate if an owner ever has more
+export async function listGbpLocations(accessToken: string): Promise<GbpLocation[]> {
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  const acctRes = await fetch('https://mybusinessaccountmanagement.googleapis.com/v1/accounts', { headers });
+  if (!acctRes.ok) {
+    console.error(`[oauth/google_business] accounts.list ${acctRes.status}:`, (await acctRes.text().catch(() => '')).slice(0, 500));
+    throw new Error(`Google Business Profile החזיר שגיאה (${acctRes.status}). נסה שוב מאוחר יותר.`);
+  }
+  const accounts: any[] = ((await acctRes.json()) as any)?.accounts || [];
+  const locations: GbpLocation[] = [];
+  for (const acct of accounts) {
+    const locRes = await fetch(
+      `https://mybusinessbusinessinformation.googleapis.com/v1/${acct.name}/locations?pageSize=100&readMask=name,title,storefrontAddress,metadata`,
+      { headers },
+    );
+    if (!locRes.ok) {
+      console.error(`[oauth/google_business] locations.list ${locRes.status} for ${acct.name}`);
+      continue;
+    }
+    for (const loc of (((await locRes.json()) as any)?.locations || [])) {
+      const addr = loc.storefrontAddress;
+      locations.push({
+        id: `${acct.name}/${loc.name}`,
+        name: loc.title || loc.name,
+        detail: [...(addr?.addressLines || []), addr?.locality].filter(Boolean).join(', '),
+        placeId: loc.metadata?.placeId,
+      });
+    }
+  }
+  if (!locations.length) {
+    throw new Error('לא נמצא עסק ב-Google Business Profile בחשבון הזה. ודא שאתה מחובר עם החשבון שמנהל את העסק ונסה שוב.');
+  }
+  return locations;
+}
+
+/** The listing whose Maps place matches this business needs no question; neither does a lone listing. Otherwise the owner picks. */
+export function pickGbpLocation(locations: GbpLocation[], placeId?: string | null): GbpLocation | undefined {
+  return locations.find(l => placeId && l.placeId === placeId) || (locations.length === 1 ? locations[0] : undefined);
+}
+
+type GoogleTokens = { accessToken: string; refreshToken: string; expiresAt: string };
+
+async function saveGoogleLocation(businessId: string, t: GoogleTokens, loc: GbpLocation) {
+  const existing = await prisma.socialAccount.findFirst({
+    where: { linked_business: businessId, platform: 'google_business' },
+  });
+  const encAccessToken  = tryEncryptToken(t.accessToken);
+  const encRefreshToken = t.refreshToken ? tryEncryptToken(t.refreshToken) : null;
+  if (existing) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE social_accounts
+       SET account_name=$1, access_token=$2, page_id=$3, is_connected=true,
+           last_sync=$4, refresh_token=$5, expires_at=$6, last_error=NULL
+       WHERE id=$7`,
+      loc.name, encAccessToken, loc.id, new Date().toISOString(),
+      encRefreshToken, t.expiresAt, existing.id,
+    );
+  } else {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO social_accounts
+         (id, created_date, linked_business, platform, account_name, access_token, page_id, is_connected, last_sync, refresh_token, expires_at)
+       VALUES (gen_random_uuid()::text, now(), $1, 'google_business', $2, $3, $4, true, $5, $6, $7)`,
+      businessId, loc.name, encAccessToken, loc.id,
+      new Date().toISOString(), encRefreshToken, t.expiresAt,
+    );
+  }
+
+  // Mirror access token into BusinessProfile — encrypted, same as the SocialAccount copy
+  await prisma.businessProfile.updateMany({
+    where: { id: businessId },
+    data:  { google_access_token: encAccessToken },
+  });
+
+  return { page_name: loc.name, platform: 'google_business' };
+}
+
 async function handleGoogleCallback(code: string, businessId: string) {
   // Exchange code for tokens
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -406,70 +492,17 @@ async function handleGoogleCallback(code: string, businessId: string) {
   const refreshToken = tokenData.refresh_token || '';  // long-lived; must be stored
   const expiresIn    = (tokenData.expires_in as number) || 3600;
   const expiresAt    = new Date(Date.now() + expiresIn * 1000).toISOString();
+  const tokens: GoogleTokens = { accessToken, refreshToken, expiresAt };
 
-  // Get user info for display name
-  const userRes  = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-    headers: { Authorization: `Bearer ${accessToken}` },
+  const locations = await listGbpLocations(accessToken);
+  const bp = await prisma.businessProfile.findUnique({
+    where: { id: businessId }, select: { google_place_id: true },
   });
-  const userData: any = userRes.ok ? await userRes.json() : {};
-  const accountName = userData.name || userData.email || 'Google Account';
+  const match = pickGbpLocation(locations, bp?.google_place_id);
+  if (match) return await saveGoogleLocation(businessId, tokens, match);
 
-  // Try to get first Google Business location's path for the Reviews API
-  let locationPath = '';
-  try {
-    const acctRes = await fetch(
-      'https://mybusinessaccountmanagement.googleapis.com/v1/accounts',
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
-    if (acctRes.ok) {
-      const acctData: any = await acctRes.json();
-      const firstAccount  = acctData?.accounts?.[0]?.name;
-      if (firstAccount) {
-        const locRes = await fetch(
-          `https://mybusinessbusinessinformation.googleapis.com/v1/${firstAccount}/locations?pageSize=1&readMask=name,storeCode`,
-          { headers: { Authorization: `Bearer ${accessToken}` } },
-        );
-        if (locRes.ok) {
-          const locData: any = await locRes.json();
-          const loc = locData?.locations?.[0];
-          if (loc?.name) locationPath = loc.name;
-        }
-      }
-    }
-  } catch (_) {}
-
-  // Upsert SocialAccount — store access_token, refresh_token, expiry
-  const existing = await prisma.socialAccount.findFirst({
-    where: { linked_business: businessId, platform: 'google_business' },
-  });
-  const encAccessToken  = tryEncryptToken(accessToken);
-  const encRefreshToken = refreshToken ? tryEncryptToken(refreshToken) : null;
-  if (existing) {
-    await prisma.$executeRawUnsafe(
-      `UPDATE social_accounts
-       SET account_name=$1, access_token=$2, page_id=$3, is_connected=true,
-           last_sync=$4, refresh_token=$5, expires_at=$6
-       WHERE id=$7`,
-      accountName, encAccessToken, locationPath, new Date().toISOString(),
-      encRefreshToken, expiresAt, existing.id,
-    );
-  } else {
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO social_accounts
-         (id, created_date, linked_business, platform, account_name, access_token, page_id, is_connected, last_sync, refresh_token, expires_at)
-       VALUES (gen_random_uuid()::text, now(), $1, 'google_business', $2, $3, $4, true, $5, $6, $7)`,
-      businessId, accountName, encAccessToken, locationPath,
-      new Date().toISOString(), encRefreshToken, expiresAt,
-    );
-  }
-
-  // Mirror access token into BusinessProfile — encrypted, same as the SocialAccount copy
-  await prisma.businessProfile.updateMany({
-    where: { id: businessId },
-    data:  { google_access_token: encAccessToken },
-  });
-
-  return { page_name: accountName, platform: 'google_business' };
+  const sessionKey = createPickerSession(businessId, 'google_business', locations.map(l => ({ ...l, tokens })));
+  return { needs_page_selection: true, platform: 'google_business', sessionKey };
 }
 
 // ── Meta Ads callback ─────────────────────────────────────────────────────────
@@ -662,11 +695,12 @@ router.get('/callback/:platform', async (req: Request, res: Response) => {
       const session = getPickerSession(result.sessionKey);
       const pages   = session?.pages ?? [];
       const serverBase = env().SERVER_BASE_URL;
+      const isGoogle   = result.platform === 'google_business';
 
       const pageButtons = pages.map((_p: any, i: number) =>
         `<a href="${serverBase}/api/oauth/confirm-page?session=${result.sessionKey}&idx=${i}" class="page-btn">
-          <div class="icon">📘</div>
-          <div><div class="name">${_p.name}</div><div class="pid">ID: ${_p.id}</div></div>
+          <div class="icon">${isGoogle ? '📍' : '📘'}</div>
+          <div><div class="name">${esc(_p.name)}</div><div class="pid">${isGoogle ? esc(_p.detail) : `ID: ${esc(_p.id)}`}</div></div>
         </a>`
       ).join('');
 
@@ -685,8 +719,8 @@ p{font-size:12px;color:#6b7280;margin-bottom:16px}
 .pid{font-size:10px;color:#9ca3af}
 </style></head>
 <body>
-<h2>בחר את הדף שברצונך לחבר</h2>
-<p>נמצאו מספר דפים — בחר את הדף הנכון לעסק זה</p>
+<h2>${isGoogle ? 'בחר את העסק שברצונך לחבר' : 'בחר את הדף שברצונך לחבר'}</h2>
+<p>${isGoogle ? 'בחשבון Google הזה יש כמה עסקים — בחר את הסניף הנכון' : 'נמצאו מספר דפים — בחר את הדף הנכון לעסק זה'}</p>
 ${pageButtons}
 </body></html>`;
       return res.send(pickerHtml);
@@ -701,7 +735,7 @@ body{font-family:sans-serif;display:flex;align-items:center;justify-content:cent
 h2{color:#10b981;margin-bottom:8px}p{color:#6b7280;font-size:14px}
 </style></head>
 <body><div class="box">
-<h2>✓ ${result.page_name || 'החיבור'} הצליח!</h2>
+<h2>✓ ${esc(result.page_name || 'החיבור')} הצליח!</h2>
 <p>החלון יסגר אוטומטית...</p>
 </div>
 <script>
@@ -761,7 +795,7 @@ router.post('/disconnect', requireOwnsBusiness(req => req.body?.businessId), asy
       }
       await prisma.socialAccount.update({
         where: { id: account.id },
-        data: { is_connected: false, access_token: null, refresh_token: null },
+        data: { is_connected: false, access_token: null, refresh_token: null, last_error: null },
       });
     }
 
@@ -803,10 +837,12 @@ router.get('/confirm-page', async (req: Request, res: Response) => {
   }
 
   try {
-    // meta_ads uses saveMetaAdsAccount; Facebook/Instagram use saveFacebookPage
+    // meta_ads uses saveMetaAdsAccount; Google uses saveGoogleLocation; Facebook/Instagram use saveFacebookPage
     const result = s.platform === 'meta_ads'
       ? await saveMetaAdsAccount(s.businessId, page, page.access_token)
-      : await saveFacebookPage(s.businessId, s.platform, page);
+      : s.platform === 'google_business'
+        ? await saveGoogleLocation(s.businessId, page.tokens, page)
+        : await saveFacebookPage(s.businessId, s.platform, page);
     pagePickerSessions.delete(session);
 
     return res.send(`<!DOCTYPE html>
@@ -818,12 +854,12 @@ body{font-family:sans-serif;display:flex;align-items:center;justify-content:cent
 h2{color:#10b981;margin-bottom:8px}p{color:#6b7280;font-size:14px}
 </style></head>
 <body><div class="box">
-<h2>✓ ${result.page_name} חובר בהצלחה!</h2>
+<h2>✓ ${esc(result.page_name)} חובר בהצלחה!</h2>
 <p>החלון יסגר אוטומטית...</p>
 </div>
 <script>
   if (window.opener) {
-    window.opener.postMessage({ type: 'oauth_success', platform: '${s.platform}', page_name: '${result.page_name.replace(/'/g, "\\'")}' }, '*');
+    window.opener.postMessage({ type: 'oauth_success', platform: '${s.platform}', page_name: ${JSON.stringify(String(result.page_name)).replace(/</g, '\\u003c')} }, '*');
   }
   setTimeout(function(){ window.close(); }, 1500);
 </script></body></html>`);
