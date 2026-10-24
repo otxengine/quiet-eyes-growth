@@ -20,6 +20,7 @@ import { getUserId } from '../middleware/auth';
 import { syncPaddleQuantity } from './billing';
 import { sendEmail, buildInviteEmail, FRONTEND_URL } from '../lib/email';
 import { getOrCreateOrgForProfile } from '../lib/orgHelpers';
+import { ORG_ROLES, ORG_ADMIN_ROLES } from '../lib/ownership';
 import crypto from 'crypto';
 
 type Params = Record<string, string>;
@@ -47,6 +48,32 @@ async function isOrgOwnerOrAdmin(orgId: string, userId: string): Promise<boolean
   const m = await getOrgMembership(orgId, userId);
   return m?.role === 'owner' || m?.role === 'admin';
 }
+
+/** A member row in any status (pending invites included), for checks on the member being changed. */
+async function getMemberRow(orgId: string, userId: string): Promise<{ role: string; status: string } | null> {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT role, status FROM organization_members WHERE org_id = $1 AND user_id = $2 LIMIT 1`,
+    orgId, userId,
+  );
+  return rows?.[0] || null;
+}
+
+/** Only an owner may grant, change or revoke owner or admin: `roles` are the member's current and new roles. */
+function mayAssign(callerRole: string, ...roles: (string | null | undefined)[]): boolean {
+  return callerRole === 'owner' || !roles.some(r => r && ORG_ADMIN_ROLES.has(r));
+}
+
+const ADMIN_ROLE_ONLY_OWNER = 'Only an owner can grant, change or revoke the owner or admin role';
+const LAST_OWNER = 'An organization must keep at least one active owner';
+
+// WHERE condition for changing the member row (org, user): it holds unless that row is the org's
+// last active owner. FOR UPDATE locks the other owners' rows, so two owners demoting each other at
+// the same moment can't both get through.
+const notLastOwner = (org: string, user: string) =>
+  `(organization_members.role <> 'owner' OR organization_members.status <> 'active'
+    OR EXISTS (SELECT 1 FROM organization_members o
+               WHERE o.org_id = ${org} AND o.user_id <> ${user} AND o.role = 'owner' AND o.status = 'active'
+               FOR UPDATE))`;
 
 // ── GET /api/orgs/my ──────────────────────────────────────────────────────────
 // Returns all orgs the user belongs to + their branches.
@@ -225,10 +252,12 @@ router.post('/:id/members', async (req: Request, res: Response) => {
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
   const { id } = req.params as Params;
 
-  if (!await isOrgOwnerOrAdmin(id, userId)) return res.status(403).json({ error: 'Insufficient role' });
+  const caller = await getOrgMembership(id, userId);
+  if (!caller || !ORG_ADMIN_ROLES.has(caller.role)) return res.status(403).json({ error: 'Insufficient role' });
 
   const { user_id, email, role = 'content_editor', branch_ids, inviter_name } = req.body;
   if (!user_id && !email) return res.status(400).json({ error: 'user_id or email required' });
+  if (!ORG_ROLES.has(role)) return res.status(400).json({ error: 'Invalid role' });
 
   // For email-only invites generate a unique token (7-day expiry)
   const isEmailInvite = !user_id && !!email;
@@ -237,17 +266,23 @@ router.post('/:id/members', async (req: Request, res: Response) => {
 
   const targetUserId = user_id || `invite:${email}`;
   try {
-    await prisma.$executeRawUnsafe(
+    // Re-inviting an existing member overwrites their row (ON CONFLICT below), so it is a role change too.
+    const existing = await getMemberRow(id, targetUserId);
+    if (!mayAssign(caller.role, role, existing?.role)) return res.status(403).json({ error: ADMIN_ROLE_ONLY_OWNER });
+
+    const written = await prisma.$executeRawUnsafe(
       `INSERT INTO organization_members
          (id, org_id, user_id, email, role, branch_ids, invited_by, invited_at, status, invite_token, token_expires_at)
        VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, NOW(), 'pending', $7, $8)
        ON CONFLICT (org_id, user_id) DO UPDATE
          SET role = $4, branch_ids = $5, status = 'pending',
-             invite_token = $7, token_expires_at = $8`,
+             invite_token = $7, token_expires_at = $8
+         WHERE ${notLastOwner('$1', '$2')}`,
       id, targetUserId, email || null, role,
       branch_ids ? JSON.stringify(branch_ids) : null,
       userId, inviteToken, tokenExpiry,
     );
+    if (!written) return res.status(409).json({ error: LAST_OWNER });
 
     // Fetch org name for the invite email
     let orgName = 'הארגון';
@@ -286,14 +321,24 @@ router.patch('/:id/members/:memberId', async (req: Request, res: Response) => {
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
   const { id, memberId } = req.params as Params;
 
-  if (!await isOrgOwnerOrAdmin(id, userId)) return res.status(403).json({ error: 'Insufficient role' });
+  const caller = await getOrgMembership(id, userId);
+  if (!caller || !ORG_ADMIN_ROLES.has(caller.role)) return res.status(403).json({ error: 'Insufficient role' });
 
   const { role, branch_ids } = req.body;
-  await prisma.$executeRawUnsafe(
+  if (role && !ORG_ROLES.has(role)) return res.status(400).json({ error: 'Invalid role' });
+
+  const target = await getMemberRow(id, memberId);
+  if (!target) return res.status(404).json({ error: 'Member not found' });
+  if (!mayAssign(caller.role, target.role, role)) return res.status(403).json({ error: ADMIN_ROLE_ONLY_OWNER });
+
+  // Any other role demotes the member if they are an owner; the guard keeps one active owner.
+  const demotesOwner = !!role && role !== 'owner';
+  const updated = await prisma.$executeRawUnsafe(
     `UPDATE organization_members SET role = COALESCE($1, role), branch_ids = COALESCE($2, branch_ids)
-     WHERE org_id = $3 AND user_id = $4`,
+     WHERE org_id = $3 AND user_id = $4${demotesOwner ? ` AND ${notLastOwner('$3', '$4')}` : ''}`,
     role || null, branch_ids ? JSON.stringify(branch_ids) : null, id, memberId,
   );
+  if (!updated) return res.status(409).json({ error: LAST_OWNER });
   return res.json({ ok: true });
 });
 
@@ -304,12 +349,19 @@ router.delete('/:id/members/:memberId', async (req: Request, res: Response) => {
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
   const { id, memberId } = req.params as Params;
 
-  if (!await isOrgOwnerOrAdmin(id, userId)) return res.status(403).json({ error: 'Insufficient role' });
+  const caller = await getOrgMembership(id, userId);
+  if (!caller || !ORG_ADMIN_ROLES.has(caller.role)) return res.status(403).json({ error: 'Insufficient role' });
 
-  await prisma.$executeRawUnsafe(
-    `UPDATE organization_members SET status = 'revoked' WHERE org_id = $1 AND user_id = $2`,
+  const target = await getMemberRow(id, memberId);
+  if (!target) return res.status(404).json({ error: 'Member not found' });
+  if (!mayAssign(caller.role, target.role)) return res.status(403).json({ error: ADMIN_ROLE_ONLY_OWNER });
+
+  const revoked = await prisma.$executeRawUnsafe(
+    `UPDATE organization_members SET status = 'revoked'
+     WHERE org_id = $1 AND user_id = $2 AND ${notLastOwner('$1', '$2')}`,
     id, memberId,
   );
+  if (!revoked) return res.status(409).json({ error: LAST_OWNER });
   return res.json({ ok: true });
 });
 
