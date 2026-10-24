@@ -106,13 +106,6 @@ const strictLimiter = rateLimit({
   skip: (req) => req.headers['x-admin-key'] === (process.env.ADMIN_SECRET || '__unset__'),
 });
 
-app.use('/api', generalLimiter);
-// Costly functions, matched on the decoded :name. Path mounts were skipped by encoded paths
-// ('/api/functions/run%46ullScan'), and three named functions that don't exist.
-const STRICT_FUNCTIONS = new Set(['run-full-scan', 'runFullScan', 'generateImage', 'generateSmartPost', 'generateBulkPosts', 'generateAdvisoryInsights']);
-app.use('/api/functions/:name', (req, res, next) => (STRICT_FUNCTIONS.has(req.params.name) ? strictLimiter(req, res, next) : next()));
-app.use('/api/orchestrator', strictLimiter);
-
 const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .split(',')
   .map(o => o.trim())
@@ -131,6 +124,15 @@ app.use(cors({
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key', 'x-dev-user'],
 }));
+
+// After cors(): a 429 needs CORS headers too, or a cross-origin browser reports it as a
+// network error instead of a 429. cors() also answers preflights, so those no longer count.
+app.use('/api', generalLimiter);
+// Costly functions, matched on the decoded :name. Path mounts were skipped by encoded paths
+// ('/api/functions/run%46ullScan'), and three named functions that don't exist.
+const STRICT_FUNCTIONS = new Set(['run-full-scan', 'runFullScan', 'generateImage', 'generateSmartPost', 'generateBulkPosts', 'generateAdvisoryInsights']);
+app.use('/api/functions/:name', (req, res, next) => (STRICT_FUNCTIONS.has(req.params.name) ? strictLimiter(req, res, next) : next()));
+app.use('/api/orchestrator', strictLimiter);
 
 // Dedicated admin key verification — placed before Clerk and body parser
 app.get('/api/admin-verify', (req: any, res: any) => {
