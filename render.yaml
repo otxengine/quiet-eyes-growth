@@ -130,6 +130,13 @@ services:
     # Long cache for immutable hashed assets; a week for brand/og images.
     # (Mirrors the headers configured manually on quiet-eyes-growth_DEV_FE.)
     headers:
+      # Same policy as CONTENT_SECURITY_POLICY in infra/lib/qe-stack.ts, plus the Render API origin.
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self' 'unsafe-hashes' 'sha256-MhtPZXr7+LpJUY5qtMutB+qWfQtMaPccfe7QXtCcEYc=' https://clerk.cortexi.ai https://concrete-tuna-44.clerk.accounts.dev https://challenges.cloudflare.com https://*.protect.clerk.com https://cdn.paddle.com https://sandbox-cdn.paddle.com https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.paddle.com https://sandbox-cdn.paddle.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' https://quiet-eyes-growth-dev-be.onrender.com https://clerk.cortexi.ai https://concrete-tuna-44.clerk.accounts.dev https://*.protect.clerk.com:* https://*.paddle.com https://*.facebook.com; frame-src https://challenges.cloudflare.com https://*.protect.clerk.com https://*.paddle.com https://*.facebook.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
       - path: /assets/*
         name: Cache-Control
         value: public, max-age=31536000, immutable
