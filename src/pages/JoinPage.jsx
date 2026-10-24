@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
+import { getAuthHeaders } from '@/api/client';
 
 export default function JoinPage() {
   const [searchParams] = useSearchParams();
@@ -28,7 +29,8 @@ export default function JoinPage() {
 
     // Authenticated — claim the invite
     setStatus('loading');
-    fetch(`/api/orgs/join/${token}`, { method: 'POST' })
+    getAuthHeaders()
+      .then((headers) => fetch(`/api/orgs/join/${token}`, { method: 'POST', headers }))
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {

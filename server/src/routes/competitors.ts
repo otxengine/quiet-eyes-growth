@@ -5,8 +5,12 @@ import { findPlaceId } from '../lib/googlePlaces';
 import { enrichCompetitorUrls } from './functions/enrichCompetitorUrls';
 import { computeThemeRollup, computeReviewTrend, REVIEWS_INSIGHTS_WINDOW_DAYS } from './functions/computeThemeRollup';
 import { computeEntityKpis } from '../lib/socialKpis';
+import { requireOwnsBusinessFields, requireOwnsRecord } from '../middleware/businessAccess';
 
 const router = Router();
+router.use(requireOwnsBusinessFields);
+const ownsCompetitor = requireOwnsRecord(async id =>
+  (await prisma.competitor.findUnique({ where: { id }, select: { linked_business: true } }))?.linked_business);
 
 function hasUrl(c: any): boolean {
   return !!(c.instagram_url || c.facebook_url || c.tiktok_url);
@@ -545,7 +549,7 @@ router.get('/proxy-image', async (req: Request, res: Response) => {
 // auto-discovered competitors. Fill-if-empty only — never touches a URL the
 // caller already set (manual_url_fields / non-null values are left alone).
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/:id/enrich-urls', async (req: Request, res: Response) => {
+router.post('/:id/enrich-urls', ownsCompetitor, async (req: Request, res: Response) => {
   const competitorId = String(req.params.id);
   try {
     const competitor = await prisma.competitor.findUnique({ where: { id: competitorId } });

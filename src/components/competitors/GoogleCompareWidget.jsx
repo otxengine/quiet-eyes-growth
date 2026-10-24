@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { th } from './topicLabels';
+import { getAuthHeaders } from '@/api/client';
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api').replace(/\/$/, '');
 
@@ -107,7 +108,7 @@ export default function GoogleCompareWidget({ businessProfileId, businessName })
     queryFn: async () => {
       const res = await fetch(`${API_BASE}/functions/compareGoogleMetrics`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
         body: JSON.stringify({ businessProfileId }),
       });
       if (!res.ok) throw new Error('compare failed');

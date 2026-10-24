@@ -11,8 +11,13 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../../db';
 import { encryptToken } from '../../lib/crypto';
 import { metaApi } from '../../lib/metaApi';
+import { ownsBusinessParam, requireOwnsBusiness, requireOwnsBusinessFields, requireOwnsRecord } from '../../middleware/businessAccess';
 
 const router = Router();
+router.use(requireOwnsBusinessFields);
+router.param('businessProfileId', ownsBusinessParam);
+const ownsConnection = requireOwnsRecord(async id =>
+  (await prisma.metaConnection.findUnique({ where: { id }, select: { business_profile_id: true } }))?.business_profile_id);
 
 // ── Facebook Login for Business (OAuth Callback) ──────────────────────────────
 
@@ -26,7 +31,9 @@ const router = Router();
  *
  * Meta redirects here with ?code=...&state=...
  */
-router.get('/facebook/callback', async (req: Request, res: Response) => {
+// `state` is the raw businessProfileId (no nonce), so only its signed-in owner may complete
+// the flow; otherwise anyone could bind their Facebook pages to another business.
+router.get('/facebook/callback', requireOwnsBusiness(req => req.query.state as string | undefined), async (req: Request, res: Response) => {
   const { code, state, error: oauthError } = req.query as Record<string, string>;
 
   // User denied the permission dialog
@@ -303,7 +310,7 @@ router.get('/connections/:businessProfileId', async (req: Request, res: Response
 
 // ── Disconnect ────────────────────────────────────────────────────────────────
 
-router.delete('/connections/:id', async (req: Request, res: Response) => {
+router.delete('/connections/:id', ownsConnection, async (req: Request, res: Response) => {
   try {
     await prisma.metaConnection.update({
       where: { id: String(req.params.id) },

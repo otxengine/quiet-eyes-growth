@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, TrendingUp } from 'lucide-react';
 import { th } from '@/components/competitors/topicLabels';
+import { getAuthHeaders } from '@/api/client';
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3007/api').replace(/\/$/, '');
 
@@ -53,7 +54,7 @@ export default function TopicTimelineWidget({ businessProfileId, businessName })
     queryFn: async () => {
       const r = await fetch(`${API_BASE}/functions/topicTimeline`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
         body: JSON.stringify({ businessProfileId }),
       });
       if (!r.ok) throw new Error('topicTimeline failed');

@@ -18,6 +18,7 @@
 import { useState, useRef } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
+import { getAuthHeaders } from '@/api/client';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3002';
 
@@ -70,7 +71,7 @@ export default function FeedbackWidget({
     try {
       await fetch(`${SERVER_URL}/api/feedback`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
         body: JSON.stringify({
           businessProfileId: bpId,
           aiOutputId:        outputId || null,

@@ -17,6 +17,7 @@ import { useOutletContext } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { base44 } from '@/api/base44Client';
+import { getAuthHeaders } from '@/api/client';
 
 // Use the same backend URL as the rest of the app (VITE_API_URL already includes /api)
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/+$/, '');
@@ -82,7 +83,7 @@ export default function LearningCenter() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['learningDashboard', bpId],
     queryFn:  async () => {
-      const r = await fetch(`${API_URL}/learning/dashboard/${bpId}`);
+      const r = await fetch(`${API_URL}/learning/dashboard/${bpId}`, { headers: await getAuthHeaders() });
       if (!r.ok) throw new Error(`שגיאת שרת ${r.status}`);
       return r.json();
     },
@@ -95,7 +96,7 @@ export default function LearningCenter() {
     mutationFn: async () => {
       // Try the dedicated learning endpoint first, fall back to general function invoke
       try {
-        const r = await fetch(`${API_URL}/learning/run/${bpId}`, { method: 'POST' });
+        const r = await fetch(`${API_URL}/learning/run/${bpId}`, { method: 'POST', headers: await getAuthHeaders() });
         if (r.ok) return r.json();
       } catch (_) {}
       // Fallback: invoke via functions API

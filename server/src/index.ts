@@ -46,6 +46,7 @@ import metaAuthRouter from './routes/meta/auth';
 import metaWebhookRouter from './routes/meta/webhook';
 import dataforseoWebhookRouter from './routes/webhooks/dataforseo';
 import clerkWebhookRouter from './routes/webhooks/clerk';
+import { requireApiAuth } from './middleware/apiAuth';
 import conversationsRouter from './routes/conversations';
 import orchestratorRouter from './routes/orchestrator';
 import approvalsRouter from './routes/approvals';
@@ -169,6 +170,10 @@ if (clerkEnabled) {
 } else {
   console.log('Clerk not configured — running in dev mode (all requests as dev-user)');
 }
+
+// Deny by default: every /api route registered below needs a signed-in user or the
+// admin key, except the short public list in middleware/apiAuth.ts.
+app.use('/api', requireApiAuth);
 
 {
   const { paddleEnabled, describeApiKey, describeWebhookSecret } = require('./lib/paddle');

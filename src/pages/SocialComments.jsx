@@ -7,9 +7,10 @@ import {
   ThumbsDown, Minus, Facebook, Instagram, Loader2, ChevronDown, Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getAuthHeaders } from '@/api/client';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3007/api';
-const HEADERS  = { 'Content-Type': 'application/json', 'x-dev-user': 'dev-user' };
+const jsonHeaders = async () => ({ 'Content-Type': 'application/json', ...(await getAuthHeaders()) });
 
 const PLATFORM_FILTERS = [
   { id: 'all',       label: 'הכל' },
@@ -70,7 +71,7 @@ function CommentCard({ comment, businessProfileId, onUpdate }) {
     try {
       const res  = await fetch(`${API_BASE}/social/comments/${comment.id}/suggest-reply`, {
         method: 'POST',
-        headers: HEADERS,
+        headers: await jsonHeaders(),
         body: JSON.stringify({ businessProfileId }),
       });
       const data = await res.json();
@@ -90,7 +91,7 @@ function CommentCard({ comment, businessProfileId, onUpdate }) {
     try {
       const res  = await fetch(`${API_BASE}/social/comments/${comment.id}/reply`, {
         method: 'POST',
-        headers: HEADERS,
+        headers: await jsonHeaders(),
         body: JSON.stringify({ businessProfileId, replyText }),
       });
       const data = await res.json();
@@ -107,7 +108,7 @@ function CommentCard({ comment, businessProfileId, onUpdate }) {
     setDismissing(true);
     try {
       await fetch(`${API_BASE}/social/comments/${comment.id}/dismiss`, {
-        method: 'PATCH', headers: HEADERS,
+        method: 'PATCH', headers: await jsonHeaders(),
       });
       onUpdate();
     } catch { setDismissing(false); }
@@ -119,7 +120,7 @@ function CommentCard({ comment, businessProfileId, onUpdate }) {
     try {
       const res  = await fetch(`${API_BASE}/social/comments/${comment.id}`, {
         method: 'DELETE',
-        headers: HEADERS,
+        headers: await jsonHeaders(),
         body: JSON.stringify({ businessProfileId }),
       });
       const data = await res.json();
@@ -291,7 +292,7 @@ export default function SocialComments() {
     queryFn: async () => {
       const res  = await fetch(
         `${API_BASE}/social/comments?businessProfileId=${bpId}`,
-        { headers: HEADERS },
+        { headers: await jsonHeaders() },
       );
       const json = await res.json();
       return json.comments || [];
@@ -306,7 +307,7 @@ export default function SocialComments() {
     try {
       const res  = await fetch(
         `${API_BASE}/social/comments?businessProfileId=${bpId}`,
-        { headers: HEADERS },
+        { headers: await jsonHeaders() },
       );
       const json = await res.json();
       if (json.errors?.length) toast.error(`שגיאות: ${json.errors.join(', ')}`);

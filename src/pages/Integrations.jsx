@@ -290,7 +290,7 @@ function WhatsAppEmbeddedCard({ platform, connection, account, bpId, expiry, onD
             try {
               const res = await fetch(`${SERVER_BASE}/api/meta/auth/whatsapp/embedded-signup`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
                 body: JSON.stringify({
                   code,
                   waba_id:           sessionData.waba_id,
