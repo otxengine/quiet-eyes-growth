@@ -5,7 +5,11 @@
  */
 jest.mock('../db', () => ({ prisma: {} }));
 jest.mock('../middleware/auth', () => ({ getUserId: jest.fn(() => 'user-a'), isAdminKeyRequest: jest.fn(() => false) }));
-jest.mock('../lib/ownership', () => ({ getUserBusinessIds: jest.fn(async () => ['biz-1']), getUserEmail: jest.fn() }));
+jest.mock('../lib/ownership', () => ({
+  getUserBusinessIds: jest.fn(async () => ['biz-1']),
+  getUserWritableBusinessIds: jest.fn(async () => ['biz-1']),
+  getUserEmail: jest.fn(),
+}));
 jest.mock('../lib/automationLog', () => ({ writeAutomationLog: jest.fn() }));
 jest.mock('../routes/functions/detectCompetitorAds', () => ({ detectCompetitorAds: jest.fn() }));
 

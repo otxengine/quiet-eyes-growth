@@ -20,10 +20,12 @@ jest.mock('../middleware/auth', () => ({
   isAdminKeyRequest: jest.fn(),
 }));
 
-jest.mock('../lib/ownership', () => ({
-  getUserBusinessIds: jest.fn(),
-  getUserEmail: jest.fn(),
-}));
+jest.mock('../lib/ownership', () => {
+  const getUserBusinessIds = jest.fn();
+  // The caller owns their businesses outright here, so they can write every one they can read
+  // (viewers: orgRoleEnforcement.test.ts).
+  return { getUserBusinessIds, getUserWritableBusinessIds: (id: string) => getUserBusinessIds(id), getUserEmail: jest.fn() };
+});
 
 import { Request, Response } from 'express';
 import { getUserId, isAdminKeyRequest } from '../middleware/auth';

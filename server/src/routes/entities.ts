@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
 import { getUserId, isAdminKeyRequest } from '../middleware/auth';
-import { getUserEmail, getUserBusinessIds } from '../lib/ownership';
+import { getUserEmail, getUserBusinessIds, getUserWritableBusinessIds } from '../lib/ownership';
 import { cleanupCompetitorsByRadius } from '../lib/competitorRadiusCleanup';
 import { collectCompetitorSocialPosts } from './functions/collectCompetitorSocialPosts';
 import { collectCompetitorSocialProfile } from './functions/collectCompetitorSocialProfile';
@@ -13,26 +13,25 @@ import { enrichCompetitorUrls } from './functions/enrichCompetitorUrls';
 // Column name allowlist for raw SQL fallback — prevents SQL injection via key names
 const SAFE_COLUMN = /^[a-z_][a-z0-9_]*$/i;
 
-/** Returns true if the record with `id` on `model` belongs to `userId` */
+/** Returns true if `userId` may change (PATCH/DELETE) the record with `id` on `model` */
 async function verifyRecordOwnership(model: any, id: string, userId: string): Promise<boolean> {
-  // Step 1: check created_by (not all models have this field)
+  // Step 1: a row tied to a business needs write access to that business — an org viewer only
+  // reads, even rows they created before they became a viewer.
+  let linkedBusiness: string | null = null;
+  try {
+    const ext = await model.findFirst({ where: { id }, select: { linked_business: true } });
+    linkedBusiness = ext?.linked_business ?? null;
+  } catch { /* model has no linked_business field — fall through to created_by check */ }
+  if (linkedBusiness) return (await getUserWritableBusinessIds(userId)).includes(linkedBusiness);
+
+  // Step 2: check created_by (not all models have this field)
   try {
     const base = await model.findFirst({ where: { id }, select: { id: true, created_by: true } });
     if (!base) return false;
     if (base.created_by === userId) return true;
     const email = await getUserEmail(userId);
     if (email && base.created_by === email) return true;
-  } catch { /* model has no created_by field — fall through to linked_business check */ }
-
-  // Step 2: check linked_business ownership
-  try {
-    const ext = await model.findFirst({ where: { id }, select: { linked_business: true } });
-    const linkedBusiness = ext?.linked_business ?? null;
-    if (linkedBusiness) {
-      const bizIds = await getUserBusinessIds(userId);
-      return bizIds.includes(linkedBusiness);
-    }
-  } catch { /* model has no linked_business field */ }
+  } catch { /* model has no created_by field */ }
 
   return false;
 }
@@ -290,7 +289,7 @@ const PLAN_COMPETITOR_LIMITS: Record<string, number> = {
 const PROTECTED_FIELDS = ['subscription_plan', 'plan_id', 'subscription_status', 'stripe_customer_id', 'subscription_started_at', 'organization_id'];
 
 // Non-admin writes: drop protected fields, and every tenant key must point at the caller's own
-// data: a business they own (linked_business, business_id) or a competitor of one.
+// data: a business they can write (linked_business, business_id) or a competitor of one.
 async function rejectForeignWrite(req: Request, data: Record<string, any>): Promise<boolean> {
   if (isAdminKeyRequest(req)) return false;
   for (const f of PROTECTED_FIELDS) delete data[f];
@@ -299,7 +298,7 @@ async function rejectForeignWrite(req: Request, data: Record<string, any>): Prom
   if (!bizKeys.length && !competitorKeys.length) return false;
   const userId = getUserId(req);
   if (!userId) return true;
-  const owned = await getUserBusinessIds(userId);
+  const owned = await getUserWritableBusinessIds(userId);
   if (bizKeys.some(f => typeof data[f] !== 'string' || !owned.includes(data[f]))) return true;
   for (const f of competitorKeys) {
     if (typeof data[f] !== 'string') return true;
