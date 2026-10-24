@@ -102,6 +102,13 @@ describe('L2: secret compares', () => {
 });
 
 describe('L12: Clerk authorizedParties', () => {
+  test('frontendOrigins comes from FRONTEND_URL only (the AWS stack sets it), as bare origins', () => {
+    const { frontendOrigins } = loadAuth({ FRONTEND_URL: 'https://d8b8gahipsuc6.cloudfront.net/, https://cortexi.ai' });
+    expect(frontendOrigins()).toEqual(['https://d8b8gahipsuc6.cloudfront.net', 'https://cortexi.ai']);
+    process.env.FRONTEND_URL = 'not a url';
+    expect(frontendOrigins()).toEqual([]);
+  });
+
   test('clerkAuth passes the allowed origins as authorizedParties and skips admin-key requests', () => {
     const { clerkAuth } = loadAuth(REAL_KEYS);
     const origins = ['https://cortexi.ai', 'https://quiet-eyes-growth.onrender.com'];

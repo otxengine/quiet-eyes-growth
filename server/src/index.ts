@@ -52,7 +52,7 @@ import metaWebhookRouter from './routes/meta/webhook';
 import dataforseoWebhookRouter from './routes/webhooks/dataforseo';
 import clerkWebhookRouter from './routes/webhooks/clerk';
 import { requireApiAuth } from './middleware/apiAuth';
-import { CLERK_ENABLED, clerkAuth, isAdminKeyRequest, isCronRequest, safeEqual } from './middleware/auth';
+import { CLERK_ENABLED, clerkAuth, frontendOrigins, isAdminKeyRequest, isCronRequest, safeEqual } from './middleware/auth';
 import conversationsRouter from './routes/conversations';
 import orchestratorRouter from './routes/orchestrator';
 import approvalsRouter from './routes/approvals';
@@ -150,7 +150,7 @@ app.get('/api/admin-verify', (req: any, res: any) => {
 
 // Only mount Clerk middleware when a real secret key is configured
 if (CLERK_ENABLED) {
-  app.use(clerkAuth(ALLOWED_ORIGINS)); // session tokens minted for any other origin are refused
+  app.use(clerkAuth(frontendOrigins())); // session tokens minted for any other origin are refused
   console.log('Clerk auth enabled');
 } else {
   console.log('Clerk not configured — running in dev mode (all requests as dev-user)');

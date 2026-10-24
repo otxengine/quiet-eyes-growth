@@ -1,7 +1,8 @@
 /**
- * OAuth state is bound to the signed-in user + business, single use, short-lived (M7); popup pages
- * escape what they print and post only to our own frontend origins (L14); WhatsApp's
- * phone_number_id must be in a WABA the token can read (L5).
+ * OAuth state is bound to the signed-in user + business, single use, short-lived (M7); the API no
+ * longer renders popup HTML or posts to '*': the callback redirects to the app's own page, which
+ * finishes the flow over authenticated JSON (L14); WhatsApp's phone_number_id must be in a WABA the
+ * token can read (L5).
  */
 jest.mock('../db', () => ({
   prisma: {
@@ -15,7 +16,10 @@ jest.mock('../db', () => ({
 }));
 jest.mock('../lib/crypto', () => ({ tryEncryptToken: (v: string) => `enc:${v}`, encryptToken: (v: string) => `enc:${v}` }));
 jest.mock('../lib/ownership', () => ({ getUserBusinessIds: jest.fn() }));
-jest.mock('../middleware/auth', () => ({ getUserId: jest.fn(), isAdminKeyRequest: jest.fn(() => false) }));
+jest.mock('../middleware/auth', () => ({
+  getUserId: jest.fn(), isAdminKeyRequest: jest.fn(() => false),
+  frontendOrigins: jest.requireActual('../middleware/auth').frontendOrigins,
+}));
 jest.mock('../lib/revokeTokens', () => ({ disconnectIntegrations: jest.fn(), revokeToken: jest.fn(), metaIntegration: jest.fn() }));
 jest.mock('../lib/metaApi', () => ({
   metaApi: { getLongLivedToken: jest.fn(async () => ({ token: 'long-tok', expiresIn: 3600 })), subscribeToWABA: jest.fn(async () => {}) },
@@ -84,30 +88,35 @@ describe('M7: initiate binds the state to the signed-in user', () => {
   });
 });
 
-describe('M7 + L14: the callback page exchanges nothing and posts only to our origins', () => {
+describe('M7 + L14: the callback exchanges nothing and renders nothing; it sends the popup to our app', () => {
   const callback = handler(oauthRouter, 'get', '/callback/:platform');
 
-  test('hands code + state to the opener at the frontend origin, escaped, never to "*"', async () => {
+  test('redirects to the frontend /oauth/callback with code + state in the fragment', async () => {
     const res = await call(callback, {
       params: { platform: "x'</script><script>alert(1)//" },
       query: { code: '</script><img src=x onerror=alert(1)>', state: 'abc' },
     });
-    const html: string = res.send.mock.calls[0][0];
     expect(global.fetch).not.toHaveBeenCalled();
     expect(execRaw).not.toHaveBeenCalled();
     expect(queryRaw).not.toHaveBeenCalled();
-    expect(html).not.toContain("'*'");
-    expect(html).toContain('["https://app.example"].forEach');
-    expect(html).not.toMatch(/<\/script><(script|img)/);
-    expect(html).toContain('"type":"oauth_code"');
-    expect(html).toContain('\\u003c/script>\\u003cimg src=x onerror=alert(1)>');
+    expect(res.send).not.toHaveBeenCalled();
+    const url = new URL(res.redirect.mock.calls[0][0]);
+    expect(url.origin + url.pathname).toBe('https://app.example/oauth/callback');
+    expect(url.search).toBe('');
+    expect(Object.fromEntries(new URLSearchParams(url.hash.slice(1)))).toEqual({
+      platform: "x'</script><script>alert(1)//", code: '</script><img src=x onerror=alert(1)>', state: 'abc',
+    });
   });
 
-  test('a provider error renders an oauth_error page, escaped', async () => {
-    const res = await call(callback, { params: { platform: 'google_business' }, query: { error: '"><svg onload=alert(1)>' } });
-    const html: string = res.send.mock.calls[0][0];
-    expect(html).toContain('"type":"oauth_error"');
-    expect(html).not.toContain('<svg');
+  test('a provider error goes to the same page as an error', async () => {
+    const res = await call(callback, { params: { platform: 'google_business' }, query: { error: 'access_denied', code: 'c', state: 's' } });
+    expect(res.redirect).toHaveBeenCalledWith('https://app.example/oauth/callback#error=access_denied');
+  });
+
+  test('the first FRONTEND_URL origin is the target', async () => {
+    process.env.FRONTEND_URL = 'https://d8b8gahipsuc6.cloudfront.net/, https://cortexi.ai';
+    const res = await call(callback, { params: { platform: 'google_business' }, query: { code: 'c', state: 's' } });
+    expect(res.redirect.mock.calls[0][0]).toMatch(/^https:\/\/d8b8gahipsuc6\.cloudfront\.net\/oauth\/callback#/);
   });
 });
 
@@ -154,7 +163,7 @@ describe('M7: /complete accepts the state only from the user who started the flo
   });
 });
 
-describe('L14: picker and confirm pages escape third-party names and post only to our origins', () => {
+describe('M7 + L14: the page picker is JSON for the app, and only the same user may confirm', () => {
   test('Facebook with several pages → picker → confirm', async () => {
     asUser('user_A');
     queryRaw.mockResolvedValueOnce([{ business_id: 'biz-1' }]);
@@ -166,21 +175,26 @@ describe('L14: picker and confirm pages escape third-party names and post only t
         { id: '2', name: 'Other', access_token: 'pt2' },
       ] }));
     const done = await call(handler(oauthRouter, 'post', '/complete'), { body: { platform: 'facebook_page', code: 'c', state: 's' } });
-    const { needs_page_selection, session } = done.json.mock.calls[0][0];
-    expect(needs_page_selection).toBe(true);
+    const picker = done.json.mock.calls[0][0];
+    expect(picker).toEqual({
+      needs_page_selection: true, platform: 'facebook_page', session: expect.stringMatching(/^[0-9a-f]{32}$/),
+      pages: [{ name: '<b>Page</b></script>', detail: 'ID: 1' }, { name: 'Other', detail: 'ID: 2' }],
+    });
+    expect(JSON.stringify(picker)).not.toContain('pt1'); // no page tokens reach the browser
 
-    const confirm = handler(oauthRouter, 'get', '/confirm-page');
-    const picker: string = (await call(confirm, { query: { session } })).send.mock.calls[0][0];
-    expect(picker).toContain('&lt;b&gt;Page&lt;/b&gt;&lt;/script&gt;');
-    expect(picker).not.toContain('<b>Page');
+    const confirm = handler(oauthRouter, 'post', '/confirm-page');
+    asUser('user_B');
+    const other = await call(confirm, { body: { session: picker.session, idx: 0 } });
+    expect(other.status).toHaveBeenCalledWith(400);
+    expect(prisma.businessProfile.updateMany).not.toHaveBeenCalled();
 
-    const saved: string = (await call(confirm, { query: { session, idx: '0' } })).send.mock.calls[0][0];
-    expect(saved).toContain('"type":"oauth_success"');
-    expect(saved).toContain('["https://app.example"].forEach');
-    expect(saved).not.toContain("'*'");
-    expect(saved.match(/<\/script>/g)).toHaveLength(1); // only the page's own closing tag
-    expect(saved).not.toContain('<b>');
+    asUser('user_A');
+    const saved = await call(confirm, { body: { session: picker.session, idx: 0 } });
+    expect(saved.json).toHaveBeenCalledWith({ ok: true, platform: 'facebook_page', page_name: '<b>Page</b></script>' });
     expect(prisma.businessProfile.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'biz-1' } }));
+
+    const again = await call(confirm, { body: { session: picker.session, idx: 1 } }); // single use
+    expect(again.status).toHaveBeenCalledWith(400);
   });
 });
 

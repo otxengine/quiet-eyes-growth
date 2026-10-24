@@ -3,9 +3,9 @@
  *
  * Endpoints:
  *   GET  /api/oauth/initiate/:platform?businessId=...  — signed in; state is bound to the user + business
- *   GET  /api/oauth/callback/:platform                 — provider redirect; hands code + state to the opener
+ *   GET  /api/oauth/callback/:platform                 — provider redirect → the app's /oauth/callback page
  *   POST /api/oauth/complete                           — signed in; the same user exchanges the code
- *   GET  /api/oauth/confirm-page?session=...[&idx=N]   — page / location picker, then save
+ *   POST /api/oauth/confirm-page                       — signed in; saves the page / location picked
  *   POST /api/oauth/disconnect
  *
  * Supported platforms: facebook_page | instagram_business | google_business
@@ -23,17 +23,13 @@ import { prisma } from '../db';
 import { tryEncryptToken } from '../lib/crypto';
 import { getUserBusinessIds } from '../lib/ownership';
 import { disconnectIntegrations } from '../lib/revokeTokens';
-import { getUserId } from '../middleware/auth';
+import { frontendOrigins, getUserId } from '../middleware/auth';
 import { requireOwnsBusiness } from '../middleware/businessAccess';
 
 const router = Router();
 
-const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-// For a value inside an inline <script>: JSON, with '<' escaped so nothing can close the tag.
-const jsValue = (v: unknown) => JSON.stringify(v).replace(/</g, '\\u003c');
-
-// Temporary in-memory store for page picker sessions (TTL 10 min)
-const pagePickerSessions = new Map<string, { businessId: string; platform: string; pages: any[]; expires: number }>();
+// Temporary in-memory store for page picker sessions (TTL 10 min); userId: who may confirm
+const pagePickerSessions = new Map<string, { businessId: string; platform: string; pages: any[]; expires: number; userId?: string }>();
 function createPickerSession(businessId: string, platform: string, pages: any[]): string {
   const key = randomBytes(16).toString('hex');
   pagePickerSessions.set(key, { businessId, platform, pages, expires: Date.now() + 10 * 60 * 1000 });
@@ -60,9 +56,6 @@ const env = () => {
     SERVER_BASE_URL:            process.env.SERVER_BASE_URL            || 'http://localhost:3007',
   };
 };
-
-// The app's own origins (FRONTEND_URL may list several). Popup pages post only to these.
-const frontendOrigins = () => env().FRONTEND_URL.split(',').map(o => { try { return new URL(o.trim()).origin; } catch { return ''; } }).filter(Boolean);
 
 // ── DB-backed state store — survives restarts and multi-instance deployments ──
 // Table: oauth_state_store (id TEXT PK, business_id TEXT, platform TEXT, user_id TEXT, expires_at TIMESTAMPTZ)
@@ -91,28 +84,6 @@ export async function consumeState(state: string, userId: string, platform: stri
   const row = rows[0];
   if (!row || !(await getUserBusinessIds(userId)).includes(row.business_id)) return null;
   return { businessId: row.business_id, codeVerifier: row.code_verifier ?? undefined };
-}
-
-/**
- * Popup result page: escaped text, and `message` posted to the opener only if it is one of our own
- * frontend origins (postMessage drops a non-matching targetOrigin, so posting to each is safe).
- */
-function popupPage(title: string, text: string, color: string, message: object, autoClose = true): string {
-  return `<!DOCTYPE html>
-<html dir="rtl" lang="he">
-<head><meta charset="UTF-8"><title>${esc(title)}</title>
-<style>
-body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f9fafb}
-.box{text-align:center;padding:40px;background:white;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.08)}
-h2{color:${color};margin-bottom:8px}p{color:#6b7280;font-size:14px}
-</style></head>
-<body><div class="box"><h2>${esc(title)}</h2><p>${esc(text)}</p></div>
-<script>
-  if (window.opener) {
-    ${jsValue(frontendOrigins())}.forEach(function (origin) { window.opener.postMessage(${jsValue(message)}, origin); });
-  }
-  ${autoClose ? 'setTimeout(function(){ window.close(); }, 1500);' : ''}
-</script></body></html>`;
 }
 
 function callbackUrl(platform: string): string {
@@ -685,20 +656,17 @@ async function handleGoogleAdsCallback(code: string, businessId: string) {
 }
 
 // ── Callback route ────────────────────────────────────────────────────────────
-// Nothing is exchanged here: this redirect carries no proof of who is signed in. The page hands
-// code + state to the app window that opened the popup (our origins only), and that window
-// finishes with an authenticated POST /complete, so only the browser and user that started the
-// flow can finish it.
+// Nothing is exchanged here: this redirect carries no proof of who is signed in. The popup goes on
+// to the app's /oauth/callback page (our frontend origin, same browser, signed in), which finishes
+// with an authenticated POST /complete, so only the browser and user that started the flow can
+// finish it. The code rides in the fragment, which never reaches a server. (Meta's pages cut
+// window.opener, so the popup can't hand anything back to the window that opened it.)
 router.get('/callback/:platform', (req: Request, res: Response) => {
   const { platform } = req.params;
   const { code, state, error } = req.query as Record<string, string>;
-
-  if (error || typeof code !== 'string' || typeof state !== 'string' || !code || !state) {
-    return res.send(popupPage('החיבור לא הושלם', 'סגור את החלון ונסה שוב.', '#ef4444',
-      { type: 'oauth_error', error: typeof error === 'string' && error ? error : 'missing_params' }));
-  }
-  return res.send(popupPage('מסיים את החיבור…', 'החלון ייסגר אוטומטית.', '#10b981',
-    { type: 'oauth_code', platform, code, state }, false));
+  const ok = !error && typeof code === 'string' && typeof state === 'string' && !!code && !!state;
+  const params = ok ? { platform, code, state } : { error: typeof error === 'string' && error ? error : 'missing_params' };
+  return res.redirect(`${frontendOrigins()[0]}/oauth/callback#${new URLSearchParams(params)}`);
 });
 
 // ── Complete — the signed-in user who started the flow exchanges the code ─────
@@ -735,45 +703,22 @@ router.post('/complete', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'unknown_platform' });
     }
 
-    // Several pages / locations: the app sends the popup to the picker (GET /confirm-page?session=)
-    if (result.needs_page_selection) return res.json({ needs_page_selection: true, session: result.sessionKey });
+    // Several pages / locations: the app shows a picker, then calls POST /confirm-page. Names only, no tokens.
+    if (result.needs_page_selection) {
+      const s = getPickerSession(result.sessionKey)!;
+      s.userId = userId;
+      const isGoogle = result.platform === 'google_business';
+      return res.json({
+        needs_page_selection: true, platform: result.platform, session: result.sessionKey,
+        pages: s.pages.map((p: any) => ({ name: p.name, detail: isGoogle ? p.detail : `ID: ${p.id}` })),
+      });
+    }
     return res.json({ ok: true, platform: result.platform, page_name: result.page_name });
   } catch (err: any) {
     console.error(`[oauth/${platform}] complete error:`, err.message);
     return res.status(502).json({ error: err.message });
   }
 });
-
-// Picker for a session from /complete: plain links back to confirm-page, no fetch, no CORS issues
-function pickerPage(sessionKey: string, platform: string, pages: any[]): string {
-  const isGoogle = platform === 'google_business';
-  const pageButtons = pages.map((_p: any, i: number) =>
-    `<a href="?session=${encodeURIComponent(sessionKey)}&idx=${i}" class="page-btn">
-          <div class="icon">${isGoogle ? '📍' : '📘'}</div>
-          <div><div class="name">${esc(_p.name)}</div><div class="pid">${isGoogle ? esc(_p.detail) : `ID: ${esc(_p.id)}`}</div></div>
-        </a>`
-  ).join('');
-
-  return `<!DOCTYPE html>
-<html dir="rtl" lang="he">
-<head><meta charset="UTF-8"><title>בחר עמוד</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:sans-serif;padding:24px;background:#f9fafb;min-height:100vh}
-h2{font-size:15px;font-weight:700;color:#111;margin-bottom:4px}
-p{font-size:12px;color:#6b7280;margin-bottom:16px}
-.page-btn{width:100%;display:flex;align-items:center;gap:12px;padding:12px 14px;background:white;border:1px solid #e5e7eb;border-radius:10px;cursor:pointer;margin-bottom:8px;text-align:right;transition:all .15s;text-decoration:none}
-.page-btn:hover{border-color:#1877f2;background:#eff6ff}
-.icon{width:36px;height:36px;border-radius:50%;background:#1877f2;color:white;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
-.name{font-size:13px;font-weight:600;color:#111}
-.pid{font-size:10px;color:#9ca3af}
-</style></head>
-<body>
-<h2>${isGoogle ? 'בחר את העסק שברצונך לחבר' : 'בחר את הדף שברצונך לחבר'}</h2>
-<p>${isGoogle ? 'בחשבון Google הזה יש כמה עסקים — בחר את הסניף הנכון' : 'נמצאו מספר דפים — בחר את הדף הנכון לעסק זה'}</p>
-${pageButtons}
-</body></html>`;
-}
 
 // ── Disconnect ────────────────────────────────────────────────────────────────
 // Revokes the token with Google / Meta, then deletes every stored copy (lib/revokeTokens.ts).
@@ -791,19 +736,17 @@ router.post('/disconnect', requireOwnsBusiness(req => req.body?.businessId), asy
   }
 });
 
-// ── Confirm page selection (plain GET link from picker — no CORS) ──────────────
-// The session key comes only from the signed-in user's /complete response.
-router.get('/confirm-page', async (req: Request, res: Response) => {
-  const { session, idx } = req.query as Record<string, string>;
+// ── Confirm page selection — the same signed-in user who ran /complete ───────
+router.post('/confirm-page', async (req: Request, res: Response) => {
+  const { session, idx } = req.body ?? {};
   const s = typeof session === 'string' ? getPickerSession(session) : null;
-  if (!s) {
-    return res.send('<html><body><p>Session expired — please reconnect.</p></body></html>');
+  if (!s || !s.userId || s.userId !== getUserId(req)) {
+    return res.status(400).json({ error: 'החיבור פג תוקף — נסה לחבר שוב.' });
   }
-  if (idx === undefined) return res.send(pickerPage(session, s.platform, s.pages));
 
   const page = s.pages[Number(idx)];
   if (!page) {
-    return res.send('<html><body><p>Invalid selection.</p></body></html>');
+    return res.status(400).json({ error: 'Invalid selection' });
   }
 
   try {
@@ -814,13 +757,10 @@ router.get('/confirm-page', async (req: Request, res: Response) => {
         ? await saveGoogleLocation(s.businessId, page.tokens, page)
         : await saveFacebookPage(s.businessId, s.platform, page);
     pagePickerSessions.delete(session);
-
-    return res.send(popupPage(`✓ ${result.page_name} חובר בהצלחה!`, 'החלון יסגר אוטומטית...', '#10b981',
-      { type: 'oauth_success', platform: s.platform, page_name: String(result.page_name) }));
+    return res.json({ ok: true, platform: s.platform, page_name: result.page_name });
   } catch (err: any) {
     console.error('[oauth/confirm-page]', err.message);
-    return res.send(popupPage('שגיאה בחיבור', String(err.message), '#ef4444',
-      { type: 'oauth_error', error: String(err.message) }, false));
+    return res.status(502).json({ error: err.message });
   }
 });
 

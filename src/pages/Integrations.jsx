@@ -403,18 +403,6 @@ async function initiateOAuth(platformId, businessId) {
   return data; // { url, state } or { error, demo }
 }
 
-// The popup's callback page can't prove who is signed in, so it hands code + state to this
-// window, and the signed-in user finishes the flow here. The server checks the state is theirs.
-async function completeOAuth({ platform, code, state }) {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${SERVER_BASE}/api/oauth/complete`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...headers },
-    body: JSON.stringify({ platform, code, state }),
-  });
-  return res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-}
-
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function Integrations() {
@@ -485,40 +473,22 @@ export default function Integrations() {
         return;
       }
 
-      // Listen for messages from the popup. Its pages are served by the API, so only that
-      // origin, from this popup, is trusted.
-      const serverOrigin = new URL(SERVER_BASE || '/', window.location.href).origin;
-      const finish = (error) => {
-        window.removeEventListener('message', handler);
-        try { popup.close(); } catch { /* already closed */ }
-        if (error) {
-          toast.error(`שגיאה בחיבור: ${error}`);
-        } else {
+      // The popup finishes on our own /oauth/callback page and reports back on a same-origin
+      // channel: no other site can post to it, and it works after Meta's pages cut window.opener.
+      const channel = new BroadcastChannel('oauth');
+      channel.onmessage = ({ data }) => {
+        if (data?.type === 'oauth_success') {
+          channel.close();
           toast.success('החיבור הצליח ✓');
           queryClient.invalidateQueries({ queryKey: ['socialAccounts', bp?.id] });
+        } else if (data?.type === 'oauth_error') {
+          channel.close();
+          toast.error(`שגיאה בחיבור: ${data.error}`);
         }
       };
-      const handler = async (event) => {
-        if (event.origin !== serverOrigin || event.source !== popup) return;
-        const msg = event.data || {};
-        if (msg.type === 'oauth_code') {
-          const result = await completeOAuth(msg).catch((e) => ({ error: e.message }));
-          if (result?.needs_page_selection) {
-            // Several pages / locations: the popup shows the picker, then posts oauth_success
-            popup.location.href = new URL(`${SERVER_BASE}/api/oauth/confirm-page?session=${encodeURIComponent(result.session)}`, window.location.href).href;
-          } else {
-            finish(result?.ok ? null : (result?.error || 'נסה שוב'));
-          }
-        } else if (msg.type === 'oauth_success') {
-          finish(null);
-        } else if (msg.type === 'oauth_error') {
-          finish(msg.error || 'נסה שוב');
-        }
-      };
-      window.addEventListener('message', handler);
 
-      // Clean up listener after 5 minutes
-      setTimeout(() => window.removeEventListener('message', handler), 5 * 60 * 1000);
+      // Stop listening after 10 minutes (the state expires then)
+      setTimeout(() => channel.close(), 10 * 60 * 1000);
     } catch (err) {
       toast.error('שגיאה בתהליך החיבור');
       console.error('[connectSocial]', err);
