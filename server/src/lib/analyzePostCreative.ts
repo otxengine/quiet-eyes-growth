@@ -1,6 +1,7 @@
 import { invokeLLM } from './llm';
 import { isS3Url, downloadFromS3 } from './s3';
 import { fetchImageBase64 } from './fetchImageBase64';
+import { safeFetch } from './safeFetch';
 
 const MAX_VIDEO_BYTES = 12 * 1024 * 1024; // stay safely under Gemini's ~20MB inline-request ceiling after base64 overhead
 // Video analysis (Gemini) is meaningfully more expensive than image analysis and is
@@ -47,7 +48,7 @@ async function fetchVideoBase64(url: string): Promise<{ data: string; mediaType:
       return { data: file.body.toString('base64'), mediaType: file.contentType || 'video/mp4' };
     }
 
-    const res = await fetch(url, {
+    const res = await safeFetch(url, {
       headers: { Referer: new URL(url).origin },
       signal: AbortSignal.timeout(20_000), // videos take longer to download than images
     });

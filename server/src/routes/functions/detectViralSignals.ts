@@ -20,6 +20,7 @@ import { tavilyAdvancedSearch, isTavilyRateLimited } from '../../lib/tavily';
 import { cacheGet, cacheSet, TTL } from '../../lib/agentCache';
 import { loadCheckpoint, saveCheckpoint, shouldSkipByTime } from '../../lib/trendMemory';
 import { getPlaceDetails, EMPTY_PLACE } from '../../lib/googlePlaces';
+import { safeFetch } from '../../lib/safeFetch';
 
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
@@ -30,7 +31,7 @@ async function fetchWebsiteText(url: string | null): Promise<string> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 6000);
-    const resp = await fetch(url, {
+    const resp = await safeFetch(url, {
       signal: controller.signal,
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; QuietEyes/1.0)' },
     });

@@ -1,5 +1,9 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
+import rateLimit from 'express-rate-limit';
 import { requireBusinessAccess } from '../../middleware/businessAccess';
+import { getUserId, isAdminKeyRequest } from '../../middleware/auth';
+import { getUserBusinessIds } from '../../lib/ownership';
+import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { generateMorningBriefing } from './generateMorningBriefing';
@@ -156,9 +160,25 @@ import { reviewSuggestedBio } from './reviewSuggestedBio';
 
 const router = Router();
 
+// Models a signed-in user may pick: the frontend only uses these. Unknown keys would otherwise be
+// sent to OpenRouter as raw model ids, so any (costly) model could be requested.
+const USER_LLM_MODELS = new Set(['haiku', 'sonnet']);
+const USER_LLM_MAX_TOKENS = 1500; // largest frontend request is 1200
+const USER_LLM_MAX_PROMPT_CHARS = 100_000; // input tokens are the real cost lever
+
 async function invokeLLMHandler(req: Request, res: Response) {
-  const { prompt, response_json_schema, model, maxTokens } = req.body;
+  const { prompt, response_json_schema } = req.body;
+  let { model, maxTokens } = req.body;
   if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
+  if (!isAdminKeyRequest(req)) {
+    if (model !== undefined && !USER_LLM_MODELS.has(model)) return res.status(400).json({ error: 'Unsupported model' });
+    if (typeof prompt !== 'string' || prompt.length > USER_LLM_MAX_PROMPT_CHARS
+        || JSON.stringify(response_json_schema ?? '').length > 20_000) {
+      return res.status(413).json({ error: 'Prompt too large' });
+    }
+    // Omitted → the model's own default in lib/llm; given → a whole number in [1, cap].
+    if (maxTokens !== undefined) maxTokens = Math.min(Math.max(Math.floor(Number(maxTokens)) || 1, 1), USER_LLM_MAX_TOKENS);
+  }
   try {
     const result = await invokeLLM({ prompt, response_json_schema, model, maxTokens });
     return res.json(result);
@@ -379,8 +399,89 @@ function runInBackground(name: string, handler: Function, req: Request, res: Res
     });
 }
 
+// Body fields that point at another tenant's rows, by the model that holds them.
+// requireBusinessAccess covers businessProfileId; this covers the other ids handlers read
+// (inventory of every FUNCTION_MAP handler's req.body fields, 2026-10-24).
+const RECORD_FIELDS: Record<string, string> = {
+  competitorId: 'competitor',          // battlecard, strategy, review insights, social analysis
+  focusedCompetitorId: 'competitor',   // reputationAdvisorChat
+  competitorIds: 'competitor',         // compareGoogleMetrics, topicTimeline, reputationAdvisorChat
+  leadId: 'lead',                      // generateLeadFirstContact, intentClassification
+  actionId: 'autoAction',              // approveAction, rejectAction
+  postId: 'organicPost',               // revisePost
+};
+// updateInsightMemory's entityId lives in a different table per entityType.
+const ENTITY_TYPE_MODELS: Record<string, string> = { signal: 'marketSignal', alert: 'proactiveAlert', competitor: 'competitor' };
+// Business ids under other names (logOutcome, submitSupportTicket). getEventBusStats and
+// manageConstraints also fall back to ?businessProfileId=, which requireBusinessAccess doesn't see.
+const OTHER_BUSINESS_FIELDS = ['linked_business', 'businessId'];
+// These run for every business when businessProfileId is missing, so callers must name one.
+const ALL_BUSINESSES_WITHOUT_ID = new Set(['runFullScan', 'run-full-scan', 'updateSectorKnowledge']);
+// Platform-wide reports with no business scope (systemHealthMonitor returns every tenant's latest
+// automation errors and global counts). No tenant UI calls them.
+const ADMIN_ONLY_FUNCTIONS = new Set(['systemHealthMonitor']);
+
+async function requireFunctionAccess(req: Request<{ name: string }>, res: Response, next: NextFunction) {
+  if (isAdminKeyRequest(req)) return next();
+  if (ADMIN_ONLY_FUNCTIONS.has(req.params.name)) return res.status(403).json({ error: 'Forbidden' });
+  const body = req.body ?? {};
+  if (ALL_BUSINESSES_WITHOUT_ID.has(req.params.name) && !body.businessProfileId) {
+    return res.status(400).json({ error: 'businessProfileId required' });
+  }
+
+  const idsByModel = new Map<string, string[]>();
+  const businessIds: unknown[] = [...OTHER_BUSINESS_FIELDS.map(f => body[f]), req.query?.businessProfileId]
+    .filter(v => v != null && v !== '');
+  const add = (model: string, v: unknown) => {
+    for (const id of Array.isArray(v) ? v : [v]) idsByModel.set(model, [...(idsByModel.get(model) ?? []), id]);
+  };
+  for (const [field, model] of Object.entries(RECORD_FIELDS)) if (body[field] != null) add(model, body[field]);
+  if (body.entityId != null && typeof body.entityType === 'string'
+      && Object.prototype.hasOwnProperty.call(ENTITY_TYPE_MODELS, body.entityType)) {
+    add(ENTITY_TYPE_MODELS[body.entityType], body.entityId);
+  }
+  if (!idsByModel.size && !businessIds.length) return next();
+
+  const all = [...businessIds, ...[...idsByModel.values()].flat()];
+  if (all.some(v => typeof v !== 'string')) return res.status(400).json({ error: 'Invalid id' });
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const owned = await getUserBusinessIds(userId);
+    if (businessIds.some(id => !owned.includes(id as string))) return res.status(403).json({ error: 'Forbidden' });
+    for (const [model, list] of idsByModel) {
+      const ids = [...new Set(list as string[])];
+      // Fail closed: every id must be found inside the caller's businesses (missing and
+      // foreign look the same). OR-of-equals, not `id: { in }`: that array bind silently
+      // returned zero rows on Supabase's pooler (see b44f78e), which would make this a no-op.
+      const ownedRows: number = owned.length ? await (prisma as any)[model].count({
+        where: { AND: [{ OR: ids.map(id => ({ id })) }, { OR: owned.map(b => ({ linked_business: b })) }] },
+      }) : 0;
+      if (ownedRows !== ids.length) return res.status(404).json({ error: 'Not found' });
+    }
+  } catch (err) {
+    return next(err);
+  }
+  next();
+}
+
+// invokeLLM is a general LLM proxy: cap each user's calls (paid per token).
+const invokeLLMLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: req => isAdminKeyRequest(req),
+  keyGenerator: req => getUserId(req) ?? 'anonymous', // the /api gate guarantees a user here
+  message: { error: 'Too many AI requests, please try again later' },
+});
+// Matched on the decoded :name. A path route ('/invokeLLM') was skipped by an encoded
+// path such as '/invoke%4CLM', which still dispatches to invokeLLM.
+const limitInvokeLLM = (req: Request<{ name: string }>, res: Response, next: NextFunction) =>
+  (req.params.name === 'invokeLLM' ? invokeLLMLimiter(req, res, next) : next());
+
 // POST /api/functions/:name
-router.post('/:name', requireBusinessAccess, (req: Request<{ name: string }>, res: Response) => {
+router.post('/:name', requireBusinessAccess, requireFunctionAccess, limitInvokeLLM, (req: Request<{ name: string }>, res: Response) => {
   const handler = FUNCTION_MAP[req.params.name];
   if (!handler) {
     return res.status(404).json({ error: `Unknown function: ${req.params.name}` });
