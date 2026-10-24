@@ -36,7 +36,7 @@ new QeStack(app, 'Qe-staging', {
   workerCount: Number(app.node.tryGetContext('workerCount') ?? 0),
   domain: stagingCertArn ? { name: STAGING_DOMAIN, certificateArn: stagingCertArn } : undefined,
   webAclArn: app.node.tryGetContext('stagingWebAclArn'), // Qe-edge output, like prodWebAclArn
-  restoreTask: true,
+  restoreTask: 'full',
   appDbRole: app.node.tryGetContext('stagingAppDbRole') === true,
   env: { account, region },
 });
@@ -53,6 +53,7 @@ new EdgeStack(app, 'Qe-edge', {
 // run every background job a second time alongside Render. It's committed rather than a
 // CLI flag so that CI deploys can't silently flip it back.
 const prodLive = app.node.tryGetContext('prodLive') === true;
+const prodAppDbRole = app.node.tryGetContext('prodAppDbRole') === true;
 
 // cortexi.ai + www certificate for the prod CloudFront (us-east-1 only, same pattern as Qe-edge).
 // DNS is on Route 53 (Qe-dns), so CloudFormation writes the validation records itself. Deploy
@@ -80,8 +81,10 @@ new QeStack(app, 'Qe-prod', {
   srcDir,
   apiCount: 1, // like Render today; 2 once page-picker state and job locks are fixed
   workerCount: prodLive ? 1 : 0,
-  restoreTask: !prodLive, // the cutover-night data load is its last use
-  appDbRole: app.node.tryGetContext('prodAppDbRole') === true,
+  // Live prod keeps the task only to create qe_app (`restore-db.sh prod role`), and it can no
+  // longer drop the schema. Once the app runs as qe_app (prodAppDbRole), the task is gone.
+  restoreTask: !prodLive ? 'full' : prodAppDbRole ? undefined : 'roleOnly',
+  appDbRole: prodAppDbRole,
   mediaBucket: { name: 'socialmediacomp2023', region: 'us-east-1' },
   webAclArn: app.node.tryGetContext('prodWebAclArn'),
   domain: prodCertArn

@@ -84,7 +84,7 @@ app.use(hideServerErrors);
 // Behind CloudFront + ALB the client IP sits TRUST_PROXY_HOPS entries from the right of
 // X-Forwarded-For. Unset = Express default (no proxy trusted), as on Render.
 if (process.env.TRUST_PROXY_HOPS) app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS));
-app.use(requestLog); // first, so refusals below (CORS, rate limit, auth) are logged too
+app.use(requestLog); // ahead of CORS, rate limits and auth, so their refusals are logged too
 
 // ── Security headers ───────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false })); // CSP handled by frontend

@@ -4,6 +4,10 @@ set -eu
 # the target public schema is dropped and recreated each time. MODE=role only sets up the
 # app's login (below), which the other modes also do at the end.
 MODE="${MODE:-full}"
+if [ "${ROLE_ONLY:-}" = "1" ] && [ "$MODE" != "role" ]; then
+  echo "[restore] refused: this environment's task only allows MODE=role (it holds live data)" >&2
+  exit 1
+fi
 export PGPASSWORD="$DB_PASSWORD"
 printf '%s\n' "$RDS_CA" > /tmp/rds-ca.pem # RDS root CAs, so the target's certificate is verified
 TARGET="host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER sslmode=verify-full sslrootcert=/tmp/rds-ca.pem"

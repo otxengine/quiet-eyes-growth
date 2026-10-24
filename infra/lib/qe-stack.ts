@@ -67,8 +67,11 @@ export interface QeStackProps extends cdk.StackProps {
   webAclArn?: string;
   /** Account-wide monthly budget in USD, emailed to ALERT_EMAIL at 80% actual and 100% forecast. */
   monthlyBudgetUsd?: number;
-  /** Include the restore task, which drops and reloads the public schema as the master user. */
-  restoreTask: boolean;
+  /**
+   * The restore task (lib/restore.sh) runs as the master user. 'full' can drop and reload the public
+   * schema; 'roleOnly' can only set up the qe_app login; unset leaves it out of the stack.
+   */
+  restoreTask?: 'full' | 'roleOnly';
   /** Connect the app as qe_app (AppDbSecret) instead of the master user. Run `restore-db.sh <env> role` first. */
   appDbRole?: boolean;
 }
@@ -301,8 +304,8 @@ export class QeStack extends cdk.Stack {
     db.connections.allowDefaultPortFrom(worker);
 
     // ── One-off data copy from Supabase, and the qe_app role (scripts/restore-db.sh runs it).
-    // It drops the public schema as the master user, so prod only has it until cutover.
     if (props.restoreTask) {
+      const roleOnly = props.restoreTask === 'roleOnly';
       const restoreSg = new ec2.SecurityGroup(this, 'RestoreSecurityGroup', { vpc, description: 'One-off DB restore task' });
       db.connections.allowDefaultPortFrom(restoreSg);
       const restoreLogs = new logs.LogGroup(this, 'RestoreLogs', { retention: logs.RetentionDays.ONE_MONTH, removalPolicy: removal });
@@ -313,10 +316,13 @@ export class QeStack extends cdk.Stack {
         image: ecs.ContainerImage.fromRegistry('public.ecr.aws/docker/library/postgres:17'),
         entryPoint: ['sh', '-c'],
         command: [fs.readFileSync(path.join(__dirname, 'restore.sh'), 'utf8')],
-        environment: { RDS_CA: fs.readFileSync(path.join(srcDir, 'server', 'rds-ca.pem'), 'utf8') }, // psql verify-full
+        environment: {
+          RDS_CA: fs.readFileSync(path.join(srcDir, 'server', 'rds-ca.pem'), 'utf8'), // psql verify-full
+          ...(roleOnly && { ROLE_ONLY: '1' }), // restore.sh then refuses MODE=schema|full
+        },
         secrets: {
           ...dbEnv,
-          SOURCE_DATABASE_URL: ssmSecret('SOURCE_DATABASE_URL'),
+          ...(!roleOnly && { SOURCE_DATABASE_URL: ssmSecret('SOURCE_DATABASE_URL') }),
           APP_DB_PASSWORD: ecs.Secret.fromSecretsManager(appDbSecret, 'password'),
         },
         logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'restore', logGroup: restoreLogs }),
