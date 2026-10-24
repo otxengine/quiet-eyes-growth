@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import * as route53 from 'aws-cdk-lib/aws-route53';
 import { QeStack } from '../lib/qe-stack';
 import { EdgeStack } from '../lib/edge-stack';
 import { GithubOidcStack } from '../lib/github-oidc-stack';
@@ -47,6 +48,28 @@ new EdgeStack(app, 'Qe-edge', {
 // run every background job a second time alongside Render. It's committed rather than a
 // CLI flag so that CI deploys can't silently flip it back.
 const prodLive = app.node.tryGetContext('prodLive') === true;
+
+// cortexi.ai + www certificate for the prod CloudFront (us-east-1 only, same pattern as Qe-edge).
+// DNS is on Route 53 (Qe-dns), so CloudFormation writes the validation records itself. Deploy
+// once by hand (`npx cdk deploy Qe-prod-cert`), then put its CertArn output into cdk.json as
+// "prodCertArn". The names attach right away (DNS still decides where cortexi.ai goes);
+// FRONTEND_URL only moves to cortexi.ai with prodLive, so the cloudfront.net URL keeps passing
+// the API's CORS check until cutover.
+const PROD_DOMAIN = 'cortexi.ai';
+const prodCertStack = new cdk.Stack(app, 'Qe-prod-cert', {
+  env: { account, region: 'us-east-1' },
+  synthesizer: new cdk.LegacyStackSynthesizer(), // no assets, so us-east-1 needs no CDK bootstrap
+});
+const prodCert = new acm.Certificate(prodCertStack, 'Cert', {
+  domainName: PROD_DOMAIN,
+  subjectAlternativeNames: [`www.${PROD_DOMAIN}`],
+  validation: acm.CertificateValidation.fromDns(route53.HostedZone.fromHostedZoneAttributes(
+    prodCertStack, 'Zone', { hostedZoneId: 'Z0759669827HQT5VLD35', zoneName: PROD_DOMAIN }, // Qe-dns
+  )),
+});
+new cdk.CfnOutput(prodCertStack, 'CertArn', { value: prodCert.certificateArn });
+const prodCertArn = app.node.tryGetContext('prodCertArn');
+
 new QeStack(app, 'Qe-prod', {
   envName: 'prod',
   srcDir,
@@ -54,6 +77,9 @@ new QeStack(app, 'Qe-prod', {
   workerCount: prodLive ? 1 : 0,
   mediaBucket: { name: 'socialmediacomp2023', region: 'us-east-1' },
   webAclArn: app.node.tryGetContext('prodWebAclArn'),
+  domain: prodCertArn
+    ? { name: PROD_DOMAIN, alternateNames: [`www.${PROD_DOMAIN}`], certificateArn: prodCertArn, live: prodLive }
+    : undefined,
   monthlyBudgetUsd: 250,
   env: { account, region },
 });
