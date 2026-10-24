@@ -176,7 +176,8 @@ router.get('/initiate/:platform', requireOwnsBusiness(req => req.query.businessI
       `client_id=${env().GOOGLE_CLIENT_ID}` +
       `&redirect_uri=${encodeURIComponent(callbackUrl(platform))}` +
       `&response_type=code` +
-      `&scope=${encodeURIComponent('https://www.googleapis.com/auth/business.manage email profile')}` +
+      // Only the scope we use — Google's verification reviews every requested scope
+      `&scope=${encodeURIComponent('https://www.googleapis.com/auth/business.manage')}` +
       `&access_type=offline` +
       `&prompt=consent` +
       `&state=${state}`;

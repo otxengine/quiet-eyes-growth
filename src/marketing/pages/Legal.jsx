@@ -76,6 +76,7 @@ export function Privacy() {
           <li><strong>נתוני ביצועים (Performance Metrics):</strong> חשיפות, לחיצות לחיוג, בקשות הגעה ולחיצות לאתר — עבור הפרופיל העסקי שלך בלבד.</li>
         </ul>
         <p>מידע זה נאסף <strong>אך ורק</strong> עבור הפרופיל העסקי שאישרת וחיברת בעצמך — לא עבור עסקים אחרים שאינם בבעלותך או ניהולך — ומשמש <strong>אך ורק</strong> להצגתו בממשק ולביצוע הפעולות שאישרת במפורש (כגון פרסום מענה לביקורת). המידע אינו משמש לאימון מודלים, לפרסום ממומן, למכירה, או לשיתוף עם כל צד שלישי. עם ניתוק האינטגרציה (בעמוד ההגדרות) או סגירת חשבונך (לבקשתך, בפנייה אלינו — ראו <a href="/data-deletion">עמוד מחיקת מידע</a>), הטוקנים והמידע הנלווה נמחקים מהמערכת לצמיתות ובאופן מיידי, וההרשאה מבוטלת גם מול Google.</p>
+        <p>השימוש של Cortexi במידע המתקבל מממשקי ה-API של Google והעברתו לכל אפליקציה אחרת יעמדו ב-<a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">Google API Services User Data Policy</a>, לרבות דרישות ה-Limited Use. נוסח באנגלית מופיע בסוף מדיניות זו.</p>
       </section>
       <section><h2>4. אגירת מידע והשימוש בו</h2>
         <p>אנו משתמשים במידע הנאסף (הן מידע הלקוחות והן המידע שעובד על ידי הסוכנים) למטרות הבאות:</p>
@@ -104,6 +105,18 @@ export function Privacy() {
       <section><h2>10. זכויותיך</h2><p>בהתאם לדין החל, עומדת לך הזכות לעיין במידע האישי שלך כלקוח (לא בנתוני ה-OSINT), לדרוש את תיקונו או את מחיקתו. למימוש זכויות אלו, יש לפנות אלינו.</p></section>
       <section><h2>11. שינויים במדיניות הפרטיות</h2><p>אנו שומרים לעצמנו את הזכות לעדכן מדיניות פרטיות זו מעת לעת. המשך השימוש במערכת והפעלת הסוכנים לאחר ביצוע שינויים, מהווה את הסכמתך המלאה למדיניות המעודכנת.</p></section>
       <section><h2>12. יצירת קשר</h2><p>לכל שאלה, הבהרה או בקשה הנוגעת למדיניות פרטיות זו, ניתן ליצור עמנו קשר בכתובת דוא"ל: <a href="mailto:contact@cortexi.ai">contact@cortexi.ai</a></p></section>
+      <section lang="en" dir="ltr"><h2>Google Business Profile data (English)</h2>
+        <p>When you connect your Google Business Profile to Cortexi with Google OAuth (scope <code>business.manage</code>), we access only the Business Profile locations you manage and choose to connect:</p>
+        <ul>
+          <li><strong>OAuth access and refresh tokens</strong>, stored encrypted (AES-256-GCM) and never shown in plain text.</li>
+          <li><strong>Business information</strong> (address, phone, category, website, description), to display it in Cortexi.</li>
+          <li><strong>Reviews</strong> of your business, and the replies you explicitly approve, which we publish to Google on your behalf.</li>
+          <li><strong>Performance metrics</strong> (impressions, calls, direction requests, website clicks) for your connected profile only.</li>
+        </ul>
+        <p>We use this data only to provide the features you see in Cortexi. Review text may be processed by our AI service providers solely to generate the reply suggestions and insights shown to you. We do not sell Google user data, use it for advertising, or use it to train AI or machine-learning models, and we do not share it with any other third party except as required by law.</p>
+        <p>You can disconnect at any time from the integrations page. Disconnecting revokes our access at Google and permanently deletes the tokens and related data from Cortexi immediately. You can also request full account deletion via <a href="/data-deletion">our data deletion page</a> or <a href="mailto:contact@cortexi.ai">contact@cortexi.ai</a>.</p>
+        <p>Cortexi's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+      </section>
     </LegalShell>
   );
 }
