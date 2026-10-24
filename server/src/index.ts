@@ -1494,7 +1494,7 @@ app.listen(PORT, async () => {
   // lib/crypto no longer reads plaintext tokens, so encrypt any left over (e.g. from a DB restore).
   const { encryptStoredTokens } = await import('./scripts/encryptStoredTokens');
   await encryptStoredTokens()
-    .then(n => { if (n) console.log(`[STARTUP] Encrypted ${n} plaintext token value(s)`); })
+    .then(n => console.log(`[STARTUP] Token backfill: encrypted ${n} plaintext value(s)`))
     .catch((e: any) => console.error('[STARTUP] Token encryption backfill failed:', e.message));
 
   // ── Post-startup table existence check ───────────────────────────────────

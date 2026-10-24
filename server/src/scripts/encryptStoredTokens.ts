@@ -3,8 +3,10 @@
  * encryptToken()'s iv:tag:ciphertext format are skipped, and each write only lands if the
  * column still holds the value read, so it is safe to re-run and to race a reconnect.
  *
- * Runs at boot (index.ts), since lib/crypto no longer reads plaintext tokens. By hand:
- *   npx ts-node src/scripts/encryptStoredTokens.ts
+ * Runs at every boot (index.ts) against the task's own DATABASE_URL, since lib/crypto no longer
+ * reads plaintext tokens. After restoring data into a running environment's RDS, restart the API
+ * (aws ecs update-service --force-new-deployment) or run once in the image:
+ *   node dist/scripts/encryptStoredTokens.js
  */
 import { prisma } from '../db';
 import { encryptToken, isEncryptedToken } from '../lib/crypto';
