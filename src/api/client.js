@@ -71,13 +71,15 @@ async function apiFetch(path, options = {}, timeoutMs = 30000) {
   const isJson = contentType.includes('application/json');
 
   if (!res.ok) {
+    // Seconds to wait on a 429 (express-rate-limit sends both); AppLayout's error page counts down from it
+    const retryAfter = Number(res.headers.get('retry-after') || res.headers.get('ratelimit-reset')) || undefined;
     if (isJson) {
       const err = await res.json().catch(() => ({ error: res.statusText }));
-      throw Object.assign(new Error(err.error || res.statusText), { status: res.status, data: err });
+      throw Object.assign(new Error(err.error || res.statusText), { status: res.status, data: err, retryAfter });
     }
     // Non-JSON error (e.g. HTML from Render while service is waking up)
     if (res.status === 503 || res.status === 502 || !isJson) {
-      throw Object.assign(new Error('השרת מתעורר, נסה שוב בעוד 30 שניות'), { status: res.status });
+      throw Object.assign(new Error('השרת מתעורר, נסה שוב בעוד 30 שניות'), { status: res.status, retryAfter });
     }
     throw Object.assign(new Error(res.statusText || 'Server error'), { status: res.status });
   }
