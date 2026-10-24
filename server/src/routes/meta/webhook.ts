@@ -443,7 +443,11 @@ interface AIResult {
   leadData?:      LeadData;
 }
 
-async function runAgent(
+// Customer text is data: break any control tag in it, so the model is never handed a ready-made
+// [HANDOFF] or [LEAD_QUALIFIED ...] to echo back as if it were its own decision.
+const defangControlTags = (text: string) => text.replace(/\[(?=\s*(HANDOFF|LEAD_QUALIFIED))/gi, '(');
+
+export async function runAgent(
   userMessage: string,
   history: Array<{ role: string; content: string }>,
   config: { agent_type: string; system_prompt: string; handoff_keywords: string | null; max_tokens: number }
@@ -469,7 +473,7 @@ async function runAgent(
   // Build the full prompt — system prompt + conversation history + new user message
   const historyText = history
     .slice(0, -1) // exclude the user message we just appended (already in userMessage)
-    .map(m => `${m.role === 'user' ? 'Customer' : 'Assistant'}: ${m.content}`)
+    .map(m => `${m.role === 'user' ? 'Customer' : 'Assistant'}: ${defangControlTags(m.content)}`)
     .join('\n');
 
   const prompt = [
@@ -477,7 +481,7 @@ async function runAgent(
     '',
     historyText.length > 0 ? `Conversation so far:\n${historyText}` : '',
     '',
-    `Customer: ${userMessage}`,
+    `Customer: ${defangControlTags(userMessage)}`,
     '',
     'If you cannot help and human intervention is needed, begin your reply ONLY with the exact token [HANDOFF] followed by your message.',
     'Assistant:',
@@ -508,12 +512,12 @@ async function runAgent(
       const eq = part.indexOf('=');
       if (eq !== -1) pairs[part.slice(0, eq).trim().toLowerCase()] = part.slice(eq + 1).trim();
     });
-    const num = (key: string) => {
-      const v = pairs[key];
-      return v ? parseFloat(v) : 50;
-    };
+    const score = parseFloat(pairs.score);
     const str = (key: string) => pairs[key] ?? 'Unknown';
-    leadData = { score: num('score'), name: str('name'), budget: str('budget'), service: str('service') };
+    leadData = {
+      score: Number.isFinite(score) ? Math.min(100, Math.max(0, score)) : 50,
+      name: str('name'), budget: str('budget'), service: str('service'),
+    };
     finalResponse = cleanResponse.replace(/\[LEAD_QUALIFIED[^\]]+\]\s*/i, '').trim();
   }
 

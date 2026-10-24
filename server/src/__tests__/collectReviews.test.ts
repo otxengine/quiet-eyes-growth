@@ -32,6 +32,7 @@ jest.mock('../lib/agentCache',    () => ({ shouldSkipAgent: jest.fn(), setLastRu
 jest.mock('../lib/llm',           () => ({ invokeLLM: jest.fn(), startCostTracking: jest.fn(), popCost: jest.fn().mockReturnValue(0) }));
 jest.mock('../lib/tavily',        () => ({ tavilySearch: jest.fn() }));
 jest.mock('../lib/automationLog', () => ({ writeAutomationLog: jest.fn() }));
+jest.mock('../lib/crypto',       () => ({ tryDecryptToken: (v: string) => v })); // fixtures hold decrypted tokens
 jest.mock('../lib/eventBus',      () => ({ publishEvent: jest.fn() }));
 
 // Mock global fetch
