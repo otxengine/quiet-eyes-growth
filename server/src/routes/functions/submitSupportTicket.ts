@@ -7,7 +7,7 @@ const SUPPORT_NOTIFY_EMAIL = process.env.SUPPORT_NOTIFY_EMAIL || 'contact@otxeng
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://quiet-eyes-frontend.onrender.com';
 
 // Everything below comes from the request, so it is escaped before it goes into the HTML.
-const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, c =>
+const esc = (v: unknown) => String(v ?? '').replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069]/g, '').replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
 const EMAIL_RE = /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/;
 

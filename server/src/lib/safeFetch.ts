@@ -14,13 +14,18 @@ import { BlockList, isIP } from 'node:net';
 const blocked = new BlockList();
 for (const [net, bits] of [
   ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16],
-  ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['224.0.0.0', 3],
+  ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15],
+  ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 3],
 ] as const) blocked.addSubnet(net, bits, 'ipv4');
 for (const [net, bits] of [
-  ['::', 128], ['::1', 128], ['64:ff9b::', 96], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8],
+  // ::/96 IPv4-compatible (::7f00:1), ::ffff:0:0:0/96 IPv4-translated, 6to4, NAT64, site-local
+  ['::', 96], ['::ffff:0:0:0', 96], ['64:ff9b::', 96], ['64:ff9b:1::', 48], ['100::', 64], ['2002::', 16],
+  ['fc00::', 7], ['fe80::', 10], ['fec0::', 10], ['ff00::', 8],
 ] as const) blocked.addSubnet(net, bits, 'ipv6');
 
 export class BlockedUrlError extends Error {}
+
+const REDIRECTS = new Set([301, 302, 303, 307, 308]);
 
 export function isBlockedAddress(address: string): boolean {
   const mapped = address.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i); // IPv4-mapped IPv6
@@ -41,9 +46,11 @@ export async function safeFetch(url: string, init: RequestInit = {}, maxRedirect
   for (let hop = 0; hop <= maxRedirects; hop++) {
     await assertPublicUrl(current);
     const res = await fetch(current, { ...init, redirect: 'manual' });
-    const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
+    const location = REDIRECTS.has(res.status) ? res.headers.get('location') : null;
     if (!location) return res;
-    current = new URL(location, current).toString();
+    await res.body?.cancel(); // free the connection of the hop we don't read
+    // Header values arrive as latin1; a raw UTF-8 path like /אודות must be decoded back.
+    current = new URL(Buffer.from(location, 'latin1').toString('utf8'), current).toString();
   }
   throw new BlockedUrlError('Too many redirects');
 }

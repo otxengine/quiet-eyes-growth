@@ -221,8 +221,7 @@ export async function learnFromWebsite(req: Request, res: Response) {
         signal: controller.signal,
         headers: { 'User-Agent': 'Mozilla/5.0 (compatible; QuietEyes/1.0)' },
       });
-      clearTimeout(timeout);
-      const html = await resp.text();
+      const html = await resp.text().finally(() => clearTimeout(timeout));
       // Strip HTML tags, keep text
       websiteText = html
         .replace(/<script[\s\S]*?<\/script>/gi, '')

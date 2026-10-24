@@ -50,9 +50,12 @@ function matchInstagram(href: string): string | null {
 }
 
 function matchFacebook(href: string): string | null {
-  const m = href.match(/(?:facebook|fb)\.com\/([^/?#]+)/i);
-  if (!m) return null;
-  const seg = m[1].toLowerCase();
+  // The href is stored as-is and rendered as a link, so it must really be an http(s) Facebook
+  // URL: 'javascript:alert(1)//facebook.com/x' used to match.
+  let u: URL;
+  try { u = new URL(href.trim(), 'https://placeholder.invalid'); } catch { return null; }
+  if (!/^https?:$/.test(u.protocol) || !/(^|\.)(facebook|fb)\.com$/i.test(u.hostname)) return null;
+  const seg = u.pathname.split('/')[1]?.toLowerCase();
   return seg && !FB_SKIP.includes(seg) ? href.trim() : null;
 }
 
