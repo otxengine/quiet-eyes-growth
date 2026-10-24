@@ -1,15 +1,13 @@
 import { lookup } from 'node:dns/promises';
 import { BlockList, isIP } from 'node:net';
+import { Agent } from 'undici';
 
 /**
  * fetch() for URLs that come from users or scraped pages (business and competitor
  * websites, image and video URLs). Only public http(s) addresses: never loopback,
  * private, link-local (cloud metadata 169.254.169.254, ECS credentials 169.254.170.2)
- * or other reserved ranges, and every redirect hop is checked again.
- *
- * ponytail: the address is checked, then fetch() resolves the name again, so a DNS
- * rebinding attacker (two answers, TTL 0) can still slip in. Upgrade path: pin the
- * checked IP with an undici Agent ({ connect: { lookup } }) if internal HTTP services appear.
+ * or other reserved ranges, and every redirect hop is checked again. Connections are
+ * pinned to the address that was checked, so DNS rebinding can't swap it afterwards.
  */
 const blocked = new BlockList();
 for (const [net, bits] of [
@@ -41,11 +39,27 @@ async function assertPublicUrl(url: string): Promise<void> {
   if (!addresses.length || addresses.some(isBlockedAddress)) throw new BlockedUrlError(`Blocked address for ${host}`);
 }
 
+// The socket's own DNS lookup: resolve once at connect time, refuse if any answer is
+// internal, and connect to exactly that answer. Without it fetch() resolves the name again
+// after assertPublicUrl, so a DNS-rebinding domain (TTL 0) could answer a public address to
+// the check and an internal one to the connection. IP-literal hosts never reach a lookup;
+// assertPublicUrl covers those.
+function checkedLookup(hostname: string, options: { all?: boolean }, callback: (...args: any[]) => void) {
+  lookup(hostname, { all: true, verbatim: true }).then(addresses => {
+    if (!addresses.length || addresses.some(a => isBlockedAddress(a.address))) {
+      return callback(new BlockedUrlError(`Blocked address for ${hostname}`));
+    }
+    if (options?.all) callback(null, addresses); // net asks for all when autoSelectFamily is on
+    else callback(null, addresses[0].address, addresses[0].family);
+  }, callback);
+}
+const pinnedAgent = new Agent({ connect: { lookup: checkedLookup as any } });
+
 export async function safeFetch(url: string, init: RequestInit = {}, maxRedirects = 5): Promise<Response> {
   let current = url;
   for (let hop = 0; hop <= maxRedirects; hop++) {
     await assertPublicUrl(current);
-    const res = await fetch(current, { ...init, redirect: 'manual' });
+    const res = await fetch(current, { ...init, redirect: 'manual', dispatcher: pinnedAgent } as RequestInit);
     const location = REDIRECTS.has(res.status) ? res.headers.get('location') : null;
     if (!location) return res;
     await res.body?.cancel(); // free the connection of the hop we don't read

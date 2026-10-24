@@ -72,6 +72,30 @@ describe('safeFetch', () => {
   });
 });
 
+describe('safeFetch — DNS rebinding (real fetch, real socket)', () => {
+  it('connects only to the checked address: a second, internal DNS answer is refused', async () => {
+    const http = require('node:http');
+    let hits = 0;
+    const server = http.createServer((_req: any, res: any) => { hits++; res.end('internal'); });
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const { lookup } = require('node:dns/promises');
+    (lookup as jest.Mock).mockClear();
+    (lookup as jest.Mock)
+      .mockResolvedValueOnce([{ address: '93.184.216.34', family: 4 }]) // the pre-check: public
+      .mockResolvedValueOnce([{ address: '127.0.0.1', family: 4 }]);    // the connection: internal
+    try {
+      const err = await safeFetch(`http://rebind.test:${server.address().port}/`).catch(e => e);
+      // fetch() wraps connect errors (net re-creates the lookup error); our message in the
+      // cause and a second lookup prove the pinned lookup ran, not an agent incompatibility.
+      expect(String(err?.cause?.message)).toContain('Blocked address for rebind.test');
+      expect(lookup).toHaveBeenCalledTimes(2);
+      expect(hits).toBe(0);
+    } finally {
+      server.close();
+    }
+  });
+});
+
 describe('submitSupportTicket email', () => {
   it('escapes request fields and names the signed-in user, not the claimed address', async () => {
     const res = { json: jest.fn(), status: jest.fn().mockReturnThis() } as any;
