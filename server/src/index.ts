@@ -34,7 +34,7 @@ import { registerAllHandlers } from './events/EventChoreographer';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+import { generalLimiter, strictLimiter } from './middleware/rateLimits';
 import entityRouter from './routes/entities';
 import functionRouter from './routes/functions/index';
 import agentTriggerRouter from './routes/agentTrigger';
@@ -84,28 +84,6 @@ if (process.env.TRUST_PROXY_HOPS) app.set('trust proxy', Number(process.env.TRUS
 app.use(helmet({ contentSecurityPolicy: false })); // CSP handled by frontend
 
 // ── Rate limiting ──────────────────────────────────────────────────────────
-// General API: 1500 requests per 15 minutes per IP. A page load makes 12-25 API calls, so the
-// old 300 locked out a normal user after about 15 page views. Abuse is also capped at the edge
-// (prod WAF: 2000 requests per 5 minutes per IP); expensive endpoints keep strictLimiter below.
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 1500,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many requests, please try again later' },
-  skip: (req) => req.headers['x-admin-key'] === (process.env.ADMIN_SECRET || '__unset__'),
-});
-
-// Strict limiter for expensive LLM/scan endpoints: 20 per 15 min
-const strictLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Rate limit exceeded for scan/AI endpoints' },
-  skip: (req) => req.headers['x-admin-key'] === (process.env.ADMIN_SECRET || '__unset__'),
-});
-
 app.use('/api', generalLimiter);
 // Costly functions, matched on the decoded :name. Path mounts were skipped by encoded paths
 // ('/api/functions/run%46ullScan'), and three named functions that don't exist.

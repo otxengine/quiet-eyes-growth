@@ -16,6 +16,19 @@ export function isS3Configured(): boolean {
   return !!process.env.AWS_S3_BUCKET;
 }
 
+// Media types a browser renders without running script. Anything else (SVG, HTML, text) would
+// run as a page on the API origin when served back, so uploads refuse it and serving downgrades it.
+export const SAFE_MEDIA_TYPES = new Set([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/heic', 'image/heif',
+  'video/mp4', 'video/webm', 'video/quicktime',
+]);
+
+/** The bare, lower-cased type if it is in SAFE_MEDIA_TYPES, else null. */
+export function safeMediaType(type: unknown): string | null {
+  const t = String(type ?? '').split(';')[0].trim().toLowerCase();
+  return SAFE_MEDIA_TYPES.has(t) ? t : null;
+}
+
 /** Returns true if the given URL points to our S3 bucket or CloudFront CDN. */
 export function isS3Url(url: string): boolean {
   if (!BUCKET) return false;
