@@ -85,7 +85,9 @@ new QeStack(app, 'Qe-prod', {
 });
 
 // cortexi.ai DNS zone, deployed by hand (`npx cdk deploy Qe-dns`), not by the pipelines.
-new DnsStack(app, 'Qe-dns', { env: { account, region } });
+// With prodLive, cortexi.ai + www point at prod's CloudFront (its Url output). Still deployed by
+// hand, so the DNS flip happens exactly when `npx cdk deploy Qe-dns` runs on cutover night.
+new DnsStack(app, 'Qe-dns', { env: { account, region }, siteCdn: prodLive ? 'd1gdqlj3w5crzt.cloudfront.net' : undefined });
 
 // One-time: lets .github/workflows deploy without stored AWS keys.
 new GithubOidcStack(app, 'Qe-github', {
