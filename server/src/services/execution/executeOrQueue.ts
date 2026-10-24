@@ -105,7 +105,7 @@ export async function dispatch(action: QueuedAction): Promise<string> {
         replyText: payload.replyText,
         googleReviewId: payload.googleReviewId,
       });
-      return r.published ? `פורסם ב-Google` : `נשמר כהצעה`;
+      return r.published ? `פורסם ב-Google` : r.error ? `נשמר כהצעה — הפרסום ב-Google נכשל: ${r.error}` : `נשמר כהצעה`;
     }
 
     case 'whatsapp_send':

@@ -159,7 +159,10 @@ function tokenExpiryStatus(account) {
 function SocialPlatformCard({ platform, connection, account, bpId, onConnect, onDisconnect }) {
   const [loading, setLoading] = useState(false);
   const isConnected = connection?.connected;
-  const expiry      = isConnected ? tokenExpiryStatus(account) : null;
+  // Google stores the 1-hour access token's expiry and refreshes it itself — showing it would always read "expired"
+  const expiry      = isConnected && !platform.id.startsWith('google') ? tokenExpiryStatus(account) : null;
+  // Set server-side when the platform rejected our token (e.g. Google invalid_grant) — only a reconnect fixes it
+  const needsReconnect = !isConnected && !!account?.last_error;
 
   const handleConnect = async () => { setLoading(true); await onConnect(); setLoading(false); };
   const handleDisconnect = async () => { setLoading(true); await onDisconnect(); setLoading(false); };
@@ -218,6 +221,12 @@ function SocialPlatformCard({ platform, connection, account, bpId, onConnect, on
             יש לחבר מחדש כדי להמשיך לפרסם אוטומטית
           </p>
         )}
+        {needsReconnect && (
+          <p className="flex items-center gap-1 text-[10px] text-red-500 mt-0.5 font-medium">
+            <AlertTriangle className="w-3 h-3" />
+            החיבור נותק או שההרשאה בוטלה — יש לחבר מחדש
+          </p>
+        )}
       </div>
 
       <div className="flex-shrink-0">
@@ -242,7 +251,7 @@ function SocialPlatformCard({ platform, connection, account, bpId, onConnect, on
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] text-white transition-all disabled:opacity-50"
             style={{ background: platform.color }}>
             {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ExternalLink className="w-3 h-3" />}
-            חבר
+            {needsReconnect ? 'חבר מחדש' : 'חבר'}
           </button>
         )}
       </div>
