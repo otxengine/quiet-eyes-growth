@@ -107,11 +107,10 @@ const strictLimiter = rateLimit({
 });
 
 app.use('/api', generalLimiter);
-app.use('/api/functions/run-full-scan', strictLimiter);
-app.use('/api/functions/runFullScan', strictLimiter);
-app.use('/api/functions/generate-post', strictLimiter);
-app.use('/api/functions/generate-image', strictLimiter);
-app.use('/api/functions/generate-advisory-insights', strictLimiter);
+// Costly functions, matched on the decoded :name. Path mounts were skipped by encoded paths
+// ('/api/functions/run%46ullScan'), and three named functions that don't exist.
+const STRICT_FUNCTIONS = new Set(['run-full-scan', 'runFullScan', 'generateImage', 'generateSmartPost', 'generateBulkPosts', 'generateAdvisoryInsights']);
+app.use('/api/functions/:name', (req, res, next) => (STRICT_FUNCTIONS.has(req.params.name) ? strictLimiter(req, res, next) : next()));
 app.use('/api/orchestrator', strictLimiter);
 
 const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || 'http://localhost:5173')
