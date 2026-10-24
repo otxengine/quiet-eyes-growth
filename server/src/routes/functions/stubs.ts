@@ -7,6 +7,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
+import { safeFetch } from '../../lib/safeFetch';
 
 export async function runCompetitorIdentification(_req: Request, res: Response) {
   return res.json({ competitors_found: 0, new_competitors_created: 0, existing_competitors_updated: 0 });
@@ -216,7 +217,7 @@ export async function learnFromWebsite(req: Request, res: Response) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 8000);
-      const resp = await fetch(websiteUrl, {
+      const resp = await safeFetch(websiteUrl, {
         signal: controller.signal,
         headers: { 'User-Agent': 'Mozilla/5.0 (compatible; QuietEyes/1.0)' },
       });

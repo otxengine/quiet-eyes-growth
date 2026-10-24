@@ -15,6 +15,9 @@ jest.mock('@aws-sdk/client-s3', () => ({
   GetObjectCommand: jest.fn(),
 }));
 
+// uploadImageFromUrl goes through safeFetch, which resolves the host: answer with a public IP.
+jest.mock('node:dns/promises', () => ({ lookup: jest.fn(async () => [{ address: '93.184.216.34', family: 4 }]) }));
+
 import { uploadImageFromUrl } from '../lib/s3';
 
 const mockFetch = jest.fn();

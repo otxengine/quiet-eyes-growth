@@ -1,3 +1,4 @@
+import { safeFetch } from './safeFetch';
 /**
  * Fetches a business website, preferring an about/services page over the homepage.
  * KAN-202 AC1/AC4: tries /about, /אודות, /services in order, falls back to the
@@ -9,7 +10,7 @@ async function fetchText(url: string): Promise<string | null> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
-    const resp = await fetch(url, {
+    const resp = await safeFetch(url, {
       signal: controller.signal,
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; QuietEyes/1.0)' },
     });

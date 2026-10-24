@@ -1,3 +1,4 @@
+import { safeFetch } from './safeFetch';
 /**
  * KAN-218: extracts Instagram/Facebook profile links from a competitor's
  * own website HTML. DIY-only — every fetch below targets `websiteUrl` or
@@ -18,7 +19,7 @@ async function fetchHtml(url: string): Promise<string | null> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
-    const resp = await fetch(url, {
+    const resp = await safeFetch(url, {
       signal: controller.signal,
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; QuietEyes/1.0)' },
     });

@@ -1,8 +1,15 @@
 import { Request, Response } from 'express';
 import { sendEmail } from '../../lib/email';
+import { getUserId } from '../../middleware/auth';
+import { getUserEmail } from '../../lib/ownership';
 
 const SUPPORT_NOTIFY_EMAIL = process.env.SUPPORT_NOTIFY_EMAIL || 'contact@otxengine.io';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://quiet-eyes-frontend.onrender.com';
+
+// Everything below comes from the request, so it is escaped before it goes into the HTML.
+const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
+const EMAIL_RE = /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/;
 
 function buildSupportEmail(opts: {
   userEmail: string;
@@ -33,11 +40,11 @@ function buildSupportEmail(opts: {
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
         <tr>
           <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; color: #888; font-size: 13px; width: 140px;">מייל משתמש</td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; color: #111; font-size: 13px; font-weight: 600;">${opts.userEmail || 'לא זמין'}</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; color: #111; font-size: 13px; font-weight: 600;">${esc(opts.userEmail) || 'לא זמין'}</td>
         </tr>
         <tr>
           <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; color: #888; font-size: 13px;">מזהה עסק</td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; color: #111; font-size: 13px; font-family: monospace;">${opts.businessId || '—'}</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; color: #111; font-size: 13px; font-family: monospace;">${esc(opts.businessId) || '—'}</td>
         </tr>
         <tr>
           <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; color: #888; font-size: 13px;">זמן הפנייה</td>
@@ -56,14 +63,14 @@ function buildSupportEmail(opts: {
       <!-- Description -->
       <div style="background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: 16px; margin-bottom: 24px; text-align: right;">
         <p style="margin: 0 0 8px; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">תיאור הבעיה</p>
-        <p style="margin: 0; color: #333; font-size: 14px; line-height: 1.6;">${opts.description}</p>
+        <p style="margin: 0; color: #333; font-size: 14px; line-height: 1.6; white-space: pre-wrap;">${esc(opts.description)}</p>
       </div>
 
       ${opts.transcript && opts.transcript.length > 0 ? `
       <!-- Conversation transcript -->
       <div style="background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: 16px; margin-bottom: 24px; text-align: right;">
         <p style="margin: 0 0 12px; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">שיחה עם הבוט</p>
-        ${opts.transcript.map(m => `<p style="margin: 0 0 8px; font-size: 13px; line-height: 1.5;"><strong style="color: ${m.role === 'user' ? '#E8344D' : '#555'};">${m.role === 'user' ? 'משתמש' : 'בוט'}:</strong> <span style="color: #333;">${(m.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span></p>`).join('')}
+        ${opts.transcript.map(m => `<p style="margin: 0 0 8px; font-size: 13px; line-height: 1.5;"><strong style="color: ${m.role === 'user' ? '#E8344D' : '#555'};">${m.role === 'user' ? 'משתמש' : 'בוט'}:</strong> <span style="color: #333;">${esc(m.text)}</span></p>`).join('')}
       </div>` : ''}
 
       <!-- CTA -->
@@ -86,9 +93,16 @@ function buildSupportEmail(opts: {
 export async function submitSupportTicket(req: Request, res: Response) {
   const { description, userEmail, businessId, hasRecording, hasScreenshot, transcript } = req.body;
 
-  if (!description) {
+  if (!description || typeof description !== 'string') {
     return res.status(400).json({ error: 'Missing description' });
   }
+
+  // The signed-in user's own address from Clerk, not whatever the request claims.
+  const userId = getUserId(req);
+  const claimed = typeof userEmail === 'string' && EMAIL_RE.test(userEmail) ? userEmail : '';
+  const email = (userId && await getUserEmail(userId)) || claimed;
+  const messages = (Array.isArray(transcript) ? transcript : []).slice(-50)
+    .map((m: any) => ({ role: m?.role === 'user' ? 'user' : 'bot', text: String(m?.text ?? '').slice(0, 2000) }));
 
   const submittedAt = new Date().toLocaleString('he-IL', {
     timeZone: 'Asia/Jerusalem',
@@ -102,8 +116,8 @@ export async function submitSupportTicket(req: Request, res: Response) {
   // Send email notification
   await sendEmail({
     to: SUPPORT_NOTIFY_EMAIL,
-    subject: `🔴 פנייה חדשה לתמיכה — ${userEmail || 'משתמש לא מזוהה'}`,
-    html: buildSupportEmail({ userEmail, businessId, description, hasRecording: !!hasRecording, hasScreenshot: !!hasScreenshot, transcript: Array.isArray(transcript) ? transcript : [], submittedAt }),
+    subject: `🔴 פנייה חדשה לתמיכה — ${email || 'משתמש לא מזוהה'}`,
+    html: buildSupportEmail({ userEmail: email, businessId, description: description.slice(0, 5000), hasRecording: !!hasRecording, hasScreenshot: !!hasScreenshot, transcript: messages, submittedAt }),
   });
 
   return res.json({ ok: true });
