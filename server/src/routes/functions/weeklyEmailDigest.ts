@@ -16,6 +16,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { sendEmail } from '../../lib/email';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { esc } from '../../lib/html';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://quiet-eyes-frontend.onrender.com';
 
@@ -120,9 +121,12 @@ function buildDigestEmail(opts: {
   dashboardUrl: string;
 }): string {
   const {
-    businessName, newLeadsCount, hotLeadsCount, topLeads,
-    newReviewsCount, avgRating, topAlert, healthScore, dashboardUrl,
+    newLeadsCount, hotLeadsCount, topLeads,
+    newReviewsCount, avgRating, healthScore, dashboardUrl,
   } = opts;
+  // Business, lead and alert text come from users, scrapes and the LLM, so it is escaped.
+  const businessName = esc(opts.businessName);
+  const topAlert     = opts.topAlert ? esc(opts.topAlert) : null;
 
   const healthColor = healthScore === null ? '#888'
     : healthScore >= 70 ? '#16a34a'
@@ -132,10 +136,10 @@ function buildDigestEmail(opts: {
   const leadRows = topLeads.length > 0
     ? topLeads.map(l =>
         `<tr>
-          <td style="padding:6px 12px;border-bottom:1px solid #f0f0f0;">${l.name || 'ליד'}</td>
+          <td style="padding:6px 12px;border-bottom:1px solid #f0f0f0;">${esc(l.name || 'ליד')}</td>
           <td style="padding:6px 12px;border-bottom:1px solid #f0f0f0;text-align:center;">
             <span style="background:${l.status === 'hot' ? '#fef2f2' : '#f0fdf4'};color:${l.status === 'hot' ? '#dc2626' : '#16a34a'};padding:2px 8px;border-radius:6px;font-size:12px;">
-              ${l.status === 'hot' ? '🔥 חם' : l.status || 'חדש'}
+              ${l.status === 'hot' ? '🔥 חם' : esc(l.status || 'חדש')}
             </span>
           </td>
           <td style="padding:6px 12px;border-bottom:1px solid #f0f0f0;text-align:center;color:#7c3aed;">

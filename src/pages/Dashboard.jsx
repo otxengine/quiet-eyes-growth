@@ -5,6 +5,7 @@ import { ChevronLeft } from 'lucide-react';
 import KoriAvatar from '@/components/onboarding/KoriAvatar';
 import InsightsFeed from '@/components/insights/InsightsFeed';
 import SectionTabs from '@/components/layout/SectionTabs';
+import { renderMarkdown } from '@/lib/safeMarkdown';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -13,13 +14,6 @@ function getGreeting() {
   if (h < 17) return 'צהריים טובים';
   if (h < 21) return 'ערב טוב';
   return 'לילה טוב';
-}
-
-function renderMarkdown(text) {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/^##\s+(.+)$/gm, '<p class="font-semibold text-[13px] mt-2 mb-1">$1</p>')
-    .replace(/^[•\-]\s+(.+)$/gm, '<li class="mr-3 list-disc text-[12px]">$1</li>');
 }
 
 const NAV_CHIPS = [

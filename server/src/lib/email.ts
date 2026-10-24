@@ -3,6 +3,8 @@
  * Falls back gracefully when RESEND_API_KEY is not set.
  */
 
+import { esc } from './html';
+
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const FROM_EMAIL     = process.env.FROM_EMAIL || 'noreply@otxengine.io';
 const FRONTEND_URL   = process.env.FRONTEND_URL || 'https://quiet-eyes-frontend.onrender.com';
@@ -57,8 +59,11 @@ export function buildInviteEmail(opts: {
     viewer:         'צופה',
     manager:        'מנהל סניף',
   };
-  const roleLabel = ROLE_HE[opts.role] || opts.role;
-  const link = `${FRONTEND_URL}/join?token=${opts.inviteToken}`;
+  // Org and inviter names are user-chosen, so every value is escaped before it goes into the HTML.
+  const orgName     = esc(opts.orgName);
+  const inviterName = esc(opts.inviterName);
+  const roleLabel   = esc(ROLE_HE[opts.role] || opts.role);
+  const link        = esc(`${FRONTEND_URL}/join?token=${encodeURIComponent(opts.inviteToken)}`);
 
   return `
 <!DOCTYPE html>
@@ -70,11 +75,11 @@ export function buildInviteEmail(opts: {
       <div style="width: 48px; height: 48px; background: #7c3aed; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;">
         <span style="color: white; font-size: 24px; font-weight: bold;">OTX</span>
       </div>
-      <h1 style="margin: 0; font-size: 22px; color: #111;">הוזמנת ל-${opts.orgName}</h1>
+      <h1 style="margin: 0; font-size: 22px; color: #111;">הוזמנת ל-${orgName}</h1>
     </div>
 
     <p style="color: #444; font-size: 15px; line-height: 1.6; text-align: right;">
-      ${opts.inviterName} הזמין אותך להצטרף לארגון <strong>${opts.orgName}</strong> בתפקיד <strong>${roleLabel}</strong>.
+      ${inviterName} הזמין אותך להצטרף לארגון <strong>${orgName}</strong> בתפקיד <strong>${roleLabel}</strong>.
     </p>
     <p style="color: #444; font-size: 15px; line-height: 1.6; text-align: right;">
       לחץ על הכפתור להלן כדי להצטרף למערכת OTX Growth OS:
