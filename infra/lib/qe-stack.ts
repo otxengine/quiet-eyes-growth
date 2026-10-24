@@ -27,8 +27,12 @@ export interface QeStackProps extends cdk.StackProps {
   srcDir: string;
   /** Worker tasks (background jobs). Staging starts at 0 until copied data is confirmed safe. */
   workerCount: number;
-  /** Custom hostname; certificateArn must be an issued us-east-1 ACM cert. Unset = the cloudfront.net URL. */
-  domain?: { name: string; certificateArn: string };
+  /**
+   * Custom hostname; certificateArn must be an issued us-east-1 ACM cert. Unset = the cloudfront.net URL.
+   * `live: false` attaches the names but keeps FRONTEND_URL (the API's CORS origin and link base) on the
+   * cloudfront.net URL, for while DNS still points elsewhere and that URL is how the stack gets tested.
+   */
+  domain?: { name: string; certificateArn: string; alternateNames?: string[]; live?: boolean };
   /** API tasks. Default 1, like Render; 2+ needs the multi-instance fixes (page picker, job locks, shutdown). */
   apiCount?: number;
   /** Existing bucket for scraped media; tasks get read/write on its objects through their IAM role. */
@@ -129,7 +133,7 @@ export class QeStack extends cdk.Stack {
       webAclId: props.webAclArn,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100, // North America, Europe, Israel
       ...(domain && {
-        domainNames: [domain.name],
+        domainNames: [domain.name, ...(domain.alternateNames ?? [])],
         certificate: acm.Certificate.fromCertificateArn(this, 'Cert', domain.certificateArn),
       }),
       defaultRootObject: 'index.html',
@@ -155,7 +159,7 @@ export class QeStack extends cdk.Stack {
       },
     });
     // Also the API's CORS origin (FRONTEND_URL), so it must be the hostname browsers actually use.
-    const siteUrl = `https://${domain?.name ?? distribution.distributionDomainName}`;
+    const siteUrl = `https://${domain && domain.live !== false ? domain.name : distribution.distributionDomainName}`;
 
     // Hashed build assets are immutable; everything else (HTML, logos, robots) revalidates.
     const webDist = path.join(srcDir, 'dist');
