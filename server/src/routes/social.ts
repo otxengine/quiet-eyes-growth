@@ -213,9 +213,10 @@ router.post('/publish-organic', async (req: Request, res: Response) => {
     }
 
     // ── Update OrganicPost in DB ──────────────────────────────────────────────
-    if (postId) {
-      await prisma.organicPost.update({
-        where: { id: postId },
+    // Scoped to the business the router verified: postId on its own can name any tenant's post.
+    if (typeof postId === 'string' && postId) {
+      await prisma.organicPost.updateMany({
+        where: { id: postId, linked_business: businessProfileId },
         data:  { status: 'published', published_at: new Date() },
       }).catch(() => null);
     }

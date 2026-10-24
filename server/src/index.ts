@@ -262,13 +262,18 @@ app.post('/api/cron/run', async (_req, res) => {
 });
 
 // Global JSON error handler — must be last, catches Clerk + any other middleware errors
-app.use((err: any, _req: any, res: any, _next: any) => {
+app.use((err: any, _req: any, res: any, next: any) => {
   console.error('Unhandled error:', err.message);
+  if (res.headersSent) return next(err); // Express closes the response; a second write would throw
   const isDev = process.env.NODE_ENV !== 'production';
   res.status(err.status || 500).json({
     error: isDev ? (err.message || 'Internal server error') : 'Internal server error',
   });
 });
+
+// A route's rejected promise that nothing awaits (Express 4 ignores them) would otherwise make
+// Node exit, so one bad request took the whole API down. Log it and keep serving.
+process.on('unhandledRejection', (err: any) => console.error('Unhandled rejection:', err?.stack || err));
 
 // ── Monitoring endpoint (admin only) ──────────────────────────────────────────
 app.get('/api/monitoring/status', async (req: any, res: any) => {

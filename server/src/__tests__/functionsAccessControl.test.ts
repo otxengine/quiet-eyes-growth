@@ -15,6 +15,8 @@ jest.mock('../db', () => ({
 
 jest.mock('../lib/llm', () => ({ invokeLLM: jest.fn(() => Promise.resolve({ ok: true })) }));
 
+jest.mock('../routes/functions/submitSupportTicket', () => ({ submitSupportTicket: jest.fn() }));
+
 jest.mock('../middleware/auth', () => ({
   getUserId: jest.fn(),
   isAdminKeyRequest: jest.fn(),
@@ -28,6 +30,7 @@ jest.mock('../lib/ownership', () => ({
 import { Request, Response } from 'express';
 import { getUserId, isAdminKeyRequest } from '../middleware/auth';
 import { getUserBusinessIds } from '../lib/ownership';
+import { submitSupportTicket } from '../routes/functions/submitSupportTicket';
 
 let router: any;
 beforeAll(() => {
@@ -256,5 +259,33 @@ describe('invokeLLM — limits for signed-in users', () => {
     await dispatch(llmReq({ prompt: 'x'.repeat(100_001) }), res);
     expect(res.status).toHaveBeenCalledWith(413);
     expect(invokeLLM).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A handler that throws must reach Express's error handler. Express 4 ignores a returned
+ * rejected promise, and Node exits on an unhandled rejection: one request downed the API.
+ */
+describe('POST /api/functions/:name — handler errors', () => {
+  const dispatchHandler = () => {
+    const layer = router.stack.find((l: any) => l.route?.path === '/:name' && l.route?.methods?.post);
+    return layer.route.stack[layer.route.stack.length - 1].handle;
+  };
+  const ticketReq = () => ({ body: {}, params: { name: 'submitSupportTicket' }, headers: {} }) as unknown as Request;
+
+  it('passes a rejected handler promise to next()', async () => {
+    const boom = new Error('boom');
+    (submitSupportTicket as jest.Mock).mockRejectedValueOnce(boom);
+    const next = jest.fn();
+    await dispatchHandler()(ticketReq(), makeRes().res, next);
+    expect(next).toHaveBeenCalledWith(boom);
+  });
+
+  it('passes a synchronous throw to next() too', async () => {
+    const boom = new Error('sync boom');
+    (submitSupportTicket as jest.Mock).mockImplementationOnce(() => { throw boom; });
+    const next = jest.fn();
+    await dispatchHandler()(ticketReq(), makeRes().res, next);
+    expect(next).toHaveBeenCalledWith(boom);
   });
 });
