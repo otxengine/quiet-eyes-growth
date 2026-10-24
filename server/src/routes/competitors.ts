@@ -6,6 +6,7 @@ import { enrichCompetitorUrls } from './functions/enrichCompetitorUrls';
 import { computeThemeRollup, computeReviewTrend, REVIEWS_INSIGHTS_WINDOW_DAYS } from './functions/computeThemeRollup';
 import { computeEntityKpis } from '../lib/socialKpis';
 import { requireOwnsBusinessFields, requireOwnsRecord } from '../middleware/businessAccess';
+import { safeFetch } from '../lib/safeFetch';
 
 const router = Router();
 router.use(requireOwnsBusinessFields);
@@ -533,7 +534,7 @@ router.get('/proxy-image', async (req: Request, res: Response) => {
   if (!allowed) return res.status(403).json({ error: 'Host not allowed' });
 
   try {
-    const upstream = await fetch(url, { headers: { Referer: parsed.origin }, signal: AbortSignal.timeout(15_000) });
+    const upstream = await safeFetch(url, { headers: { Referer: parsed.origin }, signal: AbortSignal.timeout(15_000) });
     if (!upstream.ok) return res.status(upstream.status).end();
     res.setHeader('Content-Type', upstream.headers.get('content-type') || 'image/jpeg');
     res.setHeader('Cache-Control', 'public, max-age=3600');

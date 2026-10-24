@@ -1,5 +1,6 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
+import { safeFetch } from './safeFetch';
 
 // The bucket's region, not the compute's: on ECS, AWS_REGION is the task's own region.
 const REGION = process.env.AWS_S3_REGION || process.env.AWS_REGION || 'us-east-1';
@@ -89,7 +90,7 @@ export async function uploadBufferToS3(buffer: Buffer, contentType: string, fold
 export async function uploadImageFromUrl(sourceUrl: string, folder = 'competitor-posts'): Promise<string | null> {
   if (!isS3Configured()) return null;
   try {
-    const res = await fetch(sourceUrl, {
+    const res = await safeFetch(sourceUrl, {
       headers: { Referer: new URL(sourceUrl).origin },
       signal: AbortSignal.timeout(10_000),
     });
