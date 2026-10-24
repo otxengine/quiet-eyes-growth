@@ -164,6 +164,7 @@ const router = Router();
 // sent to OpenRouter as raw model ids, so any (costly) model could be requested.
 const USER_LLM_MODELS = new Set(['haiku', 'sonnet']);
 const USER_LLM_MAX_TOKENS = 1500; // largest frontend request is 1200
+const USER_LLM_MAX_PROMPT_CHARS = 100_000; // input tokens are the real cost lever
 
 async function invokeLLMHandler(req: Request, res: Response) {
   const { prompt, response_json_schema } = req.body;
@@ -171,7 +172,12 @@ async function invokeLLMHandler(req: Request, res: Response) {
   if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
   if (!isAdminKeyRequest(req)) {
     if (model !== undefined && !USER_LLM_MODELS.has(model)) return res.status(400).json({ error: 'Unsupported model' });
-    maxTokens = Math.min(Number(maxTokens) || USER_LLM_MAX_TOKENS, USER_LLM_MAX_TOKENS);
+    if (typeof prompt !== 'string' || prompt.length > USER_LLM_MAX_PROMPT_CHARS
+        || JSON.stringify(response_json_schema ?? '').length > 20_000) {
+      return res.status(413).json({ error: 'Prompt too large' });
+    }
+    // Omitted → the model's own default in lib/llm; given → a whole number in [1, cap].
+    if (maxTokens !== undefined) maxTokens = Math.min(Math.max(Math.floor(Number(maxTokens)) || 1, 1), USER_LLM_MAX_TOKENS);
   }
   try {
     const result = await invokeLLM({ prompt, response_json_schema, model, maxTokens });
@@ -411,9 +417,13 @@ const ENTITY_TYPE_MODELS: Record<string, string> = { signal: 'marketSignal', ale
 const OTHER_BUSINESS_FIELDS = ['linked_business', 'businessId'];
 // These run for every business when businessProfileId is missing, so callers must name one.
 const ALL_BUSINESSES_WITHOUT_ID = new Set(['runFullScan', 'run-full-scan', 'updateSectorKnowledge']);
+// Platform-wide reports with no business scope (systemHealthMonitor returns every tenant's latest
+// automation errors and global counts). No tenant UI calls them.
+const ADMIN_ONLY_FUNCTIONS = new Set(['systemHealthMonitor']);
 
 async function requireFunctionAccess(req: Request<{ name: string }>, res: Response, next: NextFunction) {
   if (isAdminKeyRequest(req)) return next();
+  if (ADMIN_ONLY_FUNCTIONS.has(req.params.name)) return res.status(403).json({ error: 'Forbidden' });
   const body = req.body ?? {};
   if (ALL_BUSINESSES_WITHOUT_ID.has(req.params.name) && !body.businessProfileId) {
     return res.status(400).json({ error: 'businessProfileId required' });
@@ -426,7 +436,10 @@ async function requireFunctionAccess(req: Request<{ name: string }>, res: Respon
     for (const id of Array.isArray(v) ? v : [v]) idsByModel.set(model, [...(idsByModel.get(model) ?? []), id]);
   };
   for (const [field, model] of Object.entries(RECORD_FIELDS)) if (body[field] != null) add(model, body[field]);
-  if (body.entityId != null && ENTITY_TYPE_MODELS[body.entityType]) add(ENTITY_TYPE_MODELS[body.entityType], body.entityId);
+  if (body.entityId != null && typeof body.entityType === 'string'
+      && Object.prototype.hasOwnProperty.call(ENTITY_TYPE_MODELS, body.entityType)) {
+    add(ENTITY_TYPE_MODELS[body.entityType], body.entityId);
+  }
   if (!idsByModel.size && !businessIds.length) return next();
 
   const all = [...businessIds, ...[...idsByModel.values()].flat()];
@@ -436,14 +449,15 @@ async function requireFunctionAccess(req: Request<{ name: string }>, res: Respon
   try {
     const owned = await getUserBusinessIds(userId);
     if (businessIds.some(id => !owned.includes(id as string))) return res.status(403).json({ error: 'Forbidden' });
-    for (const [model, ids] of idsByModel) {
-      const rows: Array<{ linked_business: string | null }> = await (prisma as any)[model].findMany({
-        where: { id: { in: ids } }, select: { linked_business: true },
-      });
-      // Missing ids are left to the handler (it 404s); a row of another tenant looks the same.
-      if (rows.some(r => !r.linked_business || !owned.includes(r.linked_business))) {
-        return res.status(404).json({ error: 'Not found' });
-      }
+    for (const [model, list] of idsByModel) {
+      const ids = [...new Set(list as string[])];
+      // Fail closed: every id must be found inside the caller's businesses (missing and
+      // foreign look the same). OR-of-equals, not `id: { in }`: that array bind silently
+      // returned zero rows on Supabase's pooler (see b44f78e), which would make this a no-op.
+      const ownedRows: number = owned.length ? await (prisma as any)[model].count({
+        where: { AND: [{ OR: ids.map(id => ({ id })) }, { OR: owned.map(b => ({ linked_business: b })) }] },
+      }) : 0;
+      if (ownedRows !== ids.length) return res.status(404).json({ error: 'Not found' });
     }
   } catch (err) {
     return next(err);
@@ -461,10 +475,13 @@ const invokeLLMLimiter = rateLimit({
   keyGenerator: req => getUserId(req) ?? 'anonymous', // the /api gate guarantees a user here
   message: { error: 'Too many AI requests, please try again later' },
 });
-router.post('/invokeLLM', invokeLLMLimiter);
+// Matched on the decoded :name. A path route ('/invokeLLM') was skipped by an encoded
+// path such as '/invoke%4CLM', which still dispatches to invokeLLM.
+const limitInvokeLLM = (req: Request<{ name: string }>, res: Response, next: NextFunction) =>
+  (req.params.name === 'invokeLLM' ? invokeLLMLimiter(req, res, next) : next());
 
 // POST /api/functions/:name
-router.post('/:name', requireBusinessAccess, requireFunctionAccess, (req: Request<{ name: string }>, res: Response) => {
+router.post('/:name', requireBusinessAccess, requireFunctionAccess, limitInvokeLLM, (req: Request<{ name: string }>, res: Response) => {
   const handler = FUNCTION_MAP[req.params.name];
   if (!handler) {
     return res.status(404).json({ error: `Unknown function: ${req.params.name}` });

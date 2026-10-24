@@ -8,8 +8,8 @@ jest.mock('../db', () => ({
   prisma: {
     businessProfile: { findMany: jest.fn(() => []), findUnique: jest.fn(() => null) },
     $queryRawUnsafe: jest.fn(() => Promise.resolve([])),
-    competitor: { findMany: jest.fn() },
-    proactiveAlert: { findMany: jest.fn() },
+    competitor: { count: jest.fn() },
+    proactiveAlert: { count: jest.fn() },
   },
 }));
 
@@ -43,7 +43,8 @@ function makeReq(body: object): Request {
 
 function makeRes() {
   const json = jest.fn();
-  const res = { json, status: jest.fn().mockReturnThis() } as unknown as Response;
+  // setHeader: the invokeLLM rate limiter (in the same route stack) writes RateLimit-* headers.
+  const res = { json, status: jest.fn().mockReturnThis(), setHeader: jest.fn() } as unknown as Response;
   return { res, json };
 }
 
@@ -59,6 +60,8 @@ async function dispatch(req: Request, res: Response) {
     if (h) await h(req, res, next);
   };
   await next();
+  // express-rate-limit calls next() without awaiting it; let that chain finish.
+  await new Promise(r => setImmediate(r));
 }
 
 describe('POST /api/functions/:name — requireBusinessAccess', () => {
@@ -137,27 +140,31 @@ describe('POST /api/functions/:name — requireFunctionAccess', () => {
   });
 
   it('404s another tenant\'s competitorId before any handler runs', async () => {
-    prisma.competitor.findMany.mockResolvedValue([{ linked_business: 'biz-b' }]);
+    prisma.competitor.count.mockResolvedValue(0); // not inside the caller's businesses
     const { res, json } = makeRes();
     await dispatch(makeReq({ competitorId: 'comp-of-b' }), res);
     expect(res.status).toHaveBeenCalledWith(404);
     expect(errorOf(json)).toBe('Not found');
+    // OR-of-equals on both id and business: `id: { in }` silently matched nothing on Supabase's pooler.
+    expect(prisma.competitor.count).toHaveBeenCalledWith({
+      where: { AND: [{ OR: [{ id: 'comp-of-b' }] }, { OR: [{ linked_business: 'biz-a' }] }] },
+    });
   });
 
   it('lets own competitorIds through, but one foreign id in the list is enough to refuse', async () => {
-    prisma.competitor.findMany.mockResolvedValue([{ linked_business: 'biz-a' }]);
+    prisma.competitor.count.mockResolvedValue(1);
     let r = makeRes();
-    await dispatch(makeReq({ competitorIds: ['c1'] }), r.res);
+    await dispatch(makeReq({ competitorIds: ['c1', 'c1'] }), r.res); // duplicates count once
     expect(errorOf(r.json)).toMatch(/Unknown function/);
 
-    prisma.competitor.findMany.mockResolvedValue([{ linked_business: 'biz-a' }, { linked_business: 'biz-b' }]);
+    prisma.competitor.count.mockResolvedValue(1); // only 1 of the 2 is the caller's
     r = makeRes();
     await dispatch(makeReq({ competitorIds: ['c1', 'c2'] }), r.res);
     expect(errorOf(r.json)).toBe('Not found');
   });
 
   it('looks up entityId in the table its entityType names, and ignores types without one', async () => {
-    prisma.proactiveAlert.findMany.mockResolvedValue([{ linked_business: 'biz-b' }]);
+    prisma.proactiveAlert.count.mockResolvedValue(0);
     let r = makeRes();
     await dispatch(makeReq({ entityType: 'alert', entityId: 'alert-of-b' }), r.res);
     expect(errorOf(r.json)).toBe('Not found');
@@ -165,6 +172,16 @@ describe('POST /api/functions/:name — requireFunctionAccess', () => {
     r = makeRes();
     await dispatch(makeReq({ entityType: 'event', entityId: 'evt-1' }), r.res);
     expect(errorOf(r.json)).toMatch(/Unknown function/);
+
+    r = makeRes(); // inherited keys are not entity types
+    await dispatch(makeReq({ entityType: 'constructor', entityId: 'x' }), r.res);
+    expect(errorOf(r.json)).toMatch(/Unknown function/);
+  });
+
+  it('keeps platform-wide functions to the admin key', async () => {
+    const { res } = makeRes();
+    await dispatch(named('systemHealthMonitor', {}), res);
+    expect(res.status).toHaveBeenCalledWith(403);
   });
 
   it('403s a business id passed under another name (logOutcome, submitSupportTicket)', async () => {
@@ -197,7 +214,7 @@ describe('POST /api/functions/:name — requireFunctionAccess', () => {
 
   it('skips the checks for the admin key', async () => {
     (isAdminKeyRequest as jest.Mock).mockReturnValue(true);
-    prisma.competitor.findMany.mockResolvedValue([{ linked_business: 'biz-b' }]);
+    prisma.competitor.count.mockResolvedValue(0);
     const { res, json } = makeRes();
     await dispatch(makeReq({ competitorId: 'comp-of-b' }), res);
     expect(errorOf(json)).toMatch(/Unknown function/);
@@ -225,5 +242,19 @@ describe('invokeLLM — limits for signed-in users', () => {
     const { res } = makeRes();
     await dispatch(llmReq({ prompt: 'x', model: 'sonnet', maxTokens: 100000 }), res);
     expect(invokeLLM).toHaveBeenCalledWith(expect.objectContaining({ model: 'sonnet', maxTokens: 1500 }));
+  });
+
+  it('leaves an omitted maxTokens to the model default, and floors bad values at 1', async () => {
+    await dispatch(llmReq({ prompt: 'x', model: 'haiku' }), makeRes().res);
+    expect(invokeLLM).toHaveBeenLastCalledWith(expect.objectContaining({ maxTokens: undefined }));
+    await dispatch(llmReq({ prompt: 'x', maxTokens: -1 }), makeRes().res);
+    expect(invokeLLM).toHaveBeenLastCalledWith(expect.objectContaining({ maxTokens: 1 }));
+  });
+
+  it('refuses oversized prompts (input tokens are the real cost)', async () => {
+    const { res } = makeRes();
+    await dispatch(llmReq({ prompt: 'x'.repeat(100_001) }), res);
+    expect(res.status).toHaveBeenCalledWith(413);
+    expect(invokeLLM).not.toHaveBeenCalled();
   });
 });
