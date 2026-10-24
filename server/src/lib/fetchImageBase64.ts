@@ -1,4 +1,5 @@
 import { isS3Url, downloadFromS3 } from './s3';
+import { safeFetch } from './safeFetch';
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // Anthropic's per-image limit
 
@@ -12,7 +13,7 @@ export async function fetchImageBase64(url: string): Promise<{ data: string; med
       return { data: file.body.toString('base64'), mediaType: file.contentType || 'image/jpeg' };
     }
 
-    const res = await fetch(url, {
+    const res = await safeFetch(url, {
       headers: { Referer: new URL(url).origin },
       signal: AbortSignal.timeout(10_000),
     });
