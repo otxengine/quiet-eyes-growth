@@ -6,7 +6,8 @@
 jest.mock('../db', () => ({
   prisma: {
     businessProfile: { findUnique: jest.fn() },
-    competitor: { count: jest.fn(), create: jest.fn() },
+    competitor: { count: jest.fn(), create: jest.fn(), findUnique: jest.fn() },
+    competitorPost: { create: jest.fn() },
   },
 }));
 
@@ -110,6 +111,18 @@ describe('POST /entities — tenant write check', () => {
     expect(res.status).toHaveBeenCalledWith(403);
     expect(prisma.competitor.create).not.toHaveBeenCalled();
     expect(enrichCompetitorUrls).not.toHaveBeenCalled();
+  });
+
+  it('refuses a row attached to another tenant\'s competitor', async () => {
+    jest.clearAllMocks();
+    (prisma.competitor.findUnique as jest.Mock).mockResolvedValue({ linked_business: 'someone_elses_biz' });
+    const req = { params: { entity: 'CompetitorPost' }, body: { competitor_id: 'their_competitor', caption: 'x' } } as any;
+    const res = makeRes();
+
+    await getPostHandler()(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect((prisma as any).competitorPost.create).not.toHaveBeenCalled();
   });
 });
 

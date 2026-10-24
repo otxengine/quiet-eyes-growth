@@ -120,6 +120,16 @@ describe('getUserBusinessIds — org manager branches', () => {
     expect(prisma.$queryRawUnsafe).toHaveBeenLastCalledWith(
       expect.stringContaining('organization_id = $1 AND id = ANY($2::text[])'), 'org-a', ['biz-a1', 'victim-biz']);
   });
+
+  it('grants nothing for malformed branch_ids (fail closed, not full-org access)', async () => {
+    const { prisma } = require('../db');
+    prisma.businessProfile = { findMany: jest.fn().mockResolvedValue([]) };
+    prisma.$queryRawUnsafe = jest.fn().mockResolvedValueOnce([{ org_id: 'org-a', role: 'manager', branch_ids: 'not-json' }]);
+    const { getUserBusinessIds: real } = jest.requireActual('../lib/ownership');
+
+    expect(await real('user-m')).toEqual([]);
+    expect(prisma.$queryRawUnsafe).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('router wiring', () => {

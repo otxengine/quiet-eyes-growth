@@ -289,13 +289,24 @@ const PLAN_COMPETITOR_LIMITS: Record<string, number> = {
 // Billing and tenancy fields: only the server (Paddle webhook, org routes) or the admin key sets these.
 const PROTECTED_FIELDS = ['subscription_plan', 'plan_id', 'subscription_status', 'stripe_customer_id', 'subscription_started_at', 'organization_id'];
 
-// Non-admin writes: drop protected fields, and only allow linked_business values the caller owns.
+// Non-admin writes: drop protected fields, and every tenant key must point at the caller's own
+// data: a business they own (linked_business, business_id) or a competitor of one.
 async function rejectForeignWrite(req: Request, data: Record<string, any>): Promise<boolean> {
   if (isAdminKeyRequest(req)) return false;
   for (const f of PROTECTED_FIELDS) delete data[f];
-  if (!('linked_business' in data)) return false;
+  const bizKeys = ['linked_business', 'business_id'].filter(f => f in data);
+  const competitorKeys = ['competitor_id', 'linked_competitor'].filter(f => data[f] != null); // null = own-business row
+  if (!bizKeys.length && !competitorKeys.length) return false;
   const userId = getUserId(req);
-  return typeof data.linked_business !== 'string' || !userId || !(await getUserBusinessIds(userId)).includes(data.linked_business);
+  if (!userId) return true;
+  const owned = await getUserBusinessIds(userId);
+  if (bizKeys.some(f => typeof data[f] !== 'string' || !owned.includes(data[f]))) return true;
+  for (const f of competitorKeys) {
+    if (typeof data[f] !== 'string') return true;
+    const c = await prisma.competitor.findUnique({ where: { id: data[f] }, select: { linked_business: true } });
+    if (!c?.linked_business || !owned.includes(c.linked_business)) return true;
+  }
+  return false;
 }
 
 // POST /api/entities/:entity — create
@@ -306,7 +317,8 @@ router.post('/:entity', async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const data = { ...req.body };
-    if (userId && !data.created_by) data.created_by = userId;
+    // Only the admin key may create a row on someone else's behalf.
+    if (userId && (!data.created_by || !isAdminKeyRequest(req))) data.created_by = userId;
     if (await rejectForeignWrite(req, data)) return res.status(403).json({ error: 'Forbidden' });
 
     // Manually-added competitors need no review gate — the user typed the name themselves —
