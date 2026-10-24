@@ -8,8 +8,12 @@ jest.mock('../db', () => ({
   prisma: {
     businessProfile: { findMany: jest.fn(() => []), findUnique: jest.fn(() => null) },
     $queryRawUnsafe: jest.fn(() => Promise.resolve([])),
+    competitor: { findMany: jest.fn() },
+    proactiveAlert: { findMany: jest.fn() },
   },
 }));
+
+jest.mock('../lib/llm', () => ({ invokeLLM: jest.fn(() => Promise.resolve({ ok: true })) }));
 
 jest.mock('../middleware/auth', () => ({
   getUserId: jest.fn(),
@@ -111,5 +115,115 @@ describe('POST /api/functions/:name — requireBusinessAccess', () => {
     expect(getUserId).not.toHaveBeenCalled();
     expect(getUserBusinessIds).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(404);
+  });
+});
+
+/**
+ * requireFunctionAccess: ids other than businessProfileId (competitorId, leadId, postId,
+ * entityId, linked_business, ...) must belong to the caller too. Before, e.g. revisePost
+ * {postId} rewrote any tenant's post and generateBattlecard {competitorId} used the
+ * victim's business.
+ */
+describe('POST /api/functions/:name — requireFunctionAccess', () => {
+  const { prisma } = require('../db');
+  const named = (name: string, body: object) =>
+    ({ body, params: { name }, headers: {} }) as unknown as Request;
+  const errorOf = (json: jest.Mock) => json.mock.calls[0]?.[0]?.error;
+
+  beforeEach(() => {
+    (isAdminKeyRequest as jest.Mock).mockReturnValue(false);
+    (getUserId as jest.Mock).mockReturnValue('user-a');
+    (getUserBusinessIds as jest.Mock).mockResolvedValue(['biz-a']);
+  });
+
+  it('404s another tenant\'s competitorId before any handler runs', async () => {
+    prisma.competitor.findMany.mockResolvedValue([{ linked_business: 'biz-b' }]);
+    const { res, json } = makeRes();
+    await dispatch(makeReq({ competitorId: 'comp-of-b' }), res);
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(errorOf(json)).toBe('Not found');
+  });
+
+  it('lets own competitorIds through, but one foreign id in the list is enough to refuse', async () => {
+    prisma.competitor.findMany.mockResolvedValue([{ linked_business: 'biz-a' }]);
+    let r = makeRes();
+    await dispatch(makeReq({ competitorIds: ['c1'] }), r.res);
+    expect(errorOf(r.json)).toMatch(/Unknown function/);
+
+    prisma.competitor.findMany.mockResolvedValue([{ linked_business: 'biz-a' }, { linked_business: 'biz-b' }]);
+    r = makeRes();
+    await dispatch(makeReq({ competitorIds: ['c1', 'c2'] }), r.res);
+    expect(errorOf(r.json)).toBe('Not found');
+  });
+
+  it('looks up entityId in the table its entityType names, and ignores types without one', async () => {
+    prisma.proactiveAlert.findMany.mockResolvedValue([{ linked_business: 'biz-b' }]);
+    let r = makeRes();
+    await dispatch(makeReq({ entityType: 'alert', entityId: 'alert-of-b' }), r.res);
+    expect(errorOf(r.json)).toBe('Not found');
+
+    r = makeRes();
+    await dispatch(makeReq({ entityType: 'event', entityId: 'evt-1' }), r.res);
+    expect(errorOf(r.json)).toMatch(/Unknown function/);
+  });
+
+  it('403s a business id passed under another name (logOutcome, submitSupportTicket)', async () => {
+    let r = makeRes();
+    await dispatch(makeReq({ linked_business: 'biz-b' }), r.res);
+    expect(r.res.status).toHaveBeenCalledWith(403);
+    r = makeRes();
+    await dispatch(makeReq({ businessId: 'biz-b' }), r.res);
+    expect(r.res.status).toHaveBeenCalledWith(403);
+  });
+
+  it('checks ?businessProfileId= too (getEventBusStats/manageConstraints fall back to it)', async () => {
+    const { res } = makeRes();
+    await dispatch({ body: {}, query: { businessProfileId: 'biz-b' }, params: { name: 'manageConstraints' }, headers: {} } as unknown as Request, res);
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  it('400s non-string ids so Prisma operators can\'t be smuggled in', async () => {
+    const { res } = makeRes();
+    await dispatch(makeReq({ competitorId: { not: 'x' } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('requires a businessProfileId for functions that would otherwise run for every business', async () => {
+    const { res, json } = makeRes();
+    await dispatch(named('runFullScan', {}), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(errorOf(json)).toBe('businessProfileId required');
+  });
+
+  it('skips the checks for the admin key', async () => {
+    (isAdminKeyRequest as jest.Mock).mockReturnValue(true);
+    prisma.competitor.findMany.mockResolvedValue([{ linked_business: 'biz-b' }]);
+    const { res, json } = makeRes();
+    await dispatch(makeReq({ competitorId: 'comp-of-b' }), res);
+    expect(errorOf(json)).toMatch(/Unknown function/);
+  });
+});
+
+describe('invokeLLM — limits for signed-in users', () => {
+  const { invokeLLM } = require('../lib/llm');
+  const llmReq = (body: object) => ({ body, params: { name: 'invokeLLM' }, headers: {} }) as unknown as Request;
+
+  beforeEach(() => {
+    (isAdminKeyRequest as jest.Mock).mockReturnValue(false);
+    (getUserId as jest.Mock).mockReturnValue('user-a');
+    (invokeLLM as jest.Mock).mockClear();
+  });
+
+  it('refuses models other than haiku/sonnet (unknown keys reach OpenRouter as raw model ids)', async () => {
+    const { res } = makeRes();
+    await dispatch(llmReq({ prompt: 'x', model: 'openai/o1-pro' }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(invokeLLM).not.toHaveBeenCalled();
+  });
+
+  it('caps maxTokens', async () => {
+    const { res } = makeRes();
+    await dispatch(llmReq({ prompt: 'x', model: 'sonnet', maxTokens: 100000 }), res);
+    expect(invokeLLM).toHaveBeenCalledWith(expect.objectContaining({ model: 'sonnet', maxTokens: 1500 }));
   });
 });

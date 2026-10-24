@@ -1,5 +1,9 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
+import rateLimit from 'express-rate-limit';
 import { requireBusinessAccess } from '../../middleware/businessAccess';
+import { getUserId, isAdminKeyRequest } from '../../middleware/auth';
+import { getUserBusinessIds } from '../../lib/ownership';
+import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { generateMorningBriefing } from './generateMorningBriefing';
@@ -156,9 +160,19 @@ import { reviewSuggestedBio } from './reviewSuggestedBio';
 
 const router = Router();
 
+// Models a signed-in user may pick: the frontend only uses these. Unknown keys would otherwise be
+// sent to OpenRouter as raw model ids, so any (costly) model could be requested.
+const USER_LLM_MODELS = new Set(['haiku', 'sonnet']);
+const USER_LLM_MAX_TOKENS = 1500; // largest frontend request is 1200
+
 async function invokeLLMHandler(req: Request, res: Response) {
-  const { prompt, response_json_schema, model, maxTokens } = req.body;
+  const { prompt, response_json_schema } = req.body;
+  let { model, maxTokens } = req.body;
   if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
+  if (!isAdminKeyRequest(req)) {
+    if (model !== undefined && !USER_LLM_MODELS.has(model)) return res.status(400).json({ error: 'Unsupported model' });
+    maxTokens = Math.min(Number(maxTokens) || USER_LLM_MAX_TOKENS, USER_LLM_MAX_TOKENS);
+  }
   try {
     const result = await invokeLLM({ prompt, response_json_schema, model, maxTokens });
     return res.json(result);
@@ -379,8 +393,78 @@ function runInBackground(name: string, handler: Function, req: Request, res: Res
     });
 }
 
+// Body fields that point at another tenant's rows, by the model that holds them.
+// requireBusinessAccess covers businessProfileId; this covers the other ids handlers read
+// (inventory of every FUNCTION_MAP handler's req.body fields, 2026-10-24).
+const RECORD_FIELDS: Record<string, string> = {
+  competitorId: 'competitor',          // battlecard, strategy, review insights, social analysis
+  focusedCompetitorId: 'competitor',   // reputationAdvisorChat
+  competitorIds: 'competitor',         // compareGoogleMetrics, topicTimeline, reputationAdvisorChat
+  leadId: 'lead',                      // generateLeadFirstContact, intentClassification
+  actionId: 'autoAction',              // approveAction, rejectAction
+  postId: 'organicPost',               // revisePost
+};
+// updateInsightMemory's entityId lives in a different table per entityType.
+const ENTITY_TYPE_MODELS: Record<string, string> = { signal: 'marketSignal', alert: 'proactiveAlert', competitor: 'competitor' };
+// Business ids under other names (logOutcome, submitSupportTicket). getEventBusStats and
+// manageConstraints also fall back to ?businessProfileId=, which requireBusinessAccess doesn't see.
+const OTHER_BUSINESS_FIELDS = ['linked_business', 'businessId'];
+// These run for every business when businessProfileId is missing, so callers must name one.
+const ALL_BUSINESSES_WITHOUT_ID = new Set(['runFullScan', 'run-full-scan', 'updateSectorKnowledge']);
+
+async function requireFunctionAccess(req: Request<{ name: string }>, res: Response, next: NextFunction) {
+  if (isAdminKeyRequest(req)) return next();
+  const body = req.body ?? {};
+  if (ALL_BUSINESSES_WITHOUT_ID.has(req.params.name) && !body.businessProfileId) {
+    return res.status(400).json({ error: 'businessProfileId required' });
+  }
+
+  const idsByModel = new Map<string, string[]>();
+  const businessIds: unknown[] = [...OTHER_BUSINESS_FIELDS.map(f => body[f]), req.query?.businessProfileId]
+    .filter(v => v != null && v !== '');
+  const add = (model: string, v: unknown) => {
+    for (const id of Array.isArray(v) ? v : [v]) idsByModel.set(model, [...(idsByModel.get(model) ?? []), id]);
+  };
+  for (const [field, model] of Object.entries(RECORD_FIELDS)) if (body[field] != null) add(model, body[field]);
+  if (body.entityId != null && ENTITY_TYPE_MODELS[body.entityType]) add(ENTITY_TYPE_MODELS[body.entityType], body.entityId);
+  if (!idsByModel.size && !businessIds.length) return next();
+
+  const all = [...businessIds, ...[...idsByModel.values()].flat()];
+  if (all.some(v => typeof v !== 'string')) return res.status(400).json({ error: 'Invalid id' });
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const owned = await getUserBusinessIds(userId);
+    if (businessIds.some(id => !owned.includes(id as string))) return res.status(403).json({ error: 'Forbidden' });
+    for (const [model, ids] of idsByModel) {
+      const rows: Array<{ linked_business: string | null }> = await (prisma as any)[model].findMany({
+        where: { id: { in: ids } }, select: { linked_business: true },
+      });
+      // Missing ids are left to the handler (it 404s); a row of another tenant looks the same.
+      if (rows.some(r => !r.linked_business || !owned.includes(r.linked_business))) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+    }
+  } catch (err) {
+    return next(err);
+  }
+  next();
+}
+
+// invokeLLM is a general LLM proxy: cap each user's calls (paid per token).
+const invokeLLMLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: req => isAdminKeyRequest(req),
+  keyGenerator: req => getUserId(req) ?? 'anonymous', // the /api gate guarantees a user here
+  message: { error: 'Too many AI requests, please try again later' },
+});
+router.post('/invokeLLM', invokeLLMLimiter);
+
 // POST /api/functions/:name
-router.post('/:name', requireBusinessAccess, (req: Request<{ name: string }>, res: Response) => {
+router.post('/:name', requireBusinessAccess, requireFunctionAccess, (req: Request<{ name: string }>, res: Response) => {
   const handler = FUNCTION_MAP[req.params.name];
   if (!handler) {
     return res.status(404).json({ error: `Unknown function: ${req.params.name}` });

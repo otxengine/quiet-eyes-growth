@@ -64,8 +64,9 @@ router.post('/', async (req: Request, res: Response) => {
 
     // 2. Update AIOutput if linked
     if (aiOutputId) {
-      await prisma.aIOutput.update({
-        where: { id: aiOutputId },
+      // Scoped to the (ownership-checked) business: the id alone could name another tenant's row.
+      await prisma.aIOutput.updateMany({
+        where: { id: aiOutputId, linked_business: businessProfileId },
         data: {
           feedback_score: numScore,
           outcome_status: numScore > 0 ? 'accepted' : numScore < 0 ? 'rejected' : 'acknowledged',
