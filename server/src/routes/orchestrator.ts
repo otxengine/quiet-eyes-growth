@@ -19,9 +19,11 @@ import { recordOutcome, getOutcomeSummary } from '../services/learning/OutcomeTr
 import { prisma } from '../db';
 import { createLogger } from '../infra/logger';
 import { nanoid } from 'nanoid';
+import { requireAdminKey } from '../middleware/businessAccess';
 
 const logger = createLogger('OrchestratorRoute');
 const router = Router();
+router.use(requireAdminKey); // admin panel only (adminFetch with the admin key); no tenant UI calls this router
 
 // ─── POST /api/orchestrator/run ───────────────────────────────────────────────
 

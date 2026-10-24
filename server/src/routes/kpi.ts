@@ -12,9 +12,11 @@
 import { Router, Request, Response } from 'express';
 import { computeFunnelKPIs, computePipelineVelocity, computeTenantKPIs, computeAnalysisObservability, computeAboutMetrics, computeCompetitorDiscoveryMetrics, computeUrlEnrichmentMetrics } from '../services/metrics/KPIService';
 import { createLogger } from '../infra/logger';
+import { requireAdminKey } from '../middleware/businessAccess';
 
 const logger = createLogger('KPIRoute');
 const router = Router();
+router.use(requireAdminKey); // admin panel only (adminFetch with the admin key); no tenant UI calls this router
 
 router.get('/:businessId', async (req: Request, res: Response) => {
   const businessId = String(req.params.businessId);

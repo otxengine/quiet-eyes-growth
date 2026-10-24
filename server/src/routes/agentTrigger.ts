@@ -39,6 +39,7 @@ import { runAgentForAll } from '../scheduler';
 import { collectReviews } from './functions/collectReviews';
 import { discoverCompetitorUrls } from './functions/discoverCompetitorUrls';
 import { enrichCompetitorUrlsScheduled } from './functions/enrichCompetitorUrls';
+import { requireAdminKey, requireOwnsBusinessFields } from '../middleware/businessAccess';
 
 // Rate limit: 10 minutes per business+agent pair (in-memory)
 const lastRun: Map<string, number> = new Map();
@@ -131,7 +132,7 @@ const router = Router();
 // POST /api/agents/trigger/discover-competitor-urls
 // Global trigger — runs discoverCompetitorUrls for all businesses (KAN-160).
 // Body: { force?: boolean } — KAN-222: force allows high-confidence replace of a manually-set URL.
-router.post('/discover-competitor-urls', async (req: Request, res: Response) => {
+router.post('/discover-competitor-urls', requireAdminKey, async (req: Request, res: Response) => {
   const key = 'global:discoverCompetitorUrls';
   const now = Date.now();
   if ((now - (lastRun.get(key) ?? 0)) < COOLDOWN_MS) {
@@ -147,7 +148,7 @@ router.post('/discover-competitor-urls', async (req: Request, res: Response) => 
 // POST /api/agents/trigger/enrich-competitor-urls
 // Global trigger — runs enrichCompetitorUrlsScheduled for all businesses (KAN-221).
 // Body: { force?: boolean } — bypasses the staleness filter (never overwrites, per AC5).
-router.post('/enrich-competitor-urls', async (req: Request, res: Response) => {
+router.post('/enrich-competitor-urls', requireAdminKey, async (req: Request, res: Response) => {
   const key = 'global:enrichCompetitorUrlsScheduled';
   const now = Date.now();
   if ((now - (lastRun.get(key) ?? 0)) < COOLDOWN_MS) {
@@ -162,7 +163,7 @@ router.post('/enrich-competitor-urls', async (req: Request, res: Response) => {
 
 // POST /api/agents/trigger/collect-reviews
 // Global trigger — runs collectReviews (+ background competitor review backfill) for all businesses.
-router.post('/collect-reviews', async (_req: Request, res: Response) => {
+router.post('/collect-reviews', requireAdminKey, async (_req: Request, res: Response) => {
   const key = 'global:collectReviews';
   const now = Date.now();
   if ((now - (lastRun.get(key) ?? 0)) < COOLDOWN_MS) {
@@ -177,7 +178,7 @@ router.post('/collect-reviews', async (_req: Request, res: Response) => {
 
 // POST /api/agents/trigger
 // Body: { agentName: string, businessProfileId: string }
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requireOwnsBusinessFields, async (req: Request, res: Response) => {
   const { agentName, businessProfileId } = req.body as {
     agentName?: string;
     businessProfileId?: string;

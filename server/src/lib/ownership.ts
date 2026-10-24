@@ -64,11 +64,17 @@ export async function getUserBusinessIds(userId: string): Promise<string[]> {
     );
     for (const m of memberships) {
       if (m.role === 'manager' && m.branch_ids) {
-        try {
-          const branchIds: string[] = JSON.parse(m.branch_ids);
-          branchIds.forEach(id => ids.add(id));
-          continue;
-        } catch { /* malformed branch_ids — fall through to full-org access */ }
+        let branchIds: unknown = null;
+        try { branchIds = JSON.parse(m.branch_ids); } catch { /* malformed: no branches (fail closed) */ }
+        if (Array.isArray(branchIds) && branchIds.length) {
+          // branch_ids is whatever the inviter sent, so only keep branches this org really owns.
+          const own = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id FROM business_profiles WHERE organization_id = $1 AND id = ANY($2::text[])`,
+            m.org_id, branchIds.map(String),
+          );
+          own.forEach(b => ids.add(b.id));
+        }
+        continue;
       }
       const branches = await prisma.$queryRawUnsafe<any[]>(
         `SELECT id FROM business_profiles WHERE organization_id = $1`,

@@ -5,12 +5,21 @@ import { getSectorProfile } from '../lib/businessProfile';
 import { resolveTopicSet } from '../lib/reviewTopicPacks';
 import { downloadFromS3 } from '../lib/s3';
 import { tryDecryptToken } from '../lib/crypto';
-import { requireOwnsBusiness } from '../middleware/businessAccess';
+import { requireOwnsBusiness, requireOwnsBusinessFields, requireOwnsRecord } from '../middleware/businessAccess';
 import FormData from 'form-data';
 import fetch from 'node-fetch';
 import { randomUUID } from 'crypto';
 
 const router = Router();
+
+// Every businessProfileId in the query/body must be the caller's, and comment and
+// review ids must belong to one of the caller's businesses.
+router.use(requireOwnsBusinessFields);
+const ownsComment = requireOwnsRecord(async id =>
+  (await prisma.$queryRawUnsafe<Array<{ linked_business: string }>>(
+    `SELECT linked_business FROM social_comments WHERE id = $1`, id))[0]?.linked_business);
+const ownsReview = requireOwnsRecord(async id =>
+  (await prisma.review.findUnique({ where: { id }, select: { linked_business: true } }))?.linked_business);
 
 /**
  * GET /api/social/media/:assetId
@@ -556,7 +565,7 @@ ${batch.map((c, idx) => `${idx + 1}. "${c.comment_text.substring(0, 120)}"`).joi
 //
 // Uses LLM to generate a suggested reply for a comment.
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/comments/:id/suggest-reply', async (req: Request, res: Response) => {
+router.post('/comments/:id/suggest-reply', ownsComment, async (req: Request, res: Response) => {
   const commentId = req.params.id as string;
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
@@ -608,7 +617,7 @@ ${comment.post_message ? `הפוסט: "${comment.post_message}"` : ''}
 // Posts a reply to the comment via Facebook/Instagram Graph API.
 // Body: { businessProfileId, replyText }
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/comments/:id/reply', async (req: Request, res: Response) => {
+router.post('/comments/:id/reply', ownsComment, async (req: Request, res: Response) => {
   const commentId = req.params.id as string;
   const { businessProfileId, replyText } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
@@ -673,7 +682,7 @@ router.post('/comments/:id/reply', async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // PATCH /api/social/comments/:id/dismiss
 // ─────────────────────────────────────────────────────────────────────────────
-router.patch('/comments/:id/dismiss', async (req: Request, res: Response) => {
+router.patch('/comments/:id/dismiss', ownsComment, async (req: Request, res: Response) => {
   const commentId = req.params.id as string;
   await prisma.$executeRawUnsafe(
     `UPDATE social_comments SET is_dismissed = true WHERE id = $1`, commentId,
@@ -688,7 +697,7 @@ router.patch('/comments/:id/dismiss', async (req: Request, res: Response) => {
 // then removes it from the local DB.
 // Body: { businessProfileId }
 // ─────────────────────────────────────────────────────────────────────────────
-router.delete('/comments/:id', async (req: Request, res: Response) => {
+router.delete('/comments/:id', ownsComment, async (req: Request, res: Response) => {
   const commentId = req.params.id as string;
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
@@ -743,7 +752,7 @@ router.delete('/comments/:id', async (req: Request, res: Response) => {
 // POST /api/social/reviews/:id/reply
 // Body: { businessProfileId, replyText }
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/reviews/:id/reply', requireOwnsBusiness(req => req.body?.businessProfileId), async (req: Request, res: Response) => {
+router.post('/reviews/:id/reply', requireOwnsBusiness(req => req.body?.businessProfileId), ownsReview, async (req: Request, res: Response) => {
   const reviewId = req.params.id as string;
   const { businessProfileId, replyText } = req.body;
   if (!businessProfileId || !replyText) {
@@ -848,7 +857,7 @@ const TONE_CLOSE: Record<string, string> = {
   technical:    'precise — state what was checked or fixed and offer a direct follow-up',
 };
 
-router.post('/reviews/:id/suggest-reply', async (req: Request, res: Response) => {
+router.post('/reviews/:id/suggest-reply', ownsReview, async (req: Request, res: Response) => {
   const reviewId = req.params.id as string;
   const { businessProfileId } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });

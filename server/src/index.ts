@@ -46,6 +46,8 @@ import metaAuthRouter from './routes/meta/auth';
 import metaWebhookRouter from './routes/meta/webhook';
 import dataforseoWebhookRouter from './routes/webhooks/dataforseo';
 import clerkWebhookRouter from './routes/webhooks/clerk';
+import { requireApiAuth } from './middleware/apiAuth';
+import { isAdminKeyRequest } from './middleware/auth';
 import conversationsRouter from './routes/conversations';
 import orchestratorRouter from './routes/orchestrator';
 import approvalsRouter from './routes/approvals';
@@ -140,19 +142,6 @@ app.get('/api/admin-verify', (req: any, res: any) => {
   return res.json({ ok: true });
 });
 
-// Media library uploads (images/video as base64) need a higher body limit than
-// the rest of the API — mounted before the global express.json() below so only
-// this path gets the larger limit; express.json() no-ops once req.body is parsed.
-app.use('/api/functions/uploadBusinessMedia', express.json({ limit: '50mb' }));
-
-// Capture raw body for Meta webhook signature verification.
-// Must be registered BEFORE express.json() so we get the unmodified Buffer.
-app.use(express.json({
-  verify: (req: any, _res, buf) => { req.rawBody = buf; },
-  limit: '20mb',
-}));
-app.use(express.urlencoded({ extended: true, limit: '20mb' }));
-
 // Only mount Clerk middleware when a real secret key is configured
 const clerkKey = process.env.CLERK_SECRET_KEY || '';
 const clerkPubKey = process.env.CLERK_PUBLISHABLE_KEY || '';
@@ -169,6 +158,24 @@ if (clerkEnabled) {
 } else {
   console.log('Clerk not configured — running in dev mode (all requests as dev-user)');
 }
+
+// Deny by default: every /api route registered below needs a signed-in user or the
+// admin key, except the short public list in middleware/apiAuth.ts. Mounted before
+// the body parsers so anonymous requests are refused before a 20 MB body is read.
+app.use('/api', requireApiAuth);
+
+// Media library uploads (images/video as base64) need a higher body limit than
+// the rest of the API — mounted before the global express.json() below so only
+// this path gets the larger limit; express.json() no-ops once req.body is parsed.
+app.use('/api/functions/uploadBusinessMedia', express.json({ limit: '50mb' }));
+
+// Capture raw body for Meta webhook signature verification.
+// Must be registered BEFORE express.json() so we get the unmodified Buffer.
+app.use(express.json({
+  verify: (req: any, _res, buf) => { req.rawBody = buf; },
+  limit: '20mb',
+}));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 {
   const { paddleEnabled, describeApiKey, describeWebhookSecret } = require('./lib/paddle');
@@ -217,9 +224,15 @@ app.get(['/healthz', '/api/healthz'], async (_req, res) => {
   }
 });
 
-app.get('/api/health', async (_req, res) => {
-  const summary = await getAgentStatusSummary();
-  res.json({ ok: summary.failed === 0 && summary.stale === 0, total: summary.total, failed: summary.failed, stale: summary.stale, agents: summary.agents });
+// Public for uptime checks, so per-agent rows (named <agent>:<businessId>) only go to the admin key.
+app.get('/api/health', async (req, res) => {
+  try {
+    const summary = await getAgentStatusSummary();
+    res.json({ ok: summary.failed === 0 && summary.stale === 0, total: summary.total, failed: summary.failed, stale: summary.stale,
+      ...(isAdminKeyRequest(req) && { agents: summary.agents }) });
+  } catch {
+    res.status(503).json({ ok: false });
+  }
 });
 
 
