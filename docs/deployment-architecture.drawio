@@ -1,0 +1,317 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="drawio" version="26.0.0">
+  <diagram name="Deployment (current)" id="deploy-current">
+    <mxGraphModel dx="1700" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="880" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Quiet Eyes · current deployment (as of 2026-10-15)" style="text;html=1;align=left;verticalAlign=middle;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="600" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="users" value="&lt;b&gt;Users&lt;/b&gt;&lt;br&gt;Israel · he-IL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="40" y="330" width="160" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cloudflare" value="&lt;b&gt;Cloudflare edge&lt;/b&gt;&lt;br&gt;(Render CDN)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="300" y="330" width="180" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="github" value="&lt;b&gt;GitHub&lt;/b&gt; otxengine/quiet-eyes-growth&lt;br&gt;push the-master-work-space → DEV_FE + DEV_BE&lt;br&gt;no CI gate (test.yml is untracked)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="700" y="40" width="300" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="render" value="Render · region oregon (us-west1)" style="swimlane;startSize=30;html=1;align=left;spacingLeft=10;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;swimlaneFillColor=#f7fbff;" vertex="1" parent="1">
+          <mxGeometry x="560" y="180" width="560" height="560" as="geometry" />
+        </mxCell>
+        <mxCell id="fe" value="&lt;b&gt;quiet-eyes-growth_DEV_FE&lt;/b&gt;&lt;br&gt;static site · Vite SPA&lt;br&gt;+ prerendered marketing pages" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="render">
+          <mxGeometry x="40" y="60" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="be" value="&lt;b&gt;quiet-eyes-growth_DEV_BE&lt;/b&gt;&lt;br&gt;Express + Prisma&lt;br&gt;+ ~15 node-cron jobs in-process&lt;br&gt;starter · 0.5 CPU / 512 MB · 1 instance&lt;br&gt;no health check path" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="render">
+          <mxGeometry x="40" y="220" width="220" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="orphan" value="&lt;b&gt;quiet-eyes-backend&lt;/b&gt; (branch master)&lt;br&gt;NOT suspended · last deploy build_failed&lt;br&gt;build runs prisma db push&lt;br&gt;--accept-data-loss" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;strokeWidth=2;fontSize=10;" vertex="1" parent="render">
+          <mxGeometry x="320" y="60" width="200" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="deno" value="&lt;b&gt;quiet-eyes-deno-agents&lt;/b&gt;&lt;br&gt;defined in render.yaml&lt;br&gt;never deployed" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#ffffff;strokeColor=#999999;fontColor=#808080;fontSize=11;" vertex="1" parent="render">
+          <mxGeometry x="40" y="440" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="suspended" value="&lt;b&gt;Suspended&lt;/b&gt;&lt;br&gt;quiet-eyes-frontend&lt;br&gt;Cortexi-backend · Cortexi-frontend" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#ffffff;strokeColor=#999999;fontColor=#808080;fontSize=11;" vertex="1" parent="render">
+          <mxGeometry x="320" y="440" width="200" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="supabase" value="Supabase · eu-west-1 (Ireland)" style="swimlane;startSize=30;html=1;fontStyle=1;fillColor=#d5e8d4;strokeColor=#82b366;swimlaneFillColor=#f6fbf5;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="230" width="260" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="pg" value="&lt;b&gt;Postgres 17&lt;/b&gt;&lt;br&gt;pgvector&lt;br&gt;no edge functions&lt;br&gt;no pg_cron" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="supabase">
+          <mxGeometry x="40" y="50" width="180" height="200" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ext" value="External SaaS" style="swimlane;startSize=30;html=1;fontStyle=1;fillColor=#f5f5f5;strokeColor=#666666;swimlaneFillColor=#fafafa;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="560" width="420" height="250" as="geometry" />
+        </mxCell>
+        <mxCell id="clerk" value="Clerk · auth (browser + BE)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="ext">
+          <mxGeometry x="20" y="40" width="180" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="stripe" value="Stripe · billing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="ext">
+          <mxGeometry x="220" y="40" width="180" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="resend" value="Resend · email" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="ext">
+          <mxGeometry x="20" y="90" width="180" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="oauth" value="Meta / Google OAuth" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="ext">
+          <mxGeometry x="220" y="90" width="180" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="llm" value="LLMs: Anthropic · OpenAI · Gemini · OpenRouter · FAL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="ext">
+          <mxGeometry x="20" y="140" width="380" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="data" value="Data: Places · SerpAPI · Tavily · Apify · DataForSEO · SearchAPI · Eventbrite" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="ext">
+          <mxGeometry x="20" y="190" width="380" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="risks" value="&lt;b&gt;Risks&lt;/b&gt;&lt;br&gt;1. quiet-eyes-backend auto-deploys &lt;i&gt;master&lt;/i&gt; and its build runs prisma db push --accept-data-loss. Only a missing DATABASE_URL stops it.&lt;br&gt;2. BE in Oregon, DB in Ireland, users in Israel: every query crosses the Atlantic.&lt;br&gt;3. No CI gate, no BE health check, and /api/health always reports ok:false.&lt;br&gt;4. Web traffic and every cron job share one 512 MB instance." style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="40" y="480" width="480" height="200" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend" value="Legend" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;verticalAlign=top;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="720" width="480" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-live" value="" style="rounded=0;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="legend">
+          <mxGeometry x="10" y="30" width="30" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-live-t" value="Live service" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" vertex="1" parent="legend">
+          <mxGeometry x="50" y="28" width="180" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-edge" value="" style="rounded=0;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="legend">
+          <mxGeometry x="10" y="54" width="30" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-edge-t" value="Edge / CDN" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" vertex="1" parent="legend">
+          <mxGeometry x="50" y="52" width="180" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-db" value="" style="rounded=0;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="legend">
+          <mxGeometry x="10" y="78" width="30" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-db-t" value="Database" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" vertex="1" parent="legend">
+          <mxGeometry x="50" y="76" width="180" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-risk" value="" style="rounded=0;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="legend">
+          <mxGeometry x="250" y="30" width="30" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-risk-t" value="Risk" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" vertex="1" parent="legend">
+          <mxGeometry x="290" y="28" width="180" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-off" value="" style="rounded=0;html=1;dashed=1;fillColor=#ffffff;strokeColor=#999999;" vertex="1" parent="legend">
+          <mxGeometry x="250" y="54" width="30" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-off-t" value="Not running (suspended / never deployed)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" vertex="1" parent="legend">
+          <mxGeometry x="290" y="52" width="180" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-ext" value="" style="rounded=0;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="legend">
+          <mxGeometry x="250" y="78" width="30" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-ext-t" value="External / third party" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" vertex="1" parent="legend">
+          <mxGeometry x="290" y="76" width="180" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-users-cf" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;fontSize=11;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="users" target="cloudflare">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-cf-fe" value="assets" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;fontSize=11;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="cloudflare" target="fe">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-cf-be" value="/api" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;fontSize=11;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="cloudflare" target="be">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-gh-fe" value="the-master-work-space" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;fontSize=11;dashed=1;strokeColor=#82b366;fontColor=#4d7a3a;exitX=0.2667;exitY=1;exitDx=0;exitDy=0;entryX=0.8182;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="github" target="fe">
+          <mxGeometry x="-0.5" relative="1" as="geometry">
+            <mxPoint x="-75" y="0" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-gh-be" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;dashed=1;strokeColor=#82b366;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.1667;entryDx=0;entryDy=0;" edge="1" parent="1" source="github" target="be">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="850" y="420" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-gh-orphan" value="master (622 commits behind)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;fontSize=11;dashed=1;strokeColor=#b85450;fontColor=#b85450;exitX=0.8;exitY=1;exitDx=0;exitDy=0;entryX=0.3;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="github" target="orphan">
+          <mxGeometry x="-0.5" relative="1" as="geometry">
+            <mxPoint x="90" y="0" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-be-pg" value="Prisma · ~130–150 ms RTT per query" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;fontSize=11;strokeColor=#b85450;strokeWidth=2;fontColor=#b85450;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.9;entryDx=0;entryDy=0;" edge="1" parent="1" source="be" target="pg">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-orphan-pg" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;dashed=1;strokeColor=#b85450;exitX=1;exitY=0.5455;exitDx=0;exitDy=0;entryX=0;entryY=0.1;entryDx=0;entryDy=0;" edge="1" parent="1" source="orphan" target="pg">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-be-ext" value="API calls" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;fontSize=11;exitX=1;exitY=0.8333;exitDx=0;exitDy=0;entryX=0;entryY=0.24;entryDx=0;entryDy=0;" edge="1" parent="1" source="be" target="ext">
+          <mxGeometry x="-0.4" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1180" y="500" />
+              <mxPoint x="1180" y="620" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="Target (AWS Frankfurt)" id="deploy-target">
+    <mxGraphModel dx="1700" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1040" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="t-title" value="Quiet Eyes · target deployment on AWS eu-central-1 (Frankfurt)" style="text;html=1;align=left;verticalAlign=middle;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="700" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t-users" value="&lt;b&gt;Users&lt;/b&gt;&lt;br&gt;Israel · he-IL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="40" y="400" width="160" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t-cf" value="&lt;b&gt;CloudFront + AWS WAF&lt;/b&gt;&lt;br&gt;Shield Standard · ACM cert&lt;br&gt;your domain (Route 53)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="280" y="380" width="180" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t-gh" value="&lt;b&gt;GitHub Actions&lt;/b&gt; (OIDC, no stored AWS keys)&lt;br&gt;CI: tests · tsc · FE build · bundle scan&lt;br&gt;CD: arm64 image → ECR → prisma migrate deploy → ECS&lt;br&gt;FE: S3 sync + CloudFront invalidation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1250" y="30" width="300" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t-region" value="AWS eu-central-1 (Frankfurt) · prod account" style="swimlane;startSize=30;html=1;align=left;spacingLeft=10;fontStyle=1;fillColor=#f5f5f5;strokeColor=#666666;swimlaneFillColor=#fcfcfc;" vertex="1" parent="1">
+          <mxGeometry x="520" y="140" width="1040" height="700" as="geometry" />
+        </mxCell>
+        <mxCell id="t-s3web" value="&lt;b&gt;S3 · web&lt;/b&gt;&lt;br&gt;SPA + prerendered marketing · private (OAC)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="t-region">
+          <mxGeometry x="40" y="50" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t-s3media" value="&lt;b&gt;S3 · media&lt;/b&gt;&lt;br&gt;competitor images · private (OAC)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="t-region">
+          <mxGeometry x="300" y="50" width="220" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t-vpc" value="VPC · 2 AZs · tasks in public subnets (inbound from ALB only) · RDS in isolated subnets" style="swimlane;startSize=30;html=1;align=left;spacingLeft=10;fontSize=11;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;swimlaneFillColor=#f7fbff;" vertex="1" parent="t-region">
+          <mxGeometry x="20" y="130" width="700" height="380" as="geometry" />
+        </mxCell>
+        <mxCell id="t-alb" value="&lt;b&gt;ALB&lt;/b&gt;&lt;br&gt;accepts CloudFront only" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="t-vpc">
+          <mxGeometry x="30" y="140" width="150" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="t-api" value="&lt;b&gt;ECS Fargate · api&lt;/b&gt;&lt;br&gt;2 tasks (AZ-a, AZ-b) · arm64&lt;br&gt;0.5 vCPU / 1 GB · autoscale 2→4&lt;br&gt;/healthz · auto-rollback" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="t-vpc">
+          <mxGeometry x="260" y="60" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="t-worker" value="&lt;b&gt;ECS Fargate · worker&lt;/b&gt;&lt;br&gt;1 task · node-cron (ROLE=worker)&lt;br&gt;Postgres lock per job&lt;br&gt;stop-before-start deploys" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="t-vpc">
+          <mxGeometry x="260" y="240" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="t-rds" value="&lt;b&gt;RDS PostgreSQL 17&lt;/b&gt;&lt;br&gt;db.t4g.small&lt;br&gt;single-AZ (Multi-AZ later)&lt;br&gt;PITR 7 days" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="t-vpc">
+          <mxGeometry x="530" y="130" width="140" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t-ecr" value="&lt;b&gt;ECR&lt;/b&gt; · arm64 images&lt;br&gt;scan on push · immutable tags" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="t-region">
+          <mxGeometry x="760" y="150" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t-ssm" value="&lt;b&gt;SSM Parameter Store&lt;/b&gt;&lt;br&gt;~40 secrets (KMS) → task env" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="t-region">
+          <mxGeometry x="760" y="240" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t-ops" value="&lt;b&gt;CloudWatch&lt;/b&gt; logs (30 d) + alarms&lt;br&gt;CloudTrail · GuardDuty · Budgets" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="t-region">
+          <mxGeometry x="760" y="330" width="240" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t-ext" value="&lt;b&gt;External SaaS&lt;/b&gt;&lt;br&gt;Clerk · Stripe · Resend · Meta / Google OAuth&lt;br&gt;LLMs: Anthropic · OpenAI · Gemini · OpenRouter · FAL&lt;br&gt;Data: Places · SerpAPI · Tavily · Apify · DataForSEO · SearchAPI · Eventbrite" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="800" y="880" width="440" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="t-staging" value="&lt;b&gt;Staging account&lt;/b&gt;&lt;br&gt;same CDK stacks, scaled down&lt;br&gt;1 api · 1 worker · db.t4g.micro" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="540" y="880" width="220" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="t-supa" value="&lt;b&gt;Supabase eu-west-1&lt;/b&gt; (source)&lt;br&gt;read-only after cutover,&lt;br&gt;decommissioned with Render after 1 week" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#ffffff;strokeColor=#999999;fontColor=#808080;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1300" y="880" width="240" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t-notes" value="&lt;b&gt;Decisions&lt;/b&gt;&lt;br&gt;• Region: Frankfurt (~55 ms from Israel per API call; DB queries &amp;lt; 2 ms)&lt;br&gt;• Database: RDS, migrated from Supabase including all data&lt;br&gt;• Single-AZ RDS now, Multi-AZ later&lt;br&gt;• No NAT gateway: tasks get public IPs but accept traffic only from the ALB&lt;br&gt;• All infrastructure defined in AWS CDK (TypeScript)" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fontSize=11;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="40" y="560" width="440" height="150" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t-legend" value="Legend" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;verticalAlign=top;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="740" width="440" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="t-leg1" value="" style="rounded=0;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="t-legend">
+          <mxGeometry x="10" y="30" width="30" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="t-leg1t" value="Compute" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" vertex="1" parent="t-legend">
+          <mxGeometry x="50" y="28" width="160" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="t-leg2" value="" style="rounded=0;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="t-legend">
+          <mxGeometry x="10" y="54" width="30" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="t-leg2t" value="Edge / load balancing" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" vertex="1" parent="t-legend">
+          <mxGeometry x="50" y="52" width="160" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="t-leg3" value="" style="rounded=0;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="t-legend">
+          <mxGeometry x="10" y="78" width="30" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="t-leg3t" value="Data (RDS, S3)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" vertex="1" parent="t-legend">
+          <mxGeometry x="50" y="76" width="160" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="t-leg4" value="" style="rounded=0;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="t-legend">
+          <mxGeometry x="230" y="30" width="30" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="t-leg4t" value="Platform &amp;amp; security" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" vertex="1" parent="t-legend">
+          <mxGeometry x="270" y="28" width="160" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="t-leg5" value="" style="rounded=0;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="t-legend">
+          <mxGeometry x="230" y="54" width="30" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="t-leg5t" value="External / third party" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" vertex="1" parent="t-legend">
+          <mxGeometry x="270" y="52" width="160" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="t-leg6" value="" style="rounded=0;html=1;dashed=1;fillColor=#ffffff;strokeColor=#999999;" vertex="1" parent="t-legend">
+          <mxGeometry x="230" y="78" width="30" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="t-leg6t" value="Temporary / separate account" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" vertex="1" parent="t-legend">
+          <mxGeometry x="270" y="76" width="160" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t-e-users-cf" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;fontSize=11;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="t-users" target="t-cf">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t-e-cf-web" value="/*" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;fontSize=11;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="t-cf" target="t-s3web">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t-e-cf-media" value="/media/*" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;fontSize=11;exitX=0.85;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="t-cf" target="t-s3media">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="433" y="120" />
+              <mxPoint x="930" y="120" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t-e-cf-alb" value="/api/*" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;fontSize=11;exitX=1;exitY=0.5833;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="t-cf" target="t-alb">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t-e-alb-api" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="t-alb" target="t-api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t-e-api-rds" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeColor=#82b366;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="1" source="t-api" target="t-rds">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t-e-worker-rds" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeColor=#82b366;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" edge="1" parent="1" source="t-worker" target="t-rds">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t-e-worker-ext" value="outbound HTTPS (api + worker)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;fontSize=11;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.2273;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="t-worker" target="t-ext">
+          <mxGeometry x="0.3" relative="1" as="geometry">
+            <mxPoint x="95" y="0" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t-e-gh-ecr" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;dashed=1;strokeColor=#82b366;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="t-gh" target="t-ecr">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t-e-supa-rds" value="one-time pg_dump → pg_restore (1.5 GB)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;fontSize=11;dashed=1;strokeColor=#d79b00;fontColor=#9c6500;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="t-supa" target="t-rds">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1420" y="700" />
+              <mxPoint x="1140" y="700" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

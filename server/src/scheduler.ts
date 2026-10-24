@@ -14,8 +14,6 @@
  *                    detection + social + insight generators (+15min delayed)
  *                    (includes local events + calendar events — each self-throttles to a 3-day cadence)
  *  - Sunday 20:00:   content calendar + sector benchmark + weekly email digest (+10min delayed)
- *  - Every 6h:       OTX competitor snapshot diff (OTX_COMPETITOR_SNAPSHOT_DISABLED kill switch)
- *  - Every 10min:    OTX sync bridge (OTX_SYNC_BRIDGE_DISABLED kill switch)
  *  - Every 30min:    execute queued semi_auto actions
  *  - Every 15min:    DataForSEO review-task reconciliation (DATAFORSEO_RECONCILE_DISABLED
  *                    kill switch) + a separate keep-alive heartbeat log
@@ -78,8 +76,6 @@ import { demandGapEngine } from './routes/functions/demandGapEngine';
 import { microMomentDetector } from './routes/functions/microMomentDetector';
 import { sectorBenchmark } from './routes/functions/sectorBenchmark';
 import { intentClassification } from './routes/functions/intentClassification';
-import { collectOTXCompetitorChanges } from './routes/functions/collectOTXCompetitorChanges';
-import { runOTXSyncBridge } from './routes/functions/runOTXSyncBridge';
 import { collectOwnSocialProfileAndPosts } from './routes/functions/collectOwnSocialProfileAndPosts';
 import { collectCompetitorSocialProfileAndPosts } from './routes/functions/collectCompetitorSocialProfileAndPosts';
 import { collectOwnBusinessInfo } from './routes/functions/collectOwnBusinessInfo';
@@ -233,8 +229,6 @@ export function startScheduler() {
     runAgentForAll('SmartLeadNurture', smartLeadNurture);
     runAgentForAll('DeliveryPlatformIntel', detectDeliveryChanges);
     // ── Competitor intelligence pipeline (ordered: snapshot → changes → social → intel → moves) ──
-    // Dual change pipeline: DetectCompetitorChanges (Express/Tavily) + collectOTXCompetitorChanges (OTX/6h cron)
-    // both write to market_signals[category='competitor_move']. runOTXSyncBridge (every 10min) bridges the OTX leg.
     // DetectCompetitorChanges no longer uses last_scanned as its guard (race with BatchSnapshotCompetitors);
     // it relies on the 48h MarketSignal dedup instead.
     runAgentForAll('BatchSnapshotCompetitors', batchSnapshotCompetitors); // takes fresh snapshots + writes last_scanned
@@ -318,24 +312,6 @@ export function startScheduler() {
     runAgentForAll('DiscoverCompetitorUrls', discoverCompetitorUrls);
     runAgentForAll('EnrichCompetitorUrls', enrichCompetitorUrlsScheduled);
   });
-
-  // ── Every 6 hours: OTX competitor snapshot diff (KAN-45) ─────────────────────
-  // Kill switch: set OTX_COMPETITOR_SNAPSHOT_DISABLED=true in Render env to disable without redeploy.
-  if (process.env.OTX_COMPETITOR_SNAPSHOT_DISABLED !== 'true') {
-    cron.schedule('0 */6 * * *', () => {
-      collectOTXCompetitorChanges()
-        .catch(err => logger.error('collectOTXCompetitorChanges failed', { error: err.message }));
-    });
-  }
-
-  // ── Every 10 min: OTX sync bridge — OTX tables → QE Prisma entities (KAN-46) ─
-  // Kill switch: set OTX_SYNC_BRIDGE_DISABLED=true in Render env to disable without redeploy.
-  if (process.env.OTX_SYNC_BRIDGE_DISABLED !== 'true') {
-    cron.schedule('*/10 * * * *', () => {
-      runOTXSyncBridge()
-        .catch(err => logger.error('runOTXSyncBridge failed', { error: err.message }));
-    });
-  }
 
   // ── Every 30 min: semi_auto actions ───────────────────────────
   cron.schedule('*/30 * * * *', () => {

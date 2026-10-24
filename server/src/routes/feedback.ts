@@ -15,8 +15,11 @@ import { incrementalMemoryUpdate } from '../services/learning/BusinessMemoryEngi
 import { updateWeightFromFeedback } from '../services/learning/PolicyWeightUpdater';
 import { bus } from '../events/EventBus';
 import { nanoid } from 'nanoid';
+import { ownsBusinessParam, requireOwnsBusinessFields } from '../middleware/businessAccess';
 
 const router = Router();
+router.use(requireOwnsBusinessFields);
+router.param('businessProfileId', ownsBusinessParam);
 
 // POST /api/feedback
 router.post('/', async (req: Request, res: Response) => {

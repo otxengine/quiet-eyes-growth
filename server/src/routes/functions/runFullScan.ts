@@ -197,7 +197,7 @@ export async function runFullScan(req: Request, res: Response) {
     ['generateMorningBriefing',     generateMorningBriefing],
   ];
 
-  // Run the first 3 critical agents synchronously (fast, needed for UI refresh)
+  // The first 3 critical agents always run (cleanup + the collectors the UI refreshes on)
   const immediate: Array<[string, Function]> = pipeline.slice(0, 3);
   // Skip agents with weight < 0.3 — they've been consistently wrong for this business
   const deferred: Array<[string, Function]> = pipeline.slice(3).filter(([name]) => {
@@ -209,22 +209,16 @@ export async function runFullScan(req: Request, res: Response) {
     return true;
   });
 
-  for (const [name, fn] of immediate) {
-    try {
-      results[name] = await callHandler(fn, businessProfileId, { force });
-    } catch (e: any) {
-      results[name] = { error: e.message };
-    }
-  }
+  // Respond before any agent runs — even the first 3 can take up to 120s each, past
+  // CloudFront's 120s origin timeout. ScanOverlay polls automation_logs for the
+  // collectWebSignals/collectSocialSignals rows written since started_at.
+  res.json({ success: true, started: true, started_at: startTime, profile_name: profile?.name });
 
-  // Respond to the client immediately — do NOT make the HTTP call wait for all 20 agents
-  res.json({ success: true, profile_name: profile?.name, results });
-
-  // Run remaining agents in background (fire-and-forget)
+  // Run the whole pipeline in background (fire-and-forget)
   (async () => {
     // Write cooldown record first so 24h gate holds even if pipeline crashes mid-run
     await writeAutomationLog('runFullScan', businessProfileId, startTime, pipeline.length);
-    for (const [name, fn] of deferred) {
+    for (const [name, fn] of [...immediate, ...deferred]) {
       try {
         results[name] = await callHandler(fn, businessProfileId, { force });
       } catch (e: any) {

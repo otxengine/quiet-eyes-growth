@@ -86,7 +86,7 @@ function makeRawSignal(overrides: any = {}) {
     title:        null,
     source_url:   null,
     keywords:     null,
-    content_hash: `hash_${Math.random().toString(36).slice(2)}`,
+    checksum_hash: `hash_${Math.random().toString(36).slice(2)}`,
     created_date: new Date(),
     ...overrides,
   };
@@ -207,7 +207,7 @@ describe('SignalProcessor — deduplication', () => {
     const sharedId = 'existing_sig_001';
 
     (signalRepository.getRecentRaw as jest.Mock).mockResolvedValue([
-      makeRawSignal({ id: sharedId, content_hash: sharedId, summary: 'דחוף ביקוש מסעדה תל אביב' }),
+      makeRawSignal({ id: sharedId, checksum_hash: sharedId, summary: 'דחוף ביקוש מסעדה תל אביב' }),
     ]);
 
     // Pre-populate context with this signal as already classified
@@ -225,8 +225,8 @@ describe('SignalProcessor — deduplication', () => {
   test('within single run: duplicate hash in same batch is only classified once', async () => {
     const hash = 'same_hash_for_both';
     (signalRepository.getRecentRaw as jest.Mock).mockResolvedValue([
-      makeRawSignal({ content_hash: hash, summary: 'דחוף מסעדה תל אביב ביקוש עכשיו' }),
-      makeRawSignal({ content_hash: hash, summary: 'דחוף מסעדה תל אביב ביקוש עכשיו' }),
+      makeRawSignal({ checksum_hash: hash, summary: 'דחוף מסעדה תל אביב ביקוש עכשיו' }),
+      makeRawSignal({ checksum_hash: hash, summary: 'דחוף מסעדה תל אביב ביקוש עכשיו' }),
     ]);
 
     const ctx    = makeCtx();

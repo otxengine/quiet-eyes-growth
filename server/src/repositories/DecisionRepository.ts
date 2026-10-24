@@ -16,29 +16,27 @@ const logger = createLogger('DecisionRepository');
 export class DecisionRepository {
   async saveFusedInsight(insight: FusedInsight): Promise<void> {
     try {
+      // Real otx_fused_insights columns (index.ts startup DDL); explanation lives on the decision's rationale.
       await prisma.$executeRawUnsafe(
         `INSERT INTO otx_fused_insights
-          (id, business_id, trace_id, top_opportunity, urgency, confidence,
-           expected_impact, explanation, contributing_signal_ids,
-           raw_signals_count, trends_count, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6::numeric,$7,$8,$9::jsonb,$10::int,$11::int,$12::timestamptz)
+          (id, business_id, trace_id, urgency, confidence, summary,
+           key_signals, recommended_actions, predicted_impact, created_at)
+         VALUES ($1,$2,$3,$4,$5::numeric,$6,$7::jsonb,$8::jsonb,$9,$10::timestamptz)
          ON CONFLICT (id) DO NOTHING`,
         insight.id,
         insight.business_id,
-        insight.trace_id,
-        insight.top_opportunity,
+        insight.trace_id || null,
         insight.urgency,
         insight.confidence,
-        insight.expected_impact,
-        insight.explanation,
-        JSON.stringify(insight.contributing_signals),
-        insight.raw_signals_count,
-        insight.trends_count,
+        insight.top_summary || insight.top_opportunity || '',
+        JSON.stringify(insight.contributing_items ?? []),
+        JSON.stringify(insight.suggested_action_types ?? []),
+        insight.expected_business_impact || insight.expected_impact || null,
         insight.created_at,
       );
     } catch (e: any) {
       if (!e.message?.includes('does not exist')) throw e;
-      // Table not yet migrated — skip silently
+      logger.warn('saveFusedInsight skipped', { id: insight.id, error: e.message });
     }
   }
 
@@ -68,9 +66,9 @@ export class DecisionRepository {
         `INSERT INTO otx_decisions
           (id, business_id, insight_id, trace_id, action_type, urgency, rationale,
            final_score, roi_score, confidence_score, score_breakdown,
-           execution_mode, tags, context_snapshot, expires_at)
+           execution_mode, tags, context_snapshot, expires_at, decision_type, title, score)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8::numeric,$9::numeric,$10::numeric,$11::jsonb,
-                 $12,$13::text[],$14,$15::timestamptz)
+                 $12,$13::jsonb,$14,$15::timestamptz,$5,$16,$8::numeric)
          ON CONFLICT (id) DO NOTHING`,
         decision.id,
         decision.business_id,
@@ -84,12 +82,14 @@ export class DecisionRepository {
         decision.confidence ?? null,
         JSON.stringify(decision.score_breakdown ?? {}),
         decision.execution_mode ?? 'suggest',
-        decision.tags ?? [],
+        JSON.stringify(decision.tags ?? []),
         decision.context_snapshot ?? null,
         decision.expires_at ?? null,
+        decision.title || rationale,
       );
     } catch (e: any) {
       if (!e.message?.includes('does not exist')) throw e;
+      logger.warn('saveDecision skipped', { id: decision.id, error: e.message });
     }
   }
 
@@ -142,6 +142,7 @@ export class DecisionRepository {
       );
     } catch (e: any) {
       if (!e.message?.includes('does not exist')) throw e;
+      logger.warn('saveRecommendation skipped', { id: rec.id, error: e.message });
     }
   }
 
@@ -180,6 +181,7 @@ export class DecisionRepository {
       );
     } catch (e: any) {
       if (!e.message?.includes('does not exist')) throw e;
+      logger.warn('saveTask skipped', { id: task.id, error: e.message });
     }
   }
 
@@ -193,11 +195,13 @@ export class DecisionRepository {
         `UPDATE otx_execution_tasks
          SET status = $2,
              completed_at = NOW(),
-             error = $3
+             error_message = $3
          WHERE id = $1`,
         id, status, error ?? null,
       );
-    } catch {}
+    } catch (e: any) {
+      logger.warn('updateTaskStatus failed', { id, status, error: e.message });
+    }
   }
 
   // ─── Pipeline run log ─────────────────────────────────────────────────────────

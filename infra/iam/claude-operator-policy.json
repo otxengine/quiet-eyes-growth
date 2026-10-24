@@ -1,0 +1,73 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DeployThroughCdkBootstrapRoles",
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": "arn:aws:iam::226635092863:role/cdk-hnb659fds-*"
+    },
+    {
+      "Sid": "ReadOnlyInspection",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:Describe*",
+        "cloudformation:List*",
+        "cloudformation:GetTemplate",
+        "ecs:Describe*",
+        "ecs:List*",
+        "elasticloadbalancing:Describe*",
+        "rds:Describe*",
+        "ec2:Describe*",
+        "cloudfront:Get*",
+        "cloudfront:List*",
+        "logs:Describe*",
+        "logs:FilterLogEvents",
+        "logs:GetLogEvents",
+        "logs:StartLiveTail",
+        "cloudwatch:GetMetricData",
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics",
+        "cloudwatch:DescribeAlarms",
+        "ssm:DescribeParameters",
+        "ce:GetCostAndUsage"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "OperateStagingTasksAndServices",
+      "Effect": "Allow",
+      "Action": ["ecs:RunTask", "ecs:StopTask", "ecs:UpdateService"],
+      "Resource": [
+        "arn:aws:ecs:eu-central-1:226635092863:task-definition/Qestaging*:*",
+        "arn:aws:ecs:eu-central-1:226635092863:task/Qe-staging-*/*",
+        "arn:aws:ecs:eu-central-1:226635092863:service/Qe-staging-*/*"
+      ]
+    },
+    {
+      "Sid": "PassStagingTaskRolesToEcs",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::226635092863:role/Qe-staging-*",
+      "Condition": { "StringEquals": { "iam:PassedToService": "ecs-tasks.amazonaws.com" } }
+    },
+    {
+      "Sid": "InvalidateCdn",
+      "Effect": "Allow",
+      "Action": "cloudfront:CreateInvalidation",
+      "Resource": "*"
+    },
+    {
+      "Sid": "NeverReadSecretValues",
+      "Effect": "Deny",
+      "Action": [
+        "secretsmanager:GetSecretValue",
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:GetParametersByPath",
+        "kms:Decrypt"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

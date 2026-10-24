@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { LONG_SCAN_TIMEOUT_MS } from '@/api/client';
 import { Loader2, Users, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { getLimits } from '@/lib/planConfig';
@@ -145,24 +144,25 @@ export default function OnboardingDiscoverCompetitors() {
     }
 
     // Deep-research scans for the just-approved competitors + the business's own
-    // reviews — fired in the background, NOT awaited: Insights doesn't read this
-    // data (only quick wins/alerts/signals from an earlier onboarding step), so
-    // there's nothing to gain by making the user wait here. The fetches keep
-    // running after navigation (client-side routing doesn't cancel in-flight
-    // requests); results show up next time the user opens the competitors page.
+    // reviews — fired, NOT awaited: Insights doesn't read this data (only quick
+    // wins/alerts/signals from an earlier onboarding step), so there's nothing to
+    // gain by making the user wait here. The server answers 202 right away and runs
+    // each scan in the background (BACKGROUND_FUNCTIONS in
+    // server/src/routes/functions/index.ts), so a failure here means the scan didn't
+    // start; results show up next time the user opens the competitors page.
     const bp = businessProfile.id;
-    const invoke = (fn, params, timeoutMs) =>
-      base44.functions.invoke(fn, params, timeoutMs).catch((err) => {
+    const invoke = (fn, params) =>
+      base44.functions.invoke(fn, params).catch((err) => {
         console.error(`${fn} failed:`, err);
         toast.error(`עדכון ברקע נכשל (${fn})`);
       });
 
-    invoke('collectCompetitorSocialPosts', { businessProfileId: bp, force: true }, LONG_SCAN_TIMEOUT_MS);
-    invoke('collectCompetitorSocialProfile', { businessProfileId: bp, force: true }, LONG_SCAN_TIMEOUT_MS);
-    invoke('collectCompetitorSocialStories', { businessProfileId: bp, force: true }, LONG_SCAN_TIMEOUT_MS);
-    invoke('detectCompetitorAds', { businessProfileId: bp, force: true, allCompetitors: true }, LONG_SCAN_TIMEOUT_MS);
-    invoke('collectReviews', { businessProfileId: bp, force: true, skipCompetitorTrigger: true }, LONG_SCAN_TIMEOUT_MS);
-    invoke('collectCompetitorReviews', { businessProfileId: bp }, LONG_SCAN_TIMEOUT_MS);
+    invoke('collectCompetitorSocialPosts', { businessProfileId: bp, force: true });
+    invoke('collectCompetitorSocialProfile', { businessProfileId: bp, force: true });
+    invoke('collectCompetitorSocialStories', { businessProfileId: bp, force: true });
+    invoke('detectCompetitorAds', { businessProfileId: bp, force: true, allCompetitors: true });
+    invoke('collectReviews', { businessProfileId: bp, force: true, skipCompetitorTrigger: true });
+    invoke('collectCompetitorReviews', { businessProfileId: bp });
 
     navigate('/onboarding/insights', { state });
   };

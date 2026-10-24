@@ -73,7 +73,6 @@ export default function CompetitorDetailCard({
   businessName,
   signals = [],
   businessProfileId,
-  otxBizId,
   intelChanges = [],
   onDelete,
   onDismissed,
@@ -308,7 +307,7 @@ export default function CompetitorDetailCard({
           <div className="flex flex-wrap gap-2 pt-1">
             <SilentBoundary>
               <Suspense fallback={null}>
-                <CompetitorSwotCard competitor={comp} businessName={businessName} otxBusinessId={otxBizId} />
+                <CompetitorSwotCard competitor={comp} businessName={businessName} />
               </Suspense>
             </SilentBoundary>
             <CompetitorStrategyCard competitor={comp} businessProfileId={businessProfileId} />

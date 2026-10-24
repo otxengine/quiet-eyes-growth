@@ -71,13 +71,15 @@ async function apiFetch(path, options = {}, timeoutMs = 30000) {
   const isJson = contentType.includes('application/json');
 
   if (!res.ok) {
+    // Seconds to wait on a 429 (express-rate-limit sends both); AppLayout's error page counts down from it
+    const retryAfter = Number(res.headers.get('retry-after') || res.headers.get('ratelimit-reset')) || undefined;
     if (isJson) {
       const err = await res.json().catch(() => ({ error: res.statusText }));
-      throw Object.assign(new Error(err.error || res.statusText), { status: res.status, data: err });
+      throw Object.assign(new Error(err.error || res.statusText), { status: res.status, data: err, retryAfter });
     }
     // Non-JSON error (e.g. HTML from Render while service is waking up)
     if (res.status === 503 || res.status === 502 || !isJson) {
-      throw Object.assign(new Error('השרת מתעורר, נסה שוב בעוד 30 שניות'), { status: res.status });
+      throw Object.assign(new Error('השרת מתעורר, נסה שוב בעוד 30 שניות'), { status: res.status, retryAfter });
     }
     throw Object.assign(new Error(res.statusText || 'Server error'), { status: res.status });
   }
@@ -173,6 +175,28 @@ const functions = {
     return { data: result };
   },
 };
+
+// Long scans (BACKGROUND_FUNCTIONS in server/src/routes/functions/index.ts, runFullScan)
+// answer right away with { started_at } and keep running on the server — CloudFront cuts
+// requests at 120s. Resolves with the first automation_logs row any of `names` wrote for
+// this business since started_at. The handler must log on the path being waited on, so
+// pass force:true to skip cadence guards that return without logging.
+// ponytail: matched by name + time, so a scheduler run of the same agent that finishes
+// first counts as this one — add a run id to automation_logs if that ever matters.
+export async function waitForAutomationLog(businessProfileId, names, since, timeoutMs = LONG_SCAN_TIMEOUT_MS) {
+  const filter = encodeURIComponent(JSON.stringify({
+    linked_business: businessProfileId,
+    automation_name: { in: [].concat(names) },
+    created_date: { gte: since },
+  }));
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 5000));
+    const [log] = await apiFetch(`/entities/AutomationLog?filter=${filter}&sort=created_date&limit=1`);
+    if (log) return log;
+  }
+  throw Object.assign(new Error('הסריקה עדיין רצה ברקע — הנתונים יתעדכנו כשתסתיים'), { status: 408 });
+}
 
 // ── integrations ──────────────────────────────────────────────────────────────
 

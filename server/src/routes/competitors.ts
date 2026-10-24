@@ -5,8 +5,12 @@ import { findPlaceId } from '../lib/googlePlaces';
 import { enrichCompetitorUrls } from './functions/enrichCompetitorUrls';
 import { computeThemeRollup, computeReviewTrend, REVIEWS_INSIGHTS_WINDOW_DAYS } from './functions/computeThemeRollup';
 import { computeEntityKpis } from '../lib/socialKpis';
+import { requireOwnsBusinessFields, requireOwnsRecord } from '../middleware/businessAccess';
 
 const router = Router();
+router.use(requireOwnsBusinessFields);
+const ownsCompetitor = requireOwnsRecord(async id =>
+  (await prisma.competitor.findUnique({ where: { id }, select: { linked_business: true } }))?.linked_business);
 
 function hasUrl(c: any): boolean {
   return !!(c.instagram_url || c.facebook_url || c.tiktok_url);
@@ -523,7 +527,9 @@ router.get('/proxy-image', async (req: Request, res: Response) => {
     return res.end(obj.body);
   }
 
-  const allowed = ALLOWED_CDN_HOSTS.some(h => parsed.hostname.endsWith(h));
+  // Exact host or a real subdomain: a bare endsWith() let e.g. 'attackerfbcdn.net' through.
+  const allowed = parsed.protocol === 'https:' &&
+    ALLOWED_CDN_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith(`.${h}`));
   if (!allowed) return res.status(403).json({ error: 'Host not allowed' });
 
   try {
@@ -545,7 +551,7 @@ router.get('/proxy-image', async (req: Request, res: Response) => {
 // auto-discovered competitors. Fill-if-empty only — never touches a URL the
 // caller already set (manual_url_fields / non-null values are left alone).
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/:id/enrich-urls', async (req: Request, res: Response) => {
+router.post('/:id/enrich-urls', ownsCompetitor, async (req: Request, res: Response) => {
   const competitorId = String(req.params.id);
   try {
     const competitor = await prisma.competitor.findUnique({ where: { id: competitorId } });

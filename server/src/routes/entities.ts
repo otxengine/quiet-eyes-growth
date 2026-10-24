@@ -286,6 +286,29 @@ const PLAN_COMPETITOR_LIMITS: Record<string, number> = {
   free_trial: 3, free: 3, starter: 5, growth: 10, pro: Infinity, enterprise: Infinity,
 };
 
+// Billing and tenancy fields: only the server (Paddle webhook, org routes) or the admin key sets these.
+const PROTECTED_FIELDS = ['subscription_plan', 'plan_id', 'subscription_status', 'stripe_customer_id', 'subscription_started_at', 'organization_id'];
+
+// Non-admin writes: drop protected fields, and every tenant key must point at the caller's own
+// data: a business they own (linked_business, business_id) or a competitor of one.
+async function rejectForeignWrite(req: Request, data: Record<string, any>): Promise<boolean> {
+  if (isAdminKeyRequest(req)) return false;
+  for (const f of PROTECTED_FIELDS) delete data[f];
+  const bizKeys = ['linked_business', 'business_id'].filter(f => f in data);
+  const competitorKeys = ['competitor_id', 'linked_competitor'].filter(f => data[f] != null); // null = own-business row
+  if (!bizKeys.length && !competitorKeys.length) return false;
+  const userId = getUserId(req);
+  if (!userId) return true;
+  const owned = await getUserBusinessIds(userId);
+  if (bizKeys.some(f => typeof data[f] !== 'string' || !owned.includes(data[f]))) return true;
+  for (const f of competitorKeys) {
+    if (typeof data[f] !== 'string') return true;
+    const c = await prisma.competitor.findUnique({ where: { id: data[f] }, select: { linked_business: true } });
+    if (!c?.linked_business || !owned.includes(c.linked_business)) return true;
+  }
+  return false;
+}
+
 // POST /api/entities/:entity — create
 router.post('/:entity', async (req: Request, res: Response) => {
   const model = getModel(String(req.params.entity));
@@ -294,7 +317,9 @@ router.post('/:entity', async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const data = { ...req.body };
-    if (userId && !data.created_by) data.created_by = userId;
+    // Only the admin key may create a row on someone else's behalf.
+    if (userId && (!data.created_by || !isAdminKeyRequest(req))) data.created_by = userId;
+    if (await rejectForeignWrite(req, data)) return res.status(403).json({ error: 'Forbidden' });
 
     // Manually-added competitors need no review gate — the user typed the name themselves —
     // so auto-approve them (auto-discovery creates rows via Prisma directly, bypassing this route).
@@ -381,6 +406,8 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
         if (!owned) return res.status(403).json({ error: 'Forbidden' });
       }
     }
+    if (!isAdminKeyRequest(req)) delete data.created_by; // only the admin key can reassign an owner
+    if (await rejectForeignWrite(req, data)) return res.status(403).json({ error: 'Forbidden' });
 
     try {
       record = await model.update({ where: { id: req.params.id }, data });
@@ -400,10 +427,19 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
         const safeEntries = Object.entries(data).filter(([k]) => SAFE_COLUMN.test(k));
         if (safeEntries.length === 0) throw new Error('No valid fields to update');
 
+        // Prisma binds JS strings as text, so cast each value to its real column type
+        // (timestamptz/int/bool/jsonb reject text with 42804).
+        const cols = await prisma.$queryRawUnsafe<{ column_name: string; udt_name: string }[]>(
+          `SELECT column_name, udt_name FROM information_schema.columns
+           WHERE table_schema = current_schema() AND table_name = $1`,
+          table,
+        );
+        const udt = new Map(cols.map(c => [c.column_name, c.udt_name]));
         const setClauses = safeEntries
-          .map(([k], i) => `"${k}" = $${i + 2}`)
+          .map(([k], i) => `"${k}" = $${i + 2}${udt.has(k) ? `::"${udt.get(k)}"` : ''}`)
           .join(', ');
-        const values = [req.params.id, ...safeEntries.map(([, v]) => v)];
+        const values = [req.params.id, ...safeEntries.map(([k, v]) =>
+          /^jsonb?$/.test(udt.get(k) ?? '') && v !== null && typeof v === 'object' ? JSON.stringify(v) : v)];
         await prisma.$executeRawUnsafe(
           `UPDATE "${table}" SET ${setClauses} WHERE id = $1`,
           ...values

@@ -258,7 +258,12 @@ export async function runPipeline(
       );
       stages.fuse = stageResult;
       fusedInsight = result;
-      if (fusedInsight) insightsCreated = 1;
+      if (fusedInsight) {
+        insightsCreated = 1;
+        // Decisions point at this id (insight_id); the explain route reads it back. Don't block decide on it.
+        await decisionRepository.saveFusedInsight(fusedInsight)
+          .catch((e: any) => logger.warn('saveFusedInsight failed', { businessId, error: e.message }));
+      }
     }
 
     // ── Stage: decide ──────────────────────────────────────────────────────────

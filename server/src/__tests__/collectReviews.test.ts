@@ -514,6 +514,7 @@ describe('collectReviews — KAN-18 AC2: rating_history snapshot inserted', () =
     reviewFindMany
       .mockResolvedValueOnce([])                       // dedup
       .mockResolvedValueOnce([{ rating: 5 }])          // rating_history allRatings
+      .mockResolvedValueOnce([{ rating: 5 }])          // own google_rating recompute (googleAdded > 0)
       .mockResolvedValueOnce([])                       // ProactiveAlert negatives
       .mockResolvedValueOnce([{ id: 'r1' }]);          // freshReviews (publishEvent)
 
@@ -547,6 +548,7 @@ describe('collectReviews — KAN-18 AC3: ProactiveAlert negative_review created'
     reviewFindMany
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ rating: 1 }])
+      .mockResolvedValueOnce([{ rating: 1 }])          // own google_rating recompute (googleAdded > 0)
       .mockResolvedValueOnce([{
         id: 'r1', sentiment: 'negative', rating: 1,
         reviewer_name: 'ישראל ישראלי', text: 'גרוע מאוד',
@@ -578,6 +580,7 @@ describe('collectReviews — KAN-18 AC3: ProactiveAlert negative_review created'
     reviewFindMany
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ rating: 1 }])
+      .mockResolvedValueOnce([{ rating: 1 }])          // own google_rating recompute (googleAdded > 0)
       .mockResolvedValueOnce([{ id: 'r1', sentiment: 'negative', rating: 1, reviewer_name: 'לקוח', text: 'גרוע' }])
       .mockResolvedValueOnce([{ id: 'r1' }]);
     alertFindFirst.mockResolvedValue({ id: 'existing-alert' });

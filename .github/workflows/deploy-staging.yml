@@ -1,0 +1,44 @@
+name: deploy
+# Every push to a deploy branch runs ci.yml, then deploys and smoke-tests staging.
+# Pushes to the-master-work-space then wait for a reviewer to approve the "production"
+# environment in GitHub before the same commit is deployed to prod.
+on:
+  push:
+    branches: [the-master-work-space, aws-staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  staging:
+    needs: checks
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: staging
+      stack: Qe-staging
+      role: arn:aws:iam::226635092863:role/qe-github-deploy-staging
+
+  production:
+    needs: staging
+    if: github.ref == 'refs/heads/the-master-work-space'
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: production
+      stack: Qe-prod
+      role: arn:aws:iam::226635092863:role/qe-github-deploy-production

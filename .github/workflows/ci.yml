@@ -1,0 +1,61 @@
+name: ci
+# PR gate. deploy-staging.yml calls it too, so nothing ships without passing it.
+# Third-party actions are pinned to commit SHAs (the repo is public; tags can be moved).
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    runs-on: ubuntu-24.04-arm
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build # prisma generate + tsc
+      - run: npx jest --ci
+
+  web-and-infra:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            infra/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+        env:
+          VITE_API_URL: /api
+      - name: No server-side keys in the frontend bundle
+        run: tr -d '\r' < scripts/scan-bundle-keys.sh | bash -s -- dist
+      - run: npm ci --no-audit --no-fund
+        working-directory: infra
+      - run: npx tsc -p .
+        working-directory: infra
+      - name: cdk synth (offline; lookups come from cdk.context.json)
+        run: npx cdk synth --quiet
+        working-directory: infra
+        env:
+          CDK_DEFAULT_ACCOUNT: '226635092863'
+          CDK_DEFAULT_REGION: eu-central-1
+          ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
+
+  docker:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: docker build -t qe-api:ci server

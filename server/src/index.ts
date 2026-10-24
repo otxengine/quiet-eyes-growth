@@ -46,6 +46,8 @@ import metaAuthRouter from './routes/meta/auth';
 import metaWebhookRouter from './routes/meta/webhook';
 import dataforseoWebhookRouter from './routes/webhooks/dataforseo';
 import clerkWebhookRouter from './routes/webhooks/clerk';
+import { requireApiAuth } from './middleware/apiAuth';
+import { isAdminKeyRequest } from './middleware/auth';
 import conversationsRouter from './routes/conversations';
 import orchestratorRouter from './routes/orchestrator';
 import approvalsRouter from './routes/approvals';
@@ -74,14 +76,20 @@ import { getAgentStatusSummary } from './lib/agentMonitor';
 const app = express();
 const PORT = process.env.PORT || 3002;
 
+// Behind CloudFront + ALB the client IP sits TRUST_PROXY_HOPS entries from the right of
+// X-Forwarded-For. Unset = Express default (no proxy trusted), as on Render.
+if (process.env.TRUST_PROXY_HOPS) app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS));
+
 // ── Security headers ───────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false })); // CSP handled by frontend
 
 // ── Rate limiting ──────────────────────────────────────────────────────────
-// General API: 300 requests per 15 minutes per IP
+// General API: 1500 requests per 15 minutes per IP. A page load makes 12-25 API calls, so the
+// old 300 locked out a normal user after about 15 page views. Abuse is also capped at the edge
+// (prod WAF: 2000 requests per 5 minutes per IP); expensive endpoints keep strictLimiter below.
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: 1500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },
@@ -134,19 +142,6 @@ app.get('/api/admin-verify', (req: any, res: any) => {
   return res.json({ ok: true });
 });
 
-// Media library uploads (images/video as base64) need a higher body limit than
-// the rest of the API — mounted before the global express.json() below so only
-// this path gets the larger limit; express.json() no-ops once req.body is parsed.
-app.use('/api/functions/uploadBusinessMedia', express.json({ limit: '50mb' }));
-
-// Capture raw body for Meta webhook signature verification.
-// Must be registered BEFORE express.json() so we get the unmodified Buffer.
-app.use(express.json({
-  verify: (req: any, _res, buf) => { req.rawBody = buf; },
-  limit: '20mb',
-}));
-app.use(express.urlencoded({ extended: true, limit: '20mb' }));
-
 // Only mount Clerk middleware when a real secret key is configured
 const clerkKey = process.env.CLERK_SECRET_KEY || '';
 const clerkPubKey = process.env.CLERK_PUBLISHABLE_KEY || '';
@@ -163,6 +158,24 @@ if (clerkEnabled) {
 } else {
   console.log('Clerk not configured — running in dev mode (all requests as dev-user)');
 }
+
+// Deny by default: every /api route registered below needs a signed-in user or the
+// admin key, except the short public list in middleware/apiAuth.ts. Mounted before
+// the body parsers so anonymous requests are refused before a 20 MB body is read.
+app.use('/api', requireApiAuth);
+
+// Media library uploads (images/video as base64) need a higher body limit than
+// the rest of the API — mounted before the global express.json() below so only
+// this path gets the larger limit; express.json() no-ops once req.body is parsed.
+app.use('/api/functions/uploadBusinessMedia', express.json({ limit: '50mb' }));
+
+// Capture raw body for Meta webhook signature verification.
+// Must be registered BEFORE express.json() so we get the unmodified Buffer.
+app.use(express.json({
+  verify: (req: any, _res, buf) => { req.rawBody = buf; },
+  limit: '20mb',
+}));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 {
   const { paddleEnabled, describeApiKey, describeWebhookSecret } = require('./lib/paddle');
@@ -200,9 +213,26 @@ app.use('/api/reactivation', reactivationRouter);
 app.use('/api/agency', agencyRouter);
 app.use('/api/billing', billingRouter);
 
-app.get('/api/health', async (_req, res) => {
-  const summary = await getAgentStatusSummary();
-  res.json({ ok: summary.failed === 0 && summary.stale === 0, total: summary.total, failed: summary.failed, stale: summary.stale, agents: summary.agents });
+// Liveness for the load balancer: process up and DB reachable. Returns no data.
+app.get(['/healthz', '/api/healthz'], async (_req, res) => {
+  try {
+    const { prisma: db } = await import('./db');
+    await db.$queryRaw`SELECT 1`;
+    res.json({ ok: true });
+  } catch {
+    res.status(503).json({ ok: false });
+  }
+});
+
+// Public for uptime checks, so per-agent rows (named <agent>:<businessId>) only go to the admin key.
+app.get('/api/health', async (req, res) => {
+  try {
+    const summary = await getAgentStatusSummary();
+    res.json({ ok: summary.failed === 0 && summary.stale === 0, total: summary.total, failed: summary.failed, stale: summary.stale,
+      ...(isAdminKeyRequest(req) && { agents: summary.agents }) });
+  } catch {
+    res.status(503).json({ ok: false });
+  }
 });
 
 
@@ -759,7 +789,14 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS action_type TEXT`);
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS urgency TEXT`);
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS rationale TEXT`);
-  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS final_score NUMERIC(5,3)`);
+  await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS final_score NUMERIC(8,3)`);
+  // final_score is 0–100; NUMERIC(5,3) overflows at 100 (22003). Guarded so the lock is only taken once.
+  await sql(`DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema()
+               AND table_name = 'otx_decisions' AND column_name = 'final_score' AND numeric_precision < 8) THEN
+      ALTER TABLE otx_decisions ALTER COLUMN final_score TYPE NUMERIC(8,3);
+    END IF;
+  END $$`);
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS execution_mode TEXT DEFAULT 'suggest'`);
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS fused_insight_id TEXT`);
   await sql(`ALTER TABLE otx_decisions ADD COLUMN IF NOT EXISTS approval_required BOOLEAN DEFAULT false`);
@@ -1474,6 +1511,10 @@ app.listen(PORT, async () => {
   if (!process.env.NODE_ENV) {
     console.warn('[WARN] NODE_ENV is not set. Set NODE_ENV=production on Render to enable security hardening and error sanitization.');
   }
+
+  // ROLE=web serves HTTP only; the worker service (ROLE=worker) runs background jobs.
+  // Unset = run everything in one process, as on Render.
+  if (process.env.ROLE === 'web') return;
 
   // ── Google token refresh scheduler — runs every 30 minutes ───────────────
   setInterval(() => {

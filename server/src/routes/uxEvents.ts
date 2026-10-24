@@ -1,10 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
+import { requireOwnsBusinessFields } from '../middleware/businessAccess';
 
 const router = Router();
 
 // POST /api/events/ux — receive UX tracking events from the frontend (KAN-88 AC5)
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requireOwnsBusinessFields, async (req: Request, res: Response) => {
   const { eventType, businessId, payload } = req.body;
   if (!eventType) return res.status(400).json({ error: 'eventType required' });
 

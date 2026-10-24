@@ -23,16 +23,31 @@ describe('normalizePostCreativeAnalysis', () => {
       style: 'צבעוני',
       has_cta: true,
       cta: 'הזמינו עכשיו',
+      hook: 'רק היום',
+      content_pillar: 'promotion',
+      audience_action_driver: 'urgency',
+      video_description: 'barista pours latte',
+      video_script: 'רק היום!',
+      video_content_type: 'UGC',
     });
     expect(result).toEqual({
       topic: 'מבצע קפה',
       has_offer: true,
       offer_details: '20% הנחה',
+      // offer_* breakdown is filled by the second-pass analyzeOfferBreakdown, never by this normalizer
+      offer_mechanic: null, offer_value_framing: null, offer_urgency: null,
+      offer_conditions: null, offer_redemption: null, offer_in_image: false, offer_audience_intent: null,
       visual_hooks: ['צבעים בהירים', 'תמונת מוצר'],
       text_hooks: ['רק היום'],
       style: 'צבעוני',
       has_cta: true,
       cta: 'הזמינו עכשיו',
+      hook: 'רק היום',
+      content_pillar: 'promotion',
+      audience_action_driver: 'urgency',
+      video_description: 'barista pours latte',
+      video_script: 'רק היום!',
+      video_content_type: 'UGC',
     });
   });
 
@@ -47,6 +62,14 @@ describe('normalizePostCreativeAnalysis', () => {
       style: '',
       has_cta: false,
       cta: null,
+      offer_mechanic: null, offer_value_framing: null, offer_urgency: null,
+      offer_conditions: null, offer_redemption: null, offer_in_image: false, offer_audience_intent: null,
+      hook: null,
+      content_pillar: null,
+      audience_action_driver: null,
+      video_description: null,
+      video_script: null,
+      video_content_type: null,
     });
   });
 

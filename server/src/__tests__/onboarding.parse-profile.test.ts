@@ -29,7 +29,7 @@ const llm        = invokeLLM        as jest.Mock;
 const autoLog    = writeAutomationLog as jest.Mock;
 
 // createLogger is called at module-load time by onboarding.ts AND by modules it
-// imports (e.g. syncBusinessToOTX), so find the 'Onboarding' call by name rather
+// imports, so find the 'Onboarding' call by name rather
 // than assuming it's the first — capture in beforeAll, before clearMocks wipes
 // mock.results between tests.
 let logWarn: jest.Mock;

@@ -14,8 +14,10 @@
 
 import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
+import { ownsBusinessParam } from '../middleware/businessAccess';
 
 const router = Router();
+router.param('businessProfileId', ownsBusinessParam);
 
 // GET /api/learning/dashboard/:businessProfileId
 router.get('/dashboard/:businessProfileId', async (req: Request, res: Response) => {

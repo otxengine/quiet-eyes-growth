@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Loader2, Shield, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
-import { otxSupabase } from '@/lib/otx-supabase';
 import ActionPopup from '@/components/ui/ActionPopup';
 import { swotTypeToPopupType } from '@/lib/popup_classifier';
 
@@ -13,13 +12,12 @@ const SWOT_COLS = [
   { key: 'threats',       label: 'סיכונים',    icon: '🔴', color: 'text-red-600'   },
 ];
 
-export default function CompetitorSwotCard({ competitor, businessName, otxBusinessId }) {
+export default function CompetitorSwotCard({ competitor, businessName }) {
   const [swot,          setSwot]          = useState(null);
   const [loading,       setLoading]       = useState(false);
   const [open,          setOpen]          = useState(false);
   const [showFull,      setShowFull]      = useState(false);
   const [popupSignal,   setPopupSignal]   = useState(null); // ITEM 5: ActionPopup
-  const [dataSource,    setDataSource]    = useState(null); // 'otx' | 'base44' | null
 
   // ITEM 5: convert SWOT action into synthetic signal → ActionPopup
   // swotKey is the SWOT column the action came from (strengths/weaknesses/opportunities/threats)
@@ -45,37 +43,11 @@ export default function CompetitorSwotCard({ competitor, businessName, otxBusine
     if (swot) return;
     setLoading(true);
     try {
-      // Fetch real competitor_changes from OTX Supabase
-      let otxChangesBlock = '';
-      if (otxBusinessId) {
-        try {
-          const { data: changes } = await otxSupabase
-            .from('competitor_changes')
-            .select('competitor_name, change_type, change_summary, detected_at_utc, confidence_score')
-            .eq('business_id', otxBusinessId)
-            .ilike('competitor_name', `%${competitor.name.split(' ')[0]}%`)
-            .order('detected_at_utc', { ascending: false })
-            .limit(5);
-
-          if (changes?.length) {
-            setDataSource('otx');
-            otxChangesBlock = `\nשינויים אחרונים שזוהו (נתונים אמיתיים):\n` +
-              changes.map(c => `• [${c.change_type}] ${c.change_summary || 'ללא פרטים'} (${c.detected_at_utc?.slice(0, 10) || '?'}, ביטחון: ${Math.round((c.confidence_score || 0) * 100)}%)`).join('\n');
-          } else {
-            setDataSource('base44');
-          }
-        } catch (_) {
-          setDataSource('base44');
-        }
-      } else {
-        setDataSource('base44');
-      }
-
       const res = await base44.integrations.Core.InvokeLLM({
         model: 'sonnet',
         prompt: `אתה אנליסט עסקי. בצע ניתוח SWOT מול המתחרה "${competitor.name}" מנקודת המבט של "${businessName}".
 נתונים: דירוג ${competitor.rating || '?'}/5, ביקורות ${competitor.review_count || '?'}, מגמה: ${competitor.trend_direction || '?'}
-חוזקות שלהם: ${competitor.strengths || '?'}, חולשות: ${competitor.weaknesses || '?'}, שירותים: ${competitor.services || '?'}${otxChangesBlock}
+חוזקות שלהם: ${competitor.strengths || '?'}, חולשות: ${competitor.weaknesses || '?'}, שירותים: ${competitor.services || '?'}
 
 ענה בפורמט JSON בלבד, ללא הסברים נוספים:
 {
@@ -128,16 +100,9 @@ export default function CompetitorSwotCard({ competitor, businessName, otxBusine
         <div className="flex items-center gap-1.5">
           <Shield className="w-3.5 h-3.5 text-foreground-secondary" />
           <span className="text-[11px] font-semibold text-[#333333]">ניתוח מעמיק — {competitor.name}</span>
-          {dataSource === 'otx' && (
-            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200">
-              נתונים אמיתיים
-            </span>
-          )}
-          {dataSource === 'base44' && (
-            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">
-              הערכה
-            </span>
-          )}
+          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">
+            הערכה
+          </span>
         </div>
         <ChevronUp className="w-3.5 h-3.5 text-foreground-muted/70" />
       </div>

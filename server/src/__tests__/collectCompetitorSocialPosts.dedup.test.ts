@@ -117,8 +117,8 @@ test('caption-less posts never hash-collide — both insert as separate rows wit
 
   const inserts = insertCalls();
   expect(inserts).toHaveLength(2);
-  // content_hash is the last positional param ($13) on every insert call.
+  // content_hash is positional param $13 (call[0] is the SQL; $14 video_url follows it).
   for (const call of inserts) {
-    expect(call[call.length - 1]).toBeNull();
+    expect(call[13]).toBeNull();
   }
 });

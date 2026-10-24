@@ -13,9 +13,11 @@ import {
   getRecommendationExplanation,
 } from '../services/explainability/ExplainabilityService';
 import { createLogger } from '../infra/logger';
+import { requireAdminKey } from '../middleware/businessAccess';
 
 const logger = createLogger('ExplainabilityRoute');
 const router = Router();
+router.use(requireAdminKey); // admin panel only (adminFetch with the admin key); no tenant UI calls this router
 
 // ─── GET /api/explain/decision/:decisionId ────────────────────────────────────
 

@@ -20,7 +20,6 @@ import { fetchSocialPageAbout } from '../lib/fetchSocialPageAbout';
 import { getUserId } from '../middleware/auth';
 import { requireBusinessAccess } from '../middleware/businessAccess';
 import { getOrCreateOrgForProfile } from '../lib/orgHelpers';
-import { syncBusinessToOTX } from '../lib/syncBusinessToOTX';
 
 const logger = createLogger('Onboarding');
 const router = Router();
@@ -378,8 +377,6 @@ router.post('/approve-about', async (req: Request, res: Response) => {
       .catch((err: any) => logger.warn(`approve-about: autoConfigOsint refresh failed for ${businessProfileId}: ${err.message}`));
     generateAgentMissions(businessProfileId)
       .catch((err: any) => logger.warn(`approve-about: generateMissions refresh failed for ${businessProfileId}: ${err.message}`));
-    syncBusinessToOTX(businessProfileId, approvedObj.business_name, approvedObj.sector_key, profile.city)
-      .catch((err: any) => logger.warn(`approve-about: syncBusinessToOTX failed for ${businessProfileId}: ${err.message}`));
 
     return res.json({ ok: true, about_status: 'approved', approved: approvedObj });
   } catch (err: any) {

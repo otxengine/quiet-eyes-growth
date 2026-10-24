@@ -6,13 +6,18 @@
 jest.mock('../db', () => ({
   prisma: {
     businessProfile: { findUnique: jest.fn() },
-    competitor: { count: jest.fn(), create: jest.fn() },
+    competitor: { count: jest.fn(), create: jest.fn(), findUnique: jest.fn() },
+    competitorPost: { create: jest.fn() },
   },
 }));
 
 jest.mock('../middleware/auth', () => ({
   getUserId: jest.fn().mockReturnValue('user_1'),
   isAdminKeyRequest: jest.fn().mockReturnValue(false),
+}));
+jest.mock('../lib/ownership', () => ({
+  getUserBusinessIds: jest.fn().mockResolvedValue(['biz_1']),
+  getUserEmail: jest.fn(),
 }));
 
 jest.mock('../lib/competitorRadiusCleanup', () => ({
@@ -27,10 +32,15 @@ jest.mock('../routes/functions/detectCompetitorAds', () => ({
   detectCompetitorAds: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../routes/functions/enrichCompetitorUrls', () => ({
+  enrichCompetitorUrls: jest.fn().mockResolvedValue(undefined),
+}));
+
 import router from '../routes/entities';
 import { prisma } from '../db';
 import { collectCompetitorSocialPosts } from '../routes/functions/collectCompetitorSocialPosts';
 import { detectCompetitorAds } from '../routes/functions/detectCompetitorAds';
+import { enrichCompetitorUrls } from '../routes/functions/enrichCompetitorUrls';
 
 function getPostHandler() {
   const layer = (router as any).stack.find(
@@ -90,6 +100,32 @@ describe('POST /entities/Competitor — plan limit counts active rows only', () 
   });
 });
 
+describe('POST /entities — tenant write check', () => {
+  it('refuses a row pointed at a business the caller does not own, before any scan starts', async () => {
+    jest.clearAllMocks();
+    const req = { params: { entity: 'Competitor' }, body: { linked_business: 'someone_elses_biz', name: 'X' } } as any;
+    const res = makeRes();
+
+    await getPostHandler()(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(prisma.competitor.create).not.toHaveBeenCalled();
+    expect(enrichCompetitorUrls).not.toHaveBeenCalled();
+  });
+
+  it('refuses a row attached to another tenant\'s competitor', async () => {
+    jest.clearAllMocks();
+    (prisma.competitor.findUnique as jest.Mock).mockResolvedValue({ linked_business: 'someone_elses_biz' });
+    const req = { params: { entity: 'CompetitorPost' }, body: { competitor_id: 'their_competitor', caption: 'x' } } as any;
+    const res = makeRes();
+
+    await getPostHandler()(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect((prisma as any).competitorPost.create).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /entities/Competitor — manual add is auto-approved and scanned', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -125,7 +161,10 @@ describe('POST /entities/Competitor — manual add is auto-approved and scanned'
     const res = makeRes();
 
     await getPostHandler()(req, res);
+    // Scans are fire-and-forget and only start once URL enrichment resolves — let that tick run.
+    await new Promise(setImmediate);
 
+    expect(enrichCompetitorUrls).toHaveBeenCalledWith(['new_comp']);
     expect(collectCompetitorSocialPosts).toHaveBeenCalledWith(
       expect.objectContaining({ body: { businessProfileId: 'biz_1', force: true } }),
       expect.anything()

@@ -307,7 +307,7 @@ describe('enrichCompetitorUrlsScheduled (KAN-221)', () => {
     return { json, status: jest.fn(() => ({ json })) } as any;
   };
 
-  test('AC1/AC2: selects rivals with a website_url that are empty-or-stale, capped and ordered oldest-crawled-first, independent of last_scanned', async () => {
+  test('AC1/AC2: selects rivals that are empty-or-stale (website_url not required), capped and ordered never-crawled-then-oldest first, independent of last_scanned', async () => {
     (prisma.competitor.findMany as jest.Mock)
       .mockResolvedValueOnce([{ id: 'c1' }])
       .mockResolvedValueOnce([{ id: 'c1', website_url: 'https://biz.co.il', instagram_url: null, facebook_url: null }]);
@@ -317,13 +317,16 @@ describe('enrichCompetitorUrlsScheduled (KAN-221)', () => {
 
     const selection = (prisma.competitor.findMany as jest.Mock).mock.calls[0][0];
     expect(selection.where.linked_business).toBe('biz1');
-    expect(selection.where.website_url).toEqual({ not: null });
+    // A rival whose first enrichment found no website must stay eligible for catch-up.
+    expect(selection.where).not.toHaveProperty('website_url');
     expect(selection.where.OR).toEqual(expect.arrayContaining([
-      { instagram_url: null }, { facebook_url: null }, { social_pages_crawled_at: null },
+      { website_url: null }, { instagram_url: null }, { facebook_url: null },
+      { rating: null }, { review_count: null }, { social_pages_crawled_at: null },
     ]));
     expect(selection.where).not.toHaveProperty('last_scanned');
     expect(selection.take).toBe(10);
-    expect(selection.orderBy).toEqual({ social_pages_crawled_at: 'asc' });
+    // nulls first, else never-crawled rivals get starved out of the top-N
+    expect(selection.orderBy).toEqual({ social_pages_crawled_at: { sort: 'asc', nulls: 'first' } });
     expect(res.json).toHaveBeenCalledWith({ enriched: 1, skipped: 0 });
   });
 

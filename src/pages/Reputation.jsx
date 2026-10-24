@@ -155,7 +155,7 @@ function ReviewReplyPanel({ review, bpId, businessProfile, topicSet, onClose, on
     try {
       const res  = await fetch(`${API_BASE}/social/reviews/${review.id}/suggest-reply`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
         body: JSON.stringify({ businessProfileId: bpId }),
       });
       const data = await res.json();
@@ -343,7 +343,7 @@ export default function Reputation() {
   const { data: topicSet = [] } = useQuery({
     queryKey: ['topicSet', bpId],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/social/reviews/topic-set?businessProfileId=${bpId}`);
+      const res = await fetch(`${API_BASE}/social/reviews/topic-set?businessProfileId=${bpId}`, { headers: await getAuthHeaders() });
       const data = await res.json();
       return data.topics ?? [];
     },

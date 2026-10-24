@@ -36,9 +36,9 @@ export const AGENT_SCHEDULES: Record<string, AgentScheduleConfig> = {
     entrypoint: "agents/sector_trend_radar.ts",
   },
 
-  // CompetitorSnapshot's cron leg was removed from agents/main.ts's cronAgents map —
-  // server/src/routes/functions/collectOTXCompetitorChanges.ts (Express) is the canonical
-  // version on this same schedule now. The entry below is kept only for reference by the
+  // CompetitorSnapshot's cron leg was removed from agents/main.ts's cronAgents map (its
+  // Express port, collectOTXCompetitorChanges.ts, was deleted too — the OTX tables it
+  // needed never existed in the app DB). The entry below is kept only for reference by the
   // event-driven config_updated bus trigger (agents/orchestration/bus_listener.ts), which
   // still imports agents/competitor_snapshot.ts directly and doesn't read this schedule.
 
