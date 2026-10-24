@@ -11,6 +11,7 @@
  *      1. business_profiles they created directly (created_by = userId)
  *      2. business_profiles under any organization they own
  *      3. revoke all of their organization_members rows (owned or not)
+ *      4. revoke those businesses' Google / Meta tokens and delete them
  *
  * Verification: Clerk signs webhooks with svix. Ack 200 immediately, then
  * process async — same pattern as ../meta/webhook.ts and ./dataforseo.ts.
@@ -19,6 +20,7 @@
 import { Router, Request, Response } from 'express';
 import { Webhook } from 'svix';
 import { prisma } from '../../db';
+import { disconnectIntegrations } from '../../lib/revokeTokens';
 
 const router = Router();
 
@@ -142,6 +144,19 @@ export async function processClerkWebhookEvent(evt: ClerkWebhookEvent): Promise<
       // organizations/organization_members may be unavailable in some envs —
       // same tolerant convention as ownership.ts:getUserBusinessIds.
       console.warn('[Clerk webhook] user.deleted cascade error (continuing):', err.message);
+    }
+
+    // Deactivating keeps the Google / Meta tokens: revoke them with the provider and delete them.
+    try {
+      const owned = await prisma.$queryRawUnsafe<{ id: string }[]>(
+        `SELECT id FROM business_profiles WHERE created_by = $1
+         UNION SELECT b.id FROM business_profiles b JOIN organizations o ON o.id = b.organization_id
+         WHERE o.owner_user_id = $1`,
+        userId,
+      );
+      await disconnectIntegrations(owned.map(b => b.id));
+    } catch (err: any) {
+      console.warn('[Clerk webhook] user.deleted token cleanup error:', err.message);
     }
   }
 }

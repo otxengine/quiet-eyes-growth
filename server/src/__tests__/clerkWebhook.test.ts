@@ -20,7 +20,10 @@ jest.mock('../db', () => ({
   },
 }));
 
+jest.mock('../lib/revokeTokens', () => ({ disconnectIntegrations: jest.fn() }));
+
 import { prisma } from '../db';
+import { disconnectIntegrations } from '../lib/revokeTokens';
 import { clerkWebhookHandler, processClerkWebhookEvent } from '../routes/webhooks/clerk';
 
 const rootExecuteRawUnsafe = prisma.$executeRawUnsafe as jest.Mock;
@@ -148,6 +151,18 @@ describe('processClerkWebhookEvent', () => {
     expect(txExecuteRawUnsafe).toHaveBeenCalledWith(
       expect.stringContaining('WHERE created_by = $2'), null, 'u1',
     );
+  });
+
+  test('user.deleted revokes and deletes the tokens of every business they owned (L6)', async () => {
+    rootQueryRawUnsafe
+      .mockResolvedValueOnce([])                               // clerk_user_cache lookup
+      .mockResolvedValueOnce([{ id: 'biz-1' }, { id: 'biz-2' }]); // owned + owned-org businesses
+    txQueryRawUnsafe.mockResolvedValueOnce([]);
+
+    await processClerkWebhookEvent({ type: 'user.deleted', data: { id: 'u1' } });
+
+    expect(rootQueryRawUnsafe).toHaveBeenLastCalledWith(expect.stringContaining('owner_user_id = $1'), 'u1');
+    expect(disconnectIntegrations).toHaveBeenCalledWith(['biz-1', 'biz-2']);
   });
 
   test('user.deleted does not throw when the org tables are unavailable', async () => {

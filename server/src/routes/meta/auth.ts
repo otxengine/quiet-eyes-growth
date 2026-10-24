@@ -1,6 +1,7 @@
 /**
  * Meta Auth Routes
  *
+ * GET  /api/meta/auth/facebook/initiate       — Facebook Login URL with a state bound to the user + business
  * GET  /api/meta/auth/facebook/callback       — OAuth code → long-lived token → store MetaConnection
  * POST /api/meta/auth/whatsapp/embedded-signup — Embedded Signup code → store MetaConnection
  * GET  /api/meta/auth/connections/:bpId        — List connections for a business profile
@@ -11,7 +12,10 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../../db';
 import { encryptToken } from '../../lib/crypto';
 import { metaApi } from '../../lib/metaApi';
-import { ownsBusinessParam, requireOwnsBusiness, requireOwnsBusinessFields, requireOwnsRecord } from '../../middleware/businessAccess';
+import { disconnectIntegrations, metaIntegration, revokeToken } from '../../lib/revokeTokens';
+import { getUserId } from '../../middleware/auth';
+import { ownsBusinessParam, requireOwnsBusinessFields, requireOwnsRecord } from '../../middleware/businessAccess';
+import { consumeState, generateState } from '../oauth';
 
 const router = Router();
 router.use(requireOwnsBusinessFields);
@@ -19,21 +23,39 @@ router.param('businessProfileId', ownsBusinessParam);
 const ownsConnection = requireOwnsRecord(async id =>
   (await prisma.metaConnection.findUnique({ where: { id }, select: { business_profile_id: true } }))?.business_profile_id);
 
-// ── Facebook Login for Business (OAuth Callback) ──────────────────────────────
+const messengerRedirectUri = () => `${process.env.FRONTEND_URL}/api/meta/auth/facebook/callback`;
+
+// ── Facebook Login for Business (Messenger) ───────────────────────────────────
 
 /**
- * The frontend initiates Facebook Login with:
- *   https://www.facebook.com/v19.0/dialog/oauth?
- *     client_id=<META_APP_ID>
- *     &redirect_uri=<this endpoint>
- *     &state=<businessProfileId>        ← we use state to carry tenant context
- *     &scope=pages_messaging,pages_show_list,pages_read_engagement
- *
- * Meta redirects here with ?code=...&state=...
+ * GET /facebook/initiate?businessProfileId=... (the router guard checks ownership) returns the
+ * Facebook Login URL. Its `state` is single-use, expires in 10 minutes and is bound to the
+ * signed-in user and the business, so the callback below can't be finished by anyone else.
  */
-// `state` is the raw businessProfileId (no nonce), so only its signed-in owner may complete
-// the flow; otherwise anyone could bind their Facebook pages to another business.
-router.get('/facebook/callback', requireOwnsBusiness(req => req.query.state as string | undefined), async (req: Request, res: Response) => {
+router.get('/facebook/initiate', async (req: Request, res: Response) => {
+  const userId = getUserId(req);
+  const businessProfileId = req.query.businessProfileId;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (typeof businessProfileId !== 'string' || !businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+  if (!process.env.META_APP_ID) return res.status(500).json({ error: 'META_APP_ID not configured' });
+
+  try {
+    const state = await generateState('messenger', businessProfileId, userId);
+    const url = 'https://www.facebook.com/v19.0/dialog/oauth?' + new URLSearchParams({
+      client_id:    process.env.META_APP_ID,
+      redirect_uri: messengerRedirectUri(),
+      state,
+      scope:        'pages_messaging,pages_show_list,pages_read_engagement',
+    });
+    return res.json({ url });
+  } catch (err: any) {
+    console.error('[meta/auth] state insert failed:', err.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** Meta redirects here with ?code=...&state=... The same signed-in user must finish the flow. */
+router.get('/facebook/callback', async (req: Request, res: Response) => {
   const { code, state, error: oauthError } = req.query as Record<string, string>;
 
   // User denied the permission dialog
@@ -41,16 +63,21 @@ router.get('/facebook/callback', requireOwnsBusiness(req => req.query.state as s
     return res.redirect(`${process.env.FRONTEND_URL}/integrations?error=access_denied`);
   }
 
-  if (!code || !state) {
+  if (typeof code !== 'string' || typeof state !== 'string' || !code || !state) {
     return res.status(400).json({ error: 'Missing code or state' });
   }
 
-  const businessProfileId = state;
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
+    const stateData = await consumeState(state, userId, 'messenger');
+    if (!stateData) return res.redirect(`${process.env.FRONTEND_URL}/integrations?error=invalid_state`);
+    const businessProfileId = stateData.businessId;
+
     const appId     = process.env.META_APP_ID;
     const appSecret = process.env.META_APP_SECRET;
-    const redirectUri = `${process.env.FRONTEND_URL}/api/meta/auth/facebook/callback`;
+    const redirectUri = messengerRedirectUri();
 
     if (!appId || !appSecret) {
       return res.status(500).json({ error: 'META_APP_ID / META_APP_SECRET not configured' });
@@ -121,6 +148,15 @@ router.get('/facebook/callback', requireOwnsBusiness(req => req.query.state as s
 
 // ── WhatsApp Embedded Signup ──────────────────────────────────────────────────
 
+// ponytail: first 100 numbers of the WABA; paginate if a WABA ever holds more
+export async function wabaHasPhoneNumber(wabaId: unknown, phoneNumberId: string, token: string): Promise<boolean> {
+  if (typeof wabaId !== 'string' || !/^\d+$/.test(wabaId)) return false;
+  const res = await fetch(`https://graph.facebook.com/v19.0/${wabaId}/phone_numbers?fields=id&limit=100&access_token=${encodeURIComponent(token)}`);
+  if (!res.ok) return false;
+  const data: any = await res.json();
+  return (data?.data ?? []).some((p: any) => p?.id === phoneNumberId);
+}
+
 /**
  * Called by the frontend after the WhatsApp Embedded Signup JS SDK flow completes.
  * The SDK delivers a short-lived code + waba_id + phone_number_id.
@@ -179,6 +215,11 @@ router.post('/whatsapp/embedded-signup', async (req: Request, res: Response) => 
       // Test tokens cannot be exchanged for long-lived — use as-is
       longToken = shortToken;
       expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+    }
+
+    // Both ids come from the client, so the number must be in a WABA this token can read.
+    if (phone_number_id && !(await wabaHasPhoneNumber(waba_id, phone_number_id, longToken))) {
+      return res.status(403).json({ error: 'This WhatsApp number is not in a WhatsApp Business Account you manage' });
     }
 
     // Step 3: Subscribe this app to the WABA to receive webhook events (skip if placeholder)
@@ -318,11 +359,22 @@ router.get('/connections/:businessProfileId', async (req: Request, res: Response
 
 // ── Disconnect ────────────────────────────────────────────────────────────────
 
+// Revokes the token with Meta and deletes it. WhatsApp's token is mirrored into SocialAccount and
+// BusinessProfile, so that integration is disconnected as a whole.
 router.delete('/connections/:id', ownsConnection, async (req: Request, res: Response) => {
   try {
+    const id = String(req.params.id);
+    const conn = await prisma.metaConnection.findUnique({
+      where: { id }, select: { platform: true, business_profile_id: true, encrypted_token: true },
+    });
+    if (conn?.platform === 'whatsapp') {
+      await disconnectIntegrations([conn.business_profile_id], 'whatsapp_business');
+    } else if (conn) {
+      await revokeToken(metaIntegration(conn.platform), conn.encrypted_token);
+    }
     await prisma.metaConnection.update({
-      where: { id: String(req.params.id) },
-      data:  { is_active: false },
+      where: { id },
+      data:  { is_active: false, encrypted_token: '' },
     });
     return res.json({ success: true });
   } catch (err: any) {

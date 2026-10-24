@@ -11,6 +11,7 @@ import { bulkBootstrapAllBusinesses, bootstrapBusinessIntelligence } from '../li
 import { searchCompetitorsByKeyword } from '../lib/dataforseo';
 import { getCollectorMetrics, checkAndAlertFailureRate, getTrendMetrics } from '../lib/collectorMetrics';
 import { getUserEmail } from '../lib/ownership';
+import { disconnectIntegrations } from '../lib/revokeTokens';
 
 const logger = createLogger('AdminUsers');
 const router = Router();
@@ -117,7 +118,15 @@ router.delete('/users/:businessId', async (req: Request, res: Response) => {
     results.push('Clerk deletion skipped (dev mode or no key)');
   }
 
-  // 3. Delete all DB data related to this business
+  // 3. Revoke its Google / Meta tokens with the provider (meta_connections isn't deleted below)
+  try {
+    await disconnectIntegrations([businessId]);
+    results.push('Integration tokens: revoked and cleared');
+  } catch (e: any) {
+    errors.push(`Token cleanup: ${e.message?.substring(0, 80)}`);
+  }
+
+  // 4. Delete all DB data related to this business
   const tables: Array<[string, string]> = [
     ['automation_logs',        'linked_business'],
     ['market_signals',         'linked_business'],
@@ -184,7 +193,7 @@ router.delete('/users/:businessId', async (req: Request, res: Response) => {
     }
   }
 
-  // 4. Finally delete the BusinessProfile itself
+  // 5. Finally delete the BusinessProfile itself
   try {
     await prisma.businessProfile.delete({ where: { id: businessId } });
     results.push('BusinessProfile: deleted');
