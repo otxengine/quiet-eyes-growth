@@ -1516,6 +1516,23 @@ const server = app.listen(PORT, async () => {
   )`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_v3_audit_biz_entity ON v3_audit_logs(business_id, entity_type, entity_id, created_at DESC)`);
   await sql(`ALTER TABLE v3_audit_logs ENABLE ROW LEVEL SECURITY`); // closed to Supabase's API roles, like every public table
+  // Pin search_path on the plpgsql functions copied over from Supabase (flagged there as
+  // function_search_path_mutable), so a caller's search_path can't change what they resolve.
+  // Their bodies only use public tables and pg_catalog. Skips any already pinned or absent.
+  await sql(`DO $$
+    DECLARE f regprocedure;
+    BEGIN
+      FOR f IN
+        SELECT p.oid::regprocedure FROM pg_proc p
+        WHERE p.pronamespace = 'public'::regnamespace
+          AND p.proname = ANY (ARRAY['array_append_unique', 'cleanup_agent_bus', 'notify_agent_bus',
+            'notify_competitor_change', 'notify_local_event', 'notify_new_event', 'notify_new_signal',
+            'notify_signal_qualified', 'notify_trend_spike', 'update_competitor_config_updated_at'])
+          AND NOT EXISTS (SELECT FROM unnest(p.proconfig) c WHERE c LIKE 'search_path=%')
+      LOOP
+        EXECUTE format('ALTER FUNCTION %s SET search_path = public, pg_temp', f);
+      END LOOP;
+    END $$`);
 
   console.log('Startup SQL complete');
 

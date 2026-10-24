@@ -28,8 +28,7 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
  * Turnstile for its bot protection), Paddle checkout (live and sandbox CDNs), the Meta SDK (WhatsApp
  * signup) and Google Fonts. The hash allows the one inline handler, the font stylesheet's
  * onload="this.media='all'". Images and video come from many CDNs (scraped social posts, S3, AI
- * image hosts), so those allow any https source. render.yaml sends the same policy plus the Render
- * API origin; keep them in step.
+ * image hosts), so those allow any https source. The API is same-origin (/api on this distribution).
  */
 export const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
