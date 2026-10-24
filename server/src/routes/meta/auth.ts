@@ -187,6 +187,14 @@ router.post('/whatsapp/embedded-signup', async (req: Request, res: Response) => 
     // Step 4: Encrypt and persist the connection
     const encryptedToken = encryptToken(longToken);
 
+    // phone_number_id comes from the client: never overwrite another business's connection.
+    const existing = await prisma.metaConnection.findUnique({
+      where: { phone_number_id: resolvedPhoneNumberId }, select: { business_profile_id: true },
+    });
+    if (existing && existing.business_profile_id !== businessProfileId) {
+      return res.status(409).json({ error: 'This WhatsApp number is already connected to another business' });
+    }
+
     const connection = await prisma.metaConnection.upsert({
       where:  { phone_number_id: resolvedPhoneNumberId },
       create: {

@@ -527,7 +527,9 @@ router.get('/proxy-image', async (req: Request, res: Response) => {
     return res.end(obj.body);
   }
 
-  const allowed = ALLOWED_CDN_HOSTS.some(h => parsed.hostname.endsWith(h));
+  // Exact host or a real subdomain: a bare endsWith() let e.g. 'attackerfbcdn.net' through.
+  const allowed = parsed.protocol === 'https:' &&
+    ALLOWED_CDN_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith(`.${h}`));
   if (!allowed) return res.status(403).json({ error: 'Host not allowed' });
 
   try {

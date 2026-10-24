@@ -17,7 +17,8 @@ export function requireOwnsBusiness(extractId: (req: Request) => string | undefi
 
     const businessId = extractId(req);
     if (businessId) {
-      const ownedIds = await getUserBusinessIds(userId);
+      let ownedIds: string[];
+      try { ownedIds = await getUserBusinessIds(userId); } catch (err) { return next(err); }
       if (!ownedIds.includes(businessId)) {
         return res.status(403).json({ error: 'Forbidden' });
       }

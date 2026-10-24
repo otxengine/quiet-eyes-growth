@@ -17,11 +17,16 @@ router.get('/by-phone/:phone', async (req, res) => {
   if (!userId) return res.json(null);
 
   // Sender ids aren't unique across tenants: only search the caller's own Meta connections.
-  const ownedIds = await getUserBusinessIds(userId);
-  const conversation = await prisma.conversation.findFirst({
-    where: { sender_id: phone, metaConnection: { business_profile_id: { in: ownedIds } } },
-    orderBy: { last_message_at: 'desc' },
-  });
+  let conversation;
+  try {
+    const ownedIds = await getUserBusinessIds(userId);
+    conversation = await prisma.conversation.findFirst({
+      where: { sender_id: phone, metaConnection: { business_profile_id: { in: ownedIds } } },
+      orderBy: { last_message_at: 'desc' },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
 
   if (!conversation) return res.json(null);
 

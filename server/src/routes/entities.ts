@@ -286,6 +286,18 @@ const PLAN_COMPETITOR_LIMITS: Record<string, number> = {
   free_trial: 3, free: 3, starter: 5, growth: 10, pro: Infinity, enterprise: Infinity,
 };
 
+// Billing and tenancy fields: only the server (Paddle webhook, org routes) or the admin key sets these.
+const PROTECTED_FIELDS = ['subscription_plan', 'plan_id', 'subscription_status', 'stripe_customer_id', 'subscription_started_at', 'organization_id'];
+
+// Non-admin writes: drop protected fields, and only allow linked_business values the caller owns.
+async function rejectForeignWrite(req: Request, data: Record<string, any>): Promise<boolean> {
+  if (isAdminKeyRequest(req)) return false;
+  for (const f of PROTECTED_FIELDS) delete data[f];
+  if (!('linked_business' in data)) return false;
+  const userId = getUserId(req);
+  return typeof data.linked_business !== 'string' || !userId || !(await getUserBusinessIds(userId)).includes(data.linked_business);
+}
+
 // POST /api/entities/:entity — create
 router.post('/:entity', async (req: Request, res: Response) => {
   const model = getModel(String(req.params.entity));
@@ -295,6 +307,7 @@ router.post('/:entity', async (req: Request, res: Response) => {
     const userId = getUserId(req);
     const data = { ...req.body };
     if (userId && !data.created_by) data.created_by = userId;
+    if (await rejectForeignWrite(req, data)) return res.status(403).json({ error: 'Forbidden' });
 
     // Manually-added competitors need no review gate — the user typed the name themselves —
     // so auto-approve them (auto-discovery creates rows via Prisma directly, bypassing this route).
@@ -381,6 +394,8 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
         if (!owned) return res.status(403).json({ error: 'Forbidden' });
       }
     }
+    if (!isAdminKeyRequest(req)) delete data.created_by; // only the admin key can reassign an owner
+    if (await rejectForeignWrite(req, data)) return res.status(403).json({ error: 'Forbidden' });
 
     try {
       record = await model.update({ where: { id: req.params.id }, data });

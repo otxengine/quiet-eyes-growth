@@ -10,6 +10,7 @@ import { getUserId, isAdminKeyRequest } from './auth';
 const PUBLIC_API_PATHS: RegExp[] = [
   /^\/healthz?$/,
   /^\/cron\/run$/,
+  /^\/migrate$/,
   /^\/webhooks\//,
   /^\/billing\/webhooks$/,
   /^\/oauth\/(callback\/[^/]+|confirm-page)$/,

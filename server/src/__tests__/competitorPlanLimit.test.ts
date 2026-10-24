@@ -14,6 +14,10 @@ jest.mock('../middleware/auth', () => ({
   getUserId: jest.fn().mockReturnValue('user_1'),
   isAdminKeyRequest: jest.fn().mockReturnValue(false),
 }));
+jest.mock('../lib/ownership', () => ({
+  getUserBusinessIds: jest.fn().mockResolvedValue(['biz_1']),
+  getUserEmail: jest.fn(),
+}));
 
 jest.mock('../lib/competitorRadiusCleanup', () => ({
   cleanupCompetitorsByRadius: jest.fn(),
@@ -92,6 +96,20 @@ describe('POST /entities/Competitor — plan limit counts active rows only', () 
 
     expect(res.status).toHaveBeenCalledWith(403);
     expect(prisma.competitor.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /entities — tenant write check', () => {
+  it('refuses a row pointed at a business the caller does not own, before any scan starts', async () => {
+    jest.clearAllMocks();
+    const req = { params: { entity: 'Competitor' }, body: { linked_business: 'someone_elses_biz', name: 'X' } } as any;
+    const res = makeRes();
+
+    await getPostHandler()(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(prisma.competitor.create).not.toHaveBeenCalled();
+    expect(enrichCompetitorUrls).not.toHaveBeenCalled();
   });
 });
 
