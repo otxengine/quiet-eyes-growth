@@ -1,4 +1,7 @@
 import { prisma } from '../db';
+import { createLogger } from '../infra/logger';
+
+const logger = createLogger('ownership');
 
 /**
  * Shared ownership resolution — used by both the entity CRUD router
@@ -8,9 +11,15 @@ import { prisma } from '../db';
  */
 
 // ── Clerk email lookup cache ───────────────────────────────────────────────────
-// Maps userId → email, TTL 10 minutes. Avoids repeated Clerk API calls.
-const _emailCache = new Map<string, { email: string; expires: number }>();
+// Maps userId → email (null too, so unverified users don't hit Clerk on every
+// check), TTL 10 minutes. Avoids repeated Clerk API calls.
+const _emailCache = new Map<string, { email: string | null; expires: number }>();
 
+/**
+ * The user's primary email, only once Clerk has verified it; otherwise null.
+ * Callers grant access by this address (admin-created created_by, owner_email),
+ * so it must be one the user has proven they control.
+ */
 export async function getUserEmail(userId: string): Promise<string | null> {
   const cached = _emailCache.get(userId);
   if (cached && cached.expires > Date.now()) return cached.email;
@@ -21,8 +30,9 @@ export async function getUserEmail(userId: string): Promise<string | null> {
     const { createClerkClient } = require('@clerk/express');
     const cc = createClerkClient({ secretKey });
     const user = await cc.users.getUser(userId);
-    const email = user?.emailAddresses?.[0]?.emailAddress || null;
-    if (email) _emailCache.set(userId, { email, expires: Date.now() + 10 * 60_000 });
+    const primary = user?.emailAddresses?.find((a: any) => a.id === user.primaryEmailAddressId);
+    const email: string | null = primary?.verification?.status === 'verified' ? primary.emailAddress : null;
+    _emailCache.set(userId, { email, expires: Date.now() + 10 * 60_000 });
     return email;
   } catch {
     return null;
@@ -52,6 +62,13 @@ export async function getUserBusinessIds(userId: string): Promise<string[]> {
         select: { id: true },
       });
       byEmail.forEach(p => ids.add(p.id));
+      // Claim them for this Clerk id on first match, so the email path runs once:
+      // ownership stops depending on the address, and the profile shows up in
+      // GET /entities/BusinessProfile (which lists by created_by = userId only).
+      if (byEmail.length) {
+        await prisma.businessProfile.updateMany({ where: { created_by: email }, data: { created_by: userId } })
+          .catch(err => logger.warn('email→userId ownership claim failed', { userId, error: String(err) }));
+      }
     }
   }
 
