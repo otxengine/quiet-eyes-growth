@@ -381,7 +381,7 @@ async function handleWhatsAppCallback(code: string, businessId: string) {
   await prisma.businessProfile.updateMany({
     where: { id: businessId },
     data: {
-      whatsapp_access_token:    userToken,
+      whatsapp_access_token:    tryEncryptToken(userToken),
       ...(phoneNumberId ? { whatsapp_phone_number_id: phoneNumberId } : {}),
     },
   });

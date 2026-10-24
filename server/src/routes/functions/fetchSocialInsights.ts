@@ -46,7 +46,7 @@ export async function fetchSocialInsights(req: Request, res: Response) {
         const metrics = 'page_impressions,page_reach,page_fan_adds_total,page_engaged_users';
         const fbRes = await fetch(
           `https://graph.facebook.com/v19.0/${fbAcct.page_id}/insights` +
-          `?metric=${metrics}&period=week&access_token=${fbAcct.access_token}`,
+          `?metric=${metrics}&period=week&access_token=${tryDecryptToken(fbAcct.access_token)}`,
         );
         if (fbRes.ok) {
           const fbData: any = await fbRes.json();

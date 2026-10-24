@@ -13,13 +13,13 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // META_ENCRYPTION_KEY must be a 64-char hex string (32 bytes) — see lib/crypto.ts.
-// Without it, tryEncryptToken/tryDecryptToken silently fall back to storing/reading
-// tokens as plaintext instead of failing the request. Loud at boot, not mid-request.
+// Without it every token write and read fails (connecting an account, publishing, sending).
+// Loud at boot, not mid-request.
 {
   const key = process.env.META_ENCRYPTION_KEY || '';
   if (key.length !== 64 || !/^[0-9a-f]+$/i.test(key)) {
     const msg = 'META_ENCRYPTION_KEY is missing or malformed — tokens (Google, Meta, WhatsApp) ' +
-      'will be stored/read as PLAINTEXT until this is fixed. Generate one with: ' +
+      'can be neither stored nor read until this is fixed. Generate one with: ' +
       'node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"';
     if (process.env.NODE_ENV === 'production') {
       console.error(`FATAL: ${msg}`);
@@ -72,9 +72,13 @@ registerAllHandlers();
 import { startScheduler } from './scheduler';
 import { refreshExpiringGoogleTokens } from './lib/googleTokenRefresh';
 import { getAgentStatusSummary } from './lib/agentMonitor';
+import { hideServerErrors } from './middleware/hideServerErrors';
 
 const app = express();
 const PORT = process.env.PORT || 3002;
+
+// First, so it covers every route and the global error handler below: no 5xx body goes out as written.
+app.use(hideServerErrors);
 
 // Behind CloudFront + ALB the client IP sits TRUST_PROXY_HOPS entries from the right of
 // X-Forwarded-For. Unset = Express default (no proxy trusted), as on Render.
@@ -1486,6 +1490,12 @@ app.listen(PORT, async () => {
   await sql(`CREATE INDEX IF NOT EXISTS idx_organic_posts_biz  ON organic_posts(linked_business, status, created_date DESC)`);
 
   console.log('Startup SQL complete');
+
+  // lib/crypto no longer reads plaintext tokens, so encrypt any left over (e.g. from a DB restore).
+  const { encryptStoredTokens } = await import('./scripts/encryptStoredTokens');
+  await encryptStoredTokens()
+    .then(n => console.log(`[STARTUP] Token backfill: encrypted ${n} plaintext value(s)`))
+    .catch((e: any) => console.error('[STARTUP] Token encryption backfill failed:', e.message));
 
   // ── Post-startup table existence check ───────────────────────────────────
   // Verifies all critical tables exist and logs any missing ones.
