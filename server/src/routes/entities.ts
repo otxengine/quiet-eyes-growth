@@ -86,6 +86,33 @@ function getModel(entity: string): any {
   return (prisma as any)[key];
 }
 
+// Agents create these and approveAction/rejectAction move them along. A client write could set
+// action_type, payload or recipients and skip the approval flow, so this API only reads them.
+const READ_ONLY_ENTITIES = new Set(['AutoAction']);
+
+// Credentials never leave the server: reads get a has_<field> flag instead. Writes drop them too,
+// since only the OAuth routes set them, encrypted.
+const SECRET_FIELDS: Record<string, string[]> = {
+  BusinessProfile: ['whatsapp_access_token', 'google_access_token', 'instagram_access_token',
+                    'facebook_page_token', 'channels_webhook_secret'],
+  SocialAccount:   ['access_token', 'refresh_token'],
+};
+
+function redact(entity: string, data: any): any {
+  const fields = SECRET_FIELDS[entity];
+  if (!fields || !data) return data;
+  if (Array.isArray(data)) return data.map(r => redact(entity, r));
+  const out = { ...data };
+  for (const f of fields) {
+    if (f in out) { out[`has_${f}`] = !!out[f]; delete out[f]; }
+  }
+  return out;
+}
+
+function stripSecrets(entity: string, data: Record<string, any>): void {
+  for (const f of SECRET_FIELDS[entity] ?? []) { delete data[f]; delete data[`has_${f}`]; }
+}
+
 function buildWhere(filter: Record<string, any>, userId?: string | null): Record<string, any> {
   const where: Record<string, any> = {};
 
@@ -218,7 +245,7 @@ router.get('/:entity', async (req: Request, res: Response) => {
             orderBy: req.params.entity === 'Review' ? REVIEW_ORDER_BY : (sort ? buildOrderBy(sort) : (ENTITY_DEFAULT_ORDER[String(req.params.entity)] ?? buildOrderBy(sort))),
             take: Math.min(limit, 1000),
           });
-      return res.json(records);
+      return res.json(redact(String(req.params.entity), records));
     }
 
     const userId = getUserId(req);
@@ -268,16 +295,10 @@ router.get('/:entity', async (req: Request, res: Response) => {
       take: Math.min(limit, 1000),
     });
 
-    res.json(records);
+    res.json(redact(String(req.params.entity), records));
   } catch (err: any) {
-    console.error(`GET /entities/${req.params.entity}:`, err.message);
-    const isDev = process.env.NODE_ENV !== 'production';
-    // Include code + hint in production for diagnosing Prisma/PG errors — no sensitive data exposed
-    res.status(500).json({
-      error: isDev ? err.message : 'Internal server error',
-      code: err.code ?? err.meta?.code ?? null,
-      hint: (err.message ?? '').split('\n').find((l: string) => l.trim())?.substring(0, 200) ?? null,
-    });
+    console.error(`GET /entities/${req.params.entity}:`, err.code ?? '', err.message);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -313,10 +334,12 @@ async function rejectForeignWrite(req: Request, data: Record<string, any>): Prom
 router.post('/:entity', async (req: Request, res: Response) => {
   const model = getModel(String(req.params.entity));
   if (!model) return res.status(404).json({ error: `Unknown entity: ${req.params.entity}` });
+  if (READ_ONLY_ENTITIES.has(String(req.params.entity))) return res.status(403).json({ error: 'Read-only entity' });
 
   try {
     const userId = getUserId(req);
     const data = { ...req.body };
+    stripSecrets(String(req.params.entity), data);
     // Only the admin key may create a row on someone else's behalf.
     if (userId && (!data.created_by || !isAdminKeyRequest(req))) data.created_by = userId;
     if (await rejectForeignWrite(req, data)) return res.status(403).json({ error: 'Forbidden' });
@@ -378,7 +401,7 @@ router.post('/:entity', async (req: Request, res: Response) => {
         .catch((err: any) => console.warn(`manual competitor add: collectCompetitorReviews failed: ${err.message}`));
     }
 
-    res.status(201).json(record);
+    res.status(201).json(redact(String(req.params.entity), record));
   } catch (err: any) {
     console.error(`POST /entities/${req.params.entity}:`, err.message);
     const isDev = process.env.NODE_ENV !== 'production';
@@ -391,9 +414,11 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
   const entity = String(req.params.entity);
   const model = getModel(entity);
   if (!model) return res.status(404).json({ error: `Unknown entity: ${entity}` });
+  if (READ_ONLY_ENTITIES.has(entity)) return res.status(403).json({ error: 'Read-only entity' });
 
   try {
     const data = { ...req.body };
+    stripSecrets(entity, data);
     let record: any;
 
     // For non-admin requests: verify ownership before touching the DB.
@@ -451,7 +476,7 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
       }
     }
 
-    res.json(record);
+    res.json(redact(entity, record));
 
     // Auto-cleanup competitors when radius/cities settings change — fire and forget
     if (entity === 'BusinessProfile' &&
@@ -469,6 +494,7 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
 router.delete('/:entity/:id', async (req: Request, res: Response) => {
   const model = getModel(String(req.params.entity));
   if (!model) return res.status(404).json({ error: `Unknown entity: ${req.params.entity}` });
+  if (READ_ONLY_ENTITIES.has(String(req.params.entity))) return res.status(403).json({ error: 'Read-only entity' });
 
   try {
     // Verify ownership upfront — same pattern as PATCH

@@ -8,6 +8,7 @@
 
 import { prisma } from '../../db';
 import { createLogger } from '../../infra/logger';
+import { tryDecryptToken } from '../../lib/crypto';
 
 const logger = createLogger('WhatsAppExecutor');
 
@@ -49,7 +50,7 @@ export async function sendWhatsApp(
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${profile.whatsapp_access_token}`,
+            Authorization: `Bearer ${tryDecryptToken(profile.whatsapp_access_token)}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
