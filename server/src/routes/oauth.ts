@@ -28,6 +28,12 @@ import { requireOwnsBusiness } from '../middleware/businessAccess';
 
 const router = Router();
 
+// A connect failure the user can act on (no pages, no Instagram account, provider refused): sent as
+// a 422 with its message. Anything else is a 5xx, whose body hideServerErrors replaces.
+class ConnectError extends Error {}
+const connectFailure = (res: Response, err: any) =>
+  res.status(err instanceof ConnectError ? 422 : 502).json({ error: err.message });
+
 // Temporary in-memory store for page picker sessions (TTL 10 min); userId: who may confirm
 const pagePickerSessions = new Map<string, { businessId: string; platform: string; pages: any[]; expires: number; userId?: string }>();
 function createPickerSession(businessId: string, platform: string, pages: any[]): string {
@@ -223,7 +229,7 @@ async function handleFacebookCallback(code: string, platform: string, businessId
     `client_id=${env().FACEBOOK_APP_ID}&client_secret=${env().FACEBOOK_APP_SECRET}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}`,
   );
-  if (!tokenRes.ok) throw new Error('Token exchange failed');
+  if (!tokenRes.ok) throw new ConnectError('Token exchange failed');
   const tokenData: any = await tokenRes.json();
   const shortLivedToken = tokenData.access_token;
 
@@ -243,7 +249,7 @@ async function handleFacebookCallback(code: string, platform: string, businessId
   const pagesData: any = pagesRes.ok ? await pagesRes.json() : {};
   const pages: any[] = pagesData?.data || [];
 
-  if (pages.length === 0) throw new Error('No Facebook Pages found for this account');
+  if (pages.length === 0) throw new ConnectError('No Facebook Pages found for this account');
 
   console.log(`[oauth/facebook] found ${pages.length} page(s):`, pages.map((p: any) => `${p.name} (${p.id})`));
 
@@ -276,7 +282,7 @@ async function saveFacebookPage(businessId: string, platform: string, page: any)
     if (!igId) {
       // The Facebook Page doesn't have a linked Instagram Business/Creator account.
       // Storing the Facebook Page ID would cause silent failures at publish time.
-      throw new Error(
+      throw new ConnectError(
         `הדף "${pageName}" לא מחובר לחשבון Instagram עסקי. ` +
         `כדי לחבר: עבור להגדרות דף Facebook → Instagram → "Connect account". ` +
         `ודא שחשבון ה-Instagram שלך מוגדר כ-Business או Creator.`
@@ -325,7 +331,7 @@ async function handleWhatsAppCallback(code: string, businessId: string) {
     `client_id=${env().FACEBOOK_APP_ID}&client_secret=${env().FACEBOOK_APP_SECRET}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}`,
   );
-  if (!tokenRes.ok) throw new Error('Token exchange failed');
+  if (!tokenRes.ok) throw new ConnectError('Token exchange failed');
   const tokenData: any = await tokenRes.json();
   const shortToken = tokenData.access_token;
 
@@ -402,7 +408,7 @@ export async function listGbpLocations(accessToken: string): Promise<GbpLocation
   const acctRes = await fetch('https://mybusinessaccountmanagement.googleapis.com/v1/accounts', { headers });
   if (!acctRes.ok) {
     console.error(`[oauth/google_business] accounts.list ${acctRes.status}:`, (await acctRes.text().catch(() => '')).slice(0, 500));
-    throw new Error(`Google Business Profile החזיר שגיאה (${acctRes.status}). נסה שוב מאוחר יותר.`);
+    throw new ConnectError(`Google Business Profile החזיר שגיאה (${acctRes.status}). נסה שוב מאוחר יותר.`);
   }
   const accounts: any[] = ((await acctRes.json()) as any)?.accounts || [];
   const locations: GbpLocation[] = [];
@@ -426,7 +432,7 @@ export async function listGbpLocations(accessToken: string): Promise<GbpLocation
     }
   }
   if (!locations.length) {
-    throw new Error('לא נמצא עסק ב-Google Business Profile בחשבון הזה. ודא שאתה מחובר עם החשבון שמנהל את העסק ונסה שוב.');
+    throw new ConnectError('לא נמצא עסק ב-Google Business Profile בחשבון הזה. ודא שאתה מחובר עם החשבון שמנהל את העסק ונסה שוב.');
   }
   return locations;
 }
@@ -485,7 +491,7 @@ async function handleGoogleCallback(code: string, businessId: string) {
       grant_type:    'authorization_code',
     }).toString(),
   });
-  if (!tokenRes.ok) throw new Error('Google token exchange failed');
+  if (!tokenRes.ok) throw new ConnectError('Google token exchange failed');
   const tokenData: any = await tokenRes.json();
   const accessToken  = tokenData.access_token  || '';
   const refreshToken = tokenData.refresh_token || '';  // long-lived; must be stored
@@ -514,7 +520,7 @@ async function handleMetaAdsCallback(code: string, businessId: string) {
     `client_id=${env().FACEBOOK_APP_ID}&client_secret=${env().FACEBOOK_APP_SECRET}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}`,
   );
-  if (!tokenRes.ok) throw new Error('Meta Ads token exchange failed');
+  if (!tokenRes.ok) throw new ConnectError('Meta Ads token exchange failed');
   const tokenData: any = await tokenRes.json();
   const shortLivedToken = tokenData.access_token;
 
@@ -531,12 +537,12 @@ async function handleMetaAdsCallback(code: string, businessId: string) {
   const adAccountsRes = await fetch(
     `https://graph.facebook.com/v19.0/me/adaccounts?fields=id,name,account_status,currency&limit=20&access_token=${userToken}`,
   );
-  if (!adAccountsRes.ok) throw new Error('Failed to fetch Meta Ad Accounts');
+  if (!adAccountsRes.ok) throw new ConnectError('Failed to fetch Meta Ad Accounts');
   const adAccountsData: any = await adAccountsRes.json();
   const adAccounts: any[] = adAccountsData?.data || [];
 
   if (adAccounts.length === 0) {
-    throw new Error(
+    throw new ConnectError(
       'לא נמצאו חשבונות פרסום Meta. צור חשבון Ad Account ב-business.facebook.com ונסה שוב.',
     );
   }
@@ -588,7 +594,7 @@ async function handleGoogleAdsCallback(code: string, businessId: string) {
       grant_type:    'authorization_code',
     }).toString(),
   });
-  if (!tokenRes.ok) throw new Error('Google Ads token exchange failed');
+  if (!tokenRes.ok) throw new ConnectError('Google Ads token exchange failed');
   const tokenData: any = await tokenRes.json();
   const accessToken  = tokenData.access_token  || '';
   const refreshToken = tokenData.refresh_token || '';
@@ -716,7 +722,7 @@ router.post('/complete', async (req: Request, res: Response) => {
     return res.json({ ok: true, platform: result.platform, page_name: result.page_name });
   } catch (err: any) {
     console.error(`[oauth/${platform}] complete error:`, err.message);
-    return res.status(502).json({ error: err.message });
+    return connectFailure(res, err);
   }
 });
 
@@ -760,7 +766,7 @@ router.post('/confirm-page', async (req: Request, res: Response) => {
     return res.json({ ok: true, platform: s.platform, page_name: result.page_name });
   } catch (err: any) {
     console.error('[oauth/confirm-page]', err.message);
-    return res.status(502).json({ error: err.message });
+    return connectFailure(res, err);
   }
 });
 

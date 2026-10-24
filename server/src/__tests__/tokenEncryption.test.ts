@@ -68,10 +68,14 @@ describe('WhatsApp token', () => {
     db.socialAccount.findFirst.mockResolvedValue(null);
     db.aIAgentConfig.findFirst.mockResolvedValue({ id: 'cfg_1' });
 
+    // The number has to be in the WABA the token can read (meta/auth.ts wabaHasPhoneNumber)
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [{ id: 'p1' }] }) }) as any;
+    (metaApi.subscribeToWABA as jest.Mock).mockResolvedValue(undefined);
+
     const layer = (metaAuthRouter as any).stack.find((l: any) => l.route?.path === '/whatsapp/embedded-signup');
     const res: any = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
     jest.spyOn(console, 'log').mockImplementation(() => {});
-    await layer.route.stack[0].handle({ body: { code: 'EAAshort', businessProfileId: 'biz_1', phone_number_id: 'p1' } }, res);
+    await layer.route.stack[0].handle({ body: { code: 'EAAshort', businessProfileId: 'biz_1', waba_id: '999', phone_number_id: 'p1' } }, res);
 
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     const profileToken = db.businessProfile.updateMany.mock.calls[0][0].data.whatsapp_access_token;

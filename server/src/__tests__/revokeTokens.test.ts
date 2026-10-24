@@ -9,7 +9,10 @@ jest.mock('../db', () => ({
     businessProfile: { updateMany: jest.fn() },
   },
 }));
-jest.mock('../lib/crypto', () => ({ tryDecryptToken: (v: string) => v.replace(/^enc:/, '') }));
+// Like lib/crypto: a value that isn't an encrypted token throws instead of passing through
+jest.mock('../lib/crypto', () => ({
+  tryDecryptToken: (v: string) => { if (!v.startsWith('enc:')) throw new Error('Invalid encrypted token format'); return v.slice(4); },
+}));
 
 import { prisma } from '../db';
 import { disconnectIntegrations } from '../lib/revokeTokens';
@@ -65,7 +68,7 @@ test('Meta: looks up who granted the token and revokes only this integration\'s 
 });
 
 test('WhatsApp: the token in SocialAccount and MetaConnection is revoked once, and both copies are wiped', async () => {
-  accounts.mockResolvedValue([{ platform: 'whatsapp_business', access_token: 'wa-tok', refresh_token: null }]);
+  accounts.mockResolvedValue([{ platform: 'whatsapp_business', access_token: 'enc:wa-tok', refresh_token: null }]);
   connections.mockResolvedValue([{ platform: 'whatsapp', encrypted_token: 'enc:wa-tok' }]);
   await disconnectIntegrations(['biz-1'], 'whatsapp_business');
 
@@ -84,7 +87,7 @@ test('a provider outage never keeps the token in our DB', async () => {
 });
 
 test('no platform (user deletion): every integration, every MetaConnection, every mirror field', async () => {
-  accounts.mockResolvedValue([{ platform: 'google_ads', access_token: 'g', refresh_token: 'grt' }]);
+  accounts.mockResolvedValue([{ platform: 'google_ads', access_token: 'enc:g', refresh_token: 'enc:grt' }]);
   connections.mockResolvedValue([{ platform: 'messenger', encrypted_token: 'enc:m' }]);
   await disconnectIntegrations(['biz-1', 'biz-2']);
 
@@ -98,6 +101,18 @@ test('no platform (user deletion): every integration, every MetaConnection, ever
   ]);
   expect(urls()).toContain('https://oauth2.googleapis.com/revoke');
   expect(urls().some(u => u.includes('/permissions/pages_messaging'))).toBe(true);
+});
+
+test('a token that can\'t be decrypted is still wiped (no provider revoke for it)', async () => {
+  accounts.mockResolvedValue([
+    { platform: 'facebook_page', access_token: 'legacy-plaintext', refresh_token: null },
+    { platform: 'google_business', access_token: 'enc:at', refresh_token: 'enc:rt' },
+  ]);
+  await disconnectIntegrations(['biz-1']);
+  expect(urls()).toEqual(['https://oauth2.googleapis.com/revoke']); // only the decryptable one
+  expect(prisma.socialAccount.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+    data: expect.objectContaining({ access_token: null, refresh_token: null }),
+  }));
 });
 
 test('no businesses: nothing to do', async () => {

@@ -163,6 +163,34 @@ describe('M7: /complete accepts the state only from the user who started the flo
   });
 });
 
+describe('connect failures the user can act on keep their message (4xx); anything else is a 5xx', () => {
+  const complete = handler(oauthRouter, 'post', '/complete');
+
+  test('no ad accounts → 422 with the explanation', async () => {
+    asUser('user_A');
+    queryRaw.mockResolvedValueOnce([{ business_id: 'biz-1' }]);
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(okJson({ access_token: 'short' }))
+      .mockResolvedValueOnce(okJson({ access_token: 'long' }))
+      .mockResolvedValueOnce(okJson({ data: [] }));
+    const res = await call(complete, { body: { platform: 'meta_ads', code: 'c', state: 's' } });
+    expect(res.status).toHaveBeenCalledWith(422);
+    expect(res.json.mock.calls[0][0].error).toContain('לא נמצאו חשבונות פרסום Meta');
+  });
+
+  test('an unexpected failure (DB) is a 502, which hideServerErrors turns generic', async () => {
+    asUser('user_A');
+    queryRaw.mockResolvedValueOnce([{ business_id: 'biz-1' }]);
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(okJson({ access_token: 'short' }))
+      .mockResolvedValueOnce(okJson({ access_token: 'long' }))
+      .mockResolvedValueOnce(okJson({ data: [{ id: 'act_1', name: 'Ads', account_status: 1 }] }));
+    (prisma.socialAccount.findFirst as jest.Mock).mockRejectedValueOnce(new Error('connection refused'));
+    const res = await call(complete, { body: { platform: 'meta_ads', code: 'c', state: 's' } });
+    expect(res.status).toHaveBeenCalledWith(502);
+  });
+});
+
 describe('M7 + L14: the page picker is JSON for the app, and only the same user may confirm', () => {
   test('Facebook with several pages → picker → confirm', async () => {
     asUser('user_A');

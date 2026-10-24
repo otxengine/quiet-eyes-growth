@@ -47,10 +47,24 @@ async function revokeMeta(token: string, permissions: string[]) {
   }
 }
 
-/** Revokes a stored (encrypted or legacy plaintext) token with its provider. Never throws. */
+// A stored token's plaintext, or null when it can't be decrypted: it is wiped all the same.
+function plaintext(stored: string | null | undefined): string | null {
+  if (!stored) return null;
+  try {
+    return tryDecryptToken(stored);
+  } catch (e: any) {
+    console.warn('[revokeTokens] stored token not decryptable, wiping without a provider revoke:', e.message);
+    return null;
+  }
+}
+
+/** Revokes a stored (encrypted) token with its provider. Never throws. */
 export async function revokeToken(platform: string, stored: string | null | undefined): Promise<void> {
-  if (!stored) return;
-  const token = tryDecryptToken(stored);
+  const token = plaintext(stored);
+  if (token) await revokePlaintext(platform, token);
+}
+
+async function revokePlaintext(platform: string, token: string): Promise<void> {
   try {
     if (GOOGLE_PLATFORMS.has(platform)) {
       const res = await fetch('https://oauth2.googleapis.com/revoke', {
@@ -85,12 +99,10 @@ export async function disconnectIntegrations(businessIds: string[], platform?: s
 
   // One revoke per token: the WhatsApp token sits in both tables.
   const tokens = new Map<string, string>();
-  for (const a of accounts) {
-    const stored = a.refresh_token || a.access_token; // Google: revoking the refresh token ends the grant
-    if (stored) tokens.set(tryDecryptToken(stored), a.platform);
-  }
-  for (const c of connections) if (c.encrypted_token) tokens.set(tryDecryptToken(c.encrypted_token), metaIntegration(c.platform));
-  await Promise.all([...tokens].map(([token, p]) => revokeToken(p, token)));
+  const add = (stored: string | null, p: string) => { const t = plaintext(stored); if (t) tokens.set(t, p); };
+  for (const a of accounts) add(a.refresh_token || a.access_token, a.platform); // Google: the refresh token ends the grant
+  for (const c of connections) add(c.encrypted_token, metaIntegration(c.platform));
+  await Promise.all([...tokens].map(([token, p]) => revokePlaintext(p, token)));
 
   await prisma.socialAccount.updateMany({
     where: accountWhere,
