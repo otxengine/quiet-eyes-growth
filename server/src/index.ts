@@ -47,6 +47,7 @@ import metaWebhookRouter from './routes/meta/webhook';
 import dataforseoWebhookRouter from './routes/webhooks/dataforseo';
 import clerkWebhookRouter from './routes/webhooks/clerk';
 import { requireApiAuth } from './middleware/apiAuth';
+import { requestLog } from './middleware/requestLog';
 import { isAdminKeyRequest } from './middleware/auth';
 import conversationsRouter from './routes/conversations';
 import orchestratorRouter from './routes/orchestrator';
@@ -83,6 +84,7 @@ app.use(hideServerErrors);
 // Behind CloudFront + ALB the client IP sits TRUST_PROXY_HOPS entries from the right of
 // X-Forwarded-For. Unset = Express default (no proxy trusted), as on Render.
 if (process.env.TRUST_PROXY_HOPS) app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS));
+app.use(requestLog); // ahead of CORS, rate limits and auth, so their refusals are logged too
 
 // ── Security headers ───────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false })); // CSP handled by frontend
@@ -118,8 +120,16 @@ const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || 'http://localhost:5173')
     'http://localhost:5175',
     'https://cortexi.ai',
     'https://www.cortexi.ai',
-  ]);
+  ])
+  // Credentials are allowed, so in production a local dev page must not be able to call the API as the user.
+  .filter(o => process.env.NODE_ENV !== 'production' || !o.startsWith('http://localhost'));
 
+// A browser request from any other origin is refused here with a 403 (cors() below would throw a 500).
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && !ALLOWED_ORIGINS.includes(origin)) return res.status(403).json({ error: 'Origin not allowed' });
+  next();
+});
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
@@ -401,7 +411,7 @@ app.get('/api/debug/:bpId', async (req: any, res: any) => {
   });
 });
 
-app.listen(PORT, async () => {
+const server = app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
   const { prisma: db } = await import('./db');
 
@@ -1488,6 +1498,41 @@ app.listen(PORT, async () => {
   await sql(`ALTER TABLE automation_logs ADD COLUMN IF NOT EXISTS high_urgency_count FLOAT DEFAULT 0`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_competitors_biz    ON competitors(linked_business, not_relevant, created_date DESC)`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_organic_posts_biz  ON organic_posts(linked_business, status, created_date DESC)`);
+  // Audit trail written by infra/AuditLogger.ts (admin user deletes, approvals). Shape from prisma/otx_v3_schema.sql.
+  await sql(`CREATE TABLE IF NOT EXISTS v3_audit_logs (
+    id            TEXT        PRIMARY KEY,
+    business_id   TEXT        NOT NULL,
+    tenant_id     TEXT,
+    actor_type    TEXT        NOT NULL CHECK (actor_type IN ('system','user','agent')),
+    actor_id      TEXT        NOT NULL,
+    entity_type   TEXT        NOT NULL,
+    entity_id     TEXT        NOT NULL,
+    action        TEXT        NOT NULL,
+    old_state     TEXT,
+    new_state     TEXT,
+    reason        TEXT,
+    metadata      JSONB       NOT NULL DEFAULT '{}',
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_v3_audit_biz_entity ON v3_audit_logs(business_id, entity_type, entity_id, created_at DESC)`);
+  await sql(`ALTER TABLE v3_audit_logs ENABLE ROW LEVEL SECURITY`); // closed to Supabase's API roles, like every public table
+  // Pin search_path on the plpgsql functions copied over from Supabase (flagged there as
+  // function_search_path_mutable), so a caller's search_path can't change what they resolve.
+  // Their bodies only use public tables and pg_catalog. Skips any already pinned or absent.
+  await sql(`DO $$
+    DECLARE f regprocedure;
+    BEGIN
+      FOR f IN
+        SELECT p.oid::regprocedure FROM pg_proc p
+        WHERE p.pronamespace = 'public'::regnamespace
+          AND p.proname = ANY (ARRAY['array_append_unique', 'cleanup_agent_bus', 'notify_agent_bus',
+            'notify_competitor_change', 'notify_local_event', 'notify_new_event', 'notify_new_signal',
+            'notify_signal_qualified', 'notify_trend_spike', 'update_competitor_config_updated_at'])
+          AND NOT EXISTS (SELECT FROM unnest(p.proconfig) c WHERE c LIKE 'search_path=%')
+      LOOP
+        EXECUTE format('ALTER FUNCTION %s SET search_path = public, pg_temp', f);
+      END LOOP;
+    END $$`);
 
   console.log('Startup SQL complete');
 
@@ -1540,4 +1585,17 @@ app.listen(PORT, async () => {
   refreshExpiringGoogleTokens().catch(() => {});
 
   startScheduler();
+});
+
+// ECS (and Render) send SIGTERM, then SIGKILL once the stop timeout runs out (60 s on ECS).
+// Stop accepting connections, let in-flight requests finish, then close the DB pool.
+// ponytail: background jobs in flight are cut off at exit; drain the scheduler first if that bites.
+process.once('SIGTERM', () => {
+  console.log('SIGTERM: closing the server');
+  setTimeout(() => { console.error('Shutdown timed out, exiting'); process.exit(1); }, 50_000).unref();
+  server.close(async () => {
+    const { prisma: db } = await import('./db');
+    await db.$disconnect().catch(() => {});
+    process.exit(0);
+  });
 });
