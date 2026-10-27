@@ -138,8 +138,11 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
       const { reviewId, text, rating, sentiment, reviewerName, createdAt } = pending[i];
       const { topics: t, topic_sentiment } = topics[i];
       try {
-        await prisma.review.create({
-          data: {
+        // Competitor tasks dedup by linked_competitor, but the unique index is (linked_business,
+        // google_review_id) — skipDuplicates drops collisions instead of logging a P2002 per row.
+        const { count } = await prisma.review.createMany({
+          skipDuplicates: true,
+          data: [{
             platform:          'Google',
             rating,
             text:              text.substring(0, 2000),
@@ -155,10 +158,10 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
             linked_competitor: isOwn ? undefined : taskRow.linked_competitor,
             topics: t,
             topic_sentiment,
-          },
+          }],
         });
-        newCount++;
-      } catch { continue; } // dedup race — (linked_business, google_review_id) unique index
+        newCount += count;
+      } catch { continue; } // per-row so one bad item can't drop the rest
     }
   }
 
