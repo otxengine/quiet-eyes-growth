@@ -24,9 +24,9 @@ export async function applyOutlierAnalysis(
   force: boolean,
 ): Promise<{ analyzed: boolean; skipped: boolean }> {
   const rows = await (prisma as any).$queryRawUnsafe(
-    `SELECT id, caption, media_url, video_url, platform, analysis FROM "${table}" WHERE id = $1`,
+    `SELECT id, caption, media_url, video_url, platform, analysis, posted_at FROM "${table}" WHERE id = $1`,
     postId,
-  ) as { id: string; caption: string | null; media_url: string | null; video_url: string | null; platform: string; analysis: string | null }[];
+  ) as { id: string; caption: string | null; media_url: string | null; video_url: string | null; platform: string; analysis: string | null; posted_at: Date | null }[];
   const post = rows[0];
   if (!post || (!post.media_url && !post.video_url)) return { analyzed: false, skipped: false };
 
@@ -46,6 +46,7 @@ export async function applyOutlierAnalysis(
     platform: post.platform,
     mediaUrl: post.media_url,
     videoUrl: post.video_url,
+    postedAt: post.posted_at,
     performanceContext: { engagementMultiple },
   });
   if (!analysis) return { analyzed: false, skipped: false };

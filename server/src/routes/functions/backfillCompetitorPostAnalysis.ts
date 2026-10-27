@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
-import { analyzePostCreative } from '../../lib/analyzePostCreative';
+import { analyzePostCreative, MAX_POST_AGE_DAYS } from '../../lib/analyzePostCreative';
 
 const BATCH_LIMIT = 40; // rows fetched per DB query round
 // Stay under CloudFront's 120s origin timeout, leaving ~60s for the in-flight analysis
@@ -42,21 +42,24 @@ export async function backfillCompetitorPostAnalysis(req: Request, res: Response
       // been video-analyzed yet — including ones already image-analyzed before
       // this feature existed, so they get upgraded to real video understanding.
       const posts = await (prisma as any).$queryRawUnsafe(
-        `SELECT p.id, p.caption, p.media_url, p.video_url, p.platform, p.video_analyzed_at FROM competitor_posts p
+        `SELECT p.id, p.caption, p.media_url, p.video_url, p.platform, p.video_analyzed_at, p.posted_at FROM competitor_posts p
          JOIN competitors c ON c.id = p.competitor_id
          WHERE p.linked_business = $1 AND (p.media_url IS NOT NULL OR p.video_url IS NOT NULL)
            ${force ? '' : "AND (p.analyzed_at IS NULL OR (p.video_url IS NOT NULL AND p.video_analyzed_at IS NULL))"}
+           AND (p.posted_at IS NULL OR p.posted_at >= NOW() - INTERVAL '${MAX_POST_AGE_DAYS} days')
            AND c.tracking_status = 'approved'
          LIMIT ${BATCH_LIMIT}`,
         businessProfileId,
-      ) as { id: string; caption: string | null; media_url: string | null; video_url: string | null; platform: string; video_analyzed_at: string | null }[];
+      ) as { id: string; caption: string | null; media_url: string | null; video_url: string | null; platform: string; video_analyzed_at: string | null; posted_at: Date | null }[];
       if (posts.length === 0) break;
       postsFound += posts.length;
 
+      // A round that analyzes nothing (daily cap reached, dead media) would refetch the same rows.
+      const analyzedBefore = postsAnalyzed;
       for (const post of posts) {
         if (timeLeft() <= 0) break;
         const useVideoUrl = post.video_analyzed_at ? null : post.video_url;
-        const analysis = await analyzePostCreative({ caption: post.caption, platform: post.platform, mediaUrl: post.media_url, videoUrl: useVideoUrl });
+        const analysis = await analyzePostCreative({ caption: post.caption, platform: post.platform, mediaUrl: post.media_url, videoUrl: useVideoUrl, postedAt: post.posted_at });
         if (!analysis) continue;
         try {
           await (prisma as any).$executeRawUnsafe(
@@ -71,7 +74,7 @@ export async function backfillCompetitorPostAnalysis(req: Request, res: Response
         }
       }
       // force mode never shrinks the unanalyzed pool (rows stay eligible), so it'd loop forever
-      if (force) break;
+      if (force || postsAnalyzed === analyzedBefore) break;
     }
 
     let adsFound = 0, adsAnalyzed = 0;
@@ -88,6 +91,7 @@ export async function backfillCompetitorPostAnalysis(req: Request, res: Response
       if (ads.length === 0) break;
       adsFound += ads.length;
 
+      const adsBefore = adsAnalyzed;
       for (const ad of ads) {
         if (timeLeft() <= 0) break;
         const caption = [ad.title, ad.body].filter(Boolean).join(' — ');
@@ -103,7 +107,7 @@ export async function backfillCompetitorPostAnalysis(req: Request, res: Response
           console.error('[backfillCompetitorPostAnalysis] ad UPDATE failed:', ad.id, err.message);
         }
       }
-      if (force) break;
+      if (force || adsAnalyzed === adsBefore) break;
     }
 
     // How many are still left for next click (0 unless we ran out of time budget)
@@ -112,6 +116,7 @@ export async function backfillCompetitorPostAnalysis(req: Request, res: Response
          (SELECT COUNT(*) FROM competitor_posts p JOIN competitors c ON c.id = p.competitor_id
            WHERE p.linked_business = $1 AND (p.media_url IS NOT NULL OR p.video_url IS NOT NULL)
              AND (p.analyzed_at IS NULL OR (p.video_url IS NOT NULL AND p.video_analyzed_at IS NULL))
+             AND (p.posted_at IS NULL OR p.posted_at >= NOW() - INTERVAL '${MAX_POST_AGE_DAYS} days')
              AND c.tracking_status = 'approved') AS posts,
          (SELECT COUNT(*) FROM "competitor_ad_history" a JOIN competitors c ON c.id = a.competitor_id
            WHERE a.linked_business = $1 AND a.media_url IS NOT NULL AND a.analyzed_at IS NULL AND c.tracking_status = 'approved') AS ads`,
