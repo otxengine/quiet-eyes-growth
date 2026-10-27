@@ -179,13 +179,13 @@ async function scrapeAndSave(
 
   // Best-effort creative analysis for a row that was never analyzed — used both
   // for brand-new posts and as a backfill for posts scraped before this feature existed.
-  async function analyzeAndSave(id: string, mediaUrl: string | null, caption: string | null, videoUrl: string | null, alreadyVideoAnalyzed: boolean) {
+  async function analyzeAndSave(id: string, mediaUrl: string | null, caption: string | null, videoUrl: string | null, alreadyVideoAnalyzed: boolean, postedAt: Date | string | null = null) {
     if (!mediaUrl && !videoUrl) return;
     // videoUrl only passed through when this row hasn't been video-analyzed yet —
     // once video_analyzed_at is set, never re-run video analysis (cost control).
     const useVideoUrl = alreadyVideoAnalyzed ? null : videoUrl;
     try {
-      const analysis = await analyzePostCreative({ caption, platform, mediaUrl, videoUrl: useVideoUrl });
+      const analysis = await analyzePostCreative({ caption, platform, mediaUrl, videoUrl: useVideoUrl, postedAt });
       if (analysis) {
         await (prisma as any).$executeRawUnsafe(
           `UPDATE competitor_posts SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW(), has_offer = $2, has_cta = $3
@@ -246,7 +246,7 @@ async function scrapeAndSave(
   // loop below and drained afterward in ANALYSIS_CONCURRENCY-wide batches — keeps
   // dedup bookkeeping (existingIds/existingUrls/existingHashes) strictly in-order
   // while letting the slow part (LLM calls) run in parallel.
-  const toAnalyze: Array<{ id: string; mediaUrl: string | null; caption: string | null; videoUrl: string | null; alreadyVideoAnalyzed: boolean }> = [];
+  const toAnalyze: Array<{ id: string; mediaUrl: string | null; caption: string | null; videoUrl: string | null; alreadyVideoAnalyzed: boolean; postedAt: Date | string | null }> = [];
   let firstPostKeys: string[] = [];
   let firstPostMediaSample: Record<string, any> | null = null;
 
@@ -350,7 +350,7 @@ async function scrapeAndSave(
       if (!matchedRow.analyzed_at || (!matchedRow.video_analyzed_at && rowVideoUrl)) {
         toAnalyze.push({
           id: matchedRow.id, mediaUrl: upgradedS3 || matchedRow.media_url, caption,
-          videoUrl: rowVideoUrl, alreadyVideoAnalyzed: !!matchedRow.video_analyzed_at,
+          videoUrl: rowVideoUrl, alreadyVideoAnalyzed: !!matchedRow.video_analyzed_at, postedAt,
         });
       }
       if (externalId)       existingIds.add(externalId);
@@ -409,7 +409,7 @@ async function scrapeAndSave(
       upserted++;
 
       // Analyze the creative (topic/offer/hooks/style/cta) — best-effort, batched after the loop (see ANALYSIS_CONCURRENCY).
-      toAnalyze.push({ id: newPostId, mediaUrl, caption, videoUrl: rawVideoUrl, alreadyVideoAnalyzed: false });
+      toAnalyze.push({ id: newPostId, mediaUrl, caption, videoUrl: rawVideoUrl, alreadyVideoAnalyzed: false, postedAt });
     } catch (insertErr: any) {
       const errMsg = (insertErr.message ?? '').trim();
       // 23505 = unique constraint — row already exists, not a real failure
@@ -422,7 +422,7 @@ async function scrapeAndSave(
   for (let i = 0; i < toAnalyze.length; i += ANALYSIS_CONCURRENCY) {
     await Promise.allSettled(
       toAnalyze.slice(i, i + ANALYSIS_CONCURRENCY).map(t =>
-        analyzeAndSave(t.id, t.mediaUrl, t.caption, t.videoUrl, t.alreadyVideoAnalyzed)),
+        analyzeAndSave(t.id, t.mediaUrl, t.caption, t.videoUrl, t.alreadyVideoAnalyzed, t.postedAt)),
     );
   }
 

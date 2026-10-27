@@ -970,6 +970,8 @@ app.listen(PORT, async () => {
     email      TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
+  // Per-day spend counters (lib/analyzePostCreative daily cap), shared by API and worker.
+  await sql(`CREATE TABLE IF NOT EXISTS ai_daily_usage (day DATE NOT NULL, kind TEXT NOT NULL, n INT NOT NULL DEFAULT 0, PRIMARY KEY (day, kind))`);
 
   // ── Stripe billing columns on organizations (legacy, pre-Paddle) ───────────────────────────────
   await sql(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS stripe_customer_id     TEXT`);
