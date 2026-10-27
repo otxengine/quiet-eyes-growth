@@ -10,6 +10,11 @@ if (process.env.NODE_ENV === 'production') {
       process.exit(1);
     }
   }
+  // A placeholder key (e.g. your_key_here) would leave Clerk off, so refuse those too.
+  if (!require('./middleware/auth').CLERK_ENABLED) {
+    console.error('FATAL: CLERK_SECRET_KEY / CLERK_PUBLISHABLE_KEY are not real Clerk keys — refusing to start');
+    process.exit(1);
+  }
 }
 
 // META_ENCRYPTION_KEY must be a 64-char hex string (32 bytes) — see lib/crypto.ts.
@@ -47,7 +52,7 @@ import metaWebhookRouter from './routes/meta/webhook';
 import dataforseoWebhookRouter from './routes/webhooks/dataforseo';
 import clerkWebhookRouter from './routes/webhooks/clerk';
 import { requireApiAuth } from './middleware/apiAuth';
-import { isAdminKeyRequest } from './middleware/auth';
+import { CLERK_ENABLED, clerkAuth, frontendOrigins, isAdminKeyRequest, isCronRequest, safeEqual } from './middleware/auth';
 import conversationsRouter from './routes/conversations';
 import orchestratorRouter from './routes/orchestrator';
 import approvalsRouter from './routes/approvals';
@@ -143,22 +148,13 @@ app.get('/api/admin-verify', (req: any, res: any) => {
   const key = req.headers['x-admin-key'];
   const secret = process.env.ADMIN_SECRET || '';
   if (!secret) return res.status(503).json({ error: 'ADMIN_SECRET not configured on server' });
-  if (key !== secret) return res.status(401).json({ error: 'bad_key' });
+  if (!safeEqual(key, secret)) return res.status(401).json({ error: 'bad_key' });
   return res.json({ ok: true });
 });
 
 // Only mount Clerk middleware when a real secret key is configured
-const clerkKey = process.env.CLERK_SECRET_KEY || '';
-const clerkPubKey = process.env.CLERK_PUBLISHABLE_KEY || '';
-const clerkEnabled = clerkKey && !clerkKey.includes('your_key_here') &&
-                     clerkPubKey && !clerkPubKey.includes('your_key_here');
-if (clerkEnabled) {
-  const { clerkMiddleware } = require('@clerk/express');
-  // Skip Clerk middleware for admin key requests — prevents session cookie interference
-  app.use((req: any, res: any, next: any) => {
-    if (req.headers['x-admin-key']) return next();
-    clerkMiddleware({ publishableKey: clerkPubKey })(req, res, next);
-  });
+if (CLERK_ENABLED) {
+  app.use(clerkAuth(frontendOrigins())); // session tokens minted for any other origin are refused
   console.log('Clerk auth enabled');
 } else {
   console.log('Clerk not configured — running in dev mode (all requests as dev-user)');
@@ -241,12 +237,11 @@ app.get('/api/health', async (req, res) => {
 });
 
 
-// External cron trigger — POST /api/cron/run?secret=XXX
+// External cron trigger — POST /api/cron/run with header x-cron-secret: XXX
 // Called by cron-job.org every 14 minutes to keep Render alive + run pipelines
 app.post('/api/cron/run', async (_req, res) => {
-  const secret = _req.query.secret as string;
   // Always require CRON_SECRET — unprotected cron endpoint burns API budget
-  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+  if (!isCronRequest(_req)) {
     return res.status(401).json({ error: 'unauthorized' });
   }
   try {
@@ -903,6 +898,7 @@ app.listen(PORT, async () => {
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
   await sql(`ALTER TABLE oauth_state_store ADD COLUMN IF NOT EXISTS code_verifier TEXT`);
+  await sql(`ALTER TABLE oauth_state_store ADD COLUMN IF NOT EXISTS user_id TEXT`);
   await sql(`CREATE INDEX IF NOT EXISTS idx_oauth_state_expires ON oauth_state_store(expires_at)`);
   await sql(`DELETE FROM oauth_state_store WHERE expires_at < NOW()`);
 

@@ -2,8 +2,10 @@
  * OAuth 2.0 router — /api/oauth
  *
  * Endpoints:
- *   GET  /api/oauth/initiate/:platform?businessId=...
- *   GET  /api/oauth/callback/:platform
+ *   GET  /api/oauth/initiate/:platform?businessId=...  — signed in; state is bound to the user + business
+ *   GET  /api/oauth/callback/:platform                 — provider redirect → the app's /oauth/callback page
+ *   POST /api/oauth/complete                           — signed in; the same user exchanges the code
+ *   POST /api/oauth/confirm-page                       — signed in; saves the page / location picked
  *   POST /api/oauth/disconnect
  *
  * Supported platforms: facebook_page | instagram_business | google_business
@@ -18,15 +20,22 @@
 import { Router, Request, Response } from 'express';
 import { randomBytes } from 'crypto';
 import { prisma } from '../db';
-import { tryEncryptToken, tryDecryptToken } from '../lib/crypto';
+import { tryEncryptToken } from '../lib/crypto';
+import { getUserBusinessIds } from '../lib/ownership';
+import { disconnectIntegrations } from '../lib/revokeTokens';
+import { frontendOrigins, getUserId } from '../middleware/auth';
 import { requireOwnsBusiness } from '../middleware/businessAccess';
 
 const router = Router();
 
-const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+// A connect failure the user can act on (no pages, no Instagram account, provider refused): sent as
+// a 422 with its message. Anything else is a 5xx, whose body hideServerErrors replaces.
+class ConnectError extends Error {}
+const connectFailure = (res: Response, err: any) =>
+  res.status(err instanceof ConnectError ? 422 : 502).json({ error: err.message });
 
-// Temporary in-memory store for page picker sessions (TTL 10 min)
-const pagePickerSessions = new Map<string, { businessId: string; platform: string; pages: any[]; expires: number }>();
+// Temporary in-memory store for page picker sessions (TTL 10 min); userId: who may confirm
+const pagePickerSessions = new Map<string, { businessId: string; platform: string; pages: any[]; expires: number; userId?: string }>();
 function createPickerSession(businessId: string, platform: string, pages: any[]): string {
   const key = randomBytes(16).toString('hex');
   pagePickerSessions.set(key, { businessId, platform, pages, expires: Date.now() + 10 * 60 * 1000 });
@@ -55,45 +64,32 @@ const env = () => {
 };
 
 // ── DB-backed state store — survives restarts and multi-instance deployments ──
-// Table: oauth_state_store (id TEXT PK, business_id TEXT, platform TEXT, expires_at TIMESTAMPTZ)
+// Table: oauth_state_store (id TEXT PK, business_id TEXT, platform TEXT, user_id TEXT, expires_at TIMESTAMPTZ)
 // Created at server startup (see index.ts).
 
-async function generateState(platform: string, businessId: string, codeVerifier?: string): Promise<string> {
+// 128-bit, 10-minute state bound to the signed-in user who asked for it and to the business they own.
+export async function generateState(platform: string, businessId: string, userId: string, codeVerifier?: string): Promise<string> {
   const state     = randomBytes(16).toString('hex');
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-  try {
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO oauth_state_store (id, business_id, platform, expires_at, code_verifier)
-       VALUES ($1,$2,$3,$4::timestamptz,$5)
-       ON CONFLICT (id) DO UPDATE SET expires_at = EXCLUDED.expires_at, code_verifier = EXCLUDED.code_verifier`,
-      state, businessId, platform, expiresAt, codeVerifier ?? null,
-    );
-  } catch {
-    // Fallback: try without code_verifier column (older schema)
-    try {
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO oauth_state_store (id, business_id, platform, expires_at) VALUES ($1,$2,$3,$4::timestamptz)
-         ON CONFLICT (id) DO UPDATE SET expires_at = EXCLUDED.expires_at`,
-        state, businessId, platform, expiresAt,
-      );
-    } catch {}
-  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO oauth_state_store (id, business_id, platform, user_id, expires_at, code_verifier)
+     VALUES ($1,$2,$3,$4,$5::timestamptz,$6)`,
+    state, businessId, platform, userId, expiresAt, codeVerifier ?? null,
+  );
   return state;
 }
 
-async function consumeState(state: string): Promise<{ businessId: string; platform: string; codeVerifier?: string } | null> {
-  try {
-    const rows = await prisma.$queryRawUnsafe(
-      `DELETE FROM oauth_state_store WHERE id=$1 RETURNING business_id, platform, expires_at, code_verifier`,
-      state,
-    ) as Array<{ business_id: string; platform: string; expires_at: string; code_verifier?: string }>;
-    const row = rows[0];
-    if (!row) return null;
-    if (new Date(row.expires_at) < new Date()) return null;
-    return { businessId: row.business_id, platform: row.platform, codeVerifier: row.code_verifier ?? undefined };
-  } catch {
-    return null;
-  }
+// Single use, unexpired, same platform, and only for the user who started the flow, who must still
+// own the business. To anyone else the state is useless.
+export async function consumeState(state: string, userId: string, platform: string): Promise<{ businessId: string; codeVerifier?: string } | null> {
+  const rows = await prisma.$queryRawUnsafe(
+    `DELETE FROM oauth_state_store WHERE id=$1 AND user_id=$2 AND platform=$3 AND expires_at > NOW()
+     RETURNING business_id, code_verifier`,
+    state, userId, platform,
+  ) as Array<{ business_id: string; code_verifier?: string | null }>;
+  const row = rows[0];
+  if (!row || !(await getUserBusinessIds(userId)).includes(row.business_id)) return null;
+  return { businessId: row.business_id, codeVerifier: row.code_verifier ?? undefined };
 }
 
 function callbackUrl(platform: string): string {
@@ -144,7 +140,15 @@ router.get('/initiate/:platform', requireOwnsBusiness(req => req.query.businessI
     });
   }
 
-  const state = await generateState(String(platform), String(businessId));
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' }); // the admin key has no user to bind the flow to
+  let state: string;
+  try {
+    state = await generateState(String(platform), String(businessId), userId);
+  } catch (err: any) {
+    console.error('[oauth/initiate] state insert failed:', err.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
   let authUrl: string;
 
   if (platform === 'facebook_page' || platform === 'instagram_business') {
@@ -223,9 +227,9 @@ async function handleFacebookCallback(code: string, platform: string, businessId
   const tokenRes = await fetch(
     `https://graph.facebook.com/v19.0/oauth/access_token?` +
     `client_id=${env().FACEBOOK_APP_ID}&client_secret=${env().FACEBOOK_APP_SECRET}` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`,
+    `&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}`,
   );
-  if (!tokenRes.ok) throw new Error('Token exchange failed');
+  if (!tokenRes.ok) throw new ConnectError('Token exchange failed');
   const tokenData: any = await tokenRes.json();
   const shortLivedToken = tokenData.access_token;
 
@@ -245,7 +249,7 @@ async function handleFacebookCallback(code: string, platform: string, businessId
   const pagesData: any = pagesRes.ok ? await pagesRes.json() : {};
   const pages: any[] = pagesData?.data || [];
 
-  if (pages.length === 0) throw new Error('No Facebook Pages found for this account');
+  if (pages.length === 0) throw new ConnectError('No Facebook Pages found for this account');
 
   console.log(`[oauth/facebook] found ${pages.length} page(s):`, pages.map((p: any) => `${p.name} (${p.id})`));
 
@@ -278,7 +282,7 @@ async function saveFacebookPage(businessId: string, platform: string, page: any)
     if (!igId) {
       // The Facebook Page doesn't have a linked Instagram Business/Creator account.
       // Storing the Facebook Page ID would cause silent failures at publish time.
-      throw new Error(
+      throw new ConnectError(
         `הדף "${pageName}" לא מחובר לחשבון Instagram עסקי. ` +
         `כדי לחבר: עבור להגדרות דף Facebook → Instagram → "Connect account". ` +
         `ודא שחשבון ה-Instagram שלך מוגדר כ-Business או Creator.`
@@ -325,9 +329,9 @@ async function handleWhatsAppCallback(code: string, businessId: string) {
   const tokenRes = await fetch(
     `https://graph.facebook.com/v19.0/oauth/access_token?` +
     `client_id=${env().FACEBOOK_APP_ID}&client_secret=${env().FACEBOOK_APP_SECRET}` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`,
+    `&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}`,
   );
-  if (!tokenRes.ok) throw new Error('Token exchange failed');
+  if (!tokenRes.ok) throw new ConnectError('Token exchange failed');
   const tokenData: any = await tokenRes.json();
   const shortToken = tokenData.access_token;
 
@@ -404,7 +408,7 @@ export async function listGbpLocations(accessToken: string): Promise<GbpLocation
   const acctRes = await fetch('https://mybusinessaccountmanagement.googleapis.com/v1/accounts', { headers });
   if (!acctRes.ok) {
     console.error(`[oauth/google_business] accounts.list ${acctRes.status}:`, (await acctRes.text().catch(() => '')).slice(0, 500));
-    throw new Error(`Google Business Profile החזיר שגיאה (${acctRes.status}). נסה שוב מאוחר יותר.`);
+    throw new ConnectError(`Google Business Profile החזיר שגיאה (${acctRes.status}). נסה שוב מאוחר יותר.`);
   }
   const accounts: any[] = ((await acctRes.json()) as any)?.accounts || [];
   const locations: GbpLocation[] = [];
@@ -428,7 +432,7 @@ export async function listGbpLocations(accessToken: string): Promise<GbpLocation
     }
   }
   if (!locations.length) {
-    throw new Error('לא נמצא עסק ב-Google Business Profile בחשבון הזה. ודא שאתה מחובר עם החשבון שמנהל את העסק ונסה שוב.');
+    throw new ConnectError('לא נמצא עסק ב-Google Business Profile בחשבון הזה. ודא שאתה מחובר עם החשבון שמנהל את העסק ונסה שוב.');
   }
   return locations;
 }
@@ -487,7 +491,7 @@ async function handleGoogleCallback(code: string, businessId: string) {
       grant_type:    'authorization_code',
     }).toString(),
   });
-  if (!tokenRes.ok) throw new Error('Google token exchange failed');
+  if (!tokenRes.ok) throw new ConnectError('Google token exchange failed');
   const tokenData: any = await tokenRes.json();
   const accessToken  = tokenData.access_token  || '';
   const refreshToken = tokenData.refresh_token || '';  // long-lived; must be stored
@@ -514,9 +518,9 @@ async function handleMetaAdsCallback(code: string, businessId: string) {
   const tokenRes = await fetch(
     `https://graph.facebook.com/v19.0/oauth/access_token?` +
     `client_id=${env().FACEBOOK_APP_ID}&client_secret=${env().FACEBOOK_APP_SECRET}` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`,
+    `&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}`,
   );
-  if (!tokenRes.ok) throw new Error('Meta Ads token exchange failed');
+  if (!tokenRes.ok) throw new ConnectError('Meta Ads token exchange failed');
   const tokenData: any = await tokenRes.json();
   const shortLivedToken = tokenData.access_token;
 
@@ -533,12 +537,12 @@ async function handleMetaAdsCallback(code: string, businessId: string) {
   const adAccountsRes = await fetch(
     `https://graph.facebook.com/v19.0/me/adaccounts?fields=id,name,account_status,currency&limit=20&access_token=${userToken}`,
   );
-  if (!adAccountsRes.ok) throw new Error('Failed to fetch Meta Ad Accounts');
+  if (!adAccountsRes.ok) throw new ConnectError('Failed to fetch Meta Ad Accounts');
   const adAccountsData: any = await adAccountsRes.json();
   const adAccounts: any[] = adAccountsData?.data || [];
 
   if (adAccounts.length === 0) {
-    throw new Error(
+    throw new ConnectError(
       'לא נמצאו חשבונות פרסום Meta. צור חשבון Ad Account ב-business.facebook.com ונסה שוב.',
     );
   }
@@ -590,7 +594,7 @@ async function handleGoogleAdsCallback(code: string, businessId: string) {
       grant_type:    'authorization_code',
     }).toString(),
   });
-  if (!tokenRes.ok) throw new Error('Google Ads token exchange failed');
+  if (!tokenRes.ok) throw new ConnectError('Google Ads token exchange failed');
   const tokenData: any = await tokenRes.json();
   const accessToken  = tokenData.access_token  || '';
   const refreshToken = tokenData.refresh_token || '';
@@ -658,22 +662,36 @@ async function handleGoogleAdsCallback(code: string, businessId: string) {
 }
 
 // ── Callback route ────────────────────────────────────────────────────────────
-router.get('/callback/:platform', async (req: Request, res: Response) => {
-  const { platform }             = req.params;
-  const code = req.query.code as string;
-  const { state, error } = req.query as Record<string, string>;
+// Nothing is exchanged here: this redirect carries no proof of who is signed in. The popup goes on
+// to the app's /oauth/callback page (our frontend origin, same browser, signed in), which finishes
+// with an authenticated POST /complete, so only the browser and user that started the flow can
+// finish it. The code rides in the fragment, which never reaches a server. (Meta's pages cut
+// window.opener, so the popup can't hand anything back to the window that opened it.)
+router.get('/callback/:platform', (req: Request, res: Response) => {
+  const { platform } = req.params;
+  const { code, state, error } = req.query as Record<string, string>;
+  const ok = !error && typeof code === 'string' && typeof state === 'string' && !!code && !!state;
+  const params = ok ? { platform, code, state } : { error: typeof error === 'string' && error ? error : 'missing_params' };
+  return res.redirect(`${frontendOrigins()[0]}/oauth/callback#${new URLSearchParams(params)}`);
+});
 
-  if (error) {
-    return res.redirect(`${env().FRONTEND_URL}/integrations?oauth_error=${encodeURIComponent(error)}`);
-  }
-  if (!code || !state) {
-    return res.redirect(`${env().FRONTEND_URL}/integrations?oauth_error=missing_params`);
+// ── Complete — the signed-in user who started the flow exchanges the code ─────
+router.post('/complete', async (req: Request, res: Response) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  const { platform, code, state } = req.body ?? {};
+  if (typeof platform !== 'string' || typeof code !== 'string' || typeof state !== 'string') {
+    return res.status(400).json({ error: 'Missing params' });
   }
 
-  const stateData = await consumeState(state);
-  if (!stateData) {
-    return res.redirect(`${env().FRONTEND_URL}/integrations?oauth_error=invalid_state`);
+  let stateData: Awaited<ReturnType<typeof consumeState>>;
+  try {
+    stateData = await consumeState(state, userId, platform);
+  } catch (err: any) {
+    console.error('[oauth/complete] state lookup failed:', err.message);
+    return res.status(500).json({ error: 'Internal server error' });
   }
+  if (!stateData) return res.status(400).json({ error: 'invalid_state' });
 
   try {
     let result: any;
@@ -688,153 +706,53 @@ router.get('/callback/:platform', async (req: Request, res: Response) => {
     } else if (platform === 'meta_ads') {
       result = await handleMetaAdsCallback(code, stateData.businessId);
     } else {
-      return res.redirect(`${env().FRONTEND_URL}/integrations?oauth_error=unknown_platform`);
+      return res.status(400).json({ error: 'unknown_platform' });
     }
 
-    // Multiple pages — show picker (uses plain links, no fetch, no CORS issues)
+    // Several pages / locations: the app shows a picker, then calls POST /confirm-page. Names only, no tokens.
     if (result.needs_page_selection) {
-      const session = getPickerSession(result.sessionKey);
-      const pages   = session?.pages ?? [];
-      const serverBase = env().SERVER_BASE_URL;
-      const isGoogle   = result.platform === 'google_business';
-
-      const pageButtons = pages.map((_p: any, i: number) =>
-        `<a href="${serverBase}/api/oauth/confirm-page?session=${result.sessionKey}&idx=${i}" class="page-btn">
-          <div class="icon">${isGoogle ? '📍' : '📘'}</div>
-          <div><div class="name">${esc(_p.name)}</div><div class="pid">${isGoogle ? esc(_p.detail) : `ID: ${esc(_p.id)}`}</div></div>
-        </a>`
-      ).join('');
-
-      const pickerHtml = `<!DOCTYPE html>
-<html dir="rtl" lang="he">
-<head><meta charset="UTF-8"><title>בחר עמוד</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:sans-serif;padding:24px;background:#f9fafb;min-height:100vh}
-h2{font-size:15px;font-weight:700;color:#111;margin-bottom:4px}
-p{font-size:12px;color:#6b7280;margin-bottom:16px}
-.page-btn{width:100%;display:flex;align-items:center;gap:12px;padding:12px 14px;background:white;border:1px solid #e5e7eb;border-radius:10px;cursor:pointer;margin-bottom:8px;text-align:right;transition:all .15s;text-decoration:none}
-.page-btn:hover{border-color:#1877f2;background:#eff6ff}
-.icon{width:36px;height:36px;border-radius:50%;background:#1877f2;color:white;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
-.name{font-size:13px;font-weight:600;color:#111}
-.pid{font-size:10px;color:#9ca3af}
-</style></head>
-<body>
-<h2>${isGoogle ? 'בחר את העסק שברצונך לחבר' : 'בחר את הדף שברצונך לחבר'}</h2>
-<p>${isGoogle ? 'בחשבון Google הזה יש כמה עסקים — בחר את הסניף הנכון' : 'נמצאו מספר דפים — בחר את הדף הנכון לעסק זה'}</p>
-${pageButtons}
-</body></html>`;
-      return res.send(pickerHtml);
+      const s = getPickerSession(result.sessionKey)!;
+      s.userId = userId;
+      const isGoogle = result.platform === 'google_business';
+      return res.json({
+        needs_page_selection: true, platform: result.platform, session: result.sessionKey,
+        pages: s.pages.map((p: any) => ({ name: p.name, detail: isGoogle ? p.detail : `ID: ${p.id}` })),
+      });
     }
-
-    const html = `<!DOCTYPE html>
-<html dir="rtl" lang="he">
-<head><meta charset="UTF-8"><title>חיבור הצליח</title>
-<style>
-body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f0fdf4}
-.box{text-align:center;padding:40px;background:white;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.08)}
-h2{color:#10b981;margin-bottom:8px}p{color:#6b7280;font-size:14px}
-</style></head>
-<body><div class="box">
-<h2>✓ ${esc(result.page_name || 'החיבור')} הצליח!</h2>
-<p>החלון יסגר אוטומטית...</p>
-</div>
-<script>
-  if (window.opener) {
-    window.opener.postMessage({ type: 'oauth_success', platform: '${platform}' }, '*');
-  }
-  setTimeout(function(){ window.close(); }, 1500);
-</script></body></html>`;
-    return res.send(html);
-
+    return res.json({ ok: true, platform: result.platform, page_name: result.page_name });
   } catch (err: any) {
-    console.error(`[oauth/${platform}] callback error:`, err.message);
-    const safeMsgHtml = String(err.message).replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const html = `<!DOCTYPE html>
-<html dir="rtl" lang="he"><head><meta charset="UTF-8"><title>שגיאה</title>
-<style>
-body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;background:#fef2f2}
-.box{text-align:center;padding:40px;background:white;border-radius:16px}h2{color:#ef4444}
-</style></head>
-<body><div class="box"><h2>שגיאה בחיבור</h2><p>${safeMsgHtml}</p></div>
-<script>
-  if (window.opener) {
-    window.opener.postMessage({ type: 'oauth_error', error: '${err.message.replace(/'/g, "\\'")}' }, '*');
-  }
-  setTimeout(function(){ window.close(); }, 2500);
-</script></body></html>`;
-    return res.send(html);
+    console.error(`[oauth/${platform}] complete error:`, err.message);
+    return connectFailure(res, err);
   }
 });
 
-// Best-effort — revoke at Google so the token is actually dead, not just locally forgotten.
-// Failure here shouldn't block the customer's disconnect action.
-async function revokeGoogleToken(account: { access_token: string | null; refresh_token: string | null }) {
-  const raw = account.refresh_token || account.access_token;
-  if (!raw) return;
-  try {
-    const token = tryDecryptToken(raw);
-    const res = await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, { method: 'POST' });
-    if (!res.ok) console.warn(`[oauth/disconnect] Google revoke returned ${res.status}`);
-  } catch (e: any) {
-    console.warn('[oauth/disconnect] Google revoke failed:', e.message);
-  }
-}
-
 // ── Disconnect ────────────────────────────────────────────────────────────────
+// Revokes the token with Google / Meta, then deletes every stored copy (lib/revokeTokens.ts).
 router.post('/disconnect', requireOwnsBusiness(req => req.body?.businessId), async (req: Request, res: Response) => {
   const { businessId, platform } = req.body;
-  if (!businessId || !platform) return res.status(400).json({ error: 'Missing params' });
+  if (typeof businessId !== 'string' || typeof platform !== 'string' || !businessId || !platform) {
+    return res.status(400).json({ error: 'Missing params' });
+  }
 
   try {
-    const account = await prisma.socialAccount.findFirst({
-      where: { linked_business: businessId, platform },
-    });
-    if (account) {
-      if (platform === 'google_business' || platform === 'google_ads') {
-        await revokeGoogleToken(account);
-      }
-      await prisma.socialAccount.update({
-        where: { id: account.id },
-        data: { is_connected: false, access_token: null, refresh_token: null, last_error: null },
-      });
-    }
-
-    // Clear corresponding BusinessProfile fields
-    const bpClear: Record<string, null> = {};
-    if (platform === 'instagram_business') {
-      bpClear['instagram_access_token'] = null;
-      bpClear['instagram_page_id'] = null;
-    } else if (platform === 'facebook_page') {
-      bpClear['facebook_page_token'] = null;
-      bpClear['facebook_page_id'] = null;
-    } else if (platform === 'whatsapp_business') {
-      bpClear['whatsapp_access_token'] = null;
-      bpClear['whatsapp_phone_number_id'] = null;
-    } else if (platform === 'google_business') {
-      bpClear['google_access_token'] = null;
-    }
-    if (Object.keys(bpClear).length > 0) {
-      await prisma.businessProfile.updateMany({ where: { id: businessId }, data: bpClear });
-    }
-
+    await disconnectIntegrations([businessId], platform);
     return res.json({ ok: true });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-// ── Confirm page selection (plain GET link from picker — no CORS) ──────────────
-router.get('/confirm-page', async (req: Request, res: Response) => {
-  const { session, idx } = req.query as Record<string, string>;
-  const s = getPickerSession(session);
-  if (!s) {
-    return res.send('<html><body><p>Session expired — please reconnect.</p></body></html>');
+// ── Confirm page selection — the same signed-in user who ran /complete ───────
+router.post('/confirm-page', async (req: Request, res: Response) => {
+  const { session, idx } = req.body ?? {};
+  const s = typeof session === 'string' ? getPickerSession(session) : null;
+  if (!s || !s.userId || s.userId !== getUserId(req)) {
+    return res.status(400).json({ error: 'החיבור פג תוקף — נסה לחבר שוב.' });
   }
 
   const page = s.pages[Number(idx)];
   if (!page) {
-    return res.send('<html><body><p>Invalid selection.</p></body></html>');
+    return res.status(400).json({ error: 'Invalid selection' });
   }
 
   try {
@@ -845,28 +763,10 @@ router.get('/confirm-page', async (req: Request, res: Response) => {
         ? await saveGoogleLocation(s.businessId, page.tokens, page)
         : await saveFacebookPage(s.businessId, s.platform, page);
     pagePickerSessions.delete(session);
-
-    return res.send(`<!DOCTYPE html>
-<html dir="rtl" lang="he">
-<head><meta charset="UTF-8"><title>חיבור הצליח</title>
-<style>
-body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f0fdf4}
-.box{text-align:center;padding:40px;background:white;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.08)}
-h2{color:#10b981;margin-bottom:8px}p{color:#6b7280;font-size:14px}
-</style></head>
-<body><div class="box">
-<h2>✓ ${esc(result.page_name)} חובר בהצלחה!</h2>
-<p>החלון יסגר אוטומטית...</p>
-</div>
-<script>
-  if (window.opener) {
-    window.opener.postMessage({ type: 'oauth_success', platform: '${s.platform}', page_name: ${JSON.stringify(String(result.page_name)).replace(/</g, '\\u003c')} }, '*');
-  }
-  setTimeout(function(){ window.close(); }, 1500);
-</script></body></html>`);
+    return res.json({ ok: true, platform: s.platform, page_name: result.page_name });
   } catch (err: any) {
     console.error('[oauth/confirm-page]', err.message);
-    return res.send(`<html><body><p>Error: ${err.message}</p></body></html>`);
+    return connectFailure(res, err);
   }
 });
 
