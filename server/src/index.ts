@@ -525,8 +525,7 @@ app.listen(PORT, async () => {
     link            TEXT,
     first_seen_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_seen_at    TIMESTAMPTZ,
-    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
-    raw_json        JSONB
+    is_active       BOOLEAN NOT NULL DEFAULT TRUE
   )`);
   await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS linked_business TEXT`);
   await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS comments_count INT`);
@@ -541,7 +540,6 @@ app.listen(PORT, async () => {
   // separate from media_url (thumbnail); video_analyzed_at gates one-time video analysis.
   await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS video_url TEXT`);
   await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS video_analyzed_at TIMESTAMPTZ`);
-  await sql(`ALTER TABLE competitor_ad_history ALTER COLUMN raw_json TYPE TEXT USING raw_json::TEXT`);
   await sql(`ALTER TABLE competitor_ad_history ADD COLUMN IF NOT EXISTS linked_business TEXT`);
   await sql(`ALTER TABLE competitor_ad_history ADD COLUMN IF NOT EXISTS media_url TEXT`);
   await sql(`ALTER TABLE competitor_ad_history ADD COLUMN IF NOT EXISTS video_url TEXT`);

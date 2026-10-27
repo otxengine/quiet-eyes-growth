@@ -11,7 +11,7 @@ jest.mock('../db', () => ({
   prisma: {
     businessProfile: { findFirst: jest.fn() },
     competitor: { findMany: jest.fn(), update: jest.fn().mockResolvedValue({}) },
-    review: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn().mockResolvedValue({}) },
+    review: { findMany: jest.fn().mockResolvedValue([]), createMany: jest.fn().mockResolvedValue({ count: 0 }) },
     dataForSeoReviewTask: { create: jest.fn().mockResolvedValue({}) },
     $queryRawUnsafe: (...args: any[]) => queryRawUnsafe(...args),
     $executeRawUnsafe: (...args: any[]) => executeRawUnsafe(...args),

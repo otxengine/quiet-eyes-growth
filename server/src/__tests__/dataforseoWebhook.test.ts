@@ -6,7 +6,7 @@ jest.mock('../db', () => ({
   prisma: {
     dataForSeoReviewTask: { findUnique: jest.fn(), update: jest.fn() },
     businessProfile:      { findFirst: jest.fn() },
-    review:                { findMany: jest.fn(), create: jest.fn() },
+    review:                { findMany: jest.fn(), createMany: jest.fn() },
   },
 }));
 jest.mock('../lib/automationLog', () => ({ writeAutomationLog: jest.fn().mockResolvedValue(undefined) }));
@@ -37,7 +37,7 @@ const taskFindUnique = prisma.dataForSeoReviewTask.findUnique as jest.Mock;
 const taskUpdate     = prisma.dataForSeoReviewTask.update as jest.Mock;
 const bpFindFirst    = prisma.businessProfile.findFirst as jest.Mock;
 const reviewFindMany = prisma.review.findMany as jest.Mock;
-const reviewCreate   = prisma.review.create as jest.Mock;
+const reviewCreate   = prisma.review.createMany as jest.Mock;
 
 const OLD_ENV = process.env;
 
@@ -74,7 +74,7 @@ beforeEach(() => {
   process.env = { ...OLD_ENV, DATAFORSEO_WEBHOOK_SECRET: 's3cr3t' };
   bpFindFirst.mockResolvedValue({ id: 'bp1', google_place_id: 'ChIJabc' });
   reviewFindMany.mockResolvedValue([]);
-  reviewCreate.mockImplementation(async (args: any) => args.data);
+  reviewCreate.mockImplementation(async (args: any) => ({ count: args.data.length }));
   taskUpdate.mockResolvedValue({});
 });
 
@@ -139,7 +139,7 @@ describe('processDataForSeoReviewsPostback', () => {
     }));
 
     expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ created_at: '2026-08-14T09:23:18.000Z' }),
+      data: [expect.objectContaining({ created_at: '2026-08-14T09:23:18.000Z' })],
     }));
   });
 
@@ -149,7 +149,7 @@ describe('processDataForSeoReviewsPostback', () => {
       result: [{ items: [{ review_text: 'שירות מעולה, ממליץ בחום', rating: { value: 5 }, review_id: 'rev1' }] }],
     }));
 
-    const createdAt = reviewCreate.mock.calls[0][0].data.created_at;
+    const createdAt = reviewCreate.mock.calls[0][0].data[0].created_at;
     expect(new Date(createdAt).getTime()).not.toBeNaN();
   });
 
@@ -169,10 +169,10 @@ describe('processDataForSeoReviewsPostback', () => {
     await processDataForSeoReviewsPostback(taskPayload());
 
     expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
+      data: [expect.objectContaining({
         platform: 'Google', linked_business: 'bp1', response_status: 'pending',
         source_origin: 'dataforseo_google_reviews', google_review_id: 'rev1',
-      }),
+      })],
     }));
     expect(taskUpdate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ status: 'complete', new_reviews_count: 1 }),
@@ -194,13 +194,31 @@ describe('processDataForSeoReviewsPostback', () => {
     });
 
     expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ linked_competitor: 'comp1', response_status: null }),
+      data: [expect.objectContaining({ linked_competitor: 'comp1', response_status: null })],
     }));
     expect(backfillTopicsFor).toHaveBeenCalledWith({ linked_competitor: 'comp1' }, {});
     expect(detectCompetitorMentions).not.toHaveBeenCalled();
     expect(createNegativeReviewAlerts).not.toHaveBeenCalled();
     expect(publishNewReviewEvents).not.toHaveBeenCalled();
     expect(snapshotRatingHistory).not.toHaveBeenCalled();
+  });
+
+  test('competitor review already stored under the same business is skipped by the DB, not counted', async () => {
+    // Competitor dedup only sees linked_competitor rows; (linked_business, google_review_id)
+    // can still collide — createMany skipDuplicates returns count 0 instead of a P2002.
+    taskFindUnique.mockResolvedValue(COMPETITOR_TASK_ROW);
+    reviewCreate.mockResolvedValue({ count: 0 });
+    await processDataForSeoReviewsPostback({
+      tasks: [{
+        id: 'task456', status_code: 20000, cost: 0.01,
+        result: [{ items: [{ review_text: 'לא מרוצה בכלל מהשירות', rating: { value: 1 }, review_id: 'rev2' }] }],
+      }],
+    });
+
+    expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({ skipDuplicates: true }));
+    expect(taskUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'complete', new_reviews_count: 0 }),
+    }));
   });
 
   test('skips items already deduped by google_review_id', async () => {

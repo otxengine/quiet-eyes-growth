@@ -19,7 +19,7 @@ jest.mock('../db', () => ({
     },
     review: {
       findMany: jest.fn(async () => []),
-      create:   jest.fn(async (args: any) => { createdRows.push(args.data); return args.data; }),
+      createMany: jest.fn(async (args: any) => { createdRows.push(...args.data); return { count: args.data.length }; }),
     },
   },
 }));
