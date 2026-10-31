@@ -2,6 +2,7 @@ import React from 'react';
 import { Container, CtaButton } from '../ui/primitives.jsx';
 import { MODULES, featurePath } from '../content/modules.js';
 import useReveal from '../lib/useReveal.js';
+import { BLOG_POSTS, postPath } from '../content/blogPosts.js';
 
 const formatDate = (iso) =>
   new Date(iso + 'T00:00:00Z').toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -10,6 +11,7 @@ const formatDate = (iso) =>
 export default function BlogPost({ post }) {
   const revealRef = useReveal();
   const related = MODULES.filter((m) => post.relatedSlugs.includes(m.slug));
+  const relatedPosts = BLOG_POSTS.filter((p) => post.relatedPosts?.includes(p.slug));
 
   return (
     <div ref={revealRef}>
@@ -26,12 +28,25 @@ export default function BlogPost({ post }) {
             <h1 className="mt-4 text-[28px] md:text-[36px] leading-tight">{post.title}</h1>
             <div className="mt-3 flex items-center gap-3 text-[13px]" style={{ color: 'var(--mkt-muted)' }}>
               <time dateTime={post.datePublished}>{formatDate(post.datePublished)}</time>
+              {post.dateModified && post.dateModified !== post.datePublished && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span>עודכן <time dateTime={post.dateModified}>{formatDate(post.dateModified)}</time></span>
+                </>
+              )}
               <span aria-hidden="true">·</span>
               <span>{post.readingMinutes} דקות קריאה</span>
               <span aria-hidden="true">·</span>
               <span>צוות Cortexi</span>
             </div>
           </header>
+
+          {post.answer && (
+            <div className="mkt-card mt-6 p-5">
+              <div className="text-[12.5px] font-bold" style={{ color: 'var(--mkt-muted)' }}>בקצרה</div>
+              <p className="mt-1.5 text-[15.5px] leading-relaxed font-medium">{post.answer}</p>
+            </div>
+          )}
 
           <p className="mt-6 text-[16px] leading-relaxed font-medium" style={{ color: 'var(--mkt-ink-2)' }}>
             {post.intro}
@@ -57,6 +72,35 @@ export default function BlogPost({ post }) {
               )}
             </section>
           ))}
+
+          {post.faq?.length > 0 && (
+            <section className="mt-10">
+              <h2 className="text-[21px] leading-snug">שאלות נפוצות</h2>
+              <dl className="mt-4 space-y-5">
+                {post.faq.map((it) => (
+                  <div key={it.q}>
+                    <dt className="text-[15.5px] font-bold">{it.q}</dt>
+                    <dd className="mt-1.5 text-[14.5px] leading-[1.8]" style={{ color: 'var(--mkt-ink-2)' }}>{it.a}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          )}
+
+          {relatedPosts.length > 0 && (
+            <aside className="mt-12 pt-8 border-t" style={{ borderColor: 'var(--mkt-border)' }}>
+              <div className="text-[13px] font-bold mb-3" style={{ color: 'var(--mkt-muted)' }}>מאמרים קשורים</div>
+              <ul className="space-y-2">
+                {relatedPosts.map((p) => (
+                  <li key={p.slug}>
+                    <a href={postPath(p)} className="text-[14.5px] font-bold hover:underline" style={{ color: 'var(--mkt-ink)' }}>
+                      {p.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </aside>
+          )}
 
           {/* Related modules — internal links */}
           <aside className="mt-12 pt-8 border-t" style={{ borderColor: 'var(--mkt-border)' }}>

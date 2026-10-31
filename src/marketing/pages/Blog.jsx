@@ -1,6 +1,6 @@
 import React from 'react';
 import { Container, Section, GradientText, CtaButton } from '../ui/primitives.jsx';
-import { BLOG_POSTS, blogPath } from '../content/blogPosts.js';
+import { BLOG_POSTS, postPath } from '../content/blogPosts.js';
 import useReveal from '../lib/useReveal.js';
 
 const formatDate = (iso) =>
@@ -29,7 +29,7 @@ export default function Blog() {
             {BLOG_POSTS.map((post) => (
               <a
                 key={post.slug}
-                href={blogPath(post.slug)}
+                href={postPath(post)}
                 className="mkt-card mkt-reveal block p-7 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
               >
                 <div className="flex items-center gap-3 text-[12px]" style={{ color: 'var(--mkt-muted)' }}>
