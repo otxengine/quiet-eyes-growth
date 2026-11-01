@@ -1,7 +1,9 @@
 name: deploy-env
 # Deploys one environment. Called by deploy-staging.yml once per environment.
-# No stored AWS keys: the job trades GitHub's OIDC token for the short-lived role that
+# No stored AWS keys: the deploy job trades GitHub's OIDC token for the short-lived role that
 # infra/lib/github-oidc-stack.ts creates, which trusts only jobs in that GitHub environment.
+# Dependency code, vite.config.js and tailwind.config.js run in the build job, which can't mint
+# that token; it hands dist/ to the deploy job, which takes the role only right before cdk deploy.
 on:
   workflow_call:
     inputs:
@@ -13,29 +15,25 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-24.04-arm
+    # Only for the environment's VITE_* variables; no deployment record. Production's required
+    # reviewer still has to approve this job, and then the deploy job.
     environment:
       name: ${{ inputs.environment }}
-      url: ${{ steps.smoke.outputs.url }}
+      deployment: false
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            infra/package-lock.json
-      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
-        with:
-          role-to-assume: ${{ inputs.role }}
-          aws-region: eu-central-1
-
-      - run: npm ci --no-audit --no-fund
+          cache-dependency-path: package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run build
         env:
           VITE_API_URL: /api
@@ -46,9 +44,42 @@ jobs:
           VITE_PADDLE_ENV: ${{ vars.VITE_PADDLE_ENV }}
       - name: No server-side keys in the frontend bundle
         run: tr -d '\r' < scripts/scan-bundle-keys.sh | bash -s -- dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist-${{ inputs.environment }} # one run uploads staging and production
+          path: dist
+          if-no-files-found: error
+          retention-days: 1
 
-      - run: npm ci --no-audit --no-fund
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ steps.smoke.outputs.url }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist-${{ inputs.environment }}
+          path: dist
+      - run: npm ci --ignore-scripts --no-audit --no-fund
         working-directory: infra
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ inputs.role }}
+          aws-region: eu-central-1
       - name: cdk deploy
         working-directory: infra
         env:

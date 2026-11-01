@@ -1,4 +1,4 @@
-import { upsertSocialAccount } from '../routes/oauth';
+import { upsertSocialAccount, listGbpLocations, pickGbpLocation } from '../routes/oauth';
 import { prisma } from '../db';
 import { tryEncryptToken } from '../lib/crypto';
 
@@ -82,4 +82,49 @@ describe('AC1 KAN-21 — upsertSocialAccount', () => {
     }));
   });
 
+});
+
+// ── listGbpLocations / pickGbpLocation — v4 path, place-ID match, picker ──────
+
+describe('listGbpLocations', () => {
+  const okJson = (body: any) => ({ ok: true, json: async () => body });
+  const origFetch = global.fetch;
+  afterEach(() => { global.fetch = origFetch; });
+
+  test('lists every location across accounts with its v4 path, title and address', async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(okJson({ accounts: [{ name: 'accounts/1' }, { name: 'accounts/2' }] }))
+      .mockResolvedValueOnce(okJson({ locations: [{ name: 'locations/10', title: 'Branch A', storefrontAddress: { addressLines: ['Herzl 1'], locality: 'Haifa' }, metadata: { placeId: 'P_A' } }] }))
+      .mockResolvedValueOnce(okJson({ locations: [{ name: 'locations/20', title: 'Branch B', metadata: { placeId: 'P_B' } }] })) as any;
+    await expect(listGbpLocations('tok')).resolves.toEqual([
+      { id: 'accounts/1/locations/10', name: 'Branch A', detail: 'Herzl 1, Haifa', placeId: 'P_A' },
+      { id: 'accounts/2/locations/20', name: 'Branch B', detail: '', placeId: 'P_B' },
+    ]);
+  });
+
+  test('throws with the status when the API rejects (e.g. 0 QPM quota → 429)', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce({ ok: false, status: 429, text: async () => 'RESOURCE_EXHAUSTED' }) as any;
+    await expect(listGbpLocations('tok')).rejects.toThrow('429');
+  });
+
+  test('throws when the Google account manages no locations', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce(okJson({ accounts: [] })) as any;
+    await expect(listGbpLocations('tok')).rejects.toThrow();
+  });
+});
+
+describe('pickGbpLocation', () => {
+  const a = { id: 'accounts/1/locations/10', name: 'A', detail: '', placeId: 'P_A' };
+  const b = { id: 'accounts/1/locations/20', name: 'B', detail: '', placeId: 'P_B' };
+
+  test('picks the location matching the business place ID', () => {
+    expect(pickGbpLocation([a, b], 'P_B')).toBe(b);
+  });
+  test('picks a lone location even without a place ID match', () => {
+    expect(pickGbpLocation([a], 'P_OTHER')).toBe(a);
+  });
+  test('several locations and no match → undefined, so the owner is asked', () => {
+    expect(pickGbpLocation([a, b], null)).toBeUndefined();
+    expect(pickGbpLocation([a, b], 'P_OTHER')).toBeUndefined();
+  });
 });

@@ -32,6 +32,7 @@ jest.mock('../lib/agentCache',    () => ({ shouldSkipAgent: jest.fn(), setLastRu
 jest.mock('../lib/llm',           () => ({ invokeLLM: jest.fn(), startCostTracking: jest.fn(), popCost: jest.fn().mockReturnValue(0) }));
 jest.mock('../lib/tavily',        () => ({ tavilySearch: jest.fn() }));
 jest.mock('../lib/automationLog', () => ({ writeAutomationLog: jest.fn() }));
+jest.mock('../lib/crypto',       () => ({ tryDecryptToken: (v: string) => v })); // fixtures hold decrypted tokens
 jest.mock('../lib/eventBus',      () => ({ publishEvent: jest.fn() }));
 
 // Mock global fetch
@@ -1188,5 +1189,45 @@ describe('collectReviews — KAN-119 AC3: SerpAPI unavailable → Places fallbac
     const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
     await expect(collectReviews(req, res)).resolves.not.toThrow();
     expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 0 }));
+  });
+});
+
+describe('collectReviews — scraped review linked to its GBP review name', () => {
+  test('text+rating match on a scraped review sets google_review_id instead of skipping', async () => {
+    socialFindFirst.mockResolvedValue(GMB_ACCOUNT);
+    reviewFindMany.mockResolvedValue([{
+      id: 'scraped1', platform: 'Google', rating: 5, linked_competitor: null,
+      google_review_id: 'serp-xyz', text: 'מעולה מאוד!',
+    }]);
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ reviews: [gmbReview({ reviewReply: { comment: 'תודה!' } })] }),
+    });
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+
+    expect(reviewUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'scraped1', linked_business: 'bp1' },
+      data:  {
+        google_review_id: 'accounts/123/locations/456/reviews/rev001',
+        response_status: 'published', suggested_response: 'תודה!',
+      },
+    });
+    expect(reviewCreate).not.toHaveBeenCalled();
+  });
+
+  test('competitor review with the same text is not linked', async () => {
+    socialFindFirst.mockResolvedValue(GMB_ACCOUNT);
+    reviewFindMany.mockResolvedValue([{
+      id: 'comp1', platform: 'Google', rating: 5, linked_competitor: 'c1',
+      google_review_id: null, text: 'מעולה מאוד!',
+    }]);
+    mockFetch.mockResolvedValueOnce({ ok: true, json: jest.fn().mockResolvedValue({ reviews: [gmbReview()] }) });
+
+    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
+    await collectReviews(req, res);
+
+    expect(reviewUpdateMany).not.toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: 'comp1' }) }));
   });
 });

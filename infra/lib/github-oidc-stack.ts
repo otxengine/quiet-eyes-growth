@@ -22,7 +22,8 @@ export class GithubOidcStack extends cdk.Stack {
 
     // One role per GitHub environment. A job can assume it only while running in that
     // environment, which GitHub limits to the allowed branches (and, for production, to a
-    // run a reviewer approved). Same account for both, so the separation lives in GitHub.
+    // run a reviewer approved). Same account and same CDK bootstrap roles for both, so the
+    // separation lives only in GitHub; a separate prod account would move it into AWS.
     const deployRole = (constructId: string, environment: string, stack: string) => {
       const role = new iam.Role(this, constructId, {
         roleName: `qe-github-deploy-${environment}`,

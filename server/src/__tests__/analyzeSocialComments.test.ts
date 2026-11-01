@@ -16,6 +16,7 @@ jest.mock('../db', () => ({
 }));
 jest.mock('../lib/llm',          () => ({ invokeLLM: jest.fn() }));
 jest.mock('../lib/automationLog', () => ({ writeAutomationLog: jest.fn() }));
+jest.mock('../lib/crypto',       () => ({ tryDecryptToken: (v: string) => v })); // fixtures hold decrypted tokens
 jest.mock('../lib/apify',        () => ({ runApifyActor: jest.fn(), hasApifyKey: jest.fn() }));
 jest.mock('../lib/agentCache',   () => ({ shouldSkipAgent: jest.fn(), setLastRun: jest.fn() }));
 jest.mock('../lib/tavily',       () => ({ tavilySearch: jest.fn() }));

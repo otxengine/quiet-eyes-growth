@@ -24,7 +24,8 @@ export async function getOwnLocationInfo(businessProfileId: string): Promise<Own
   const account = await prisma.socialAccount.findFirst({
     where: { linked_business: businessProfileId, platform: 'google_business', is_connected: true },
   });
-  const locationPath = account?.page_id;
+  // page_id is the v4 "accounts/X/locations/Y"; Business Information v1 wants "locations/Y"
+  const locationPath = account?.page_id?.replace(/^accounts\/[^/]+\//, '');
   if (!account || !locationPath || !locationPath.includes('/')) return null;
 
   const token = await getValidGoogleToken(businessProfileId);
@@ -37,7 +38,8 @@ export async function getOwnLocationInfo(businessProfileId: string): Promise<Own
       { headers: { Authorization: `Bearer ${token}`, 'X-GOOG-API-FORMAT-VERSION': '2' } },
     );
     if (!res.ok) {
-      if ((res.status === 401 || res.status === 403) && account) {
+      const body = await res.text().catch(() => '');
+      if ((res.status === 401 || res.status === 403) && account && !body.includes('SERVICE_DISABLED')) {
         await prisma.socialAccount.update({
           where: { id: account.id },
           data: { is_connected: false, last_error: `gbp_info_${res.status}` },

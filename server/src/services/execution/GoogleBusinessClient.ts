@@ -28,26 +28,29 @@ export interface ReviewReplyResult {
   error?: string;
 }
 
-export async function postReviewReply(
-  businessProfileId: string,
-  payload: ReviewReplyPayload,
-): Promise<ReviewReplyResult> {
+/** Resolves the auto-refreshing token + full location path for a business's own connected GBP account. */
+async function resolveOwnGmbConnection(businessProfileId: string) {
   const [profile, gmbAccount] = await Promise.all([
     prisma.businessProfile.findUnique({
       where: { id: businessProfileId },
-      select: { google_access_token: true, name: true },
+      select: { google_access_token: true },
     }),
     prisma.socialAccount.findFirst({
       where: { linked_business: businessProfileId, platform: 'google_business', is_connected: true },
     }),
   ]);
-
-  // Use auto-refreshing token (handles 1-hour expiry automatically)
   const freshToken = await getValidGoogleToken(businessProfileId).catch(() => null);
-  const gmbToken = freshToken || gmbAccount?.access_token
+  const gmbToken = freshToken || (gmbAccount?.access_token ? tryDecryptToken(gmbAccount.access_token) : undefined)
     || (profile?.google_access_token ? tryDecryptToken(profile.google_access_token) : undefined);
-  // gmbAccount.page_id is the full location path "accounts/123/locations/456"
   const locationPath = gmbAccount?.page_id;
+  return { gmbToken, locationPath, connected: !!(gmbToken && locationPath && locationPath.includes('/')) };
+}
+
+export async function postReviewReply(
+  businessProfileId: string,
+  payload: ReviewReplyPayload,
+): Promise<ReviewReplyResult> {
+  const { gmbToken, connected } = await resolveOwnGmbConnection(businessProfileId);
 
   // Update suggested_response regardless
   await prisma.review.update({
@@ -58,45 +61,44 @@ export async function postReviewReply(
     },
   });
 
-  // Try Google Business Profile API if we have token + location path + real review ID
-  // googleReviewId should be the full review name "accounts/123/locations/456/reviews/AbcXyz"
-  if (gmbToken && locationPath && locationPath.includes('/') && payload.googleReviewId) {
-    try {
-      // Extract just the review ID segment if full path provided
-      const reviewSegment = payload.googleReviewId.includes('/')
-        ? payload.googleReviewId.split('/').pop()
-        : payload.googleReviewId;
-
-      const replyRes = await fetch(
-        `https://mybusiness.googleapis.com/v4/${locationPath}/reviews/${reviewSegment}/reply`,
-        {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${gmbToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ comment: payload.replyText }),
-        },
-      );
-
-      if (replyRes.ok) {
-        await prisma.review.update({
-          where: { id: payload.reviewId },
-          data: { response_status: 'published' },
-        });
-        logger.info('Review reply published via Google API', { businessProfileId, reviewId: payload.reviewId });
-        return { published: true, method: 'api' };
-      }
-
-      const errData = await replyRes.json().catch(() => ({})) as any;
-      logger.warn('Google API reply failed', { status: replyRes.status, error: errData?.error?.message });
-    } catch (err: any) {
-      logger.warn('Google Business API error', { error: err.message });
-    }
+  if (!connected) {
+    logger.info('Review reply saved as suggestion (Google Business not connected)', { businessProfileId, reviewId: payload.reviewId });
+    return { published: false, method: 'suggested_only', gmbRequired: true };
+  }
+  // Only GBP API review names ("accounts/123/locations/456/reviews/AbcXyz") are replyable —
+  // scraped IDs get linked to one by collectReviews once the GBP review is fetched.
+  if (!payload.googleReviewId?.includes('/reviews/')) {
+    return { published: false, method: 'suggested_only', error: 'Review is not linked to Google Business yet — sync reviews and retry' };
   }
 
-  // Not published via API — stays as suggested_response for manual approval
-  const gmbConnected = !!(gmbToken && locationPath && locationPath.includes('/'));
-  logger.info('Review reply saved as suggestion (no Google API token)', { businessProfileId, reviewId: payload.reviewId });
-  return { published: false, method: 'suggested_only', gmbRequired: !gmbConnected };
+  try {
+    const replyRes = await fetch(
+      `https://mybusiness.googleapis.com/v4/${payload.googleReviewId}/reply`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${gmbToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ comment: payload.replyText }),
+      },
+    );
+
+    if (replyRes.ok) {
+      await prisma.review.update({
+        where: { id: payload.reviewId },
+        data: { response_status: 'published' },
+      });
+      logger.info('Review reply published via Google API', { businessProfileId, reviewId: payload.reviewId });
+      return { published: true, method: 'api' };
+    }
+
+    const errData = await replyRes.json().catch(() => ({})) as any;
+    const error = errData?.error?.message || `Google API error ${replyRes.status}`;
+    logger.warn('Google API reply failed', { status: replyRes.status, error });
+    return { published: false, method: 'api', error };
+  } catch (err: any) {
+    logger.warn('Google Business API error', { error: err.message });
+    return { published: false, method: 'api', error: err.message };
+  }
 }

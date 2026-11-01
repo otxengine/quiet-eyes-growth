@@ -163,7 +163,7 @@ router.post('/whatsapp/embedded-signup', async (req: Request, res: Response) => 
       if (!tokenRes.ok) {
         const err = await tokenRes.json().catch(() => ({}));
         console.error('Meta token exchange error:', JSON.stringify(err));
-        return res.status(400).json({ error: 'Embedded Signup token exchange failed', detail: err });
+        return res.status(400).json({ error: 'Embedded Signup token exchange failed' });
       }
       ({ access_token: shortToken } = await tokenRes.json() as any);
     }
@@ -214,13 +214,13 @@ router.post('/whatsapp/embedded-signup', async (req: Request, res: Response) => 
       },
     });
 
-    // Step 5: Bridge tokens → BusinessProfile so WhatsAppExecutor (outbound) can send messages
-    // without needing to decrypt MetaConnection tokens.
+    // Step 5: Bridge the (encrypted) token → BusinessProfile so WhatsAppExecutor (outbound) can send
+    // messages without looking up the MetaConnection.
     await prisma.businessProfile.updateMany({
       where: { id: businessProfileId },
       data: {
         whatsapp_phone_number_id: resolvedPhoneNumberId,
-        whatsapp_access_token:    longToken,
+        whatsapp_access_token:    encryptedToken,
       },
     }).catch(() => {});
 
@@ -233,7 +233,7 @@ router.post('/whatsapp/embedded-signup', async (req: Request, res: Response) => 
         where: { id: existingSA.id },
         data: {
           account_name: resolvedPhoneNumberId,
-          access_token: longToken,
+          access_token: encryptedToken,
           page_id:      resolvedPhoneNumberId,
           is_connected: true,
           last_sync:    new Date().toISOString(),
@@ -245,7 +245,7 @@ router.post('/whatsapp/embedded-signup', async (req: Request, res: Response) => 
           linked_business: businessProfileId,
           platform:        'whatsapp_business',
           account_name:    resolvedPhoneNumberId,
-          access_token:    longToken,
+          access_token:    encryptedToken,
           page_id:         resolvedPhoneNumberId,
           is_connected:    true,
           last_sync:       new Date().toISOString(),

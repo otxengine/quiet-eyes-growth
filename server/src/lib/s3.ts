@@ -29,20 +29,27 @@ export function isS3Url(url: string): boolean {
   return false;
 }
 
+// The keys uploadBufferToS3 writes: `<folder>/<uuid>.<ext>`, one of the folders its callers pass.
+// Callers hand in stored or caller-supplied URLs, so any other key in the bucket is refused.
+const MEDIA_KEY_RE = /^(business-media|business-posts|business-ads|business-profile|competitor-posts|competitor-stories|competitor-ads|competitor-profile|logos)\/[0-9a-f-]{36}\.(jpg|png|webp|gif|mp4|webm|mov)$/;
+
+/** The object key of one of our media objects, or null for any URL that isn't one. */
+export function mediaKeyFromUrl(url: string): string | null {
+  if (!isS3Url(url)) return null;
+  // ponytail: assumes AWS_CDN_URL has no path prefix; one would fail closed here (refused, not mis-read).
+  const key = new URL(url).pathname.slice(1);
+  return MEDIA_KEY_RE.test(key) ? key : null;
+}
+
 /**
- * Extracts the S3 key from a bucket or CDN URL and streams the object.
- * Returns { body, contentType } or null on failure.
+ * Streams one of our media objects from a bucket or CDN URL.
+ * Returns { body, contentType } or null on failure or for any other key.
  */
 export async function downloadFromS3(url: string): Promise<{ body: Buffer; contentType: string } | null> {
   if (!isS3Configured()) return null;
+  const key = mediaKeyFromUrl(url);
+  if (!key) return null;
   try {
-    const parsed = new URL(url);
-    const cdnBase = process.env.AWS_CDN_URL;
-    // Key is the path without leading slash
-    const key = cdnBase && url.startsWith(cdnBase)
-      ? url.slice(cdnBase.length).replace(/^\//, '')
-      : parsed.pathname.replace(/^\//, '');
-
     const result = await client.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
     const bytes = await (result.Body as any).transformToByteArray();
     return { body: Buffer.from(bytes), contentType: result.ContentType || 'image/jpeg' };
