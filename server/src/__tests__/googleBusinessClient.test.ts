@@ -126,3 +126,30 @@ describe('postReviewReply — KAN-126', () => {
     });
   });
 });
+
+describe('postReviewReply — surfaced errors', () => {
+  beforeEach(() => { jest.clearAllMocks(); mockGmbConnected(); });
+
+  test('PUTs to the full review name', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    await postReviewReply('biz_001', PAYLOAD);
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://mybusiness.googleapis.com/v4/accounts/123/locations/456/reviews/AbcXyz/reply',
+      expect.objectContaining({ method: 'PUT' }),
+    );
+  });
+
+  test('returns the Google error message when the API rejects', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 403, json: async () => ({ error: { message: 'Forbidden' } }) });
+    const r = await postReviewReply('biz_001', PAYLOAD);
+    expect(r).toEqual(expect.objectContaining({ published: false, error: 'Forbidden' }));
+    expect(r.gmbRequired).toBeFalsy();
+  });
+
+  test('review without a GBP review name: error, no API call', async () => {
+    const r = await postReviewReply('biz_001', { ...PAYLOAD, googleReviewId: 'ChZDSUhNMG9nS0VJQ0FnSUR' });
+    expect(r.published).toBe(false);
+    expect(r.error).toMatch(/not linked/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});

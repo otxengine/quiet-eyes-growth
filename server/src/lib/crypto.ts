@@ -11,13 +11,11 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
-import { createLogger } from '../infra/logger';
-
-const logger = createLogger('crypto');
 
 const ALGORITHM  = 'aes-256-gcm';
 const IV_LENGTH  = 12; // bytes — NIST recommended for GCM
 const KEY_LENGTH = 32; // bytes — AES-256
+const TAG_LENGTH = 16; // bytes — pinned so decrypt refuses a truncated (forgeable) auth tag
 
 /**
  * Derive the encryption key from the environment.
@@ -43,7 +41,7 @@ export function encryptToken(plaintext: string): string {
   const key = getKey();
   const iv  = randomBytes(IV_LENGTH);
 
-  const cipher    = createCipheriv(ALGORITHM, key, iv);
+  const cipher    = createCipheriv(ALGORITHM, key, iv, { authTagLength: TAG_LENGTH });
   const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
   const tag       = cipher.getAuthTag(); // must be called after final()
 
@@ -58,25 +56,18 @@ export function isEncryptedToken(stored: string): boolean {
   return ENCRYPTED_RE.test(stored);
 }
 
-/** Encrypt if META_ENCRYPTION_KEY is configured; return plaintext otherwise. */
+// The try* names stay for their callers, but neither falls back to plaintext any more: stored
+// tokens are all encrypted (encryptStoredTokens backfills at boot), so a missing key, a
+// plaintext value or a failed auth tag is an error rather than a silent downgrade.
+
+/** Encrypt; throws if META_ENCRYPTION_KEY is missing. */
 export function tryEncryptToken(plaintext: string): string {
-  try {
-    return encryptToken(plaintext);
-  } catch (e: any) {
-    logger.error('Token encryption failed — storing as plaintext', { error: e.message });
-    return plaintext;
-  }
+  return encryptToken(plaintext);
 }
 
-/** Decrypt if the stored value looks like an encrypted token; return as-is otherwise. */
+/** Decrypt a stored token; an empty value (no token set) passes through. */
 export function tryDecryptToken(stored: string): string {
-  if (!ENCRYPTED_RE.test(stored)) return stored;
-  try {
-    return decryptToken(stored);
-  } catch (e: any) {
-    logger.error('Token decryption failed — returning stored value as-is', { error: e.message });
-    return stored;
-  }
+  return stored ? decryptToken(stored) : stored;
 }
 
 /**
@@ -95,7 +86,7 @@ export function decryptToken(stored: string): string {
   const tag        = Buffer.from(tagHex, 'hex');
   const ciphertext = Buffer.from(ctHex,  'hex');
 
-  const decipher = createDecipheriv(ALGORITHM, key, iv);
+  const decipher = createDecipheriv(ALGORITHM, key, iv, { authTagLength: TAG_LENGTH });
   decipher.setAuthTag(tag);
 
   const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);

@@ -10,17 +10,32 @@ import * as route53 from 'aws-cdk-lib/aws-route53';
  * Skipped on purpose: NS/SOA (Route 53 makes its own) and _domainconnect (GoDaddy-only).
  * Edit records here, not in GoDaddy, once the nameservers point at this zone.
  */
+export interface DnsStackProps extends cdk.StackProps {
+  /** Prod's CloudFront domain (xxxx.cloudfront.net). Set = cortexi.ai and www serve from AWS; unset = Render. */
+  siteCdn?: string;
+}
+
 export class DnsStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: DnsStackProps = {}) {
     super(scope, id, props);
 
     const zone = new route53.PublicHostedZone(this, 'Zone', { zoneName: 'cortexi.ai' });
     zone.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN);
     const ttl = (s: number) => cdk.Duration.seconds(s);
 
-    // Site, still on Render until the app cutover switches it to the CloudFront alias.
-    new route53.ARecord(this, 'Apex', { zone, target: route53.RecordTarget.fromIpAddresses('216.24.57.1'), ttl: ttl(600) });
-    new route53.CnameRecord(this, 'Www', { zone, recordName: 'www', domainName: 'quiet-eyes-frontend.onrender.com', ttl: ttl(3600) });
+    // Site. 60s TTLs so the cutover, or a rollback, reaches resolvers within a minute. www stays a
+    // CNAME (to the apex) in both states: Route 53 refuses an A record next to an existing CNAME.
+    if (props.siteCdn) {
+      const cdn = route53.RecordTarget.fromAlias({
+        bind: () => ({ dnsName: props.siteCdn!, hostedZoneId: 'Z2FDTNDATAQYW2' }), // CloudFront's fixed alias zone
+      });
+      new route53.ARecord(this, 'Apex', { zone, target: cdn });
+      new route53.AaaaRecord(this, 'ApexV6', { zone, target: cdn });
+      new route53.CnameRecord(this, 'Www', { zone, recordName: 'www', domainName: 'cortexi.ai', ttl: ttl(60) });
+    } else {
+      new route53.ARecord(this, 'Apex', { zone, target: route53.RecordTarget.fromIpAddresses('216.24.57.1'), ttl: ttl(60) });
+      new route53.CnameRecord(this, 'Www', { zone, recordName: 'www', domainName: 'quiet-eyes-frontend.onrender.com', ttl: ttl(60) });
+    }
 
     // Google Workspace mail + site verification, and the DMARC policy.
     new route53.MxRecord(this, 'Mx', { zone, values: [{ priority: 1, hostName: 'smtp.google.com' }], ttl: ttl(3600) });

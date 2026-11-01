@@ -2,6 +2,7 @@ import { invokeLLM } from './llm';
 import { isS3Url, downloadFromS3 } from './s3';
 import { fetchImageBase64 } from './fetchImageBase64';
 import { safeFetch } from './safeFetch';
+import { prisma } from '../db';
 
 const MAX_VIDEO_BYTES = 12 * 1024 * 1024; // stay safely under Gemini's ~20MB inline-request ceiling after base64 overhead
 // Video analysis (Gemini) is meaningfully more expensive than image analysis and is
@@ -154,6 +155,42 @@ Look at the attached ${input.isVideo ? 'video' : 'image'} and caption together. 
   }
 }
 
+// Spend guards for creative analysis (a vision-LLM call, paid per call).
+// Posts published longer ago than this are never analyzed: they say little about what a
+// competitor does now, and a backlog of old posts drained the whole OpenRouter balance
+// (2026-10-25). Items without a date (stories, running ads) skip this check.
+export const MAX_POST_AGE_DAYS = 30;
+// Analyses per UTC day, shared by the API and the worker through ai_daily_usage.
+// About 80/day is normal with the window; 150 leaves headroom.
+const DAILY_CAP = Number(process.env.CREATIVE_ANALYSIS_DAILY_CAP) || 150;
+
+function isPastWindow(postedAt: Date | string | null | undefined): boolean {
+  const t = postedAt ? new Date(postedAt).getTime() : NaN;
+  return Number.isFinite(t) && Date.now() - t > MAX_POST_AGE_DAYS * 86_400_000;
+}
+
+let capLoggedDay = '';
+// Takes one of today's analysis slots. False once the cap is used up, or if the counter
+// can't be reached: spend stays bounded rather than open.
+async function takeDailySlot(): Promise<boolean> {
+  try {
+    const [row] = await prisma.$queryRawUnsafe<Array<{ n: number }>>(
+      `INSERT INTO ai_daily_usage (day, kind, n) VALUES (CURRENT_DATE, 'creative_analysis', 1)
+       ON CONFLICT (day, kind) DO UPDATE SET n = ai_daily_usage.n + 1 RETURNING n`,
+    );
+    if (Number(row?.n) <= DAILY_CAP) return true;
+  } catch (err: any) {
+    console.warn('[analyzePostCreative] daily counter unavailable, skipping:', err.message);
+    return false;
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  if (capLoggedDay !== today) {
+    capLoggedDay = today;
+    console.warn(`[analyzePostCreative] daily cap of ${DAILY_CAP} reached; skipping until tomorrow (UTC)`);
+  }
+  return false;
+}
+
 /**
  * Analyzes a single competitor post/ad creative (image + caption) via vision LLM.
  * Returns null on any failure (missing image, fetch error, LLM error, bad JSON) —
@@ -173,8 +210,13 @@ export async function analyzePostCreative(input: {
   // Present only when this post is a detected engagement outlier — grounds the
   // "hook"/"content_pillar"/"audience_action_driver" fields in the schema below.
   performanceContext?: { engagementMultiple: number };
+  // When the post was published. Older than MAX_POST_AGE_DAYS = skipped before any download
+  // or LLM call. Omit for items that are current by nature (stories, running ads).
+  postedAt?: Date | string | null;
 }): Promise<PostCreativeAnalysis | null> {
   if (!input.mediaUrl && !input.videoUrl) return null;
+  if (isPastWindow(input.postedAt)) return null;
+  if (!(await takeDailySlot())) return null;
 
   try {
     let media = (input.videoUrl && VIDEO_ANALYSIS_ENABLED) ? await fetchVideoBase64(input.videoUrl) : null;

@@ -36,13 +36,13 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             infra/package-lock.json
-      - run: npm ci --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run build
         env:
           VITE_API_URL: /api
       - name: No server-side keys in the frontend bundle
         run: tr -d '\r' < scripts/scan-bundle-keys.sh | bash -s -- dist
-      - run: npm ci --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
         working-directory: infra
       - run: npx tsc -p .
         working-directory: infra

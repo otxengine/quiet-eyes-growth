@@ -8,6 +8,7 @@ import { resolveTopicSet } from '../../lib/reviewTopicPacks';
 import { tavilySearch } from '../../lib/tavily';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { tryDecryptToken } from '../../lib/crypto';
+import { getValidGoogleToken } from '../../lib/googleTokenRefresh';
 import { normReviewOrigin } from '../../lib/signalGuard';
 import { findPlaceId, getPlaceDetails } from '../../lib/googlePlaces';
 import { serpGoogleMapsReviews, hasSerpApiKey, firstValidDate } from '../../lib/serpapi';
@@ -74,9 +75,15 @@ export async function collectReviews(req: Request, res: Response) {
       where: { linked_business: businessProfileId, platform: 'google_business', is_connected: true },
     });
     const gmbLocationPath = gmbAccount?.page_id;
-    const rawGmbToken = gmbAccount?.access_token;
     const rawProfileToken = (profile as any).google_access_token as string | null;
-    const gmbToken = (rawGmbToken ? tryDecryptToken(rawGmbToken) : null) || (rawProfileToken ? tryDecryptToken(rawProfileToken) : null);
+    // Auto-refreshing — a stale 1h token would 401 and the handler below would disconnect the account
+    const gmbToken = (gmbAccount ? await getValidGoogleToken(businessProfileId).catch(() => null) : null)
+      || (rawProfileToken ? tryDecryptToken(rawProfileToken) : null);
+    // Reviews stored earlier by a scraper (SerpAPI/DataForSEO/Places) lack the GBP review name the
+    // reply API needs — matched by text+rating below and linked instead of skipped.
+    const scrapedByText = new Map(existingReviews
+      .filter((r: typeof existingReviews[0]) => r.platform === 'Google' && !r.linked_competitor && !r.google_review_id?.startsWith('accounts/'))
+      .map((r: typeof existingReviews[0]) => [(r.text || '').substring(0, 50), r]));
 
     if (gmbToken && gmbLocationPath) {
       if (!gmbLocationPath.includes('/')) {
@@ -93,7 +100,8 @@ export async function collectReviews(req: Request, res: Response) {
             const gmbRes = await fetch(pageUrl, { headers: { Authorization: `Bearer ${gmbToken}` } });
             if (!gmbRes.ok) {
               const errData: any = await gmbRes.json().catch(() => ({}));
-              const isAuthErr = gmbRes.status === 401 || gmbRes.status === 403;
+              // SERVICE_DISABLED = an API is off in our Cloud project — reconnecting can't fix that, so don't disconnect the customer
+              const isAuthErr = (gmbRes.status === 401 || gmbRes.status === 403) && !JSON.stringify(errData).includes('SERVICE_DISABLED');
               console.warn(`[collectReviews] GMB API ${gmbRes.status}: ${errData?.error?.message || 'unknown error'}${isAuthErr ? '' : ' — falling back to Places'}`);
               if (isAuthErr && gmbAccount) {
                 gmbPathResult = 'failed';
@@ -109,6 +117,7 @@ export async function collectReviews(req: Request, res: Response) {
             const gmbData: any = await gmbRes.json();
             nextPageToken = gmbData.nextPageToken;
             const pendingBefore = gmbPending.length;
+            let linkedThisPage = 0;
             for (const gr of (gmbData.reviews || [])) {
               const reviewId = gr.name;
               if (existingGoogleIds.has(reviewId)) {
@@ -123,14 +132,29 @@ export async function collectReviews(req: Request, res: Response) {
               }
               const text = gr.comment || '';
               const textKey = text.substring(0, 50);
-              if (existingTexts.has(textKey) || text.length < 5) continue;
               const rating = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }[gr.starRating as string] ?? 0;
+              if (existingTexts.has(textKey) || text.length < 5) {
+                const scraped = scrapedByText.get(textKey);
+                if (scraped && scraped.rating === rating) {
+                  await prisma.review.updateMany({
+                    where: { id: scraped.id, linked_business: businessProfileId },
+                    data:  {
+                      google_review_id: reviewId,
+                      ...(gr.reviewReply?.comment ? { response_status: 'published', suggested_response: gr.reviewReply.comment } : {}),
+                    },
+                  });
+                  scrapedByText.delete(textKey);
+                  existingGoogleIds.add(reviewId);
+                  linkedThisPage++;
+                }
+                continue;
+              }
               const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
               const reviewerName = gr.reviewer?.displayName || 'לקוח';
               gmbPending.push({ gr, reviewId, text, textKey, rating, sentiment, reviewerName });
             }
             // AC2: page had no new reviews — stop early, older pages won't have new ones either
-            if (gmbPending.length === pendingBefore) break;
+            if (gmbPending.length === pendingBefore && linkedThisPage === 0) break;
           } while (nextPageToken);
 
           if (gmbPending.length > 0) {

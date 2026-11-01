@@ -481,13 +481,14 @@ const limitInvokeLLM = (req: Request<{ name: string }>, res: Response, next: Nex
   (req.params.name === 'invokeLLM' ? invokeLLMLimiter(req, res, next) : next());
 
 // POST /api/functions/:name
-router.post('/:name', requireBusinessAccess, requireFunctionAccess, limitInvokeLLM, (req: Request<{ name: string }>, res: Response) => {
+router.post('/:name', requireBusinessAccess, requireFunctionAccess, limitInvokeLLM, (req: Request<{ name: string }>, res: Response, next: NextFunction) => {
   const handler = FUNCTION_MAP[req.params.name];
   if (!handler) {
     return res.status(404).json({ error: `Unknown function: ${req.params.name}` });
   }
   if (BACKGROUND_FUNCTIONS.has(req.params.name)) return runInBackground(req.params.name, handler, req, res);
-  return handler(req, res);
+  // Express 4 drops a rejected promise (and Node then exits on it): send throws to the error handler.
+  return Promise.resolve().then(() => handler(req, res)).catch(next);
 });
 
 export default router;

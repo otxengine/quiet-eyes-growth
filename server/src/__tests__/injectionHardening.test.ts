@@ -141,13 +141,14 @@ describe('rate limiters and the admin key', () => {
     }
   }
 
+  // 21 real local requests each: generous timeout for a loaded parallel run.
   it('does not skip when ADMIN_SECRET is unset, whatever the header says', async () => {
     expect((await statuses(undefined, '__unset__', 21)).pop()).toBe(429);
-  });
+  }, 30_000);
 
   it('skips for the configured admin key', async () => {
     expect(await statuses('s3cret', 's3cret', 21)).not.toContain(429);
-  });
+  }, 30_000);
 });
 
 describe('platform emails escape interpolated values', () => {

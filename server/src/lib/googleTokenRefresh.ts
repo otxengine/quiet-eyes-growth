@@ -46,6 +46,17 @@ export async function refreshGoogleToken(businessProfileId: string): Promise<str
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({})) as any;
+      // invalid_grant = revoked, expired or password-reset — no retry will fix it, only a reconnect.
+      // Flagging it stops the 30-min job retrying forever and lets the Integrations page say so.
+      if (err?.error === 'invalid_grant') {
+        await prisma.socialAccount.update({
+          where: { id: account.id },
+          data:  { is_connected: false, access_token: null, refresh_token: null, last_error: 'google_invalid_grant' },
+        });
+        await prisma.businessProfile.updateMany({ where: { id: businessProfileId }, data: { google_access_token: null } });
+        logger.warn('Google refresh token is dead — marked for reconnect', { businessProfileId, error_description: err.error_description });
+        return null;
+      }
       logger.warn(`Google token refresh failed for ${businessProfileId}: ${err?.error_description || res.status}`);
       return null;
     }
@@ -92,7 +103,7 @@ export async function getValidGoogleToken(businessProfileId: string): Promise<st
   if (!expiresAt || expiresAt < fiveMinFromNow) {
     const refreshed = await refreshGoogleToken(businessProfileId);
     if (!refreshed) logger.warn(`Google token expired and refresh failed for ${businessProfileId} — using existing token`);
-    return refreshed || account.access_token;
+    return refreshed || tryDecryptToken(account.access_token);
   }
 
   return tryDecryptToken(account.access_token);

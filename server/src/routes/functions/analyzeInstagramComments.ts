@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { tryDecryptToken } from '../../lib/crypto';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { tavilySearch } from '../../lib/tavily';
@@ -108,7 +109,7 @@ export async function analyzeInstagramComments(req: Request, res: Response) {
     // ── Path A: Instagram Graph API (OAuth connected) ─────────────────────────
     if (igAccount?.access_token && igAccount?.page_id) {
       const igUserId = igAccount.page_id;
-      const token    = igAccount.access_token;
+      const token    = tryDecryptToken(igAccount.access_token);
 
       const mediaRes = await fetch(
         `${GRAPH_BASE}/${igUserId}/media?fields=id,timestamp,like_count,comments_count,caption&limit=10&access_token=${token}`,

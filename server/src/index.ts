@@ -13,13 +13,13 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // META_ENCRYPTION_KEY must be a 64-char hex string (32 bytes) — see lib/crypto.ts.
-// Without it, tryEncryptToken/tryDecryptToken silently fall back to storing/reading
-// tokens as plaintext instead of failing the request. Loud at boot, not mid-request.
+// Without it every token write and read fails (connecting an account, publishing, sending).
+// Loud at boot, not mid-request.
 {
   const key = process.env.META_ENCRYPTION_KEY || '';
   if (key.length !== 64 || !/^[0-9a-f]+$/i.test(key)) {
     const msg = 'META_ENCRYPTION_KEY is missing or malformed — tokens (Google, Meta, WhatsApp) ' +
-      'will be stored/read as PLAINTEXT until this is fixed. Generate one with: ' +
+      'can be neither stored nor read until this is fixed. Generate one with: ' +
       'node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"';
     if (process.env.NODE_ENV === 'production') {
       console.error(`FATAL: ${msg}`);
@@ -72,9 +72,13 @@ registerAllHandlers();
 import { startScheduler } from './scheduler';
 import { refreshExpiringGoogleTokens } from './lib/googleTokenRefresh';
 import { getAgentStatusSummary } from './lib/agentMonitor';
+import { hideServerErrors } from './middleware/hideServerErrors';
 
 const app = express();
 const PORT = process.env.PORT || 3002;
+
+// First, so it covers every route and the global error handler below: no 5xx body goes out as written.
+app.use(hideServerErrors);
 
 // Behind CloudFront + ALB the client IP sits TRUST_PROXY_HOPS entries from the right of
 // X-Forwarded-For. Unset = Express default (no proxy trusted), as on Render.
@@ -82,14 +86,6 @@ if (process.env.TRUST_PROXY_HOPS) app.set('trust proxy', Number(process.env.TRUS
 
 // ── Security headers ───────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false })); // CSP handled by frontend
-
-// ── Rate limiting ──────────────────────────────────────────────────────────
-app.use('/api', generalLimiter);
-// Costly functions, matched on the decoded :name. Path mounts were skipped by encoded paths
-// ('/api/functions/run%46ullScan'), and three named functions that don't exist.
-const STRICT_FUNCTIONS = new Set(['run-full-scan', 'runFullScan', 'generateImage', 'generateSmartPost', 'generateBulkPosts', 'generateAdvisoryInsights']);
-app.use('/api/functions/:name', (req, res, next) => (STRICT_FUNCTIONS.has(req.params.name) ? strictLimiter(req, res, next) : next()));
-app.use('/api/orchestrator', strictLimiter);
 
 const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .split(',')
@@ -109,6 +105,15 @@ app.use(cors({
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key', 'x-dev-user'],
 }));
+
+// After cors(): a 429 needs CORS headers too, or a cross-origin browser reports it as a
+// network error instead of a 429. cors() also answers preflights, so those no longer count.
+app.use('/api', generalLimiter);
+// Costly functions, matched on the decoded :name. Path mounts were skipped by encoded paths
+// ('/api/functions/run%46ullScan'), and three named functions that don't exist.
+const STRICT_FUNCTIONS = new Set(['run-full-scan', 'runFullScan', 'generateImage', 'generateSmartPost', 'generateBulkPosts', 'generateAdvisoryInsights']);
+app.use('/api/functions/:name', (req, res, next) => (STRICT_FUNCTIONS.has(req.params.name) ? strictLimiter(req, res, next) : next()));
+app.use('/api/orchestrator', strictLimiter);
 
 // Dedicated admin key verification — placed before Clerk and body parser
 app.get('/api/admin-verify', (req: any, res: any) => {
@@ -240,13 +245,18 @@ app.post('/api/cron/run', async (_req, res) => {
 });
 
 // Global JSON error handler — must be last, catches Clerk + any other middleware errors
-app.use((err: any, _req: any, res: any, _next: any) => {
+app.use((err: any, _req: any, res: any, next: any) => {
   console.error('Unhandled error:', err.message);
+  if (res.headersSent) return next(err); // Express closes the response; a second write would throw
   const isDev = process.env.NODE_ENV !== 'production';
   res.status(err.status || 500).json({
     error: isDev ? (err.message || 'Internal server error') : 'Internal server error',
   });
 });
+
+// A route's rejected promise that nothing awaits (Express 4 ignores them) would otherwise make
+// Node exit, so one bad request took the whole API down. Log it and keep serving.
+process.on('unhandledRejection', (err: any) => console.error('Unhandled rejection:', err?.stack || err));
 
 // ── Monitoring endpoint (admin only) ──────────────────────────────────────────
 app.get('/api/monitoring/status', async (req: any, res: any) => {
@@ -937,6 +947,8 @@ app.listen(PORT, async () => {
     email      TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
+  // Per-day spend counters (lib/analyzePostCreative daily cap), shared by API and worker.
+  await sql(`CREATE TABLE IF NOT EXISTS ai_daily_usage (day DATE NOT NULL, kind TEXT NOT NULL, n INT NOT NULL DEFAULT 0, PRIMARY KEY (day, kind))`);
 
   // ── Stripe billing columns on organizations (legacy, pre-Paddle) ───────────────────────────────
   await sql(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS stripe_customer_id     TEXT`);
@@ -1457,6 +1469,12 @@ app.listen(PORT, async () => {
   await sql(`CREATE INDEX IF NOT EXISTS idx_organic_posts_biz  ON organic_posts(linked_business, status, created_date DESC)`);
 
   console.log('Startup SQL complete');
+
+  // lib/crypto no longer reads plaintext tokens, so encrypt any left over (e.g. from a DB restore).
+  const { encryptStoredTokens } = await import('./scripts/encryptStoredTokens');
+  await encryptStoredTokens()
+    .then(n => console.log(`[STARTUP] Token backfill: encrypted ${n} plaintext value(s)`))
+    .catch((e: any) => console.error('[STARTUP] Token encryption backfill failed:', e.message));
 
   // ── Post-startup table existence check ───────────────────────────────────
   // Verifies all critical tables exist and logs any missing ones.

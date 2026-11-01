@@ -54,13 +54,13 @@ async function scrapeAndSave(
 
   const t0 = Date.now();
 
-  async function analyzeAndSave(id: string, mediaUrl: string | null, caption: string | null, videoUrl: string | null, alreadyVideoAnalyzed: boolean) {
+  async function analyzeAndSave(id: string, mediaUrl: string | null, caption: string | null, videoUrl: string | null, alreadyVideoAnalyzed: boolean, postedAt: Date | string | null = null) {
     if (!mediaUrl && !videoUrl) return;
     // videoUrl only passed through when this row hasn't been video-analyzed yet —
     // once video_analyzed_at is set, never re-run video analysis (cost control).
     const useVideoUrl = alreadyVideoAnalyzed ? null : videoUrl;
     try {
-      const analysis = await analyzePostCreative({ caption, platform, mediaUrl, videoUrl: useVideoUrl });
+      const analysis = await analyzePostCreative({ caption, platform, mediaUrl, videoUrl: useVideoUrl, postedAt });
       if (analysis) {
         await prisma.businessPost.update({
           where: { id },
@@ -186,7 +186,7 @@ async function scrapeAndSave(
       if (!matchedRow.analyzed_at || (!matchedRow.video_analyzed_at && (rawVideoUrl || matchedRow.video_url))) {
         await analyzeAndSave(
           matchedRow.id, mediaUrl || matchedRow.media_url, caption,
-          rawVideoUrl || matchedRow.video_url, !!matchedRow.video_analyzed_at,
+          rawVideoUrl || matchedRow.video_url, !!matchedRow.video_analyzed_at, postedAt,
         );
       }
       continue;
@@ -212,7 +212,7 @@ async function scrapeAndSave(
         },
       });
       upserted++;
-      await analyzeAndSave(created.id, mediaUrl, caption, rawVideoUrl, false);
+      await analyzeAndSave(created.id, mediaUrl, caption, rawVideoUrl, false, postedAt);
     } catch (insertErr: any) {
       // P2002 = unique constraint — row already landed via a concurrent run, not a real failure
       if (insertErr.code === 'P2002') continue;

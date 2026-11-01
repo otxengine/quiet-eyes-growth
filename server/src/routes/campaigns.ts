@@ -215,7 +215,7 @@ router.post('/publish-meta-ads', requireOwnsBusinessId, async (req: Request, res
 
     // 8. Publish to Meta Ads
     const result = await createMetaAdsCampaign({
-      accessToken:    adsAccount.access_token,
+      accessToken:    tryDecryptToken(adsAccount.access_token),
       adAccountId:    adsAccount.page_id,
       pageId:         facebookPageId,
       name:           campaign.title || 'OTX Campaign',

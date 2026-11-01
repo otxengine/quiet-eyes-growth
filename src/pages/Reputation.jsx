@@ -141,7 +141,7 @@ const ASPECT_PREFIX = { positive: '+', negative: '−', neutral: '', none: '' };
 
 function ReviewReplyPanel({ review, bpId, businessProfile, topicSet, onClose, onSent }) {
   const platCfg    = PLATFORM_ICONS[review.source] || PLATFORM_ICONS.default;
-  const gmbConnected = !!(businessProfile?.google_access_token);
+  const gmbConnected = !!businessProfile?.has_google_access_token;
   const [replyText, setReplyText] = useState(review.suggested_response || '');
   const [sending,   setSending]   = useState(false);
   const [generating, setGenerating] = useState(false);
