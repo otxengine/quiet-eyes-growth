@@ -2,13 +2,12 @@ import { Request, Response } from 'express';
 import { sendEmail } from '../../lib/email';
 import { getUserId } from '../../middleware/auth';
 import { getUserEmail } from '../../lib/ownership';
+import { esc } from '../../lib/html';
 
 const SUPPORT_NOTIFY_EMAIL = process.env.SUPPORT_NOTIFY_EMAIL || 'contact@otxengine.io';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://quiet-eyes-frontend.onrender.com';
 
-// Everything below comes from the request, so it is escaped before it goes into the HTML.
-const esc = (v: unknown) => String(v ?? '').replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069]/g, '').replace(/[&<>"']/g, c =>
-  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
+// Everything below comes from the request, so it is escaped (esc) before it goes into the HTML.
 const EMAIL_RE = /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/;
 
 function buildSupportEmail(opts: {

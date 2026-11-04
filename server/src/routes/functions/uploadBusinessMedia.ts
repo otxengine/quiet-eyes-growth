@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
-import { isS3Configured, uploadBufferToS3 } from '../../lib/s3';
+import { isS3Configured, uploadBufferToS3, safeMediaType } from '../../lib/s3';
 
 /**
  * uploadBusinessMedia
@@ -9,12 +9,15 @@ import { isS3Configured, uploadBufferToS3 } from '../../lib/s3';
  * library, with a required user-authored description so later post-generation
  * prompts know what the media shows.
  *
- * Body: { businessProfileId, fileBase64, mimeType, mediaType?, description }
+ * Body: { businessProfileId, fileBase64, mimeType, description } (media type follows mimeType)
  * Returns: { mediaAssetId, url, media_type }
  */
 export async function uploadBusinessMedia(req: Request, res: Response) {
-  const { businessProfileId, fileBase64, mimeType = 'image/jpeg', description } = req.body;
-  const mediaType = req.body.mediaType || (mimeType.startsWith('video') ? 'video' : 'image');
+  const { businessProfileId, fileBase64, description } = req.body;
+  // Stored as the S3 ContentType and served back as Content-Type, so only known media types.
+  const mimeType = safeMediaType(req.body.mimeType ?? 'image/jpeg');
+  if (!mimeType) return res.status(400).json({ error: 'Unsupported file type' });
+  const mediaType = mimeType.startsWith('video/') ? 'video' : 'image';
 
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
   if (!fileBase64)        return res.status(400).json({ error: 'Missing fileBase64' });

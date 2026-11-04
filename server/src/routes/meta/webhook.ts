@@ -17,7 +17,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import { prisma } from '../../db';
 import { decryptToken } from '../../lib/crypto';
 import { metaApi } from '../../lib/metaApi';
@@ -57,10 +57,13 @@ router.get('/', (req: Request, res: Response) => {
   const mode      = req.query['hub.mode']         as string;
   const token     = req.query['hub.verify_token'] as string;
   const challenge = req.query['hub.challenge']    as string;
+  const expected  = process.env.META_WEBHOOK_VERIFY_TOKEN;
 
-  if (mode === 'subscribe' && token === process.env.META_WEBHOOK_VERIFY_TOKEN) {
+  // Unset token refuses every request. Hashing first gives timingSafeEqual equal-length inputs.
+  const sha = (v: string) => createHash('sha256').update(v).digest();
+  if (mode === 'subscribe' && expected && typeof token === 'string' && timingSafeEqual(sha(token), sha(expected))) {
     console.log('[Meta webhook] Verification challenge accepted');
-    return res.status(200).send(challenge);
+    return res.status(200).type('text/plain').send(String(challenge ?? ''));
   }
 
   console.warn('[Meta webhook] Verification failed — token mismatch');

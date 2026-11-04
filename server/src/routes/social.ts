@@ -3,7 +3,7 @@ import { prisma } from '../db';
 import { invokeLLM } from '../lib/llm';
 import { getSectorProfile } from '../lib/businessProfile';
 import { resolveTopicSet } from '../lib/reviewTopicPacks';
-import { downloadFromS3 } from '../lib/s3';
+import { downloadFromS3, safeMediaType } from '../lib/s3';
 import { tryDecryptToken } from '../lib/crypto';
 import { requireOwnsBusiness, requireOwnsBusinessFields, requireOwnsRecord } from '../middleware/businessAccess';
 import FormData from 'form-data';
@@ -38,20 +38,24 @@ router.get('/media/:assetId', async (req: Request, res: Response) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   res.setHeader('Access-Control-Allow-Origin', '*');
 
+  // The stored type came from the uploader: anything not known to be inert media goes out as a
+  // download, and a sandboxed, non-sniffed response can't run script on this origin either way.
+  const send = (body: Buffer, type: string | null) => {
+    res.set('Content-Type', safeMediaType(type) || 'application/octet-stream');
+    res.set('Content-Security-Policy', 'sandbox');
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('Cache-Control', 'public, max-age=86400');
+    return res.send(body);
+  };
+
   if (asset.url) {
     const obj = await downloadFromS3(asset.url);
     if (!obj) return res.status(404).json({ error: 'Media not found' });
-    res.set('Content-Type', obj.contentType);
-    res.set('Cache-Control', 'public, max-age=86400');
-    return res.send(obj.body);
+    return send(obj.body, obj.contentType);
   }
   if (!asset.image_base64) return res.status(404).json({ error: 'Media not found' });
 
-  const mimeType = asset.mime_type || 'image/jpeg';
-  const buffer   = Buffer.from(asset.image_base64, 'base64');
-  res.set('Content-Type', mimeType);
-  res.set('Cache-Control', 'public, max-age=86400');
-  return res.send(buffer);
+  return send(Buffer.from(asset.image_base64, 'base64'), asset.mime_type || 'image/jpeg');
 });
 
 /**
