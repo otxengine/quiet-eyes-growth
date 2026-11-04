@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
 import { requireBusinessAccess } from '../../middleware/businessAccess';
 import { getUserId, isAdminKeyRequest } from '../../middleware/auth';
-import { getUserBusinessIds } from '../../lib/ownership';
+import { getUserBusinessIds, getUserWritableBusinessIds } from '../../lib/ownership';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
@@ -420,6 +420,13 @@ const ALL_BUSINESSES_WITHOUT_ID = new Set(['runFullScan', 'run-full-scan', 'upda
 // Platform-wide reports with no business scope (systemHealthMonitor returns every tenant's latest
 // automation errors and global counts). No tenant UI calls them.
 const ADMIN_ONLY_FUNCTIONS = new Set(['systemHealthMonitor']);
+// Functions that only read (checked 2026-10-24: no DB writes, no LLM or other paid calls). An org
+// viewer may call these; every other function changes data or spends credits, so its business and
+// record ids must be ones the caller can write. Fail closed: add a function here only after checking it.
+const READ_ONLY_FUNCTIONS = new Set([
+  'getEventBusStats', 'getBusinessConstraints', 'getSubscriptionStatus',
+  'compareGoogleMetrics', 'topicTimeline', 'sectorBenchmark',
+]);
 
 async function requireFunctionAccess(req: Request<{ name: string }>, res: Response, next: NextFunction) {
   if (isAdminKeyRequest(req)) return next();
@@ -429,9 +436,12 @@ async function requireFunctionAccess(req: Request<{ name: string }>, res: Respon
     return res.status(400).json({ error: 'businessProfileId required' });
   }
 
+  const readOnly = READ_ONLY_FUNCTIONS.has(req.params.name);
   const idsByModel = new Map<string, string[]>();
-  const businessIds: unknown[] = [...OTHER_BUSINESS_FIELDS.map(f => body[f]), req.query?.businessProfileId]
-    .filter(v => v != null && v !== '');
+  // requireBusinessAccess has checked businessProfileId for reading; a write needs more.
+  const businessIds: unknown[] = [
+    ...OTHER_BUSINESS_FIELDS.map(f => body[f]), req.query?.businessProfileId, readOnly ? null : body.businessProfileId,
+  ].filter(v => v != null && v !== '');
   const add = (model: string, v: unknown) => {
     for (const id of Array.isArray(v) ? v : [v]) idsByModel.set(model, [...(idsByModel.get(model) ?? []), id]);
   };
@@ -447,7 +457,7 @@ async function requireFunctionAccess(req: Request<{ name: string }>, res: Respon
   const userId = getUserId(req);
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
   try {
-    const owned = await getUserBusinessIds(userId);
+    const owned = await (readOnly ? getUserBusinessIds : getUserWritableBusinessIds)(userId);
     if (businessIds.some(id => !owned.includes(id as string))) return res.status(403).json({ error: 'Forbidden' });
     for (const [model, list] of idsByModel) {
       const ids = [...new Set(list as string[])];

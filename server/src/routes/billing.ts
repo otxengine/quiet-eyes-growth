@@ -22,6 +22,7 @@ import {
   verifyPaddleSignature, webhookSecret, describeWebhookSecret, PLAN_PRICES,
 } from '../lib/paddle';
 import { createLogger } from '../infra/logger';
+import { ORG_ADMIN_ROLES } from '../lib/ownership';
 
 const router = Router();
 const logger = createLogger('BillingRoutes');
@@ -30,16 +31,17 @@ const logger = createLogger('BillingRoutes');
 const ENTITLED_STATUSES = new Set(['active', 'trialing', 'past_due']);
 
 // ── Helper: get org for user ──────────────────────────────────────────────────
+// Rows carry the caller's role in that org as member_role.
 
 async function getUserOrg(userId: string, orgId?: string): Promise<any | null> {
   try {
     const rows = await prisma.$queryRawUnsafe<any[]>(
       orgId
-        ? `SELECT o.* FROM organizations o
+        ? `SELECT o.*, om.role AS member_role FROM organizations o
            JOIN organization_members om ON om.org_id = o.id
            WHERE o.id = $1 AND om.user_id = $2 AND om.status = 'active'
            LIMIT 1`
-        : `SELECT o.* FROM organizations o
+        : `SELECT o.*, om.role AS member_role FROM organizations o
            JOIN organization_members om ON om.org_id = o.id
            WHERE om.user_id = $1 AND om.status = 'active'
            ORDER BY o.created_at ASC LIMIT 1`,
@@ -48,6 +50,10 @@ async function getUserOrg(userId: string, orgId?: string): Promise<any | null> {
     return rows?.[0] || null;
   } catch { return null; }
 }
+
+// Changing the plan, the Paddle portal (card, cancel), quantity sync and invoices: owner and admin only.
+const canManageBilling = (org: any) => ORG_ADMIN_ROLES.has(org?.member_role);
+const BILLING_ROLE_ERROR = 'רק הבעלים או מנהל הארגון יכולים לנהל את החיוב';
 
 async function setOrgPlan(orgId: string, planId: string, status: string) {
   await prisma.$executeRawUnsafe(
@@ -70,6 +76,7 @@ router.get('/status', async (req: Request, res: Response) => {
 
   const org = await getUserOrg(userId, req.query.orgId as string | undefined);
   if (!org) return res.json({ plan: 'free_trial', status: 'none', branchCount: 1 });
+  const manage = canManageBilling(org);
 
   let invoices: any[] = [];
   let paymentMethod: any = null;
@@ -118,8 +125,10 @@ router.get('/status', async (req: Request, res: Response) => {
     branchCount: org.branch_count || 1,
     currentPeriodEnd,
     cancelAtPeriodEnd,
-    paymentMethod,
-    invoices,
+    // Card and charges are for the members who manage billing.
+    paymentMethod: manage ? paymentMethod : null,
+    invoices: manage ? invoices : [],
+    canManageBilling: manage,
     pricePerBranch: PLAN_PRICES[org.plan_id] || null,
     totalMonthly: org.plan_id && PLAN_PRICES[org.plan_id]
       ? PLAN_PRICES[org.plan_id] * (org.branch_count || 1)
@@ -138,6 +147,7 @@ router.post('/checkout', async (req: Request, res: Response) => {
 
   const org = await getUserOrg(userId, orgId);
   if (!org) return res.status(404).json({ error: 'Org not found' });
+  if (!canManageBilling(org)) return res.status(403).json({ error: BILLING_ROLE_ERROR });
 
   if (!paddleEnabled()) {
     // Without billing configured a paid plan must never be granted for free in
@@ -189,6 +199,7 @@ router.post('/portal', async (req: Request, res: Response) => {
   if (!paddleEnabled()) return res.status(503).json({ error: 'Billing not configured' });
 
   const org = await getUserOrg(userId, req.body.orgId);
+  if (org && !canManageBilling(org)) return res.status(403).json({ error: BILLING_ROLE_ERROR });
   if (!org?.paddle_customer_id) return res.status(404).json({ error: 'No billing customer found' });
 
   try {
@@ -238,6 +249,7 @@ router.post('/update-quantity', async (req: Request, res: Response) => {
 
   const org = await getUserOrg(userId, req.body.orgId);
   if (!org) return res.status(404).json({ error: 'Org not found' });
+  if (!canManageBilling(org)) return res.status(403).json({ error: BILLING_ROLE_ERROR });
 
   try {
     return res.json({ ok: true, result: await syncPaddleQuantity(org.id) });
@@ -255,6 +267,7 @@ router.get('/invoices/:txnId/pdf', async (req: Request, res: Response) => {
   if (!paddleEnabled()) return res.status(503).json({ error: 'Billing not configured' });
 
   const org = await getUserOrg(userId, req.query.orgId as string | undefined);
+  if (org && !canManageBilling(org)) return res.status(403).json({ error: BILLING_ROLE_ERROR });
   if (!org?.paddle_customer_id) return res.status(404).json({ error: 'Not found' });
 
   try {

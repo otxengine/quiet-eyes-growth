@@ -17,6 +17,7 @@ jest.mock('../middleware/auth', () => ({
 }));
 jest.mock('../lib/ownership', () => ({
   getUserBusinessIds: jest.fn().mockResolvedValue(['biz_1']),
+  getUserWritableBusinessIds: jest.fn().mockResolvedValue(['biz_1']),
   getUserEmail: jest.fn(),
 }));
 
