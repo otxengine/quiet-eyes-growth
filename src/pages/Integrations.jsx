@@ -3,13 +3,9 @@ import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { getAuthHeaders } from '@/api/client';
+import { connectPlatform } from '@/lib/connectPlatform';
 import { toast } from 'sonner';
 import { CheckCircle, ExternalLink, Loader2, X, AlertTriangle, Clock } from 'lucide-react';
-import HubSpotConfig from '@/components/integrations/HubSpotConfig';
-import MondayConfig from '@/components/integrations/MondayConfig';
-import WebhookZapierConfig from '@/components/integrations/WebhookZapierConfig';
-import SyncEventsConfig from '@/components/integrations/SyncEventsConfig';
-import SyncStats from '@/components/integrations/SyncStats';
 
 // ── Social platform definitions ───────────────────────────────────────────────
 
@@ -64,33 +60,6 @@ const ADS_PLATFORMS = [
     color: '#1877F2',
     bg: '#EBF3FF',
     description: 'פרסם בפייסבוק, אינסטגרם ו-WhatsApp — החיוב עובר לחשבון Meta שלך',
-  },
-];
-
-const CRM_PLATFORMS = [
-  {
-    id: 'hubspot',
-    name: 'HubSpot',
-    icon: '🟠',
-    color: '#FF7A59',
-    bg: '#FFF5F2',
-    description: 'סנכרן לקוחות ולידים',
-  },
-  {
-    id: 'monday',
-    name: 'Monday',
-    icon: '📋',
-    color: '#FF3D57',
-    bg: '#FFF2F4',
-    description: 'נהל משימות ופרויקטים',
-  },
-  {
-    id: 'pipedrive',
-    name: 'Pipedrive',
-    icon: '🔵',
-    color: '#2E86AB',
-    bg: '#EEF6FB',
-    description: 'CRM מכירות ולידים',
   },
 ];
 
@@ -390,18 +359,9 @@ function WhatsAppEmbeddedCard({ platform, connection, account, bpId, expiry, onD
   );
 }
 
-// ── OAuth connect flow — server-side state + PKCE ─────────────────────────────
-
 // Derive server base from the same API URL used everywhere else in the app
 const _apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3007/api';
 const SERVER_BASE = _apiUrl.replace(/\/api\/?$/, '');
-
-async function initiateOAuth(platformId, businessId) {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${SERVER_BASE}/api/oauth/initiate/${platformId}?businessId=${businessId}`, { headers });
-  const data = await res.json();
-  return data; // { url, state } or { error, demo }
-}
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
@@ -431,15 +391,9 @@ export default function Integrations() {
 
   const connections = accountsToConnections(socialAccounts);
 
-  const saveField = async (partial) => {
-    if (!bp?.id) return;
-    await base44.entities.BusinessProfile.update(bp.id, partial);
-    toast.success('נשמר ✓');
-  };
-
   const connectSocial = async (platformId) => {
     try {
-      const result = await initiateOAuth(platformId, bp?.id);
+      const result = await connectPlatform(platformId, bp?.id);
 
       // WhatsApp uses Embedded Signup — handled by the card itself
       if (result?.whatsapp_embedded_signup) {
@@ -447,47 +401,23 @@ export default function Integrations() {
         return;
       }
 
-      if (result?.demo || result?.error) {
-        // Server not configured — create a demo SocialAccount record
-        toast.info(`חיבור ${platformId} — Demo Mode (הגדר OAuth credentials לחיבור אמיתי)`);
-        await base44.entities.SocialAccount.create({
-          linked_business: bp.id,
-          platform: platformId,
-          account_name: 'עמוד הדגמה',
-          is_connected: true,
-          last_sync: new Date().toISOString(),
-        }).catch(() => {});
-        queryClient.invalidateQueries({ queryKey: ['socialAccounts', bp?.id] });
-        return;
-      }
-
-      if (!result?.url) {
-        toast.error('שגיאה בפתיחת חלון חיבור');
-        return;
-      }
-
-      // Open OAuth popup
-      const popup = window.open(result.url, 'oauth', 'width=620,height=720,scrollbars=yes,resizable=yes');
-      if (!popup) {
+      if (result?.error === 'popup_blocked') {
         toast.error('לא ניתן לפתוח חלון חיבור — אפשר חלונות קופצים בדפדפן');
         return;
       }
+      if (result?.error === 'no_url') {
+        toast.error('שגיאה בפתיחת חלון חיבור');
+        return;
+      }
+      if (result?.error) {
+        toast.error(`שגיאה בחיבור: ${result.error}`);
+        return;
+      }
 
-      // Listen for success/error message from popup
-      const handler = async (event) => {
-        if (event.data?.type === 'oauth_success') {
-          window.removeEventListener('message', handler);
-          toast.success('החיבור הצליח ✓');
-          queryClient.invalidateQueries({ queryKey: ['socialAccounts', bp?.id] });
-        } else if (event.data?.type === 'oauth_error') {
-          window.removeEventListener('message', handler);
-          toast.error(`שגיאה בחיבור: ${event.data.error}`);
-        }
-      };
-      window.addEventListener('message', handler);
-
-      // Clean up listener after 5 minutes
-      setTimeout(() => window.removeEventListener('message', handler), 5 * 60 * 1000);
+      if (result?.success) {
+        toast.success('החיבור הצליח ✓');
+        queryClient.invalidateQueries({ queryKey: ['socialAccounts', bp?.id] });
+      }
     } catch (err) {
       toast.error('שגיאה בתהליך החיבור');
       console.error('[connectSocial]', err);
@@ -511,10 +441,9 @@ export default function Integrations() {
     <div className="space-y-6 max-w-2xl">
       <div>
         <h1 className="text-[16px] font-bold text-foreground tracking-tight">אינטגרציות</h1>
-        <p className="text-[12px] text-foreground-muted mt-0.5">חבר את Cortexi לרשתות החברתיות ול-CRM שלך</p>
+        <p className="text-[12px] text-foreground-muted mt-0.5">חבר את Cortexi לרשתות החברתיות ולפרסום שלך</p>
       </div>
 
-      <SyncStats bp={bp} socialAccounts={socialAccounts} />
 
       {/* Social Networks */}
       <div className="space-y-3">
@@ -558,28 +487,6 @@ export default function Integrations() {
           ))}
         </div>
       </div>
-
-      {/* CRM */}
-      <div className="space-y-3">
-        <h2 className="text-[13px] font-semibold text-foreground">CRM ולידים</h2>
-        <HubSpotConfig bp={bp} saveField={saveField} />
-        <MondayConfig bp={bp} saveField={saveField} />
-        <div className="card-base p-4 flex items-center gap-4 opacity-60">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl bg-blue-50 flex-shrink-0">🔵</div>
-          <div className="flex-1">
-            <span className="text-[13px] font-semibold text-foreground">Pipedrive</span>
-            <p className="text-[11px] text-foreground-muted">בקרוב</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Webhook */}
-      <div className="space-y-3">
-        <h2 className="text-[13px] font-semibold text-foreground">Webhook & Zapier</h2>
-        <WebhookZapierConfig bp={bp} saveField={saveField} />
-      </div>
-
-      <SyncEventsConfig bp={bp} saveField={saveField} />
 
       {/* Website Tracking Snippet */}
       <div className="space-y-3">
