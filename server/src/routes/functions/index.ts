@@ -420,6 +420,11 @@ const ALL_BUSINESSES_WITHOUT_ID = new Set(['runFullScan', 'run-full-scan', 'upda
 // Platform-wide reports with no business scope (systemHealthMonitor returns every tenant's latest
 // automation errors and global counts). No tenant UI calls them.
 const ADMIN_ONLY_FUNCTIONS = new Set(['systemHealthMonitor']);
+// The plan cadence (lib/planLimits.ts) decides when paid social collection runs, so a browser can't force one.
+const PLAN_CADENCE_FUNCTIONS = new Set([
+  'collectCompetitorSocialProfileAndPosts', 'collectCompetitorSocialProfile', 'collectCompetitorSocialPosts',
+  'collectCompetitorSocialStories', 'collectOwnSocialProfileAndPosts', 'collectOwnSocialProfile', 'collectOwnSocialPosts',
+]);
 
 async function requireFunctionAccess(req: Request<{ name: string }>, res: Response, next: NextFunction) {
   if (isAdminKeyRequest(req)) return next();
@@ -486,6 +491,7 @@ router.post('/:name', requireBusinessAccess, requireFunctionAccess, limitInvokeL
   if (!handler) {
     return res.status(404).json({ error: `Unknown function: ${req.params.name}` });
   }
+  if (PLAN_CADENCE_FUNCTIONS.has(req.params.name) && !isAdminKeyRequest(req) && req.body) delete req.body.force;
   if (BACKGROUND_FUNCTIONS.has(req.params.name)) return runInBackground(req.params.name, handler, req, res);
   // Express 4 drops a rejected promise (and Node then exits on it): send throws to the error handler.
   return Promise.resolve().then(() => handler(req, res)).catch(next);

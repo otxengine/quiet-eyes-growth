@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
-import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { setLastRun } from '../../lib/agentCache';
+import { socialGate } from '../../lib/planLimits';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { recordFollowerSnapshot } from '../../lib/followerSnapshot';
@@ -178,9 +179,8 @@ export async function collectOwnSocialProfile(req: Request, res: Response) {
   const { businessProfileId, force } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
-  if (!force && shouldSkipAgent(businessProfileId, 'collectOwnSocialProfile', MIN_INTERVAL_MS)) {
-    return res.json({ saved: 0, skipped: true, reason: 'ran_recently' });
-  }
+  const { skip } = await socialGate(businessProfileId, 'collectOwnSocialProfile', { force });
+  if (skip) return res.json({ saved: 0, skipped: true, reason: skip });
 
   const startTime = new Date().toISOString();
   try {

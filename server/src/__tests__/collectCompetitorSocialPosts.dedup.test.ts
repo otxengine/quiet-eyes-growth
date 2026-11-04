@@ -8,6 +8,12 @@
 const queryRawUnsafe = jest.fn();
 const executeRawUnsafe = jest.fn().mockResolvedValue(undefined);
 
+// Plan gating is covered by planLimits.test.ts; this file tests what the collector does once it runs.
+jest.mock('../lib/planLimits', () => ({
+  socialGate: jest.fn().mockResolvedValue({ limits: {}, skip: null }),
+  socialCompetitors: (competitors: any[]) => competitors,
+}));
+
 jest.mock('../db', () => ({
   prisma: {
     competitor: { findMany: jest.fn() },

@@ -49,7 +49,7 @@ export async function getCollectorMetrics(windowHours = 24): Promise<CollectorMe
         COUNT(*) FILTER (WHERE status = 'failed')::int                                     AS failed,
         COUNT(*) FILTER (WHERE error_message = 'ran_recently')::int                        AS skipped_ran_recently,
         COUNT(*) FILTER (WHERE error_message = 'no_data_sources')::int                     AS skipped_no_data,
-        COUNT(*) FILTER (WHERE error_message IN ('ran_recently', 'no_data_sources'))::int  AS skipped
+        COUNT(*) FILTER (WHERE error_message IN ('ran_recently', 'no_data_sources') OR status = 'skipped')::int AS skipped
       FROM automation_logs
       WHERE created_date >= $1::timestamptz
       GROUP BY automation_name

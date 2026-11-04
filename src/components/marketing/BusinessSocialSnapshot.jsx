@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { LONG_SCAN_TIMEOUT_MS } from '@/api/client';
+import { PLAN_SKIP_TEXT } from '@/lib/planConfig';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -64,9 +65,10 @@ export default function BusinessSocialSnapshot({ businessProfile, platform }) {
     setRefreshing(true);
     const parts = [];
     try {
-      const { data: result } = await base44.functions.invoke('collectOwnSocialPosts', { businessProfileId: bpId, force: true }, LONG_SCAN_TIMEOUT_MS);
+      const { data: result } = await base44.functions.invoke('collectOwnSocialPosts', { businessProfileId: bpId }, LONG_SCAN_TIMEOUT_MS);
       queryClient.invalidateQueries({ queryKey: ['businessSnapshotFeed', bpId] });
       if (result?.upserted > 0) parts.push(`${result.upserted} פוסטים חדשים`);
+      if (result?.skipped) parts.push(PLAN_SKIP_TEXT[result.reason] || result.reason);
       (result?.diagnostics || []).filter(d => d.error).forEach(d => {
         toast.error(`סריקת ${PLATFORM_LABELS[d.platform] || d.platform} נכשלה: ${d.error}`);
       });
@@ -79,12 +81,12 @@ export default function BusinessSocialSnapshot({ businessProfile, platform }) {
     } catch (e) { toast.error(`שגיאה בעדכון המודעות: ${e.message}`); }
 
     try {
-      await base44.functions.invoke('collectOwnSocialProfile', { businessProfileId: bpId, force: true }, 90000);
+      const { data: profileResult } = await base44.functions.invoke('collectOwnSocialProfile', { businessProfileId: bpId }, 90000);
       queryClient.invalidateQueries({ queryKey: ['businessSnapshotProfile', bpId] });
-      parts.push('פרופיל עודכן');
+      parts.push(profileResult?.skipped ? (PLAN_SKIP_TEXT[profileResult.reason] || profileResult.reason) : 'פרופיל עודכן');
     } catch (e) { toast.error(`שגיאה בעדכון הפרופיל: ${e.message}`); }
 
-    toast.success(parts.length ? `רענון הושלם — ${parts.join(' · ')}` : 'רענון הושלם — אין עדכונים חדשים');
+    toast.success(parts.length ? `רענון הושלם — ${[...new Set(parts)].join(' · ')}` : 'רענון הושלם — אין עדכונים חדשים');
     setRefreshing(false);
   };
 

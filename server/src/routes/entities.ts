@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
+import { planLimits } from '../lib/planLimits';
 import { getUserId, isAdminKeyRequest } from '../middleware/auth';
 import { getUserEmail, getUserBusinessIds } from '../lib/ownership';
 import { cleanupCompetitorsByRadius } from '../lib/competitorRadiusCleanup';
@@ -302,11 +303,6 @@ router.get('/:entity', async (req: Request, res: Response) => {
   }
 });
 
-// ponytail: inline from src/lib/planConfig.js — update both if plan limits change
-const PLAN_COMPETITOR_LIMITS: Record<string, number> = {
-  free_trial: 3, free: 3, starter: 5, growth: 10, pro: Infinity, enterprise: Infinity,
-};
-
 // Billing and tenancy fields: only the server (Paddle webhook, org routes) or the admin key sets these.
 const PROTECTED_FIELDS = ['subscription_plan', 'plan_id', 'subscription_status', 'stripe_customer_id', 'subscription_started_at', 'organization_id'];
 
@@ -356,7 +352,7 @@ router.post('/:entity', async (req: Request, res: Response) => {
         where: { id: data.linked_business }, select: { subscription_plan: true },
       });
       const planId = biz?.subscription_plan || 'free_trial';
-      const maxCompetitors = PLAN_COMPETITOR_LIMITS[planId] ?? 3;
+      const maxCompetitors = planLimits(planId).competitors_max;
       if (maxCompetitors !== Infinity) {
         const activeCount = await (prisma as any).competitor.count({
           where: {

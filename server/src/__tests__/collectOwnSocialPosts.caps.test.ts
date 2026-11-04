@@ -7,6 +7,12 @@
 
 const businessPostFindMany = jest.fn();
 
+// Plan gating is covered by planLimits.test.ts; this file tests what the collector does once it runs.
+jest.mock('../lib/planLimits', () => ({
+  socialGate: jest.fn().mockResolvedValue({ limits: {}, skip: null }),
+  socialCompetitors: (competitors: any[]) => competitors,
+}));
+
 jest.mock('../db', () => ({
   prisma: {
     businessProfile: { findUnique: jest.fn() },
