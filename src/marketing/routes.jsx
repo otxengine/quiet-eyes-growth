@@ -12,7 +12,7 @@ import BlogPost from './pages/BlogPost.jsx';
 import { Terms, Privacy, DataDeletion } from './pages/Legal.jsx';
 import { FEATURE_PAGES } from './content/featurePages.js';
 import { PRICING_FAQ } from './content/pricing.js';
-import { BLOG_POSTS } from './content/blogPosts.js';
+import { BLOG_POSTS, postPath } from './content/blogPosts.js';
 
 /**
  * Single source of truth for the marketing midsite: consumed by the SPA router
@@ -30,7 +30,7 @@ export const SITE_URL = 'https://cortexi.ai';
 const HOME_SEO = {
   title: 'Cortexi — מערכת AI לשיווק דיגיטלי וניהול מוניטין לעסקים',
   description:
-    'מערכת בינה מלאכותית לשיווק דיגיטלי לעסקים קטנים: מעקב מתחרים, ניהול מוניטין, אוטומציות ופעולות מוכנות לאישור — בעברית. תובנה ראשונה תוך 60 שניות.',
+    'Cortexi: מערכת AI לאוטומציה שיווקית וניהול מוניטין לעסקים קטנים — מעקב מתחרים, ביקורות גוגל, לידים ופעולות מוכנות לאישור, בעברית.',
   canonical: '/',
 };
 
@@ -51,27 +51,33 @@ const featureRoutes = Object.entries(FEATURE_PAGES).map(([slug, data]) => ({
   },
 }));
 
-const blogRoutes = BLOG_POSTS.map((post) => ({
-  path: `/blog/${post.slug}`,
-  Component: function BlogPostRoute() {
-    return <BlogPost post={post} />;
-  },
-  seo: {
-    title: post.seoTitle,
-    description: post.description,
-    canonical: `/blog/${post.slug}`,
-    article: {
-      headline: post.title,
-      description: post.description,
-      datePublished: post.datePublished,
+// Pillar posts (e.g. /automation) carry their own path and skip the /blog breadcrumb.
+const blogRoutes = BLOG_POSTS.map((post) => {
+  const path = postPath(post);
+  return {
+    path,
+    Component: function BlogPostRoute() {
+      return <BlogPost post={post} />;
     },
-    breadcrumbs: [
-      { name: 'בית', path: '/' },
-      { name: 'בלוג', path: '/blog' },
-      { name: post.title, path: `/blog/${post.slug}` },
-    ],
-  },
-}));
+    seo: {
+      title: post.seoTitle,
+      description: post.description,
+      canonical: path,
+      faqItems: post.faq,
+      article: {
+        headline: post.title,
+        description: post.description,
+        datePublished: post.datePublished,
+        dateModified: post.dateModified,
+      },
+      breadcrumbs: [
+        { name: 'בית', path: '/' },
+        ...(post.pillar ? [] : [{ name: 'בלוג', path: '/blog' }]),
+        { name: post.title, path },
+      ],
+    },
+  };
+});
 
 export const marketingRoutes = [
   { path: '/', Component: Home, seo: { ...HOME_SEO, jsonLd: 'software' } },
@@ -80,7 +86,7 @@ export const marketingRoutes = [
     Component: Blog,
     seo: {
       title: 'הבלוג של Cortexi — מדריכי שיווק ומוניטין לעסקים קטנים',
-      description: 'מדריכים מעשיים לעסקים קטנים: אוטומציות, מענה לביקורות גוגל, לידים ובחירת תוכנה לניהול עסק.',
+      description: 'מדריכים מעשיים לעסקים קטנים: אוטומציה, ניהול מוניטין וביקורות גוגל, לידים ובחירת תוכנה לניהול עסק.',
       canonical: '/blog',
       breadcrumbs: [
         { name: 'בית', path: '/' },

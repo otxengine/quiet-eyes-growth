@@ -1,5 +1,5 @@
 /**
- * planConfig.js — Single source of truth for plan limits and cost estimates.
+ * planConfig.js — Plan limits and cost estimates. Mirrors server/src/lib/planLimits.ts — update both.
  * Used by: useScanQuota, PlanGate, AdminDashboard.
  */
 
@@ -22,7 +22,7 @@ export const PLAN_LIMITS = {
     signals_max:     15,
     competitors_max: 5,
     posts_per_month: 5,
-    images_per_month: 0,
+    images_per_month: 3,
     leads_social:    false,
     trends:          false,
     viral:           false,
@@ -35,7 +35,7 @@ export const PLAN_LIMITS = {
     signals_max:     Infinity,
     competitors_max: 10,
     posts_per_month: 30,
-    images_per_month: 10,
+    images_per_month: 20,
     leads_social:    true,
     trends:          true,
     viral:           true,
@@ -115,3 +115,10 @@ export function agentCost(name) {
 export function getLimits(plan) {
   return PLAN_LIMITS[plan] || PLAN_LIMITS.free_trial;
 }
+
+// Reasons the server logs when a plan skips social collection (server/src/lib/planLimits.ts).
+export const PLAN_SKIP_TEXT = {
+  plan_no_social:  'איסוף מהרשתות החברתיות זמין בתוכניות בתשלום',
+  plan_no_stories: 'סטוריז של מתחרים זמינים בתוכנית Pro',
+  plan_cadence:    'הנתונים מהרשתות מתעדכנים לפי תדירות התוכנית שלך',
+};

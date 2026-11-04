@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
+import { planLimits } from '../../lib/planLimits';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { collectWebSignals } from './collectWebSignals';
 import { collectSocialSignals } from './collectSocialSignals';
@@ -33,16 +34,6 @@ import { bootstrapBusinessIntelligence } from '../../lib/bootstrapIntelligence';
 import { evaluateCollectionStatus } from '../../lib/collectionStatus';
 import { contentPerformanceAgent } from './contentPerformanceAgent';
 import { reviewRequestTimingAgent } from './reviewRequestTimingAgent';
-
-// ponytail: inline from src/lib/planConfig.js — update both if plan limits change
-const PLAN_SCAN_LIMITS: Record<string, number> = {
-  free_trial: 1,
-  free:       1,   // schema default maps to free_trial
-  starter:    4,
-  growth:     30,
-  pro:        Infinity,
-  enterprise: Infinity,
-};
 
 async function callHandler(fn: Function, businessProfileId: string, extra: Record<string, any> = {}): Promise<any> {
   return Promise.race([
@@ -121,7 +112,7 @@ export async function runFullScan(req: Request, res: Response) {
 
   // Plan scan-limit enforcement (KAN-20 AC2)
   const plan      = profile?.subscription_plan ?? 'free_trial';
-  const scanLimit = PLAN_SCAN_LIMITS[plan] ?? PLAN_SCAN_LIMITS.free_trial;
+  const scanLimit = planLimits(plan).scans_per_month;
   if (isFinite(scanLimit)) {
     try {
       const startOfMonth = new Date();

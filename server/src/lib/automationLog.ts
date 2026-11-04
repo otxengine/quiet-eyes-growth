@@ -5,7 +5,7 @@ export async function writeAutomationLog(
   businessProfileId: string,
   startTime: string,
   itemsProcessed: number,
-  status: 'success' | 'failed' = 'success',
+  status: 'success' | 'failed' | 'skipped' = 'success',
   errorMessage?: string,
   costUsd?: number,
 ) {
@@ -34,7 +34,7 @@ export async function writeAutomationLogDual(
   businessProfileId: string,
   startTime: string,
   itemsProcessed: number,
-  status: 'success' | 'failed' = 'success',
+  status: 'success' | 'failed' | 'skipped' = 'success',
   errorMessage?: string,
   costUsd?: number,
 ) {

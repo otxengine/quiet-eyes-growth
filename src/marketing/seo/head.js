@@ -10,7 +10,6 @@ const ORGANIZATION = {
   '@type': 'Organization',
   '@id': `${SITE_URL}/#organization`,
   name: 'Cortexi',
-  alternateName: 'קורטקסי',
   url: SITE_URL,
   logo: `${SITE_URL}/logo/cortexi-logo.png`,
   slogan: 'Inspired by the brain. Built for intelligence.',

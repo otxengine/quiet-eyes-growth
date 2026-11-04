@@ -42,6 +42,7 @@ export const orgApi = {
   createOrg: (body) => apiFetch('/orgs', { method: 'POST', body: JSON.stringify(body) }),
   getOrg: (id) => apiFetch(`/orgs/${id}`),
   updateOrg: (id, body) => apiFetch(`/orgs/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  joinOrg: (token) => apiFetch(`/orgs/join/${encodeURIComponent(token)}`, { method: 'POST' }),
 
   // Members
   addMember: (orgId, body) => apiFetch(`/orgs/${orgId}/members`, { method: 'POST', body: JSON.stringify(body) }),

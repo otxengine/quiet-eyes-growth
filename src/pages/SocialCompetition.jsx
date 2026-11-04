@@ -3,6 +3,7 @@ import { useOutletContext, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { waitForAutomationLog } from '@/api/client';
+import { PLAN_SKIP_TEXT } from '@/lib/planConfig';
 import { Loader2, RefreshCw, ChevronDown, Megaphone } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/shared/PageHeader';
@@ -627,14 +628,17 @@ export default function SocialCompetition() {
     try {
       // Profile scraped first, then posts — the posts scrape reads the profile's
       // fresh post_count/last_post_at delta to decide whether/how much to fetch
-      // (see server/src/lib/postsDeltaSignal.ts). force:true still bypasses each
-      // step's own cadence guard, but not this delta-based skip — a quiet account
-      // can still report "0 new posts" here even on a manual refresh.
+      // (see server/src/lib/postsDeltaSignal.ts), so a quiet account can report "0 new
+      // posts". The plan sets how often these social scrapes run (server/src/lib/planLimits.ts);
+      // between runs the server ignores force and logs a 'skipped' row with the reason.
       const feedLog = await runScan('collectCompetitorSocialProfileAndPosts', 'collectCompetitorSocialPosts');
       queryClient.invalidateQueries({ queryKey: ['socialPosts', bpId] });
       queryClient.invalidateQueries({ queryKey: ['socialProfiles', bpId] });
-      if (feedLog.items_processed > 0) parts.push(`${feedLog.items_processed} פוסטים חדשים`);
-      parts.push('פרופילים עודכנו');
+      if (feedLog.status === 'skipped') parts.push(PLAN_SKIP_TEXT[feedLog.error_message] || feedLog.error_message);
+      else {
+        if (feedLog.items_processed > 0) parts.push(`${feedLog.items_processed} פוסטים חדשים`);
+        parts.push('פרופילים עודכנו');
+      }
     } catch (e) { toast.error(`שגיאה בעדכון הפיד/פרופילים: ${e.message}`); }
 
     try {
@@ -646,7 +650,8 @@ export default function SocialCompetition() {
     try {
       const storiesLog = await runScan('collectCompetitorSocialStories');
       queryClient.invalidateQueries({ queryKey: ['socialStories', bpId] });
-      if (storiesLog.items_processed > 0) parts.push(`${storiesLog.items_processed} סטוריז חדשים`);
+      if (storiesLog.status === 'skipped') parts.push(PLAN_SKIP_TEXT[storiesLog.error_message] || storiesLog.error_message);
+      else if (storiesLog.items_processed > 0) parts.push(`${storiesLog.items_processed} סטוריז חדשים`);
     } catch (e) { toast.error(`שגיאה בעדכון הסטוריז: ${e.message}`); }
 
     try {
@@ -659,7 +664,7 @@ export default function SocialCompetition() {
       if (total > 0) parts.push(remaining > 0 ? `${total} פריטים נותחו (נשארו עוד ${remaining})` : `${total} פריטים נותחו`);
     } catch (e) { toast.error(`שגיאה בניתוח: ${e.message}`); }
 
-    toast.success(parts.length ? `רענון הושלם — ${parts.join(' · ')}` : 'רענון הושלם — אין עדכונים חדשים');
+    toast.success(parts.length ? `רענון הושלם — ${[...new Set(parts)].join(' · ')}` : 'רענון הושלם — אין עדכונים חדשים');
     setRefreshingAll(false);
   };
 

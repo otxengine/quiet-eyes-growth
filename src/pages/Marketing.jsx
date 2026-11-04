@@ -353,7 +353,7 @@ function ToggleSwitch({ active, onToggle }) {
   );
 }
 
-function CampaignRow({ campaign, onDelete, bpId, onToggle }) {
+function CampaignRow({ campaign, onDelete, bpId, onToggle, onPublished }) {
   const navigate = useNavigate();
   const plat = PLATFORM_CONFIG[campaign.platform] || { label: campaign.platform, icon: '📣', color: '#555' };
   const isActive = ['active', 'published'].includes(campaign.status);
@@ -384,6 +384,12 @@ function CampaignRow({ campaign, onDelete, bpId, onToggle }) {
           </p>
         )}
       </div>
+      {campaign.status === 'pending_launch' && (
+        <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          {campaign.platform === 'google' && <PublishGoogleAdsButton campaign={campaign} bpId={bpId} onPublished={onPublished} />}
+          {['facebook', 'instagram', 'whatsapp'].includes(campaign.platform) && <PublishMetaAdsButton campaign={campaign} bpId={bpId} onPublished={onPublished} />}
+        </div>
+      )}
       <div className="w-12 flex-shrink-0 flex justify-center" onClick={(e) => e.stopPropagation()}>
         <ToggleSwitch active={isActive} onToggle={() => onToggle(campaign)} />
       </div>
@@ -585,6 +591,7 @@ export default function Marketing() {
                 campaign={c}
                 onDelete={(id) => deleteCampaign.mutate(id)}
                 bpId={bpId}
+                onPublished={() => queryClient.invalidateQueries({ queryKey: ['campaigns', bpId] })}
                 onToggle={(camp) => {
                   const newStatus = ['active', 'published'].includes(camp.status) ? 'paused' : 'active';
                   base44.entities.Campaign.update(camp.id, { status: newStatus })

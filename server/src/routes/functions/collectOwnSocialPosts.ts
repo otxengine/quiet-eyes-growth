@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
-import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { setLastRun } from '../../lib/agentCache';
+import { socialGate } from '../../lib/planLimits';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
@@ -14,7 +15,6 @@ import { PostsDeltaSignal } from '../../lib/postsDeltaSignal';
 // TIMESTAMP(3) columns (see server/src/index.ts), so — unlike the competitor
 // version — this can use plain typed Prisma calls with no pgHex/raw-SQL workarounds.
 
-const MIN_INTERVAL_MS = 20 * 60 * 60 * 1000; // 20h
 // ponytail: steady-state cap sized for the actual delta (a few posts/day), not the backfill.
 // If an account posts >5x between two ~20-24h scans, the overflow is silently missed next
 // run too (cursor advances past it) — raise this if a specific account looks incomplete.
@@ -230,9 +230,8 @@ export async function collectOwnSocialPosts(req: Request, res: Response) {
   };
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
-  if (!force && shouldSkipAgent(businessProfileId, 'collectOwnSocialPosts', MIN_INTERVAL_MS)) {
-    return res.json({ upserted: 0, skipped: true, reason: 'ran_recently' });
-  }
+  const { skip } = await socialGate(businessProfileId, 'collectOwnSocialPosts', { force });
+  if (skip) return res.json({ upserted: 0, skipped: true, reason: skip });
 
   const startTime = new Date().toISOString();
   try {
