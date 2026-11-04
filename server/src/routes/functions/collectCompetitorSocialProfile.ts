@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
-import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { setLastRun } from '../../lib/agentCache';
+import { socialGate, socialCompetitors } from '../../lib/planLimits';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { findDonorCandidates } from '../../lib/competitorDonor';
@@ -12,7 +13,6 @@ import { recordFollowerSnapshot } from '../../lib/followerSnapshot';
 // is often tracked by multiple businesses, so a fresh scrape from one is cloned instead of
 // re-scraping). Loops over Instagram + Facebook per competitor within one function/cron slot.
 
-const MIN_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h between full runs
 const PER_COMP_INTERVAL_MS = 24 * 60 * 60 * 1000; // skip individual competitor+platform if scraped within 24h
 const INSTAGRAM_PROFILE_ACTOR = 'apify~instagram-profile-scraper';
 const FACEBOOK_PROFILE_ACTOR = 'NZ2v1fqLfaN2UBYIx'; // apivault_labs/facebook-profile-scraper
@@ -210,9 +210,8 @@ export async function collectCompetitorSocialProfile(req: Request, res: Response
   const { businessProfileId, force } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
-  if (!force && shouldSkipAgent(businessProfileId, 'collectCompetitorSocialProfile', MIN_INTERVAL_MS)) {
-    return res.json({ saved: 0, skipped: true, reason: 'ran_recently' });
-  }
+  const { limits, skip } = await socialGate(businessProfileId, 'collectCompetitorSocialProfile', { force });
+  if (skip) return res.json({ saved: 0, skipped: true, reason: skip });
 
   const startTime = new Date().toISOString();
   try {
@@ -222,7 +221,7 @@ export async function collectCompetitorSocialProfile(req: Request, res: Response
     }
 
     const allCompetitors = await prisma.competitor.findMany({ where: { linked_business: businessProfileId } });
-    const eligibleCompetitors = allCompetitors.filter((c: any) => !c.not_relevant && c.tracking_status === 'approved');
+    const eligibleCompetitors = socialCompetitors(allCompetitors.filter((c: any) => !c.not_relevant && c.tracking_status === 'approved'), limits);
 
     const results: any[] = [];
     for (const platform of Object.keys(PLATFORM_CONFIGS) as (keyof typeof PLATFORM_CONFIGS)[]) {

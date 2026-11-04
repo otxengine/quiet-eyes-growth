@@ -180,7 +180,7 @@ const functions = {
 // answer right away with { started_at } and keep running on the server — CloudFront cuts
 // requests at 120s. Resolves with the first automation_logs row any of `names` wrote for
 // this business since started_at. The handler must log on the path being waited on, so
-// pass force:true to skip cadence guards that return without logging.
+// pass force:true to skip cadence guards that return without logging (social collectors ignore force and log their plan skips instead).
 // ponytail: matched by name + time, so a scheduler run of the same agent that finishes
 // first counts as this one — add a run id to automation_logs if that ever matters.
 export async function waitForAutomationLog(businessProfileId, names, since, timeoutMs = LONG_SCAN_TIMEOUT_MS) {

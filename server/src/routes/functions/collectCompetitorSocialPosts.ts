@@ -2,7 +2,8 @@ import { randomUUID } from 'crypto';
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
-import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { setLastRun } from '../../lib/agentCache';
+import { socialGate, socialCompetitors } from '../../lib/planLimits';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
@@ -445,9 +446,8 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
   };
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
-  if (!force && shouldSkipAgent(businessProfileId, 'collectCompetitorSocialPosts', MIN_INTERVAL_MS)) {
-    return res.json({ upserted: 0, skipped: true, reason: 'ran_recently' });
-  }
+  const { limits, skip } = await socialGate(businessProfileId, 'collectCompetitorSocialPosts', { force });
+  if (skip) return res.json({ upserted: 0, skipped: true, reason: skip });
 
   const startTime = new Date().toISOString();
   try {
@@ -459,7 +459,7 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
     const allCompetitors = await prisma.competitor.findMany({
       where: { linked_business: businessProfileId },
     });
-    const competitors = allCompetitors.filter((c: any) => !c.not_relevant && c.tracking_status === 'approved');
+    const competitors = socialCompetitors(allCompetitors.filter((c: any) => !c.not_relevant && c.tracking_status === 'approved'), limits);
 
     // One-time backfill: repair posts missing linked_business
     for (const comp of competitors) {
