@@ -98,14 +98,17 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
   const topicSet = resolveTopicSet(sp?.sector_key ?? 'other', sp?.onboarding_review_extras ?? []);
 
   const isOwn = taskRow.task_type === 'own';
+  // IDs dedup across the whole business, matching the unique index (linked_business, google_review_id).
+  // Scoped to one competitor, a review already stored under another competitor row looked new on every
+  // run: it was topic-tagged by the LLM, then rejected by the index. Text keys stay per competitor.
   const existing = await prisma.review.findMany({
-    where: isOwn
-      ? { linked_business: taskRow.business_profile_id }
-      : { linked_competitor: taskRow.linked_competitor! },
-    select: { google_review_id: true, text: true },
+    where: { linked_business: taskRow.business_profile_id },
+    select: { google_review_id: true, text: true, linked_competitor: true },
   });
   const existingIds = new Set(existing.map(r => r.google_review_id).filter(Boolean));
-  const existingKeys = new Set(existing.map(r => (r.text || '').substring(0, 50)));
+  const existingKeys = new Set(existing
+    .filter(r => isOwn || r.linked_competitor === taskRow.linked_competitor)
+    .map(r => (r.text || '').substring(0, 50)));
 
   const pending: Array<{
     reviewId: string; text: string; rating: number;

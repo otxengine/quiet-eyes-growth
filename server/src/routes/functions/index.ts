@@ -163,7 +163,7 @@ const router = Router();
 // Models a signed-in user may pick: the frontend only uses these. Unknown keys would otherwise be
 // sent to OpenRouter as raw model ids, so any (costly) model could be requested.
 const USER_LLM_MODELS = new Set(['haiku', 'sonnet']);
-const USER_LLM_MAX_TOKENS = 1500; // largest frontend request is 1200
+const USER_LLM_MAX_TOKENS = 1500; // largest frontend requests (Strategy, insight guidance) are 1500
 const USER_LLM_MAX_PROMPT_CHARS = 100_000; // input tokens are the real cost lever
 
 async function invokeLLMHandler(req: Request, res: Response) {

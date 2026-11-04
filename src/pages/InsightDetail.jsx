@@ -194,7 +194,7 @@ function AgentAdvisor({ insight, snapshot, bpId, insightId, onCreateTask }) {
     try {
       const res = await base44.integrations.Core.InvokeLLM({
         model: 'haiku',
-        maxTokens: 700,
+        maxTokens: 1500, // 700 truncated the Hebrew JSON → no `steps` → nothing shown
         response_json_schema: GUIDANCE_SCHEMA,
         prompt: `אתה יועץ עסקי בכיר לעסקים קטנים ישראלים. המשימה: להפוך את התובנה לתוכנית ביצוע ברורה.
 

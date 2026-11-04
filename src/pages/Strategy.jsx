@@ -57,7 +57,8 @@ function writeRecoCache(bpId, data) {
 // ── LLM JSON call ────────────────────────────────────────────────────────────
 
 async function callLLM(prompt) {
-  const result = await base44.integrations.Core.InvokeLLM({ model: 'sonnet', maxTokens: 900, prompt });
+  // 2 strategies of Hebrew JSON overflow 900 tokens; a truncated reply fails JSON.parse and shows nothing.
+  const result = await base44.integrations.Core.InvokeLLM({ model: 'sonnet', maxTokens: 1500, prompt });
   const text  = typeof result === 'string' ? result : (result?.content || '{}');
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('no JSON in response');
