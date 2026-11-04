@@ -2,7 +2,8 @@ import React from 'react';
 import { Container } from '../ui/primitives.jsx';
 
 /* Terms / Privacy / DataDeletion — content carried over verbatim from
-   src/pages/public/{Terms,Privacy,DataDeletion}.jsx, restyled with tokens. */
+   src/pages/public/{Terms,Privacy,DataDeletion}.jsx, restyled with tokens.
+   RefundPolicy is new; Paddle's website review requires one. */
 
 function LegalShell({ title, updated, children }) {
   return (
@@ -16,7 +17,7 @@ function LegalShell({ title, updated, children }) {
 
 export function Terms() {
   return (
-    <LegalShell title="תנאי שימוש" updated="יוני 2026">
+    <LegalShell title="תנאי שימוש" updated="אוקטובר 2026">
       <section><h2>1. הסכמה לתנאים</h2><p>בהרשמה לשירות Cortexi והשימוש בו, אתה מסכים לתנאי שימוש אלה. אם אינך מסכים, אנא אל תשתמש בשירות.</p></section>
       <section><h2>2. תיאור השירות</h2><p>Cortexi מספקת פלטפורמת מודיעין עסקי אוטומטי לעסקים קטנים ובינוניים בישראל. השירות כולל סריקת מקורות ציבוריים, ניתוח מתחרים, ניהול ביקורות, מעקב לידים ותובנות שוק.</p></section>
       <section><h2>3. חשבון משתמש</h2><ul>
@@ -34,7 +35,8 @@ export function Terms() {
       <section><h2>6. תשלום וביטול</h2><ul>
         <li>תשלום עבור מנויים בתשלום מתבצע מראש על בסיס חודשי.</li>
         <li>ניתן לבטל מנוי בכל עת; הביטול ייכנס לתוקף בסוף תקופת החיוב הנוכחית.</li>
-        <li>אין החזר כספי על תקופות חיוב שכבר שולמו.</li>
+        <li>ניתן לקבל החזר כספי מלא תוך 14 יום מכל חיוב, כמפורט ב<a href="/refund-policy">מדיניות ההחזרים</a>.</li>
+        <li>תהליך ההזמנה מתבצע על ידי המשווק המקוון שלנו, Paddle.com, שהוא ה-Merchant of Record של כל ההזמנות ומטפל בחיובים, בחשבוניות ובהחזרים.</li>
       </ul></section>
       <section><h2>7. קניין רוחני</h2><p>כל הזכויות בשירות, לרבות תוכנה, עיצוב, ומתודולוגיה, שמורות ל-Cortexi. המשתמש מקבל רישיון מוגבל, אישי, ובלתי ניתן להעברה לשימוש בשירות.</p></section>
       <section><h2>8. הגבלת אחריות</h2><p>השירות ניתן "כפי שהוא" (AS IS). Cortexi לא תישא באחריות לנזקים עקיפים, תוצאתיים, או מקריים הנובעים מהשימוש בשירות.</p></section>
@@ -116,6 +118,26 @@ export function Privacy() {
         <p>We use this data only to provide the features you see in Cortexi. Review text may be processed by our AI service providers solely to generate the reply suggestions and insights shown to you. We do not sell Google user data, use it for advertising, or use it to train AI or machine-learning models, and we do not share it with any other third party except as required by law.</p>
         <p>You can disconnect at any time from the integrations page. Disconnecting revokes our access at Google and permanently deletes the tokens and related data from Cortexi immediately. You can also request full account deletion via <a href="/data-deletion">our data deletion page</a> or <a href="mailto:contact@cortexi.ai">contact@cortexi.ai</a>.</p>
         <p>Cortexi's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+      </section>
+    </LegalShell>
+  );
+}
+
+export function RefundPolicy() {
+  return (
+    <LegalShell title="מדיניות החזרים" updated="אוקטובר 2026">
+      <p className="text-[14px]">אנחנו רוצים שתהיו מרוצים מ-<strong>CORTEXI</strong>. אם תוכנית בתשלום לא מתאימה לכם, תוכלו לקבל את הכסף בחזרה.</p>
+      <section><h2>1. החזר מלא תוך 14 יום</h2><p>ניתן לבקש החזר כספי מלא תוך 14 ימים קלנדריים מכל חיוב — התשלום הראשון וכל חידוש חודשי — ללא צורך בנימוק.</p></section>
+      <section><h2>2. איך מבקשים החזר</h2><ul>
+        <li>שלחו בקשה לכתובת <a href="mailto:contact@cortexi.ai">contact@cortexi.ai</a> מכתובת הדוא"ל הרשומה לחשבון, או</li>
+        <li>פנו ישירות ל-Paddle דרך הקישור בקבלה שקיבלתם בדוא"ל, או באתר <a href="https://paddle.net" target="_blank" rel="noopener noreferrer">paddle.net</a>.</li>
+      </ul></section>
+      <section><h2>3. ביצוע ההחזר</h2><p>ההחזר מבוצע על ידי Paddle.com, ה-Merchant of Record של כל ההזמנות שלנו, לאמצעי התשלום המקורי. משך הזמן עד שהסכום מופיע בחשבון תלוי בחברת האשראי או בבנק. החזר על חיוב מבטל את המנוי, והחשבון עובר לתוכנית החינמית.</p></section>
+      <section><h2>4. אחרי 14 יום</h2><p>לאחר 14 יום מהחיוב לא יינתן החזר על התקופה ששולמה. ניתן לבטל את המנוי בכל עת, והביטול ייכנס לתוקף בסוף תקופת החיוב הנוכחית.</p></section>
+      <section><h2>5. יצירת קשר</h2><p>שאלות על חיובים והחזרים: <a href="mailto:contact@cortexi.ai">contact@cortexi.ai</a></p></section>
+      <section lang="en" dir="ltr"><h2>Refund policy (English)</h2>
+        <p>You can request a full refund within 14 calendar days of any charge, the first payment or any monthly renewal, with no questions asked. Email <a href="mailto:contact@cortexi.ai">contact@cortexi.ai</a> from your account's email address, or contact Paddle through the link in your receipt or at <a href="https://paddle.net" target="_blank" rel="noopener noreferrer">paddle.net</a>.</p>
+        <p>Our order process is conducted by our online reseller Paddle.com. Paddle.com is the Merchant of Record for all our orders and issues refunds to the original payment method. A refund cancels the subscription and moves the account to the free plan. After 14 days the paid period is not refunded; you can cancel at any time, effective at the end of the current billing period.</p>
       </section>
     </LegalShell>
   );
