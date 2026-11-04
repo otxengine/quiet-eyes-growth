@@ -8,12 +8,13 @@
  * full result body lands here as soon as the task completes — same shape as
  * a task_get response (see getGoogleReviewsTaskResult in lib/dataforseo.ts).
  *
- * DataForSEO postbacks aren't signed, so auth is a shared secret in the query
- * string (mirrors the CRON_SECRET convention at /api/cron/run), not HMAC.
+ * DataForSEO postbacks aren't signed, so auth is a shared secret, not HMAC. It
+ * has to ride in the query string: a postback_url can't carry custom headers.
  */
 
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../db';
+import { safeEqual } from '../../middleware/auth';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { batchExtractTopics } from '../../lib/reviewTaxonomy';
 import { getSectorProfile } from '../../lib/businessProfile';
@@ -27,8 +28,7 @@ import {
 const router = Router();
 
 export function dataforseoWebhookHandler(req: Request, res: Response) {
-  const secret = req.query.secret as string | undefined;
-  if (!process.env.DATAFORSEO_WEBHOOK_SECRET || secret !== process.env.DATAFORSEO_WEBHOOK_SECRET) {
+  if (!safeEqual(req.query.secret, process.env.DATAFORSEO_WEBHOOK_SECRET || '')) {
     return res.status(403).json({ error: 'unauthorized' });
   }
 

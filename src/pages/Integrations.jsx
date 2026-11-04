@@ -473,21 +473,22 @@ export default function Integrations() {
         return;
       }
 
-      // Listen for success/error message from popup
-      const handler = async (event) => {
-        if (event.data?.type === 'oauth_success') {
-          window.removeEventListener('message', handler);
+      // The popup finishes on our own /oauth/callback page and reports back on a same-origin
+      // channel: no other site can post to it, and it works after Meta's pages cut window.opener.
+      const channel = new BroadcastChannel('oauth');
+      channel.onmessage = ({ data }) => {
+        if (data?.type === 'oauth_success') {
+          channel.close();
           toast.success('החיבור הצליח ✓');
           queryClient.invalidateQueries({ queryKey: ['socialAccounts', bp?.id] });
-        } else if (event.data?.type === 'oauth_error') {
-          window.removeEventListener('message', handler);
-          toast.error(`שגיאה בחיבור: ${event.data.error}`);
+        } else if (data?.type === 'oauth_error') {
+          channel.close();
+          toast.error(`שגיאה בחיבור: ${data.error}`);
         }
       };
-      window.addEventListener('message', handler);
 
-      // Clean up listener after 5 minutes
-      setTimeout(() => window.removeEventListener('message', handler), 5 * 60 * 1000);
+      // Stop listening after 10 minutes (the state expires then)
+      setTimeout(() => channel.close(), 10 * 60 * 1000);
     } catch (err) {
       toast.error('שגיאה בתהליך החיבור');
       console.error('[connectSocial]', err);

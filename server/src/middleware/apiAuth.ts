@@ -13,7 +13,7 @@ const PUBLIC_API_PATHS: RegExp[] = [
   /^\/migrate$/,
   /^\/webhooks\//,
   /^\/billing\/webhooks$/,
-  /^\/oauth\/(callback\/[^/]+|confirm-page)$/,
+  /^\/oauth\/callback\/[^/]+$/,
   /^\/competitors\/proxy-image$/,
   /^\/social\/media\/[^/]+$/,
 ];

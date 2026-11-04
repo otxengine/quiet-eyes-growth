@@ -16,6 +16,7 @@
 
 import { Router, Request, Response, RequestHandler } from 'express';
 import { prisma } from '../db';
+import { getUserEmail } from '../lib/ownership';
 import { getUserId } from '../middleware/auth';
 import { syncPaddleQuantity } from './billing';
 import { sendEmail, buildInviteEmail, FRONTEND_URL } from '../lib/email';
@@ -353,11 +354,18 @@ router.post('/join/:token', async (req: Request, res: Response) => {
     if (!rows?.length) return res.status(404).json({ error: 'invite_not_found' });
 
     const invite = rows[0];
+    // The link alone isn't enough: only the invited address may claim it, and only once Clerk
+    // has verified that address as the user's primary (same rule as lib/ownership.ts). A
+    // mismatch leaves the invite pending for the right person.
+    const verifiedEmail = await getUserEmail(userId);
+    if (!verifiedEmail || !invite.email || verifiedEmail.toLowerCase() !== String(invite.email).trim().toLowerCase()) {
+      return res.status(403).json({ error: 'invite_email_mismatch' });
+    }
     // Claim the invite — replace the placeholder user_id with the real one
     await prisma.$executeRawUnsafe(
       `UPDATE organization_members
        SET user_id = $1, status = 'active', invite_token = NULL, token_expires_at = NULL
-       WHERE id = $2`,
+       WHERE id = $2 AND status = 'pending'`,
       userId, invite.id,
     );
     return res.json({ ok: true, orgId: invite.org_id, role: invite.role });

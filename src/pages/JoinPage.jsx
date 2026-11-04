@@ -34,7 +34,9 @@ export default function JoinPage() {
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          throw new Error(data.error || 'שגיאה בהצטרפות לארגון');
+          throw new Error(data.error === 'invite_email_mismatch'
+            ? 'ההזמנה נשלחה לכתובת מייל אחרת. התחבר עם החשבון של הכתובת שהוזמנה (אחרי שאימתת אותה) ונסה שוב.'
+            : data.error || 'שגיאה בהצטרפות לארגון');
         }
         return data;
       })

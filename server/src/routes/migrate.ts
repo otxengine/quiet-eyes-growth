@@ -11,8 +11,8 @@ const router = Router();
 const MIGRATION_SECRET = process.env.MIGRATION_SECRET;
 
 router.post('/', async (req: Request, res: Response) => {
-  const { isAdminKeyRequest } = require('../middleware/auth');
-  const validMigrationSecret = !!MIGRATION_SECRET && req.headers['x-migration-secret'] === MIGRATION_SECRET;
+  const { isAdminKeyRequest, safeEqual } = require('../middleware/auth');
+  const validMigrationSecret = safeEqual(req.headers['x-migration-secret'], MIGRATION_SECRET || '');
   const validAdminKey = isAdminKeyRequest(req);
   if (!validMigrationSecret && !validAdminKey) {
     return res.status(403).json({ error: 'Forbidden' });

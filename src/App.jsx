@@ -53,6 +53,7 @@ const CompetitorsOffers = lazyPage(() => import('@/pages/CompetitorsOffers.jsx')
 const OrganizationSettings = lazyPage(() => import('@/pages/OrganizationSettings.jsx'));
 const AgencyDashboard = lazyPage(() => import('@/pages/AgencyDashboard.jsx'));
 const JoinPage = lazyPage(() => import('@/pages/JoinPage.jsx'));
+const OAuthCallback = lazyPage(() => import('@/pages/OAuthCallback.jsx'));
 const CommandHome = lazyPage(() => import('@/pages/CommandHome.jsx'));
 const ChatPage = lazyPage(() => import('@/pages/Chat.jsx'));
 
@@ -132,6 +133,9 @@ const AuthenticatedApp = () => {
 
       {/* Invite join — accessible without app layout */}
       <Route path="/join" element={<JoinPage />} />
+
+      {/* OAuth popup lands here to finish connecting an integration */}
+      <Route path="/oauth/callback" element={<OAuthCallback />} />
 
       {/* Onboarding flow */}
       <Route path="/onboarding/*" element={<Onboarding />} />
