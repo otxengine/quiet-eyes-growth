@@ -12,6 +12,7 @@ const COMPANY_LINKS = [
 const LEGAL_LINKS = [
   { label: 'תנאי שימוש', href: '/terms' },
   { label: 'מדיניות פרטיות', href: '/privacy' },
+  { label: 'מדיניות החזרים', href: '/refund-policy' },
   { label: 'מחיקת נתונים', href: '/data-deletion' },
 ];
 

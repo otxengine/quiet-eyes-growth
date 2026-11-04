@@ -9,7 +9,7 @@ import FeaturePage from './pages/FeaturePage.jsx';
 import NotFound from './pages/NotFound.jsx';
 import Blog from './pages/Blog.jsx';
 import BlogPost from './pages/BlogPost.jsx';
-import { Terms, Privacy, DataDeletion } from './pages/Legal.jsx';
+import { Terms, Privacy, RefundPolicy, DataDeletion } from './pages/Legal.jsx';
 import { FEATURE_PAGES } from './content/featurePages.js';
 import { PRICING_FAQ } from './content/pricing.js';
 import { BLOG_POSTS, postPath } from './content/blogPosts.js';
@@ -154,6 +154,11 @@ export const marketingRoutes = [
     path: '/privacy',
     Component: Privacy,
     seo: { title: 'מדיניות פרטיות — Cortexi', description: 'מדיניות הפרטיות של Cortexi: איזה מידע נאסף, איך הוא נשמר ומה זכויותיך.', canonical: '/privacy' },
+  },
+  {
+    path: '/refund-policy',
+    Component: RefundPolicy,
+    seo: { title: 'מדיניות החזרים — Cortexi', description: 'החזר כספי מלא תוך 14 יום מכל חיוב, דרך Paddle.com.', canonical: '/refund-policy' },
   },
   {
     path: '/data-deletion',
