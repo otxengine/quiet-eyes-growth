@@ -27,6 +27,7 @@ jest.mock('../lib/reviewPostProcessing', () => ({
 
 import { prisma } from '../db';
 import { writeAutomationLog } from '../lib/automationLog';
+import { batchExtractTopics } from '../lib/reviewTaxonomy';
 import {
   detectCompetitorMentions, snapshotRatingHistory, createNegativeReviewAlerts,
   publishNewReviewEvents, backfillTopicsFor,
@@ -212,6 +213,34 @@ describe('processDataForSeoReviewsPostback', () => {
     expect(reviewCreate).not.toHaveBeenCalled();
     expect(taskUpdate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ new_reviews_count: 0 }),
+    }));
+  });
+
+  test('competitor task: skips a review id already stored under another competitor of the same business', async () => {
+    taskFindUnique.mockResolvedValue(COMPETITOR_TASK_ROW);
+    // Filter like the DB would, so a per-competitor lookup can't see the other competitor's rows.
+    const rows = [
+      { linked_business: 'bp1', linked_competitor: 'compOld', google_review_id: 'rev2', text: 'לא מרוצה בכלל מהשירות' },
+      { linked_business: 'bp1', linked_competitor: 'compOld', google_review_id: 'old9', text: 'אוכל טעים ושירות מהיר' },
+    ];
+    reviewFindMany.mockImplementation(async ({ where }: any) =>
+      rows.filter(r => Object.entries(where).every(([k, v]) => (r as any)[k] === v)));
+
+    await processDataForSeoReviewsPostback({
+      tasks: [{
+        id: 'task456', status_code: 20000, cost: 0.01,
+        result: [{ items: [
+          { review_text: 'לא מרוצה בכלל מהשירות', rating: { value: 1 }, review_id: 'rev2' },
+          { review_text: 'אוכל טעים ושירות מהיר', rating: { value: 5 }, review_id: 'rev3' },
+        ] }],
+      }],
+    });
+
+    // rev2 exists for bp1 → skipped before topic tagging; rev3's text matches only another competitor → kept.
+    expect(batchExtractTopics).toHaveBeenCalledWith([{ text: 'אוכל טעים ושירות מהיר' }], undefined, {});
+    expect(reviewCreate).toHaveBeenCalledTimes(1);
+    expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ google_review_id: 'rev3', linked_competitor: 'comp1' }),
     }));
   });
 
