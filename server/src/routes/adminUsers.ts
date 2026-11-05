@@ -7,6 +7,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
 import { isAdminKeyRequest } from '../middleware/auth';
 import { createLogger } from '../infra/logger';
+import { writeAuditLog } from '../infra/AuditLogger';
 import { bulkBootstrapAllBusinesses, bootstrapBusinessIntelligence } from '../lib/bootstrapIntelligence';
 import { searchCompetitorsByKeyword } from '../lib/dataforseo';
 import { getCollectorMetrics, checkAndAlertFailureRate, getTrendMetrics } from '../lib/collectorMetrics';
@@ -172,30 +173,43 @@ router.delete('/users/:businessId', async (req: Request, res: Response) => {
     ['system_events',          'business_id'],
   ];
 
-  for (const [table, col] of tables) {
-    try {
-      const r = await prisma.$executeRawUnsafe(
-        `DELETE FROM ${table} WHERE ${col} = $1`, businessId
-      );
-      results.push(`${table}: deleted ${r} rows`);
-    } catch (e: any) {
-      // Table might not exist or col name wrong — not fatal
-      errors.push(`${table}: ${e.message?.substring(0, 80)}`);
-    }
-  }
-
-  // 4. Finally delete the BusinessProfile itself
+  // 4. All of it, then the BusinessProfile itself, in one transaction: a failure part-way rolls
+  // back instead of leaving a half-deleted business. A failed statement aborts a Postgres
+  // transaction, so tables or columns this database doesn't have are skipped up front.
   try {
-    await prisma.businessProfile.delete({ where: { id: businessId } });
-    results.push('BusinessProfile: deleted');
+    const present = new Set((await prisma.$queryRawUnsafe<{ c: string }[]>(
+      `SELECT table_name || '.' || column_name AS c FROM information_schema.columns WHERE table_schema = 'public'`,
+    )).map(r => r.c));
+    const deleted = await prisma.$transaction(async (tx) => {
+      const lines: string[] = [];
+      for (const [table, col] of tables) {
+        if (!present.has(`${table}.${col}`)) { lines.push(`${table}: skipped (no ${col} column)`); continue; }
+        const r = await tx.$executeRawUnsafe(`DELETE FROM ${table} WHERE ${col} = $1`, businessId);
+        lines.push(`${table}: deleted ${r} rows`);
+      }
+      await tx.businessProfile.delete({ where: { id: businessId } });
+      return [...lines, 'BusinessProfile: deleted'];
+    }, { timeout: 120_000 });
+    results.push(...deleted);
   } catch (e: any) {
-    errors.push(`BusinessProfile delete: ${e.message?.substring(0, 80)}`);
+    errors.push(`BusinessProfile delete rolled back: ${e.message?.substring(0, 120)}`);
   }
 
-  logger.info(`User deletion complete. Results: ${results.length}, Errors: ${errors.length}`);
+  const ok = !errors.some(e => e.includes('BusinessProfile'));
+  logger.info(`User deletion ${ok ? 'complete' : 'failed'}. Results: ${results.length}, Errors: ${errors.length}`);
+  // v3_audit_logs is not in the list above, so the record outlives the business it describes.
+  await writeAuditLog({
+    business_id: businessId,
+    actor_type:  'user',
+    actor_id:    'admin-key', // the admin panel signs in with one shared key, so no named admin exists
+    entity_type: 'business_profile',
+    entity_id:   businessId,
+    action:      ok ? 'admin_deleted' : 'admin_delete_failed',
+    metadata:    { request_id: (req as any).id, ip: req.ip, owner: ownerEmail, errors },
+  });
 
   return res.json({
-    ok:      errors.filter(e => e.includes('BusinessProfile')).length === 0,
+    ok,
     email:   ownerEmail,
     results,
     errors,

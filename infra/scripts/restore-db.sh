@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Run the one-off RestoreTask (pg_dump from Supabase, pg_restore into RDS) and print its log.
-# Usage: scripts/restore-db.sh staging schema|full
+# Usage: scripts/restore-db.sh staging schema|full|role   (role: only set up the app's qe_app login)
 set -euo pipefail
-ENV=${1:?usage: restore-db.sh <env> schema|full}
-MODE=${2:?usage: restore-db.sh <env> schema|full}
+ENV=${1:?usage: restore-db.sh <env> schema|full|role}
+MODE=${2:?usage: restore-db.sh <env> schema|full|role}
 REGION=${AWS_REGION:-eu-central-1}
 out() {
   aws cloudformation describe-stacks --region "$REGION" --stack-name "Qe-$ENV" \

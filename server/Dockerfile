@@ -17,6 +17,8 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
 COPY package.json ./
+# Amazon RDS root CAs for eu-central-1 (truststore.pki.rds.amazonaws.com), used by docker-entrypoint.sh.
+COPY rds-ca.pem ./
 COPY --chmod=755 docker-entrypoint.sh ./
 USER node
 EXPOSE 3000

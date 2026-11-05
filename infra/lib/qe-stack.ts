@@ -20,6 +20,31 @@ import * as cwActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subs from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as budgets from 'aws-cdk-lib/aws-budgets';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+
+/**
+ * CSP for the frontend; the API sets its own headers. Built from what the SPA loads: Clerk (prod
+ * instance clerk.cortexi.ai and the dev instance the AWS stacks still build with, plus Cloudflare
+ * Turnstile for its bot protection), Paddle checkout (live and sandbox CDNs), the Meta SDK (WhatsApp
+ * signup) and Google Fonts. The hash allows the one inline handler, the font stylesheet's
+ * onload="this.media='all'". Images and video come from many CDNs (scraped social posts, S3, AI
+ * image hosts), so those allow any https source. The API is same-origin (/api on this distribution).
+ */
+export const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-hashes' 'sha256-MhtPZXr7+LpJUY5qtMutB+qWfQtMaPccfe7QXtCcEYc=' https://clerk.cortexi.ai https://concrete-tuna-44.clerk.accounts.dev https://challenges.cloudflare.com https://*.protect.clerk.com https://cdn.paddle.com https://sandbox-cdn.paddle.com https://connect.facebook.net",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.paddle.com https://sandbox-cdn.paddle.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https:",
+  "media-src 'self' data: blob: https:",
+  "connect-src 'self' https://clerk.cortexi.ai https://concrete-tuna-44.clerk.accounts.dev https://*.protect.clerk.com:* https://*.paddle.com https://*.facebook.com",
+  "frame-src https://challenges.cloudflare.com https://*.protect.clerk.com https://*.paddle.com https://*.facebook.com",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
 
 export interface QeStackProps extends cdk.StackProps {
   envName: 'staging' | 'prod';
@@ -41,6 +66,13 @@ export interface QeStackProps extends cdk.StackProps {
   webAclArn?: string;
   /** Account-wide monthly budget in USD, emailed to ALERT_EMAIL at 80% actual and 100% forecast. */
   monthlyBudgetUsd?: number;
+  /**
+   * The restore task (lib/restore.sh) runs as the master user. 'full' can drop and reload the public
+   * schema; 'roleOnly' can only set up the qe_app login; unset leaves it out of the stack.
+   */
+  restoreTask?: 'full' | 'roleOnly';
+  /** Connect the app as qe_app (AppDbSecret) instead of the master user. Run `restore-db.sh <env> role` first. */
+  appDbRole?: boolean;
 }
 
 export class QeStack extends cdk.Stack {
@@ -87,20 +119,28 @@ export class QeStack extends cdk.Stack {
       removalPolicy: isProd ? cdk.RemovalPolicy.SNAPSHOT : cdk.RemovalPolicy.DESTROY,
     });
     const dbSecret = db.secret!;
-    const dbEnv: Record<string, ecs.Secret> = {
-      DB_HOST: ecs.Secret.fromSecretsManager(dbSecret, 'host'),
-      DB_PORT: ecs.Secret.fromSecretsManager(dbSecret, 'port'),
-      DB_NAME: ecs.Secret.fromSecretsManager(dbSecret, 'dbname'),
-      DB_USER: ecs.Secret.fromSecretsManager(dbSecret, 'username'),
-      DB_PASSWORD: ecs.Secret.fromSecretsManager(dbSecret, 'password'),
-    };
+    const dbEnvFrom = (secret: secretsmanager.ISecret): Record<string, ecs.Secret> => ({
+      DB_HOST: ecs.Secret.fromSecretsManager(secret, 'host'),
+      DB_PORT: ecs.Secret.fromSecretsManager(secret, 'port'),
+      DB_NAME: ecs.Secret.fromSecretsManager(secret, 'dbname'),
+      DB_USER: ecs.Secret.fromSecretsManager(secret, 'username'),
+      DB_PASSWORD: ecs.Secret.fromSecretsManager(secret, 'password'),
+    });
+    const dbEnv = dbEnvFrom(dbSecret);
+    // The app's own login, so it doesn't hold the master user: qe_app owns the public schema's
+    // objects (the startup DDL still runs) but can't create roles or databases or reach other
+    // schemas. lib/restore.sh creates it from this secret; `appDbRole` then switches the app over.
+    const appDbSecret = new rds.DatabaseSecret(this, 'AppDbSecret', {
+      username: 'qe_app',
+      excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\=,.^', // same as the master: URL-safe
+    }).attach(db);
 
     // ── App secrets: names in secrets.<env>.txt, values only in SSM (scripts/put-secrets.sh).
     const ssmSecret = (name: string) => ecs.Secret.fromSsmParameter(
       ssm.StringParameter.fromSecureStringParameterAttributes(this, `Param${name}`, { parameterName: `/qe/${envName}/${name}` }));
     const secretNames = fs.readFileSync(path.join(__dirname, `../secrets.${envName}.txt`), 'utf8')
       .split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
-    const appSecrets: Record<string, ecs.Secret> = { ...dbEnv };
+    const appSecrets: Record<string, ecs.Secret> = props.appDbRole ? dbEnvFrom(appDbSecret) : { ...dbEnv };
     for (const name of secretNames) appSecrets[name] = ssmSecret(name);
 
     // ── Load balancer: internal, reachable only from CloudFront through a VPC origin.
@@ -128,6 +168,17 @@ export class QeStack extends cdk.Stack {
       code: cloudfront.FunctionCode.fromFile({ filePath: path.join(__dirname, 'spa-rewrite.js') }),
       runtime: cloudfront.FunctionRuntime.JS_2_0,
     });
+    // The managed SECURITY_HEADERS values, plus the CSP and DENY in place of SAMEORIGIN.
+    const securityHeaders = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeaders', {
+      securityHeadersBehavior: {
+        contentSecurityPolicy: { contentSecurityPolicy: CONTENT_SECURITY_POLICY, override: true },
+        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
+        contentTypeOptions: { override: true },
+        referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN, override: true },
+        strictTransportSecurity: { accessControlMaxAge: cdk.Duration.days(365), includeSubdomains: false, override: true },
+        xssProtection: { protection: true, modeBlock: true, override: true },
+      },
+    });
     const distribution = new cloudfront.Distribution(this, 'Cdn', {
       comment: `quiet-eyes ${envName}`,
       webAclId: props.webAclArn,
@@ -141,7 +192,7 @@ export class QeStack extends cdk.Stack {
         origin: origins.S3BucketOrigin.withOriginAccessControl(web),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-        responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
+        responseHeadersPolicy: securityHeaders,
         functionAssociations: [{ function: spaRewrite, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
       },
       additionalBehaviors: {
@@ -251,20 +302,34 @@ export class QeStack extends cdk.Stack {
     db.connections.allowDefaultPortFrom(api);
     db.connections.allowDefaultPortFrom(worker);
 
-    // ── One-off data copy from Supabase (scripts/restore-db.sh runs it)
-    const restoreSg = new ec2.SecurityGroup(this, 'RestoreSecurityGroup', { vpc, description: 'One-off DB restore task' });
-    db.connections.allowDefaultPortFrom(restoreSg);
-    const restoreLogs = new logs.LogGroup(this, 'RestoreLogs', { retention: logs.RetentionDays.ONE_MONTH, removalPolicy: removal });
-    const restoreTask = new ecs.FargateTaskDefinition(this, 'RestoreTask', {
-      cpu: 1024, memoryLimitMiB: 2048, runtimePlatform: arm64, ephemeralStorageGiB: 30,
-    });
-    restoreTask.addContainer('pg', {
-      image: ecs.ContainerImage.fromRegistry('public.ecr.aws/docker/library/postgres:17'),
-      entryPoint: ['sh', '-c'],
-      command: [fs.readFileSync(path.join(__dirname, 'restore.sh'), 'utf8')],
-      secrets: { ...dbEnv, SOURCE_DATABASE_URL: ssmSecret('SOURCE_DATABASE_URL') },
-      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'restore', logGroup: restoreLogs }),
-    });
+    // ── One-off data copy from Supabase, and the qe_app role (scripts/restore-db.sh runs it).
+    if (props.restoreTask) {
+      const roleOnly = props.restoreTask === 'roleOnly';
+      const restoreSg = new ec2.SecurityGroup(this, 'RestoreSecurityGroup', { vpc, description: 'One-off DB restore task' });
+      db.connections.allowDefaultPortFrom(restoreSg);
+      const restoreLogs = new logs.LogGroup(this, 'RestoreLogs', { retention: logs.RetentionDays.ONE_MONTH, removalPolicy: removal });
+      const restoreTask = new ecs.FargateTaskDefinition(this, 'RestoreTask', {
+        cpu: 1024, memoryLimitMiB: 2048, runtimePlatform: arm64, ephemeralStorageGiB: 30,
+      });
+      restoreTask.addContainer('pg', {
+        image: ecs.ContainerImage.fromRegistry('public.ecr.aws/docker/library/postgres:17'),
+        entryPoint: ['sh', '-c'],
+        command: [fs.readFileSync(path.join(__dirname, 'restore.sh'), 'utf8')],
+        environment: {
+          RDS_CA: fs.readFileSync(path.join(srcDir, 'server', 'rds-ca.pem'), 'utf8'), // psql verify-full
+          ...(roleOnly && { ROLE_ONLY: '1' }), // restore.sh then refuses MODE=schema|full
+        },
+        secrets: {
+          ...dbEnv,
+          ...(!roleOnly && { SOURCE_DATABASE_URL: ssmSecret('SOURCE_DATABASE_URL') }),
+          APP_DB_PASSWORD: ecs.Secret.fromSecretsManager(appDbSecret, 'password'),
+        },
+        logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'restore', logGroup: restoreLogs }),
+      });
+      new cdk.CfnOutput(this, 'RestoreTaskDef', { value: restoreTask.taskDefinitionArn });
+      new cdk.CfnOutput(this, 'RestoreSg', { value: restoreSg.securityGroupId });
+      new cdk.CfnOutput(this, 'RestoreLogGroup', { value: restoreLogs.logGroupName });
+    }
 
     // ── Alarms → email. The address stays out of this public repo: CI passes the ALERT_EMAIL
     // repo variable, scripts/deploy.sh reads it from infra/.env.<env>. Required, so a deploy
@@ -349,6 +414,24 @@ export class QeStack extends cdk.Stack {
     ].join('\n'),
       workerErrors.metric({ period: minutes(60), statistic: 'Sum' }), 20);
 
+    // Every 401/403 is a warn line in the API's access log (middleware/requestLog.ts).
+    const authFailures = new logs.MetricFilter(this, 'ApiAuthFailureLines', {
+      logGroup: logGroups.Api,
+      filterPattern: logs.FilterPattern.any(
+        logs.FilterPattern.numberValue('$.data.status', '=', 401),
+        logs.FilterPattern.numberValue('$.data.status', '=', 403),
+      ),
+      metricNamespace: 'QuietEyes',
+      metricName: `${envName}-api-auth-failures`,
+      metricValue: '1',
+    });
+    alarm('ApiAuthFailures', [
+      'Many refused requests: the API answered more than 100 requests with 401 or 403 in 5 minutes.',
+      'A few are normal (expired sessions, a tab left open after sign-out). A burst usually means someone is guessing the admin key or cron secret, probing other tenants\' data, or a client is stuck retrying with a bad token.',
+      'First step: search the Api log group for "status":401 or 403 around the alarm time and group by ip and path.',
+    ].join('\n'),
+      authFailures.metric({ period: minutes(5), statistic: 'Sum' }), 100);
+
     // Account-wide cost alert (one is enough, so only the prod stack sets it).
     if (props.monthlyBudgetUsd) {
       const subscribers = [{ subscriptionType: 'EMAIL', address: alertEmail }];
@@ -372,9 +455,6 @@ export class QeStack extends cdk.Stack {
     output('ClusterName', cluster.clusterName);
     output('ApiService', api.serviceName);
     output('WorkerService', worker.serviceName);
-    output('RestoreTaskDef', restoreTask.taskDefinitionArn);
-    output('RestoreSg', restoreSg.securityGroupId);
-    output('RestoreLogGroup', restoreLogs.logGroupName);
     output('PublicSubnets', cdk.Fn.join(',', vpc.publicSubnets.map((s) => s.subnetId)));
   }
 }
