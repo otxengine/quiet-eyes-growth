@@ -17,11 +17,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04-arm
-    # Only for the environment's VITE_* variables; no deployment record. Production's required
-    # reviewer still has to approve this job, and then the deploy job.
-    environment:
-      name: ${{ inputs.environment }}
-      deployment: false
+    # No environment: production's required reviewer gates every job that names it, even with
+    # deployment: false, so it would be asked twice. The VITE_* values are public (they ship in
+    # the bundle), so they're repo variables suffixed per environment, e.g. ..._PRODUCTION.
     permissions:
       contents: read
     steps:
@@ -34,14 +32,16 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - run: npm run build
+      - run: |
+          : "${VITE_CLERK_PUBLISHABLE_KEY:?set repo variable VITE_CLERK_PUBLISHABLE_KEY_<ENVIRONMENT>}"
+          npm run build
         env:
           VITE_API_URL: /api
-          VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
-          VITE_FACEBOOK_APP_ID: ${{ vars.VITE_FACEBOOK_APP_ID }}
-          VITE_META_CONFIG_ID: ${{ vars.VITE_META_CONFIG_ID }}
-          VITE_PADDLE_CLIENT_TOKEN: ${{ vars.VITE_PADDLE_CLIENT_TOKEN }}
-          VITE_PADDLE_ENV: ${{ vars.VITE_PADDLE_ENV }}
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ vars[format('VITE_CLERK_PUBLISHABLE_KEY_{0}', inputs.environment)] }}
+          VITE_FACEBOOK_APP_ID: ${{ vars[format('VITE_FACEBOOK_APP_ID_{0}', inputs.environment)] }}
+          VITE_META_CONFIG_ID: ${{ vars[format('VITE_META_CONFIG_ID_{0}', inputs.environment)] }}
+          VITE_PADDLE_CLIENT_TOKEN: ${{ vars[format('VITE_PADDLE_CLIENT_TOKEN_{0}', inputs.environment)] }}
+          VITE_PADDLE_ENV: ${{ vars[format('VITE_PADDLE_ENV_{0}', inputs.environment)] }}
       - name: No server-side keys in the frontend bundle
         run: tr -d '\r' < scripts/scan-bundle-keys.sh | bash -s -- dist
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
