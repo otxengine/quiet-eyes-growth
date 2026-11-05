@@ -10,8 +10,10 @@
  *   PADDLE_WEBHOOK_SECRET  — notification destination secret (pdl_ntfset_…)
  *   PADDLE_ENV             — 'sandbox' | 'production' (default production)
  *   PADDLE_PRICE_STARTER   — pri_…  (₪149/branch/month)
- *   PADDLE_PRICE_GROWTH    — pri_…  (₪349/branch/month)
- *   PADDLE_PRICE_PRO       — pri_…  (₪699/branch/month)
+ *   PADDLE_PRICE_GROWTH    — pri_…  (₪499/branch/month)
+ *   PADDLE_PRICE_PRO       — pri_…  (₪899/branch/month)
+ *   Each may list retired price IDs after the current one ("pri_new,pri_old"): checkout
+ *   uses the first; webhooks map all of them, so subscribers on an old price keep their plan.
  *
  * Read lazily (not at import) so tests and env edits see the current values.
  */
@@ -20,8 +22,8 @@ import crypto from 'crypto';
 
 export const PLAN_PRICES: Record<string, number> = {
   starter: 149,
-  growth:  349,
-  pro:     699,
+  growth:  499,
+  pro:     899,
 };
 
 /** A credential as pasted into the dashboard, minus stray whitespace, quotes or a "Bearer " prefix. */
@@ -87,18 +89,24 @@ function apiBase(): string {
     : 'https://api.paddle.com';
 }
 
-export function priceIds(): Record<string, string> {
+function planPriceIds(): Record<string, string[]> {
+  const ids = (v?: string) => (v || '').split(',').map(s => s.trim()).filter(Boolean);
   return {
-    starter: process.env.PADDLE_PRICE_STARTER || '',
-    growth:  process.env.PADDLE_PRICE_GROWTH  || '',
-    pro:     process.env.PADDLE_PRICE_PRO     || '',
+    starter: ids(process.env.PADDLE_PRICE_STARTER),
+    growth:  ids(process.env.PADDLE_PRICE_GROWTH),
+    pro:     ids(process.env.PADDLE_PRICE_PRO),
   };
 }
 
-/** Map Paddle price ID → plan key (null when the price isn't one of ours). */
+/** The price each plan's checkout uses now. */
+export function priceIds(): Record<string, string> {
+  return Object.fromEntries(Object.entries(planPriceIds()).map(([plan, ids]) => [plan, ids[0] || '']));
+}
+
+/** Map Paddle price ID → plan key, current or retired price (null when the price isn't one of ours). */
 export function planFromPriceId(priceId: string): string | null {
-  for (const [plan, pid] of Object.entries(priceIds())) {
-    if (pid && pid === priceId) return plan;
+  for (const [plan, ids] of Object.entries(planPriceIds())) {
+    if (ids.includes(priceId)) return plan;
   }
   return null;
 }

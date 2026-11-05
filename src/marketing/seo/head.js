@@ -49,8 +49,8 @@ const PRICING_PRODUCT = {
   offers: [
     { name: 'חינם', price: '0' },
     { name: 'Starter', price: '149' },
-    { name: 'Growth', price: '349' },
-    { name: 'Pro', price: '699' },
+    { name: 'Growth', price: '499' },
+    { name: 'Pro', price: '899' },
   ].map((o) => ({
     '@type': 'Offer',
     name: o.name,

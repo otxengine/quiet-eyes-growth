@@ -11,7 +11,7 @@ jest.mock('../db', () => ({
 
 import crypto from 'crypto';
 import { prisma } from '../db';
-import { verifyPaddleSignature, planFromPriceId } from '../lib/paddle';
+import { verifyPaddleSignature, planFromPriceId, priceIds } from '../lib/paddle';
 import { handlePaddleEvent } from '../routes/billing';
 
 const executeRaw = prisma.$executeRawUnsafe as jest.Mock;
@@ -74,6 +74,12 @@ describe('planFromPriceId', () => {
     expect(planFromPriceId('pri_growth')).toBe('growth');
     expect(planFromPriceId('pri_unknown')).toBeNull();
     expect(planFromPriceId('')).toBeNull();
+  });
+
+  test('a subscriber on a retired price keeps the plan; checkout uses the current price', () => {
+    process.env.PADDLE_PRICE_GROWTH = 'pri_growth_499, pri_growth_349';
+    expect(planFromPriceId('pri_growth_349')).toBe('growth');
+    expect(priceIds().growth).toBe('pri_growth_499');
   });
 });
 
