@@ -112,7 +112,7 @@ export const marketingRoutes = [
     Component: Pricing,
     seo: {
       title: 'Cortexi מחיר — תוכניות מ-₪0, ללא התחייבות',
-      description: 'תוכנית חינם לתמיד, Starter ‏₪149, Growth ‏₪349 ו-Pro ‏₪699 לסניף לחודש. ללא כרטיס אשראי, ביטול בכל עת.',
+      description: 'תוכנית חינם לתמיד, Starter ‏₪149, Growth ‏₪499 ו-Pro ‏₪899 לסניף לחודש. ללא כרטיס אשראי, ביטול בכל עת.',
       canonical: '/pricing',
       jsonLd: 'pricing',
       faqItems: PRICING_FAQ,
