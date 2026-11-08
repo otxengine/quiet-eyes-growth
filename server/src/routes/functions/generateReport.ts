@@ -8,8 +8,9 @@ import { buildReportData, isEmptyReport } from '../../lib/reportData';
 
 // ponytail: inline like generateBattlecard.ts — all paid plans get all three reports.
 const REPORT_PLANS = new Set(['starter', 'growth', 'pro', 'enterprise']);
-// Generous ceilings: truncated LLM JSON was a real prod failure (2026-11-05 QA).
-const MAX_TOKENS: Record<ReportType, number> = { daily: 1200, weekly: 2000, monthly: 3000 };
+// Generous ceilings: Hebrew is token-heavy, and the first real weekly report (10
+// competitors, 2026-11-08) was cut off at 2000 — it lost reviews_summary and actions.
+const MAX_TOKENS: Record<ReportType, number> = { daily: 2500, weekly: 4000, monthly: 6000 };
 // A stored row is returned as-is for this long, force or not — each regeneration is a
 // Sonnet call plus the full SQL build, and `force` is reachable by any business owner.
 const REGEN_COOLDOWN_MS = 10 * 60 * 1000;
@@ -27,19 +28,31 @@ Rules:
 - In per_competitor, include only competitors with activity in this period.
 - "limits" lists data we don't collect — never present those as "no activity".
 - If the data for a section is empty, say so in one short phrase instead of guessing.
+- Review sentiment comes from the rating: avg_rating ≤ 2 is negative, ≥ 4 is positive. Never call a low-rated review positive.
 
 DATA (JSON):
 ${json}
 
-Return ONLY valid JSON. ALL string values must be in Hebrew:
+Return ONLY valid JSON, with the keys in this order (per_competitor last). ALL string values must be in Hebrew:
 {
   "headline": "one sentence — the most important thing competitors did in this period",
-  "highlights": ["3-5 specific bullets with competitor names and numbers"],
-  "per_competitor": [{ "name": "competitor name", "summary": "1-2 sentences: what they posted, advertised or offered" }],${type !== 'daily' ? `
+  "highlights": ["3-5 specific bullets with competitor names and numbers"],${type !== 'daily' ? `
   "reviews_summary": "2-3 sentences comparing our reviews with competitors' (volume, rating, main themes)",` : ''}${type === 'monthly' ? `
   "own_summary": "2-3 sentences on our own activity this month and how it compares with competitors",` : ''}
-  "recommended_actions": ["2-3 concrete actions for us, each under 15 words"]
+  "recommended_actions": ["2-3 concrete actions for us, each under 15 words"],
+  "per_competitor": [{ "name": "competitor name", "summary": "1-2 sentences: what they posted, advertised or offered" }]
 }`;
+}
+
+/**
+ * A summary counts only if every section this report type asks for is there — a reply
+ * cut off by maxTokens still parses (llm.ts repairs truncated JSON) but drops the tail.
+ */
+export function isCompleteSummary(type: ReportType, s: any): boolean {
+  return !!s && typeof s === 'object' && !!s.headline && Array.isArray(s.highlights)
+    && Array.isArray(s.recommended_actions) && s.recommended_actions.length > 0
+    && (type === 'daily' || !!s.reviews_summary)
+    && (type !== 'monthly' || !!s.own_summary);
 }
 
 /**
@@ -99,7 +112,8 @@ export async function generateReport(req: Request, res: Response) {
             profile: bp as any,
             costTrackingId: trackId,
           });
-          summary = result && typeof result === 'object' && result.headline ? result : null;
+          summary = isCompleteSummary(type, result) ? result : null;
+          if (!summary) console.warn(`[generateReport] attempt ${attempt}: summary incomplete, keys=${result && Object.keys(result)}`);
         } catch (llmErr: any) {
           console.warn(`[generateReport] LLM attempt ${attempt} failed:`, llmErr.message);
         }
