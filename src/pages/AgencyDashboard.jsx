@@ -8,7 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { agencyApi, orgApi } from '@/api/orgApi';
 import { toast } from 'sonner';
 import { Building2, Plus, Eye, Star, Zap, AlertTriangle, Loader2, X, ExternalLink } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { cn } from '@/lib/utils';
 
@@ -108,24 +108,29 @@ function AddClientModal({ onClose, onAdded }) {
 
 export default function AgencyDashboard() {
   const [showAddModal, setShowAddModal] = useState(false);
-  const { refetch: refetchOrgs } = useOrganization();
+  const { refetch: refetchOrgs, isAgency, isLoading: orgLoading } = useOrganization();
   const navigate = useNavigate();
   const qc = useQueryClient();
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['agencyClients'],
     queryFn: () => agencyApi.getClients(),
+    enabled: isAgency,
     staleTime: 30_000,
   });
 
   const { data: aggregate } = useQuery({
     queryKey: ['agencyAggregate'],
     queryFn: () => agencyApi.getAggregate(),
+    enabled: isAgency,
     staleTime: 60_000,
   });
 
   const clients = data?.clients || [];
   const totals  = aggregate?.totals || {};
+
+  // Only agency orgs have clients; the sidebar hides this page for the rest.
+  if (!orgLoading && !isAgency) return <Navigate to="/" replace />;
 
   return (
     <div className="max-w-4xl mx-auto py-6 space-y-6" dir="rtl">
@@ -165,7 +170,7 @@ export default function AgencyDashboard() {
       )}
 
       {/* Client list */}
-      {isLoading ? (
+      {isLoading || orgLoading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="w-6 h-6 animate-spin text-foreground-muted" />
         </div>

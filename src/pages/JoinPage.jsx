@@ -36,7 +36,9 @@ export default function JoinPage() {
       })
       .catch((err) => {
         setStatus('error');
-        setErrorMsg(err.message);
+        setErrorMsg(err.message === 'invite_not_found'
+          ? 'ההזמנה לא נמצאה, כבר נוצלה או שפג תוקפה. בקשו ממנהל הארגון הזמנה חדשה.'
+          : 'לא הצלחנו לצרף אתכם לארגון. נסו שוב בעוד כמה דקות.');
       });
   }, [token, isAuthenticated, isLoadingAuth]);
 
