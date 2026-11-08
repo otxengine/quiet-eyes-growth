@@ -124,7 +124,6 @@ async function followerDeltas(bpId: string, start: Date, end: Date): Promise<Map
 }
 
 const LIMITS_ALL = [
-  'TikTok: לא נאסף מידע על פוסטים ומודעות של מתחרים',
   'סטוריז נאספים מאינסטגרם בלבד (לא מפייסבוק)',
   'מודעות גוגל מגיעות ללא תאריך עלייה — נספרות לפי מועד הזיהוי הראשון',
 ];
