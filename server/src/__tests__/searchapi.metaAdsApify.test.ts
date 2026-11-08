@@ -60,6 +60,26 @@ describe('searchMetaAdsViaApify', () => {
     })]);
   });
 
+  it('catalog video ad: skips {{template}} titles and uses the video preview frame as the image', async () => {
+    (runApifyActor as jest.Mock).mockResolvedValue([{
+      adArchiveID: '1000', isActive: true, publisherPlatform: ['FACEBOOK'],
+      snapshot: {
+        title: '{{product.name}}', body: { text: '{{product.brand}}' },
+        cards: [{ title: 'Tasting menu', body: 'Book a table' }],
+        videos: [{ videoHdUrl: 'https://video.example/ad.mp4', videoPreviewImageUrl: 'https://img.example/frame.jpg' }],
+      },
+    }]);
+
+    const [ad] = await searchMetaAdsViaApify('https://facebook.com/acmeco');
+
+    expect(ad).toEqual(expect.objectContaining({
+      title: 'Tasting menu',
+      body: 'Book a table',
+      media_url: 'https://img.example/frame.jpg',
+      video_url: 'https://video.example/ad.mp4',
+    }));
+  });
+
   it('returns [] when Apify returns nothing', async () => {
     (runApifyActor as jest.Mock).mockResolvedValue([]);
     expect(await searchMetaAdsViaApify('https://facebook.com/acmeco')).toEqual([]);
