@@ -1,0 +1,139 @@
+import { Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
+import { prisma } from '../../db';
+import { invokeLLM, startCostTracking, popCost } from '../../lib/llm';
+import { writeAutomationLog } from '../../lib/automationLog';
+import { reportPeriod, REPORT_TYPES, ReportType } from '../../lib/reportPeriod';
+import { buildReportData, isEmptyReport } from '../../lib/reportData';
+
+// ponytail: inline like generateBattlecard.ts — all paid plans get all three reports.
+const REPORT_PLANS = new Set(['starter', 'growth', 'pro', 'enterprise']);
+// Generous ceilings: truncated LLM JSON was a real prod failure (2026-11-05 QA).
+const MAX_TOKENS: Record<ReportType, number> = { daily: 1200, weekly: 2000, monthly: 3000 };
+// A stored row is returned as-is for this long, force or not — each regeneration is a
+// Sonnet call plus the full SQL build, and `force` is reachable by any business owner.
+const REGEN_COOLDOWN_MS = 10 * 60 * 1000;
+const LABEL: Record<ReportType, string> = { daily: 'יומי', weekly: 'שבועי', monthly: 'חודשי' };
+
+const ilDate = (d: Date) => new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem' }).format(d);
+
+function buildPrompt(type: ReportType, start: Date, end: Date, data: unknown): string {
+  // ids/urls are for the UI, not the narrative — drop them to save tokens.
+  const json = JSON.stringify(data, (k, v) => (k === 'id' || k === 'url' || k === 'link' ? undefined : v));
+  return `You are a competitive-intelligence analyst for a small Israeli business. Write its ${type} competitor report (דוח ${LABEL[type]}) for ${ilDate(start)}–${ilDate(new Date(end.getTime() - 1))} from the data below.
+
+Rules:
+- Use ONLY facts present in the data. Cite competitor names and numbers. Never invent posts, ads, offers or reviews.
+- In per_competitor, include only competitors with activity in this period.
+- "limits" lists data we don't collect — never present those as "no activity".
+- If the data for a section is empty, say so in one short phrase instead of guessing.
+
+DATA (JSON):
+${json}
+
+Return ONLY valid JSON. ALL string values must be in Hebrew:
+{
+  "headline": "one sentence — the most important thing competitors did in this period",
+  "highlights": ["3-5 specific bullets with competitor names and numbers"],
+  "per_competitor": [{ "name": "competitor name", "summary": "1-2 sentences: what they posted, advertised or offered" }],${type !== 'daily' ? `
+  "reviews_summary": "2-3 sentences comparing our reviews with competitors' (volume, rating, main themes)",` : ''}${type === 'monthly' ? `
+  "own_summary": "2-3 sentences on our own activity this month and how it compares with competitors",` : ''}
+  "recommended_actions": ["2-3 concrete actions for us, each under 15 words"]
+}`;
+}
+
+/**
+ * POST /api/functions/generateReport { businessProfileId, type: 'daily'|'weekly'|'monthly', force? }
+ * Builds the report for the last completed Israel-time period and stores it in `reports`
+ * (one row per business+type+period). Re-runs return the stored row unless force=true or
+ * the stored one is 'partial' — never within REGEN_COOLDOWN_MS of the last build.
+ * The data comes from SQL; the LLM only narrates it, so an LLM failure still saves the
+ * data with status 'partial' (and never overwrites an existing 'ready' narrative).
+ * `scheduled` is set by the cron (scheduler.ts) so unpaid plans skip quietly instead of 403.
+ */
+export async function generateReport(req: Request, res: Response) {
+  const { businessProfileId, type, force, scheduled } = req.body ?? {};
+  if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
+  if (!REPORT_TYPES.includes(type)) {
+    return res.status(400).json({ error: `type must be one of: ${REPORT_TYPES.join(', ')}` });
+  }
+
+  const startTime = new Date().toISOString();
+  try {
+    const bp = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
+    if (!bp) return res.status(404).json({ error: 'Business profile not found' });
+    if (!REPORT_PLANS.has(bp.subscription_plan || 'free')) {
+      if (scheduled) return res.json({ skipped: true, reason: 'plan' });
+      return res.status(403).json({ error: 'Reports require a paid plan', plan_limit: true });
+    }
+
+    const { start, end } = reportPeriod(type);
+    const key = { linked_business: businessProfileId, report_type: type, period_start: start };
+    const existing = await prisma.report.findUnique({ where: { linked_business_report_type_period_start: key } });
+    if (existing) {
+      const fresh = Date.now() - existing.created_date.getTime() < REGEN_COOLDOWN_MS;
+      if (fresh || (!force && existing.status !== 'partial')) return res.json({ report: existing, cached: true });
+    }
+
+    // Round-trip through JSON so Dates become strings — what we store is exactly what we return.
+    const data = JSON.parse(JSON.stringify(await buildReportData(businessProfileId, type, start, end)));
+
+    let summary: Record<string, unknown> | null = null;
+    let status = 'empty';
+    let cost: number | null = null;
+    if (!isEmptyReport(data)) {
+      // Unique per run — concurrent agents for the same business share the bare bpId key.
+      const trackId = `${businessProfileId}:report:${type}:${start.toISOString()}`;
+      startCostTracking(trackId);
+      const prompt = buildPrompt(type, start, end, data);
+      // ponytail: one retry covers a transient OpenRouter error; a persistent one leaves 'partial',
+      // which the next non-forced call (after the cooldown) regenerates.
+      for (let attempt = 1; attempt <= 2 && !summary; attempt++) {
+        try {
+          const result = await invokeLLM({
+            prompt,
+            model: 'sonnet',
+            maxTokens: MAX_TOKENS[type],
+            response_json_schema: { type: 'object' },
+            skipCache: true,
+            profile: bp as any,
+            costTrackingId: trackId,
+          });
+          summary = result && typeof result === 'object' && result.headline ? result : null;
+        } catch (llmErr: any) {
+          console.warn(`[generateReport] LLM attempt ${attempt} failed:`, llmErr.message);
+        }
+      }
+      cost = popCost(trackId);
+      status = summary ? 'ready' : 'partial';
+    }
+
+    // A forced rebuild whose LLM failed must not wipe a good stored narrative.
+    if (status === 'partial' && existing?.status === 'ready') {
+      await writeAutomationLog('generateReport', businessProfileId, startTime, 0, 'success',
+        `${type}: regenerate llm_failed, kept stored report`, cost ?? undefined);
+      return res.json({ report: existing, cached: true, regenerate_failed: true });
+    }
+
+    const fields = {
+      period_end: end,
+      status,
+      data,
+      summary: summary ? (summary as Prisma.InputJsonValue) : Prisma.DbNull,
+      cost_usd: cost,
+    };
+    const report = await prisma.report.upsert({
+      where: { linked_business_report_type_period_start: key },
+      create: { ...key, ...fields },
+      update: { ...fields, created_date: new Date() },
+    });
+
+    await writeAutomationLog('generateReport', businessProfileId, startTime, 1, 'success',
+      status === 'partial' ? `${type}: llm_failed` : undefined, cost ?? undefined);
+    return res.json({ report });
+  } catch (err: any) {
+    console.error('[generateReport] error:', err.message);
+    await writeAutomationLog('generateReport', businessProfileId, startTime, 0, 'failed', `${type}: ${err.message}`);
+    return res.status(500).json({ error: err.message });
+  }
+}

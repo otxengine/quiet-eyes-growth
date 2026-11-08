@@ -79,8 +79,10 @@ async function upsertAdHistory(competitorId: string, businessProfileId: string, 
   return rowsNeedingAnalysis;
 }
 
-const MIN_INTERVAL_MS     = 48 * 60 * 60 * 1000; // 48h between full runs (saves API credits)
-const PER_COMP_INTERVAL_MS = 48 * 60 * 60 * 1000; // skip individual competitor if scanned within 48h
+// 20h (was 48h): the daily competitor report needs every rival's new ads every day.
+// ponytail: cost ceiling ≈ 1 ad-library call per tracked competitor per business per day (donor clones are free).
+const MIN_INTERVAL_MS     = 20 * 60 * 60 * 1000; // between full runs; < 24h so the daily cron never skips
+const PER_COMP_INTERVAL_MS = 20 * 60 * 60 * 1000; // skip individual competitor if scanned within 20h
 
 // Cross-business cache: another business may already have a fresh ad scan of this
 // exact real-world competitor. Checks google_place_id + each set social URL (ads
@@ -163,9 +165,9 @@ async function cloneAdsFromDonor(competitorId: string, businessProfileId: string
  *
  * Requires: SEARCHAPI_API_KEY env var
  */
-// ponytail: onboarding needs every approved competitor scanned, not just the
-// daily cron's top-6 — this soft ceiling (not the plan's competitor cap, which
-// is Infinity on Pro/Enterprise) bounds worst-case cost/duration for outliers.
+// ponytail: every approved competitor is scanned (daily cron and onboarding alike) —
+// this soft ceiling (not the plan's competitor cap, which is Infinity on
+// Pro/Enterprise) bounds worst-case cost/duration for outliers.
 const MAX_ADS_COMPETITORS_ALL = parseInt(process.env.MAX_ADS_COMPETITORS_ALL || '20', 10);
 // ponytail: 2-wide, not 3 — server/src/db.ts caps the Postgres pool at 8 connections,
 // shared with 4 other DB-heavy onboarding scans, and each competitor batch now also
@@ -176,6 +178,7 @@ const ADS_BATCH_CONCURRENCY = 2;
 const ANALYSIS_CONCURRENCY = 2;
 
 export async function detectCompetitorAds(req: Request, res: Response) {
+  // allCompetitors now only picks batched (onboarding) vs sequential (cron) processing.
   const { businessProfileId, allCompetitors } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
@@ -197,7 +200,7 @@ export async function detectCompetitorAds(req: Request, res: Response) {
     const competitors = await prisma.competitor.findMany({
       where: { linked_business: businessProfileId, not_relevant: false, tracking_status: 'approved' },
       orderBy: { last_scanned: 'asc' },
-      take: allCompetitors ? MAX_ADS_COMPETITORS_ALL : 6,
+      take: MAX_ADS_COMPETITORS_ALL,
     });
 
     if (competitors.length === 0) {
@@ -476,6 +479,8 @@ Return ONLY valid JSON. ALL string values MUST be in Hebrew:
         await Promise.allSettled(competitors.slice(i, i + ADS_BATCH_CONCURRENCY).map(processOne));
       }
     } else {
+      // ponytail: sequential so the 07:00 cron stays gentle on the shared pool; a business
+      // with ~20 un-donated rivals takes ~20 serial scans — batch here if it starts overrunning 10:00.
       for (const comp of competitors) {
         await processOne(comp);
       }

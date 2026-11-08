@@ -9,6 +9,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { generateMorningBriefing } from './generateMorningBriefing';
 import { generateLeadFirstContact } from './generateLeadFirstContact';
 import { generateBattlecard } from './generateBattlecard';
+import { generateReport } from './generateReport';
 import { logOutcome } from './logOutcome';
 import { calculateHealthScore } from './calculateHealthScore';
 import { collectWebSignals } from './collectWebSignals';
@@ -193,6 +194,7 @@ const FUNCTION_MAP: Record<string, any> = {
   generateMorningBriefing,
   generateLeadFirstContact,
   generateBattlecard,
+  generateReport,
   logOutcome,
   calculateHealthScore,
   collectWebSignals,

@@ -21,6 +21,7 @@
 
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
+import { REPORT_SIGNAL_CATEGORIES, NOT_REPORT_SIGNAL } from '../../lib/reportData';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { runMLLearning } from './learnFromClosedDeals';
@@ -96,12 +97,26 @@ export async function cleanupAndLearn(req: Request, res: Response) {
       // rawSignal table may use different name — safe to ignore
     }
 
+    // ── Phase 1A0: competitor change signals live 40 days ────────────────────
+    // They feed the monthly report (lib/reportData.ts), which on the 1st still reads
+    // the 1st of the previous month — so they're kept out of the short purges below
+    // (their confidence is on a 0–1 scale, so the `< 35` rule always wiped them at 7d).
+    const reportSignalDelete = await prisma.marketSignal.deleteMany({
+      where: {
+        linked_business: businessProfileId,
+        category: { in: REPORT_SIGNAL_CATEGORIES },
+        detected_at: { lt: new Date(now.getTime() - 40 * 24 * 60 * 60 * 1000).toISOString() },
+      },
+    });
+    stats.signals_archived += reportSignalDelete.count;
+
     // ── Phase 1A: Delete read signals older than 30 days ─────────────────────
     const readOldDelete = await prisma.marketSignal.deleteMany({
       where: {
         linked_business: businessProfileId,
         is_read: true,
         detected_at: { lt: thirtyDaysAgo },
+        ...NOT_REPORT_SIGNAL,
       },
     });
     stats.signals_archived += readOldDelete.count;
@@ -122,6 +137,7 @@ export async function cleanupAndLearn(req: Request, res: Response) {
         is_read: false,
         confidence: { lt: 35 },
         detected_at: { lt: sevenDaysAgo },
+        ...NOT_REPORT_SIGNAL,
       },
     });
     stats.signals_archived += staleDelete.count;
@@ -132,6 +148,7 @@ export async function cleanupAndLearn(req: Request, res: Response) {
         linked_business: businessProfileId,
         is_dismissed: true,
         detected_at: { lt: sevenDaysAgo },
+        ...NOT_REPORT_SIGNAL,
       },
     });
     stats.signals_archived += dismissedDelete.count;

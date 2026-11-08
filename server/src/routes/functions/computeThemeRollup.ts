@@ -50,7 +50,11 @@ export async function computeThemeRollup(
   }
 
   const reviews = (await (prisma as any).$queryRawUnsafe(sql, ...params)) as { topic_sentiment: string }[];
+  return tallyThemes(reviews);
+}
 
+/** Per-topic polarity counts from review rows' topic_sentiment JSON, most-mentioned first. */
+export function tallyThemes(reviews: { topic_sentiment: string | null }[]): ThemeCount[] {
   const counts: Record<string, { positive: number; negative: number; neutral: number }> = {};
 
   for (const r of reviews) {
