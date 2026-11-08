@@ -53,6 +53,7 @@ import { googleTrendsScanAgent } from './routes/functions/googleTrendsScanAgent'
 import { cleanupInsights } from './routes/functions/cleanupInsights';
 import { cleanupAndLearn } from './routes/functions/cleanupAndLearn';
 import { weeklyEmailDigest } from './routes/functions/weeklyEmailDigest';
+import { generateReport } from './routes/functions/generateReport';
 import { writeHeartbeat } from './lib/agentMonitor';
 import { writeAutomationLog } from './lib/automationLog';
 import { checkAndAlertFailureRate } from './lib/collectorMetrics';
@@ -300,6 +301,14 @@ export function startScheduler() {
     // WeeklyEmailDigest runs 10 min after contentCalendar so digest can include latest posts
     setTimeout(() => runAgentForAll('WeeklyEmailDigest', weeklyEmailDigest), 10 * 60 * 1000);
   });
+
+  // ── Competitor reports (generateReport.ts) — each covers the last completed ──
+  // Israel-time calendar period, so they run after the 05:30 ingestion and the
+  // 07:00 ads/pipeline have landed the previous day's data. Unpaid plans are
+  // skipped inside the handler (`scheduled` turns its 403 into a quiet no-op).
+  cron.schedule('0 10 * * *', () => runAgentForAll('GenerateDailyReport', generateReport, { type: 'daily', scheduled: true }));
+  cron.schedule('30 10 * * 0', () => runAgentForAll('GenerateWeeklyReport', generateReport, { type: 'weekly', scheduled: true }));
+  cron.schedule('0 11 1 * *', () => runAgentForAll('GenerateMonthlyReport', generateReport, { type: 'monthly', scheduled: true }));
 
   // ── Every day at 04:00 UTC: competitor snapshot diff + URL discovery (KAN-160) ──
   // discoverCompetitorUrls runs on its own social_pages_crawled_at guard (7d),

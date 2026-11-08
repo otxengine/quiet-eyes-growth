@@ -395,6 +395,19 @@ const httpServer = app.listen(PORT, async () => {
     status          TEXT NOT NULL DEFAULT 'ok',
     error_message   TEXT
   )`);
+  await sql(`CREATE TABLE IF NOT EXISTS reports (
+    id              TEXT PRIMARY KEY,
+    created_date    TIMESTAMP(3) NOT NULL DEFAULT NOW(),
+    linked_business TEXT NOT NULL,
+    report_type     TEXT NOT NULL,
+    period_start    TIMESTAMP(3) NOT NULL,
+    period_end      TIMESTAMP(3) NOT NULL,
+    status          TEXT NOT NULL,
+    data            JSONB NOT NULL,
+    summary         JSONB,
+    cost_usd        DOUBLE PRECISION
+  )`);
+  await sql(`CREATE UNIQUE INDEX IF NOT EXISTS reports_linked_business_report_type_period_start_key ON reports(linked_business, report_type, period_start)`);
   await sql(`CREATE TABLE IF NOT EXISTS agent_data_bus (
     id           SERIAL PRIMARY KEY,
     event_type   TEXT NOT NULL,
