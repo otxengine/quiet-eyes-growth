@@ -95,6 +95,26 @@ function reviewStats(rows: any[], own: boolean) {
   };
 }
 
+/**
+ * The tracked competitor a free-text signal is about, by name. Names come in mixed forms
+ * ("SPICEHAUS | ספייסהאוס", "קומראן Qumran TLV", "יפו-תל אביב"), so each name is split on
+ * " | " and " - " and its Hebrew run is tried on its own too. Unspaced hyphens stay intact
+ * so "יפו-תל אביב" never matches a bare "תל אביב".
+ * ponytail: substring match on names ≥ 3 chars — a rival whose name is a common word can
+ * false-match; switch to a competitor_id on signals if that shows up.
+ */
+export function mentionedCompetitor(summary: string | null, names: string[]): string | null {
+  if (!summary) return null;
+  for (const name of names) {
+    const parts = [
+      ...name.split(/\s*\|\s*|\s+-\s+/),
+      ...(name.match(/[֐-׿]+(?:[\s'׳״-]+[֐-׿]+)*/g) ?? []),
+    ].map(t => t.trim()).filter(t => t.length >= 3);
+    if (parts.some(t => summary.includes(t))) return name;
+  }
+  return null;
+}
+
 const ymdIL = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(d);
 
 /**
@@ -172,14 +192,19 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
   );
   // Price / promotion / website changes only exist as signals. otx_comp:* rows are
   // routed by sector, not business, so they can belong to someone else — excluded.
-  const changes = await q(
+  // Signals carry no competitor_id, and some agents also file insights about rivals the
+  // business doesn't track under this category, so keep only those naming a tracked one.
+  const changes = (await q(
     `SELECT category, summary, impact_level, ${ts('COALESCE(detected_at, created_date::text)')} AS detected_at
      FROM market_signals
      WHERE linked_business = $1 AND category = ANY($4::text[])
        AND COALESCE(source_description, '') NOT LIKE 'otx_comp:%'
        AND ${inWindow('COALESCE(detected_at, created_date::text)')}
-     ORDER BY 4 DESC LIMIT 50`, ...p, REPORT_SIGNAL_CATEGORIES,
-  );
+     ORDER BY 4 DESC LIMIT 200`, ...p, REPORT_SIGNAL_CATEGORIES,
+  )).flatMap(s => {
+    const competitor = mentionedCompetitor(s.summary, competitors.map(c => c.name));
+    return competitor ? [{ ...s, competitor }] : [];
+  }).slice(0, 50);
   const followers = await followerDeltas(bpId, start, end);
 
   const withReviews = type !== 'daily';
