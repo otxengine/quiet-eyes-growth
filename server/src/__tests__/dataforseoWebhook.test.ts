@@ -258,7 +258,7 @@ describe('processDataForSeoReviewsPostback', () => {
     expect(batchExtractTopics).toHaveBeenCalledWith([{ text: 'אוכל טעים ושירות מהיר' }], undefined, {});
     expect(reviewCreate).toHaveBeenCalledTimes(1);
     expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ google_review_id: 'rev3', linked_competitor: 'comp1' }),
+      data: [expect.objectContaining({ google_review_id: 'rev3', linked_competitor: 'comp1' })],
     }));
   });
 

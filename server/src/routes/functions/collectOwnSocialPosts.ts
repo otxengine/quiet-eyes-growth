@@ -113,6 +113,12 @@ async function scrapeAndSave(
     }, backfillWaitMs ?? 120_000, 160, (msg) => { apifyError = msg; });
   }
 
+  // Apify answers a page it can't read with a placeholder item ({ url, error: 'no_items', ... });
+  // saved as-is it became a "post" holding only the page link.
+  const placeholder = rawPosts.find(p => p?.error);
+  if (placeholder) apifyError ??= `${placeholder.error}: ${placeholder.errorDescription ?? ''}`;
+  rawPosts = rawPosts.filter(p => !p?.error);
+
   let upserted = 0;
 
   for (const post of rawPosts) {
