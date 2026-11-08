@@ -192,8 +192,10 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
           const { reviewId, text, rating, sentiment, reviewerName, publishTime } = pending[i];
           const { topics, topic_sentiment } = topicsArr[i];
           try {
-            await (prisma.review as any).create({
-              data: {
+            // existingIds is per-competitor; the unique index is (linked_business, google_review_id)
+            const { count } = await prisma.review.createMany({
+              skipDuplicates: true,
+              data: [{
                 platform:          'Google',
                 rating,
                 text:              text.substring(0, 500),
@@ -210,9 +212,9 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
                 linked_competitor: comp.id,  // AC4: scoped to competitor
                 topics,
                 topic_sentiment,
-              },
+              }],
             });
-            totalNew++;
+            totalNew += count;
           } catch { continue; }
         }
       }
