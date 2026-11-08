@@ -34,8 +34,15 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: |
           : "${VITE_CLERK_PUBLISHABLE_KEY:?set repo variable VITE_CLERK_PUBLISHABLE_KEY_<ENVIRONMENT>}"
+          # Production takes live values only: test ones signed every user out and sent checkout to Paddle's sandbox (2026-11-08).
+          if [ "$DEPLOY_ENV" = production ]; then
+            case "$VITE_CLERK_PUBLISHABLE_KEY" in pk_live_*) ;; *) echo "::error::VITE_CLERK_PUBLISHABLE_KEY_PRODUCTION is not a pk_live_ key"; exit 1 ;; esac
+            case "$VITE_PADDLE_CLIENT_TOKEN" in live_*) ;; *) echo "::error::VITE_PADDLE_CLIENT_TOKEN_PRODUCTION is not a live_ token"; exit 1 ;; esac
+            [ "$VITE_PADDLE_ENV" = production ] || { echo "::error::VITE_PADDLE_ENV_PRODUCTION is not 'production'"; exit 1; }
+          fi
           npm run build
         env:
+          DEPLOY_ENV: ${{ inputs.environment }}
           VITE_API_URL: /api
           VITE_CLERK_PUBLISHABLE_KEY: ${{ vars[format('VITE_CLERK_PUBLISHABLE_KEY_{0}', inputs.environment)] }}
           VITE_FACEBOOK_APP_ID: ${{ vars[format('VITE_FACEBOOK_APP_ID_{0}', inputs.environment)] }}
