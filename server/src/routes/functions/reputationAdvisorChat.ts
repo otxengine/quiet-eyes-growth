@@ -3,6 +3,12 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { getCompetitorReviewInsightsData } from './getCompetitorReviewInsights';
 import { GOOGLE_REVIEW_SOURCES as GOOGLE_SOURCES } from '../../lib/signalGuard';
+import { CORE_ASPECTS, REVIEW_TOPIC_PACKS } from '../../lib/reviewTopicPacks';
+
+// Hebrew names for topic ids, so the model never sees (and echoes) keys like wait_time.
+const TOPIC_HE: Record<string, string> = Object.fromEntries(
+  [...CORE_ASPECTS, ...Object.values(REVIEW_TOPIC_PACKS).flat()].map(a => [a.id, a.label_he]),
+);
 
 function summarizeTopics(reviews: { topic_sentiment: string | null }[]): string {
   const counts: Record<string, { pos: number; neg: number }> = {};
@@ -19,7 +25,7 @@ function summarizeTopics(reviews: { topic_sentiment: string | null }[]): string 
   }
   const sorted = Object.entries(counts).sort(([, a], [, b]) => (b.pos + b.neg) - (a.pos + a.neg)).slice(0, 8);
   return sorted.length > 0
-    ? sorted.map(([topic, { pos, neg }]) => `• ${topic}: ${pos}+ / ${neg}−`).join('\n')
+    ? sorted.map(([topic, { pos, neg }]) => `• ${TOPIC_HE[topic] ?? topic}: ${pos}+ / ${neg}−`).join('\n')
     : 'אין נתוני נושאים';
 }
 

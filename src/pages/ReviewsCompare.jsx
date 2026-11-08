@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Bot, Send, Loader2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { renderBold } from '@/lib/safeMarkdown';
 import TopicTimelineWidget from '@/components/competitors/TopicTimelineWidget';
 import CompetitorReviewInsightsPanel from '@/components/competitors/CompetitorReviewInsightsPanel';
 import ReviewsInsightsRadar from '@/components/competitors/ReviewsInsightsRadar';
@@ -71,7 +72,10 @@ function ReputationAdvisorChat({ bpId, competitorIds }) {
                   ? 'bg-gray-100 text-gray-800'
                   : 'bg-blue-50 text-gray-800'
               }`}>
-                {m.text}
+                {m.role === 'ai'
+                  // "# heading" lines become bold; renderBold escapes HTML before adding <strong>
+                  ? <span dangerouslySetInnerHTML={{ __html: renderBold(m.text.replace(/^#{1,6}\s+(.+)$/gm, '**$1**')) }} />
+                  : m.text}
               </div>
             </div>
           ))}

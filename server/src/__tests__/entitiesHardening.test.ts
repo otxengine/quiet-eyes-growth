@@ -10,6 +10,7 @@ jest.mock('../db', () => ({
     autoAction:      { create: jest.fn(), update: jest.fn(), delete: jest.fn(), findFirst: jest.fn() },
     businessProfile: { findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
     socialAccount:   { findMany: jest.fn() },
+    sectorKnowledge: { findMany: jest.fn() },
   },
 }));
 jest.mock('../middleware/auth', () => ({
@@ -107,5 +108,27 @@ describe('credentials stay on the server', () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Internal server error' });
+  });
+});
+
+describe('SectorKnowledge (no linked_business column) is scoped by the user\'s sectors', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    db.businessProfile.findMany.mockResolvedValue([{ category: 'cafe' }]);
+    db.sectorKnowledge.findMany.mockResolvedValue([]);
+  });
+
+  test('an unfiltered read is limited to the sectors of owned businesses', async () => {
+    await handler('/:entity', 'get')(req({ entity: 'SectorKnowledge' }), makeRes());
+
+    expect(db.sectorKnowledge.findMany.mock.calls[0][0].where).toEqual({ sector: { in: ['cafe'] } });
+  });
+
+  test('another sector is refused', async () => {
+    const res = makeRes();
+    await handler('/:entity', 'get')(req({ entity: 'SectorKnowledge' }, { query: { filter: '{"sector":"law"}' } }), res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(db.sectorKnowledge.findMany).not.toHaveBeenCalled();
   });
 });

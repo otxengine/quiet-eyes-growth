@@ -378,7 +378,7 @@ app.get('/api/debug/:bpId', async (req: any, res: any) => {
   });
 });
 
-app.listen(PORT, async () => {
+const httpServer = app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
   const { prisma: db } = await import('./db');
 
@@ -1520,3 +1520,8 @@ app.listen(PORT, async () => {
 
   startScheduler();
 });
+
+// Keep idle sockets open longer than the ALB's 900s idle timeout (infra/lib/qe-stack.ts). With Node's 5s
+// default the ALB reuses a socket Node just closed and answers 502 without the request reaching the app.
+httpServer.keepAliveTimeout = 905_000;
+httpServer.headersTimeout = 906_000;
