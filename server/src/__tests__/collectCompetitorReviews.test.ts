@@ -1,90 +1,67 @@
 /**
- * KAN-121 — Competitor review ingest: scoping and read-only guards.
- * Tests the contract, not the DB: mock Prisma + Places so no network/DB needed.
+ * KAN-121 — Competitor review ingest: DataForSEO is the only review source.
+ * This function only submits one DataForSEO task per competitor. The rows themselves are written by the
+ * webhook (linked_competitor set, response_status null) — covered in dataforseoWebhook.test.ts.
  */
 import { collectCompetitorReviews } from '../routes/functions/collectCompetitorReviews';
-
-// ── Mocks ──────────────────────────────────────────────────────────────────────
-
-const createdRows: any[] = [];
+import { prisma } from '../db';
+import { submitGoogleReviewsTask } from '../lib/dataforseo';
 
 jest.mock('../db', () => ({
   prisma: {
-    businessProfile: {
-      findFirst: jest.fn(async () => ({ id: 'biz1', city: 'תל אביב', name: 'Biz' })),
-    },
+    businessProfile: { findFirst: jest.fn(async () => ({ id: 'biz1', city: 'תל אביב', name: 'Biz' })) },
     competitor: {
-      findMany: jest.fn(async () => [{ id: 'comp1', name: 'Rival', google_place_id: 'places/ABC' }]),
+      findMany: jest.fn(async () => [{ id: 'comp1', name: 'Rival', google_place_id: 'ChIJrival' }]),
       update:   jest.fn(async () => ({})),
     },
-    review: {
-      findMany: jest.fn(async () => []),
-      createMany: jest.fn(async (args: any) => { createdRows.push(...args.data); return { count: args.data.length }; }),
-    },
+    review: { findMany: jest.fn(async () => []), createMany: jest.fn(), create: jest.fn() },
+    dataForSeoReviewTask: { create: jest.fn(async () => ({})) },
   },
 }));
-
-jest.mock('../lib/googlePlaces', () => ({
-  findPlaceId:    jest.fn(async () => 'places/ABC'),
-  getPlaceDetails: jest.fn(async () => ({
-    reviews: [
-      { text: { text: 'Great place!' }, authorAttribution: { displayName: 'Alice' }, rating: 5, publishTime: '2024-01-01T00:00:00Z' },
-      { text: { text: 'Terrible service.' }, authorAttribution: { displayName: 'Bob' }, rating: 1, publishTime: '2024-01-02T00:00:00Z' },
-    ],
-  })),
+jest.mock('../lib/dataforseo', () => ({
+  submitGoogleReviewsTask: jest.fn(async () => ({ taskId: 'task-1', costUsd: 0.0375 })),
+  hasDataForSeoCreds: jest.fn(() => true),
 }));
-
-jest.mock('../lib/serpapi', () => ({
-  serpGoogleMapsReviews: jest.fn(async () => []), // SERPAPI_KEY absent → returns []
-  firstValidDate: jest.fn((...c: any[]) => c.find((x: any) => x && !isNaN(new Date(x).getTime())) ?? null),
-}));
-
-jest.mock('../lib/llm', () => ({
-  invokeLLM: jest.fn(async () => ({ results: [] })),
-}));
-
-jest.mock('../lib/automationLog', () => ({
-  writeAutomationLog: jest.fn(async () => {}),
-}));
-
-jest.mock('../lib/signalGuard', () => ({
-  normReviewOrigin: jest.fn((v: string) => v),
-}));
-
-// Cross-business donor cache is covered separately in collectCompetitorReviews.donor.test.ts —
-// force it to "no donor" here so these tests only exercise the own-business scrape/insert contract.
+jest.mock('../lib/googlePlaces', () => ({ findPlaceId: jest.fn(async () => null) }));
+jest.mock('../lib/automationLog', () => ({ writeAutomationLog: jest.fn(async () => {}) }));
+jest.mock('../lib/reviewPostProcessing', () => ({ backfillTopicsFor: jest.fn(async () => {}) }));
+// Donor cache is covered in collectCompetitorReviews.donor.test.ts — force "no donor" here.
 jest.mock('../lib/competitorDonor', () => ({ findDonorCandidates: jest.fn(async () => []) }));
 
-// ── Tests ──────────────────────────────────────────────────────────────────────
-
-function makeReq(body: object) { return { body } as any; }
 function makeRes() {
   const res: any = {};
   res.status = jest.fn(() => res);
   res.json = jest.fn(() => res);
   return res;
 }
+const run = (res = makeRes()) => collectCompetitorReviews({ body: { businessProfileId: 'biz1' } } as any, res).then(() => res);
 
-beforeEach(() => { createdRows.length = 0; });
+const OLD_ENV = process.env;
+beforeEach(() => {
+  jest.clearAllMocks();
+  process.env = { ...OLD_ENV, DATAFORSEO_REVIEWS_ENABLED: 'true' };
+});
+afterAll(() => { process.env = OLD_ENV; });
 
-test('AC4: created rows have linked_competitor set to competitor id', async () => {
-  await collectCompetitorReviews(makeReq({ businessProfileId: 'biz1' }), makeRes());
-  expect(createdRows.length).toBeGreaterThan(0);
-  for (const row of createdRows) {
-    expect(row.linked_competitor).toBe('comp1');
-  }
+test('submits one DataForSEO task per competitor, recorded against that competitor', async () => {
+  const res = await run();
+  expect(submitGoogleReviewsTask).toHaveBeenCalledWith(expect.objectContaining({ placeId: 'ChIJrival', tag: 'comp1' }));
+  expect(prisma.dataForSeoReviewTask.create).toHaveBeenCalledWith({
+    data: expect.objectContaining({ task_id: 'task-1', task_type: 'competitor', business_profile_id: 'biz1', linked_competitor: 'comp1' }),
+  });
+  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ dataforseo_tasks_submitted: 1 }));
 });
 
-test('AC3: created rows have null response_status (never enter ops inbox)', async () => {
-  await collectCompetitorReviews(makeReq({ businessProfileId: 'biz1' }), makeRes());
-  for (const row of createdRows) {
-    expect(row.response_status).toBeNull();
-  }
+test('never writes reviews itself — the DataForSEO webhook does', async () => {
+  await run();
+  expect(prisma.review.createMany).not.toHaveBeenCalled();
+  expect(prisma.review.create).not.toHaveBeenCalled();
 });
 
-test('AC3: linked_business is still set for query scoping', async () => {
-  await collectCompetitorReviews(makeReq({ businessProfileId: 'biz1' }), makeRes());
-  for (const row of createdRows) {
-    expect(row.linked_business).toBe('biz1');
-  }
+test('DataForSEO switched off: no task and no other source is tried', async () => {
+  process.env.DATAFORSEO_REVIEWS_ENABLED = 'false';
+  const res = await run();
+  expect(submitGoogleReviewsTask).not.toHaveBeenCalled();
+  expect(prisma.review.createMany).not.toHaveBeenCalled();
+  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ dataforseo_tasks_submitted: 0 }));
 });

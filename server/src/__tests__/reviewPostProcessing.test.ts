@@ -158,6 +158,17 @@ describe('backfillTopicsFor', () => {
     }));
   });
 
+  test('never queries star-only rows, and short rows cannot crowd out real ones', async () => {
+    const short = Array.from({ length: 35 }, (_, i) => ({ id: `s${i}`, text: 'טוב' }));
+    reviewFindMany.mockResolvedValue([...short, { id: 'r1', text: 'שירות מעולה' }]);
+    await backfillTopicsFor({ linked_business: 'bp1' }, {});
+    expect(reviewFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ NOT: { text: '' } }),
+    }));
+    expect(batchExtractTopics).toHaveBeenCalledWith([{ text: 'שירות מעולה' }], undefined, {});
+    expect(reviewUpdate).toHaveBeenCalledTimes(1);
+  });
+
   test('skips reviews with text under 5 chars and never calls update for them', async () => {
     reviewFindMany.mockResolvedValue([{ id: 'r1', text: 'hi' }]);
     await backfillTopicsFor({ linked_business: 'bp1' }, {});

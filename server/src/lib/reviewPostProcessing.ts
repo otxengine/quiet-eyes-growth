@@ -183,14 +183,16 @@ export async function backfillTopicsFor(
   where: { linked_business?: string; linked_competitor?: string },
   topicSet: any,
 ): Promise<void> {
+  // Star-only reviews ('' text) never get topics — exclude them, and read past other too-short rows so they
+  // can't fill the batch and stall the queue. ponytail: stalls only if >200 untopiced 1–4 char reviews pile up.
   const untopiced = await prisma.review.findMany({
-    where: { ...where, OR: [{ topic_sentiment: null }, { topic_sentiment: '{}' }] },
+    where: { ...where, NOT: { text: '' }, OR: [{ topic_sentiment: null }, { topic_sentiment: '{}' }] },
     select: { id: true, text: true },
-    take: 30,
+    take: 200,
   }) as Array<{ id: string; text: string }>;
   if (untopiced.length === 0) return;
 
-  const eligible = untopiced.filter(r => (r.text || '').length >= 5);
+  const eligible = untopiced.filter(r => (r.text || '').length >= 5).slice(0, 30);
   if (eligible.length === 0) return;
 
   const backfill = await batchExtractTopics(eligible.map(r => ({ text: r.text })), undefined, topicSet);
