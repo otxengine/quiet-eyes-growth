@@ -75,7 +75,7 @@ function normalizeUrl(url: string | null): string | null {
 async function scrapeAndSave(
   comp: any,
   platform: string,
-  url: string | null,
+  url: string,
   businessProfileId: string,
   fullBackfill = false,
   override?: PostsDeltaSignal,
@@ -176,24 +176,11 @@ async function scrapeAndSave(
       const donorBusiness = donors.find(d => d.id === donorCompetitorId)?.linked_business;
       console.log(`[collectCompetitorSocialPosts] cloned ${cloned} posts for ${platform} from donor ${donorCompetitorId} (business ${donorBusiness}) — skipped Apify`);
       return {
-        competitor: comp.name, platform, url: url ?? '',
+        competitor: comp.name, platform, url,
         upserted: Number(cloned) || 0, apify_returned: 0, media_found: 0, media_uploaded: 0,
         elapsed_ms: Date.now() - t0, error: null,
       };
     }
-  }
-
-  // No local URL for this platform yet (e.g. onboarding fired this before the
-  // slower Tavily/DataForSEO URL-enrichment step finished writing it) and no
-  // donor was found via google_place_id either — nothing to scrape. The next
-  // normal run (daily cron) will pick this competitor up once its URL exists.
-  if (!url) {
-    console.log(`[collectCompetitorSocialPosts] ${comp.name} (${platform}): no URL yet and no donor — will retry once URL is enriched`);
-    return {
-      competitor: comp.name, platform, url: '',
-      upserted: 0, apify_returned: 0, media_found: 0, media_uploaded: 0,
-      elapsed_ms: Date.now() - t0, error: null,
-    };
   }
 
   // Best-effort creative analysis for a row that was never analyzed — used both
@@ -503,12 +490,12 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
       );
     }
 
-    // Build list of (competitor, platform, url) tasks. A missing local URL still
-    // gets a task (url: null) when we have a google_place_id to donor-match on —
-    // e.g. right after onboarding, URL enrichment may not have finished writing
-    // this competitor's URLs yet, but a cross-business donor can still be found
-    // by place_id. scrapeAndSave skips the actual Apify call when url is null.
-    const tasks: Array<{ comp: any; platform: string; url: string | null }> = [];
+    // Build list of (competitor, platform, url) tasks. No URL on this competitor =
+    // no task at all: a google_place_id-only donor match used to clone another
+    // business's posts for a platform this competitor has no account on (that
+    // business's own, possibly wrong, URL) — garbage posts. The daily run picks
+    // the competitor up once a URL is set.
+    const tasks: Array<{ comp: any; platform: string; url: string }> = [];
     const skipped: any[] = [];
 
     for (const comp of competitors) {
@@ -517,13 +504,8 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
         facebook:  (comp as any).facebook_url,
       };
       for (const [platform, url] of Object.entries(urls)) {
-        if (url) {
-          tasks.push({ comp, platform, url });
-        } else if ((comp as any).google_place_id) {
-          tasks.push({ comp, platform, url: null });
-        } else {
-          skipped.push({ competitor: comp.name, platform, status: 'skipped', reason: 'no_url' });
-        }
+        if (url) tasks.push({ comp, platform, url });
+        else skipped.push({ competitor: comp.name, platform, status: 'skipped', reason: 'no_url' });
       }
     }
 
