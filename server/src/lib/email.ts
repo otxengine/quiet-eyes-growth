@@ -13,6 +13,7 @@ export interface SendEmailOptions {
   to: string | string[]; // Resend takes up to 50 recipients per call
   subject: string;
   html: string;
+  attachments?: { filename: string; content: string }[]; // content is base64
 }
 
 export async function sendEmail(opts: SendEmailOptions): Promise<boolean> {
@@ -32,6 +33,7 @@ export async function sendEmail(opts: SendEmailOptions): Promise<boolean> {
         to:   opts.to,
         subject: opts.subject,
         html: opts.html,
+        ...(opts.attachments?.length && { attachments: opts.attachments }),
       }),
     });
     if (!res.ok) {

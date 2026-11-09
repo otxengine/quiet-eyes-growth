@@ -104,6 +104,21 @@ export async function uploadBufferToS3(buffer: Buffer, contentType: string, fold
 }
 
 /**
+ * Uploads a buffer under an explicit key (a re-run overwrites the same object). Returns the S3 (or
+ * CloudFront) URL, or null on failure or when S3 is off. Unlike uploadBufferToS3 the key is not
+ * random, so callers must not use this for anything served through the public proxy-image route.
+ */
+export async function uploadObjectToS3(buffer: Buffer, key: string, contentType: string): Promise<string | null> {
+  if (!isS3Configured()) return null;
+  try {
+    await client.send(new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: buffer, ContentType: contentType }));
+    return `${CDN_BASE}/${key}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Downloads an image from a CDN URL and uploads it to S3.
  * Returns the permanent S3 (or CloudFront) URL, or null on failure.
  */

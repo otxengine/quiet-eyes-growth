@@ -182,18 +182,18 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
     `SELECT competitor_id, media_type, has_offer, analysis, ${ts('posted_at')} AS posted_at
      FROM competitor_stories WHERE linked_business = $1 AND ${inWindow('posted_at')}`, ...p,
   );
+  const AD_COLS = `id, competitor_id, platform, title, LEFT(body, 600) AS body, cta, link, has_offer, analysis,
+            media_url, video_url, COALESCE(${ts('start_date')}, first_seen_at) AS started_at`;
   const newAds = await q(
-    `SELECT competitor_id, platform, title, LEFT(body, 600) AS body, cta, link, has_offer, analysis,
-            media_url, video_url, COALESCE(${ts('start_date')}, first_seen_at) AS started_at
-     FROM competitor_ad_history WHERE linked_business = $1 AND ${newAdsWhere}`, ...p,
+    `SELECT ${AD_COLS} FROM competitor_ad_history WHERE linked_business = $1 AND ${newAdsWhere}`, ...p,
   );
   // "Active" = seen by a scan in the last 2 days of the period; is_active is only
-  // cleared when a scan finds zero ads, so it goes stale for individual ads.
-  const activeAds = await q<{ competitor_id: string; n: number }>(
-    `SELECT competitor_id, COUNT(*)::int AS n FROM competitor_ad_history
+  // cleared when a scan finds zero ads, so it goes stale for individual ads. Newest launch first.
+  const activeAds = await q(
+    `SELECT ${AD_COLS} FROM competitor_ad_history
      WHERE linked_business = $1 AND first_seen_at < $3::timestamptz
        AND last_seen_at >= $3::timestamptz - interval '2 days'
-     GROUP BY competitor_id`, ...p,
+     ORDER BY started_at DESC NULLS LAST`, ...p,
   );
   // Price / promotion / website changes only exist as signals. otx_comp:* rows are
   // routed by sector, not business, so they can belong to someone else — excluded.
@@ -224,12 +224,14 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
   const storiesBy = groupBy(stories, r => r.competitor_id);
   const adsBy = groupBy(newAds, r => r.competitor_id);
   const reviewsBy = groupBy(reviews, r => r.linked_competitor);
-  const activeBy = new Map(activeAds.map(r => [r.competitor_id, r.n]));
+  const activeBy = groupBy(activeAds, r => r.competitor_id);
 
   const competitorBlocks = competitors.map(c => {
     const cp = postsBy.get(c.id) ?? [];
     const cs = storiesBy.get(c.id) ?? [];
     const ca = adsBy.get(c.id) ?? [];
+    const running = activeBy.get(c.id) ?? [];
+    const newIds = new Set(ca.map(a => a.id));
     const offers = [
       ...cp.filter(x => x.has_offer).map(x => ({ source: 'post', platform: x.platform, url: x.post_url, at: x.posted_at, ...offerOf(x.analysis) })),
       ...cs.filter(x => x.has_offer).map(x => ({ source: 'story', platform: 'instagram', at: x.posted_at, ...offerOf(x.analysis) })),
@@ -240,7 +242,11 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
       name: c.name,
       posts: postsSummary(cp),
       stories: { count: cs.length, with_offer: cs.filter(x => x.has_offer).length },
-      ads: { new_count: ca.length, active_count: activeBy.get(c.id) ?? 0, new: ca.slice(0, 5).map(adItem) },
+      ads: {
+        new_count: ca.length, active_count: running.length, new: ca.slice(0, 5).map(adItem),
+        // Still-running ads launched before this period (the new ones are listed above).
+        active: running.filter(a => !newIds.has(a.id)).slice(0, 3).map(adItem),
+      },
       offers: { count: offers.length, items: offers.slice(0, 5) },
       followers_delta: followers.get(c.id) ?? null,
       ...(withReviews ? {
@@ -259,6 +265,8 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
     posts: sum(c => c.posts.count),
     stories: sum(c => c.stories.count),
     new_ads: sum(c => c.ads.new_count),
+    // Counts as activity in isEmptyReport: a day when competitors only keep ads running still gets a report.
+    active_ads: sum(c => c.ads.active_count),
     offers: sum(c => c.offers.count),
     changes: changes.length,
     ...(ownReviews ? { reviews: ownReviews.count + sum(c => c.reviews?.count ?? 0) } : {}),

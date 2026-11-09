@@ -186,8 +186,8 @@ export class QeStack extends cdk.Stack {
     const image = ecs.ContainerImage.fromAsset(path.join(srcDir, 'server'), { platform: Platform.LINUX_ARM64 });
     const arm64 = { cpuArchitecture: ecs.CpuArchitecture.ARM64, operatingSystemFamily: ecs.OperatingSystemFamily.LINUX };
     const logGroups: Record<string, logs.LogGroup> = {};
-    const taskDef = (name: string, role: 'web' | 'worker', cpu: number) => {
-      const td = new ecs.FargateTaskDefinition(this, `${name}Task`, { cpu, memoryLimitMiB: 1024, runtimePlatform: arm64 });
+    const taskDef = (name: string, role: 'web' | 'worker', cpu: number, memoryLimitMiB = 1024) => {
+      const td = new ecs.FargateTaskDefinition(this, `${name}Task`, { cpu, memoryLimitMiB, runtimePlatform: arm64 });
       td.addContainer('app', {
         image,
         environment: {
@@ -238,7 +238,7 @@ export class QeStack extends cdk.Stack {
 
     const worker = new ecs.FargateService(this, 'Worker', {
       cluster,
-      taskDefinition: taskDef('Worker', 'worker', 512),
+      taskDefinition: taskDef('Worker', 'worker', 1024, 2048), // headless Chromium renders the report PDFs
       desiredCount: workerCount,
       // Stop the old worker before starting the new one, so two schedulers never overlap.
       minHealthyPercent: 0,
