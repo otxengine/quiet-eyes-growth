@@ -187,8 +187,8 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
             media_url, video_url, COALESCE(${ts('start_date')}, first_seen_at) AS started_at
      FROM competitor_ad_history WHERE linked_business = $1 AND ${newAdsWhere}`, ...p,
   );
-  // "Active" = seen by a scan in the last 2 days of the period; is_active is only
-  // cleared when a scan finds zero ads, so it goes stale for individual ads.
+  // "Active" = seen by a scan in the last 2 days of the period; is_active is the state
+  // now, not at the period's end.
   const activeAds = await q<{ competitor_id: string; n: number }>(
     `SELECT competitor_id, COUNT(*)::int AS n FROM competitor_ad_history
      WHERE linked_business = $1 AND first_seen_at < $3::timestamptz

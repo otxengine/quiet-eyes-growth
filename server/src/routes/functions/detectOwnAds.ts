@@ -4,7 +4,7 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
-import { searchAllAds, hasSearchApiKey, AdResult } from '../../lib/searchapi';
+import { searchAllAds, hasSearchApiKey, AdResult, fullyScannedPlatforms } from '../../lib/searchapi';
 import { hasApifyKey } from '../../lib/apify';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
@@ -122,6 +122,7 @@ export async function detectOwnAds(req: Request, res: Response) {
     const fbHandle = profile.facebook_url
       ? profile.facebook_url.replace(/^https?:\/\/(www\.)?facebook\.com\//, '').split(/[/?#]/)[0].replace(/^@/, '') || null
       : null;
+    const scanStart = new Date();
     const ads = await searchAllAds(profile.name, profile.category || '', profile.city || '', fbHandle, profile.facebook_url || null);
 
     if (ads.length === 0) {
@@ -136,6 +137,14 @@ export async function detectOwnAds(req: Request, res: Response) {
 
     const platforms = [...new Set(ads.map(a => a.platform))];
     const adRowsNeedingAnalysis = await upsertAdHistory(businessProfileId, ads);
+    // Ads this scan returned were just stamped last_seen_at; the older ones have ended.
+    const endedPlatforms = fullyScannedPlatforms(ads);
+    if (endedPlatforms.length) {
+      await prisma.businessAdHistory.updateMany({
+        where: { linked_business: businessProfileId, is_active: true, platform: { in: endedPlatforms }, last_seen_at: { lt: scanStart } },
+        data: { is_active: false },
+      }).catch((e: any) => console.warn('[detectOwnAds] mark-ended update failed:', e.message));
+    }
 
     for (const row of adRowsNeedingAnalysis) {
       if (!row.media_url) continue;
