@@ -187,8 +187,8 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
   const newAds = await q(
     `SELECT ${AD_COLS} FROM competitor_ad_history WHERE linked_business = $1 AND ${newAdsWhere}`, ...p,
   );
-  // "Active" = seen by a scan in the last 2 days of the period; is_active is only
-  // cleared when a scan finds zero ads, so it goes stale for individual ads. Newest launch first.
+  // "Active" = seen by a scan in the last 2 days of the period; is_active is the state
+  // now, not at the period's end. Newest launch first.
   const activeAds = await q(
     `SELECT ${AD_COLS} FROM competitor_ad_history
      WHERE linked_business = $1 AND first_seen_at < $3::timestamptz

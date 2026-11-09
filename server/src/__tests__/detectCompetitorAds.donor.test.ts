@@ -1,7 +1,7 @@
 /**
  * Unit tests — detectCompetitorAds cross-business donor cache.
- * Covers: fresh donor found -> clones ad history, never calls SearchAPI/LLM;
- * no fresh donor -> falls through to a normal scan.
+ * Covers: fresh donor found -> clones ad history and its active state, never calls SearchAPI/LLM;
+ * no fresh donor -> falls through to a normal scan; ads a scan no longer returns are marked ended.
  */
 
 const queryRawUnsafe = jest.fn();
@@ -22,13 +22,16 @@ jest.mock('../db', () => ({
 jest.mock('../lib/llm', () => ({ invokeLLM: jest.fn() }));
 jest.mock('../lib/automationLog', () => ({ writeAutomationLog: jest.fn(async () => {}) }));
 jest.mock('../lib/agentCache', () => ({ shouldSkipAgent: jest.fn(() => false), setLastRun: jest.fn() }));
-jest.mock('../lib/searchapi', () => ({ searchAllAds: jest.fn(async () => []), hasSearchApiKey: jest.fn(() => true) }));
+jest.mock('../lib/searchapi', () => ({
+  ...jest.requireActual('../lib/searchapi'),
+  searchAllAds: jest.fn(async () => []), hasSearchApiKey: jest.fn(() => true),
+}));
 jest.mock('../lib/s3', () => ({ isS3Configured: jest.fn(() => false), uploadImageFromUrl: jest.fn() }));
 jest.mock('../lib/analyzePostCreative', () => ({ analyzePostCreative: jest.fn(async () => null) }));
 jest.mock('../lib/competitorDonor', () => ({ findDonorCandidates: jest.fn() }));
 
 import { prisma } from '../db';
-import { searchAllAds } from '../lib/searchapi';
+import { searchAllAds, fullyScannedPlatforms } from '../lib/searchapi';
 import { invokeLLM } from '../lib/llm';
 import { findDonorCandidates } from '../lib/competitorDonor';
 import { detectCompetitorAds } from '../routes/functions/detectCompetitorAds';
@@ -69,6 +72,8 @@ test('fresh donor found -> clones ad history and never calls SearchAPI/LLM', asy
   expect(invokeLLM).not.toHaveBeenCalled();
   const cloneCall = executeRawUnsafe.mock.calls.find(([sql]) => String(sql).includes('gen_random_uuid()::text'));
   expect(cloneCall).toBeTruthy();
+  const syncCall = executeRawUnsafe.mock.calls.find(([sql]) => String(sql).includes('SET is_active = d.is_active'));
+  expect(syncCall?.slice(1)).toEqual(['c1', 'donor-1']);
 });
 
 test('no fresh donor -> falls through to a normal scan', async () => {
@@ -79,4 +84,30 @@ test('no fresh donor -> falls through to a normal scan', async () => {
   await detectCompetitorAds(req, mockRes());
 
   expect(searchAllAds).toHaveBeenCalled();
+});
+
+describe('ads a scan no longer returns', () => {
+  const ad = (platform: string, i: number) => ({
+    platform, title: `t${i}`, body: '', cta: '', link: '', page_name: '', is_active: true,
+    start_date: null, end_date: null, audience_est: null, external_ad_id: `ad${i}`, media_url: null, video_url: null,
+  }) as any;
+  const ads = (platform: string, n: number) => Array.from({ length: n }, (_, i) => ad(platform, i));
+
+  test('are marked ended on the scanned platforms after a scan under its cap', async () => {
+    (findDonorCandidates as jest.Mock).mockResolvedValue([]);
+    queryRawUnsafe.mockResolvedValue([]); // both ads are new
+    (searchAllAds as jest.Mock).mockResolvedValueOnce(ads('instagram', 2));
+
+    await detectCompetitorAds({ body: { businessProfileId: 'b1' } } as any, mockRes());
+
+    const ended = executeRawUnsafe.mock.calls.find(([sql]) => String(sql).includes('SET is_active = false'));
+    expect(ended?.slice(1, 3)).toEqual(['c1', ['facebook', 'instagram']]);
+  });
+
+  test('stay active when a scan hits its cap, since the rest may still run', () => {
+    expect(fullyScannedPlatforms(ads('facebook', 9))).toEqual(['facebook', 'instagram']);
+    expect(fullyScannedPlatforms(ads('facebook', 10))).toEqual([]);
+    expect(fullyScannedPlatforms(ads('google', 4))).toEqual(['google']);
+    expect(fullyScannedPlatforms(ads('google', 5))).toEqual([]);
+  });
 });
