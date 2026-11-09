@@ -10,7 +10,7 @@ const FROM_EMAIL     = process.env.FROM_EMAIL || 'noreply@otxengine.io';
 const FRONTEND_URL   = process.env.FRONTEND_URL || 'https://quiet-eyes-frontend.onrender.com';
 
 export interface SendEmailOptions {
-  to: string;
+  to: string | string[]; // Resend takes up to 50 recipients per call
   subject: string;
   html: string;
 }

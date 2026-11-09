@@ -5,6 +5,7 @@ import { invokeLLM, startCostTracking, popCost } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { reportPeriod, REPORT_TYPES, ReportType } from '../../lib/reportPeriod';
 import { buildReportData, isEmptyReport } from '../../lib/reportData';
+import { sendReportEmail } from '../../lib/reportEmail';
 
 // ponytail: inline like generateBattlecard.ts — all paid plans get all three reports.
 const REPORT_PLANS = new Set(['starter', 'growth', 'pro', 'enterprise']);
@@ -144,6 +145,13 @@ export async function generateReport(req: Request, res: Response) {
 
     await writeAutomationLog('generateReport', businessProfileId, startTime, 1, 'success',
       status === 'partial' ? `${type}: llm_failed` : undefined, cost ?? undefined);
+
+    // Every complete report goes to the internal distribution list. 'empty' has nothing to
+    // read and 'partial' is regenerated later, so only 'ready' sends. Never fails the report.
+    if (status === 'ready') {
+      await sendReportEmail(report, bp.name).catch((e: any) =>
+        console.warn('[generateReport] report email failed:', e.message));
+    }
     return res.json({ report });
   } catch (err: any) {
     console.error('[generateReport] error:', err.message);
