@@ -81,3 +81,45 @@ describe('sendReportEmail', () => {
     expect(sendEmail).not.toHaveBeenCalled();
   });
 });
+
+describe('post and ad cards', () => {
+  const S3_IMG = 'https://socialmediacomp2023.s3.us-east-1.amazonaws.com/competitor-posts/a.jpg';
+  const S3_VID = 'https://socialmediacomp2023.s3.us-east-1.amazonaws.com/competitor-ads/v.mp4';
+  const withMedia = {
+    ...weekly,
+    data: {
+      ...weekly.data,
+      competitors: [{
+        name: 'גקסון תכשיטים', posts: { count: 1, total_engagement: 5,
+          top: [{ platform: 'instagram', url: 'https://www.instagram.com/p/X/', caption: 'קוד SHOP10 <b>x</b>', posted_at: '2026-11-02T08:09:06.000Z',
+                  likes: null, comments: 0, media_url: S3_IMG, video_url: 'https://instagram.fbne6-1.fna.fbcdn.net/v.mp4' }] },
+        stories: { count: 0 }, offers: { count: 0 },
+        ads: { new_count: 1, active_count: 0, new: [{ platform: 'instagram', body: 'מבצע 50-50', cta: 'Learn more', link: 'http://fb.me/', started_at: '2026-10-08T07:00:00.000Z', media_url: null, video_url: S3_VID }] },
+      }],
+    },
+  };
+  const env = process.env.FRONTEND_URL;
+  afterEach(() => { process.env.FRONTEND_URL = env; });
+
+  it('shows images through the app proxy, with open-image / video / original-post links', () => {
+    process.env.FRONTEND_URL = 'https://cortexi.ai';
+    const { html } = buildReportEmail(withMedia, 'KID JEWELRY');
+    expect(html).toContain(`https://cortexi.ai/api/competitors/proxy-image?url=${encodeURIComponent(S3_IMG)}`);
+    expect(html).toContain('פתיחת התמונה');
+    expect(html).toContain('לפוסט המקורי');
+    expect(html).toContain(encodeURIComponent(S3_VID)); // stored video → "צפייה בוידאו"
+    expect(html).not.toContain('fbcdn.net');             // expiring CDN video is not linked
+    expect(html).not.toContain('fb.me');                  // generic ad link is not a destination
+    expect(html).toContain('לייקים מוסתרים');             // hidden (−1 → null) likes
+    expect(html).not.toContain('<b>x</b>');               // caption is escaped
+    expect(html).toContain('מבצע 50-50');
+  });
+
+  it('falls back to text-only cards when no public base URL is configured', () => {
+    delete process.env.FRONTEND_URL;
+    const { html } = buildReportEmail(withMedia, 'KID JEWELRY');
+    expect(html).not.toContain('<img');
+    expect(html).toContain('ללא תמונה');
+    expect(html).toContain('קוד SHOP10');
+  });
+});

@@ -20,8 +20,11 @@ const LABEL: Record<ReportType, string> = { daily: 'יומי', weekly: 'שבוע
 const ilDate = (d: Date) => new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem' }).format(d);
 
 function buildPrompt(type: ReportType, start: Date, end: Date, data: unknown): string {
-  // ids/urls are for the UI, not the narrative — drop them to save tokens.
-  const json = JSON.stringify(data, (k, v) => (k === 'id' || k === 'url' || k === 'link' ? undefined : v));
+  // ids/urls/media are for the UI and email, not the narrative — drop them, and keep post/ad
+  // text at the 200 chars the prompt always had (the stored report keeps up to 600 for display).
+  const DROP = new Set(['id', 'url', 'link', 'media_url', 'video_url']);
+  const json = JSON.stringify(data, (k, v) =>
+    DROP.has(k) ? undefined : (k === 'caption' || k === 'body') && typeof v === 'string' ? v.slice(0, 200) : v);
   return `You are a competitive-intelligence analyst for a small Israeli business. Write its ${type} competitor report (דוח ${LABEL[type]}) for ${ilDate(start)}–${ilDate(new Date(end.getTime() - 1))} from the data below.
 
 Rules:
