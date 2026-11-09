@@ -6,6 +6,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { reportPeriod, REPORT_TYPES, ReportType } from '../../lib/reportPeriod';
 import { buildReportData, isEmptyReport } from '../../lib/reportData';
 import { sendReportEmail } from '../../lib/reportEmail';
+import { renderReportPdf, reportPdfFilename, storeReportPdf } from '../../lib/reportPdf';
 
 // ponytail: inline like generateBattlecard.ts — all paid plans get all three reports.
 const REPORT_PLANS = new Set(['starter', 'growth', 'pro', 'enterprise']);
@@ -31,6 +32,7 @@ Rules:
 - Use ONLY facts present in the data. Cite competitor names and numbers. Never invent posts, ads, offers or reviews.
 - In per_competitor, include only competitors with activity in this period.
 - "limits" lists data we don't collect — never present those as "no activity".
+- ads.new = ads launched in this period; ads.active_count = ads still running at its end (ads.active = running ones launched earlier). Never call a running ad new.
 - If the data for a section is empty, say so in one short phrase instead of guessing.
 - Review sentiment comes from the rating: avg_rating ≤ 2 is negative, ≥ 4 is positive. Never call a low-rated review positive.
 
@@ -149,13 +151,26 @@ export async function generateReport(req: Request, res: Response) {
     await writeAutomationLog('generateReport', businessProfileId, startTime, 1, 'success',
       status === 'partial' ? `${type}: llm_failed` : undefined, cost ?? undefined);
 
-    // Every complete report goes to the internal distribution list. 'empty' has nothing to
-    // read and 'partial' is regenerated later, so only 'ready' sends. Never fails the report.
+    // Every complete report goes to the internal distribution list as a short email with the PDF
+    // attached. 'empty' has nothing to read and 'partial' is regenerated later, so only 'ready'
+    // sends. Nothing here may fail the report: no PDF still sends the email, no email still saves it.
+    let stored = report;
     if (status === 'ready') {
-      await sendReportEmail(report, bp.name).catch((e: any) =>
+      let pdf: Buffer | null = null;
+      try {
+        // Chromium runs only in the worker (1 vCPU / 2 GB). The API tasks (ROLE=web, 1 GB) serve every
+        // user, so a manual "generate now" there saves the report and emails it without a PDF.
+        if (process.env.ROLE === 'web') throw new Error('PDF rendering is worker-only (ROLE=web)');
+        pdf = await renderReportPdf(report, bp.name);
+        const pdfUrl = await storeReportPdf(businessProfileId, report, pdf);
+        if (pdfUrl) stored = await prisma.report.update({ where: { id: report.id }, data: { pdf_url: pdfUrl } });
+      } catch (e: any) {
+        console.error(`[generateReport] ${type} PDF failed (${pdf ? 'upload' : 'render'}):`, e.message);
+      }
+      await sendReportEmail(report, bp.name, pdf && { filename: reportPdfFilename(report), content: pdf }).catch((e: any) =>
         console.warn('[generateReport] report email failed:', e.message));
     }
-    return res.json({ report });
+    return res.json({ report: stored });
   } catch (err: any) {
     console.error('[generateReport] error:', err.message);
     await writeAutomationLog('generateReport', businessProfileId, startTime, 0, 'failed', `${type}: ${err.message}`);

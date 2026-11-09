@@ -11,11 +11,14 @@ RUN npm run build && npm prune --omit=dev
 
 FROM node:26-bookworm-slim
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+# chromium prints the report PDFs (lib/reportPdf, driven by puppeteer-core); the emoji font is for captions.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates chromium fonts-noto-color-emoji && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
+ENV CHROMIUM_PATH=/usr/bin/chromium
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
+COPY assets ./assets
 COPY package.json ./
 COPY --chmod=755 docker-entrypoint.sh ./
 USER node
