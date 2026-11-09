@@ -408,6 +408,7 @@ const httpServer = app.listen(PORT, async () => {
     cost_usd        DOUBLE PRECISION
   )`);
   await sql(`CREATE UNIQUE INDEX IF NOT EXISTS reports_linked_business_report_type_period_start_key ON reports(linked_business, report_type, period_start)`);
+  await sql(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS pdf_url TEXT`);
   await sql(`CREATE TABLE IF NOT EXISTS agent_data_bus (
     id           SERIAL PRIMARY KEY,
     event_type   TEXT NOT NULL,
