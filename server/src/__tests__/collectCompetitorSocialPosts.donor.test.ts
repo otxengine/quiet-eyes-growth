@@ -124,45 +124,46 @@ test('force=true with no fresh donor still scrapes fresh via Apify', async () =>
   expect(runApifyActor).toHaveBeenCalled();
 });
 
-// ─── No local URL yet (URL enrichment still in flight) — donor lookup should
-// still be attempted via google_place_id, since that's set at creation time,
-// well before the slower Tavily/DataForSEO URL enrichment finishes.
+// ─── No URL on the competitor — never scrape or clone posts for that platform,
+// even when a google_place_id donor exists: the donor's posts belong to the
+// donor's own (possibly wrong) URL, which this competitor never approved.
 
-test('no local URL but has google_place_id -> still finds and clones from a donor', async () => {
+test('no local URL but has google_place_id + fresh donor -> no donor lookup, no clone, no Apify', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([{
     id: 'c1', name: 'Test Co', not_relevant: false, tracking_status: 'approved',
     google_place_id: 'place1', instagram_url: null, facebook_url: null,
   }]);
-  // Both platforms produce donor-only tasks that run concurrently — use
-  // implementation-based mocks (order-independent) rather than *Once queuing.
   queryRawUnsafe.mockImplementation(async (sql: string) =>
     sql.includes('GROUP BY competitor_id') ? [{ competitor_id: 'donor-1' }] : [],
   );
   (findDonorCandidates as jest.Mock).mockResolvedValue([{ id: 'donor-1', linked_business: 'other-biz' }]);
 
   const req: any = { body: { businessProfileId: 'b1', force: true } };
-  await collectCompetitorSocialPosts(req, mockRes());
+  const res = mockRes();
+  await collectCompetitorSocialPosts(req, res);
 
-  expect(findDonorCandidates).toHaveBeenCalledWith('c1', 'b1', expect.objectContaining({ googlePlaceId: 'place1', urlValue: null }));
+  expect(findDonorCandidates).not.toHaveBeenCalled();
   expect(runApifyActor).not.toHaveBeenCalled();
-  const cloneCall = executeRawUnsafe.mock.calls.find(([sql]) => String(sql).includes('gen_random_uuid()::text'));
-  expect(cloneCall).toBeTruthy();
+  expect(executeRawUnsafe.mock.calls.find(([sql]) => String(sql).includes('gen_random_uuid()::text'))).toBeUndefined();
+  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ upserted: 0 }));
 });
 
-test('no local URL, has google_place_id, but no donor -> skips Apify entirely (no url to scrape)', async () => {
+test('only facebook_url set -> instagram is skipped as no_url, facebook still runs', async () => {
   (prisma.competitor.findMany as jest.Mock).mockResolvedValue([{
     id: 'c1', name: 'Test Co', not_relevant: false, tracking_status: 'approved',
-    google_place_id: 'place1', instagram_url: null, facebook_url: null,
+    google_place_id: 'place1', instagram_url: null, facebook_url: 'https://facebook.com/testco',
   }]);
-  queryRawUnsafe.mockResolvedValue([]); // no existing posts, no fresh donor for any platform
+  queryRawUnsafe.mockResolvedValue([]);
   (findDonorCandidates as jest.Mock).mockResolvedValue([]);
 
   const req: any = { body: { businessProfileId: 'b1', force: true } };
   const res = mockRes();
   await collectCompetitorSocialPosts(req, res);
 
-  expect(runApifyActor).not.toHaveBeenCalled();
-  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ upserted: 0 }));
+  expect(findDonorCandidates).toHaveBeenCalledTimes(1);
+  expect(findDonorCandidates).toHaveBeenCalledWith('c1', 'b1', expect.objectContaining({ platform: 'facebook' }));
+  const { diagnostics } = res.json.mock.calls[0][0];
+  expect(diagnostics).toContainEqual(expect.objectContaining({ platform: 'instagram', reason: 'no_url' }));
 });
 
 test('no local URL and no google_place_id -> skipped immediately, no donor lookup attempted', async () => {
