@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { getAuthHeaders } from '@/api/client';
-import { Star, Search, Loader2, Bot, Send, X, ChevronDown, MoreVertical, Copy, CheckCheck, Radar } from 'lucide-react';
+import { Star, Search, Loader2, Bot, Send, X, ChevronDown, MoreVertical, Copy, CheckCheck, Radar, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import RequestReviewModal from '@/components/reputation/RequestReviewModal';
 import ScheduledReviewRequests from '@/components/reputation/ScheduledReviewRequests';
@@ -112,6 +112,13 @@ function ReviewRow({ review, onApprove, labelById = {} }) {
         <span className="text-[11px] text-foreground-muted w-20 flex-shrink-0">{relDate}</span>
         {isPublished && <span className="flex-shrink-0 text-[11px] font-medium text-green-600">✓ פורסם</span>}
         {isPending && <span className="flex-shrink-0 w-2 h-2 rounded-full bg-[#e8344d]" />}
+        {review.source_url?.startsWith('https://') && (
+          <a href={review.source_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+            title="צפה בביקורת המקורית" aria-label="צפה בביקורת המקורית"
+            className="text-foreground-muted hover:text-primary flex-shrink-0">
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        )}
         <button onClick={e => e.stopPropagation()} className="text-foreground-muted hover:text-foreground flex-shrink-0">
           <MoreVertical className="w-4 h-4" />
         </button>
@@ -214,6 +221,12 @@ function ReviewReplyPanel({ review, bpId, businessProfile, topicSet, onClose, on
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[11px] font-semibold text-gray-500">{review.reviewer_name || 'לקוח'}</span>
             <span className="text-amber-400 text-[12px]">{'★'.repeat(review.rating || 0)}{'☆'.repeat(5 - (review.rating || 0))}</span>
+            {review.source_url?.startsWith('https://') && (
+              <a href={review.source_url} target="_blank" rel="noopener noreferrer"
+                className="mr-auto inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:text-primary/80">
+                <ExternalLink className="w-3 h-3" /> צפה בביקורת
+              </a>
+            )}
           </div>
           <p className="text-[12px] text-gray-700 leading-relaxed">{review.text || '(ביקורת ללא טקסט)'}</p>
         </div>
