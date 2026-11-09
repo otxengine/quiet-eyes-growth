@@ -26,7 +26,9 @@ jest.mock('../lib/dataforseo', () => ({ submitGoogleReviewsTask: jest.fn(), hasD
 jest.mock('../lib/reviewTaxonomy', () => ({ batchExtractTopics: jest.fn(async () => []) }));
 jest.mock('../lib/businessProfile', () => ({ getSectorProfile: jest.fn(() => ({ sector_key: 'other', onboarding_review_extras: [] })) }));
 jest.mock('../lib/reviewTopicPacks', () => ({ resolveTopicSet: jest.fn(() => []) }));
-jest.mock('../lib/reviewPostProcessing', () => ({ backfillTopicsFor: jest.fn(async () => {}) }));
+jest.mock('../lib/reviewPostProcessing', () => ({
+  backfillTopicsFor: jest.fn(async () => {}), reviewLink: jest.fn(() => null), relinkReviews: jest.fn(async () => {}),
+}));
 jest.mock('../lib/competitorDonor', () => ({ findDonorCandidates: jest.fn() }));
 
 import { prisma } from '../db';

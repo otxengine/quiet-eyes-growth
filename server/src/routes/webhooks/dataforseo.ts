@@ -21,7 +21,7 @@ import { resolveTopicSet } from '../../lib/reviewTopicPacks';
 import { normReviewOrigin } from '../../lib/signalGuard';
 import {
   detectCompetitorMentions, snapshotRatingHistory, createNegativeReviewAlerts,
-  publishNewReviewEvents, backfillTopicsFor,
+  publishNewReviewEvents, backfillTopicsFor, reviewLink, relinkReviews,
 } from '../../lib/reviewPostProcessing';
 
 const router = Router();
@@ -103,16 +103,18 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
   // run: it was topic-tagged by the LLM, then rejected by the index. Text keys stay per competitor.
   const existing = await prisma.review.findMany({
     where: { linked_business: taskRow.business_profile_id },
-    select: { google_review_id: true, text: true, linked_competitor: true },
+    select: { google_review_id: true, text: true, linked_competitor: true, source_url: true },
   });
   const existingIds = new Set(existing.map(r => r.google_review_id).filter(Boolean));
+  const storedLinks = new Map(existing.map(r => [r.google_review_id, r.source_url]));
+  const seenLinks: Array<[string, string | null]> = [];
   const existingKeys = new Set(existing
     .filter(r => isOwn || r.linked_competitor === taskRow.linked_competitor)
     .map(r => (r.text || '').substring(0, 50)));
 
   const pending: Array<{
     reviewId: string; text: string; rating: number;
-    sentiment: string; reviewerName: string; createdAt: string;
+    sentiment: string; reviewerName: string; createdAt: string; link: string | null;
   }> = [];
 
   for (const item of items) {
@@ -121,7 +123,8 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
     if (!text || text.length < 5) continue;
     const reviewId: string = item.review_id || item.id || `dfs_${(item.profile_name || item.reviewer_name || '').replace(/[^a-z0-9]/gi, '_').substring(0, 40)}_${text.substring(0, 20).replace(/[^a-z0-9]/gi, '_')}`;
     const textKey = text.substring(0, 50);
-    if (existingIds.has(reviewId) || existingKeys.has(textKey)) continue;
+    const link = reviewLink(item);
+    if (existingIds.has(reviewId) || existingKeys.has(textKey)) { seenLinks.push([reviewId, link]); continue; }
 
     const rating: number = item.rating?.value ?? item.rating ?? 0;
     const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
@@ -129,7 +132,7 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
     // correctly alongside created_at strings from the other tiers (GMB/Places/SerpAPI).
     const parsedDate = item.timestamp ? new Date(item.timestamp) : null;
     const createdAt: string = parsedDate && !isNaN(parsedDate.getTime()) ? parsedDate.toISOString() : new Date().toISOString();
-    pending.push({ reviewId, text, rating, sentiment, reviewerName: item.profile_name || item.reviewer_name || 'לקוח', createdAt });
+    pending.push({ reviewId, text, rating, sentiment, reviewerName: item.profile_name || item.reviewer_name || 'לקוח', createdAt, link });
     existingIds.add(reviewId);
     existingKeys.add(textKey);
   }
@@ -138,7 +141,7 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
   if (pending.length > 0) {
     const topics = await batchExtractTopics(pending.map(p => ({ text: p.text })), undefined, topicSet);
     for (let i = 0; i < pending.length; i++) {
-      const { reviewId, text, rating, sentiment, reviewerName, createdAt } = pending[i];
+      const { reviewId, text, rating, sentiment, reviewerName, createdAt, link } = pending[i];
       const { topics: t, topic_sentiment } = topics[i];
       try {
         // Competitor tasks dedup by linked_competitor, but the unique index is (linked_business,
@@ -152,7 +155,7 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
             reviewer_name:     reviewerName,
             sentiment,
             response_status:   isOwn ? 'pending' : null,
-            source_url:        profile.google_place_id ? `https://www.google.com/maps/place/?q=place_id:${profile.google_place_id}` : null,
+            source_url:        link ?? (profile.google_place_id ? `https://www.google.com/maps/place/?q=place_id:${profile.google_place_id}` : null),
             source_origin:     normReviewOrigin('dataforseo_google_reviews', 'dataforseoWebhook'),
             google_review_id:  reviewId,
             is_verified:       true,
@@ -167,6 +170,8 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
       } catch { continue; } // per-row so one bad item can't drop the rest
     }
   }
+
+  await relinkReviews(taskRow.business_profile_id, storedLinks, seenLinks);
 
   await prisma.dataForSeoReviewTask.update({
     where: { task_id: taskId },

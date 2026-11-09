@@ -8,7 +8,7 @@ import { submitGoogleReviewsTask, hasDataForSeoCreds } from '../../lib/dataforse
 import { batchExtractTopics } from '../../lib/reviewTaxonomy';
 import { getSectorProfile } from '../../lib/businessProfile';
 import { resolveTopicSet } from '../../lib/reviewTopicPacks';
-import { backfillTopicsFor } from '../../lib/reviewPostProcessing';
+import { backfillTopicsFor, reviewLink, relinkReviews } from '../../lib/reviewPostProcessing';
 import { findDonorCandidates } from '../../lib/competitorDonor';
 
 const MAX_REVIEWS = 300;
@@ -112,9 +112,11 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
       // Dedup: existing ids and text-keys already stored for this competitor
       const existing = await (prisma.review as any).findMany({
         where: { linked_competitor: comp.id },
-        select: { google_review_id: true, text: true },
-      }) as Array<{ google_review_id: string | null; text: string }>;
+        select: { google_review_id: true, text: true, source_url: true },
+      }) as Array<{ google_review_id: string | null; text: string; source_url: string | null }>;
       const existingIds  = new Set(existing.map(r => r.google_review_id).filter(Boolean));
+      const storedLinks  = new Map(existing.map(r => [r.google_review_id, r.source_url]));
+      const seenLinks: Array<[string, string | null]> = [];
       const existingKeys = new Set(existing.map(r => (r.text || '').substring(0, 50)));
 
       // Path 1a: DataForSEO reviews task — async (task_post → postback), never returns
@@ -156,7 +158,7 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
 
       const pending: Array<{
         reviewId: string; text: string; rating: number;
-        sentiment: string; reviewerName: string; publishTime: string;
+        sentiment: string; reviewerName: string; publishTime: string; link: string | null;
       }> = [];
 
       for (const gr of rawReviews) {
@@ -171,11 +173,13 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
         const reviewId    = gr.review_id || gr.name || `comp_${comp.id}_${authorName}_${rating}`;
         const textKey     = text.substring(0, 50);
 
+        const link        = reviewLink(gr);
+
         if (!text || text.length < 5) continue;
-        if (existingIds.has(reviewId) || existingKeys.has(textKey)) continue;
+        if (existingIds.has(reviewId) || existingKeys.has(textKey)) { seenLinks.push([reviewId, link]); continue; }
 
         const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
-        pending.push({ reviewId, text, rating, sentiment, reviewerName: authorName, publishTime });
+        pending.push({ reviewId, text, rating, sentiment, reviewerName: authorName, publishTime, link });
         existingIds.add(reviewId);
         existingKeys.add(textKey);
         if (pending.length + existing.length >= MAX_REVIEWS) break;
@@ -189,7 +193,7 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
         );
 
         for (let i = 0; i < pending.length; i++) {
-          const { reviewId, text, rating, sentiment, reviewerName, publishTime } = pending[i];
+          const { reviewId, text, rating, sentiment, reviewerName, publishTime, link } = pending[i];
           const { topics, topic_sentiment } = topicsArr[i];
           try {
             // existingIds is per-competitor; the unique index is (linked_business, google_review_id)
@@ -203,7 +207,7 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
                 sentiment,
                 // AC3: no response_status → never enters ops inbox or autoRespondToReviews
                 response_status:   null,
-                source_url:        `https://www.google.com/maps/place/?q=place_id:${placeId}`,
+                source_url:        link ?? `https://www.google.com/maps/place/?q=place_id:${placeId}`,
                 source_origin:     normReviewOrigin('google_places', 'collectCompetitorReviews'),
                 google_review_id:  reviewId,
                 is_verified:       true,
@@ -220,6 +224,7 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
       }
 
       perCompetitor.push({ name: comp.name, new: pending.length });
+      await relinkReviews(businessProfileId, storedLinks, seenLinks);
 
       // Backfill: existing reviews that were stored before topic extraction was added.
       // Runs every pass regardless of `pending.length`, since collection is dedup'd and

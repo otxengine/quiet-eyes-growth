@@ -6,7 +6,7 @@ jest.mock('../db', () => ({
   prisma: {
     dataForSeoReviewTask: { findUnique: jest.fn(), update: jest.fn() },
     businessProfile:      { findFirst: jest.fn() },
-    review:                { findMany: jest.fn(), createMany: jest.fn() },
+    review:                { findMany: jest.fn(), createMany: jest.fn(), updateMany: jest.fn() },
   },
 }));
 jest.mock('../lib/automationLog', () => ({ writeAutomationLog: jest.fn().mockResolvedValue(undefined) }));
@@ -23,6 +23,8 @@ jest.mock('../lib/reviewPostProcessing', () => ({
   createNegativeReviewAlerts: jest.fn().mockResolvedValue(undefined),
   publishNewReviewEvents:  jest.fn().mockResolvedValue(undefined),
   backfillTopicsFor:       jest.fn().mockResolvedValue(undefined),
+  reviewLink:    jest.requireActual('../lib/reviewPostProcessing').reviewLink,
+  relinkReviews: jest.requireActual('../lib/reviewPostProcessing').relinkReviews,
 }));
 
 import { prisma } from '../db';
@@ -39,6 +41,7 @@ const taskUpdate     = prisma.dataForSeoReviewTask.update as jest.Mock;
 const bpFindFirst    = prisma.businessProfile.findFirst as jest.Mock;
 const reviewFindMany = prisma.review.findMany as jest.Mock;
 const reviewCreate   = prisma.review.createMany as jest.Mock;
+const reviewUpdateMany = prisma.review.updateMany as jest.Mock;
 
 const OLD_ENV = process.env;
 
@@ -278,5 +281,45 @@ describe('processDataForSeoReviewsPostback', () => {
     expect(taskUpdate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ new_reviews_count: 2 }),
     }));
+  });
+});
+
+describe('processDataForSeoReviewsPostback — link to the review itself', () => {
+  const REVIEW_URL = 'https://www.google.com/maps/reviews/data=!4m8!14m7!1m6!2m5!1sRev1';
+  const PLACE_URL  = 'https://www.google.com/maps/place/?q=place_id:ChIJabc';
+  const withLink = (review_url: string) => taskPayload({
+    result: [{ items: [{ review_text: 'שירות מעולה, ממליץ בחום', rating: { value: 5 }, review_id: 'rev1', review_url }] }],
+  });
+  const storedUrl = () => reviewCreate.mock.calls[0][0].data[0].source_url;
+
+  beforeEach(() => {
+    taskFindUnique.mockResolvedValue(OWN_TASK_ROW);
+    reviewUpdateMany.mockResolvedValue({ count: 1 });
+  });
+
+  test('new review stores its own review_url', async () => {
+    await processDataForSeoReviewsPostback(withLink(REVIEW_URL));
+    expect(storedUrl()).toBe(REVIEW_URL);
+  });
+
+  test('a non-https review_url is never stored; falls back to the place page', async () => {
+    await processDataForSeoReviewsPostback(withLink('javascript:alert(1)'));
+    expect(storedUrl()).toBe(PLACE_URL);
+  });
+
+  test('an already-stored review is pointed at its own link once', async () => {
+    reviewFindMany.mockResolvedValue([{ google_review_id: 'rev1', text: 'x', linked_competitor: null, source_url: PLACE_URL }]);
+    await processDataForSeoReviewsPostback(withLink(REVIEW_URL));
+    expect(reviewCreate).not.toHaveBeenCalled();
+    expect(reviewUpdateMany).toHaveBeenCalledWith({
+      where: { linked_business: 'bp1', google_review_id: 'rev1' },
+      data:  { source_url: REVIEW_URL },
+    });
+
+    jest.clearAllMocks();
+    taskFindUnique.mockResolvedValue(OWN_TASK_ROW);
+    reviewFindMany.mockResolvedValue([{ google_review_id: 'rev1', text: 'x', linked_competitor: null, source_url: REVIEW_URL }]);
+    await processDataForSeoReviewsPostback(withLink(REVIEW_URL));
+    expect(reviewUpdateMany).not.toHaveBeenCalled();
   });
 });

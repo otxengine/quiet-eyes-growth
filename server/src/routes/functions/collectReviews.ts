@@ -15,7 +15,7 @@ import { serpGoogleMapsReviews, hasSerpApiKey, firstValidDate } from '../../lib/
 import { submitGoogleReviewsTask, hasDataForSeoCreds } from '../../lib/dataforseo';
 import {
   detectCompetitorMentions, snapshotRatingHistory, createNegativeReviewAlerts,
-  publishNewReviewEvents, backfillTopicsFor,
+  publishNewReviewEvents, backfillTopicsFor, reviewLink, relinkReviews,
 } from '../../lib/reviewPostProcessing';
 import { runCollectCompetitorReviews } from './collectCompetitorReviews';
 
@@ -69,6 +69,12 @@ export async function collectReviews(req: Request, res: Response) {
     const existingReviews = await prisma.review.findMany({ where: { linked_business: businessProfileId } });
     const existingGoogleIds = new Set(existingReviews.map((r: typeof existingReviews[0]) => r.google_review_id).filter(Boolean));
     const existingTexts = new Set(existingReviews.map((r: typeof existingReviews[0]) => (r.text || '').substring(0, 50)));
+    const storedLinks = new Map(existingReviews.map((r: typeof existingReviews[0]) => [r.google_review_id, r.source_url]));
+    const seenLinks: Array<[string, string | null]> = [];
+    // GBP API reviews carry no public per-review URL — the business's own Maps page is the closest link.
+    const placeLink = (id: string | null) => id
+      ? `https://www.google.com/maps/place/?q=place_id:${id}`
+      : `https://www.google.com/maps/search/?q=${encodeURIComponent(name)}`;
 
     // ── Google My Business API (OAuth) — preferred when client has connected ────
     const gmbAccount = await prisma.socialAccount.findFirst({
@@ -170,7 +176,7 @@ export async function collectReviews(req: Request, res: Response) {
                   reviewer_name: reviewerName,
                   sentiment,
                   response_status: gr.reviewReply ? 'published' : 'pending',
-                  source_url: `https://www.google.com/maps/search/?q=${encodeURIComponent(name)}`,
+                  source_url: placeLink(profile.google_place_id),
                   source_origin: normReviewOrigin('google_business_api', 'collectReviews:gmb'),
                   google_review_id: reviewId,
                   is_verified: true,
@@ -238,24 +244,25 @@ export async function collectReviews(req: Request, res: Response) {
           const serpReviews = await serpGoogleMapsReviews(serpPlaceId, 300);
           const serpPending: Array<{
             reviewId: string; textKey: string; text: string;
-            rating: number; sentiment: string; reviewerName: string; createdAt: string;
+            rating: number; sentiment: string; reviewerName: string; createdAt: string; link: string | null;
           }> = [];
           for (const sr of serpReviews) {
             const text: string = sr.snippet || '';
             if (!text || text.length < 5) continue;
             const reviewId = `serpgmr_${(sr.user?.link || sr.user?.name || '').replace(/[^a-z0-9]/gi, '_').substring(0, 40)}`;
-            if (existingGoogleIds.has(reviewId)) continue;
+            const link = reviewLink(sr);
+            if (existingGoogleIds.has(reviewId)) { seenLinks.push([reviewId, link]); continue; }
             const textKey = text.substring(0, 50);
             if (existingTexts.has(textKey)) continue;
             const rating: number = sr.rating || 0;
             const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
             const createdAt = firstValidDate(sr.iso_date) ?? new Date().toISOString();
-            serpPending.push({ reviewId, textKey, text, rating, sentiment, reviewerName: sr.user?.name || 'לקוח', createdAt });
+            serpPending.push({ reviewId, textKey, text, rating, sentiment, reviewerName: sr.user?.name || 'לקוח', createdAt, link });
           }
           if (serpPending.length > 0) {
             const serpTopics = await batchExtractTopics(serpPending.map(p => ({ text: p.text })), undefined, topicSet);
             for (let i = 0; i < serpPending.length; i++) {
-              const { reviewId, textKey, text, rating, sentiment, reviewerName, createdAt } = serpPending[i];
+              const { reviewId, textKey, text, rating, sentiment, reviewerName, createdAt, link } = serpPending[i];
               const { topics, topic_sentiment } = serpTopics[i];
               await prisma.review.create({
                 data: {
@@ -265,7 +272,7 @@ export async function collectReviews(req: Request, res: Response) {
                   reviewer_name:   reviewerName,
                   sentiment,
                   response_status: 'pending',
-                  source_url:      `https://www.google.com/maps/search/?q=${encodeURIComponent(name)}`,
+                  source_url:      link ?? placeLink(serpPlaceId),
                   source_origin:   normReviewOrigin('serp_google_maps_reviews', 'collectReviews:serp'),
                   google_review_id: reviewId,
                   is_verified:     true,
@@ -301,7 +308,7 @@ export async function collectReviews(req: Request, res: Response) {
           const authorName  = gr.authorAttribution?.displayName || 'לקוח';
           const reviewTime  = Math.floor(new Date(gr.publishTime).getTime() / 1000);
           const googleId    = `places_${authorName}_${reviewTime}`;
-          if (existingGoogleIds.has(googleId)) continue;
+          if (existingGoogleIds.has(googleId)) { seenLinks.push([googleId, reviewLink(gr)]); continue; }
           const textKey = reviewText.substring(0, 50);
           if (existingTexts.has(textKey) || !reviewText || reviewText.length < 5) continue;
           const sentiment = gr.rating >= 4 ? 'positive' : gr.rating <= 2 ? 'negative' : 'neutral';
@@ -319,7 +326,7 @@ export async function collectReviews(req: Request, res: Response) {
               reviewer_name: authorName,
               sentiment,
               response_status: 'pending',
-              source_url: `https://www.google.com/maps/place/?q=place_id:${placeId}`,
+              source_url: reviewLink(gr) ?? placeLink(placeId),
               source_origin: 'google_places',
               google_review_id: googleId,
               is_verified: true,
@@ -336,6 +343,8 @@ export async function collectReviews(req: Request, res: Response) {
         }
       }
     }
+
+    await relinkReviews(businessProfileId, storedLinks, seenLinks);
 
     // ── Tavily direct search — when no Google API key available ──────────────
     if (googleAdded === 0) {

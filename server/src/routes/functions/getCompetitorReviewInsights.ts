@@ -5,7 +5,7 @@ import { computeThemeRollup, computeReviewTrend } from './computeThemeRollup';
 import { GOOGLE_REVIEW_SOURCES as GOOGLE_SOURCES } from '../../lib/signalGuard';
 
 export async function getCompetitorReviewInsightsData(businessProfileId: string, competitorId: string) {
-  const reviewSelect = { reviewer_name: true, rating: true, text: true, created_at: true, created_date: true, topic_sentiment: true } as const;
+  const reviewSelect = { reviewer_name: true, rating: true, text: true, created_at: true, created_date: true, topic_sentiment: true, source_url: true } as const;
 
   const [competitor, themes, trend, ownReviews, latestReviews] = await Promise.all([
     prisma.competitor.findUnique({
