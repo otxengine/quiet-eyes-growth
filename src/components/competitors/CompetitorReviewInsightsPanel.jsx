@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Loader2, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader2, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { th } from './topicLabels';
 
 const TREND_ICON = {
@@ -21,6 +21,12 @@ function ReviewSnippet({ review }) {
         <span className="text-[11px] font-semibold text-foreground truncate flex-1">{review.reviewer_name || 'לקוח'}</span>
         <span className="text-amber-400 text-[10px] flex-shrink-0">{'★'.repeat(stars)}{'☆'.repeat(5 - stars)}</span>
         {date && <span className="text-[10px] text-foreground-muted flex-shrink-0">{date}</span>}
+        {review.source_url?.startsWith('https://') && (
+          <a href={review.source_url} target="_blank" rel="noopener noreferrer" aria-label="צפה בביקורת המקורית"
+            className="text-primary hover:text-primary/80 flex-shrink-0">
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        )}
       </div>
       {review.text && (
         <p dir="auto" className="text-[11px] text-foreground-secondary leading-relaxed">{review.text}</p>

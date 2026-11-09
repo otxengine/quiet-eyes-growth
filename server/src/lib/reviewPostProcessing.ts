@@ -7,6 +7,33 @@ import { prisma } from '../db';
 import { publishEvent } from './eventBus';
 import { batchExtractTopics } from './reviewTaxonomy';
 
+/**
+ * A provider's link to one review: DataForSEO `review_url`, SerpAPI `link`, Places API `googleMapsUri`.
+ * https only, since the UI renders it as an href and it comes from a third-party payload.
+ */
+export function reviewLink(item: any): string | null {
+  const url = item?.review_url || item?.link || item?.googleMapsUri;
+  return typeof url === 'string' && url.startsWith('https://') ? url : null;
+}
+
+/**
+ * Points already-stored reviews at their own link. Rows saved before links were captured hold a
+ * business-level URL; `stored` maps google_review_id → current source_url, so only changed rows are written.
+ */
+export async function relinkReviews(
+  businessProfileId: string,
+  stored: Map<string | null, string | null>,
+  seen: Array<[string, string | null]>,
+): Promise<void> {
+  for (const [google_review_id, source_url] of seen) {
+    if (!source_url || !stored.has(google_review_id) || stored.get(google_review_id) === source_url) continue;
+    await prisma.review.updateMany({
+      where: { linked_business: businessProfileId, google_review_id },
+      data:  { source_url },
+    }).catch(() => {});
+  }
+}
+
 export async function detectCompetitorMentions(businessProfileId: string, sinceTimestamp: string): Promise<void> {
   try {
     const knownCompetitors = await prisma.competitor.findMany({
