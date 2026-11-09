@@ -6,7 +6,6 @@ import { resolveTopicSet } from '../lib/reviewTopicPacks';
 import { downloadFromS3, safeMediaType } from '../lib/s3';
 import { tryDecryptToken } from '../lib/crypto';
 import { requireOwnsBusiness, requireOwnsBusinessFields, requireOwnsRecord } from '../middleware/businessAccess';
-import FormData from 'form-data';
 import fetch from 'node-fetch';
 import { randomUUID } from 'crypto';
 
@@ -107,12 +106,16 @@ router.post('/publish-organic', async (req: Request, res: Response) => {
         const base64    = imageUrl.replace(/^data:[^;]+;base64,/, '');
         const buffer    = Buffer.from(base64, 'base64');
 
+        // Node's built-in FormData + Blob, sent with the built-in fetch. The `form-data`
+        // package was never a declared dependency — it only arrived via @anthropic-ai/sdk
+        // 0.x, and its removal in 1.x crashed startup. node-fetch v2 (used elsewhere in
+        // this file) can't serialize a built-in FormData, hence globalThis.fetch here.
         const form = new FormData();
-        form.append('source',       buffer,  { filename: 'photo.jpg', contentType: mimeType });
+        form.append('source',       new Blob([buffer], { type: mimeType }), 'photo.jpg');
         form.append('message',      content);
         form.append('access_token', token);
 
-        const fbRes = await fetch(
+        const fbRes = await globalThis.fetch(
           `https://graph.facebook.com/v19.0/${pageId}/photos`,
           { method: 'POST', body: form },
         );
