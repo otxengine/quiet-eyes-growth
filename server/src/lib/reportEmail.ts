@@ -27,6 +27,34 @@ const list = (items: unknown[], tag: 'ul' | 'ol') =>
 
 const TOTAL_LABELS: Record<string, string> = { posts: 'פוסטים', stories: 'סטוריז', new_ads: 'מודעות חדשות', offers: 'מבצעים', reviews: 'ביקורות' };
 
+// Post/ad images go through the app's public image proxy (routes/competitors.ts /proxy-image):
+// it serves our stored S3 copies, while raw Instagram/Facebook CDN links expire within days.
+const proxied = (u: unknown): string | null => {
+  const base = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
+  return base && typeof u === 'string' && u.startsWith('https://')
+    ? `${base}/api/competitors/proxy-image?url=${encodeURIComponent(u)}` : null;
+};
+const clip = (t: unknown, n: number) => { const s = String(t ?? '').trim(); return s.length > n ? `${s.slice(0, n - 1)}…` : s; };
+const shortDate = (iso: unknown) => { try { return il(new Date(String(iso)), { day: 'numeric', month: 'numeric' }); } catch { return ''; } };
+
+function mediaCard(o: { who: string; meta: string; text: string; media?: unknown; video?: unknown; page?: unknown }) {
+  const img = proxied(o.media);
+  const vid = typeof o.video === 'string' && o.video.includes('amazonaws.com') ? proxied(o.video) : null; // fbcdn video links expire
+  const page = typeof o.page === 'string' && /^https?:\/\//.test(o.page) && !o.page.includes('fb.me') ? o.page : null;
+  const link = (href: string, label: string) => `<a href="${esc(href)}" style="color:${C.comp};text-decoration:none;font-weight:600">${label} ↗</a>`;
+  const links = [img && link(img, 'פתיחת התמונה'), vid && link(vid, 'צפייה בוידאו'), page && link(page, 'לפוסט המקורי')].filter(Boolean).join(' · ');
+  const pic = img
+    ? `<a href="${esc(img)}"><img src="${esc(img)}" width="120" height="120" alt="" style="display:block;width:120px;height:120px;object-fit:cover;border-radius:6px;border:0"></a>`
+    : `<div style="width:120px;height:56px;line-height:56px;background:#f0efec;border-radius:6px;font-size:11px;color:${C.muted};text-align:center">${vid ? 'וידאו' : 'ללא תמונה'}</div>`;
+  return `<tr><td width="132" valign="top" style="padding:8px 0 8px 12px">${pic}</td>`
+    + `<td valign="top" style="padding:8px 0;font-size:13px;line-height:1.55;border-bottom:1px solid ${C.grid}">`
+    + `<div style="font-size:12px;color:${C.ink2}"><b style="color:${C.ink}">${esc(o.who)}</b> · ${esc(o.meta)}</div>`
+    + `<div style="white-space:pre-line;margin-top:2px">${esc(o.text)}</div>`
+    + (links ? `<div style="font-size:12px;margin-top:4px">${links}</div>` : '') + `</td></tr>`;
+}
+const cards = (title: string, rows: string[]) =>
+  rows.length ? h2(title) + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows.join('')}</table>` : '';
+
 /**
  * Table-based, inline-styled RTL HTML so it renders in Gmail/Outlook (no grid/flex, no <style>).
  * Every value from the report is escaped — captions, review text and LLM output are untrusted.
@@ -73,6 +101,17 @@ export function buildReportEmail(
   const perComp: any[] = Array.isArray(s.per_competitor) ? s.per_competitor : [];
   const changes: any[] = Array.isArray(d.changes) ? d.changes : [];
 
+  const postCards = comps.flatMap(c => (Array.isArray(c.posts?.top) ? c.posts.top : []).slice(0, 2).map((p: any) => mediaCard({
+    who: c.name,
+    meta: `${p.platform ?? ''} · ${shortDate(p.posted_at)} · ${p.likes == null ? 'לייקים מוסתרים' : `${p.likes} לייקים`} · ${p.comments ?? 0} תגובות`,
+    text: clip(p.caption, 300) || 'ללא טקסט', media: p.media_url, video: p.video_url, page: p.url,
+  }))).slice(0, 6);
+  const adCards = comps.flatMap(c => (Array.isArray(c.ads?.new) ? c.ads.new : []).map((a: any) => mediaCard({
+    who: c.name,
+    meta: `${a.platform ?? ''} · עלתה ${shortDate(a.started_at)}${a.cta ? ` · ${a.cta}` : ''}${a.offer?.details ? ` · מבצע: ${clip(a.offer.details, 60)}` : ''}`,
+    text: clip(a.body || a.title, 300) || 'מודעה ללא טקסט', media: a.media_url, video: a.video_url, page: a.link,
+  }))).slice(0, 4);
+
   const body = [
     `<div style="background:${C.tint};border-right:4px solid ${C.comp};padding:12px 14px;border-radius:4px;font-size:16px;font-weight:600;line-height:1.5">${esc(s.headline ?? '')}</div>`,
     tiles,
@@ -82,6 +121,8 @@ export function buildReportEmail(
     ownReviews,
     Array.isArray(s.recommended_actions) && s.recommended_actions.length ? h2('פעולות מומלצות') + list(s.recommended_actions, 'ol') : '',
     bars,
+    cards('הפוסטים הבולטים', postCards),
+    cards('מודעות חדשות', adCards),
     changes.length ? h2('שינויים שזוהו') + list(changes.map(c => c.summary), 'ul') : '',
     perComp.length ? h2('לפי מתחרה') + perComp.map(c => `<p style="margin:0 0 8px;line-height:1.6"><b>${esc(c.name)}:</b> ${esc(c.summary)}</p>`).join('') : '',
     table,

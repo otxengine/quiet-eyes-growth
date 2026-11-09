@@ -63,6 +63,7 @@ function postsSummary(rows: any[]) {
     top: [...rows].sort((a, b) => engagement(b) - engagement(a)).slice(0, 3).map(p => ({
       platform: p.platform, url: p.post_url, caption: p.caption, posted_at: p.posted_at,
       likes: p.likes, comments: p.comments_count, offer: p.has_offer ? offerOf(p.analysis) : null,
+      media_url: p.media_url, video_url: p.video_url,
     })),
   };
 }
@@ -70,7 +71,12 @@ function postsSummary(rows: any[]) {
 const adItem = (a: any) => ({
   platform: a.platform, title: a.title, body: a.body, cta: a.cta, link: a.link,
   started_at: a.started_at, offer: a.has_offer ? offerOf(a.analysis) : null,
+  media_url: a.media_url, video_url: a.video_url,
 });
+
+// Instagram returns likes = -1 when an account hides its like counts — that's "unknown",
+// not a negative number to subtract from engagement totals.
+const LIKES = `CASE WHEN likes < 0 THEN NULL ELSE likes END AS likes`;
 
 // New ads in the window: Meta ads carry a real start_date; Google ads don't, so
 // fall back to when we first saw them — but not for rows cloned from another
@@ -144,7 +150,6 @@ async function followerDeltas(bpId: string, start: Date, end: Date): Promise<Map
 }
 
 const LIMITS_ALL = [
-  'TikTok: לא נאסף מידע על פוסטים ומודעות של מתחרים',
   'סטוריז נאספים מאינסטגרם בלבד (לא מפייסבוק)',
   'מודעות גוגל מגיעות ללא תאריך עלייה — נספרות לפי מועד הזיהוי הראשון',
 ];
@@ -169,8 +174,8 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
   );
 
   const posts = await q(
-    `SELECT competitor_id, platform, post_url, LEFT(caption, 200) AS caption, likes, comments_count,
-            has_offer, analysis, ${ts('posted_at')} AS posted_at
+    `SELECT competitor_id, platform, post_url, LEFT(caption, 600) AS caption, ${LIKES}, comments_count,
+            has_offer, analysis, media_url, video_url, ${ts('posted_at')} AS posted_at
      FROM competitor_posts WHERE linked_business = $1 AND ${inWindow('posted_at')}`, ...p,
   );
   const stories = await q(
@@ -178,8 +183,8 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
      FROM competitor_stories WHERE linked_business = $1 AND ${inWindow('posted_at')}`, ...p,
   );
   const newAds = await q(
-    `SELECT competitor_id, platform, title, LEFT(body, 200) AS body, cta, link, has_offer, analysis,
-            COALESCE(${ts('start_date')}, first_seen_at) AS started_at
+    `SELECT competitor_id, platform, title, LEFT(body, 600) AS body, cta, link, has_offer, analysis,
+            media_url, video_url, COALESCE(${ts('start_date')}, first_seen_at) AS started_at
      FROM competitor_ad_history WHERE linked_business = $1 AND ${newAdsWhere}`, ...p,
   );
   // "Active" = seen by a scan in the last 2 days of the period; is_active is only
@@ -273,8 +278,8 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
 /** The business's own activity over the window — monthly report only. */
 async function buildOwnActivity(p: readonly [string, string, string], followersDelta: number | null) {
   const posts = await q(
-    `SELECT platform, post_url, LEFT(caption, 200) AS caption, likes, comments_count, has_offer, analysis,
-            ${ts('posted_at')} AS posted_at
+    `SELECT platform, post_url, LEFT(caption, 600) AS caption, ${LIKES}, comments_count, has_offer, analysis,
+            media_url, video_url, ${ts('posted_at')} AS posted_at
      FROM business_posts WHERE linked_business = $1 AND ${inWindow('posted_at')}`, ...p,
   );
   const [ads] = await q<{ new_count: number }>(
