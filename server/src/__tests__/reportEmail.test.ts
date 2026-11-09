@@ -104,3 +104,10 @@ describe('sendReportEmail', () => {
     expect(sendEmail).not.toHaveBeenCalled();
   });
 });
+
+describe('PDF wording', () => {
+  it('only says the PDF is attached when it is', () => {
+    expect(buildReportEmail(weekly, 'A.K.A').html).toContain('מצורף כקובץ PDF');
+    expect(buildReportEmail(weekly, 'A.K.A', false).html).not.toContain('מצורף כקובץ PDF');
+  });
+});

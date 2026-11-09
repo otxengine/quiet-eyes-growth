@@ -158,6 +158,9 @@ export async function generateReport(req: Request, res: Response) {
     if (status === 'ready') {
       let pdf: Buffer | null = null;
       try {
+        // Chromium runs only in the worker (1 vCPU / 2 GB). The API tasks (ROLE=web, 1 GB) serve every
+        // user, so a manual "generate now" there saves the report and emails it without a PDF.
+        if (process.env.ROLE === 'web') throw new Error('PDF rendering is worker-only (ROLE=web)');
         pdf = await renderReportPdf(report, bp.name);
         const pdfUrl = await storeReportPdf(businessProfileId, report, pdf);
         if (pdfUrl) stored = await prisma.report.update({ where: { id: report.id }, data: { pdf_url: pdfUrl } });

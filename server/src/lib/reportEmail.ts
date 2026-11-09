@@ -29,6 +29,7 @@ export function periodLabel(type: ReportType, start: Date, end: Date): string {
 export function buildReportEmail(
   report: { report_type: string; period_start: Date; period_end: Date; data: any; summary: any },
   businessName: string,
+  hasPdf = true,
 ): { subject: string; html: string } {
   const type = report.report_type as ReportType;
   const s = report.summary ?? {};
@@ -42,7 +43,8 @@ export function buildReportEmail(
   const body = [
     `<div style="background:${C.tint};border-right:4px solid ${C.comp};padding:12px 14px;border-radius:4px;font-size:16px;font-weight:600;line-height:1.5">${esc(s.headline ?? '')}</div>`,
     tiles,
-    `<p style="margin:16px 0 0;font-size:14px;line-height:1.6;color:${C.ink2}">הדוח המלא מצורף כקובץ PDF</p>`,
+    // Only promise an attachment that is actually there (a failed render still sends this email).
+    hasPdf ? `<p style="margin:16px 0 0;font-size:14px;line-height:1.6;color:${C.ink2}">הדוח המלא מצורף כקובץ PDF</p>` : '',
   ].join('');
 
   const html = `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><title>${esc(subject)}</title></head>
@@ -71,7 +73,7 @@ export async function sendReportEmail(
 ): Promise<boolean> {
   const to = reportRecipients();
   if (!to.length) return false;
-  const { subject, html } = buildReportEmail(report, businessName);
+  const { subject, html } = buildReportEmail(report, businessName, !!pdf);
   return sendEmail({
     to, subject, html,
     ...(pdf && { attachments: [{ filename: pdf.filename, content: pdf.content.toString('base64') }] }),
