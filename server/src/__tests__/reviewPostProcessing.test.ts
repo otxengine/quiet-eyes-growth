@@ -91,6 +91,14 @@ describe('snapshotRatingHistory', () => {
 });
 
 describe('createNegativeReviewAlerts', () => {
+  test('only looks at own reviews still awaiting a reply (not answered, not competitor rows)', async () => {
+    reviewFindMany.mockResolvedValue([]);
+    await createNegativeReviewAlerts('bp1');
+    expect(reviewFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ linked_business: 'bp1', sentiment: 'negative', response_status: 'pending' }),
+    }));
+  });
+
   test('creates a ProactiveAlert for a recent negative review', async () => {
     reviewFindMany.mockResolvedValue([{ id: 'r1', reviewer_name: 'דני', rating: 1, text: 'גרוע' }]);
     alertFindFirst.mockResolvedValue(null);

@@ -385,13 +385,19 @@ export default function Reputation() {
   const ratingDelta = prevMonthAvg > 0 && thisMonthAvg > 0
     ? (thisMonthAvg - prevMonthAvg).toFixed(1)
     : null;
-  const pendingCount = reviews.filter(r => r.response_status === 'pending').length;
+  const isPending = r => r.response_status === 'pending';
+  const pendingCount = reviews.filter(isPending).length;
+  const negativePendingCount = reviews.filter(r => isPending(r) && Number(r.rating) <= 2).length;
+  const weekAgo = new Date(now.getTime() - 7 * 86400000).toISOString();
+  const pendingThisWeek = reviews.filter(r => isPending(r) && (r.created_at || r.created_date || '') >= weekAgo).length;
+  const monthDelta = thisMonthReviews.length - prevMonthReviews.length;
 
   const [sortBy, setSortBy] = useState('newest');
   const [ratingSpanWeeks, setRatingSpanWeeks] = useState(12);
   const sortedReviews = [...reviews].sort(SORT_COMPARATORS[sortBy] || SORT_COMPARATORS.priority);
 
-  const respondedCount = reviews.filter(r => ['responded', 'auto_responded', 'suggested', 'published'].includes(r.response_status)).length;
+  // 'suggested' is only an AI draft nobody sent yet — not a reply.
+  const respondedCount = reviews.filter(r => ['responded', 'auto_responded', 'published'].includes(r.response_status)).length;
   const responseRate = reviews.length > 0 ? Math.round((respondedCount / reviews.length) * 100) : 0;
 
   const statCards = [
@@ -399,14 +405,14 @@ export default function Reputation() {
       count: pendingCount,
       label: 'ביקורות דורשות מענה',
       borderColor: 'red',
-      change: pendingCount > 0 ? `${Math.min(pendingCount, 3)} חדשות מאז השבוע הקודם` : 'הכל טופל',
+      change: pendingCount === 0 ? 'הכל טופל' : pendingThisWeek > 0 ? `${pendingThisWeek} מהשבוע האחרון` : 'אין חדשות מהשבוע האחרון',
       changeColor: pendingCount > 0 ? 'text-red-500' : 'text-green-600',
     },
     {
       count: avgRating > 0 ? avgRating.toFixed(1) : '—',
       label: 'ציון ממוצע',
       borderColor: 'blue',
-      change: 'ללא שינוי מהחודש הקודם',
+      change: reviews.length > 0 ? `לפי ${reviews.length} הביקורות האחרונות` : null,
       changeColor: 'text-foreground-muted',
     },
     {
@@ -420,8 +426,8 @@ export default function Reputation() {
       count: thisMonthReviews.length,
       label: 'ביקורות חדשות החודש',
       borderColor: 'none',
-      change: thisMonthReviews.length > 0 ? `+${thisMonthReviews.length} מהחודש הקודם` : null,
-      changeColor: 'text-green-600',
+      change: thisMonthReviews.length > 0 || prevMonthReviews.length > 0 ? `${monthDelta >= 0 ? '+' : ''}${monthDelta} מהחודש הקודם` : null,
+      changeColor: monthDelta >= 0 ? 'text-green-600' : 'text-red-500',
     },
   ];
 
@@ -463,13 +469,13 @@ export default function Reputation() {
   });
 
   const insights = [
-    pendingCount > 0 && {
-      text: `${pendingCount} ביקורות שליליות ממתינות למענה`,
+    negativePendingCount > 0 && {
+      text: `${negativePendingCount} ביקורות שליליות ממתינות למענה`,
       border: 'border-r-red-500',
       dot: 'bg-red-500',
     },
     responseRate < 80 && reviews.length > 0 && {
-      text: `שיעור התגובה ירד ב-${100 - responseRate}%`,
+      text: `רק ${responseRate}% מהביקורות קיבלו מענה`,
       border: 'border-r-yellow-400',
       dot: 'bg-yellow-400',
     },

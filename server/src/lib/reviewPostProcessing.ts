@@ -109,6 +109,8 @@ export async function createNegativeReviewAlerts(businessProfileId: string): Pro
       where: {
         linked_business: businessProfileId,
         sentiment: 'negative',
+        // Only own reviews still awaiting a reply: answered ones are 'published', competitor rows have no status.
+        response_status: 'pending',
         created_date: { gte: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() },
       },
       orderBy: { created_date: 'desc' },

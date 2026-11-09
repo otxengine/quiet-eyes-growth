@@ -103,10 +103,13 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
   // run: it was topic-tagged by the LLM, then rejected by the index. Text keys stay per competitor.
   const existing = await prisma.review.findMany({
     where: { linked_business: taskRow.business_profile_id },
-    select: { google_review_id: true, text: true, linked_competitor: true, source_url: true },
+    select: { google_review_id: true, text: true, linked_competitor: true, source_url: true, response_status: true },
   });
   const existingIds = new Set(existing.map(r => r.google_review_id).filter(Boolean));
   const storedLinks = new Map(existing.map(r => [r.google_review_id, r.source_url]));
+  // Own reviews the owner has since answered on Google (DataForSEO `owner_answer`) — marked answered below.
+  const storedStatus = new Map(existing.map(r => [r.google_review_id, r.response_status]));
+  const answeredOnGoogle: Array<[string, string]> = [];
   const seenLinks: Array<[string, string | null]> = [];
   const existingKeys = new Set(existing
     .filter(r => isOwn || r.linked_competitor === taskRow.linked_competitor)
@@ -114,7 +117,7 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
 
   const pending: Array<{
     reviewId: string; text: string; rating: number;
-    sentiment: string; reviewerName: string; createdAt: string; link: string | null;
+    sentiment: string; reviewerName: string; createdAt: string; link: string | null; ownerAnswer: string | null;
   }> = [];
 
   for (const item of items) {
@@ -127,14 +130,19 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
     // Short/empty text can't tell reviews apart (every star-only review would share the '' key), so those dedup by id only.
     const textKey = text.length >= 5 ? text.substring(0, 50) : null;
     const link = reviewLink(item);
-    if (existingIds.has(reviewId) || (textKey && existingKeys.has(textKey))) { seenLinks.push([reviewId, link]); continue; }
+    const ownerAnswer: string | null = typeof item.owner_answer === 'string' && item.owner_answer.trim() ? item.owner_answer.trim() : null;
+    if (existingIds.has(reviewId) || (textKey && existingKeys.has(textKey))) {
+      seenLinks.push([reviewId, link]);
+      if (isOwn && ownerAnswer && storedStatus.has(reviewId) && storedStatus.get(reviewId) !== 'published') answeredOnGoogle.push([reviewId, ownerAnswer]);
+      continue;
+    }
 
     const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
     // item.timestamp is "YYYY-MM-DD HH:mm:ss +00:00" — normalize to real ISO so it sorts
     // correctly alongside created_at strings from the other tiers (GMB/Places/SerpAPI).
     const parsedDate = item.timestamp ? new Date(item.timestamp) : null;
     const createdAt: string = parsedDate && !isNaN(parsedDate.getTime()) ? parsedDate.toISOString() : new Date().toISOString();
-    pending.push({ reviewId, text, rating, sentiment, reviewerName: item.profile_name || item.reviewer_name || 'לקוח', createdAt, link });
+    pending.push({ reviewId, text, rating, sentiment, reviewerName: item.profile_name || item.reviewer_name || 'לקוח', createdAt, link, ownerAnswer });
     existingIds.add(reviewId);
     if (textKey) existingKeys.add(textKey);
   }
@@ -146,7 +154,7 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
     const extracted = withText.length ? await batchExtractTopics(withText.map(p => ({ text: p.text })), undefined, topicSet) : [];
     const topicsOf = new Map(withText.map((p, i) => [p, extracted[i]]));
     for (let i = 0; i < pending.length; i++) {
-      const { reviewId, text, rating, sentiment, reviewerName, createdAt, link } = pending[i];
+      const { reviewId, text, rating, sentiment, reviewerName, createdAt, link, ownerAnswer } = pending[i];
       const { topics: t, topic_sentiment } = topicsOf.get(pending[i]) ?? { topics: null, topic_sentiment: null };
       try {
         // Competitor tasks dedup by linked_competitor, but the unique index is (linked_business,
@@ -159,7 +167,9 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
             text:              text.substring(0, 2000),
             reviewer_name:     reviewerName,
             sentiment,
-            response_status:   isOwn ? 'pending' : null,
+            // Already answered on Google → 'published' with that reply (same convention as the GBP sync).
+            response_status:   isOwn ? (ownerAnswer ? 'published' : 'pending') : null,
+            suggested_response: isOwn ? ownerAnswer : null,
             source_url:        link ?? (profile.google_place_id ? `https://www.google.com/maps/place/?q=place_id:${profile.google_place_id}` : null),
             source_origin:     normReviewOrigin('dataforseo_google_reviews', 'dataforseoWebhook'),
             google_review_id:  reviewId,
@@ -177,6 +187,12 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
   }
 
   await relinkReviews(taskRow.business_profile_id, storedLinks, seenLinks);
+  for (const [google_review_id, reply] of answeredOnGoogle) {
+    await prisma.review.updateMany({
+      where: { linked_business: taskRow.business_profile_id, linked_competitor: null, google_review_id },
+      data:  { response_status: 'published', suggested_response: reply },
+    }).catch(() => {});
+  }
 
   await prisma.dataForSeoReviewTask.update({
     where: { task_id: taskId },
