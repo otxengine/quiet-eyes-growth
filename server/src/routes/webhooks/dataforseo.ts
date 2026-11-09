@@ -120,13 +120,15 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
   for (const item of items) {
     // Field mapping confirmed against a real payload (type: google_reviews_search).
     const text: string = item.review_text || item.text || item.snippet || '';
-    if (!text || text.length < 5) continue;
-    const reviewId: string = item.review_id || item.id || `dfs_${(item.profile_name || item.reviewer_name || '').replace(/[^a-z0-9]/gi, '_').substring(0, 40)}_${text.substring(0, 20).replace(/[^a-z0-9]/gi, '_')}`;
-    const textKey = text.substring(0, 50);
-    const link = reviewLink(item);
-    if (existingIds.has(reviewId) || existingKeys.has(textKey)) { seenLinks.push([reviewId, link]); continue; }
-
     const rating: number = item.rating?.value ?? item.rating ?? 0;
+    // Star-only reviews (rating, no text) are real Google reviews — keep them so counts and averages match Google.
+    if (!text && !rating) continue;
+    const reviewId: string = item.review_id || item.id || `dfs_${(item.profile_name || item.reviewer_name || '').replace(/[^a-z0-9]/gi, '_').substring(0, 40)}_${text.substring(0, 20).replace(/[^a-z0-9]/gi, '_')}`;
+    // Short/empty text can't tell reviews apart (every star-only review would share the '' key), so those dedup by id only.
+    const textKey = text.length >= 5 ? text.substring(0, 50) : null;
+    const link = reviewLink(item);
+    if (existingIds.has(reviewId) || (textKey && existingKeys.has(textKey))) { seenLinks.push([reviewId, link]); continue; }
+
     const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
     // item.timestamp is "YYYY-MM-DD HH:mm:ss +00:00" — normalize to real ISO so it sorts
     // correctly alongside created_at strings from the other tiers (GMB/Places/SerpAPI).
@@ -134,15 +136,18 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
     const createdAt: string = parsedDate && !isNaN(parsedDate.getTime()) ? parsedDate.toISOString() : new Date().toISOString();
     pending.push({ reviewId, text, rating, sentiment, reviewerName: item.profile_name || item.reviewer_name || 'לקוח', createdAt, link });
     existingIds.add(reviewId);
-    existingKeys.add(textKey);
+    if (textKey) existingKeys.add(textKey);
   }
 
   let newCount = 0;
   if (pending.length > 0) {
-    const topics = await batchExtractTopics(pending.map(p => ({ text: p.text })), undefined, topicSet);
+    // Only reviews with text go to the topic LLM; star-only rows keep null topics.
+    const withText = pending.filter(p => p.text.length >= 5);
+    const extracted = withText.length ? await batchExtractTopics(withText.map(p => ({ text: p.text })), undefined, topicSet) : [];
+    const topicsOf = new Map(withText.map((p, i) => [p, extracted[i]]));
     for (let i = 0; i < pending.length; i++) {
       const { reviewId, text, rating, sentiment, reviewerName, createdAt, link } = pending[i];
-      const { topics: t, topic_sentiment } = topics[i];
+      const { topics: t, topic_sentiment } = topicsOf.get(pending[i]) ?? { topics: null, topic_sentiment: null };
       try {
         // Competitor tasks dedup by linked_competitor, but the unique index is (linked_business,
         // google_review_id) — skipDuplicates drops collisions instead of logging a P2002 per row.

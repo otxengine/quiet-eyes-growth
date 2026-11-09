@@ -3,17 +3,15 @@ import { collectReviews } from '../routes/functions/collectReviews';
 import { prisma } from '../db';
 import { shouldSkipAgent, setLastRun } from '../lib/agentCache';
 import { invokeLLM } from '../lib/llm';
-import { tavilySearch } from '../lib/tavily';
 import { writeAutomationLog } from '../lib/automationLog';
 import { publishEvent } from '../lib/eventBus';
-import * as serpapi from '../lib/serpapi';
+import { submitGoogleReviewsTask } from '../lib/dataforseo';
 
 // ── Mocks ──────────────────────────────────────────────────────────────────────
 
-jest.mock('../lib/serpapi', () => ({
-  hasSerpApiKey:         jest.fn().mockReturnValue(false),
-  serpGoogleMapsReviews: jest.fn().mockResolvedValue([]),
-  firstValidDate:        jest.fn((...c: any[]) => c.find((x: any) => x && !isNaN(new Date(x).getTime())) ?? null),
+jest.mock('../lib/dataforseo', () => ({
+  submitGoogleReviewsTask: jest.fn(),
+  hasDataForSeoCreds:      jest.fn(() => true),
 }));
 
 jest.mock('../db', () => ({
@@ -24,13 +22,12 @@ jest.mock('../db', () => ({
     competitor:      { findMany: jest.fn() },
     marketSignal:    { findFirst: jest.fn(), create: jest.fn() },
     proactiveAlert:  { findFirst: jest.fn(), create: jest.fn() },
-    rawSignal:       { findMany: jest.fn() },
+    dataForSeoReviewTask: { create: jest.fn() },
     $executeRawUnsafe: jest.fn(),
   },
 }));
 jest.mock('../lib/agentCache',    () => ({ shouldSkipAgent: jest.fn(), setLastRun: jest.fn() }));
 jest.mock('../lib/llm',           () => ({ invokeLLM: jest.fn(), startCostTracking: jest.fn(), popCost: jest.fn().mockReturnValue(0) }));
-jest.mock('../lib/tavily',        () => ({ tavilySearch: jest.fn() }));
 jest.mock('../lib/automationLog', () => ({ writeAutomationLog: jest.fn() }));
 jest.mock('../lib/crypto',       () => ({ tryDecryptToken: (v: string) => v })); // fixtures hold decrypted tokens
 jest.mock('../lib/eventBus',      () => ({ publishEvent: jest.fn() }));
@@ -50,15 +47,13 @@ const msFindFirst      = prisma.marketSignal.findFirst      as jest.Mock;
 const msCreate         = prisma.marketSignal.create         as jest.Mock;
 const alertFindFirst   = prisma.proactiveAlert.findFirst    as jest.Mock;
 const alertCreate      = prisma.proactiveAlert.create       as jest.Mock;
-const rawSignalFindMany = prisma.rawSignal.findMany         as jest.Mock;
+const dfsTaskCreate    = prisma.dataForSeoReviewTask.create as jest.Mock;
 const execRaw          = prisma.$executeRawUnsafe           as jest.Mock;
 const skipAgent        = shouldSkipAgent                    as jest.Mock;
 const llm              = invokeLLM                          as jest.Mock;
-const tavily           = tavilySearch                       as jest.Mock;
 const autoLog          = writeAutomationLog                 as jest.Mock;
 const mockFetch          = global.fetch                       as jest.Mock;
-const mockHasSerpKey     = serpapi.hasSerpApiKey              as jest.Mock;
-const mockSerpReviews    = serpapi.serpGoogleMapsReviews       as jest.Mock;
+const submitTask       = submitGoogleReviewsTask            as jest.Mock;
 
 const PROFILE = {
   id: 'bp1', name: 'Test Biz', city: 'תל אביב',
@@ -110,18 +105,16 @@ beforeEach(() => {
   msCreate.mockResolvedValue({});
   alertFindFirst.mockResolvedValue(null);
   alertCreate.mockResolvedValue({});
-  rawSignalFindMany.mockResolvedValue([]);
+  dfsTaskCreate.mockResolvedValue({});
+  submitTask.mockResolvedValue({ taskId: 'task-own-1', costUsd: 0.0225 });
   reviewUpdateMany.mockResolvedValue({ count: 0 });
   execRaw.mockResolvedValue(undefined);
   skipAgent.mockReturnValue(false);
   (setLastRun as jest.Mock).mockReturnValue(undefined);
   llm.mockResolvedValue({ results: [] });
-  tavily.mockResolvedValue([]);
   autoLog.mockResolvedValue(undefined);
   (publishEvent as jest.Mock).mockResolvedValue(undefined);
   mockFetch.mockResolvedValue({ ok: false, status: 404, json: jest.fn().mockResolvedValue({}) });
-  mockHasSerpKey.mockReturnValue(false);
-  mockSerpReviews.mockResolvedValue([]);
 });
 
 // ── Input validation ───────────────────────────────────────────────────────────
@@ -187,7 +180,7 @@ describe('collectReviews — KAN-23 AC#1 content truncation', () => {
 
 });
 
-describe('collectReviews — KAN-34 AC2: GMB connected + Tavily returns nothing = success', () => {
+describe('collectReviews — KAN-34 AC2: GMB connected + nothing new = success', () => {
   test('gmb_path is success and AutomationLog status success even when 0 new reviews', async () => {
     socialFindFirst.mockResolvedValue(GMB_ACCOUNT);
     // GMB API returns no reviews (all previously de-duped)
@@ -195,7 +188,6 @@ describe('collectReviews — KAN-34 AC2: GMB connected + Tavily returns nothing 
       ok: true,
       json: jest.fn().mockResolvedValue({ reviews: [], nextPageToken: undefined }),
     });
-    tavily.mockResolvedValue([]); // Tavily also returns nothing
 
     const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
     await collectReviews(req, res);
@@ -328,99 +320,6 @@ describe('collectReviews — AC1: GMB connected → reviews fetched and de-duped
       expect.anything(),
     );
     warnSpy.mockRestore();
-  });
-
-});
-
-// ── AC2: Places fallback ───────────────────────────────────────────────────────
-
-describe('collectReviews — AC2: no GMB → Places API used', () => {
-
-  test('uses stored google_place_id to call Places Details API', async () => {
-    socialFindFirst.mockResolvedValue(null);
-    bpFindMany.mockResolvedValue([{ ...PROFILE, google_place_id: 'ChIJplace123' }]);
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValue({
-        reviews: [{
-          authorAttribution: { displayName: 'דינה כהן' },
-          rating: 4,
-          text: { text: 'מקום יפה מאוד' },
-          publishTime: new Date(1700000000 * 1000).toISOString(),
-        }],
-      }),
-    });
-    llm.mockResolvedValue({ results: [{ topics: ['atmosphere'], sentiments: { atmosphere: 'positive' } }] });
-
-    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
-    await collectReviews(req, res);
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining('ChIJplace123'),
-      expect.anything(),
-    );
-    expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        platform:      'Google',
-        source_origin: 'google_places',
-        google_review_id: expect.stringContaining('places_דינה כהן_'),
-        linked_business: 'bp1',
-      }),
-    }));
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 1 }));
-  });
-
-  test('resolves and persists place_id via findPlaceId when none stored', async () => {
-    socialFindFirst.mockResolvedValue(null);
-    bpFindMany.mockResolvedValue([{ ...PROFILE, google_place_id: null }]);
-
-    // findPlaceId call — new places:searchText
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValue({
-        places: [{ id: 'ChIJresolved', displayName: { text: 'Test Place' } }],
-      }),
-    });
-    // getPlaceDetails call — new places/{id}
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValue({ reviews: [] }),
-    });
-
-    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
-    await collectReviews(req, res);
-
-    expect(bpUpdate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ google_place_id: 'ChIJresolved', google_place_id_verified: true }),
-    }));
-  });
-
-  test('Places reviews de-duplicated by synthetic google_review_id across runs', async () => {
-    socialFindFirst.mockResolvedValue(null);
-    bpFindMany.mockResolvedValue([{ ...PROFILE, google_place_id: 'ChIJplace123' }]);
-    // Simulate existing de-dup entry
-    reviewFindMany.mockResolvedValue([{
-      google_review_id: 'places_דינה כהן_1700000000',
-      text: 'מקום יפה מאוד',
-    }]);
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValue({
-        reviews: [{
-          authorAttribution: { displayName: 'דינה כהן' },
-          rating: 4,
-          text: { text: 'מקום יפה מאוד' },
-          publishTime: new Date(1700000000 * 1000).toISOString(),
-        }],
-      }),
-    });
-
-    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
-    await collectReviews(req, res);
-
-    expect(reviewCreate).not.toHaveBeenCalled();
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 0 }));
   });
 
 });
@@ -688,242 +587,6 @@ describe('collectReviews — KAN-18 AC4: new_review event published per review',
   });
 });
 
-// ── KAN-17 AC: Tier 3 — Tavily direct search ──────────────────────────────────
-
-describe('collectReviews — KAN-17 Tier 3: Tavily direct', () => {
-  beforeEach(() => {
-    socialFindFirst.mockResolvedValue(null);
-    // Google Places returns nothing → Tier 3 eligible
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: jest.fn().mockResolvedValue({ candidates: [], status: 'ZERO_RESULTS', result: { reviews: [] } }),
-    });
-  });
-
-  test('triggers when Google returns nothing and writes review with source_origin: tavily', async () => {
-    tavily.mockResolvedValueOnce([
-      { url: 'https://example.com/rev', content: 'ביקורת מצוינת על מסעדה טסט שירות מהיר', snippet: '' },
-    ]);
-    llm.mockResolvedValueOnce({
-      results: [{ is_review: true, text: 'ביקורת מצוינת על מסעדה', rating: 5, reviewer_name: 'יוסי', platform: 'Google' }],
-    });
-
-    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
-    await collectReviews(req, res);
-
-    expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ source_origin: 'tavily', text: 'ביקורת מצוינת על מסעדה' }),
-    }));
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 1 }));
-  });
-
-  test('Tier 3 is skipped when Google Places already found reviews', async () => {
-    bpFindMany.mockResolvedValue([{ ...PROFILE, google_place_id: 'ChIJ_test_id_123' }]);
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: jest.fn().mockResolvedValue({
-        reviews: [{
-          authorAttribution: { displayName: 'ישראל ישראלי' },
-          rating: 5,
-          text: { text: 'מסעדה מצוינת מאוד אהבתי את האוכל' },
-          publishTime: new Date(Date.now() - 1000000).toISOString(),
-        }],
-      }),
-    });
-    llm.mockResolvedValueOnce({ results: [{ topics: ['service'], sentiments: { service: 'positive' } }] });
-
-    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
-    await collectReviews(req, res);
-
-    // Tier 3 query contains 'ביקורות' but no 'site:' — should not appear
-    const tier3Call = (tavily.mock.calls as string[][]).find(([q]) => q.includes('ביקורות') && !q.includes('site:'));
-    expect(tier3Call).toBeUndefined();
-  });
-
-  test('LLM-classified non-review snippets are not persisted', async () => {
-    tavily.mockResolvedValueOnce([
-      { url: 'https://example.com/ad', content: 'פרסומת למסעדה טסט במחיר מיוחד', snippet: '' },
-    ]);
-    llm.mockResolvedValueOnce({
-      results: [{ is_review: false, text: 'פרסומת למסעדה', rating: 0, reviewer_name: '' }],
-    });
-
-    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
-    await collectReviews(req, res);
-
-    expect(reviewCreate).not.toHaveBeenCalled();
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 0 }));
-  });
-});
-
-// ── KAN-17 AC: Tier 4 — multi-source Tavily ───────────────────────────────────
-
-describe('collectReviews — KAN-17 Tier 4: multi-source Tavily', () => {
-  beforeEach(() => {
-    socialFindFirst.mockResolvedValue(null);
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: jest.fn().mockResolvedValue({ candidates: [], status: 'ZERO_RESULTS', result: { reviews: [] } }),
-    });
-  });
-
-  test('triggers when Tier 3 yields nothing and writes review with correct platform label', async () => {
-    // Tier 3 → empty; Tier 4 facebook (first key in SOURCE_QUERIES) → one result
-    tavily
-      .mockResolvedValueOnce([])  // Tier 3 direct search
-      .mockResolvedValueOnce([    // Tier 4: facebook
-        { url: 'https://facebook.com/review/1', content: 'מסעדה טסט אוכל מדהים ביותר', snippet: '' },
-      ])
-      .mockResolvedValue([]);     // remaining Tier 4 sources
-
-    llm.mockResolvedValueOnce({
-      results: [{ is_review: true, text: 'אוכל מדהים ביותר מסעדה', rating: 5, reviewer_name: 'דנה' }],
-    });
-
-    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
-    await collectReviews(req, res);
-
-    expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ platform: 'Facebook', source_origin: 'tavily' }),
-    }));
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 1 }));
-  });
-
-  test('all 10 multi-source platforms are queried when newReviews === 0', async () => {
-    tavily.mockResolvedValue([]);
-
-    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
-    await collectReviews(req, res);
-
-    const queries = (tavily.mock.calls as string[][]).map(([q]) => q);
-    const expectedFragments = [
-      'facebook.com', 'instagram.com', 'tripadvisor',
-      'waze.com', 'wolt.com',
-      '10bis.co.il', 'easy.co.il', 'booking.com', 'tapuz.co.il',
-    ];
-    for (const frag of expectedFragments) {
-      expect(queries.some(q => q.includes(frag))).toBe(true);
-    }
-  });
-
-  test('Tier 4 does not auto-scan all sources when a prior tier already wrote reviews', async () => {
-    // Tier 3 finds a review → newReviews = 1 → sourcesToScan falls back to requestedSources (empty)
-    tavily.mockResolvedValueOnce([
-      { url: 'https://example.com/rev', content: 'ביקורת מצוינת על מסעדה טסט שירות מהיר', snippet: '' },
-    ]);
-    llm.mockResolvedValueOnce({
-      results: [{ is_review: true, text: 'ביקורת מצוינת על מסעדה', rating: 5, reviewer_name: 'יוסי' }],
-    });
-
-    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
-    await collectReviews(req, res);
-
-    // Only 1 Tavily call (Tier 3 direct); no Tier 4 site: queries
-    const queries = (tavily.mock.calls as string[][]).map(([q]) => q);
-    expect(queries.some(q => q.includes('site:'))).toBe(false);
-  });
-});
-
-// ── KAN-17 AC: Tier 5 — RawSignal → Haiku classification ─────────────────────
-
-describe('collectReviews — KAN-17 Tier 5: RawSignal→Haiku', () => {
-  beforeEach(() => {
-    socialFindFirst.mockResolvedValue(null);
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: jest.fn().mockResolvedValue({ candidates: [], status: 'ZERO_RESULTS', result: { reviews: [] } }),
-    });
-    tavily.mockResolvedValue([]);  // Tiers 3 + 4 yield nothing → Tier 5 eligible
-  });
-
-  test('triggers when all prior tiers yield nothing and classifies RawSignal as Review', async () => {
-    rawSignalFindMany.mockResolvedValue([{
-      id: 'rs1',
-      url: 'https://google.com/maps/search/Test+Biz',
-      content: 'Test Biz שירות נפלא ואוכל מצוין',
-      source_origin: 'tavily',
-      created_date: new Date().toISOString(),
-    }]);
-    llm.mockResolvedValueOnce({
-      results: [{ is_review: true, text: 'שירות נפלא ואוכל מצוין', rating: 5, reviewer_name: 'רועי', platform: 'Google' }],
-    });
-
-    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
-    await collectReviews(req, res);
-
-    expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ source_origin: 'tavily', text: 'שירות נפלא ואוכל מצוין' }),
-    }));
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 1 }));
-  });
-
-  test('Tier 5 is skipped when a prior tier already wrote reviews', async () => {
-    // Override: Tier 3 finds a review → newReviews = 1 → Tier 5 guard (newReviews === 0) fails
-    tavily.mockResolvedValueOnce([
-      { url: 'https://example.com/rev', content: 'ביקורת מצוינת על מסעדה טסט שירות מהיר', snippet: '' },
-    ]);
-    llm.mockResolvedValueOnce({
-      results: [{ is_review: true, text: 'ביקורת מצוינת על מסעדה', rating: 5, reviewer_name: 'יוסי' }],
-    });
-    rawSignalFindMany.mockResolvedValue([{
-      id: 'rs1', url: 'https://google.com/maps/search/Test+Biz',
-      content: 'Test Biz שירות נפלא', source_origin: 'tavily',
-      created_date: new Date().toISOString(),
-    }]);
-
-    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
-    await collectReviews(req, res);
-
-    expect(rawSignalFindMany).not.toHaveBeenCalled();
-  });
-
-  test('raw signals from non-review platform URLs are pre-filtered and not sent to LLM', async () => {
-    rawSignalFindMany.mockResolvedValue([{
-      id: 'rs2',
-      url: 'https://some-random-blog.com/post/123',  // not in reviewPlatforms list
-      content: 'Test Biz אוכל טעים',
-      source_origin: 'tavily',
-      created_date: new Date().toISOString(),
-    }]);
-
-    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
-    await collectReviews(req, res);
-
-    expect(llm).not.toHaveBeenCalled();
-    expect(reviewCreate).not.toHaveBeenCalled();
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 0 }));
-  });
-});
-
-// ── KAN-17 AC: cross-tier deduplication ───────────────────────────────────────
-
-describe('collectReviews — KAN-17 deduplication', () => {
-  beforeEach(() => {
-    socialFindFirst.mockResolvedValue(null);
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: jest.fn().mockResolvedValue({ candidates: [], status: 'ZERO_RESULTS', result: { reviews: [] } }),
-    });
-  });
-
-  test('Tavily result matching an existing review text prefix is not re-created', async () => {
-    const existingText = 'ביקורת ישנה שכבר קיימת בדאטאבייס שלנו';
-    reviewFindMany
-      .mockResolvedValueOnce([{ text: existingText, google_review_id: null, source_url: null }])
-      .mockResolvedValue([]);
-
-    tavily.mockResolvedValueOnce([
-      { url: 'https://example.com/dup', content: existingText, snippet: '' },
-    ]);
-
-    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
-    await collectReviews(req, res);
-
-    expect(reviewCreate).not.toHaveBeenCalled();
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 0 }));
-  });
-});
-
 // ── KAN-120 AC2: early stop when page is all-known ────────────────────────────
 
 describe('collectReviews — KAN-120 AC2: early stop when page is all-known', () => {
@@ -1046,149 +709,53 @@ describe('collectReviews — KAN-120 AC3: immutable fields not overwritten', () 
   });
 });
 
-// ── KAN-119: SerpAPI google_maps_reviews tier (priority 2) ───────────────────
+// ── DataForSEO is the review source: no Places / SerpAPI / web-search fallback ──
 
-const PROFILE_WITH_PLACE = { ...PROFILE, google_place_id: 'ChIJplace123' };
-
-function serpReview(overrides: any = {}) {
-  return {
-    user:    { name: 'יוסי כהן', link: 'https://www.google.com/maps/contrib/123' },
-    rating:  5,
-    snippet: 'מקום מדהים, שירות מעולה!',
-    date:    'לפני שבוע',
-    ...overrides,
-  };
-}
-
-describe('collectReviews — KAN-119 AC1: SerpAPI 300-review backfill', () => {
+describe('collectReviews — DataForSEO is the review source', () => {
+  const OLD_ENV = process.env;
   beforeEach(() => {
-    socialFindFirst.mockResolvedValue(null);
-    bpFindMany.mockResolvedValue([PROFILE_WITH_PLACE]);
-    mockHasSerpKey.mockReturnValue(true);
-    mockSerpReviews.mockResolvedValue([]);
+    process.env = { ...OLD_ENV, DATAFORSEO_REVIEWS_ENABLED: 'true' };
+    bpFindMany.mockResolvedValue([{ ...PROFILE, google_place_id: 'ChIJmine' }]);
   });
+  afterEach(() => { process.env = OLD_ENV; });
 
-  test('SerpAPI reviews are fetched and persisted with correct fields', async () => {
-    mockSerpReviews.mockResolvedValue([serpReview()]);
-    llm.mockResolvedValue({ results: [{ topics: ['service'], sentiments: { service: 'positive' } }] });
-
+  test('submits a DataForSEO task for the stored place and calls no other source', async () => {
     const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
     await collectReviews(req, res);
 
-    expect(mockSerpReviews).toHaveBeenCalledWith('ChIJplace123', 300);
-    expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        platform:      'Google',
-        source_origin: 'serp_google_maps_reviews',
-        is_verified:   true,
-        linked_business: 'bp1',
-        google_review_id: expect.stringContaining('serpgmr_'),
-      }),
-    }));
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 1, google_reviews_added: 1 }));
+    expect(submitTask).toHaveBeenCalledWith(expect.objectContaining({ placeId: 'ChIJmine', tag: 'bp1' }));
+    expect(dfsTaskCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ task_type: 'own', business_profile_id: 'bp1' }) });
+    expect(mockFetch).not.toHaveBeenCalled();     // no Google Places / web call
+    expect(llm).not.toHaveBeenCalled();           // no web-search classification
+    expect(reviewCreate).not.toHaveBeenCalled();  // reviews arrive later through the webhook
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ dataforseo_task_pending: true }));
+    expect(autoLog).toHaveBeenCalledWith('collectReviews', 'bp1', expect.any(String), 0, 'success', undefined, expect.any(Number));
   });
 
-  test('SerpAPI deduplicates by google_review_id across runs', async () => {
-    const rev = serpReview();
-    const reviewId = `serpgmr_${rev.user.link.replace(/[^a-z0-9]/gi, '_').substring(0, 40)}`;
-    reviewFindMany.mockResolvedValue([{ google_review_id: reviewId, text: rev.snippet }]);
-    mockSerpReviews.mockResolvedValue([rev]);
-
+  test('switched off: nothing is collected from any other source, and the run is logged as failed', async () => {
+    process.env.DATAFORSEO_REVIEWS_ENABLED = 'false';
     const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
     await collectReviews(req, res);
 
+    expect(submitTask).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
     expect(reviewCreate).not.toHaveBeenCalled();
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 0 }));
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ dataforseo_task_pending: false, reason: 'dataforseo_disabled' }));
+    expect(autoLog).toHaveBeenCalledWith('collectReviews', 'bp1', expect.any(String), 0, 'failed', 'dataforseo_disabled', expect.any(Number));
   });
 
-  test('SerpAPI text longer than 2000 chars is capped at 2000', async () => {
-    const longSnippet = 'א'.repeat(2500);
-    mockSerpReviews.mockResolvedValue([serpReview({ snippet: longSnippet })]);
-    llm.mockResolvedValue({ results: [{ topics: [], sentiments: {} }] });
-
-    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
-    await collectReviews(req, res);
-
-    expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ text: longSnippet.substring(0, 2000) }),
-    }));
-    expect(reviewCreate.mock.calls[0][0].data.text).toHaveLength(2000);
-  });
-
-  test('SerpAPI skipped when hasSerpApiKey() returns false', async () => {
-    mockHasSerpKey.mockReturnValue(false);
-
-    const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
-    await collectReviews(req, res);
-
-    expect(mockSerpReviews).not.toHaveBeenCalled();
-  });
-});
-
-describe('collectReviews — KAN-119 AC2: GMB priority 1 over SerpAPI', () => {
-  test('SerpAPI not called when GMB already added reviews', async () => {
-    mockHasSerpKey.mockReturnValue(true);
-    bpFindMany.mockResolvedValue([PROFILE_WITH_PLACE]);
+  test('not sent when the connected Business Profile already added reviews', async () => {
     socialFindFirst.mockResolvedValue(GMB_ACCOUNT);
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: jest.fn().mockResolvedValue({ reviews: [gmbReview()], nextPageToken: undefined }),
     });
     llm.mockResolvedValue({ results: [{ topics: [], sentiments: {} }] });
-
     const { req, res } = makeReqRes({ businessProfileId: 'bp1' });
     await collectReviews(req, res);
 
-    expect(mockSerpReviews).not.toHaveBeenCalled();
-    expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ source_origin: 'google_business_api' }),
-    }));
-  });
-});
-
-describe('collectReviews — KAN-119 AC3: SerpAPI unavailable → Places fallback', () => {
-  test('Places API runs when SerpAPI returns empty (unavailable/no results)', async () => {
-    mockHasSerpKey.mockReturnValue(true);
-    mockSerpReviews.mockResolvedValue([]);   // SerpAPI returns nothing
-    bpFindMany.mockResolvedValue([PROFILE_WITH_PLACE]);
-    socialFindFirst.mockResolvedValue(null);
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValue({
-        reviews: [{
-          authorAttribution: { displayName: 'דינה כהן' },
-          rating: 4,
-          text: { text: 'מקום יפה מאוד' },
-          publishTime: new Date(1700000000 * 1000).toISOString(),
-        }],
-      }),
-    });
-    llm.mockResolvedValue({ results: [{ topics: ['atmosphere'], sentiments: { atmosphere: 'positive' } }] });
-
-    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
-    await collectReviews(req, res);
-
-    expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ source_origin: 'google_places' }),
-    }));
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 1 }));
-  });
-
-  test('Places API also runs when SerpAPI throws (no error propagated)', async () => {
-    mockHasSerpKey.mockReturnValue(true);
-    mockSerpReviews.mockRejectedValue(new Error('SerpAPI timeout'));
-    bpFindMany.mockResolvedValue([PROFILE_WITH_PLACE]);
-    socialFindFirst.mockResolvedValue(null);
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValue({ reviews: [] }),
-    });
-
-    const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
-    await expect(collectReviews(req, res)).resolves.not.toThrow();
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({ new_reviews: 0 }));
+    expect(reviewCreate).toHaveBeenCalled();
+    expect(submitTask).not.toHaveBeenCalled();
   });
 });
 

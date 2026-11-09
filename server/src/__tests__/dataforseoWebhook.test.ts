@@ -284,6 +284,27 @@ describe('processDataForSeoReviewsPostback', () => {
   });
 });
 
+describe('processDataForSeoReviewsPostback — star-only reviews', () => {
+  beforeEach(() => taskFindUnique.mockResolvedValue(OWN_TASK_ROW));
+
+  test('imports rating-only reviews (no text) without sending them to the topic LLM', async () => {
+    await processDataForSeoReviewsPostback(taskPayload({
+      result: [{ items: [
+        { review_text: null, rating: { value: 5 }, review_id: 'star1', profile_name: 'א' },
+        { review_text: null, rating: { value: 4 }, review_id: 'star2', profile_name: 'ב' },
+        { review_text: 'שירות מעולה, ממליץ בחום', rating: { value: 5 }, review_id: 'rev1' },
+        { review_text: null, rating: null, review_id: 'empty' },
+      ] }],
+    }));
+
+    const rows = reviewCreate.mock.calls.map(c => c[0].data[0]);
+    expect(rows.map(r => r.google_review_id)).toEqual(['star1', 'star2', 'rev1']); // both star-only kept, no '' text-key collision
+    expect(rows[0]).toEqual(expect.objectContaining({ text: '', rating: 5, topics: null, topic_sentiment: null }));
+    expect(rows[2]).toEqual(expect.objectContaining({ topics: 'service' }));
+    expect(batchExtractTopics).toHaveBeenCalledWith([{ text: 'שירות מעולה, ממליץ בחום' }], undefined, {});
+  });
+});
+
 describe('processDataForSeoReviewsPostback — link to the review itself', () => {
   const REVIEW_URL = 'https://www.google.com/maps/reviews/data=!4m8!14m7!1m6!2m5!1sRev1';
   const PLACE_URL  = 'https://www.google.com/maps/place/?q=place_id:ChIJabc';
