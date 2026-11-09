@@ -9,6 +9,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { generateMorningBriefing } from './generateMorningBriefing';
 import { generateLeadFirstContact } from './generateLeadFirstContact';
 import { generateBattlecard } from './generateBattlecard';
+import { generateReport } from './generateReport';
 import { logOutcome } from './logOutcome';
 import { calculateHealthScore } from './calculateHealthScore';
 import { collectWebSignals } from './collectWebSignals';
@@ -163,7 +164,7 @@ const router = Router();
 // Models a signed-in user may pick: the frontend only uses these. Unknown keys would otherwise be
 // sent to OpenRouter as raw model ids, so any (costly) model could be requested.
 const USER_LLM_MODELS = new Set(['haiku', 'sonnet']);
-const USER_LLM_MAX_TOKENS = 1500; // largest frontend request is 1200
+const USER_LLM_MAX_TOKENS = 1500; // largest frontend requests (Strategy, insight guidance) are 1500
 const USER_LLM_MAX_PROMPT_CHARS = 100_000; // input tokens are the real cost lever
 
 async function invokeLLMHandler(req: Request, res: Response) {
@@ -193,6 +194,7 @@ const FUNCTION_MAP: Record<string, any> = {
   generateMorningBriefing,
   generateLeadFirstContact,
   generateBattlecard,
+  generateReport,
   logOutcome,
   calculateHealthScore,
   collectWebSignals,
@@ -427,6 +429,11 @@ const READ_ONLY_FUNCTIONS = new Set([
   'getEventBusStats', 'getBusinessConstraints', 'getSubscriptionStatus',
   'compareGoogleMetrics', 'topicTimeline', 'sectorBenchmark',
 ]);
+// The plan cadence (lib/planLimits.ts) decides when paid social collection runs, so a browser can't force one.
+const PLAN_CADENCE_FUNCTIONS = new Set([
+  'collectCompetitorSocialProfileAndPosts', 'collectCompetitorSocialProfile', 'collectCompetitorSocialPosts',
+  'collectCompetitorSocialStories', 'collectOwnSocialProfileAndPosts', 'collectOwnSocialProfile', 'collectOwnSocialPosts',
+]);
 
 async function requireFunctionAccess(req: Request<{ name: string }>, res: Response, next: NextFunction) {
   if (isAdminKeyRequest(req)) return next();
@@ -496,6 +503,7 @@ router.post('/:name', requireBusinessAccess, requireFunctionAccess, limitInvokeL
   if (!handler) {
     return res.status(404).json({ error: `Unknown function: ${req.params.name}` });
   }
+  if (PLAN_CADENCE_FUNCTIONS.has(req.params.name) && !isAdminKeyRequest(req) && req.body) delete req.body.force;
   if (BACKGROUND_FUNCTIONS.has(req.params.name)) return runInBackground(req.params.name, handler, req, res);
   // Express 4 drops a rejected promise (and Node then exits on it): send throws to the error handler.
   return Promise.resolve().then(() => handler(req, res)).catch(next);

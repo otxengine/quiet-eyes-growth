@@ -34,8 +34,28 @@ export interface SectorProfile {
 /** Parse sector_profile from BusinessProfile. Returns null if missing or invalid. */
 export function getSectorProfile(profile: { sector_profile?: string | null }): SectorProfile | null {
   if (!profile.sector_profile) return null;
-  try { return JSON.parse(profile.sector_profile) as SectorProfile; }
+  let sp: any;
+  try { sp = JSON.parse(profile.sector_profile); }
   catch { return null; }
+  if (!sp || typeof sp !== 'object') return null;
+  // The JSON is LLM-written, so fields can be missing or the wrong shape, while callers
+  // .map/.split them directly (buildAgentPromptContext crashed every LLM call for a
+  // business whose profile lacked relevant_topics). Normalize the shape once, here.
+  const list = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string')
+      : typeof v === 'string' ? v.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const text = (v: unknown): string =>
+    typeof v === 'string' ? v : Array.isArray(v) ? v.filter(x => typeof x === 'string').join(', ') : '';
+  return {
+    ...sp,
+    sector_key: text(sp.sector_key), sub_sector: text(sp.sub_sector), sector_label_he: text(sp.sector_label_he),
+    business_type: text(sp.business_type), target_audience_he: text(sp.target_audience_he),
+    competitor_type_he: text(sp.competitor_type_he), price_context_he: text(sp.price_context_he),
+    lead_urgency: text(sp.lead_urgency), content_tone: text(sp.content_tone), seasonality_he: text(sp.seasonality_he),
+    relevant_topics: list(sp.relevant_topics), irrelevant_topics: list(sp.irrelevant_topics),
+    irrelevant_signal_types: list(sp.irrelevant_signal_types), content_themes_he: list(sp.content_themes_he),
+    key_trust_signals_he: list(sp.key_trust_signals_he),
+  } as SectorProfile;
 }
 
 // ── City name translations (EN) ────────────────────────────────────────────────

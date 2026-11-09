@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { isProfileUrl, IG_NON_PROFILE, FB_NON_PROFILE } from './discoverCompetitorUrls';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { tavilySearch } from '../../lib/tavily';
 
@@ -39,7 +40,9 @@ export async function analyzeCompetitorSocial(req: Request, res: Response) {
 
     const insights: any[] = [];
 
-    for (const comp of competitors.slice(0, 5)) { // max 5 to control API usage
+    // The scheduled run analyzes tracked competitors, like the social collectors; an explicit competitorId is honoured as asked.
+    const targets = competitorId ? competitors : competitors.filter((c: any) => !c.not_relevant && c.tracking_status === 'approved');
+    for (const comp of targets.slice(0, 5)) { // max 5 to control API usage
       try {
         // Use known social URLs if discovered, otherwise search by name
         const c = comp as any;
@@ -121,8 +124,9 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
         // ponytail: detectCompetitorAds owns sponsored_ads_* — don't overwrite here (KAN-172)
         // Extract social URLs from search results (if not already stored)
         const c2 = comp as any;
-        const igUrl = allResults.find(r => r.url?.includes('instagram.com/'))?.url;
-        const fbUrl = allResults.find(r => r.url?.includes('facebook.com/'))?.url;
+        // Profiles only: a search hit is often a single post or reel, which the collectors can't scrape as a profile
+        const igUrl = allResults.find(r => isProfileUrl(r.url, 'instagram.com/', IG_NON_PROFILE))?.url;
+        const fbUrl = allResults.find(r => isProfileUrl(r.url, 'facebook.com/', FB_NON_PROFILE))?.url;
         if (igUrl && !c2.instagram_url) socialUpdate.instagram_url = igUrl;
         if (fbUrl && !c2.facebook_url)  socialUpdate.facebook_url  = fbUrl;
 

@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
-import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { setLastRun } from '../../lib/agentCache';
+import { socialGate } from '../../lib/planLimits';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
@@ -14,12 +15,17 @@ import { PostsDeltaSignal } from '../../lib/postsDeltaSignal';
 // TIMESTAMP(3) columns (see server/src/index.ts), so — unlike the competitor
 // version — this can use plain typed Prisma calls with no pgHex/raw-SQL workarounds.
 
-const MIN_INTERVAL_MS = 20 * 60 * 60 * 1000; // 20h
 // ponytail: steady-state cap sized for the actual delta (a few posts/day), not the backfill.
 // If an account posts >5x between two ~20-24h scans, the overflow is silently missed next
 // run too (cursor advances past it) — raise this if a specific account looks incomplete.
 const POSTS_CAP = 5;       // steady-state cap per platform per run
 const BACKFILL_CAP = 150;  // one-time deeper pull on a business's first-ever scrape (no cursor yet)
+// ponytail: engagement refresh — while the business has a post from the last REFRESH_DAYS,
+// re-pull that window (up to REFRESH_CAP items) every daily run so likes/comments stay current.
+// Cost ceiling: ~REFRESH_CAP Apify items per platform per business per day while the account
+// is active (and the postsDeltaSignal skip is bypassed). Shrink REFRESH_CAP if Apify spend climbs.
+const REFRESH_DAYS = 7;
+const REFRESH_CAP = 30;
 
 function normalizeUrl(url: string | null): string | null {
   if (!url) return null;
@@ -78,11 +84,19 @@ async function scrapeAndSave(
 
   let rawPosts: any[] = [];
   let apifyError: string | null = null;
-  const onlyPostsNewerThan = (!fullBackfill && maxPostedAt) ? maxPostedAt.toISOString().slice(0, 10) : null;
+  let onlyPostsNewerThan = (!fullBackfill && maxPostedAt) ? maxPostedAt.toISOString().slice(0, 10) : null;
+
+  // Engagement refresh (repeat scrapes only): a post from the last REFRESH_DAYS means
+  // its likes/comments are still moving, so widen the window back to cover it.
+  const refreshSince = new Date(now.getTime() - REFRESH_DAYS * 86_400_000);
+  const refreshRecent = !!onlyPostsNewerThan
+    && existing.some(p => p.posted_at && p.posted_at >= refreshSince && p.posted_at <= now);
+  const refreshSinceDay = refreshSince.toISOString().slice(0, 10);
+  if (refreshRecent && refreshSinceDay < onlyPostsNewerThan!) onlyPostsNewerThan = refreshSinceDay;
 
   // First-ever scrape (no cursor yet) pulls a deeper one-time backfill; repeat
   // scrapes stay at the steady-state cap since onlyPostsNewerThan already scopes them.
-  let platformCap = onlyPostsNewerThan ? POSTS_CAP : BACKFILL_CAP;
+  let platformCap = refreshRecent ? REFRESH_CAP : onlyPostsNewerThan ? POSTS_CAP : BACKFILL_CAP;
   // A 150-post backfill run takes noticeably longer on Apify's side than a
   // steady-state few-posts run — give it more polling time or it gets cut off
   // (rawPosts=[]) while the actor is still legitimately working.
@@ -90,8 +104,9 @@ async function scrapeAndSave(
 
   // Profile-scrape cost signal (see postsDeltaSignal.ts) — only consulted on the
   // steady-state path; never allowed to suppress or shrink the first-ever backfill pull.
+  // Ignored during an engagement refresh: "no new posts" doesn't mean old counts are fresh.
   let skipApifyCall = false;
-  if (onlyPostsNewerThan && override) {
+  if (onlyPostsNewerThan && override && !refreshRecent) {
     if (override.kind === 'skip') skipApifyCall = true;
     else if (override.kind === 'clamped') platformCap = override.limit;
   }
@@ -112,6 +127,12 @@ async function scrapeAndSave(
       ...(onlyPostsNewerThan ? { onlyPostsNewerThan } : {}),
     }, backfillWaitMs ?? 120_000, 160, (msg) => { apifyError = msg; });
   }
+
+  // Apify answers a page it can't read with a placeholder item ({ url, error: 'no_items', ... });
+  // saved as-is it became a "post" holding only the page link.
+  const placeholder = rawPosts.find(p => p?.error);
+  if (placeholder) apifyError ??= `${placeholder.error}: ${placeholder.errorDescription ?? ''}`;
+  rawPosts = rawPosts.filter(p => !p?.error);
 
   let upserted = 0;
 
@@ -171,6 +192,9 @@ async function scrapeAndSave(
       (contentHash && existingByHash.get(contentHash)) ||
       null;
 
+    const likes = typeof (post.likesCount ?? post.diggCount ?? post.likes) === 'number' ? (post.likesCount ?? post.diggCount ?? post.likes) : null;
+    const comments = typeof (post.commentsCount ?? post.commentCount ?? post.comments) === 'number' ? (post.commentsCount ?? post.commentCount ?? post.comments) : null;
+
     if (matchedRow) {
       await prisma.businessPost.update({
         where: { id: matchedRow.id },
@@ -181,6 +205,9 @@ async function scrapeAndSave(
           external_post_id: matchedRow.external_post_id ?? externalId,
           post_url: matchedRow.post_url ?? postUrl,
           content_hash: contentHash ?? matchedRow.content_hash,
+          // undefined = leave column as-is when the scrape didn't return a count
+          likes: likes ?? undefined,
+          comments_count: comments ?? undefined,
         },
       }).catch(() => {});
       if (!matchedRow.analyzed_at || (!matchedRow.video_analyzed_at && (rawVideoUrl || matchedRow.video_url))) {
@@ -191,9 +218,6 @@ async function scrapeAndSave(
       }
       continue;
     }
-
-    const likes = typeof (post.likesCount ?? post.diggCount ?? post.likes) === 'number' ? (post.likesCount ?? post.diggCount ?? post.likes) : null;
-    const comments = typeof (post.commentsCount ?? post.commentCount ?? post.comments) === 'number' ? (post.commentsCount ?? post.commentCount ?? post.comments) : null;
 
     try {
       const created = await prisma.businessPost.create({
@@ -230,9 +254,8 @@ export async function collectOwnSocialPosts(req: Request, res: Response) {
   };
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
-  if (!force && shouldSkipAgent(businessProfileId, 'collectOwnSocialPosts', MIN_INTERVAL_MS)) {
-    return res.json({ upserted: 0, skipped: true, reason: 'ran_recently' });
-  }
+  const { skip } = await socialGate(businessProfileId, 'collectOwnSocialPosts', { force });
+  if (skip) return res.json({ upserted: 0, skipped: true, reason: skip });
 
   const startTime = new Date().toISOString();
   try {

@@ -2,7 +2,8 @@ import { randomUUID } from 'crypto';
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
-import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { setLastRun } from '../../lib/agentCache';
+import { socialGate, socialCompetitors } from '../../lib/planLimits';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
@@ -10,7 +11,6 @@ import { findDonorCandidates } from '../../lib/competitorDonor';
 
 // Stories expire ~24h after posting on Instagram, so this needs to run far more
 // often than the 20h post scraper to actually catch them before they vanish.
-const MIN_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6h
 const STORIES_ACTOR = 'dLL7b34nRrgN6ZV24'; // datavoyantlab~advanced-instagram-stories-scraper
 // ponytail: caps how many analyzeCreative calls run at once — shares the same 8-connection
 // Postgres pool budget as the other onboarding scans; see collectCompetitorSocialPosts.ts's
@@ -48,9 +48,8 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
   const { businessProfileId, force } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
-  if (!force && shouldSkipAgent(businessProfileId, 'collectCompetitorSocialStories', MIN_INTERVAL_MS)) {
-    return res.json({ upserted: 0, skipped: true, reason: 'ran_recently' });
-  }
+  const { limits, skip } = await socialGate(businessProfileId, 'collectCompetitorSocialStories', { force, stories: true });
+  if (skip) return res.json({ upserted: 0, skipped: true, reason: skip });
 
   const startTime = new Date().toISOString();
   try {
@@ -62,7 +61,7 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
     const allCompetitors = await prisma.competitor.findMany({
       where: { linked_business: businessProfileId },
     });
-    const competitors = allCompetitors.filter((c: any) => !c.not_relevant && c.tracking_status === 'approved');
+    const competitors = socialCompetitors(allCompetitors.filter((c: any) => !c.not_relevant && c.tracking_status === 'approved'), limits);
 
     // username -> competitor, deduped (two competitors sharing a handle is not expected)
     const byUsername = new Map<string, any>();

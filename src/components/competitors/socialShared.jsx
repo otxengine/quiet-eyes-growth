@@ -252,8 +252,9 @@ export function StoryCard({ story, onSelect }) {
         story.media_type === 'video' && story.video_url ? (
           <video
             src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(story.video_url)}`}
+            poster={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(story.media_url)}`}
             className="w-full h-52 object-cover"
-            muted loop playsInline
+            muted loop playsInline preload="none"
           />
         ) : (
           <img
@@ -279,7 +280,7 @@ export function StoryCard({ story, onSelect }) {
 }
 
 export function AdCard({ ad, onSelect }) {
-  const thumb = ad.media_url || ad.video_url || null;
+  const thumb = ad.media_url || null;
 
   return (
     <div
@@ -294,8 +295,15 @@ export function AdCard({ ad, onSelect }) {
           loading="lazy"
           onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
         />
+      ) : ad.video_url ? (
+        // #t=0.1 makes the browser load and show a frame as the tile picture
+        <video
+          src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(ad.video_url)}#t=0.1`}
+          className="w-full h-36 object-cover"
+          muted playsInline preload="metadata"
+        />
       ) : null}
-      <div className={`w-full h-36 bg-muted items-center justify-center text-muted-foreground text-xs ${thumb ? 'hidden' : 'flex'}`}>
+      <div className={`w-full h-36 bg-muted items-center justify-center text-muted-foreground text-xs ${thumb || ad.video_url ? 'hidden' : 'flex'}`}>
         {ad.is_active ? '📣 מודעה' : PLATFORM_LABELS[ad.platform] || ad.platform}
       </div>
 
@@ -425,17 +433,23 @@ export function StoryDetailModal({ story, onClose }) {
 
 export function AdDetailModal({ ad, onClose }) {
   if (!ad) return null;
-  const thumb = ad.media_url || ad.video_url;
   return (
     <Dialog open={!!ad} onOpenChange={v => !v && onClose()}>
       <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto p-0">
-        {thumb && (
+        {ad.video_url ? (
+          <video
+            src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(ad.video_url)}`}
+            poster={ad.media_url ? `${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(ad.media_url)}` : undefined}
+            className="w-full max-h-64 object-cover"
+            controls muted playsInline
+          />
+        ) : ad.media_url ? (
           <img
-            src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(thumb)}`}
+            src={`${API_BASE}/competitors/proxy-image?url=${encodeURIComponent(ad.media_url)}`}
             alt=""
             className="w-full max-h-64 object-cover"
           />
-        )}
+        ) : null}
         <div className="p-4 space-y-3">
           <div className="flex items-center gap-2 text-xs flex-wrap">
             <span className={`px-2 py-0.5 rounded ${PLATFORM_COLORS[ad.platform] || 'bg-gray-100 text-gray-700'}`}>

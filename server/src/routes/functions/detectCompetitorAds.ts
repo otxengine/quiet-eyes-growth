@@ -4,7 +4,7 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
-import { searchAllAds, hasSearchApiKey, AdResult } from '../../lib/searchapi';
+import { searchAllAds, hasSearchApiKey, AdResult, fullyScannedPlatforms } from '../../lib/searchapi';
 import { hasApifyKey } from '../../lib/apify';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
@@ -79,8 +79,10 @@ async function upsertAdHistory(competitorId: string, businessProfileId: string, 
   return rowsNeedingAnalysis;
 }
 
-const MIN_INTERVAL_MS     = 48 * 60 * 60 * 1000; // 48h between full runs (saves API credits)
-const PER_COMP_INTERVAL_MS = 48 * 60 * 60 * 1000; // skip individual competitor if scanned within 48h
+// 20h (was 48h): the daily competitor report needs every rival's new ads every day.
+// ponytail: cost ceiling ≈ 1 ad-library call per tracked competitor per business per day (donor clones are free).
+const MIN_INTERVAL_MS     = 20 * 60 * 60 * 1000; // between full runs; < 24h so the daily cron never skips
+const PER_COMP_INTERVAL_MS = 20 * 60 * 60 * 1000; // skip individual competitor if scanned within 20h
 
 // Cross-business cache: another business may already have a fresh ad scan of this
 // exact real-world competitor. Checks google_place_id + each set social URL (ads
@@ -129,6 +131,16 @@ async function cloneAdsFromDonor(competitorId: string, businessProfileId: string
        )`,
     competitorId, businessProfileId, donorCompetitorId,
   );
+  // Rows cloned earlier never change above, so take the donor's scan result for them too.
+  await (prisma as any).$executeRawUnsafe(
+    `UPDATE "competitor_ad_history" o
+     SET is_active = d.is_active, last_seen_at = GREATEST(o.last_seen_at, d.last_seen_at)
+     FROM "competitor_ad_history" d
+     WHERE o.competitor_id = $1 AND d.competitor_id = $2 AND o.platform = d.platform
+       AND ( (d.external_ad_id IS NOT NULL AND o.external_ad_id = d.external_ad_id)
+          OR (d.content_hash IS NOT NULL AND o.content_hash = d.content_hash) )`,
+    competitorId, donorCompetitorId,
+  ).catch((e: any) => console.warn('[detectCompetitorAds] donor status sync failed:', e.message));
 
   const donorComp = await prisma.competitor.findUnique({ where: { id: donorCompetitorId } });
   if (donorComp) {
@@ -163,9 +175,9 @@ async function cloneAdsFromDonor(competitorId: string, businessProfileId: string
  *
  * Requires: SEARCHAPI_API_KEY env var
  */
-// ponytail: onboarding needs every approved competitor scanned, not just the
-// daily cron's top-6 — this soft ceiling (not the plan's competitor cap, which
-// is Infinity on Pro/Enterprise) bounds worst-case cost/duration for outliers.
+// ponytail: every approved competitor is scanned (daily cron and onboarding alike) —
+// this soft ceiling (not the plan's competitor cap, which is Infinity on
+// Pro/Enterprise) bounds worst-case cost/duration for outliers.
 const MAX_ADS_COMPETITORS_ALL = parseInt(process.env.MAX_ADS_COMPETITORS_ALL || '20', 10);
 // ponytail: 2-wide, not 3 — server/src/db.ts caps the Postgres pool at 8 connections,
 // shared with 4 other DB-heavy onboarding scans, and each competitor batch now also
@@ -176,6 +188,7 @@ const ADS_BATCH_CONCURRENCY = 2;
 const ANALYSIS_CONCURRENCY = 2;
 
 export async function detectCompetitorAds(req: Request, res: Response) {
+  // allCompetitors now only picks batched (onboarding) vs sequential (cron) processing.
   const { businessProfileId, allCompetitors } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
@@ -197,7 +210,7 @@ export async function detectCompetitorAds(req: Request, res: Response) {
     const competitors = await prisma.competitor.findMany({
       where: { linked_business: businessProfileId, not_relevant: false, tracking_status: 'approved' },
       orderBy: { last_scanned: 'asc' },
-      take: allCompetitors ? MAX_ADS_COMPETITORS_ALL : 6,
+      take: MAX_ADS_COMPETITORS_ALL,
     });
 
     if (competitors.length === 0) {
@@ -236,6 +249,7 @@ export async function detectCompetitorAds(req: Request, res: Response) {
           ? c.facebook_url.replace(/^https?:\/\/(www\.)?facebook\.com\//, '').split(/[/?#]/)[0].replace(/^@/, '') || null
           : null;
 
+        const scanStart = new Date().toISOString();
         const ads = await searchAllAds(comp.name, profile.category || '', profile.city || '', fbHandle, c.facebook_url || null);
 
         // ── Update competitor record ─────────────────────────────────────────
@@ -284,6 +298,16 @@ export async function detectCompetitorAds(req: Request, res: Response) {
 
         // Persist ad history (append-only upsert)
         const adRowsNeedingAnalysis = await upsertAdHistory(comp.id, businessProfileId, ads);
+        // Every ad this scan returned now has last_seen_at >= scanStart; older ones have ended.
+        const endedPlatforms = fullyScannedPlatforms(ads);
+        if (endedPlatforms.length) {
+          await (prisma as any).$executeRawUnsafe(
+            `UPDATE "competitor_ad_history" SET is_active = false
+             WHERE competitor_id = $1 AND is_active AND platform = ANY($2::text[])
+               AND COALESCE(last_seen_at, first_seen_at) < $3::timestamptz`,
+            comp.id, endedPlatforms, scanStart,
+          ).catch((e: any) => console.warn('[detectCompetitorAds] mark-ended update failed:', e.message));
+        }
 
         // Analyze ad creatives (topic/offer/hooks/style/cta) — new ads, plus a
         // backfill for existing ads never analyzed. Best-effort, never blocks the agent,
@@ -476,6 +500,8 @@ Return ONLY valid JSON. ALL string values MUST be in Hebrew:
         await Promise.allSettled(competitors.slice(i, i + ADS_BATCH_CONCURRENCY).map(processOne));
       }
     } else {
+      // ponytail: sequential so the 07:00 cron stays gentle on the shared pool; a business
+      // with ~20 un-donated rivals takes ~20 serial scans — batch here if it starts overrunning 10:00.
       for (const comp of competitors) {
         await processOne(comp);
       }

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
+import { planLimits } from '../../lib/planLimits';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
 import { publishEvent } from '../../lib/eventBus';
@@ -10,11 +11,6 @@ import { enrichCompetitorUrls } from './enrichCompetitorUrls';
 import { getPlaceDetails, PlaceDetails } from '../../lib/googlePlaces';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
-
-// ponytail: inline from src/lib/planConfig.js — update both if plan limits change
-const PLAN_COMPETITOR_LIMITS: Record<string, number> = {
-  free_trial: 3, free: 3, starter: 5, growth: 10, pro: Infinity, enterprise: Infinity,
-};
 
 const PLACE_DETAILS_CONCURRENCY = 5;
 // ponytail: cap enrichment volume — editorialSummary is a paid Place Details call;
@@ -360,7 +356,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
     // business_profiles.plan_id is never written after row creation (stays at its "free"
     // default forever) — billing webhooks write the live plan into subscription_plan instead.
     const planId: string = (profile as any).subscription_plan || 'free_trial';
-    const maxCompetitors = PLAN_COMPETITOR_LIMITS[planId] ?? 3;
+    const maxCompetitors = planLimits(planId).competitors_max;
     if (maxCompetitors !== Infinity) {
       const activeCount = existingCompetitors.filter((c: any) => !c.not_relevant && !c.is_dismissed).length;
       const headroom = Math.max(0, maxCompetitors - activeCount);

@@ -8,19 +8,25 @@ const IL_TZ = 'Asia/Jerusalem';
 export function israelLocalToUTC(dateStr: string, timeStr: string): Date {
   const [y, m, d] = dateStr.split('-').map(Number);
   const [hh, mm] = timeStr.split(':').map(Number);
-  const guess = new Date(Date.UTC(y, m - 1, d, hh, mm, 0));
+  const guess = Date.UTC(y, m - 1, d, hh, mm, 0);
 
   const dtf = new Intl.DateTimeFormat('en-US', {
     timeZone: IL_TZ, hour12: false,
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
   });
-  const parts = Object.fromEntries(dtf.formatToParts(guess).map(p => [p.type, p.value])) as Record<string, string>;
-  const readAsUTC = Date.UTC(
-    Number(parts.year), Number(parts.month) - 1, Number(parts.day),
-    Number(parts.hour) % 24, Number(parts.minute), Number(parts.second),
-  );
-  return new Date(guess.getTime() + (guess.getTime() - readAsUTC));
+  // Israel's UTC offset (ms) in effect at instant `at`.
+  const offsetAt = (at: number) => {
+    const parts = Object.fromEntries(dtf.formatToParts(new Date(at)).map(p => [p.type, p.value])) as Record<string, string>;
+    return Date.UTC(
+      Number(parts.year), Number(parts.month) - 1, Number(parts.day),
+      Number(parts.hour) % 24, Number(parts.minute), Number(parts.second),
+    ) - at;
+  };
+  // Two passes: when a DST switch lies between `guess` and the answer (e.g. local
+  // midnight on 2026-10-25), the offset at `guess` is the wrong one — re-read it
+  // at the first estimate.
+  return new Date(guess - offsetAt(guess - offsetAt(guess)));
 }
 
 const toMinutes = (hhmm: string) => {

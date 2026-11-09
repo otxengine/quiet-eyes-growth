@@ -34,7 +34,7 @@ import { registerAllHandlers } from './events/EventChoreographer';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+import { generalLimiter, strictLimiter } from './middleware/rateLimits';
 import entityRouter from './routes/entities';
 import functionRouter from './routes/functions/index';
 import agentTriggerRouter from './routes/agentTrigger';
@@ -86,29 +86,6 @@ if (process.env.TRUST_PROXY_HOPS) app.set('trust proxy', Number(process.env.TRUS
 
 // ── Security headers ───────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false })); // CSP handled by frontend
-
-// ── Rate limiting ──────────────────────────────────────────────────────────
-// General API: 1500 requests per 15 minutes per IP. A page load makes 12-25 API calls, so the
-// old 300 locked out a normal user after about 15 page views. Abuse is also capped at the edge
-// (prod WAF: 2000 requests per 5 minutes per IP); expensive endpoints keep strictLimiter below.
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 1500,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many requests, please try again later' },
-  skip: (req) => req.headers['x-admin-key'] === (process.env.ADMIN_SECRET || '__unset__'),
-});
-
-// Strict limiter for expensive LLM/scan endpoints: 20 per 15 min
-const strictLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Rate limit exceeded for scan/AI endpoints' },
-  skip: (req) => req.headers['x-admin-key'] === (process.env.ADMIN_SECRET || '__unset__'),
-});
 
 const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .split(',')
@@ -401,7 +378,7 @@ app.get('/api/debug/:bpId', async (req: any, res: any) => {
   });
 });
 
-app.listen(PORT, async () => {
+const httpServer = app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
   const { prisma: db } = await import('./db');
 
@@ -418,6 +395,20 @@ app.listen(PORT, async () => {
     status          TEXT NOT NULL DEFAULT 'ok',
     error_message   TEXT
   )`);
+  await sql(`CREATE TABLE IF NOT EXISTS reports (
+    id              TEXT PRIMARY KEY,
+    created_date    TIMESTAMP(3) NOT NULL DEFAULT NOW(),
+    linked_business TEXT NOT NULL,
+    report_type     TEXT NOT NULL,
+    period_start    TIMESTAMP(3) NOT NULL,
+    period_end      TIMESTAMP(3) NOT NULL,
+    status          TEXT NOT NULL,
+    data            JSONB NOT NULL,
+    summary         JSONB,
+    cost_usd        DOUBLE PRECISION
+  )`);
+  await sql(`CREATE UNIQUE INDEX IF NOT EXISTS reports_linked_business_report_type_period_start_key ON reports(linked_business, report_type, period_start)`);
+  await sql(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS pdf_url TEXT`);
   await sql(`CREATE TABLE IF NOT EXISTS agent_data_bus (
     id           SERIAL PRIMARY KEY,
     event_type   TEXT NOT NULL,
@@ -525,8 +516,7 @@ app.listen(PORT, async () => {
     link            TEXT,
     first_seen_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_seen_at    TIMESTAMPTZ,
-    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
-    raw_json        JSONB
+    is_active       BOOLEAN NOT NULL DEFAULT TRUE
   )`);
   await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS linked_business TEXT`);
   await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS comments_count INT`);
@@ -541,7 +531,6 @@ app.listen(PORT, async () => {
   // separate from media_url (thumbnail); video_analyzed_at gates one-time video analysis.
   await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS video_url TEXT`);
   await sql(`ALTER TABLE competitor_posts ADD COLUMN IF NOT EXISTS video_analyzed_at TIMESTAMPTZ`);
-  await sql(`ALTER TABLE competitor_ad_history ALTER COLUMN raw_json TYPE TEXT USING raw_json::TEXT`);
   await sql(`ALTER TABLE competitor_ad_history ADD COLUMN IF NOT EXISTS linked_business TEXT`);
   await sql(`ALTER TABLE competitor_ad_history ADD COLUMN IF NOT EXISTS media_url TEXT`);
   await sql(`ALTER TABLE competitor_ad_history ADD COLUMN IF NOT EXISTS video_url TEXT`);
@@ -1543,3 +1532,8 @@ app.listen(PORT, async () => {
 
   startScheduler();
 });
+
+// Keep idle sockets open longer than the ALB's 900s idle timeout (infra/lib/qe-stack.ts). With Node's 5s
+// default the ALB reuses a socket Node just closed and answers 502 without the request reaching the app.
+httpServer.keepAliveTimeout = 905_000;
+httpServer.headersTimeout = 906_000;

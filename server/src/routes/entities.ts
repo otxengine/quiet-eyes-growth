@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
+import { planLimits } from '../lib/planLimits';
 import { getUserId, isAdminKeyRequest } from '../middleware/auth';
 import { getUserEmail, getUserBusinessIds, getUserWritableBusinessIds } from '../lib/ownership';
 import { cleanupCompetitorsByRadius } from '../lib/competitorRadiusCleanup';
@@ -262,6 +263,18 @@ router.get('/:entity', async (req: Request, res: Response) => {
     if (req.params.entity === 'BusinessProfile') {
       // BusinessProfile: scope to records owned by this user
       where.created_by = userId;
+    } else if (req.params.entity === 'SectorKnowledge') {
+      // Sector-wide aggregates have no linked_business column — scope to the sectors of the user's businesses.
+      const owned = await prisma.businessProfile.findMany({
+        where: { id: { in: await getUserBusinessIds(userId) } },
+        select: { category: true },
+      });
+      const sectors = owned.map(b => b.category).filter(Boolean);
+      if (filter.sector !== undefined && !sectors.includes(filter.sector)) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+      if (sectors.length === 0) return res.json([]);
+      where.sector = filter.sector ?? { in: sectors };
     } else {
       // All other entities: verify the requested linked_business belongs to this user
       const requestedBizId = filter.linked_business as string | undefined;
@@ -300,11 +313,6 @@ router.get('/:entity', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
-// ponytail: inline from src/lib/planConfig.js — update both if plan limits change
-const PLAN_COMPETITOR_LIMITS: Record<string, number> = {
-  free_trial: 3, free: 3, starter: 5, growth: 10, pro: Infinity, enterprise: Infinity,
-};
 
 // Billing and tenancy fields: only the server (Paddle webhook, org routes) or the admin key sets these.
 const PROTECTED_FIELDS = ['subscription_plan', 'plan_id', 'subscription_status', 'stripe_customer_id', 'subscription_started_at', 'organization_id'];
@@ -355,7 +363,7 @@ router.post('/:entity', async (req: Request, res: Response) => {
         where: { id: data.linked_business }, select: { subscription_plan: true },
       });
       const planId = biz?.subscription_plan || 'free_trial';
-      const maxCompetitors = PLAN_COMPETITOR_LIMITS[planId] ?? 3;
+      const maxCompetitors = planLimits(planId).competitors_max;
       if (maxCompetitors !== Infinity) {
         const activeCount = await (prisma as any).competitor.count({
           where: {

@@ -9,6 +9,12 @@
 const queryRawUnsafe = jest.fn();
 const executeRawUnsafe = jest.fn().mockResolvedValue(undefined);
 
+// Plan gating is covered by planLimits.test.ts; this file tests what the collector does once it runs.
+jest.mock('../lib/planLimits', () => ({
+  socialGate: jest.fn().mockResolvedValue({ limits: {}, skip: null }),
+  socialCompetitors: (competitors: any[]) => competitors,
+}));
+
 jest.mock('../db', () => ({
   prisma: {
     competitor: { findMany: jest.fn() },
@@ -117,4 +123,16 @@ test('competitorPlatformOverrides is ignored on the first-ever backfill path (ne
 
   expect(fbCall()).toBeTruthy();
   expect(fbCall()![1]).toMatchObject({ resultsLimit: 75 });
+});
+
+test('an Apify "no items" placeholder is not stored as a post', async () => {
+  queryRawUnsafe.mockResolvedValueOnce([]);
+  (runApifyActor as jest.Mock).mockResolvedValue([
+    { url: COMP.facebook_url, error: 'no_items', errorDescription: 'Empty or private data for provided input' },
+  ]);
+
+  await collectCompetitorSocialPosts({ body: { businessProfileId: 'b1' } } as any, mockRes());
+
+  const inserts = executeRawUnsafe.mock.calls.filter(([sql]) => /INSERT INTO competitor_posts/.test(sql));
+  expect(inserts).toHaveLength(0);
 });

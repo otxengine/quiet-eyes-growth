@@ -1,18 +1,13 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
-import { findPlaceId, getPlaceDetails } from '../../lib/googlePlaces';
-import { normReviewOrigin } from '../../lib/signalGuard';
-import { serpGoogleMapsReviews, firstValidDate } from '../../lib/serpapi';
+import { findPlaceId } from '../../lib/googlePlaces';
 import { submitGoogleReviewsTask, hasDataForSeoCreds } from '../../lib/dataforseo';
-import { batchExtractTopics } from '../../lib/reviewTaxonomy';
 import { getSectorProfile } from '../../lib/businessProfile';
 import { resolveTopicSet } from '../../lib/reviewTopicPacks';
 import { backfillTopicsFor } from '../../lib/reviewPostProcessing';
 import { findDonorCandidates } from '../../lib/competitorDonor';
 
-const MAX_REVIEWS = 300;
-const DATAFORSEO_REVIEWS_ENABLED = process.env.DATAFORSEO_REVIEWS_ENABLED === 'true';
 const SERVER_BASE_URL = process.env.SERVER_BASE_URL || 'http://localhost:3007';
 // This function has no freshness guard of its own (unlike the other collect
 // agents) — reusing its real-world daily cadence as the donor-freshness window.
@@ -20,9 +15,9 @@ const REVIEW_DONOR_FRESHNESS_MS = 24 * 60 * 60 * 1000;
 
 /**
  * KAN-121 — Competitor Google review ingest.
- * Backfills up to 300 Google reviews per tracked competitor using:
- *   1. SerpAPI google_maps_reviews (paginated, up to 300) when SERPAPI_KEY is set
- *   2. Google Places API (up to 5 reviews) as fallback
+ * Per tracked competitor: clone fresh reviews from another business tracking the same place (donor),
+ * otherwise submit a DataForSEO reviews task — the only review source. Its webhook
+ * (routes/webhooks/dataforseo.ts) writes, links and topic-tags the reviews when the task completes.
  *
  * AC3/AC4 guarantees:
  *   - response_status is NULL → rows never appear in the ops inbox / autoRespondToReviews
@@ -44,6 +39,8 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
     let totalNew = 0;
     let tasksSubmitted = 0;
     const perCompetitor: Array<{ name: string; new: number }> = [];
+    const dataforseoOn = process.env.DATAFORSEO_REVIEWS_ENABLED === 'true' && hasDataForSeoCreds();
+    if (!dataforseoOn) console.warn(`[collectCompetitorReviews] DataForSEO reviews disabled or missing credentials — no competitor reviews collected for business ${businessProfileId}`);
 
     for (const comp of competitors) {
       // Resolve Google place_id (cached on competitor row)
@@ -95,13 +92,14 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
                  SELECT 1 FROM reviews o
                  WHERE o.linked_competitor = $2
                    AND ( (d.google_review_id IS NOT NULL AND o.google_review_id = d.google_review_id)
-                      OR LEFT(o.text, 50) = LEFT(d.text, 50) )
+                      -- star-only/short texts can't identify a review: '' would match every other ''
+                      OR (length(d.text) >= 5 AND LEFT(o.text, 50) = LEFT(d.text, 50)) )
                )`,
             businessProfileId, comp.id, donorCompetitorId,
           ) as number;
 
           const donorBusiness = donors.find(d => d.id === donorCompetitorId)?.linked_business;
-          console.log(`[collectCompetitorReviews] cloned ${cloned} reviews for ${comp.name} from donor ${donorCompetitorId} (business ${donorBusiness}) — skipped SerpAPI/DataForSEO`);
+          console.log(`[collectCompetitorReviews] cloned ${cloned} reviews for ${comp.name} from donor ${donorCompetitorId} (business ${donorBusiness}) — skipped DataForSEO`);
           perCompetitor.push({ name: comp.name, new: cloned });
           totalNew += cloned;
           await backfillTopicsFor({ linked_competitor: comp.id }, topicSet);
@@ -109,17 +107,8 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
         }
       }
 
-      // Dedup: existing ids and text-keys already stored for this competitor
-      const existing = await (prisma.review as any).findMany({
-        where: { linked_competitor: comp.id },
-        select: { google_review_id: true, text: true },
-      }) as Array<{ google_review_id: string | null; text: string }>;
-      const existingIds  = new Set(existing.map(r => r.google_review_id).filter(Boolean));
-      const existingKeys = new Set(existing.map(r => (r.text || '').substring(0, 50)));
-
-      // Path 1a: DataForSEO reviews task — async (task_post → postback), never returns
-      // reviews inline; results are written by the postback handler when the task completes.
-      if (DATAFORSEO_REVIEWS_ENABLED && hasDataForSeoCreds()) {
+      // DataForSEO reviews task — async (task_post → postback); the webhook writes the reviews.
+      if (dataforseoOn) {
         try {
           const { taskId, costUsd } = await submitGoogleReviewsTask({
             placeId,
@@ -144,80 +133,7 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
           console.warn('[collectCompetitorReviews] DataForSEO reviews task_post failed:', err.message);
         }
       }
-
-      // Path 1b: SerpAPI (paginated, up to 300) — active when DataForSEO is disabled
-      let rawReviews: any[] = DATAFORSEO_REVIEWS_ENABLED ? [] : await serpGoogleMapsReviews(placeId, MAX_REVIEWS);
-
-      // Path 2: Google Places API fallback (≤5 reviews, always available)
-      if (rawReviews.length === 0) {
-        const details = await getPlaceDetails(placeId);
-        rawReviews = details.reviews;
-      }
-
-      const pending: Array<{
-        reviewId: string; text: string; rating: number;
-        sentiment: string; reviewerName: string; publishTime: string;
-      }> = [];
-
-      for (const gr of rawReviews) {
-        // Normalise across SerpAPI shape (gr.user.name / gr.snippet / gr.review_id)
-        // and Places API (New) shape (gr.authorAttribution.displayName / gr.text.text / gr.name)
-        const text        = gr.snippet || gr.text?.text || gr.comment || '';
-        const authorName  = gr.user?.name || gr.authorAttribution?.displayName || 'לקוח';
-        const rating      = gr.rating ?? 0;
-        // gr.iso_date (SerpAPI) / gr.publishTime (Places API) are real timestamps;
-        // gr.date (SerpAPI) is relative text ("3 months ago") and unparseable — never prefer it.
-        const publishTime = firstValidDate(gr.iso_date, gr.publishTime) ?? new Date().toISOString();
-        const reviewId    = gr.review_id || gr.name || `comp_${comp.id}_${authorName}_${rating}`;
-        const textKey     = text.substring(0, 50);
-
-        if (!text || text.length < 5) continue;
-        if (existingIds.has(reviewId) || existingKeys.has(textKey)) continue;
-
-        const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
-        pending.push({ reviewId, text, rating, sentiment, reviewerName: authorName, publishTime });
-        existingIds.add(reviewId);
-        existingKeys.add(textKey);
-        if (pending.length + existing.length >= MAX_REVIEWS) break;
-      }
-
-      if (pending.length > 0) {
-        const topicsArr = await batchExtractTopics(
-          pending.map(p => ({ text: p.text })),
-          undefined,
-          topicSet,
-        );
-
-        for (let i = 0; i < pending.length; i++) {
-          const { reviewId, text, rating, sentiment, reviewerName, publishTime } = pending[i];
-          const { topics, topic_sentiment } = topicsArr[i];
-          try {
-            await (prisma.review as any).create({
-              data: {
-                platform:          'Google',
-                rating,
-                text:              text.substring(0, 500),
-                reviewer_name:     reviewerName,
-                sentiment,
-                // AC3: no response_status → never enters ops inbox or autoRespondToReviews
-                response_status:   null,
-                source_url:        `https://www.google.com/maps/place/?q=place_id:${placeId}`,
-                source_origin:     normReviewOrigin('google_places', 'collectCompetitorReviews'),
-                google_review_id:  reviewId,
-                is_verified:       true,
-                created_at:        publishTime,
-                linked_business:   businessProfileId,
-                linked_competitor: comp.id,  // AC4: scoped to competitor
-                topics,
-                topic_sentiment,
-              },
-            });
-            totalNew++;
-          } catch { continue; }
-        }
-      }
-
-      perCompetitor.push({ name: comp.name, new: pending.length });
+      perCompetitor.push({ name: comp.name, new: 0 }); // new reviews are counted by the webhook
 
       // Backfill: existing reviews that were stored before topic extraction was added.
       // Runs every pass regardless of `pending.length`, since collection is dedup'd and

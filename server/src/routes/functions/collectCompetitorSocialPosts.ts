@@ -2,7 +2,8 @@ import { randomUUID } from 'crypto';
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { runApifyActor, hasApifyKey } from '../../lib/apify';
-import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
+import { setLastRun } from '../../lib/agentCache';
+import { socialGate, socialCompetitors } from '../../lib/planLimits';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
@@ -16,6 +17,12 @@ const MIN_INTERVAL_MS = 20 * 60 * 60 * 1000; // 20h
 // run too (cursor advances past it) — raise this if a specific account looks incomplete.
 const POSTS_CAP = 5;       // steady-state cap per platform per run
 const BACKFILL_CAP = 75;   // one-time deeper pull on a competitor's first-ever scrape (no cursor yet)
+// ponytail: engagement refresh — while a competitor has a post from the last REFRESH_DAYS,
+// re-pull that window (up to REFRESH_CAP items) every daily run so likes/comments stay current.
+// Cost ceiling: ~REFRESH_CAP Apify items per platform per competitor per day while the account
+// is active (and the postsDeltaSignal skip is bypassed). Shrink REFRESH_CAP if Apify spend climbs.
+const REFRESH_DAYS = 7;
+const REFRESH_CAP = 30;
 // ponytail: 2-wide batches, not full concurrency — server/src/db.ts caps the
 // Postgres pool at 8 connections (10s pool_timeout); this runs alongside 4 other
 // DB-heavy onboarding scans for the same business, and each scrape batch now also
@@ -68,7 +75,7 @@ function normalizeUrl(url: string | null): string | null {
 async function scrapeAndSave(
   comp: any,
   platform: string,
-  url: string | null,
+  url: string,
   businessProfileId: string,
   fullBackfill = false,
   override?: PostsDeltaSignal,
@@ -154,27 +161,26 @@ async function scrapeAndSave(
         businessProfileId, comp.id, donorCompetitorId, platform,
       ) as number;
 
+      // NOT EXISTS above skips posts we already hold, so their likes/comments would
+      // stay frozen at first sight — copy the donor's fresher counts for recent posts.
+      await (prisma as any).$executeRawUnsafe(
+        `UPDATE competitor_posts o SET likes = d.likes, comments_count = d.comments_count
+         FROM competitor_posts d
+         WHERE o.competitor_id = $1 AND d.competitor_id = $2 AND o.platform = $3 AND d.platform = $3
+           AND ( (d.external_post_id IS NOT NULL AND o.external_post_id = d.external_post_id)
+              OR (d.content_hash IS NOT NULL AND o.content_hash = d.content_hash) )
+           AND o.posted_at::timestamptz >= now() - interval '${REFRESH_DAYS} days'`,
+        comp.id, donorCompetitorId, platform,
+      ).catch((e: any) => console.warn('[collectCompetitorSocialPosts] donor engagement refresh failed:', e.message));
+
       const donorBusiness = donors.find(d => d.id === donorCompetitorId)?.linked_business;
       console.log(`[collectCompetitorSocialPosts] cloned ${cloned} posts for ${platform} from donor ${donorCompetitorId} (business ${donorBusiness}) — skipped Apify`);
       return {
-        competitor: comp.name, platform, url: url ?? '',
+        competitor: comp.name, platform, url,
         upserted: Number(cloned) || 0, apify_returned: 0, media_found: 0, media_uploaded: 0,
         elapsed_ms: Date.now() - t0, error: null,
       };
     }
-  }
-
-  // No local URL for this platform yet (e.g. onboarding fired this before the
-  // slower Tavily/DataForSEO URL-enrichment step finished writing it) and no
-  // donor was found via google_place_id either — nothing to scrape. The next
-  // normal run (daily cron) will pick this competitor up once its URL exists.
-  if (!url) {
-    console.log(`[collectCompetitorSocialPosts] ${comp.name} (${platform}): no URL yet and no donor — will retry once URL is enriched`);
-    return {
-      competitor: comp.name, platform, url: '',
-      upserted: 0, apify_returned: 0, media_found: 0, media_uploaded: 0,
-      elapsed_ms: Date.now() - t0, error: null,
-    };
   }
 
   // Best-effort creative analysis for a row that was never analyzed — used both
@@ -207,16 +213,24 @@ async function scrapeAndSave(
 
   // Only set on repeat scrapes (maxPostedAt exists) — a competitor's first-ever
   // scrape still pulls the full capped history with no since-date filter.
-  const onlyPostsNewerThan = (!fullBackfill && maxPostedAt) ? maxPostedAt.slice(0, 10) : null;
+  let onlyPostsNewerThan = (!fullBackfill && maxPostedAt) ? maxPostedAt.slice(0, 10) : null;
+
+  // Engagement refresh (repeat scrapes only): a post from the last REFRESH_DAYS means
+  // its likes/comments are still moving, so widen the window back to cover it.
+  const refreshSinceIso = new Date(Date.now() - REFRESH_DAYS * 86_400_000).toISOString();
+  const refreshRecent = !!onlyPostsNewerThan
+    && existing.some(p => p.posted_at && p.posted_at >= refreshSinceIso && p.posted_at <= nowIso);
+  if (refreshRecent && refreshSinceIso.slice(0, 10) < onlyPostsNewerThan!) onlyPostsNewerThan = refreshSinceIso.slice(0, 10);
 
   // First-ever scrape (no cursor yet) pulls a deeper one-time backfill; repeat
   // scrapes stay at the steady-state cap since onlyPostsNewerThan already scopes them.
-  let platformCap = onlyPostsNewerThan ? POSTS_CAP : BACKFILL_CAP;
+  let platformCap = refreshRecent ? REFRESH_CAP : onlyPostsNewerThan ? POSTS_CAP : BACKFILL_CAP;
 
   // Profile-scrape cost signal (see postsDeltaSignal.ts) — only consulted on the
   // steady-state path; never allowed to suppress or shrink the first-ever backfill pull.
+  // Ignored during an engagement refresh: "no new posts" doesn't mean old counts are fresh.
   let skipApifyCall = false;
-  if (onlyPostsNewerThan && override) {
+  if (onlyPostsNewerThan && override && !refreshRecent) {
     if (override.kind === 'skip') skipApifyCall = true;
     else if (override.kind === 'clamped') platformCap = override.limit;
   }
@@ -237,6 +251,12 @@ async function scrapeAndSave(
       ...(onlyPostsNewerThan ? { onlyPostsNewerThan } : {}),
     }, 120_000, 160, (msg) => { apifyError = msg; });
   }
+
+  // Apify answers a page it can't read with a placeholder item ({ url, error: 'no_items', ... });
+  // saved as-is it became a "post" holding only the page link.
+  const placeholder = rawPosts.find(p => p?.error);
+  if (placeholder) apifyError ??= `${placeholder.error}: ${placeholder.errorDescription ?? ''}`;
+  rawPosts = rawPosts.filter(p => !p?.error);
 
   const insertErrors: any[] = [];
   let upserted = 0;
@@ -334,6 +354,9 @@ async function scrapeAndSave(
       (contentHash && existingByHash.get(contentHash)) ||
       null;
 
+    const likes    = typeof (post.likesCount    ?? post.diggCount  ?? post.likes)    === 'number' ? (post.likesCount    ?? post.diggCount  ?? post.likes)    : null;
+    const comments = typeof (post.commentsCount ?? post.commentCount ?? post.comments) === 'number' ? (post.commentsCount ?? post.commentCount ?? post.comments) : null;
+
     if (matchedRow) {
       await (prisma as any).$executeRawUnsafe(
         `UPDATE competitor_posts SET
@@ -342,9 +365,11 @@ async function scrapeAndSave(
            video_url = COALESCE($6, video_url),
            external_post_id = COALESCE(external_post_id, $3),
            post_url = COALESCE(post_url, $4),
-           content_hash = COALESCE($5, content_hash)
+           content_hash = COALESCE($5, content_hash),
+           likes = COALESCE($7::int, likes),
+           comments_count = COALESCE($8::int, comments_count)
          WHERE id = $1`,
-        matchedRow.id, upgradedS3, externalId, postUrl, contentHash, rawVideoUrl,
+        matchedRow.id, upgradedS3, externalId, postUrl, contentHash, rawVideoUrl, likes, comments,
       ).catch(() => {});
       const rowVideoUrl = rawVideoUrl || matchedRow.video_url;
       if (!matchedRow.analyzed_at || (!matchedRow.video_analyzed_at && rowVideoUrl)) {
@@ -358,9 +383,6 @@ async function scrapeAndSave(
       if (contentHash)      existingHashes.add(contentHash);
       continue;
     }
-
-    const likes    = typeof (post.likesCount    ?? post.diggCount  ?? post.likes)    === 'number' ? (post.likesCount    ?? post.diggCount  ?? post.likes)    : null;
-    const comments = typeof (post.commentsCount ?? post.commentCount ?? post.comments) === 'number' ? (post.commentsCount ?? post.commentCount ?? post.comments) : null;
 
     const newPostId = randomUUID();
     try {
@@ -445,9 +467,8 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
   };
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
-  if (!force && shouldSkipAgent(businessProfileId, 'collectCompetitorSocialPosts', MIN_INTERVAL_MS)) {
-    return res.json({ upserted: 0, skipped: true, reason: 'ran_recently' });
-  }
+  const { limits, skip } = await socialGate(businessProfileId, 'collectCompetitorSocialPosts', { force });
+  if (skip) return res.json({ upserted: 0, skipped: true, reason: skip });
 
   const startTime = new Date().toISOString();
   try {
@@ -459,7 +480,7 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
     const allCompetitors = await prisma.competitor.findMany({
       where: { linked_business: businessProfileId },
     });
-    const competitors = allCompetitors.filter((c: any) => !c.not_relevant && c.tracking_status === 'approved');
+    const competitors = socialCompetitors(allCompetitors.filter((c: any) => !c.not_relevant && c.tracking_status === 'approved'), limits);
 
     // One-time backfill: repair posts missing linked_business
     for (const comp of competitors) {
@@ -469,12 +490,12 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
       );
     }
 
-    // Build list of (competitor, platform, url) tasks. A missing local URL still
-    // gets a task (url: null) when we have a google_place_id to donor-match on —
-    // e.g. right after onboarding, URL enrichment may not have finished writing
-    // this competitor's URLs yet, but a cross-business donor can still be found
-    // by place_id. scrapeAndSave skips the actual Apify call when url is null.
-    const tasks: Array<{ comp: any; platform: string; url: string | null }> = [];
+    // Build list of (competitor, platform, url) tasks. No URL on this competitor =
+    // no task at all: a google_place_id-only donor match used to clone another
+    // business's posts for a platform this competitor has no account on (that
+    // business's own, possibly wrong, URL) — garbage posts. The daily run picks
+    // the competitor up once a URL is set.
+    const tasks: Array<{ comp: any; platform: string; url: string }> = [];
     const skipped: any[] = [];
 
     for (const comp of competitors) {
@@ -483,13 +504,8 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
         facebook:  (comp as any).facebook_url,
       };
       for (const [platform, url] of Object.entries(urls)) {
-        if (url) {
-          tasks.push({ comp, platform, url });
-        } else if ((comp as any).google_place_id) {
-          tasks.push({ comp, platform, url: null });
-        } else {
-          skipped.push({ competitor: comp.name, platform, status: 'skipped', reason: 'no_url' });
-        }
+        if (url) tasks.push({ comp, platform, url });
+        else skipped.push({ competitor: comp.name, platform, status: 'skipped', reason: 'no_url' });
       }
     }
 

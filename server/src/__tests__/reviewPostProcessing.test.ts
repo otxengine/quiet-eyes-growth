@@ -91,6 +91,14 @@ describe('snapshotRatingHistory', () => {
 });
 
 describe('createNegativeReviewAlerts', () => {
+  test('only looks at own reviews still awaiting a reply (not answered, not competitor rows)', async () => {
+    reviewFindMany.mockResolvedValue([]);
+    await createNegativeReviewAlerts('bp1');
+    expect(reviewFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ linked_business: 'bp1', sentiment: 'negative', response_status: 'pending' }),
+    }));
+  });
+
   test('creates a ProactiveAlert for a recent negative review', async () => {
     reviewFindMany.mockResolvedValue([{ id: 'r1', reviewer_name: 'דני', rating: 1, text: 'גרוע' }]);
     alertFindFirst.mockResolvedValue(null);
@@ -156,6 +164,17 @@ describe('backfillTopicsFor', () => {
     expect(reviewFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ linked_competitor: 'comp1' }),
     }));
+  });
+
+  test('never queries star-only rows, and short rows cannot crowd out real ones', async () => {
+    const short = Array.from({ length: 35 }, (_, i) => ({ id: `s${i}`, text: 'טוב' }));
+    reviewFindMany.mockResolvedValue([...short, { id: 'r1', text: 'שירות מעולה' }]);
+    await backfillTopicsFor({ linked_business: 'bp1' }, {});
+    expect(reviewFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ NOT: { text: '' } }),
+    }));
+    expect(batchExtractTopics).toHaveBeenCalledWith([{ text: 'שירות מעולה' }], undefined, {});
+    expect(reviewUpdate).toHaveBeenCalledTimes(1);
   });
 
   test('skips reviews with text under 5 chars and never calls update for them', async () => {

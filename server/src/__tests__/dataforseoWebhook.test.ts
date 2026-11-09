@@ -6,7 +6,7 @@ jest.mock('../db', () => ({
   prisma: {
     dataForSeoReviewTask: { findUnique: jest.fn(), update: jest.fn() },
     businessProfile:      { findFirst: jest.fn() },
-    review:                { findMany: jest.fn(), create: jest.fn() },
+    review:                { findMany: jest.fn(), createMany: jest.fn(), updateMany: jest.fn() },
   },
 }));
 jest.mock('../lib/automationLog', () => ({ writeAutomationLog: jest.fn().mockResolvedValue(undefined) }));
@@ -23,10 +23,13 @@ jest.mock('../lib/reviewPostProcessing', () => ({
   createNegativeReviewAlerts: jest.fn().mockResolvedValue(undefined),
   publishNewReviewEvents:  jest.fn().mockResolvedValue(undefined),
   backfillTopicsFor:       jest.fn().mockResolvedValue(undefined),
+  reviewLink:    jest.requireActual('../lib/reviewPostProcessing').reviewLink,
+  relinkReviews: jest.requireActual('../lib/reviewPostProcessing').relinkReviews,
 }));
 
 import { prisma } from '../db';
 import { writeAutomationLog } from '../lib/automationLog';
+import { batchExtractTopics } from '../lib/reviewTaxonomy';
 import {
   detectCompetitorMentions, snapshotRatingHistory, createNegativeReviewAlerts,
   publishNewReviewEvents, backfillTopicsFor,
@@ -37,7 +40,8 @@ const taskFindUnique = prisma.dataForSeoReviewTask.findUnique as jest.Mock;
 const taskUpdate     = prisma.dataForSeoReviewTask.update as jest.Mock;
 const bpFindFirst    = prisma.businessProfile.findFirst as jest.Mock;
 const reviewFindMany = prisma.review.findMany as jest.Mock;
-const reviewCreate   = prisma.review.create as jest.Mock;
+const reviewCreate   = prisma.review.createMany as jest.Mock;
+const reviewUpdateMany = prisma.review.updateMany as jest.Mock;
 
 const OLD_ENV = process.env;
 
@@ -74,7 +78,7 @@ beforeEach(() => {
   process.env = { ...OLD_ENV, DATAFORSEO_WEBHOOK_SECRET: 's3cr3t' };
   bpFindFirst.mockResolvedValue({ id: 'bp1', google_place_id: 'ChIJabc' });
   reviewFindMany.mockResolvedValue([]);
-  reviewCreate.mockImplementation(async (args: any) => args.data);
+  reviewCreate.mockImplementation(async (args: any) => ({ count: args.data.length }));
   taskUpdate.mockResolvedValue({});
 });
 
@@ -139,7 +143,7 @@ describe('processDataForSeoReviewsPostback', () => {
     }));
 
     expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ created_at: '2026-08-14T09:23:18.000Z' }),
+      data: [expect.objectContaining({ created_at: '2026-08-14T09:23:18.000Z' })],
     }));
   });
 
@@ -149,7 +153,7 @@ describe('processDataForSeoReviewsPostback', () => {
       result: [{ items: [{ review_text: 'שירות מעולה, ממליץ בחום', rating: { value: 5 }, review_id: 'rev1' }] }],
     }));
 
-    const createdAt = reviewCreate.mock.calls[0][0].data.created_at;
+    const createdAt = reviewCreate.mock.calls[0][0].data[0].created_at;
     expect(new Date(createdAt).getTime()).not.toBeNaN();
   });
 
@@ -169,10 +173,10 @@ describe('processDataForSeoReviewsPostback', () => {
     await processDataForSeoReviewsPostback(taskPayload());
 
     expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
+      data: [expect.objectContaining({
         platform: 'Google', linked_business: 'bp1', response_status: 'pending',
         source_origin: 'dataforseo_google_reviews', google_review_id: 'rev1',
-      }),
+      })],
     }));
     expect(taskUpdate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ status: 'complete', new_reviews_count: 1 }),
@@ -194,13 +198,31 @@ describe('processDataForSeoReviewsPostback', () => {
     });
 
     expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ linked_competitor: 'comp1', response_status: null }),
+      data: [expect.objectContaining({ linked_competitor: 'comp1', response_status: null })],
     }));
     expect(backfillTopicsFor).toHaveBeenCalledWith({ linked_competitor: 'comp1' }, {});
     expect(detectCompetitorMentions).not.toHaveBeenCalled();
     expect(createNegativeReviewAlerts).not.toHaveBeenCalled();
     expect(publishNewReviewEvents).not.toHaveBeenCalled();
     expect(snapshotRatingHistory).not.toHaveBeenCalled();
+  });
+
+  test('competitor review already stored under the same business is skipped by the DB, not counted', async () => {
+    // Competitor dedup only sees linked_competitor rows; (linked_business, google_review_id)
+    // can still collide — createMany skipDuplicates returns count 0 instead of a P2002.
+    taskFindUnique.mockResolvedValue(COMPETITOR_TASK_ROW);
+    reviewCreate.mockResolvedValue({ count: 0 });
+    await processDataForSeoReviewsPostback({
+      tasks: [{
+        id: 'task456', status_code: 20000, cost: 0.01,
+        result: [{ items: [{ review_text: 'לא מרוצה בכלל מהשירות', rating: { value: 1 }, review_id: 'rev2' }] }],
+      }],
+    });
+
+    expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({ skipDuplicates: true }));
+    expect(taskUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'complete', new_reviews_count: 0 }),
+    }));
   });
 
   test('skips items already deduped by google_review_id', async () => {
@@ -212,6 +234,34 @@ describe('processDataForSeoReviewsPostback', () => {
     expect(reviewCreate).not.toHaveBeenCalled();
     expect(taskUpdate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ new_reviews_count: 0 }),
+    }));
+  });
+
+  test('competitor task: skips a review id already stored under another competitor of the same business', async () => {
+    taskFindUnique.mockResolvedValue(COMPETITOR_TASK_ROW);
+    // Filter like the DB would, so a per-competitor lookup can't see the other competitor's rows.
+    const rows = [
+      { linked_business: 'bp1', linked_competitor: 'compOld', google_review_id: 'rev2', text: 'לא מרוצה בכלל מהשירות' },
+      { linked_business: 'bp1', linked_competitor: 'compOld', google_review_id: 'old9', text: 'אוכל טעים ושירות מהיר' },
+    ];
+    reviewFindMany.mockImplementation(async ({ where }: any) =>
+      rows.filter(r => Object.entries(where).every(([k, v]) => (r as any)[k] === v)));
+
+    await processDataForSeoReviewsPostback({
+      tasks: [{
+        id: 'task456', status_code: 20000, cost: 0.01,
+        result: [{ items: [
+          { review_text: 'לא מרוצה בכלל מהשירות', rating: { value: 1 }, review_id: 'rev2' },
+          { review_text: 'אוכל טעים ושירות מהיר', rating: { value: 5 }, review_id: 'rev3' },
+        ] }],
+      }],
+    });
+
+    // rev2 exists for bp1 → skipped before topic tagging; rev3's text matches only another competitor → kept.
+    expect(batchExtractTopics).toHaveBeenCalledWith([{ text: 'אוכל טעים ושירות מהיר' }], undefined, {});
+    expect(reviewCreate).toHaveBeenCalledTimes(1);
+    expect(reviewCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: [expect.objectContaining({ google_review_id: 'rev3', linked_competitor: 'comp1' })],
     }));
   });
 
@@ -231,5 +281,104 @@ describe('processDataForSeoReviewsPostback', () => {
     expect(taskUpdate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ new_reviews_count: 2 }),
     }));
+  });
+});
+
+describe('processDataForSeoReviewsPostback — owner replies on Google (owner_answer)', () => {
+  const item = (review_id: string, owner_answer: string | null) =>
+    ({ review_text: 'שירות מעולה, ממליץ בחום ' + review_id, rating: { value: 5 }, review_id, owner_answer });
+
+  beforeEach(() => reviewUpdateMany.mockResolvedValue({ count: 1 }));
+
+  test('own review already answered on Google is saved as published with the reply; unanswered stays pending', async () => {
+    taskFindUnique.mockResolvedValue(OWN_TASK_ROW);
+    await processDataForSeoReviewsPostback(taskPayload({ result: [{ items: [item('a', 'תודה רבה!'), item('b', null)] }] }));
+    const rows = reviewCreate.mock.calls.map(c => c[0].data[0]);
+    expect(rows[0]).toEqual(expect.objectContaining({ google_review_id: 'a', response_status: 'published', suggested_response: 'תודה רבה!' }));
+    expect(rows[1]).toEqual(expect.objectContaining({ google_review_id: 'b', response_status: 'pending', suggested_response: null }));
+  });
+
+  test('competitor reviews ignore the owner reply (no status, no reply)', async () => {
+    taskFindUnique.mockResolvedValue(COMPETITOR_TASK_ROW);
+    await processDataForSeoReviewsPostback(taskPayload({ id: 'task456', result: [{ items: [item('c', 'תודה')] }] }));
+    expect(reviewCreate.mock.calls[0][0].data[0]).toEqual(expect.objectContaining({ response_status: null, suggested_response: null }));
+  });
+
+  test('a stored pending review answered on Google since is marked published; already-published rows are left alone', async () => {
+    taskFindUnique.mockResolvedValue(OWN_TASK_ROW);
+    reviewFindMany.mockResolvedValue([
+      { google_review_id: 'old1', text: 'x1', linked_competitor: null, source_url: null, response_status: 'pending' },
+      { google_review_id: 'old2', text: 'x2', linked_competitor: null, source_url: null, response_status: 'published' },
+    ]);
+    await processDataForSeoReviewsPostback(taskPayload({ result: [{ items: [item('old1', 'תודה!'), item('old2', 'תודה!')] }] }));
+    expect(reviewCreate).not.toHaveBeenCalled();
+    expect(reviewUpdateMany).toHaveBeenCalledWith({
+      where: { linked_business: 'bp1', linked_competitor: null, google_review_id: 'old1' },
+      data:  { response_status: 'published', suggested_response: 'תודה!' },
+    });
+    expect(reviewUpdateMany).not.toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ google_review_id: 'old2' }), data: expect.objectContaining({ response_status: 'published' }),
+    }));
+  });
+});
+
+describe('processDataForSeoReviewsPostback — star-only reviews', () => {
+  beforeEach(() => taskFindUnique.mockResolvedValue(OWN_TASK_ROW));
+
+  test('imports rating-only reviews (no text) without sending them to the topic LLM', async () => {
+    await processDataForSeoReviewsPostback(taskPayload({
+      result: [{ items: [
+        { review_text: null, rating: { value: 5 }, review_id: 'star1', profile_name: 'א' },
+        { review_text: null, rating: { value: 4 }, review_id: 'star2', profile_name: 'ב' },
+        { review_text: 'שירות מעולה, ממליץ בחום', rating: { value: 5 }, review_id: 'rev1' },
+        { review_text: null, rating: null, review_id: 'empty' },
+      ] }],
+    }));
+
+    const rows = reviewCreate.mock.calls.map(c => c[0].data[0]);
+    expect(rows.map(r => r.google_review_id)).toEqual(['star1', 'star2', 'rev1']); // both star-only kept, no '' text-key collision
+    expect(rows[0]).toEqual(expect.objectContaining({ text: '', rating: 5, topics: null, topic_sentiment: null }));
+    expect(rows[2]).toEqual(expect.objectContaining({ topics: 'service' }));
+    expect(batchExtractTopics).toHaveBeenCalledWith([{ text: 'שירות מעולה, ממליץ בחום' }], undefined, {});
+  });
+});
+
+describe('processDataForSeoReviewsPostback — link to the review itself', () => {
+  const REVIEW_URL = 'https://www.google.com/maps/reviews/data=!4m8!14m7!1m6!2m5!1sRev1';
+  const PLACE_URL  = 'https://www.google.com/maps/place/?q=place_id:ChIJabc';
+  const withLink = (review_url: string) => taskPayload({
+    result: [{ items: [{ review_text: 'שירות מעולה, ממליץ בחום', rating: { value: 5 }, review_id: 'rev1', review_url }] }],
+  });
+  const storedUrl = () => reviewCreate.mock.calls[0][0].data[0].source_url;
+
+  beforeEach(() => {
+    taskFindUnique.mockResolvedValue(OWN_TASK_ROW);
+    reviewUpdateMany.mockResolvedValue({ count: 1 });
+  });
+
+  test('new review stores its own review_url', async () => {
+    await processDataForSeoReviewsPostback(withLink(REVIEW_URL));
+    expect(storedUrl()).toBe(REVIEW_URL);
+  });
+
+  test('a non-https review_url is never stored; falls back to the place page', async () => {
+    await processDataForSeoReviewsPostback(withLink('javascript:alert(1)'));
+    expect(storedUrl()).toBe(PLACE_URL);
+  });
+
+  test('an already-stored review is pointed at its own link once', async () => {
+    reviewFindMany.mockResolvedValue([{ google_review_id: 'rev1', text: 'x', linked_competitor: null, source_url: PLACE_URL }]);
+    await processDataForSeoReviewsPostback(withLink(REVIEW_URL));
+    expect(reviewCreate).not.toHaveBeenCalled();
+    expect(reviewUpdateMany).toHaveBeenCalledWith({
+      where: { linked_business: 'bp1', google_review_id: 'rev1' },
+      data:  { source_url: REVIEW_URL },
+    });
+
+    jest.clearAllMocks();
+    taskFindUnique.mockResolvedValue(OWN_TASK_ROW);
+    reviewFindMany.mockResolvedValue([{ google_review_id: 'rev1', text: 'x', linked_competitor: null, source_url: REVIEW_URL }]);
+    await processDataForSeoReviewsPostback(withLink(REVIEW_URL));
+    expect(reviewUpdateMany).not.toHaveBeenCalled();
   });
 });

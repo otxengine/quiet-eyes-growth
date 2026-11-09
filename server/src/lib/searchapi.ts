@@ -54,22 +54,32 @@ export interface AdResult {
   video_url:      string | null;
 }
 
+// Catalog (dynamic) ads put template placeholders such as {{product.name}} in their ad-level fields.
+const realText = (...vals: any[]): string =>
+  vals.find(v => typeof v === 'string' && v.trim() && !v.includes('{{')) || '';
+
+// Most ads one scan keeps per source; see fullyScannedPlatforms.
+const META_ADS_CAP = 10;
+const GOOGLE_ADS_CAP = 5;
+
 // ── Meta Ads Library ──────────────────────────────────────────────────────────
 export async function searchMetaAds(query: string, country = 'IL'): Promise<AdResult[]> {
   const data = await _fetch({ engine: 'meta_ad_library', q: query, country });
   if (!data?.ads) return [];
 
-  return (data.ads as any[]).slice(0, 10).map(ad => {
+  // Active first, then cap, so a result under the cap means every active ad was returned.
+  return (data.ads as any[]).filter(ad => ad.is_active === true).slice(0, META_ADS_CAP).map(ad => {
     const snap = ad.snapshot || {};
     // Extract body text from cards or direct body
-    const bodyText: string =
-      (snap.cards?.[0]?.body as string) ||
-      (typeof snap.body === 'object' ? snap.body?.text : snap.body) ||
-      snap.link_description || '';
+    const bodyText = realText(
+      snap.cards?.[0]?.body,
+      typeof snap.body === 'object' ? snap.body?.text : snap.body,
+      snap.link_description,
+    );
     const platforms: string[] = ad.publisher_platform || [];
     return {
       platform:       platforms.includes('INSTAGRAM') ? 'instagram' : 'facebook',
-      title:          snap.title || snap.cards?.[0]?.title || '',
+      title:          realText(snap.title, snap.cards?.[0]?.title),
       body:           bodyText,
       cta:            snap.cta_text || snap.cta_type || '',
       link:           snap.link_url || snap.page_profile_uri || '',
@@ -79,10 +89,11 @@ export async function searchMetaAds(query: string, country = 'IL'): Promise<AdRe
       end_date:       ad.end_date   || null,
       audience_est:   null,
       external_ad_id: ad.ad_archive_id ? String(ad.ad_archive_id) : null,
-      media_url:      snap.images?.[0]?.resized_image_url || snap.images?.[0]?.url || snap.cards?.[0]?.image_url || snap.videos?.[0]?.thumbnail || null,
+      media_url:      snap.images?.[0]?.resized_image_url || snap.images?.[0]?.url || snap.cards?.[0]?.image_url ||
+                      snap.videos?.[0]?.video_preview_image_url || snap.videos?.[0]?.thumbnail || null,
       video_url:      snap.videos?.[0]?.video_hd_url || snap.videos?.[0]?.video_sd_url || null,
     } as AdResult;
-  }).filter(a => a.is_active);
+  });
 }
 
 // ── Meta Ads Library (Apify) ──────────────────────────────────────────────────
@@ -92,7 +103,7 @@ export async function searchMetaAds(query: string, country = 'IL'): Promise<AdRe
 export async function searchMetaAdsViaApify(pageUrl: string): Promise<AdResult[]> {
   const items = await runApifyActor(
     'apify~facebook-ads-scraper',
-    { startUrls: [{ url: pageUrl }], activeStatus: 'active', resultsLimit: 10 },
+    { startUrls: [{ url: pageUrl }], activeStatus: 'active', resultsLimit: META_ADS_CAP },
     90_000, 10,
     (msg) => console.warn(`[searchMetaAdsViaApify] ${msg}`),
   );
@@ -109,17 +120,18 @@ export async function searchMetaAdsViaApify(pageUrl: string): Promise<AdResult[]
   // for some pages, { results: [], totalCount: 0, ... } for others). Rather than
   // blacklist every "no ads" shape Apify might return, positively require the one
   // field every real ad has: adArchiveID.
-  return items.filter((ad: any) => ad.adArchiveID ?? ad.ad_archive_id).slice(0, 10).map((ad: any) => {
+  return items.filter((ad: any) => ad.adArchiveID ?? ad.ad_archive_id).slice(0, META_ADS_CAP).map((ad: any) => {
     const snap = ad.snapshot || {};
-    const bodyText: string =
-      (snap.cards?.[0]?.body as string) ||
-      (typeof snap.body === 'object' ? snap.body?.text : snap.body) ||
-      snap.link_description || '';
+    const bodyText = realText(
+      snap.cards?.[0]?.body,
+      typeof snap.body === 'object' ? snap.body?.text : snap.body,
+      snap.link_description,
+    );
     const platforms: string[] = (ad.publisherPlatform || ad.publisher_platform || [])
       .map((p: string) => String(p).toUpperCase());
     return {
       platform:       platforms.includes('INSTAGRAM') ? 'instagram' : 'facebook',
-      title:          snap.title || snap.cards?.[0]?.title || '',
+      title:          realText(snap.title, snap.cards?.[0]?.title),
       body:           bodyText,
       cta:            snap.ctaText || snap.cta_text || snap.ctaType || snap.cta_type || '',
       link:           snap.linkUrl || snap.link_url || snap.page_profile_uri || '',
@@ -131,6 +143,8 @@ export async function searchMetaAdsViaApify(pageUrl: string): Promise<AdResult[]
       external_ad_id: (ad.adArchiveID ?? ad.ad_archive_id) ? String(ad.adArchiveID ?? ad.ad_archive_id) : null,
       media_url:      snap.images?.[0]?.resized_image_url || snap.images?.[0]?.url ||
                        snap.cards?.[0]?.originalImageUrl || snap.cards?.[0]?.resizedImageUrl ||
+                       // video ads: Meta's preview frame, so they get a picture and creative analysis
+                       snap.videos?.[0]?.videoPreviewImageUrl || snap.cards?.[0]?.videoPreviewImageUrl ||
                        snap.videos?.[0]?.thumbnail || null,
       video_url:      snap.videos?.[0]?.video_hd_url || snap.videos?.[0]?.videoHdUrl ||
                        snap.cards?.[0]?.videoHdUrl || null,
@@ -143,7 +157,7 @@ export async function searchGoogleAds(query: string): Promise<AdResult[]> {
   const data = await _fetch({ engine: 'google', q: query, gl: 'il' });
   if (!data?.ads) return [];
 
-  return (data.ads as any[]).slice(0, 5).map(ad => ({
+  return (data.ads as any[]).slice(0, GOOGLE_ADS_CAP).map(ad => ({
     platform:       'google' as const,
     title:          ad.title   || '',
     body:           ad.snippet || '',
@@ -237,4 +251,12 @@ export async function searchAllAds(
 
   // ponytail: Google only when the library is empty — saves credits (KAN-172)
   return metaAds.length > 0 ? metaAds : searchGoogleAds(`${competitorName} ${category} ${city}`);
+}
+
+// A searchAllAds result comes from one source (Meta, else Google). Under that source's cap
+// it holds every ad running there, so stored ads on these platforms that it lacks have ended.
+// At the cap the rest may still be running: returns [] and nothing is marked ended.
+export function fullyScannedPlatforms(ads: AdResult[]): AdResult['platform'][] {
+  if (ads[0]?.platform === 'google') return ads.length < GOOGLE_ADS_CAP ? ['google'] : [];
+  return ads.length < META_ADS_CAP ? ['facebook', 'instagram'] : [];
 }

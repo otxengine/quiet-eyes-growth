@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
 import { Sparkles, Loader2, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { useInsight } from '@/hooks/useInsight';
+import { renderBold } from '@/lib/safeMarkdown';
 
 /** Renders AI text without raw markdown — handles headings, lists, bold inline. */
 function SimpleMarkdown({ text }) {
   if (!text) return null;
   const raw = typeof text === 'string' ? text : JSON.stringify(text, null, 2);
 
-  const renderInline = (str) => ({
-    __html: str.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'),
-  });
+  const renderInline = (str) => ({ __html: renderBold(str) });
 
   const paragraphs = raw.split(/\n{2,}/);
 

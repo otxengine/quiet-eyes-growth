@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
-import { getAuthHeaders } from '@/api/client';
+import { orgApi } from '@/api/orgApi';
 
 export default function JoinPage() {
   const [searchParams] = useSearchParams();
@@ -23,28 +23,22 @@ export default function JoinPage() {
 
     if (!isAuthenticated) {
       // Redirect to sign-up, then come back with the token
-      navigate(`/sign-up?redirect_url=/join?token=${token}`);
+      navigate(`/sign-up?redirect_url=${encodeURIComponent(`/join?token=${token}`)}`);
       return;
     }
 
     // Authenticated — claim the invite
     setStatus('loading');
-    getAuthHeaders()
-      .then((headers) => fetch(`/api/orgs/join/${token}`, { method: 'POST', headers }))
-      .then(async (res) => {
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(data.error || 'שגיאה בהצטרפות לארגון');
-        }
-        return data;
-      })
+    orgApi.joinOrg(token)
       .then(() => {
         setStatus('success');
         setTimeout(() => navigate('/dashboard'), 2000);
       })
       .catch((err) => {
         setStatus('error');
-        setErrorMsg(err.message);
+        setErrorMsg(err.message === 'invite_not_found'
+          ? 'ההזמנה לא נמצאה, כבר נוצלה או שפג תוקפה. בקשו ממנהל הארגון הזמנה חדשה.'
+          : 'לא הצלחנו לצרף אתכם לארגון. נסו שוב בעוד כמה דקות.');
       });
   }, [token, isAuthenticated, isLoadingAuth]);
 

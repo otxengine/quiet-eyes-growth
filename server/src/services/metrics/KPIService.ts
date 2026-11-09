@@ -20,6 +20,7 @@
  */
 
 import { prisma } from '../../db';
+import { planLimits } from '../../lib/planLimits';
 import { createLogger } from '../../infra/logger';
 
 const logger = createLogger('KPIService');
@@ -564,10 +565,6 @@ export async function computeAboutMetrics(tenantId: string, windowDays = 30): Pr
 
 // ─── Competitor-discovery funnel (KAN-216, PRD 16 Phase C) ────────────────────
 
-// ponytail: inline from src/lib/planConfig.js — update both if plan limits change
-const PLAN_COMPETITOR_LIMITS: Record<string, number> = {
-  free_trial: 3, free: 3, starter: 5, growth: 10, pro: Infinity, enterprise: Infinity,
-};
 // ponytail: static per-run budget; move to a per-plan value in planConfig.js if that's ever needed
 const DATAFORSEO_BUDGET_USD_PER_RUN = 0.05;
 
@@ -635,7 +632,7 @@ export async function computeCompetitorDiscoveryMetrics(tenantId: string, window
     : 0;
 
   const capUtilizations = runRows
-    .map(r => ({ items: Number(r.items_processed ?? 0), cap: PLAN_COMPETITOR_LIMITS[r.plan_id || 'free_trial'] ?? 3 }))
+    .map(r => ({ items: Number(r.items_processed ?? 0), cap: planLimits(r.plan_id).competitors_max }))
     .filter(r => Number.isFinite(r.cap) && r.cap > 0)
     .map(r => r.items / r.cap);
   const avgCapUtilization = capUtilizations.length ? capUtilizations.reduce((a, b) => a + b, 0) / capUtilizations.length : 0;

@@ -20,6 +20,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
+import { NOT_REPORT_SIGNAL } from '../../lib/reportData';
 
 const DAYS = (d: number) => new Date(Date.now() - d * 86_400_000);
 
@@ -128,9 +129,10 @@ export async function updateLeadFreshness(req: Request, res: Response) {
     stats.social_signals_deleted = r5.count;
 
     // ── Phase 6: Purge old market signals ─────────────────────────────────────
-    // Aligned with cleanupAndLearn: read signals 30d, unread 90d
+    // Aligned with cleanupAndLearn: read signals 30d, unread 90d; competitor change
+    // signals are left to cleanupAndLearn's 40-day rule (the monthly report reads them).
     const r6a = await prisma.marketSignal.deleteMany({
-      where: { linked_business: businessProfileId, is_read: true, created_date: { lt: DAYS(30) } },
+      where: { linked_business: businessProfileId, is_read: true, created_date: { lt: DAYS(30) }, ...NOT_REPORT_SIGNAL },
     });
     const r6b = await prisma.marketSignal.deleteMany({
       where: { linked_business: businessProfileId, is_read: false, created_date: { lt: DAYS(90) } },

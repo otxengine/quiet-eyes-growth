@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { getAuthHeaders } from '@/api/client';
-import { Star, Search, Loader2, Bot, Send, X, ChevronDown, MoreVertical, Copy, CheckCheck, Radar } from 'lucide-react';
+import { Star, Search, Loader2, Bot, Send, X, ChevronDown, MoreVertical, Copy, CheckCheck, Radar, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import RequestReviewModal from '@/components/reputation/RequestReviewModal';
 import ScheduledReviewRequests from '@/components/reputation/ScheduledReviewRequests';
@@ -112,6 +112,13 @@ function ReviewRow({ review, onApprove, labelById = {} }) {
         <span className="text-[11px] text-foreground-muted w-20 flex-shrink-0">{relDate}</span>
         {isPublished && <span className="flex-shrink-0 text-[11px] font-medium text-green-600">✓ פורסם</span>}
         {isPending && <span className="flex-shrink-0 w-2 h-2 rounded-full bg-[#e8344d]" />}
+        {review.source_url?.startsWith('https://') && (
+          <a href={review.source_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+            title="צפה בביקורת המקורית" aria-label="צפה בביקורת המקורית"
+            className="text-foreground-muted hover:text-primary flex-shrink-0">
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        )}
         <button onClick={e => e.stopPropagation()} className="text-foreground-muted hover:text-foreground flex-shrink-0">
           <MoreVertical className="w-4 h-4" />
         </button>
@@ -214,6 +221,12 @@ function ReviewReplyPanel({ review, bpId, businessProfile, topicSet, onClose, on
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[11px] font-semibold text-gray-500">{review.reviewer_name || 'לקוח'}</span>
             <span className="text-amber-400 text-[12px]">{'★'.repeat(review.rating || 0)}{'☆'.repeat(5 - (review.rating || 0))}</span>
+            {review.source_url?.startsWith('https://') && (
+              <a href={review.source_url} target="_blank" rel="noopener noreferrer"
+                className="mr-auto inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:text-primary/80">
+                <ExternalLink className="w-3 h-3" /> צפה בביקורת
+              </a>
+            )}
           </div>
           <p className="text-[12px] text-gray-700 leading-relaxed">{review.text || '(ביקורת ללא טקסט)'}</p>
         </div>
@@ -372,13 +385,19 @@ export default function Reputation() {
   const ratingDelta = prevMonthAvg > 0 && thisMonthAvg > 0
     ? (thisMonthAvg - prevMonthAvg).toFixed(1)
     : null;
-  const pendingCount = reviews.filter(r => r.response_status === 'pending').length;
+  const isPending = r => r.response_status === 'pending';
+  const pendingCount = reviews.filter(isPending).length;
+  const negativePendingCount = reviews.filter(r => isPending(r) && Number(r.rating) <= 2).length;
+  const weekAgo = new Date(now.getTime() - 7 * 86400000).toISOString();
+  const pendingThisWeek = reviews.filter(r => isPending(r) && (r.created_at || r.created_date || '') >= weekAgo).length;
+  const monthDelta = thisMonthReviews.length - prevMonthReviews.length;
 
   const [sortBy, setSortBy] = useState('newest');
   const [ratingSpanWeeks, setRatingSpanWeeks] = useState(12);
   const sortedReviews = [...reviews].sort(SORT_COMPARATORS[sortBy] || SORT_COMPARATORS.priority);
 
-  const respondedCount = reviews.filter(r => ['responded', 'auto_responded', 'suggested', 'published'].includes(r.response_status)).length;
+  // 'suggested' is only an AI draft nobody sent yet — not a reply.
+  const respondedCount = reviews.filter(r => ['responded', 'auto_responded', 'published'].includes(r.response_status)).length;
   const responseRate = reviews.length > 0 ? Math.round((respondedCount / reviews.length) * 100) : 0;
 
   const statCards = [
@@ -386,14 +405,14 @@ export default function Reputation() {
       count: pendingCount,
       label: 'ביקורות דורשות מענה',
       borderColor: 'red',
-      change: pendingCount > 0 ? `${Math.min(pendingCount, 3)} חדשות מאז השבוע הקודם` : 'הכל טופל',
+      change: pendingCount === 0 ? 'הכל טופל' : pendingThisWeek > 0 ? `${pendingThisWeek} מהשבוע האחרון` : 'אין חדשות מהשבוע האחרון',
       changeColor: pendingCount > 0 ? 'text-red-500' : 'text-green-600',
     },
     {
       count: avgRating > 0 ? avgRating.toFixed(1) : '—',
       label: 'ציון ממוצע',
       borderColor: 'blue',
-      change: 'ללא שינוי מהחודש הקודם',
+      change: reviews.length > 0 ? `לפי ${reviews.length} הביקורות האחרונות` : null,
       changeColor: 'text-foreground-muted',
     },
     {
@@ -407,8 +426,8 @@ export default function Reputation() {
       count: thisMonthReviews.length,
       label: 'ביקורות חדשות החודש',
       borderColor: 'none',
-      change: thisMonthReviews.length > 0 ? `+${thisMonthReviews.length} מהחודש הקודם` : null,
-      changeColor: 'text-green-600',
+      change: thisMonthReviews.length > 0 || prevMonthReviews.length > 0 ? `${monthDelta >= 0 ? '+' : ''}${monthDelta} מהחודש הקודם` : null,
+      changeColor: monthDelta >= 0 ? 'text-green-600' : 'text-red-500',
     },
   ];
 
@@ -450,13 +469,13 @@ export default function Reputation() {
   });
 
   const insights = [
-    pendingCount > 0 && {
-      text: `${pendingCount} ביקורות שליליות ממתינות למענה`,
+    negativePendingCount > 0 && {
+      text: `${negativePendingCount} ביקורות שליליות ממתינות למענה`,
       border: 'border-r-red-500',
       dot: 'bg-red-500',
     },
     responseRate < 80 && reviews.length > 0 && {
-      text: `שיעור התגובה ירד ב-${100 - responseRate}%`,
+      text: `רק ${responseRate}% מהביקורות קיבלו מענה`,
       border: 'border-r-yellow-400',
       dot: 'bg-yellow-400',
     },

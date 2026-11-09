@@ -21,7 +21,7 @@ import { resolveTopicSet } from '../../lib/reviewTopicPacks';
 import { normReviewOrigin } from '../../lib/signalGuard';
 import {
   detectCompetitorMentions, snapshotRatingHistory, createNegativeReviewAlerts,
-  publishNewReviewEvents, backfillTopicsFor,
+  publishNewReviewEvents, backfillTopicsFor, reviewLink, relinkReviews,
 } from '../../lib/reviewPostProcessing';
 
 const router = Router();
@@ -98,55 +98,79 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
   const topicSet = resolveTopicSet(sp?.sector_key ?? 'other', sp?.onboarding_review_extras ?? []);
 
   const isOwn = taskRow.task_type === 'own';
+  // IDs dedup across the whole business, matching the unique index (linked_business, google_review_id).
+  // Scoped to one competitor, a review already stored under another competitor row looked new on every
+  // run: it was topic-tagged by the LLM, then rejected by the index. Text keys stay per competitor.
   const existing = await prisma.review.findMany({
-    where: isOwn
-      ? { linked_business: taskRow.business_profile_id }
-      : { linked_competitor: taskRow.linked_competitor! },
-    select: { google_review_id: true, text: true },
+    where: { linked_business: taskRow.business_profile_id },
+    select: { google_review_id: true, text: true, linked_competitor: true, source_url: true, response_status: true },
   });
   const existingIds = new Set(existing.map(r => r.google_review_id).filter(Boolean));
-  const existingKeys = new Set(existing.map(r => (r.text || '').substring(0, 50)));
+  const storedLinks = new Map(existing.map(r => [r.google_review_id, r.source_url]));
+  // Own reviews the owner has since answered on Google (DataForSEO `owner_answer`) — marked answered below.
+  const storedStatus = new Map(existing.map(r => [r.google_review_id, r.response_status]));
+  const answeredOnGoogle: Array<[string, string]> = [];
+  const seenLinks: Array<[string, string | null]> = [];
+  const existingKeys = new Set(existing
+    .filter(r => isOwn || r.linked_competitor === taskRow.linked_competitor)
+    .map(r => (r.text || '').substring(0, 50)));
 
   const pending: Array<{
     reviewId: string; text: string; rating: number;
-    sentiment: string; reviewerName: string; createdAt: string;
+    sentiment: string; reviewerName: string; createdAt: string; link: string | null; ownerAnswer: string | null;
   }> = [];
 
   for (const item of items) {
     // Field mapping confirmed against a real payload (type: google_reviews_search).
     const text: string = item.review_text || item.text || item.snippet || '';
-    if (!text || text.length < 5) continue;
-    const reviewId: string = item.review_id || item.id || `dfs_${(item.profile_name || item.reviewer_name || '').replace(/[^a-z0-9]/gi, '_').substring(0, 40)}_${text.substring(0, 20).replace(/[^a-z0-9]/gi, '_')}`;
-    const textKey = text.substring(0, 50);
-    if (existingIds.has(reviewId) || existingKeys.has(textKey)) continue;
-
     const rating: number = item.rating?.value ?? item.rating ?? 0;
+    // Star-only reviews (rating, no text) are real Google reviews — keep them so counts and averages match Google.
+    if (!text && !rating) continue;
+    const reviewId: string = item.review_id || item.id || `dfs_${(item.profile_name || item.reviewer_name || '').replace(/[^a-z0-9]/gi, '_').substring(0, 40)}_${text.substring(0, 20).replace(/[^a-z0-9]/gi, '_')}`;
+    // Short/empty text can't tell reviews apart (every star-only review would share the '' key), so those dedup by id only.
+    const textKey = text.length >= 5 ? text.substring(0, 50) : null;
+    const link = reviewLink(item);
+    const ownerAnswer: string | null = typeof item.owner_answer === 'string' && item.owner_answer.trim() ? item.owner_answer.trim() : null;
+    if (existingIds.has(reviewId) || (textKey && existingKeys.has(textKey))) {
+      seenLinks.push([reviewId, link]);
+      if (isOwn && ownerAnswer && storedStatus.has(reviewId) && storedStatus.get(reviewId) !== 'published') answeredOnGoogle.push([reviewId, ownerAnswer]);
+      continue;
+    }
+
     const sentiment = rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral';
     // item.timestamp is "YYYY-MM-DD HH:mm:ss +00:00" — normalize to real ISO so it sorts
     // correctly alongside created_at strings from the other tiers (GMB/Places/SerpAPI).
     const parsedDate = item.timestamp ? new Date(item.timestamp) : null;
     const createdAt: string = parsedDate && !isNaN(parsedDate.getTime()) ? parsedDate.toISOString() : new Date().toISOString();
-    pending.push({ reviewId, text, rating, sentiment, reviewerName: item.profile_name || item.reviewer_name || 'לקוח', createdAt });
+    pending.push({ reviewId, text, rating, sentiment, reviewerName: item.profile_name || item.reviewer_name || 'לקוח', createdAt, link, ownerAnswer });
     existingIds.add(reviewId);
-    existingKeys.add(textKey);
+    if (textKey) existingKeys.add(textKey);
   }
 
   let newCount = 0;
   if (pending.length > 0) {
-    const topics = await batchExtractTopics(pending.map(p => ({ text: p.text })), undefined, topicSet);
+    // Only reviews with text go to the topic LLM; star-only rows keep null topics.
+    const withText = pending.filter(p => p.text.length >= 5);
+    const extracted = withText.length ? await batchExtractTopics(withText.map(p => ({ text: p.text })), undefined, topicSet) : [];
+    const topicsOf = new Map(withText.map((p, i) => [p, extracted[i]]));
     for (let i = 0; i < pending.length; i++) {
-      const { reviewId, text, rating, sentiment, reviewerName, createdAt } = pending[i];
-      const { topics: t, topic_sentiment } = topics[i];
+      const { reviewId, text, rating, sentiment, reviewerName, createdAt, link, ownerAnswer } = pending[i];
+      const { topics: t, topic_sentiment } = topicsOf.get(pending[i]) ?? { topics: null, topic_sentiment: null };
       try {
-        await prisma.review.create({
-          data: {
+        // Competitor tasks dedup by linked_competitor, but the unique index is (linked_business,
+        // google_review_id) — skipDuplicates drops collisions instead of logging a P2002 per row.
+        const { count } = await prisma.review.createMany({
+          skipDuplicates: true,
+          data: [{
             platform:          'Google',
             rating,
             text:              text.substring(0, 2000),
             reviewer_name:     reviewerName,
             sentiment,
-            response_status:   isOwn ? 'pending' : null,
-            source_url:        profile.google_place_id ? `https://www.google.com/maps/place/?q=place_id:${profile.google_place_id}` : null,
+            // Already answered on Google → 'published' with that reply (same convention as the GBP sync).
+            response_status:   isOwn ? (ownerAnswer ? 'published' : 'pending') : null,
+            suggested_response: isOwn ? ownerAnswer : null,
+            source_url:        link ?? (profile.google_place_id ? `https://www.google.com/maps/place/?q=place_id:${profile.google_place_id}` : null),
             source_origin:     normReviewOrigin('dataforseo_google_reviews', 'dataforseoWebhook'),
             google_review_id:  reviewId,
             is_verified:       true,
@@ -155,11 +179,19 @@ export async function processDataForSeoReviewsPostback(payload: any): Promise<vo
             linked_competitor: isOwn ? undefined : taskRow.linked_competitor,
             topics: t,
             topic_sentiment,
-          },
+          }],
         });
-        newCount++;
-      } catch { continue; } // dedup race — (linked_business, google_review_id) unique index
+        newCount += count;
+      } catch { continue; } // per-row so one bad item can't drop the rest
     }
+  }
+
+  await relinkReviews(taskRow.business_profile_id, storedLinks, seenLinks);
+  for (const [google_review_id, reply] of answeredOnGoogle) {
+    await prisma.review.updateMany({
+      where: { linked_business: taskRow.business_profile_id, linked_competitor: null, google_review_id },
+      data:  { response_status: 'published', suggested_response: reply },
+    }).catch(() => {});
   }
 
   await prisma.dataForSeoReviewTask.update({

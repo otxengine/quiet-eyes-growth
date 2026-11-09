@@ -157,9 +157,9 @@ export default function OnboardingDiscoverCompetitors() {
         toast.error(`עדכון ברקע נכשל (${fn})`);
       });
 
-    invoke('collectCompetitorSocialPosts', { businessProfileId: bp, force: true });
-    invoke('collectCompetitorSocialProfile', { businessProfileId: bp, force: true });
-    invoke('collectCompetitorSocialStories', { businessProfileId: bp, force: true });
+    invoke('collectCompetitorSocialPosts', { businessProfileId: bp });
+    invoke('collectCompetitorSocialProfile', { businessProfileId: bp });
+    invoke('collectCompetitorSocialStories', { businessProfileId: bp });
     invoke('detectCompetitorAds', { businessProfileId: bp, force: true, allCompetitors: true });
     invoke('collectReviews', { businessProfileId: bp, force: true, skipCompetitorTrigger: true });
     invoke('collectCompetitorReviews', { businessProfileId: bp });

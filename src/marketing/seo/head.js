@@ -10,7 +10,6 @@ const ORGANIZATION = {
   '@type': 'Organization',
   '@id': `${SITE_URL}/#organization`,
   name: 'Cortexi',
-  alternateName: 'קורטקסי',
   url: SITE_URL,
   logo: `${SITE_URL}/logo/cortexi-logo.png`,
   slogan: 'Inspired by the brain. Built for intelligence.',
@@ -50,8 +49,8 @@ const PRICING_PRODUCT = {
   offers: [
     { name: 'חינם', price: '0' },
     { name: 'Starter', price: '149' },
-    { name: 'Growth', price: '349' },
-    { name: 'Pro', price: '699' },
+    { name: 'Growth', price: '499' },
+    { name: 'Pro', price: '899' },
   ].map((o) => ({
     '@type': 'Offer',
     name: o.name,

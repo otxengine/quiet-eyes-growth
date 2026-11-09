@@ -94,7 +94,7 @@ async function apifyInstagramHashtags(
 
   try {
     const results = await runApifyActor(
-      'apify/instagram-hashtag-scraper',
+      'apify~instagram-hashtag-scraper', // Apify's API path needs '~'; 'apify/...' answered 404
       {
         hashtags:     hashtags.slice(0, 5),
         resultsLimit: maxItems,
@@ -107,7 +107,7 @@ async function apifyInstagramHashtags(
       .filter((r: any) => r.id && (r.likesCount || r.likes) > 50)
       .map((r: any) => ({
         id:          r.id,
-        url:         r.url || r.shortCode ? `https://instagram.com/p/${r.shortCode}` : '',
+        url:         r.url || (r.shortCode ? `https://instagram.com/p/${r.shortCode}` : ''),
         displayUrl:  r.displayUrl || r.thumbnailUrl || r.imageUrl || '',
         caption:     (r.caption || r.alt || '').slice(0, 250),
         likes:       r.likesCount || r.likes || 0,
