@@ -90,7 +90,7 @@ const STATUS_LABELS = {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function PlanCard({ plan, isCurrentPlan, branchCount, onSelect, loading }) {
+function PlanCard({ plan, isCurrentPlan, branchCount, onSelect, loading, locked }) {
   const accentColor = `#${plan.color}`;
   const totalMonthly = plan.pricePerBranch * branchCount;
   const showBranchBreakdown = branchCount > 1;
@@ -157,14 +157,14 @@ function PlanCard({ plan, isCurrentPlan, branchCount, onSelect, loading }) {
 
       <button
         onClick={() => onSelect(plan.id)}
-        disabled={isCurrentPlan || loading}
+        disabled={isCurrentPlan || loading || locked}
         className={cn(
           'w-full py-2.5 rounded-lg text-[12px] font-semibold transition-all flex items-center justify-center gap-2',
-          isCurrentPlan
+          isCurrentPlan || locked
             ? 'bg-secondary text-foreground-muted cursor-default'
             : 'text-white hover:opacity-90 shadow-sm',
         )}
-        style={!isCurrentPlan ? { background: accentColor } : {}}
+        style={!isCurrentPlan && !locked ? { background: accentColor } : {}}
       >
         {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
         {isCurrentPlan ? 'התוכנית הנוכחית' : 'בחר תוכנית'}
@@ -235,6 +235,8 @@ export default function Subscription() {
   // This page is Paddle's default payment link: open checkouts linked from Paddle emails.
   useEffect(() => { openLinkedPaddleCheckout(); }, []);
 
+  // Only org owners/admins may change the plan or payment details (the API answers 403 otherwise).
+  const canManageBilling = subData?.canManageBilling !== false;
   const currentPlanId = subData?.plan || currentOrg?.plan_id || 'free_trial';
   const subStatus     = subData?.status || 'none';
   const statusInfo    = STATUS_LABELS[subStatus] || STATUS_LABELS.none;
@@ -310,11 +312,15 @@ export default function Subscription() {
           <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
           <div className="flex-1">
             <p className="text-[13px] font-semibold text-amber-800">תשלום נכשל</p>
-            <p className="text-[12px] text-amber-700">נא לעדכן פרטי תשלום כדי למנוע הפסקת שירות</p>
+            <p className="text-[12px] text-amber-700">
+              {canManageBilling ? 'נא לעדכן פרטי תשלום כדי למנוע הפסקת שירות' : 'יש לבקש מבעלי החשבון או ממנהל לעדכן את פרטי התשלום'}
+            </p>
           </div>
-          <button onClick={handlePortal} className="px-4 py-2 bg-amber-600 text-white rounded-lg text-[12px] font-semibold hover:bg-amber-700">
-            עדכן תשלום
-          </button>
+          {canManageBilling && (
+            <button onClick={handlePortal} className="px-4 py-2 bg-amber-600 text-white rounded-lg text-[12px] font-semibold hover:bg-amber-700">
+              עדכן תשלום
+            </button>
+          )}
         </div>
       )}
 
@@ -366,7 +372,7 @@ export default function Subscription() {
           )}
         </div>
 
-        {subData?.subscriptionId && (
+        {subData?.subscriptionId && canManageBilling && (
           <button
             onClick={handlePortal}
             disabled={portalLoading}
@@ -396,6 +402,11 @@ export default function Subscription() {
       {/* Plans Grid */}
       <div>
         <h2 className="text-[14px] font-semibold text-foreground mb-3">בחר תוכנית</h2>
+        {!canManageBilling && (
+          <p className="text-[12px] text-foreground-muted mb-3">
+            רק בעלי החשבון ומנהלים יכולים לשנות את התוכנית או את פרטי התשלום.
+          </p>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {PLANS.map((plan, i) => (
             <div key={plan.id} className={`fade-in-up stagger-${i + 1}`}>
@@ -405,6 +416,7 @@ export default function Subscription() {
                 branchCount={branchCount}
                 onSelect={handlePlanSelect}
                 loading={checkoutLoading === plan.id}
+                locked={!canManageBilling}
               />
             </div>
           ))}
