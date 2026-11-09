@@ -284,6 +284,44 @@ describe('processDataForSeoReviewsPostback', () => {
   });
 });
 
+describe('processDataForSeoReviewsPostback — owner replies on Google (owner_answer)', () => {
+  const item = (review_id: string, owner_answer: string | null) =>
+    ({ review_text: 'שירות מעולה, ממליץ בחום ' + review_id, rating: { value: 5 }, review_id, owner_answer });
+
+  beforeEach(() => reviewUpdateMany.mockResolvedValue({ count: 1 }));
+
+  test('own review already answered on Google is saved as published with the reply; unanswered stays pending', async () => {
+    taskFindUnique.mockResolvedValue(OWN_TASK_ROW);
+    await processDataForSeoReviewsPostback(taskPayload({ result: [{ items: [item('a', 'תודה רבה!'), item('b', null)] }] }));
+    const rows = reviewCreate.mock.calls.map(c => c[0].data[0]);
+    expect(rows[0]).toEqual(expect.objectContaining({ google_review_id: 'a', response_status: 'published', suggested_response: 'תודה רבה!' }));
+    expect(rows[1]).toEqual(expect.objectContaining({ google_review_id: 'b', response_status: 'pending', suggested_response: null }));
+  });
+
+  test('competitor reviews ignore the owner reply (no status, no reply)', async () => {
+    taskFindUnique.mockResolvedValue(COMPETITOR_TASK_ROW);
+    await processDataForSeoReviewsPostback(taskPayload({ id: 'task456', result: [{ items: [item('c', 'תודה')] }] }));
+    expect(reviewCreate.mock.calls[0][0].data[0]).toEqual(expect.objectContaining({ response_status: null, suggested_response: null }));
+  });
+
+  test('a stored pending review answered on Google since is marked published; already-published rows are left alone', async () => {
+    taskFindUnique.mockResolvedValue(OWN_TASK_ROW);
+    reviewFindMany.mockResolvedValue([
+      { google_review_id: 'old1', text: 'x1', linked_competitor: null, source_url: null, response_status: 'pending' },
+      { google_review_id: 'old2', text: 'x2', linked_competitor: null, source_url: null, response_status: 'published' },
+    ]);
+    await processDataForSeoReviewsPostback(taskPayload({ result: [{ items: [item('old1', 'תודה!'), item('old2', 'תודה!')] }] }));
+    expect(reviewCreate).not.toHaveBeenCalled();
+    expect(reviewUpdateMany).toHaveBeenCalledWith({
+      where: { linked_business: 'bp1', linked_competitor: null, google_review_id: 'old1' },
+      data:  { response_status: 'published', suggested_response: 'תודה!' },
+    });
+    expect(reviewUpdateMany).not.toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ google_review_id: 'old2' }), data: expect.objectContaining({ response_status: 'published' }),
+    }));
+  });
+});
+
 describe('processDataForSeoReviewsPostback — star-only reviews', () => {
   beforeEach(() => taskFindUnique.mockResolvedValue(OWN_TASK_ROW));
 
