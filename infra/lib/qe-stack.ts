@@ -125,8 +125,17 @@ export class QeStack extends cdk.Stack {
       autoDeleteObjects: !isProd,
     });
     const spaRewrite = new cloudfront.Function(this, 'SpaRewrite', {
-      code: cloudfront.FunctionCode.fromFile({ filePath: path.join(__dirname, 'spa-rewrite.js') }),
+      // Prod routes visitors by country (Israel -> Hebrew site, elsewhere -> /en); staging stays open
+      // so both sites can be tested from anywhere. See the header of spa-rewrite.js.
+      code: cloudfront.FunctionCode.fromInline(
+        fs.readFileSync(path.join(__dirname, 'spa-rewrite.js'), 'utf8')
+          .replace('var GEO_ROUTING = false;', `var GEO_ROUTING = ${isProd};`)),
       runtime: cloudfront.FunctionRuntime.JS_2_0,
+    });
+    // Makes CloudFront-Viewer-Country readable by that function. In the origin request policy, not the
+    // cache policy, so pages are still cached once for all countries (S3 ignores the extra header).
+    const viewerCountry = new cloudfront.OriginRequestPolicy(this, 'ViewerCountry', {
+      headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList('CloudFront-Viewer-Country'),
     });
     const distribution = new cloudfront.Distribution(this, 'Cdn', {
       comment: `quiet-eyes ${envName}`,
@@ -141,6 +150,7 @@ export class QeStack extends cdk.Stack {
         origin: origins.S3BucketOrigin.withOriginAccessControl(web),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        originRequestPolicy: viewerCountry,
         responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
         functionAssociations: [{ function: spaRewrite, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
       },
