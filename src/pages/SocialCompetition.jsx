@@ -16,6 +16,11 @@ import {
 import SocialInsightsComparison from '@/components/competitors/SocialInsightsComparison';
 import SectionTabs from '@/components/layout/SectionTabs';
 
+// = META_ADS_CAP in server/src/lib/searchapi.ts: a scan keeps at most that many ads, so a
+// count at the cap means "at least that many".
+const AD_SCAN_CAP = 10;
+const adCount = (n) => `${n || 0}${n >= AD_SCAN_CAP ? '+' : ''}`;
+
 function resolveSection(param) {
   if (!param) return null;
   return (param === 'ad-history' || param === 'ads') ? 'ads' : 'feed';
@@ -246,7 +251,7 @@ function AnalysisTab({ competitor, posts, bpId }) {
             onClick={generate}
             className="w-full py-2 text-xs border border-dashed border-border rounded-lg hover:bg-muted/50 text-muted-foreground transition-colors"
           >
-            ✨ עדיין לא נותח (ינותח אוטומטית) — לחץ לניתוח מיידי ({posts.length} פוסטים, {competitor.active_ad_count || 0} מודעות)
+            ✨ עדיין לא נותח (ינותח אוטומטית) — לחץ לניתוח מיידי ({posts.length} פוסטים, {adCount(competitor.active_ad_count)} מודעות)
           </button>
         )}
         {loading && (
@@ -297,7 +302,7 @@ function AnalysisTab({ competitor, posts, bpId }) {
   );
 }
 
-function RivalCard({ competitor, posts, ads, stories, profiles, defaultSec, bpId, autoOpenHistory, defaultExpanded }) {
+function RivalCard({ competitor, posts, ads, hasAdHistory, stories, profiles, defaultSec, bpId, autoOpenHistory, defaultExpanded }) {
   const [expanded,    setExpanded]    = useState(defaultExpanded || false);
   const [section,     setSection]     = useState(() => defaultSec || getDefaultSection(posts, ads));
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -339,7 +344,7 @@ function RivalCard({ competitor, posts, ads, stories, profiles, defaultSec, bpId
           <span className="text-[10px] text-muted-foreground">{posts.length} פוסטים</span>
         )}
         {competitor.active_ad_count > 0 && (
-          <span className="text-[10px] text-orange-600">{competitor.active_ad_count} מודעות</span>
+          <span className="text-[10px] text-orange-600">{adCount(competitor.active_ad_count)} מודעות</span>
         )}
       </button>
 
@@ -362,7 +367,8 @@ function RivalCard({ competitor, posts, ads, stories, profiles, defaultSec, bpId
           {[
             { key: 'feed',    label: `פיד (${posts.length})` },
             { key: 'stories', label: `סטוריז (${stories.length})` },
-            { key: 'ads',     label: `מודעות (${competitor.active_ad_count || ads.length})` },
+            // Running ads only — `ads` is the whole history, ended ones included.
+            { key: 'ads',     label: `מודעות (${adCount(competitor.active_ad_count)})` },
           ].map(({ key, label }) => (
             <button
               key={key}
@@ -464,7 +470,7 @@ function RivalCard({ competitor, posts, ads, stories, profiles, defaultSec, bpId
                     </span>
                   ))}
                   {(competitor.active_ad_count > 0) && (
-                    <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">{competitor.active_ad_count} מודעות</span>
+                    <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">{adCount(competitor.active_ad_count)} מודעות</span>
                   )}
                   <span className="text-muted-foreground mr-auto">עודכן {timeAgo(competitor.ad_intel_updated_at || competitor.sponsored_ads_updated_at)}</span>
                 </div>
@@ -507,13 +513,16 @@ function RivalCard({ competitor, posts, ads, stories, profiles, defaultSec, bpId
                   </div>
                 )}
 
-                <button
-                  onClick={() => setHistoryOpen(true)}
-                  className="text-[10px] text-muted-foreground underline"
-                >
-                  ▼ היסטוריית מודעות
-                </button>
               </>
+            )}
+            {/* Outside the branch above: a rival with only ended ads still reaches them here. */}
+            {hasAdHistory && (
+              <button
+                onClick={() => setHistoryOpen(true)}
+                className="text-[10px] text-muted-foreground underline"
+              >
+                ▼ היסטוריית מודעות
+              </button>
             )}
           </div>
         )}
@@ -685,11 +694,11 @@ export default function SocialCompetition() {
 
   let visible = competitors;
   if (filter === 'with_posts') visible = visible.filter(c => allPosts.some(p => p.competitor_id === c.id));
-  if (filter === 'with_ads')   visible = visible.filter(c => allAdsRaw.some(a => a.competitor_id === c.id));
+  if (filter === 'with_ads')   visible = visible.filter(c => allAdsRaw.some(a => a.competitor_id === c.id && a.is_active));
   if (platformFilter) {
     visible = visible.filter(c =>
       allPosts.some(p => p.competitor_id === c.id && p.platform === platformFilter) ||
-      allAdsRaw.some(a   => a.competitor_id === c.id && a.platform === platformFilter) ||
+      allAdsRaw.some(a   => a.competitor_id === c.id && a.is_active && a.platform === platformFilter) ||
       allStories.some(s => s.competitor_id === c.id && s.platform === platformFilter)
     );
   }
@@ -774,7 +783,9 @@ export default function SocialCompetition() {
               <RivalCard
                 competitor={comp}
                 posts={allPosts.filter(p => p.competitor_id === comp.id)}
-                ads={allAdsRaw.filter(a => a.competitor_id === comp.id)}
+                // Running ads only, so the cards match the count; ended ones live in the history modal.
+                ads={allAdsRaw.filter(a => a.competitor_id === comp.id && a.is_active)}
+                hasAdHistory={allAdsRaw.some(a => a.competitor_id === comp.id)}
                 stories={allStories.filter(s => s.competitor_id === comp.id)}
                 profiles={allProfiles.filter(p => p.competitor_id === comp.id)}
                 defaultSec={comp.id === focusId ? focusSection : null}

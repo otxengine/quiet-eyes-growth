@@ -1,6 +1,7 @@
 import { prisma } from '../db';
 import { tallyThemes } from '../routes/functions/computeThemeRollup';
 import type { ReportType } from './reportPeriod';
+import { adScanCapped } from './searchapi';
 
 // Raw SQL throughout: several timestamp columns are TEXT in the DB (posted_at,
 // created_at, start_date, detected_at, executed_at) and Prisma's typed filters
@@ -187,12 +188,14 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
   const newAds = await q(
     `SELECT ${AD_COLS} FROM competitor_ad_history WHERE linked_business = $1 AND ${newAdsWhere}`, ...p,
   );
-  // "Active" = seen by a scan in the last 2 days of the period; is_active is the state
-  // now, not at the period's end. Newest launch first.
+  // "Active" = returned by the competitor's latest scan (is_active, the same set the app's
+  // active_ad_count counts) and launched before the period's end. The 2-day last_seen window
+  // used before also counted ads that ended yesterday and donor-cloned ads that had ended.
+  // ponytail: the scheduled report runs after that morning's scan; a regeneration days later
+  // counts what runs at regeneration time. Newest launch first.
   const activeAds = await q(
     `SELECT ${AD_COLS} FROM competitor_ad_history
-     WHERE linked_business = $1 AND first_seen_at < $3::timestamptz
-       AND last_seen_at >= $3::timestamptz - interval '2 days'
+     WHERE linked_business = $1 AND is_active AND COALESCE(${ts('start_date')}, first_seen_at) < $3::timestamptz
      ORDER BY started_at DESC NULLS LAST`, ...p,
   );
   // Price / promotion / website changes only exist as signals. otx_comp:* rows are
@@ -244,6 +247,8 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
       stories: { count: cs.length, with_offer: cs.filter(x => x.has_offer).length },
       ads: {
         new_count: ca.length, active_count: running.length, new: ca.slice(0, 5).map(adItem),
+        // The scan stopped at its cap: active_count is a floor, shown as "N+".
+        ...(adScanCapped(running) ? { active_capped: true } : {}),
         // Still-running ads launched before this period (the new ones are listed above).
         active: running.filter(a => !newIds.has(a.id)).slice(0, 3).map(adItem),
       },

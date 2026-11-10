@@ -53,7 +53,9 @@ const TOPIC_HE: Record<string, string> = {
 };
 
 // ── text helpers ──────────────────────────────────────────────────────────────────────────────
-const fmt = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString('en-US') : '—');
+const fmt = (n: unknown) => (typeof n === 'string' ? n : typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString('en-US') : '—');
+// A competitor's latest ad scan hit its cap (see adScanCapped): its running-ads count is a floor.
+const anyCapped = (comps: any[]) => comps.some(c => c.ads?.active_capped);
 const sum = <T,>(xs: T[], f: (x: T) => number) => xs.reduce((s, x) => s + (f(x) || 0), 0);
 
 /** Competitor names are sometimes stored as a site URL: "https://www.ediamonds.co.il/" -> "ediamonds.co.il". */
@@ -111,7 +113,7 @@ function section(title: string, body: string, keep = true, note = ''): string {
 }
 
 /** The lead-box numbers: non-zero ones (big), and the labels of the zero ones (one grey line). Also used by the email. */
-export function reportKpis(d: any): { on: [string, number][]; off: string[] } {
+export function reportKpis(d: any): { on: [string, number | string][]; off: string[] } {
   const comps: any[] = d?.competitors ?? [];
   const t: Record<string, any> = { ...(d?.totals ?? {}) };
   // Rows stored before totals.active_ads existed carry running ads only per competitor (ads.active_count).
@@ -119,7 +121,8 @@ export function reportKpis(d: any): { on: [string, number][]; off: string[] } {
   // The stored total also counts the business's own reviews; this strip is about competitors.
   if ('reviews' in t) t.reviews = sum(comps, c => c.reviews?.count ?? 0);
   return {
-    on: TOTALS.filter(([k]) => t[k]).map(([k, label]) => [label, t[k]] as [string, number]),
+    on: TOTALS.filter(([k]) => t[k]).map(([k, label]) =>
+      [label, k === 'active_ads' && anyCapped(comps) ? `${fmt(t[k])}+` : t[k]] as [string, number | string]),
     off: TOTALS.filter(([k]) => k in t && !t[k]).map(([, label]) => label),
   };
 }
@@ -147,12 +150,12 @@ const COLS: Col[] = [
 const ACTIVITY = ['posts', 'eng', 'stories', 'new_ads', 'active_ads', 'offers', 'followers', 'reviews'];
 const BAR_PREF = ['eng', 'stories', 'posts', 'active_ads', 'reviews', 'offers'];
 
-type Row = { name: string; you?: boolean; n: number | null; v: Record<string, any> };
+type Row = { name: string; you?: boolean; n: number | null; v: Record<string, any>; capped?: boolean };
 const val = (r: Row, k: string) => r.v[k] ?? null;
 
 function scoreboard(comps: any[], own: any, ownRev: any, business: string): { table: string; idle: string[] } {
   const rows: Row[] = comps.map(c => ({
-    name: cleanName(c.name), n: c.current_review_count ?? null,
+    name: cleanName(c.name), n: c.current_review_count ?? null, capped: !!c.ads?.active_capped,
     v: Object.fromEntries(COLS.map(col => [col.key, col.get(c) ?? null])),
   }));
   let you: Row | null = null;
@@ -185,7 +188,7 @@ function scoreboard(comps: any[], own: any, ownRev: any, business: string): { ta
       return `<bdi class="${v > 0 ? 'good' : v < 0 ? 'bad' : 'z'}">${v < 0 ? '-' : '+'}${Math.abs(v).toLocaleString('en-US')}</bdi>`;
     }
     const cls = !v ? 'z' : v === mx[k] && tableRows.length > 1 ? 'max' : '';
-    const num = `<span class="${cls}">${fmt(v)}</span>`;
+    const num = `<span class="${cls}">${fmt(v)}${k === 'active_ads' && r.capped ? '+' : ''}</span>`;
     if (k === bar) {
       return `<div class="cellbar"><span class="v">${num}</span><span class="track"><i style="width:${((v / (mx[k] || 1)) * 100).toFixed(1)}%"></i></span></div>`;
     }
@@ -354,7 +357,7 @@ export function buildReportHtml(row: ReportRow, opts: BuildOptions): string {
   if (row.status === 'empty' || !s.headline) {
     // No new activity — ads launched earlier can still be running, so show them instead of a blank page.
     const running = sum(comps, c => c.ads?.active_count ?? 0);
-    const line = `לא זוהתה פעילות חדשה של המתחרים ${when}${running ? ` — ${running} מודעות שלהם ממשיכות לרוץ.` : '.'}`;
+    const line = `לא זוהתה פעילות חדשה של המתחרים ${when}${running ? ` — ${running}${anyCapped(comps) ? '+' : ''} מודעות שלהם ממשיכות לרוץ.` : '.'}`;
     out.push(`<div class="lead"><div class="kicker">בשורה אחת</div><p class="headline">${line}</p>${kpis(d, when)}</div>`);
     out.push(running ? numbers() : section('המתחרים במעקב',
       `<div class="chips">${comps.map(c => `<span class="chip"><bdi>${e(cleanName(c.name))}</bdi></span>`).join('')}</div>`));

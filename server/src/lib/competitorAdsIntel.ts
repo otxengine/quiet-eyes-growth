@@ -8,6 +8,7 @@
  */
 
 import { prisma } from '../db';
+import { META_ADS_CAP } from './searchapi';
 
 export interface CompetitorAdIntel {
   competitorName: string;
@@ -74,7 +75,9 @@ export function formatCompetitorAdsForPrompt(intel: CompetitorAdIntel[]): string
   const lines: string[] = ['=== מודעות ממומנות של מתחרים (מידע עדכני) ==='];
 
   for (const comp of activeAds) {
-    lines.push(`\n📣 ${comp.competitorName} (${comp.platforms || 'לא ידוע'}, ${comp.adCount} מודעות):`);
+    // ponytail: Meta cap only — Google's lower cap (5) isn't marked; no Google ad rows on prod.
+    const count = `${comp.adCount}${comp.adCount >= META_ADS_CAP ? '+' : ''}`;
+    lines.push(`\n📣 ${comp.competitorName} (${comp.platforms || 'לא ידוע'}, ${count} מודעות):`);
     if (comp.promoted)       lines.push(`  מקדמים: ${comp.promoted}`);
     if (comp.targetAudience) lines.push(`  קהל יעד: ${comp.targetAudience}`);
     if (comp.strategy)       lines.push(`  אסטרטגיה: ${comp.strategy}`);

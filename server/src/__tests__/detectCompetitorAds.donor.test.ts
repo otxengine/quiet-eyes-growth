@@ -72,8 +72,10 @@ test('fresh donor found -> clones ad history and never calls SearchAPI/LLM', asy
   expect(invokeLLM).not.toHaveBeenCalled();
   const cloneCall = executeRawUnsafe.mock.calls.find(([sql]) => String(sql).includes('gen_random_uuid()::text'));
   expect(cloneCall).toBeTruthy();
-  const syncCall = executeRawUnsafe.mock.calls.find(([sql]) => String(sql).includes('SET is_active = d.is_active'));
+  // Every stored row of ours is set from the donor's running set, not just the rows it matches.
+  const syncCall = executeRawUnsafe.mock.calls.find(([sql]) => String(sql).includes('SET is_active = EXISTS'));
   expect(syncCall?.slice(1)).toEqual(['c1', 'donor-1']);
+  expect(String(syncCall?.[0])).toMatch(/d\.is_active[\s\S]*WHERE o\.competitor_id = \$1$/);
 });
 
 test('no fresh donor -> falls through to a normal scan', async () => {
@@ -93,15 +95,31 @@ describe('ads a scan no longer returns', () => {
   }) as any;
   const ads = (platform: string, n: number) => Array.from({ length: n }, (_, i) => ad(platform, i));
 
-  test('are marked ended on the scanned platforms after a scan under its cap', async () => {
+  const scan = async (found: any[]) => {
     (findDonorCandidates as jest.Mock).mockResolvedValue([]);
-    queryRawUnsafe.mockResolvedValue([]); // both ads are new
-    (searchAllAds as jest.Mock).mockResolvedValueOnce(ads('instagram', 2));
-
+    queryRawUnsafe.mockResolvedValue([]); // every ad is new
+    (searchAllAds as jest.Mock).mockResolvedValueOnce(found);
     await detectCompetitorAds({ body: { businessProfileId: 'b1' } } as any, mockRes());
+    return executeRawUnsafe.mock.calls.find(([sql]) => String(sql).includes('SET is_active = false'));
+  };
 
-    const ended = executeRawUnsafe.mock.calls.find(([sql]) => String(sql).includes('SET is_active = false'));
-    expect(ended?.slice(1, 3)).toEqual(['c1', ['facebook', 'instagram']]);
+  test('are marked ended after a scan under its cap', async () => {
+    const ended = await scan(ads('instagram', 2));
+    expect(ended?.[1]).toBe('c1');
+    expect(String(ended?.[0])).not.toContain('platform'); // whatever the platform: the scan is the truth
+  });
+
+  test('are marked ended at the cap too, and the count is reported as "10+"', async () => {
+    (invokeLLM as jest.Mock).mockResolvedValue({ promoted_product: 'x', urgency: 'low' });
+    expect(await scan(ads('facebook', 10))).toBeTruthy();
+    expect((prisma.marketSignal.create as jest.Mock).mock.calls[0][0].data.summary).toContain('10+ מודעות');
+  });
+
+  test('ads sharing their copy are stored as separate rows (ad id in the hash)', async () => {
+    const same = [0, 1, 2].map(i => ({ ...ad('facebook', 0), external_ad_id: `id${i}` }));
+    await scan(same);
+    const inserts = executeRawUnsafe.mock.calls.filter(([sql]) => String(sql).includes('INSERT INTO "competitor_ad_history"'));
+    expect(new Set(inserts.map(c => c[6])).size).toBe(3); // $6 = content_hash
   });
 
   test('stay active when a scan hits its cap, since the rest may still run', () => {

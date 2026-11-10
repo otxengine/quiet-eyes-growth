@@ -38,7 +38,7 @@ export function buildReportEmail(
 
   const { on } = reportKpis(report.data);
   const tiles = on.length ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="6" style="margin:12px 0"><tr>${on.map(([label, v]) =>
-    `<td style="border:1px solid ${C.grid};border-radius:6px;padding:8px 10px;text-align:right"><div style="font-size:22px;font-weight:700;color:${C.ink}">${esc(Number(v).toLocaleString('en-US'))}</div><div style="font-size:12px;color:${C.ink2}">${esc(label)}</div></td>`).join('')}</tr></table>` : '';
+    `<td style="border:1px solid ${C.grid};border-radius:6px;padding:8px 10px;text-align:right"><div style="font-size:22px;font-weight:700;color:${C.ink}">${esc(typeof v === 'number' ? v.toLocaleString('en-US') : v)}</div><div style="font-size:12px;color:${C.ink2}">${esc(label)}</div></td>`).join('')}</tr></table>` : '';
 
   const body = [
     `<div style="background:${C.tint};border-right:4px solid ${C.comp};padding:12px 14px;border-radius:4px;font-size:16px;font-weight:600;line-height:1.5">${esc(s.headline ?? '')}</div>`,

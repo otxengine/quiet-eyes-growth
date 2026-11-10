@@ -33,6 +33,7 @@ Rules:
 - In per_competitor, include only competitors with activity in this period.
 - "limits" lists data we don't collect — never present those as "no activity".
 - ads.new = ads launched in this period; ads.active_count = ads still running at its end (ads.active = running ones launched earlier). Never call a running ad new.
+- ads.active_capped = true means our scan stops at active_count ads, so they run at least that many: write "לפחות N" or "N+", never the bare number.
 - If the data for a section is empty, say so in one short phrase instead of guessing.
 - Review sentiment comes from the rating: avg_rating ≤ 2 is negative, ≥ 4 is positive. Never call a low-rated review positive.
 

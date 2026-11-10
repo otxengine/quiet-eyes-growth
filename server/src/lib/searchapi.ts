@@ -58,8 +58,9 @@ export interface AdResult {
 const realText = (...vals: any[]): string =>
   vals.find(v => typeof v === 'string' && v.trim() && !v.includes('{{')) || '';
 
-// Most ads one scan keeps per source; see fullyScannedPlatforms.
-const META_ADS_CAP = 10;
+// Most ads one scan keeps per source; see adScanCapped. Apify bills each returned ad (~$0.005).
+// src/pages/SocialCompetition.jsx shows META_ADS_CAP as "N+" — keep its AD_SCAN_CAP in step.
+export const META_ADS_CAP = 10;
 const GOOGLE_ADS_CAP = 5;
 
 // ── Meta Ads Library ──────────────────────────────────────────────────────────
@@ -253,10 +254,15 @@ export async function searchAllAds(
   return metaAds.length > 0 ? metaAds : searchGoogleAds(`${competitorName} ${category} ${city}`);
 }
 
-// A searchAllAds result comes from one source (Meta, else Google). Under that source's cap
-// it holds every ad running there, so stored ads on these platforms that it lacks have ended.
-// At the cap the rest may still be running: returns [] and nothing is marked ended.
+// A searchAllAds result comes from one source (Meta, else Google). At that source's cap more
+// ads may be running than it holds, so its count is a floor ("N+").
+export function adScanCapped(ads: { platform: string }[]): boolean {
+  return ads.length >= (ads[0]?.platform === 'google' ? GOOGLE_ADS_CAP : META_ADS_CAP);
+}
+
+// Under the cap the result holds every ad running there, so stored ads on these platforms
+// that it lacks have ended. At the cap the rest may still be running: returns [].
 export function fullyScannedPlatforms(ads: AdResult[]): AdResult['platform'][] {
-  if (ads[0]?.platform === 'google') return ads.length < GOOGLE_ADS_CAP ? ['google'] : [];
-  return ads.length < META_ADS_CAP ? ['facebook', 'instagram'] : [];
+  if (adScanCapped(ads)) return [];
+  return ads[0]?.platform === 'google' ? ['google'] : ['facebook', 'instagram'];
 }
