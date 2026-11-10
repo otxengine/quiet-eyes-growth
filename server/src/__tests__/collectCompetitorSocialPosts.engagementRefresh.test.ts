@@ -84,3 +84,18 @@ test('donor clone also copies donor likes/comments onto already-held recent post
   expect(refresh!.slice(1)).toEqual(['c1', 'donor-1', 'facebook']);
   expect(runApifyActor).not.toHaveBeenCalled();
 });
+
+// The DB returns posted_at as a Date (timestamp column), not the ISO string the tests above use.
+test('Date posted_at still yields a cursor: old post -> incremental pull, not a backfill', async () => {
+  const old = new Date(Date.now() - 10 * DAY);
+  queryRawUnsafe.mockResolvedValueOnce([{
+    id: 'p1', external_post_id: 'x1', post_url: null, content_hash: null, media_url: 'http://img',
+    video_url: null, analyzed_at: old, video_analyzed_at: null, posted_at: old,
+  }]);
+  (runApifyActor as jest.Mock).mockResolvedValueOnce([]);
+
+  await collectCompetitorSocialPosts({ body: { businessProfileId: 'b1' } } as any, mockRes());
+
+  const fb = (runApifyActor as jest.Mock).mock.calls.find(([a]) => a === 'apify~facebook-posts-scraper');
+  expect(fb![1]).toMatchObject({ resultsLimit: 5, onlyPostsNewerThan: old.toISOString().slice(0, 10) });
+});

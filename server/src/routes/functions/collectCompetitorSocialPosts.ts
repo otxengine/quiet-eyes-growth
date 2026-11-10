@@ -91,6 +91,13 @@ async function scrapeAndSave(
     `SELECT id, external_post_id, post_url, content_hash, media_url, video_url, analyzed_at, video_analyzed_at, posted_at FROM competitor_posts WHERE competitor_id = $1 AND platform = $2`,
     comp.id, platform,
   ) as { id: string; external_post_id: string | null; post_url: string | null; content_hash: string | null; media_url: string | null; video_url: string | null; analyzed_at: string | null; video_analyzed_at: string | null; posted_at: string | null }[];
+  // posted_at is a timestamp column, so the driver returns a Date. Every comparison below is on
+  // ISO text, and a Date never compares <= an ISO string — the cursor stayed null and every run
+  // was a full BACKFILL_CAP pull.
+  for (const p of existing) {
+    const at = p.posted_at as unknown;
+    if (at instanceof Date) p.posted_at = at.toISOString();
+  }
   const existingIds   = new Set<string>(existing.map(p => p.external_post_id).filter(Boolean) as string[]);
   const existingUrls  = new Set<string>(existing.map(p => normalizeUrl(p.post_url)).filter(Boolean) as string[]);
   const existingHashes = new Set<string>(existing.map(p => p.content_hash).filter(Boolean) as string[]);
