@@ -3,6 +3,8 @@ import { isS3Url, downloadFromS3 } from './s3';
 import { fetchImageBase64 } from './fetchImageBase64';
 import { safeFetch } from './safeFetch';
 import { prisma } from '../db';
+import { businessLocale } from './businessLocale';
+import { EN_JSON_SYSTEM } from './locale';
 
 const MAX_VIDEO_BYTES = 12 * 1024 * 1024; // stay safely under Gemini's ~20MB inline-request ceiling after base64 overhead
 // Video analysis (Gemini) is meaningfully more expensive than image analysis and is
@@ -103,6 +105,30 @@ function normalizeValueFraming(v: string | null): string | null {
   return v;
 }
 
+// Output language and the example phrases shown to the model, per business language.
+const EX = {
+  he: {
+    language: 'Hebrew',
+    urgency: "'היום בלבד', 'מלאי מוגבל'",
+    redemption: "'קישור בביו', 'קוד בקופה', 'הודעה פרטית', 'בחנות בלבד'",
+    pillars: "'מבצעים', 'מאחורי הקלעים', 'לקוחות מרוצים', 'מוצר חדש', 'טיפים/חינוך', 'הומור/בידור'",
+    drivers: "'ביקש לתייג חבר/ה', 'ביקש תגובות/דעות', 'ביקש לשתף', 'ביקש לייק/שמירה'",
+    offer: "'20% הנחה על כל התפריט'",
+    styles: "'מינימליסטי', 'צבעוני ואנרגטי', 'מקצועי'",
+    cta: "'הזמינו עכשיו', 'לפרטים בלינק בביו'",
+  },
+  en: {
+    language: 'English',
+    urgency: "'Today only', 'Limited stock'",
+    redemption: "'Link in bio', 'Code at checkout', 'Direct message', 'In store only'",
+    pillars: "'Offers', 'Behind the scenes', 'Happy customers', 'New product', 'Tips/education', 'Humor/entertainment'",
+    drivers: "'Asked to tag a friend', 'Asked for comments/opinions', 'Asked to share', 'Asked for a like/save'",
+    offer: "'20% off the whole menu'",
+    styles: "'Minimalist', 'Colorful and energetic', 'Professional'",
+    cta: "'Order now', 'Details at the link in bio'",
+  },
+};
+
 /** Normalize/guard raw offer-breakdown LLM output. Never throws. */
 function normalizeOfferBreakdown(raw: any) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
@@ -123,8 +149,9 @@ function normalizeOfferBreakdown(raw: any) {
  */
 async function analyzeOfferBreakdown(input: {
   caption: string | null; cta: string | null; offerDetails: string | null; platform: string;
-  imageBase64: string; imageMediaType: string; model: string; isVideo: boolean;
+  imageBase64: string; imageMediaType: string; model: string; isVideo: boolean; lang: 'he' | 'en';
 }) {
+  const x = EX[input.lang];
   try {
     const raw = await invokeLLM({
       model: input.model,
@@ -133,17 +160,18 @@ async function analyzeOfferBreakdown(input: {
       imageBase64: input.imageBase64,
       imageMediaType: input.imageMediaType,
       response_json_schema: { type: 'object' },
+      ...(input.lang === 'en' && { systemPrompt: EN_JSON_SYSTEM }),
       prompt: `You are a marketing analyst breaking down a competitor's promotional offer on ${input.platform}.
 Caption: ${(input.caption || '(no caption)').slice(0, 800)}
 ${input.cta ? `CTA: ${input.cta}\n` : ''}Offer: ${input.offerDetails || '(see image)'}
 
-Look at the attached ${input.isVideo ? 'video' : 'image'} and caption together. Return ONLY valid JSON. ALL string values must be in Hebrew:
+Look at the attached ${input.isVideo ? 'video' : 'image'} and caption together. Return ONLY valid JSON. ALL string values must be in ${x.language}:
 {
   "offer_mechanic": "one of: percent_discount, fixed_amount, bogo, free_shipping, bundle, gift_with_purchase, free_trial, giveaway, loyalty_perk, other",
   "offer_value_framing": "one of exactly: relative, absolute, both — relative means percent off (e.g. 20%), absolute means a fixed amount off (e.g. 50 currency units off) — return ONLY the single word, not the explanation",
-  "offer_urgency": "short phrase describing an urgency/scarcity cue if present (e.g. 'היום בלבד', 'מלאי מוגבל'), otherwise null",
+  "offer_urgency": "short phrase describing an urgency/scarcity cue if present (e.g. ${x.urgency}), otherwise null",
   "offer_conditions": "short phrase for minimum spend / code required / exclusions if present, otherwise null",
-  "offer_redemption": "short phrase for how to redeem — e.g. 'קישור בביו', 'קוד בקופה', 'הודעה פרטית', 'בחנות בלבד'",
+  "offer_redemption": "short phrase for how to redeem — e.g. ${x.redemption}",
   "offer_in_image": true,
   "offer_audience_intent": "one of: new_customer, retention, reactivation, list_building, general"
 }`,
@@ -213,10 +241,15 @@ export async function analyzePostCreative(input: {
   // When the post was published. Older than MAX_POST_AGE_DAYS = skipped before any download
   // or LLM call. Omit for items that are current by nature (stories, running ads).
   postedAt?: Date | string | null;
+  // The business the analysis is for: its language is the language of every text field.
+  // Omitted = Hebrew.
+  businessProfileId?: string | null;
 }): Promise<PostCreativeAnalysis | null> {
   if (!input.mediaUrl && !input.videoUrl) return null;
   if (isPastWindow(input.postedAt)) return null;
   if (!(await takeDailySlot())) return null;
+  const { lang } = await businessLocale(input.businessProfileId);
+  const x = EX[lang];
 
   try {
     let media = (input.videoUrl && VIDEO_ANALYSIS_ENABLED) ? await fetchVideoBase64(input.videoUrl) : null;
@@ -228,8 +261,8 @@ export async function analyzePostCreative(input: {
 
     const outlierFields = input.performanceContext ? `,
   "hook": "1-2 sentences: based on the caption/${isVideo ? 'video' : 'image'} AND that this post got ${input.performanceContext.engagementMultiple.toFixed(1)}x this account's average engagement on ${input.platform}, why did it likely stand out and drive people to stop scrolling and engage",
-  "content_pillar": "a short recurring content theme/category label for this post, e.g. 'מבצעים', 'מאחורי הקלעים', 'לקוחות מרוצים', 'מוצר חדש', 'טיפים/חינוך', 'הומור/בידור'",
-  "audience_action_driver": "what specifically the caption asked the audience to do to engage — e.g. 'ביקש לתייג חבר/ה', 'ביקש תגובות/דעות', 'ביקש לשתף', 'ביקש לייק/שמירה' — or null if there was no explicit ask"` : '';
+  "content_pillar": "a short recurring content theme/category label for this post, e.g. ${x.pillars}",
+  "audience_action_driver": "what specifically the caption asked the audience to do to engage — e.g. ${x.drivers} — or null if there was no explicit ask"` : '';
 
     const videoFields = isVideo ? `,
   "video_description": "1-3 sentences: what actually happens in the video — actions, scenes, pacing, what's shown",
@@ -243,20 +276,21 @@ export async function analyzePostCreative(input: {
       imageBase64: media.data,
       imageMediaType: media.mediaType,
       response_json_schema: { type: 'object' },
+      ...(lang === 'en' && { systemPrompt: EN_JSON_SYSTEM }),
       prompt: `You are a marketing analyst reviewing a competitor's ${input.platform} post creative.
 ${input.profile ? `My business: "${input.profile.name}" | Sector: ${input.profile.category} | City: ${input.profile.city}\n` : ''}
 Caption: ${(input.caption || '(no caption)').slice(0, 800)}
 ${input.cta ? `Known CTA: ${input.cta}\n` : ''}
-Look at the attached ${isVideo ? 'video' : 'image'} and the caption together. Return ONLY valid JSON. ALL string values must be in Hebrew:
+Look at the attached ${isVideo ? 'video' : 'image'} and the caption together. Return ONLY valid JSON. ALL string values must be in ${x.language}:
 {
   "topic": "what the post is about — 1 short phrase",
   "has_offer": false,
-  "offer_details": "the specific discount/offer if has_offer is true (e.g. '20% הנחה על כל התפריט'), otherwise null",
+  "offer_details": "the specific discount/offer if has_offer is true (e.g. ${x.offer}), otherwise null",
   "visual_hooks": ["visual elements that grab attention — colors, faces, product shots, text overlays"],
   "text_hooks": ["specific words/phrases in the caption or ${isVideo ? 'video' : 'image'} text designed to grab attention"],
-  "style": "overall creative style — e.g. 'מינימליסטי', 'צבעוני ואנרגטי', 'מקצועי'",
+  "style": "overall creative style — e.g. ${x.styles}",
   "has_cta": false,
-  "cta": "the call to action, ONLY if has_cta is true and it's a clear explicit instruction (e.g. 'הזמינו עכשיו', 'לפרטים בלינק בביו') — not just a vague sign-off. Otherwise null."${videoFields}${outlierFields}
+  "cta": "the call to action, ONLY if has_cta is true and it's a clear explicit instruction (e.g. ${x.cta}) — not just a vague sign-off. Otherwise null."${videoFields}${outlierFields}
 }`,
     });
 
@@ -267,7 +301,7 @@ Look at the attached ${isVideo ? 'video' : 'image'} and the caption together. Re
       const breakdown = await analyzeOfferBreakdown({
         caption: input.caption, cta: normalized.cta, offerDetails: normalized.offer_details,
         platform: input.platform, imageBase64: media.data, imageMediaType: media.mediaType,
-        model, isVideo,
+        model, isVideo, lang,
       });
       if (breakdown) Object.assign(normalized, breakdown);
     }

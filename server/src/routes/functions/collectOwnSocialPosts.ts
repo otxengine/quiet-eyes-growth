@@ -66,7 +66,7 @@ async function scrapeAndSave(
     // once video_analyzed_at is set, never re-run video analysis (cost control).
     const useVideoUrl = alreadyVideoAnalyzed ? null : videoUrl;
     try {
-      const analysis = await analyzePostCreative({ caption, platform, mediaUrl, videoUrl: useVideoUrl, postedAt });
+      const analysis = await analyzePostCreative({ caption, platform, mediaUrl, videoUrl: useVideoUrl, postedAt, businessProfileId });
       if (analysis) {
         await prisma.businessPost.update({
           where: { id },

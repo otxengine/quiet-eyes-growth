@@ -3,6 +3,8 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { loadBusinessContext } from '../../lib/businessContext';
+import { businessLocale } from '../../lib/businessLocale';
+import { EN_JSON_SYSTEM } from '../../lib/locale';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 
@@ -53,6 +55,8 @@ export async function detectCompetitorChanges(req: Request, res: Response) {
     // Load context for personalized action suggestions
     const bizCtx = await loadBusinessContext(businessProfileId);
     const preferredChannel = bizCtx?.preferredChannels?.[0] || 'instagram';
+    // Search queries, the analysis and every stored text follow the business's language.
+    const en = (await businessLocale(businessProfileId)).lang === 'en';
 
     for (const comp of competitors) {
 
@@ -60,10 +64,10 @@ export async function detectCompetitorChanges(req: Request, res: Response) {
         const instagramHandle = (comp as any).instagram_handle
           ? `@${((comp as any).instagram_handle).replace('@', '')} ` : '';
         const queries = [
-          `"${comp.name}" מבצע הנחה חדש`,
-          `"${comp.name}" מחיר תפריט שירות`,
+          en ? `"${comp.name}" new deal discount` : `"${comp.name}" מבצע הנחה חדש`,
+          en ? `"${comp.name}" prices menu services` : `"${comp.name}" מחיר תפריט שירות`,
           `${instagramHandle}"${comp.name}" site:facebook.com OR site:instagram.com`,
-          `"${comp.name}" ביקורות חדשות לקוחות`,
+          en ? `"${comp.name}" new customer reviews` : `"${comp.name}" ביקורות חדשות לקוחות`,
         ];
 
         const results: any[] = [];
@@ -81,11 +85,12 @@ export async function detectCompetitorChanges(req: Request, res: Response) {
         const analysis = await invokeLLM({
           model: 'sonnet',
           maxTokens: 500,
+          ...(en && { systemPrompt: EN_JSON_SYSTEM }),
           prompt: `You are a competitive intelligence analyst. Analyze the information gathered about the competitor "${comp.name}" and identify real business changes.
 
 ${textBlob.slice(0, 3000)}
 
-Report only on concrete changes that appear in the data. Return ONLY valid JSON. ALL string values must be in Hebrew:
+Report only on concrete changes that appear in the data. Return ONLY valid JSON. ALL string values must be in ${en ? 'English' : 'Hebrew'}:
 {
   "changes_found": true,
   "price_change":    { "found": false, "summary": "specific description with numbers if found" },
@@ -127,7 +132,7 @@ Report only on concrete changes that appear in the data. Return ONLY valid JSON.
         // Create a MarketSignal for significant changes — with dedup check
         if (analysis.overall_summary && analysis.changes_found) {
           // Dedup: skip if similar signal for this competitor exists in last 48h
-          const signalSummary = `שינוי אצל ${comp.name}: ${analysis.overall_summary}`;
+          const signalSummary = `${en ? 'Change at' : 'שינוי אצל'} ${comp.name}: ${analysis.overall_summary}`;
           const existingSignal = await prisma.marketSignal.findFirst({
             where: {
               linked_business: businessProfileId,
@@ -140,22 +145,30 @@ Report only on concrete changes that appear in the data. Return ONLY valid JSON.
           if (existingSignal) continue;
 
           // Build a specific action based on change type
-          let actionLabel = `בדוק עדכונים אצל ${comp.name}`;
+          let actionLabel = en ? `Check updates at ${comp.name}` : `בדוק עדכונים אצל ${comp.name}`;
           let actionType  = 'task';
-          let prefillText = `עדכון אצל ${comp.name}:\n\n${analysis.overall_summary}\n\nפעולה מומלצת: `;
+          let prefillText = en
+            ? `Update at ${comp.name}:\n\n${analysis.overall_summary}\n\nRecommended action: `
+            : `עדכון אצל ${comp.name}:\n\n${analysis.overall_summary}\n\nפעולה מומלצת: `;
 
           if (analysis.new_promotion?.found) {
-            actionLabel = `פרסם מבצע משלך ב${preferredChannel}`;
+            actionLabel = en ? `Post your own offer on ${preferredChannel}` : `פרסם מבצע משלך ב${preferredChannel}`;
             actionType  = 'promote';
-            prefillText += `${comp.name} מציע מבצע: "${analysis.new_promotion.summary}". פרסם מבצע מקביל שמבליט את הערך הייחודי שלך.`;
+            prefillText += en
+              ? `${comp.name} is running an offer: "${analysis.new_promotion.summary}". Post a matching offer that highlights what makes you different.`
+              : `${comp.name} מציע מבצע: "${analysis.new_promotion.summary}". פרסם מבצע מקביל שמבליט את הערך הייחודי שלך.`;
           } else if (analysis.price_change?.found) {
-            actionLabel = `בדוק תמחור`;
+            actionLabel = en ? 'Review your pricing' : `בדוק תמחור`;
             actionType  = 'task';
-            prefillText += `${comp.name} עדכן מחירים (${analysis.price_change.summary}) — בדוק האם המחירים שלך עדיין תחרותיים.`;
+            prefillText += en
+              ? `${comp.name} changed prices (${analysis.price_change.summary}) — check that yours are still competitive.`
+              : `${comp.name} עדכן מחירים (${analysis.price_change.summary}) — בדוק האם המחירים שלך עדיין תחרותיים.`;
           } else if (analysis.new_post?.found) {
-            actionLabel = `פרסם תוכן ב${preferredChannel}`;
+            actionLabel = en ? `Post content on ${preferredChannel}` : `פרסם תוכן ב${preferredChannel}`;
             actionType  = 'social_post';
-            prefillText += `${comp.name} פרסם: "${analysis.new_post.summary}". צור פוסט שמציג את היתרון הייחודי שלך.`;
+            prefillText += en
+              ? `${comp.name} posted: "${analysis.new_post.summary}". Create a post that shows what makes you different.`
+              : `${comp.name} פרסם: "${analysis.new_post.summary}". צור פוסט שמציג את היתרון הייחודי שלך.`;
           }
 
           const sourceDesc = JSON.stringify({
@@ -165,10 +178,10 @@ Report only on concrete changes that appear in the data. Return ONLY valid JSON.
             time_minutes:   15,
             urgency_hours:  analysis.price_change?.found ? 12 : 24,
             impact_reason:  analysis.new_promotion?.found
-              ? 'מתחרה עם מבצע פעיל עלול למשוך לקוחות שלך'
+              ? (en ? 'A competitor with a live offer can pull your customers away' : 'מתחרה עם מבצע פעיל עלול למשוך לקוחות שלך')
               : analysis.price_change?.found
-              ? 'שינוי מחירים אצל מתחרה עשוי להשפיע על ההחלטות של לקוחותיך'
-              : 'תגובה מהירה לפרסום מתחרה שומרת על נוכחותך בשוק',
+              ? (en ? "A competitor's price change can sway your customers' decisions" : 'שינוי מחירים אצל מתחרה עשוי להשפיע על ההחלטות של לקוחותיך')
+              : (en ? "A quick answer to a competitor's post keeps you visible" : 'תגובה מהירה לפרסום מתחרה שומרת על נוכחותך בשוק'),
           });
 
           const sourceUrls = results

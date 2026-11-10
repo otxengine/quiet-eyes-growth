@@ -5,13 +5,13 @@ const IL_TZ = 'Asia/Jerusalem';
  * Date, handling DST correctly via Intl (round-trip: guess as UTC, see how
  * that instant reads in Asia/Jerusalem, correct by the difference).
  */
-export function israelLocalToUTC(dateStr: string, timeStr: string): Date {
+export function localToUTC(dateStr: string, timeStr: string, tz: string = IL_TZ): Date {
   const [y, m, d] = dateStr.split('-').map(Number);
   const [hh, mm] = timeStr.split(':').map(Number);
   const guess = Date.UTC(y, m - 1, d, hh, mm, 0);
 
   const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone: IL_TZ, hour12: false,
+    timeZone: tz, hour12: false,
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
   });
@@ -28,6 +28,8 @@ export function israelLocalToUTC(dateStr: string, timeStr: string): Date {
   // at the first estimate.
   return new Date(guess - offsetAt(guess - offsetAt(guess)));
 }
+
+export const israelLocalToUTC = (dateStr: string, timeStr: string) => localToUTC(dateStr, timeStr);
 
 const toMinutes = (hhmm: string) => {
   const [h, m = 0] = hhmm.split(':').map(Number);
