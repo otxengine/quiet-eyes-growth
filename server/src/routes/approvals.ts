@@ -17,11 +17,11 @@ import {
   getPendingApprovals,
 } from '../services/approval/ApprovalWorkflow';
 import { createLogger } from '../infra/logger';
-import { requireAdminKey } from '../middleware/businessAccess';
+import { requireAdmin } from '../middleware/auth';
 
 const logger = createLogger('ApprovalsRoute');
 const router = Router();
-router.use(requireAdminKey); // admin panel only (adminFetch with the admin key); no tenant UI calls this router
+router.use(requireAdmin); // admins only (middleware/auth.ts); no tenant UI calls this router
 
 // ─── POST /api/approvals ──────────────────────────────────────────────────────
 

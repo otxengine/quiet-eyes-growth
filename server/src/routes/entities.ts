@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
 import { planLimits } from '../lib/planLimits';
-import { getUserId, isAdminKeyRequest } from '../middleware/auth';
+import { getUserId } from '../middleware/auth';
 import { getUserEmail, getUserBusinessIds, getUserWritableBusinessIds } from '../lib/ownership';
 import { cleanupCompetitorsByRadius } from '../lib/competitorRadiusCleanup';
 import { collectCompetitorSocialPosts } from './functions/collectCompetitorSocialPosts';
@@ -211,9 +211,6 @@ async function rawEntityQuery(
 
 // GET /api/entities/me — current user info
 router.get('/me', (req: Request, res: Response) => {
-  if (isAdminKeyRequest(req)) {
-    return res.json({ id: 'admin', email: 'admin' });
-  }
   try {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
@@ -233,20 +230,6 @@ router.get('/:entity', async (req: Request, res: Response) => {
     const filter = req.query.filter ? JSON.parse(req.query.filter as string) : {};
     const sort = req.query.sort as string | undefined;
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 200;
-
-    // Admin key bypasses all tenant isolation
-    if (isAdminKeyRequest(req)) {
-      const adminWhere = buildWhere(filter);
-      const rawTable = RAW_SQL_TABLES[String(req.params.entity)];
-      const records = rawTable
-        ? await rawEntityQuery(rawTable, adminWhere, sort, limit)
-        : await model.findMany({
-            where: adminWhere,
-            orderBy: req.params.entity === 'Review' ? REVIEW_ORDER_BY : (sort ? buildOrderBy(sort) : (ENTITY_DEFAULT_ORDER[String(req.params.entity)] ?? buildOrderBy(sort))),
-            take: Math.min(limit, 1000),
-          });
-      return res.json(redact(String(req.params.entity), records));
-    }
 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
@@ -314,13 +297,12 @@ router.get('/:entity', async (req: Request, res: Response) => {
   }
 });
 
-// Billing and tenancy fields: only the server (Paddle webhook, org routes) or the admin key sets these.
+// Billing and tenancy fields: only the server (Paddle webhook, org routes, admin panel) sets these.
 const PROTECTED_FIELDS = ['subscription_plan', 'plan_id', 'subscription_status', 'stripe_customer_id', 'subscription_started_at', 'organization_id'];
 
 // Non-admin writes: drop protected fields, and every tenant key must point at the caller's own
 // data: a business they can write (linked_business, business_id) or a competitor of one.
 async function rejectForeignWrite(req: Request, data: Record<string, any>): Promise<boolean> {
-  if (isAdminKeyRequest(req)) return false;
   for (const f of PROTECTED_FIELDS) delete data[f];
   const bizKeys = ['linked_business', 'business_id'].filter(f => f in data);
   const competitorKeys = ['competitor_id', 'linked_competitor'].filter(f => data[f] != null); // null = own-business row
@@ -347,8 +329,8 @@ router.post('/:entity', async (req: Request, res: Response) => {
     const userId = getUserId(req);
     const data = { ...req.body };
     stripSecrets(String(req.params.entity), data);
-    // Only the admin key may create a row on someone else's behalf.
-    if (userId && (!data.created_by || !isAdminKeyRequest(req))) data.created_by = userId;
+    // A row is always created on the caller's own behalf.
+    if (userId) data.created_by = userId;
     if (await rejectForeignWrite(req, data)) return res.status(403).json({ error: 'Forbidden' });
 
     // Manually-added competitors need no review gate — the user typed the name themselves —
@@ -431,14 +413,12 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
     // For non-admin requests: verify ownership before touching the DB.
     // Doing this upfront (instead of using created_by in the WHERE clause) avoids
     // the P2025 → retry dance for agent-created records that have no created_by.
-    if (!isAdminKeyRequest(req)) {
-      const userId = getUserId(req);
-      if (userId) {
-        const owned = await verifyRecordOwnership(model, String(req.params.id), userId);
-        if (!owned) return res.status(403).json({ error: 'Forbidden' });
-      }
+    const userId = getUserId(req);
+    if (userId) {
+      const owned = await verifyRecordOwnership(model, String(req.params.id), userId);
+      if (!owned) return res.status(403).json({ error: 'Forbidden' });
     }
-    if (!isAdminKeyRequest(req)) delete data.created_by; // only the admin key can reassign an owner
+    delete data.created_by; // an owner is never reassigned
     if (await rejectForeignWrite(req, data)) return res.status(403).json({ error: 'Forbidden' });
 
     try {
@@ -505,12 +485,10 @@ router.delete('/:entity/:id', async (req: Request, res: Response) => {
 
   try {
     // Verify ownership upfront — same pattern as PATCH
-    if (!isAdminKeyRequest(req)) {
-      const userId = getUserId(req);
-      if (userId) {
-        const owned = await verifyRecordOwnership(model, String(req.params.id), userId);
-        if (!owned) return res.status(403).json({ error: 'Forbidden' });
-      }
+    const userId = getUserId(req);
+    if (userId) {
+      const owned = await verifyRecordOwnership(model, String(req.params.id), userId);
+      if (!owned) return res.status(403).json({ error: 'Forbidden' });
     }
     try {
       await model.delete({ where: { id: req.params.id } });

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { getUserId, isAdminKeyRequest } from './auth';
+import { getUserId } from './auth';
 import { getUserBusinessIds } from '../lib/ownership';
 
 /**
@@ -10,8 +10,6 @@ import { getUserBusinessIds } from '../lib/ownership';
  */
 export function requireOwnsBusiness(extractId: (req: Request) => string | undefined) {
   return async (req: Request, res: Response, next: NextFunction) => {
-    if (isAdminKeyRequest(req)) return next();
-
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
@@ -39,7 +37,7 @@ export const requireBusinessAccess = requireOwnsBusiness(req => req.body?.busine
 // 403 unless the caller owns every id. No ids → next(): the /api gate (requireApiAuth)
 // already requires a signed-in caller, so this composes with public routes too.
 async function ensureOwnsAll(req: Request, res: Response, next: NextFunction, ids: string[]) {
-  if (!ids.length || isAdminKeyRequest(req)) return next();
+  if (!ids.length) return next();
   const userId = getUserId(req);
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
   let ownedIds: string[];
@@ -73,7 +71,6 @@ export function ownsBusinessParam(req: Request, res: Response, next: NextFunctio
  */
 export function requireOwnsRecord(lookup: (id: string) => Promise<string | null | undefined>, param = 'id') {
   return async (req: Request, res: Response, next: NextFunction) => {
-    if (isAdminKeyRequest(req)) return next();
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     let owned: boolean;
@@ -84,10 +81,4 @@ export function requireOwnsRecord(lookup: (id: string) => Promise<string | null 
     if (!owned) return res.status(404).json({ error: 'Not found' });
     next();
   };
-}
-
-/** System-wide operations (all-business agent runs, pipeline internals, admin panel APIs). */
-export function requireAdminKey(req: Request, res: Response, next: NextFunction) {
-  if (isAdminKeyRequest(req)) return next();
-  return res.status(403).json({ error: 'Forbidden' });
 }

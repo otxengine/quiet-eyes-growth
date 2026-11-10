@@ -4,7 +4,7 @@ import { getUserId } from '../middleware/auth';
 import { getUserBusinessIds } from '../lib/ownership';
 
 jest.mock('../db', () => ({ prisma: { businessProfile: { findUnique: jest.fn(), update: jest.fn() } } }));
-jest.mock('../middleware/auth', () => ({ getUserId: jest.fn(), isAdminKeyRequest: jest.fn(() => false) }));
+jest.mock('../middleware/auth', () => ({ getUserId: jest.fn() }));
 jest.mock('../lib/ownership', () => ({ getUserBusinessIds: jest.fn(), getUserEmail: jest.fn() }));
 jest.mock('../infra/logger', () => ({
   createLogger: jest.fn(() => ({ warn: jest.fn(), info: jest.fn(), error: jest.fn() })),

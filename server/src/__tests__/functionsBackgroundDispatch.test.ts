@@ -4,7 +4,7 @@
  * running in the background, logging failures to automation_logs.
  */
 jest.mock('../db', () => ({ prisma: {} }));
-jest.mock('../middleware/auth', () => ({ getUserId: jest.fn(() => 'user-a'), isAdminKeyRequest: jest.fn(() => false) }));
+jest.mock('../middleware/auth', () => ({ getUserId: jest.fn(() => 'user-a') }));
 jest.mock('../lib/ownership', () => ({
   getUserBusinessIds: jest.fn(async () => ['biz-1']),
   getUserWritableBusinessIds: jest.fn(async () => ['biz-1']),
