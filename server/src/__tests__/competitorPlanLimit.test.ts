@@ -13,7 +13,6 @@ jest.mock('../db', () => ({
 
 jest.mock('../middleware/auth', () => ({
   getUserId: jest.fn().mockReturnValue('user_1'),
-  isAdminKeyRequest: jest.fn().mockReturnValue(false),
 }));
 jest.mock('../lib/ownership', () => ({
   getUserBusinessIds: jest.fn().mockResolvedValue(['biz_1']),

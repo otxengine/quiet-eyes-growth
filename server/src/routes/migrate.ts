@@ -7,14 +7,12 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
 
 const router = Router();
-// No default secret — must be explicitly set in env or use admin key
+// No default secret — must be explicitly set in env
 const MIGRATION_SECRET = process.env.MIGRATION_SECRET;
 
 router.post('/', async (req: Request, res: Response) => {
-  const { isAdminKeyRequest } = require('../middleware/auth');
   const validMigrationSecret = !!MIGRATION_SECRET && req.headers['x-migration-secret'] === MIGRATION_SECRET;
-  const validAdminKey = isAdminKeyRequest(req);
-  if (!validMigrationSecret && !validAdminKey) {
+  if (!validMigrationSecret) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 

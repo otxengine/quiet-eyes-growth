@@ -121,15 +121,9 @@ describe('Meta webhook verify (GET)', () => {
   });
 });
 
-describe('rate limiters and the admin key', () => {
-  // auth.ts reads ADMIN_SECRET at load, so each case loads the modules fresh.
-  async function statuses(adminSecret: string | undefined, header: string, n: number) {
-    const saved = process.env.ADMIN_SECRET;
-    if (adminSecret === undefined) delete process.env.ADMIN_SECRET; else process.env.ADMIN_SECRET = adminSecret;
-    let strictLimiter: any;
-    jest.isolateModules(() => { ({ strictLimiter } = require('../middleware/rateLimits')); });
-    if (saved === undefined) delete process.env.ADMIN_SECRET; else process.env.ADMIN_SECRET = saved;
-
+describe('rate limiters', () => {
+  async function statuses(header: string, n: number) {
+    const { strictLimiter } = require('../middleware/rateLimits');
     const server = express().use(strictLimiter).get('/', (_req, res) => { res.send('ok'); }).listen(0);
     try {
       const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
@@ -141,13 +135,9 @@ describe('rate limiters and the admin key', () => {
     }
   }
 
-  // 21 real local requests each: generous timeout for a loaded parallel run.
-  it('does not skip when ADMIN_SECRET is unset, whatever the header says', async () => {
-    expect((await statuses(undefined, '__unset__', 21)).pop()).toBe(429);
-  }, 30_000);
-
-  it('skips for the configured admin key', async () => {
-    expect(await statuses('s3cret', 's3cret', 21)).not.toContain(429);
+  // 21 real local requests: generous timeout for a loaded parallel run.
+  it('never skip, whatever x-admin-key says (the shared admin key is gone)', async () => {
+    expect((await statuses('__unset__', 21)).pop()).toBe(429);
   }, 30_000);
 });
 

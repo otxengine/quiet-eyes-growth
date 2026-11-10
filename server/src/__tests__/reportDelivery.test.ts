@@ -13,7 +13,7 @@ jest.mock('../db', () => ({
 }));
 const sendEmail = jest.fn(async () => true);
 jest.mock('../lib/email', () => ({ sendEmail: (...a: any[]) => (sendEmail as any)(...a) }));
-jest.mock('../middleware/auth', () => ({ getUserId: () => 'u1', isAdminKeyRequest: () => false }));
+jest.mock('../middleware/auth', () => ({ getUserId: () => 'u1' }));
 jest.mock('../lib/s3', () => ({ downloadReportPdf: jest.fn(async () => null), isS3Url: () => false }));
 jest.mock('../lib/reportPdf', () => ({ reportPdfFilename: () => 'cortexi-weekly-2026-11-01.pdf' }));
 

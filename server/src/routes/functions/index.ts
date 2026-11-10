@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
 import { requireBusinessAccess } from '../../middleware/businessAccess';
-import { getUserId, isAdminKeyRequest } from '../../middleware/auth';
+import { getUserId, requireAdmin } from '../../middleware/auth';
 import { getUserBusinessIds, getUserWritableBusinessIds } from '../../lib/ownership';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
@@ -171,15 +171,13 @@ async function invokeLLMHandler(req: Request, res: Response) {
   const { prompt, response_json_schema } = req.body;
   let { model, maxTokens } = req.body;
   if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
-  if (!isAdminKeyRequest(req)) {
-    if (model !== undefined && !USER_LLM_MODELS.has(model)) return res.status(400).json({ error: 'Unsupported model' });
-    if (typeof prompt !== 'string' || prompt.length > USER_LLM_MAX_PROMPT_CHARS
-        || JSON.stringify(response_json_schema ?? '').length > 20_000) {
-      return res.status(413).json({ error: 'Prompt too large' });
-    }
-    // Omitted → the model's own default in lib/llm; given → a whole number in [1, cap].
-    if (maxTokens !== undefined) maxTokens = Math.min(Math.max(Math.floor(Number(maxTokens)) || 1, 1), USER_LLM_MAX_TOKENS);
+  if (model !== undefined && !USER_LLM_MODELS.has(model)) return res.status(400).json({ error: 'Unsupported model' });
+  if (typeof prompt !== 'string' || prompt.length > USER_LLM_MAX_PROMPT_CHARS
+      || JSON.stringify(response_json_schema ?? '').length > 20_000) {
+    return res.status(413).json({ error: 'Prompt too large' });
   }
+  // Omitted → the model's own default in lib/llm; given → a whole number in [1, cap].
+  if (maxTokens !== undefined) maxTokens = Math.min(Math.max(Math.floor(Number(maxTokens)) || 1, 1), USER_LLM_MAX_TOKENS);
   try {
     const result = await invokeLLM({ prompt, response_json_schema, model, maxTokens });
     return res.json(result);
@@ -436,8 +434,7 @@ const PLAN_CADENCE_FUNCTIONS = new Set([
 ]);
 
 async function requireFunctionAccess(req: Request<{ name: string }>, res: Response, next: NextFunction) {
-  if (isAdminKeyRequest(req)) return next();
-  if (ADMIN_ONLY_FUNCTIONS.has(req.params.name)) return res.status(403).json({ error: 'Forbidden' });
+  if (ADMIN_ONLY_FUNCTIONS.has(req.params.name)) return requireAdmin(req, res, next);
   const body = req.body ?? {};
   if (ALL_BUSINESSES_WITHOUT_ID.has(req.params.name) && !body.businessProfileId) {
     return res.status(400).json({ error: 'businessProfileId required' });
@@ -488,7 +485,6 @@ const invokeLLMLimiter = rateLimit({
   limit: 120,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: req => isAdminKeyRequest(req),
   keyGenerator: req => getUserId(req) ?? 'anonymous', // the /api gate guarantees a user here
   message: { error: 'Too many AI requests, please try again later' },
 });
@@ -503,7 +499,7 @@ router.post('/:name', requireBusinessAccess, requireFunctionAccess, limitInvokeL
   if (!handler) {
     return res.status(404).json({ error: `Unknown function: ${req.params.name}` });
   }
-  if (PLAN_CADENCE_FUNCTIONS.has(req.params.name) && !isAdminKeyRequest(req) && req.body) delete req.body.force;
+  if (PLAN_CADENCE_FUNCTIONS.has(req.params.name) && req.body) delete req.body.force;
   if (BACKGROUND_FUNCTIONS.has(req.params.name)) return runInBackground(req.params.name, handler, req, res);
   // Express 4 drops a rejected promise (and Node then exits on it): send throws to the error handler.
   return Promise.resolve().then(() => handler(req, res)).catch(next);

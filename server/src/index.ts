@@ -47,7 +47,8 @@ import metaWebhookRouter from './routes/meta/webhook';
 import dataforseoWebhookRouter from './routes/webhooks/dataforseo';
 import clerkWebhookRouter from './routes/webhooks/clerk';
 import { requireApiAuth } from './middleware/apiAuth';
-import { isAdminKeyRequest } from './middleware/auth';
+import { requireAdmin } from './middleware/auth';
+import adminRouter from './routes/admin';
 import conversationsRouter from './routes/conversations';
 import orchestratorRouter from './routes/orchestrator';
 import approvalsRouter from './routes/approvals';
@@ -104,7 +105,7 @@ app.use(cors({
     cb(new Error(`CORS: ${origin} not allowed`));
   },
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key', 'x-dev-user'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-dev-user'],
 }));
 
 // After cors(): a 429 needs CORS headers too, or a cross-origin browser reports it as a
@@ -116,15 +117,6 @@ const STRICT_FUNCTIONS = new Set(['run-full-scan', 'runFullScan', 'generateImage
 app.use('/api/functions/:name', (req, res, next) => (STRICT_FUNCTIONS.has(req.params.name) ? strictLimiter(req, res, next) : next()));
 app.use('/api/orchestrator', strictLimiter);
 
-// Dedicated admin key verification — placed before Clerk and body parser
-app.get('/api/admin-verify', (req: any, res: any) => {
-  const key = req.headers['x-admin-key'];
-  const secret = process.env.ADMIN_SECRET || '';
-  if (!secret) return res.status(503).json({ error: 'ADMIN_SECRET not configured on server' });
-  if (key !== secret) return res.status(401).json({ error: 'bad_key' });
-  return res.json({ ok: true });
-});
-
 // Only mount Clerk middleware when a real secret key is configured
 const clerkKey = process.env.CLERK_SECRET_KEY || '';
 const clerkPubKey = process.env.CLERK_PUBLISHABLE_KEY || '';
@@ -132,18 +124,14 @@ const clerkEnabled = clerkKey && !clerkKey.includes('your_key_here') &&
                      clerkPubKey && !clerkPubKey.includes('your_key_here');
 if (clerkEnabled) {
   const { clerkMiddleware } = require('@clerk/express');
-  // Skip Clerk middleware for admin key requests — prevents session cookie interference
-  app.use((req: any, res: any, next: any) => {
-    if (req.headers['x-admin-key']) return next();
-    clerkMiddleware({ publishableKey: clerkPubKey })(req, res, next);
-  });
+  app.use(clerkMiddleware({ publishableKey: clerkPubKey }));
   console.log('Clerk auth enabled');
 } else {
   console.log('Clerk not configured — running in dev mode (all requests as dev-user)');
 }
 
-// Deny by default: every /api route registered below needs a signed-in user or the
-// admin key, except the short public list in middleware/apiAuth.ts. Mounted before
+// Deny by default: every /api route registered below needs a signed-in user, except
+// the short public list in middleware/apiAuth.ts. Mounted before
 // the body parsers so anonymous requests are refused before a 20 MB body is read.
 app.use('/api', requireApiAuth);
 
@@ -186,7 +174,7 @@ app.use('/api/kpi', kpiRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/oauth', oauthRouter);
 app.use('/api', roiRouter);
-app.use('/api/admin', adminUsersRouter);
+app.use('/api/admin', requireAdmin, adminRouter, adminUsersRouter);
 app.use('/api/events', uxEventsRouter);
 app.use('/api/onboarding', onboardingRouter);
 app.use('/api/social', socialRouter);
@@ -208,12 +196,11 @@ app.get(['/healthz', '/api/healthz'], async (_req, res) => {
   }
 });
 
-// Public for uptime checks, so per-agent rows (named <agent>:<businessId>) only go to the admin key.
-app.get('/api/health', async (req, res) => {
+// Public for uptime checks: counts only. Per-agent rows are in /api/monitoring/status (admins).
+app.get('/api/health', async (_req, res) => {
   try {
     const summary = await getAgentStatusSummary();
-    res.json({ ok: summary.failed === 0 && summary.stale === 0, total: summary.total, failed: summary.failed, stale: summary.stale,
-      ...(isAdminKeyRequest(req) && { agents: summary.agents }) });
+    res.json({ ok: summary.failed === 0 && summary.stale === 0, total: summary.total, failed: summary.failed, stale: summary.stale });
   } catch {
     res.status(503).json({ ok: false });
   }
@@ -261,9 +248,7 @@ app.use((err: any, _req: any, res: any, next: any) => {
 process.on('unhandledRejection', (err: any) => console.error('Unhandled rejection:', err?.stack || err));
 
 // ── Monitoring endpoint (admin only) ──────────────────────────────────────────
-app.get('/api/monitoring/status', async (req: any, res: any) => {
-  const { isAdminKeyRequest } = await import('./middleware/auth');
-  if (!isAdminKeyRequest(req)) return res.status(403).json({ error: 'Forbidden' });
+app.get('/api/monitoring/status', requireAdmin, async (_req: any, res: any) => {
   try {
     const { getAgentStatusSummary } = await import('./lib/agentMonitor');
     const summary = await getAgentStatusSummary();
@@ -275,10 +260,8 @@ app.get('/api/monitoring/status', async (req: any, res: any) => {
 
 // Debug endpoint — shows all data counts for a business profile
 // Lead-finding diagnostic — shows exactly what Tavily returns and what the LLM says
-// Requires admin key — exposes env key status and raw business data
-app.get('/api/debug/leads/:bpId', async (req: any, res: any) => {
-  const { isAdminKeyRequest } = await import('./middleware/auth');
-  if (!isAdminKeyRequest(req)) return res.status(403).json({ error: 'Forbidden' });
+// Admins only — exposes env key status and raw business data
+app.get('/api/debug/leads/:bpId', requireAdmin, async (req: any, res: any) => {
   const bpId = req.params.bpId;
   const { prisma: db } = await import('./db');
   const { invokeLLM } = await import('./lib/llm');
@@ -359,9 +342,7 @@ Set is_lead=false if no clear intent to purchase/hire a service.`,
   return res.json(report);
 });
 
-app.get('/api/debug/:bpId', async (req: any, res: any) => {
-  const { isAdminKeyRequest } = await import('./middleware/auth');
-  if (!isAdminKeyRequest(req)) return res.status(403).json({ error: 'Forbidden' });
+app.get('/api/debug/:bpId', requireAdmin, async (req: any, res: any) => {
   const { prisma } = await import('./db');
   const bpId = req.params.bpId;
   const [profile, rawSignals, marketSignals, leads, reviews, competitors, automationLogs] = await Promise.all([
@@ -968,6 +949,31 @@ const httpServer = app.listen(PORT, async () => {
   )`);
   // Per-day spend counters (lib/analyzePostCreative daily cap), shared by API and worker.
   await sql(`CREATE TABLE IF NOT EXISTS ai_daily_usage (day DATE NOT NULL, kind TEXT NOT NULL, n INT NOT NULL DEFAULT 0, PRIMARY KEY (day, kind))`);
+
+  // ── Admin panel (routes/admin.ts): who changed what, and the "run now" queue the worker drains ──
+  await sql(`CREATE TABLE IF NOT EXISTS admin_audit_log (
+    id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    admin_user_id TEXT NOT NULL,
+    action        TEXT NOT NULL,
+    target        TEXT,
+    detail        JSONB
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_log(created_at DESC)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_admin_audit_target ON admin_audit_log(target)`);
+  await sql(`CREATE TABLE IF NOT EXISTS admin_jobs (
+    id           TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    requested_by TEXT NOT NULL,
+    kind         TEXT NOT NULL,
+    business_id  TEXT NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'queued',
+    started_at   TIMESTAMPTZ,
+    finished_at  TIMESTAMPTZ,
+    result       JSONB
+  )`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_admin_jobs_queue ON admin_jobs(status, created_at)`);
+  await sql(`CREATE INDEX IF NOT EXISTS idx_admin_jobs_business ON admin_jobs(business_id, created_at DESC)`);
 
   // ── Stripe billing columns on organizations (legacy, pre-Paddle) ───────────────────────────────
   await sql(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS stripe_customer_id     TEXT`);

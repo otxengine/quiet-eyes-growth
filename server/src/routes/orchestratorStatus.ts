@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { prisma } from '../db';
-import { requireAdminKey } from '../middleware/businessAccess';
+import { requireAdmin } from '../middleware/auth';
 
 const router = Router();
 
 // GET /api/agents/status — Returns latest heartbeat per OTX agent + bus stats
 // Admin panel only: heartbeat rows are named <agent>:<businessId> across every tenant.
-router.get('/', requireAdminKey, async (_req, res) => {
+router.get('/', requireAdmin, async (_req, res) => {
   const [heartbeats, busStats, recentEvents] = await Promise.allSettled([
       prisma.$queryRaw<Array<{
         agent_name: string;
