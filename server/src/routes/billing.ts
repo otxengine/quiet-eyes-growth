@@ -19,7 +19,7 @@ import { prisma } from '../db';
 import { getUserId } from '../middleware/auth';
 import {
   paddleEnabled, paddleRequest, priceIds, planFromPriceId,
-  verifyPaddleSignature, webhookSecret, describeWebhookSecret, PLAN_PRICES,
+  verifyPaddleSignature, webhookSecret, describeWebhookSecret, PLAN_PRICES, planCurrency,
 } from '../lib/paddle';
 import { createLogger } from '../infra/logger';
 import { ORG_ADMIN_ROLES } from '../lib/ownership';
@@ -129,6 +129,7 @@ router.get('/status', async (req: Request, res: Response) => {
     paymentMethod: manage ? paymentMethod : null,
     invoices: manage ? invoices : [],
     canManageBilling: manage,
+    currency: planCurrency(org.plan_id),
     pricePerBranch: PLAN_PRICES[org.plan_id] || null,
     totalMonthly: org.plan_id && PLAN_PRICES[org.plan_id]
       ? PLAN_PRICES[org.plan_id] * (org.branch_count || 1)
@@ -340,9 +341,11 @@ async function applySubscription(sub: any, occurredAt?: string) {
   const item = sub.items?.[0];
   const status: string = sub.status; // active | trialing | past_due | paused | canceled
   const entitled = ENTITLED_STATUSES.has(status);
+  const pricePlan = planFromPriceId(item?.price?.id || '') || sub.custom_data?.plan_id;
+  // A lapsed report-only subscription falls back to the free report-only plan, not into the app.
   const planId = entitled
-    ? (planFromPriceId(item?.price?.id || '') || sub.custom_data?.plan_id || 'starter')
-    : 'free_trial';
+    ? (pricePlan || 'starter')
+    : planCurrency(pricePlan) === 'USD' ? 'brief_free' : 'free_trial';
 
   // Paddle doesn't guarantee delivery order; an older event (e.g. a delayed
   // subscription.created) must not overwrite state from a newer one.

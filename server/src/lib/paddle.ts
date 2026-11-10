@@ -12,6 +12,7 @@
  *   PADDLE_PRICE_STARTER   — pri_…  (₪149/branch/month)
  *   PADDLE_PRICE_GROWTH    — pri_…  (₪499/branch/month)
  *   PADDLE_PRICE_PRO       — pri_…  (₪899/branch/month)
+ *   PADDLE_PRICE_BRIEF_MONTHLY / _WEEKLY / _DAILY / _PLUS — pri_… (USD 10 / 29 / 79 / 149 a month, report-only plans)
  *   Each may list retired price IDs after the current one ("pri_new,pri_old"): checkout
  *   uses the first; webhooks map all of them, so subscribers on an old price keep their plan.
  *
@@ -24,7 +25,15 @@ export const PLAN_PRICES: Record<string, number> = {
   starter: 149,
   growth:  499,
   pro:     899,
+  // Report-only plans, in USD (see planCurrency). brief_free has no price and no checkout.
+  brief_monthly: 10,
+  brief_weekly: 29,
+  brief_daily:  79,
+  brief_plus:   149,
 };
+
+/** The currency PLAN_PRICES is in for a plan — the charge itself is whatever the Paddle price says. */
+export const planCurrency = (plan?: string | null): 'USD' | 'ILS' => (plan?.startsWith('brief_') ? 'USD' : 'ILS');
 
 /** A credential as pasted into the dashboard, minus stray whitespace, quotes or a "Bearer " prefix. */
 function cleanCredential(raw: string | undefined): string {
@@ -95,6 +104,10 @@ function planPriceIds(): Record<string, string[]> {
     starter: ids(process.env.PADDLE_PRICE_STARTER),
     growth:  ids(process.env.PADDLE_PRICE_GROWTH),
     pro:     ids(process.env.PADDLE_PRICE_PRO),
+    brief_monthly: ids(process.env.PADDLE_PRICE_BRIEF_MONTHLY),
+    brief_weekly: ids(process.env.PADDLE_PRICE_BRIEF_WEEKLY),
+    brief_daily:  ids(process.env.PADDLE_PRICE_BRIEF_DAILY),
+    brief_plus:   ids(process.env.PADDLE_PRICE_BRIEF_PLUS),
   };
 }
 

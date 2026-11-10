@@ -20,13 +20,14 @@ import { fetchSocialPageAbout } from '../lib/fetchSocialPageAbout';
 import { getUserId } from '../middleware/auth';
 import { requireBusinessAccess } from '../middleware/businessAccess';
 import { getOrCreateOrgForProfile } from '../lib/orgHelpers';
+import { businessPlanLimits } from '../lib/planLimits';
 
 const logger = createLogger('Onboarding');
 const router = Router();
 // Every route here acts on body.businessProfileId — require a signed-in owner of it
 // (otherwise anyone could rewrite another business's identity/name/category/tone).
 router.use(requireBusinessAccess);
-const PAID_PLANS = new Set(['starter', 'growth', 'pro']);
+const PAID_PLANS = new Set(['starter', 'growth', 'pro', 'brief_monthly', 'brief_weekly', 'brief_daily', 'brief_plus']);
 
 // §5.0/§5.2 identity draft — 9 keys shared by generate-about + approve-about
 const ABOUT_KEYS = ['business_name','sector_key','sub_sector_key','business_type','service_model','target_audience','relevant_topics','content_tone','business_description'];
@@ -422,7 +423,7 @@ router.post('/select-plan', async (req: Request, res: Response) => {
     if (!PAID_PLANS.has(planId)) {
       await prisma.businessProfile.update({
         where: { id: businessProfileId },
-        data: { subscription_plan: 'free_trial' },
+        data: { subscription_plan: planId === 'brief_free' ? 'brief_free' : 'free_trial' },
       });
       return res.json({ ok: true, requiresCheckout: false });
     }
@@ -445,8 +446,23 @@ router.post('/select-plan', async (req: Request, res: Response) => {
 router.post('/confirm-competitors', async (req: Request, res: Response) => {
   const { businessProfileId, approvedIds = [], rejectedIds = [] } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
+  const isIds = (v: unknown) => Array.isArray(v) && v.every(x => typeof x === 'string');
+  if (!isIds(approvedIds) || !isIds(rejectedIds)) return res.status(400).json({ error: 'approvedIds and rejectedIds must be arrays of ids' });
 
   try {
+    // The plan's competitor cap holds here too: tracked after this call = already approved (and not
+    // being rejected now) + the ones being approved. Discovery and manual add already enforce it.
+    const limit = (await businessPlanLimits(businessProfileId)).competitors_max;
+    if (approvedIds.length && limit !== Infinity) {
+      const [kept, adding] = await Promise.all([
+        prisma.competitor.count({ where: { linked_business: businessProfileId, tracking_status: 'approved', id: { notIn: [...approvedIds, ...rejectedIds] } } }),
+        prisma.competitor.count({ where: { linked_business: businessProfileId, id: { in: approvedIds } } }),
+      ]);
+      if (kept + adding > limit) {
+        return res.status(403).json({ ok: false, error: 'Competitor limit reached for this plan', plan_limit: true, limit });
+      }
+    }
+
     if (approvedIds.length) {
       await prisma.competitor.updateMany({
         where: { id: { in: approvedIds }, linked_business: businessProfileId },

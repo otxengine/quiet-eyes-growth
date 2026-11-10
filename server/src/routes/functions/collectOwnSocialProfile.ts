@@ -179,7 +179,7 @@ export async function collectOwnSocialProfile(req: Request, res: Response) {
   const { businessProfileId, force } = req.body;
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
-  const { skip } = await socialGate(businessProfileId, 'collectOwnSocialProfile', { force });
+  const { skip } = await socialGate(businessProfileId, 'collectOwnSocialProfile', { force, own: true });
   if (skip) return res.json({ saved: 0, skipped: true, reason: skip });
 
   const startTime = new Date().toISOString();

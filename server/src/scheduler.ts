@@ -96,13 +96,36 @@ const CONCURRENCY = 4;
 // ponytail: two regions, two cron sets — per-timezone delivery (7am local) when customers ask for it.
 type Region = 'IL' | 'US';
 
-async function getActiveProfiles(region?: Region): Promise<string[]> {
+// The only scheduled agents a report-only ("briefing") business gets: what feeds its competitor
+// report, and the reports. Every other agent and the main pipeline skip those businesses.
+const BRIEFING_AGENTS = new Set([
+  'CollectReviews', 'CollectCompetitorSocialProfileAndPosts', 'CollectCompetitorSocialStories',
+  'CollectOwnSocialProfileAndPosts', 'CollectOwnBusinessInfo',
+  'BatchSnapshotCompetitors', 'DetectCompetitorChanges', 'DetectCompetitorAds',
+  'DiffCompetitorSnapshot', 'DiscoverCompetitorUrls', 'EnrichCompetitorUrls',
+  'GenerateDailyReport', 'GenerateWeeklyReport', 'GenerateMonthlyReport',
+]);
+
+// The hour (business-local) at which US businesses get their reports.
+const SEND_HOUR = 9;
+// Businesses whose local clock is in the SEND_HOUR hour now — and, for the weekly / monthly report,
+// whose local day is a Sunday / the 1st. Timezones are validated when saved (routes/briefing.ts).
+const LOCAL_NOW = `(now() AT TIME ZONE COALESCE(NULLIF(timezone, ''), 'America/New_York'))`;
+const SEND_NOW: Record<'daily' | 'weekly' | 'monthly', string> = {
+  daily: `EXTRACT(HOUR FROM ${LOCAL_NOW}) = ${SEND_HOUR}`,
+  weekly: `EXTRACT(HOUR FROM ${LOCAL_NOW}) = ${SEND_HOUR} AND EXTRACT(DOW FROM ${LOCAL_NOW}) = 0`,
+  monthly: `EXTRACT(HOUR FROM ${LOCAL_NOW}) = ${SEND_HOUR} AND EXTRACT(DAY FROM ${LOCAL_NOW}) = 1`,
+};
+
+async function getActiveProfiles(region?: Region, includeBriefing = false, sendNow?: keyof typeof SEND_NOW): Promise<string[]> {
   try {
     // ponytail: is_active isn't in schema.prisma (DB column predates it, added via raw SQL
     // elsewhere — see organizations.ts) — raw query until schema.prisma is reconciled.
     const profiles = await prisma.$queryRawUnsafe<{ id: string }[]>(
       `SELECT id FROM business_profiles WHERE onboarding_completed = true AND is_active = true`
-      + (region ? ` AND (COALESCE(locale, '') ILIKE 'en%') = ${region === 'US'}` : ''),
+      + (region ? ` AND (COALESCE(locale, '') ILIKE 'en%') = ${region === 'US'}` : '')
+      + (includeBriefing ? '' : ` AND COALESCE(subscription_plan, '') NOT LIKE 'brief\\_%'`)
+      + (sendNow ? ` AND ${SEND_NOW[sendNow]}` : ''),
     );
     return profiles.map((p: { id: string }) => p.id);
   } catch (err: any) {
@@ -111,9 +134,24 @@ async function getActiveProfiles(region?: Region): Promise<string[]> {
   }
 }
 
+async function firstBriefingReports() {
+  const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
+    `SELECT bp.id FROM business_profiles bp
+     WHERE bp.onboarding_completed = true AND bp.is_active = true AND bp.subscription_plan LIKE 'brief\\_%'
+       AND bp.created_date > now() - interval '7 days'
+       AND NOT EXISTS (SELECT 1 FROM reports r WHERE r.linked_business = bp.id)
+       AND (EXISTS (SELECT 1 FROM automation_logs l WHERE l.linked_business = bp.id AND l.automation_name = 'collectCompetitorSocialPosts')
+            OR bp.created_date < now() - interval '20 minutes')`,
+  );
+  for (const { id } of rows) {
+    const res: any = { json: (data: any) => logger.info('FirstBriefingReport result', { id, status: data?.report?.status ?? data?.reason }), status: () => res };
+    await generateReport({ body: { businessProfileId: id, type: 'monthly', first: true, scheduled: true } } as any, res);
+  }
+}
+
 /** Runs a single growth agent function for all active profiles, or only those of one region */
-export async function runAgentForAll(label: string, agentFn: Function, extraBody: Record<string, any> = {}, region?: Region) {
-  const ids = await getActiveProfiles(region);
+export async function runAgentForAll(label: string, agentFn: Function, extraBody: Record<string, any> = {}, region?: Region, sendNow?: keyof typeof SEND_NOW) {
+  const ids = await getActiveProfiles(region, BRIEFING_AGENTS.has(label), sendNow);
   if (ids.length === 0) return;
   logger.info(`${label}: running for ${ids.length} profile(s)`);
   for (let i = 0; i < ids.length; i += CONCURRENCY) {
@@ -320,7 +358,8 @@ export function startScheduler() {
 
   // ── US businesses: the same report collectors and reports, after the US day has ended ──
   // 09:30 UTC is 01:30 Pacific (standard time) / 02:30 (daylight), so "yesterday" is complete in
-  // every continental US timezone; the reports go out at 13:00 UTC = 08:00 Eastern / 05:00 Pacific.
+  // every continental US timezone. The reports go out at 9am in each business's own timezone:
+  // an hourly job that picks the businesses whose local hour is SEND_HOUR (13:00 UTC at the earliest).
   // ponytail: Hawaii and Alaska evenings fall after 09:30 UTC — those posts land in the next daily.
   cron.schedule('30 9 * * *', () => {
     runAgentForAll('CollectReviews', collectReviews, {}, 'US');
@@ -332,9 +371,17 @@ export function startScheduler() {
     runAgentForAll('DetectCompetitorChanges', detectCompetitorChanges, {}, 'US');
     runAgentForAll('DetectCompetitorAds', detectCompetitorAds, {}, 'US');
   });
-  cron.schedule('0 13 * * *', () => runAgentForAll('GenerateDailyReport', generateReport, { type: 'daily', scheduled: true }, 'US'));
-  cron.schedule('30 13 * * 0', () => runAgentForAll('GenerateWeeklyReport', generateReport, { type: 'weekly', scheduled: true }, 'US'));
-  cron.schedule('0 14 1 * *', () => runAgentForAll('GenerateMonthlyReport', generateReport, { type: 'monthly', scheduled: true }, 'US'));
+  cron.schedule('0 * * * *', () => {
+    for (const type of ['daily', 'weekly', 'monthly'] as const) {
+      const label = type === 'daily' ? 'GenerateDailyReport' : type === 'weekly' ? 'GenerateWeeklyReport' : 'GenerateMonthlyReport';
+      runAgentForAll(label, generateReport, { type, scheduled: true }, 'US', type);
+    }
+  });
+
+  // ── Every 5 minutes: the free first report of a new report-only business (its last 30 days) ──
+  // Runs here, not in the API, because only the worker can render the PDF. A business qualifies
+  // once it has no report and its first posts collection has logged — or after 20 minutes anyway.
+  cron.schedule('*/5 * * * *', () => firstBriefingReports().catch(err => logger.error('firstBriefingReports error', { error: err.message })));
 
   // ── Every day at 04:00 UTC: competitor snapshot diff + URL discovery (KAN-160) ──
   // discoverCompetitorUrls runs on its own social_pages_crawled_at guard (7d),

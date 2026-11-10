@@ -38,6 +38,11 @@ const template = readFileSync(join(DIST, 'marketing.html'), 'utf-8');
 const fill = (tpl, head, html) =>
   tpl.replace('<!--app-head-->', head).replace('<!--app-html-->', html);
 
+// English routes (seo.lang === 'en'): a left-to-right document that preloads the Latin font subset.
+const toEnglish = (tpl) => tpl
+  .replace('<html lang="he" dir="rtl">', '<html lang="en" dir="ltr">')
+  .replace(/heebo-(\d+)-hebrew\.woff2/g, 'heebo-$1-latin.woff2');
+
 let count = 0;
 
 for (const route of marketingRoutes) {
@@ -53,7 +58,7 @@ for (const route of marketingRoutes) {
   } else {
     const outDir = join(DIST, route.path.slice(1));
     mkdirSync(outDir, { recursive: true });
-    writeFileSync(join(outDir, 'index.html'), fill(template, head, html));
+    writeFileSync(join(outDir, 'index.html'), fill(route.seo?.lang === 'en' ? toEnglish(template) : template, head, html));
   }
   count += 1;
 }

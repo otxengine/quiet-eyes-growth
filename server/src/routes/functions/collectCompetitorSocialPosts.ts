@@ -9,7 +9,8 @@ import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
 import { postContentHash } from '../../lib/postContentHash';
 import { findDonorCandidates, DonorPlatform } from '../../lib/competitorDonor';
-import { PostsDeltaSignal } from '../../lib/postsDeltaSignal';
+import { PostsDeltaSignal, INSTAGRAM_DELTA_CEILING } from '../../lib/postsDeltaSignal';
+import { steadyPostsCap } from '../../lib/postsCap';
 
 const MIN_INTERVAL_MS = 20 * 60 * 60 * 1000; // 20h
 // ponytail: steady-state cap sized for the actual delta (a few posts/day), not the backfill.
@@ -79,6 +80,8 @@ async function scrapeAndSave(
   businessProfileId: string,
   fullBackfill = false,
   override?: PostsDeltaSignal,
+  // Steady-state pull size: POSTS_CAP on daily plans, more when one pull covers a week or a month.
+  steadyCap = POSTS_CAP,
 ): Promise<{ competitor: string; platform: string; url: string; upserted: number; apify_returned: number; media_found: number; media_uploaded: number; first_post_keys?: string[]; first_post_media_sample?: Record<string, any>; elapsed_ms: number; error: string | null; insert_errors?: any[] }> {
   // One-time backfill: delete posts with no media so they get re-inserted with correct field extraction
   await (prisma as any).$executeRawUnsafe(
@@ -231,7 +234,7 @@ async function scrapeAndSave(
 
   // First-ever scrape (no cursor yet) pulls a deeper one-time backfill; repeat
   // scrapes stay at the steady-state cap since onlyPostsNewerThan already scopes them.
-  let platformCap = refreshRecent ? REFRESH_CAP : onlyPostsNewerThan ? POSTS_CAP : BACKFILL_CAP;
+  let platformCap = refreshRecent ? Math.max(REFRESH_CAP, steadyCap) : onlyPostsNewerThan ? steadyCap : BACKFILL_CAP;
 
   // Profile-scrape cost signal (see postsDeltaSignal.ts) — only consulted on the
   // steady-state path; never allowed to suppress or shrink the first-ever backfill pull.
@@ -239,7 +242,9 @@ async function scrapeAndSave(
   let skipApifyCall = false;
   if (onlyPostsNewerThan && override && !refreshRecent) {
     if (override.kind === 'skip') skipApifyCall = true;
-    else if (override.kind === 'clamped') platformCap = override.limit;
+    // The profile's exact new-post count — unless it hit its own ceiling, where the real number may
+    // be higher (a weekly or monthly pull): then the plan's steady cap applies if it is larger.
+    else if (override.kind === 'clamped') platformCap = override.limit >= INSTAGRAM_DELTA_CEILING ? Math.max(override.limit, steadyCap) : override.limit;
   }
 
   if (skipApifyCall) {
@@ -524,6 +529,7 @@ export async function collectCompetitorSocialPosts(req: Request, res: Response) 
           scrapeAndSave(
             comp, platform, url, businessProfileId, platform === 'facebook' && !!fullBackfill,
             competitorPlatformOverrides?.[comp.id]?.[platform as 'instagram' | 'facebook'],
+            steadyPostsCap(limits?.social_every_days, POSTS_CAP, BACKFILL_CAP),
           ),
         ),
       );

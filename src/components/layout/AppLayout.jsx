@@ -110,6 +110,11 @@ export default function AppLayout() {
   useEffect(() => {
     if (view === 'loading') return;
     if (location.pathname.startsWith('/onboarding')) return;
+    // A report-only (English) business never enters the Hebrew app: it has its own screens.
+    if (String(businessProfile?.subscription_plan || '').startsWith('brief_')) {
+      navigate(businessProfile.onboarding_completed ? '/en/briefing' : '/en/start', { replace: true });
+      return;
+    }
     // If the profile loaded successfully, clear the onboarding guard flag
     if (businessProfile) sessionStorage.removeItem('otx_just_onboarded');
     if (view === 'onboarding') navigate('/onboarding');

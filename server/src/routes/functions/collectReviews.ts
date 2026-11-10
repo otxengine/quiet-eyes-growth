@@ -1,3 +1,4 @@
+import { planLimits, collectorSkipReason } from '../../lib/planLimits';
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
@@ -32,12 +33,21 @@ export async function collectReviews(req: Request, res: Response) {
     return res.json({ new_reviews: 0, skipped: true, reason: 'ran_recently' });
   }
 
+
   const startTime = new Date().toISOString();
   startCostTracking(businessProfileId);
   try {
     const profiles = await prisma.businessProfile.findMany({ where: { id: businessProfileId } });
     const profile = profiles[0];
     if (!profile) return res.status(404).json({ error: 'No business profile' });
+
+    // Plans that collect reviews less often than daily (the report-only plans: weekly) wait here.
+    const limits = planLimits(profile.subscription_plan);
+    if (await collectorSkipReason(businessProfileId, 'collectReviews', limits.reviews_every_days, limits, !!req.body.force)) {
+      popCost(businessProfileId);
+      await writeAutomationLog('collectReviews', businessProfileId, startTime, 0, 'skipped', 'plan_cadence');
+      return res.json({ new_reviews: 0, skipped: true, reason: 'plan_cadence' });
+    }
 
     const { name, city } = profile;
     const sp = getSectorProfile(profile);
