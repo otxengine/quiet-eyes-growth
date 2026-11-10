@@ -4,15 +4,19 @@ import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
-import { searchAllAds, hasSearchApiKey, AdResult, fullyScannedPlatforms } from '../../lib/searchapi';
+import { searchAllAds, hasSearchApiKey, AdResult, adScanCapped } from '../../lib/searchapi';
 import { hasApifyKey } from '../../lib/apify';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
 import { findDonorCandidates, DonorCandidate, DonorPlatform } from '../../lib/competitorDonor';
 
+// Meta ads that share their copy are still separate ads (other image, other variant). Without
+// the ad id in the hash, the unique (competitor, platform, content_hash) index rejected every
+// such ad after the first, so a scan stored fewer ads than it found. Rows stored before this are
+// looked up by external_ad_id, so their old hash never matters.
 function adContentHash(a: AdResult) {
   return createHash('sha256')
-    .update(`${a.platform}|${a.title}|${a.body}|${a.cta}`)
+    .update(`${a.platform}|${a.title}|${a.body}|${a.cta}${a.external_ad_id ? `|${a.external_ad_id}` : ''}`)
     .digest('hex');
 }
 
@@ -131,14 +135,17 @@ async function cloneAdsFromDonor(competitorId: string, businessProfileId: string
        )`,
     competitorId, businessProfileId, donorCompetitorId,
   );
-  // Rows cloned earlier never change above, so take the donor's scan result for them too.
+  // Running here = running in the donor's latest scan. Covers rows cloned earlier and rows
+  // left from our own older scans, which the insert above never touches — before, those kept
+  // counting as running after the donor saw them end.
   await (prisma as any).$executeRawUnsafe(
     `UPDATE "competitor_ad_history" o
-     SET is_active = d.is_active, last_seen_at = GREATEST(o.last_seen_at, d.last_seen_at)
-     FROM "competitor_ad_history" d
-     WHERE o.competitor_id = $1 AND d.competitor_id = $2 AND o.platform = d.platform
-       AND ( (d.external_ad_id IS NOT NULL AND o.external_ad_id = d.external_ad_id)
-          OR (d.content_hash IS NOT NULL AND o.content_hash = d.content_hash) )`,
+     SET is_active = EXISTS (
+       SELECT 1 FROM "competitor_ad_history" d
+       WHERE d.competitor_id = $2 AND d.is_active AND d.platform = o.platform
+         AND ( (d.external_ad_id IS NOT NULL AND o.external_ad_id = d.external_ad_id)
+            OR (d.content_hash IS NOT NULL AND o.content_hash = d.content_hash) ))
+     WHERE o.competitor_id = $1`,
     competitorId, donorCompetitorId,
   ).catch((e: any) => console.warn('[detectCompetitorAds] donor status sync failed:', e.message));
 
@@ -254,6 +261,7 @@ export async function detectCompetitorAds(req: Request, res: Response) {
 
         // ── Update competitor record ─────────────────────────────────────────
         const platforms = [...new Set(ads.map(a => a.platform))];
+        const adCountText = `${ads.length}${adScanCapped(ads) ? '+' : ''}`; // "10+" at the scan cap
         const compUpdate: Record<string, any> = {
           sponsored_ads_detected:   ads.length > 0,
           sponsored_ads_updated_at: new Date().toISOString(),
@@ -298,16 +306,14 @@ export async function detectCompetitorAds(req: Request, res: Response) {
 
         // Persist ad history (append-only upsert)
         const adRowsNeedingAnalysis = await upsertAdHistory(comp.id, businessProfileId, ads);
-        // Every ad this scan returned now has last_seen_at >= scanStart; older ones have ended.
-        const endedPlatforms = fullyScannedPlatforms(ads);
-        if (endedPlatforms.length) {
-          await (prisma as any).$executeRawUnsafe(
-            `UPDATE "competitor_ad_history" SET is_active = false
-             WHERE competitor_id = $1 AND is_active AND platform = ANY($2::text[])
-               AND COALESCE(last_seen_at, first_seen_at) < $3::timestamptz`,
-            comp.id, endedPlatforms, scanStart,
-          ).catch((e: any) => console.warn('[detectCompetitorAds] mark-ended update failed:', e.message));
-        }
+        // is_active = returned by the latest scan, so it always matches active_ad_count (what the
+        // UI and the reports count). Every returned ad now has last_seen_at >= scanStart; the rest
+        // are marked ended — at the cap too, where some may still run: the count shows as "N+".
+        await (prisma as any).$executeRawUnsafe(
+          `UPDATE "competitor_ad_history" SET is_active = false
+           WHERE competitor_id = $1 AND is_active AND COALESCE(last_seen_at, first_seen_at) < $2::timestamptz`,
+          comp.id, scanStart,
+        ).catch((e: any) => console.warn('[detectCompetitorAds] mark-ended update failed:', e.message));
 
         // Analyze ad creatives (topic/offer/hooks/style/cta) — new ads, plus a
         // backfill for existing ads never analyzed. Best-effort, never blocks the agent,
@@ -385,7 +391,7 @@ Analyze and return ONLY valid JSON. ALL string values MUST be in Hebrew:
           maxTokens: 600,
           prompt: `You are a senior competitive intelligence analyst for Israeli businesses.
 My business: "${profile.name}" (${profile.category}, ${profile.city}).
-Competitor "${comp.name}" is running ${ads.length} paid ad campaigns across ${platforms.join(', ')}.
+Competitor "${comp.name}" is running ${adCountText} paid ad campaigns across ${platforms.join(', ')}.
 
 Campaign data:
 ${adSummary.slice(0, 2500)}
@@ -472,7 +478,7 @@ Return ONLY valid JSON. ALL string values MUST be in Hebrew:
         await prisma.marketSignal.create({
           data: {
             linked_business:    businessProfileId,
-            summary:            `${comp.name} מריץ ${ads.length} מודעות ממומנות (${platforms.join(', ')})`,
+            summary:            `${comp.name} מריץ ${adCountText} מודעות ממומנות (${platforms.join(', ')})`,
             impact_level:       analysis.urgency === 'high' ? 'high' : 'medium',
             category:           'competitor_ads',
             recommended_action: analysis.our_counter_action || '',

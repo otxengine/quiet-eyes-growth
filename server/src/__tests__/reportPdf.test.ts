@@ -173,6 +173,14 @@ describe('buildReportHtml — empty daily', () => {
     hasNot(h, 'המתחרים במעקב</h2>');
   });
 
+  it('marks counts from a scan that hit its cap as "N+" in the line, the KPI and the table', () => {
+    const row = { ...emptyDaily, data: { ...emptyDaily.data, totals: { ...emptyDaily.data.totals, active_ads: 12 },
+      competitors: [comp('מתחרה א', { ads: { new_count: 0, active_count: 10, active_capped: true, new: [], active: [] } }),
+        comp('מתחרה ב', { ads: { new_count: 0, active_count: 2, new: [], active: [] } })] } };
+    has(html(row), '— 12+ מודעות שלהם ממשיכות לרוץ.', '<b>12+</b>', '>10+</span>', '>2</span>');
+    expect(reportKpis(row.data).on).toContainEqual(['מודעות פעילות', '12+']);
+  });
+
   it('treats a missing headline like an empty report', () => {
     has(html({ ...dailyActive, summary: {} }), 'לא זוהתה פעילות חדשה');
   });

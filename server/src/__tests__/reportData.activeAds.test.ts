@@ -5,7 +5,7 @@ jest.mock('../db', () => ({
   prisma: {
     $queryRawUnsafe: async (sql: string) => {
       if (sql.includes('FROM competitors')) return [{ id: 'c1', name: 'טאיזו', rating: null, review_count: null }];
-      if (sql.includes('FROM competitor_ad_history')) return sql.includes('last_seen_at >=') ? adRows.active : adRows.fresh;
+      if (sql.includes('FROM competitor_ad_history')) return sql.includes('is_active') ? adRows.active : adRows.fresh;
       return [];
     },
   },
@@ -35,6 +35,13 @@ describe('buildReportData — running ads', () => {
     expect(ads.active[0]).not.toHaveProperty('id');
     expect(data.totals.active_ads).toBe(5);
     expect(isEmptyReport(data)).toBe(false);
+  });
+
+  it('marks the count as a floor only when the latest scan hit its cap', async () => {
+    adRows = { fresh: [], active: Array.from({ length: 10 }, (_, i) => ad(`a${i}`, '2026-11-01')) };
+    expect((await day()).competitors[0].ads).toMatchObject({ active_count: 10, active_capped: true });
+    adRows = { fresh: [], active: Array.from({ length: 9 }, (_, i) => ad(`a${i}`, '2026-11-01')) };
+    expect((await day()).competitors[0].ads).not.toHaveProperty('active_capped');
   });
 
   it('a day with only running ads still gets a report', async () => {
