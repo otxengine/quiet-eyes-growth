@@ -1,3 +1,4 @@
+import { businessGeo } from '../lib/businessLocale';
 import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
 import { isS3Url, downloadFromS3 } from '../lib/s3';
@@ -562,7 +563,7 @@ router.post('/:id/enrich-urls', ownsCompetitor, async (req: Request, res: Respon
       const profile = await prisma.businessProfile.findUnique({
         where: { id: competitor.linked_business }, select: { city: true },
       });
-      const placeId = await findPlaceId(competitor.name, profile?.city || '');
+      const placeId = await findPlaceId(competitor.name, profile?.city || '', await businessGeo(competitor.linked_business));
       if (placeId) {
         await prisma.competitor.update({ where: { id: competitorId }, data: { google_place_id: placeId } });
       }

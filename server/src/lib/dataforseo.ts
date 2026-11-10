@@ -1,3 +1,4 @@
+import { IL_GEO, SearchGeo } from './locale';
 const LOGIN    = process.env.DATAFORSEO_LOGIN    || '';
 const PASSWORD = process.env.DATAFORSEO_PASSWORD || '';
 
@@ -33,6 +34,7 @@ export async function searchCompetitorsByKeyword(
   lng: number,
   zoom  = 14,
   depth = 20,
+  geo: SearchGeo = IL_GEO,
 ): Promise<DataForSEOSearchResult> {
   if (!LOGIN || !PASSWORD) {
     console.warn('[dataforseo] Missing DATAFORSEO_LOGIN / DATAFORSEO_PASSWORD — skipping');
@@ -49,7 +51,7 @@ export async function searchCompetitorsByKeyword(
       body: JSON.stringify([{
         keyword,
         location_coordinate: `${lat},${lng},${zoom}`,
-        language_code:       'iw',
+        language_code:       geo.hl,
         search_this_area:    true,
         depth,
       }]),
@@ -100,7 +102,7 @@ export async function searchCompetitorsByKeyword(
 const ORGANIC_URL = 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced';
 
 /** KAN-220: organic Google SERP — used as the primary source for URL fallback discovery. */
-export async function searchOrganic(keyword: string): Promise<{ urls: string[]; costUsd: number }> {
+export async function searchOrganic(keyword: string, geo: SearchGeo = IL_GEO): Promise<{ urls: string[]; costUsd: number }> {
   if (!LOGIN || !PASSWORD) return { urls: [], costUsd: 0 };
 
   const auth = Buffer.from(`${LOGIN}:${PASSWORD}`).toString('base64');
@@ -109,7 +111,7 @@ export async function searchOrganic(keyword: string): Promise<{ urls: string[]; 
     res = await fetch(ORGANIC_URL, {
       method: 'POST',
       headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify([{ keyword, language_code: 'iw', location_name: 'Israel' }]),
+      body: JSON.stringify([{ keyword, language_code: geo.hl, location_name: geo.country }]),
     });
   } catch (e: any) {
     console.warn('[dataforseo] organic network error:', e.message);

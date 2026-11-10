@@ -1,3 +1,4 @@
+import { businessGeo } from '../../lib/businessLocale';
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
@@ -107,6 +108,7 @@ export async function discoverCompetitorUrls(req: Request, res: Response) {
     if (!profile) return res.status(404).json({ error: 'No business profile' });
 
     const { category, city } = profile;
+    const officialSite = (await businessGeo(businessProfileId)).hl === 'en' ? 'official website' : 'אתר רשמי';
 
     const competitors = await prisma.competitor.findMany({
       where: { linked_business: businessProfileId },
@@ -138,8 +140,8 @@ export async function discoverCompetitorUrls(req: Request, res: Response) {
           Promise.all(prefixes.map(p => tavilySearch(`${p} site:instagram.com`, 3))),
           Promise.all(prefixes.map(p => tavilySearch(`${p} site:facebook.com`, 3))),
           Promise.all([
-            tavilySearch(`"${comp.name}" ${city} ${category} אתר רשמי`, 2),
-            tavilySearch(`"${comp.name}" ${category} אתר רשמי`, 2),
+            tavilySearch(`"${comp.name}" ${city} ${category} ${officialSite}`, 2),
+            tavilySearch(`"${comp.name}" ${category} ${officialSite}`, 2),
             ...(nameEn ? [
               tavilySearch(`"${nameEn}" ${city} ${category} official website`, 2),
               tavilySearch(`"${nameEn}" ${category} official website`, 2),

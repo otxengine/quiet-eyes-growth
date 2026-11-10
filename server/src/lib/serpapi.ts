@@ -1,3 +1,4 @@
+import { IL_GEO, SearchGeo } from './locale';
 /**
  * Shared SerpAPI client — structured Google data for all server-side agents.
  *
@@ -133,12 +134,12 @@ export async function serpGoogleMapsReviews(placeId: string, maxResults = 300): 
  * KAN-220: organic Google search — soft-fail fallback behind DataForSEO organic
  * for URL discovery (website / social).
  */
-export async function serpGoogleOrganic(query: string): Promise<string[]> {
-  const cacheKey = `organic:${query}`;
+export async function serpGoogleOrganic(query: string, geo: SearchGeo = IL_GEO): Promise<string[]> {
+  const cacheKey = `organic:${geo.gl}:${query}`;
   const cached = _getCached(cacheKey);
   if (cached) return cached;
 
-  const data = await _get({ engine: 'google', q: query, google_domain: 'google.co.il', gl: 'il', hl: 'iw' });
+  const data = await _get({ engine: 'google', q: query, google_domain: geo.googleDomain, gl: geo.gl, hl: geo.hl });
   const urls = (data?.organic_results || []).map((r: any) => r.link).filter(Boolean);
   if (urls.length) _setCache(cacheKey, urls);
   return urls;

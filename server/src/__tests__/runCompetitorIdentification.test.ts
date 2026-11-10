@@ -13,6 +13,8 @@ jest.mock('../db', () => ({
       update:     jest.fn().mockResolvedValue({}),
       deleteMany: jest.fn().mockResolvedValue({}),
     },
+    // business_profiles.locale / timezone lookup (lib/businessLocale) — no row = Hebrew / Israel
+    $queryRaw: jest.fn().mockResolvedValue([]),
   },
 }));
 
@@ -480,8 +482,41 @@ test('AC1 (KAN-212): DataForSEO Maps and Google Places nearby both run for the s
   const res = makeRes();
   await runCompetitorIdentification(makeReq(), res);
 
-  expect(searchCompetitorsByKeyword).toHaveBeenCalledWith('בית קפה', COORDS.lat, COORDS.lng);
+  expect(searchCompetitorsByKeyword).toHaveBeenCalledWith('בית קפה', COORDS.lat, COORDS.lng, undefined, undefined,
+    expect.objectContaining({ hl: 'iw', gl: 'il', country: 'Israel' }));
   expect(placesFetch).toHaveBeenCalledWith(expect.stringContaining('nearbysearch'));
+  expect(placesFetch).toHaveBeenCalledWith(expect.stringContaining('language=iw&region=il'));
+});
+
+test('an English (US) business searches in English, in the US, with English prompts', async () => {
+  const US_PROFILE = { ...PROFILE, id: 'biz_us', name: "Joe's Pizza", category: 'Pizza restaurant', city: 'Austin, TX' };
+  (prisma.businessProfile.findMany as jest.Mock).mockResolvedValue([US_PROFILE]);
+  ((prisma as any).$queryRaw as jest.Mock).mockResolvedValueOnce([{ locale: 'en-US', timezone: null }]);
+  const placesFetch = geoAndPlacesFetch([
+    { name: 'Rival Pizza', place_id: 'us1', rating: 4.4, user_ratings_total: 210, formatted_address: 'Austin, TX' },
+  ]);
+  (global as any).fetch = placesFetch;
+  (searchCompetitorsByKeyword as jest.Mock).mockResolvedValue({ candidates: [], costUsd: 0 });
+  (invokeLLM as jest.Mock).mockReset() // earlier tests leave unused once-values queued
+    .mockResolvedValueOnce({ business_type: 'Pizza restaurant', search_terms: ['pizza restaurant'], nearby_cities: [] })
+    .mockResolvedValueOnce({ competitors: [] });
+
+  await runCompetitorIdentification(makeReq('biz_us'), makeRes());
+
+  const HEBREW = /[֐-׿]/;
+  // Hebrew prebuilt terms (the mocked 'בית קפה') are not used; the LLM's English term is.
+  expect(searchCompetitorsByKeyword).toHaveBeenCalledWith('pizza restaurant', COORDS.lat, COORDS.lng, undefined, undefined,
+    expect.objectContaining({ hl: 'en', gl: 'us', country: 'United States' }));
+  const urls = placesFetch.mock.calls.map(c => decodeURIComponent(String(c[0])));
+  expect(urls.some(u => u.includes('geocode') && u.includes('language=en&region=us'))).toBe(true);
+  expect(urls.some(u => u.includes('nearbysearch') && u.includes('language=en') && u.includes('region=us'))).toBe(true);
+  urls.forEach(u => expect(u).not.toMatch(HEBREW));
+  for (const [opts] of (invokeLLM as jest.Mock).mock.calls) {
+    expect(opts.prompt).toContain('must be in English');
+    expect(opts.prompt).not.toMatch(HEBREW);
+    expect(opts.systemPrompt).toContain('must be in English');
+  }
+  expect((invokeLLM as jest.Mock).mock.calls[0][0].prompt).toContain('in United States');
 });
 
 test('AC2 (KAN-212): DataForSEO empty/down does not block identify — Places results still used', async () => {

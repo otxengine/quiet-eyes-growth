@@ -26,3 +26,24 @@ export function localeOf(p?: { locale?: string | null; timezone?: string | null 
 
 /** System prompt for English JSON calls — llm.ts's default JSON system prompt asks for Hebrew. */
 export const EN_JSON_SYSTEM = 'You are a JSON-only assistant. Respond with a single valid JSON object only. No preamble, no explanation, no markdown fences. ALL string values must be in English.';
+
+/** Where and in which language the search APIs (Google, DataForSEO, SerpAPI) look for a business. */
+export interface SearchGeo {
+  /** Google interface language code: 'iw' | 'en'. */
+  hl: string;
+  /** Google region / country code: 'il' | 'us'. */
+  gl: string;
+  /** DataForSEO location_name. */
+  country: string;
+  /** DataForSEO language_name, and the language LLM prompts ask for. */
+  language: string;
+  googleDomain: string;
+  /** Appended to a geocoding query so a bare city name resolves in the right country. */
+  geocodeSuffix: string;
+}
+
+export const IL_GEO: SearchGeo = { hl: 'iw', gl: 'il', country: 'Israel', language: 'Hebrew', googleDomain: 'google.co.il', geocodeSuffix: ' ישראל' };
+// ponytail: English means the US — the only English market sold. Add a country column when a second one is.
+const US_GEO: SearchGeo = { hl: 'en', gl: 'us', country: 'United States', language: 'English', googleDomain: 'google.com', geocodeSuffix: '' };
+
+export const searchGeo = (loc?: BizLocale | null): SearchGeo => (loc?.lang === 'en' ? US_GEO : IL_GEO);
