@@ -9,9 +9,9 @@ import { sendReportEmail } from '../../lib/reportEmail';
 import { renderReportPdf, reportPdfFilename, storeReportPdf } from '../../lib/reportPdf';
 import { BizLocale, EN_JSON_SYSTEM, IL_LOCALE } from '../../lib/locale';
 import { businessLocale } from '../../lib/businessLocale';
+import { isBriefingPlan, planLimits } from '../../lib/planLimits';
 
-// ponytail: inline like generateBattlecard.ts — all paid plans get all three reports.
-const REPORT_PLANS = new Set(['starter', 'growth', 'pro', 'enterprise']);
+
 // Generous ceilings: Hebrew is token-heavy, and the first real weekly report (10
 // competitors, 2026-11-08) was cut off at 2000 — it lost reviews_summary and actions.
 const MAX_TOKENS: Record<ReportType, number> = { daily: 2500, weekly: 4000, monthly: 6000 };
@@ -26,6 +26,7 @@ const fmtDate = (d: Date, loc: BizLocale) => new Intl.DateTimeFormat(loc.intl, {
 
 export function buildPrompt(type: ReportType, start: Date, end: Date, data: unknown, loc: BizLocale = IL_LOCALE, business = ''): string {
   const en = loc.lang === 'en';
+  const withOwn = !!(data as any)?.own; // the business's own activity: monthly, unless the plan leaves it out
   // ids/urls/media are for the UI and email, not the narrative — drop them, and keep post/ad
   // text at the 200 chars the prompt always had (the stored report keeps up to 600 for display).
   const DROP = new Set(['id', 'url', 'link', 'media_url', 'video_url']);
@@ -49,7 +50,7 @@ Return ONLY valid JSON, with the keys in this order (per_competitor last). ALL s
 {
   "headline": "one sentence — the most important thing competitors did in this period",
   "highlights": ["3-5 specific bullets with competitor names and numbers"],${type !== 'daily' ? `
-  "reviews_summary": "2-3 sentences comparing our reviews with competitors' (volume, rating, main themes)",` : ''}${type === 'monthly' ? `
+  "reviews_summary": "2-3 sentences comparing our reviews with competitors' (volume, rating, main themes)",` : ''}${withOwn ? `
   "own_summary": "2-3 sentences on our own activity this month and how it compares with competitors",` : ''}
   "recommended_actions": ["2-3 concrete actions for us, each under 15 words"],
   "per_competitor": [{ "name": "competitor name", "summary": "1-2 sentences: what they posted, advertised or offered" }]
@@ -60,11 +61,11 @@ Return ONLY valid JSON, with the keys in this order (per_competitor last). ALL s
  * A summary counts only if every section this report type asks for is there — a reply
  * cut off by maxTokens still parses (llm.ts repairs truncated JSON) but drops the tail.
  */
-export function isCompleteSummary(type: ReportType, s: any): boolean {
+export function isCompleteSummary(type: ReportType, s: any, withOwn = type === 'monthly'): boolean {
   return !!s && typeof s === 'object' && !!s.headline && Array.isArray(s.highlights)
     && Array.isArray(s.recommended_actions) && s.recommended_actions.length > 0
     && (type === 'daily' || !!s.reviews_summary)
-    && (type !== 'monthly' || !!s.own_summary);
+    && (!withOwn || !!s.own_summary);
 }
 
 /**
@@ -76,9 +77,10 @@ export function isCompleteSummary(type: ReportType, s: any): boolean {
  * The data comes from SQL; the LLM only narrates it, so an LLM failure still saves the
  * data with status 'partial' (and never overwrites an existing 'ready' narrative).
  * `scheduled` is set by the cron (scheduler.ts) so unpaid plans skip quietly instead of 403.
+ * `first` (with type 'monthly') builds a new business's first report: its last 30 days.
  */
 export async function generateReport(req: Request, res: Response) {
-  const { businessProfileId, type, force, scheduled } = req.body ?? {};
+  const { businessProfileId, type, force, scheduled, first } = req.body ?? {};
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
   if (!REPORT_TYPES.includes(type)) {
     return res.status(400).json({ error: `type must be one of: ${REPORT_TYPES.join(', ')}` });
@@ -88,13 +90,26 @@ export async function generateReport(req: Request, res: Response) {
   try {
     const bp = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
     if (!bp) return res.status(404).json({ error: 'Business profile not found' });
-    if (!REPORT_PLANS.has(bp.subscription_plan || 'free')) {
+    // Which reports a plan gets is in planLimits: every paid app plan gets all three, the
+    // report-only plans get them by cadence (free = monthly, weekly = weekly + monthly).
+    if (!planLimits(bp.subscription_plan).reports.includes(type)) {
       if (scheduled) return res.json({ skipped: true, reason: 'plan' });
       return res.status(403).json({ error: 'Reports require a paid plan', plan_limit: true });
     }
 
     const loc = await businessLocale(businessProfileId);
-    const { start, end } = reportPeriod(type, new Date(), loc.tz);
+    let period = reportPeriod(type, new Date(), loc.tz);
+    if (first) {
+      // The free first report of a new business: the 30 days up to today (local midnight), stored
+      // as a 'monthly' row. Only while the business has no report at all.
+      if (type !== 'monthly' || await prisma.report.count({ where: { linked_business: businessProfileId } })) {
+        if (scheduled) return res.json({ skipped: true, reason: 'not_first' });
+        return res.status(400).json({ error: 'The first report already exists' });
+      }
+      const today = reportPeriod('daily', new Date(), loc.tz).end;
+      period = { start: new Date(today.getTime() - 30 * 86_400_000), end: today };
+    }
+    const { start, end } = period;
     const key = { linked_business: businessProfileId, report_type: type, period_start: start };
     const existing = await prisma.report.findUnique({ where: { linked_business_report_type_period_start: key } });
     if (existing) {
@@ -104,6 +119,13 @@ export async function generateReport(req: Request, res: Response) {
 
     // Round-trip through JSON so Dates become strings — what we store is exactly what we return.
     const data = JSON.parse(JSON.stringify(await buildReportData(businessProfileId, type, start, end, loc)));
+    // Plans whose monthly report is competitors-only (report-only Free) get no "you vs. them" data.
+    if (planLimits(bp.subscription_plan).own_in_report === false) { delete data.own; delete data.own_reviews; }
+    // A report-only business has none of the app's own-activity numbers (leads, campaigns, chats…):
+    // its "you" side is its posts, ads and followers.
+    if (data.own && isBriefingPlan(bp.subscription_plan)) {
+      for (const k of Object.keys(data.own)) if (!['posts', 'ads', 'followers_delta'].includes(k)) delete data.own[k];
+    }
 
     let summary: Record<string, unknown> | null = null;
     let status = 'empty';
@@ -129,7 +151,7 @@ export async function generateReport(req: Request, res: Response) {
             ...(loc.lang === 'en' ? { systemPrompt: EN_JSON_SYSTEM } : { profile: bp as any }),
             costTrackingId: trackId,
           });
-          summary = isCompleteSummary(type, result) ? result : null;
+          summary = isCompleteSummary(type, result, !!data.own) ? result : null;
           if (!summary) console.warn(`[generateReport] attempt ${attempt}: summary incomplete, keys=${result && Object.keys(result)}`);
         } catch (llmErr: any) {
           console.warn(`[generateReport] LLM attempt ${attempt} failed:`, llmErr.message);

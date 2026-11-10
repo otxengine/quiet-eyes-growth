@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
-import { planLimits } from '../../lib/planLimits';
+import { isBriefingPlan, planLimits } from '../../lib/planLimits';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { collectWebSignals } from './collectWebSignals';
 import { collectSocialSignals } from './collectSocialSignals';
@@ -112,6 +112,8 @@ export async function runFullScan(req: Request, res: Response) {
 
   // Plan scan-limit enforcement (KAN-20 AC2)
   const plan      = profile?.subscription_plan ?? 'free_trial';
+  // Report-only plans never run the app's full scan (~30 agents: leads, trends, …).
+  if (isBriefingPlan(plan)) return res.status(403).json({ success: false, plan_limit: true, plan, error: 'Not part of this plan' });
   const scanLimit = planLimits(plan).scans_per_month;
   if (isFinite(scanLimit)) {
     try {

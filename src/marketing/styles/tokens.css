@@ -18,6 +18,12 @@
   direction: rtl;
 }
 
+/* English pages (/en): the same shell, left-to-right. The app's stylesheet aligns <body> right. */
+.mkt-root[dir="ltr"] {
+  direction: ltr;
+  text-align: left;
+}
+
 .mkt-root h1,
 .mkt-root h2,
 .mkt-root h3 {

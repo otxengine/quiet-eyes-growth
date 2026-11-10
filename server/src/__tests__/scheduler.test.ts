@@ -134,8 +134,44 @@ describe('runAgentForAll region filter (US report schedule)', () => {
     (cron.schedule as jest.Mock).mockClear();
     startScheduler();
     const exprs = (cron.schedule as jest.Mock).mock.calls.map(c => c[0]);
-    for (const e of ['0 10 * * *', '30 10 * * 0', '0 11 1 * *', '30 9 * * *', '0 13 * * *', '30 13 * * 0', '0 14 1 * *']) {
+    // Israel: fixed UTC times. US: collection at 09:30 UTC, then an hourly send job.
+    for (const e of ['0 10 * * *', '30 10 * * 0', '0 11 1 * *', '30 9 * * *', '0 * * * *']) {
       expect(exprs).toContain(e);
+    }
+  });
+
+  it('US reports go to the businesses whose local time is 9am (Sunday for weekly, the 1st for monthly)', async () => {
+    bpFindMany.mockResolvedValue([]);
+    await runAgentForAll('GenerateDailyReport', jest.fn(), {}, 'US', 'daily');
+    expect(sqlOf()).toContain('EXTRACT(HOUR FROM');
+    expect(sqlOf()).toContain(') = 9');
+    expect(sqlOf()).not.toContain('EXTRACT(DOW');
+    await runAgentForAll('GenerateWeeklyReport', jest.fn(), {}, 'US', 'weekly');
+    expect(sqlOf()).toMatch(/EXTRACT\(DOW FROM .*\) = 0/);
+    await runAgentForAll('GenerateMonthlyReport', jest.fn(), {}, 'US', 'monthly');
+    expect(sqlOf()).toMatch(/EXTRACT\(DAY FROM .*\) = 1/);
+    await runAgentForAll('GenerateDailyReport', jest.fn(), {}, 'IL');
+    expect(sqlOf()).not.toContain('EXTRACT(HOUR');
+  });
+});
+
+describe('report-only businesses and the scheduler', () => {
+  const sqlOf = () => String(bpFindMany.mock.calls[bpFindMany.mock.calls.length - 1][0]);
+  const EXCLUDES = "NOT LIKE 'brief\\_%'";
+
+  it('agents outside the report pipeline skip report-only businesses', async () => {
+    bpFindMany.mockResolvedValue([]);
+    await runAgentForAll('FindSocialLeads', jest.fn());
+    expect(sqlOf()).toContain(EXCLUDES);
+    await runAgentForAll('Test', jest.fn(), {}, 'US');
+    expect(sqlOf()).toContain(EXCLUDES);
+  });
+
+  it('report collectors and the reports include them', async () => {
+    bpFindMany.mockResolvedValue([]);
+    for (const label of ['CollectReviews', 'CollectCompetitorSocialProfileAndPosts', 'DetectCompetitorAds', 'DiffCompetitorSnapshot', 'GenerateDailyReport', 'GenerateMonthlyReport']) {
+      await runAgentForAll(label, jest.fn(), {}, 'US');
+      expect(sqlOf()).not.toContain(EXCLUDES);
     }
   });
 });

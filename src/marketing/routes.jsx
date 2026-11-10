@@ -7,6 +7,8 @@ import HowItWorks from './pages/HowItWorks.jsx';
 import FeaturesIndex from './pages/FeaturesIndex.jsx';
 import FeaturePage from './pages/FeaturePage.jsx';
 import NotFound from './pages/NotFound.jsx';
+import EnHome from './en/EnHome.jsx';
+import { EN_FAQ } from './en/plans.js';
 import Blog from './pages/Blog.jsx';
 import BlogPost from './pages/BlogPost.jsx';
 import { Terms, Privacy, RefundPolicy, DataDeletion } from './pages/Legal.jsx';
@@ -81,6 +83,20 @@ const blogRoutes = BLOG_POSTS.map((post) => {
 
 export const marketingRoutes = [
   { path: '/', Component: Home, seo: { ...HOME_SEO, jsonLd: 'software' } },
+  {
+    // The English site: the competitor report only, sold outside Israel. seo.lang switches the
+    // shell to left-to-right with the English nav/footer (MarketingLayout) and the head to en-US.
+    path: '/en',
+    Component: EnHome,
+    seo: {
+      lang: 'en',
+      title: 'Cortexi — Competitor report for local businesses',
+      description:
+        'What your competitors posted, advertised and offered this week, and what their customers said — in one short email. First report free.',
+      canonical: '/en',
+      faqItems: EN_FAQ,
+    },
+  },
   {
     path: '/blog',
     Component: Blog,

@@ -103,7 +103,8 @@ export function hebrewPeriodLabel(type: string, start: unknown, end: unknown, tz
   const s = ilDate(start, tz);
   const last = addDays(ilDate(end, tz), -1);
   if (type === 'daily') return `יום ${DAYS[weekdayIdx(s)]}, ${s.d} ב${MONTHS[s.m - 1]} ${s.y}`;
-  if (type === 'monthly') return `${MONTHS[s.m - 1]} ${s.y}`;
+  // A 'monthly' row that is not a calendar month (the first report: the last 30 days) reads as a range.
+  if (type === 'monthly' && s.d === 1) return `${MONTHS[s.m - 1]} ${s.y}`;
   if (s.m === last.m) return `${s.d}–${last.d} ב${MONTHS[last.m - 1]} ${last.y}`;
   return `${s.d} ב${MONTHS[s.m - 1]} – ${last.d} ב${MONTHS[last.m - 1]} ${last.y}`;
 }
@@ -118,7 +119,7 @@ export function reportPeriodLabel(type: string, start: unknown, end: unknown, lo
   const last = addDays(ilDate(end, loc.tz), -1);
   const M = (x: YMD) => MONTHS_EN[x.m - 1];
   if (type === 'daily') return `${DAYS_EN[weekdayIdx(s)]}, ${M(s)} ${s.d}, ${s.y}`;
-  if (type === 'monthly') return `${M(s)} ${s.y}`;
+  if (type === 'monthly' && s.d === 1) return `${M(s)} ${s.y}`;
   if (s.m === last.m) return `${M(s)} ${s.d}–${last.d}, ${last.y}`;
   return `${M(s)} ${s.d} – ${M(last)} ${last.d}, ${last.y}`;
 }
@@ -469,7 +470,8 @@ export function buildReportHtml(row: ReportRow, opts: BuildOptions): string {
         [S.ownStats[0], own.leads?.created], [S.ownStats[1], own.leads?.won],
         [S.ownStats[2], own.conversations], [S.ownStats[3], own.auto_actions?.completed],
       ];
-      const grid = `<div class="stats four">${stats.map(([l, v]) => `<div class="stat"><b class="${v ? '' : 'z'}">${fmt(v || 0)}</b><span>${l}</span></div>`).join('')}</div>`;
+      // The app's own-activity numbers; a report-only business has none (its row in the table above is its "you" side).
+      const grid = own.leads ? `<div class="stats four">${stats.map(([l, v]) => `<div class="stat"><b class="${v ? '' : 'z'}">${fmt(v || 0)}</b><span>${l}</span></div>`).join('')}</div>` : '';
       out.push(section(S.yourActivity, (s.own_summary ? `<p style="margin-bottom:10px">${tx(s.own_summary)}</p>` : '') + grid));
     }
 

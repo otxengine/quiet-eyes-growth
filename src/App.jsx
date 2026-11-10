@@ -12,6 +12,7 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 
 // Public (marketing) routes — shared by all three trees below
 import { publicRoutes, isPublicPath, marketingNotFound } from '@/marketing/PublicRoutes.jsx';
+import { rememberBriefingSignup } from '@/briefing/keys.js';
 
 // App layout
 import AppLayout from '@/components/layout/AppLayout';
@@ -22,6 +23,23 @@ import { OrganizationProvider } from '@/contexts/OrganizationContext';
 // download the app bundle, and each app screen loads its own chunk on demand.
 const lazyPage = (loader) => React.lazy(loader);
 const Onboarding = lazyPage(() => import('@/pages/Onboarding'));
+// The English report-only product (sold outside Israel): its own sign-up flow and account area.
+const BriefingStart = lazyPage(() => import('@/briefing/Start.jsx'));
+const BriefingAccount = lazyPage(() => import('@/briefing/Account.jsx'));
+
+// A visitor from the English landing page (/sign-up?briefing=1) signs up into /en/start; everyone
+// else into the Hebrew onboarding. The flag is kept in sessionStorage across Clerk's sign-up steps.
+const SignUpPage = () => (
+  <div className="min-h-screen flex items-center justify-center bg-secondary/50">
+    {rememberBriefingSignup()
+      ? <SignUp routing="path" path="/sign-up" forceRedirectUrl="/en/start" />
+      : <SignUp routing="path" path="/sign-up" fallbackRedirectUrl="/onboarding" />}
+  </div>
+);
+// Already signed in: the sign-up link from the landing page goes straight to the flow.
+const SignedInSignUp = () => <Navigate to={rememberBriefingSignup() ? '/en/start' : '/'} replace />;
+// Clerk can still land a report-only sign-up on /onboarding (its provider-level fallback).
+const OnboardingOrBriefing = () => (rememberBriefingSignup('') ? <Navigate to="/en/start" replace /> : <Onboarding />);
 const Dashboard = lazyPage(() => import('@/pages/Dashboard.jsx'));
 const Competitors = lazyPage(() => import('@/pages/Competitors.jsx'));
 const Events = lazyPage(() => import('@/pages/Events.jsx'));
@@ -110,11 +128,10 @@ const AuthenticatedApp = () => {
             <SignIn routing="path" path="/sign-in" fallbackRedirectUrl="/" />
           </div>
         } />
-        <Route path="/sign-up/*" element={
-          <div className="min-h-screen flex items-center justify-center bg-secondary/50">
-            <SignUp routing="path" path="/sign-up" fallbackRedirectUrl="/onboarding" />
-          </div>
-        } />
+        <Route path="/sign-up/*" element={<SignUpPage />} />
+        {/* The report-only screens need an account */}
+        <Route path="/en/start" element={<Navigate to="/sign-up?briefing=1" replace />} />
+        <Route path="/en/briefing" element={<Navigate to="/sign-in" replace />} />
         {publicRoutes()}
         <Route path="/join" element={<JoinPage />} />
         <Route path="*" element={marketingNotFound()} />
@@ -134,7 +151,12 @@ const AuthenticatedApp = () => {
       <Route path="/join" element={<JoinPage />} />
 
       {/* Onboarding flow */}
-      <Route path="/onboarding/*" element={<Onboarding />} />
+      <Route path="/onboarding/*" element={<OnboardingOrBriefing />} />
+
+      {/* English report-only product — outside the Hebrew app layout */}
+      <Route path="/en/start" element={<BriefingStart />} />
+      <Route path="/en/briefing" element={<BriefingAccount />} />
+      <Route path="/sign-up/*" element={<SignedInSignUp />} />
 
       {/* Main app with layout */}
       <Route element={<AppLayout />}>

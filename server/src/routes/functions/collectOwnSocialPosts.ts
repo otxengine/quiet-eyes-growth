@@ -7,7 +7,8 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
 import { postContentHash } from '../../lib/postContentHash';
-import { PostsDeltaSignal } from '../../lib/postsDeltaSignal';
+import { PostsDeltaSignal, INSTAGRAM_DELTA_CEILING } from '../../lib/postsDeltaSignal';
+import { steadyPostsCap } from '../../lib/postsCap';
 
 // Own-business twin of collectCompetitorSocialPosts.ts — same Apify actors, same
 // dedup/analysis logic, but scrapes the business's own pages into business_posts
@@ -40,6 +41,7 @@ function normalizeUrl(url: string | null): string | null {
 async function scrapeAndSave(
   businessProfileId: string, platform: string, url: string, fullBackfill = false,
   override?: PostsDeltaSignal,
+  steadyCap = POSTS_CAP, // more than the daily cap when one pull covers a week or a month (see planLimits)
 ) {
   const existing = await prisma.businessPost.findMany({
     where: { linked_business: businessProfileId, platform },
@@ -96,7 +98,7 @@ async function scrapeAndSave(
 
   // First-ever scrape (no cursor yet) pulls a deeper one-time backfill; repeat
   // scrapes stay at the steady-state cap since onlyPostsNewerThan already scopes them.
-  let platformCap = refreshRecent ? REFRESH_CAP : onlyPostsNewerThan ? POSTS_CAP : BACKFILL_CAP;
+  let platformCap = refreshRecent ? Math.max(REFRESH_CAP, steadyCap) : onlyPostsNewerThan ? steadyCap : BACKFILL_CAP;
   // A 150-post backfill run takes noticeably longer on Apify's side than a
   // steady-state few-posts run — give it more polling time or it gets cut off
   // (rawPosts=[]) while the actor is still legitimately working.
@@ -108,7 +110,7 @@ async function scrapeAndSave(
   let skipApifyCall = false;
   if (onlyPostsNewerThan && override && !refreshRecent) {
     if (override.kind === 'skip') skipApifyCall = true;
-    else if (override.kind === 'clamped') platformCap = override.limit;
+    else if (override.kind === 'clamped') platformCap = override.limit >= INSTAGRAM_DELTA_CEILING ? Math.max(override.limit, steadyCap) : override.limit;
   }
 
   if (skipApifyCall) {
@@ -254,7 +256,7 @@ export async function collectOwnSocialPosts(req: Request, res: Response) {
   };
   if (!businessProfileId) return res.status(400).json({ error: 'Missing businessProfileId' });
 
-  const { skip } = await socialGate(businessProfileId, 'collectOwnSocialPosts', { force });
+  const { limits, skip } = await socialGate(businessProfileId, 'collectOwnSocialPosts', { force, own: true });
   if (skip) return res.json({ upserted: 0, skipped: true, reason: skip });
 
   const startTime = new Date().toISOString();
@@ -277,6 +279,7 @@ export async function collectOwnSocialPosts(req: Request, res: Response) {
       tasks.map(([platform, url]) => scrapeAndSave(
         businessProfileId, platform, url, platform === 'facebook' && !!fullBackfill,
         platformCapOverrides?.[platform as 'instagram' | 'facebook'],
+        steadyPostsCap(limits?.social_every_days, POSTS_CAP, BACKFILL_CAP),
       )),
     );
 

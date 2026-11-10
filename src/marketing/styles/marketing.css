@@ -16,3 +16,5 @@ body {
   margin: 0;
   background: var(--mkt-canvas);
 }
+/* Prerendered English pages (scripts/prerender.mjs writes lang="en" dir="ltr" on <html>). */
+html[lang="en"] body { direction: ltr; text-align: left; }

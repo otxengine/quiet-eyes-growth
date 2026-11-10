@@ -81,6 +81,8 @@ const faqJsonLd = (items) => ({
 const esc = (s = '') => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
 export function buildHead(seo) {
+  const en = seo.lang === 'en';
+  const lang = en ? 'en' : 'he';
   const canonical = `${SITE_URL}${seo.canonical === '/' ? '/' : seo.canonical || '/'}`;
   const ogImage = `${SITE_URL}/og/og-default.png`;
 
@@ -91,7 +93,7 @@ export function buildHead(seo) {
     url: canonical,
     name: seo.title,
     description: seo.description,
-    inLanguage: 'he',
+    inLanguage: lang,
     isPartOf: { '@id': `${SITE_URL}/#website` },
   });
   if (seo.breadcrumbs?.length) {
@@ -130,13 +132,15 @@ export function buildHead(seo) {
       ? `<meta name="robots" content="noindex, follow" />`
       : `<meta name="robots" content="index, follow, max-image-preview:large" />`,
     `<link rel="canonical" href="${canonical}" />`,
-    // hreflang — he today, /en/ slot ready for the future
-    `<link rel="alternate" hreflang="he" href="${canonical}" />`,
-    `<link rel="alternate" hreflang="x-default" href="${canonical}" />`,
+    // hreflang — Hebrew pages are also the x-default; the English pages (/en) are a different
+    // product for a different market, not translations, so each side only declares itself.
+    ...(en
+      ? [`<link rel="alternate" hreflang="en-US" href="${canonical}" />`]
+      : [`<link rel="alternate" hreflang="he" href="${canonical}" />`, `<link rel="alternate" hreflang="x-default" href="${canonical}" />`]),
     // Open Graph
     `<meta property="og:type" content="website" />`,
     `<meta property="og:site_name" content="Cortexi" />`,
-    `<meta property="og:locale" content="he_IL" />`,
+    `<meta property="og:locale" content="${en ? 'en_US' : 'he_IL'}" />`,
     `<meta property="og:title" content="${esc(seo.title)}" />`,
     `<meta property="og:description" content="${esc(seo.description)}" />`,
     `<meta property="og:url" content="${canonical}" />`,

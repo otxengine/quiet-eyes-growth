@@ -1,3 +1,4 @@
+import { planLimits, collectorSkipReason } from '../../lib/planLimits';
 import { createHash, randomUUID } from 'crypto';
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
@@ -214,6 +215,13 @@ export async function detectCompetitorAds(req: Request, res: Response) {
   try {
     const profile = await prisma.businessProfile.findFirst({ where: { id: businessProfileId } });
     if (!profile) return res.status(404).json({ error: 'No business profile' });
+
+    // Plans that scan ads less often than daily (report-only Free and Weekly: weekly) wait here.
+    const limits = planLimits(profile.subscription_plan);
+    if (await collectorSkipReason(businessProfileId, 'detectCompetitorAds', limits.ads_every_days, limits, !!req.body.force)) {
+      await writeAutomationLog('detectCompetitorAds', businessProfileId, startTime, 0, 'skipped', 'plan_cadence');
+      return res.json({ processed: 0, skipped: true, reason: 'plan_cadence' });
+    }
 
     const competitors = await prisma.competitor.findMany({
       where: { linked_business: businessProfileId, not_relevant: false, tracking_status: 'approved' },
