@@ -14,6 +14,7 @@ export interface SendEmailOptions {
   subject: string;
   html: string;
   attachments?: { filename: string; content: string }[]; // content is base64
+  headers?: Record<string, string>; // e.g. List-Unsubscribe
 }
 
 export async function sendEmail(opts: SendEmailOptions): Promise<boolean> {
@@ -34,6 +35,7 @@ export async function sendEmail(opts: SendEmailOptions): Promise<boolean> {
         subject: opts.subject,
         html: opts.html,
         ...(opts.attachments?.length && { attachments: opts.attachments }),
+        ...(opts.headers && { headers: opts.headers }),
       }),
     });
     if (!res.ok) {

@@ -16,6 +16,7 @@ const PUBLIC_API_PATHS: RegExp[] = [
   /^\/oauth\/(callback\/[^/]+|confirm-page)$/,
   /^\/competitors\/proxy-image$/,
   /^\/social\/media\/[^/]+$/,
+  /^\/reports\/unsubscribe$/, // opened from a report email; signed per recipient (lib/reportDelivery.ts)
 ];
 
 /**

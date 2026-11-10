@@ -53,6 +53,7 @@ import orchestratorRouter from './routes/orchestrator';
 import approvalsRouter from './routes/approvals';
 import explainabilityRouter from './routes/explainability';
 import kpiRouter from './routes/kpi';
+import reportsRouter from './routes/reports';
 import oauthRouter from './routes/oauth';
 import roiRouter from './routes/roi';
 import adminUsersRouter from './routes/adminUsers';
@@ -182,6 +183,7 @@ app.use('/api/orchestrator', orchestratorRouter);
 app.use('/api/approvals', approvalsRouter);
 app.use('/api/explain', explainabilityRouter);
 app.use('/api/kpi', kpiRouter);
+app.use('/api/reports', reportsRouter);
 app.use('/api/oauth', oauthRouter);
 app.use('/api', roiRouter);
 app.use('/api/admin', adminUsersRouter);
@@ -906,6 +908,8 @@ const httpServer = app.listen(PORT, async () => {
   // Language + timezone of a business’s reports (lib/locale.ts). NULL = Hebrew / Israel time.
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS locale   TEXT`);
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS timezone TEXT`);
+  // Who the competitor report is emailed to (comma-separated). NULL = customer delivery off.
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS report_recipients TEXT`);
 
   // ── Multi-branch / Multi-user / Agency tables ─────────────────────────────
   await sql(`CREATE TABLE IF NOT EXISTS organizations (

@@ -91,12 +91,18 @@ const logger = createLogger('Scheduler');
 // Watch Render logs for pool_timeout / Prisma P2024 after changing; back off to 2 if seen.
 const CONCURRENCY = 4;
 
-async function getActiveProfiles(): Promise<string[]> {
+// Where a business's day ends decides when its report data is collected and its reports are built.
+// English businesses (business_profiles.locale) are the US ones; everything else is Israel.
+// ponytail: two regions, two cron sets — per-timezone delivery (7am local) when customers ask for it.
+type Region = 'IL' | 'US';
+
+async function getActiveProfiles(region?: Region): Promise<string[]> {
   try {
     // ponytail: is_active isn't in schema.prisma (DB column predates it, added via raw SQL
     // elsewhere — see organizations.ts) — raw query until schema.prisma is reconciled.
     const profiles = await prisma.$queryRawUnsafe<{ id: string }[]>(
-      `SELECT id FROM business_profiles WHERE onboarding_completed = true AND is_active = true`,
+      `SELECT id FROM business_profiles WHERE onboarding_completed = true AND is_active = true`
+      + (region ? ` AND (COALESCE(locale, '') ILIKE 'en%') = ${region === 'US'}` : ''),
     );
     return profiles.map((p: { id: string }) => p.id);
   } catch (err: any) {
@@ -105,9 +111,9 @@ async function getActiveProfiles(): Promise<string[]> {
   }
 }
 
-/** Runs a single growth agent function for all active profiles */
-export async function runAgentForAll(label: string, agentFn: Function, extraBody: Record<string, any> = {}) {
-  const ids = await getActiveProfiles();
+/** Runs a single growth agent function for all active profiles, or only those of one region */
+export async function runAgentForAll(label: string, agentFn: Function, extraBody: Record<string, any> = {}, region?: Region) {
+  const ids = await getActiveProfiles(region);
   if (ids.length === 0) return;
   logger.info(`${label}: running for ${ids.length} profile(s)`);
   for (let i = 0; i < ids.length; i += CONCURRENCY) {
@@ -206,15 +212,17 @@ export function startScheduler() {
   // ── Every 24 hours at 05:30 UTC: data ingestion (runs BEFORE main pipeline) ──
   // Fresh data must be in DB before the 07:00 pipeline classifies & fuses it.
   cron.schedule('30 5 * * *', () => {
-    runAgentForAll('CollectReviews', collectReviews);
+    // The four collectors that feed the competitor reports run for Israeli businesses only here;
+    // US businesses get them at 09:30 UTC, once their own day has ended (see the US block below).
+    runAgentForAll('CollectReviews', collectReviews, {}, 'IL');
     runAgentForAll('CollectWebSignals', collectWebSignals);
     runAgentForAll('FindSocialLeads', findSocialLeads);
     // Profile scraped first, then posts scraped with the profile-derived skip/size
     // signal (see postsDeltaSignal.ts) — chained inside each orchestrator call, so
     // this needs no cron reordering.
-    runAgentForAll('CollectCompetitorSocialProfileAndPosts', collectCompetitorSocialProfileAndPosts);
-    runAgentForAll('CollectCompetitorSocialStories', collectCompetitorSocialStories);
-    runAgentForAll('CollectOwnSocialProfileAndPosts', collectOwnSocialProfileAndPosts);
+    runAgentForAll('CollectCompetitorSocialProfileAndPosts', collectCompetitorSocialProfileAndPosts, {}, 'IL');
+    runAgentForAll('CollectCompetitorSocialStories', collectCompetitorSocialStories, {}, 'IL');
+    runAgentForAll('CollectOwnSocialProfileAndPosts', collectOwnSocialProfileAndPosts, {}, 'IL');
     runAgentForAll('CollectOwnBusinessInfo', collectOwnBusinessInfo);
     // Enrich newly created leads with Haiku intent classification (5min after lead gen)
     setTimeout(() => enrichNewLeadsWithIntent()
@@ -233,9 +241,9 @@ export function startScheduler() {
     // DetectCompetitorChanges no longer uses last_scanned as its guard (race with BatchSnapshotCompetitors);
     // it relies on the 48h MarketSignal dedup instead.
     runAgentForAll('BatchSnapshotCompetitors', batchSnapshotCompetitors); // takes fresh snapshots + writes last_scanned
-    runAgentForAll('DetectCompetitorChanges',  detectCompetitorChanges);  // prices/promos/posts → MarketSignals (48h dedup)
+    runAgentForAll('DetectCompetitorChanges',  detectCompetitorChanges, {}, 'IL');  // prices/promos/posts → MarketSignals (48h dedup)
     runAgentForAll('AnalyzeCompetitorSocial',   analyzeCompetitorSocial);   // social enrichment + promo/ads/product detection → new fields + alerts
-    runAgentForAll('DetectCompetitorAds',       detectCompetitorAds);       // Meta/Google paid ad campaigns → ProactiveAlerts
+    runAgentForAll('DetectCompetitorAds',       detectCompetitorAds, {}, 'IL');       // Meta/Google paid ad campaigns → ProactiveAlerts
     runAgentForAll('DetectOwnAds',              detectOwnAds);              // own Meta/Google ad campaigns → self-audit MarketSignal (48h guard)
     runAgentForAll('AnalyzeSocialPosts', scheduledAnalyzeSocialPosts); // deep content-strategy analysis, grounded in per-post vision analysis (48h/competitor guard)
     runAgentForAll('CompetitorIntel',           competitorIntelAgent);      // OSINT × events → ProactiveAlerts
@@ -306,9 +314,27 @@ export function startScheduler() {
   // Israel-time calendar period, so they run after the 05:30 ingestion and the
   // 07:00 ads/pipeline have landed the previous day's data. Unpaid plans are
   // skipped inside the handler (`scheduled` turns its 403 into a quiet no-op).
-  cron.schedule('0 10 * * *', () => runAgentForAll('GenerateDailyReport', generateReport, { type: 'daily', scheduled: true }));
-  cron.schedule('30 10 * * 0', () => runAgentForAll('GenerateWeeklyReport', generateReport, { type: 'weekly', scheduled: true }));
-  cron.schedule('0 11 1 * *', () => runAgentForAll('GenerateMonthlyReport', generateReport, { type: 'monthly', scheduled: true }));
+  cron.schedule('0 10 * * *', () => runAgentForAll('GenerateDailyReport', generateReport, { type: 'daily', scheduled: true }, 'IL'));
+  cron.schedule('30 10 * * 0', () => runAgentForAll('GenerateWeeklyReport', generateReport, { type: 'weekly', scheduled: true }, 'IL'));
+  cron.schedule('0 11 1 * *', () => runAgentForAll('GenerateMonthlyReport', generateReport, { type: 'monthly', scheduled: true }, 'IL'));
+
+  // ── US businesses: the same report collectors and reports, after the US day has ended ──
+  // 09:30 UTC is 01:30 Pacific (standard time) / 02:30 (daylight), so "yesterday" is complete in
+  // every continental US timezone; the reports go out at 13:00 UTC = 08:00 Eastern / 05:00 Pacific.
+  // ponytail: Hawaii and Alaska evenings fall after 09:30 UTC — those posts land in the next daily.
+  cron.schedule('30 9 * * *', () => {
+    runAgentForAll('CollectReviews', collectReviews, {}, 'US');
+    runAgentForAll('CollectCompetitorSocialProfileAndPosts', collectCompetitorSocialProfileAndPosts, {}, 'US');
+    runAgentForAll('CollectCompetitorSocialStories', collectCompetitorSocialStories, {}, 'US');
+    runAgentForAll('CollectOwnSocialProfileAndPosts', collectOwnSocialProfileAndPosts, {}, 'US');
+  });
+  cron.schedule('30 10 * * *', () => {
+    runAgentForAll('DetectCompetitorChanges', detectCompetitorChanges, {}, 'US');
+    runAgentForAll('DetectCompetitorAds', detectCompetitorAds, {}, 'US');
+  });
+  cron.schedule('0 13 * * *', () => runAgentForAll('GenerateDailyReport', generateReport, { type: 'daily', scheduled: true }, 'US'));
+  cron.schedule('30 13 * * 0', () => runAgentForAll('GenerateWeeklyReport', generateReport, { type: 'weekly', scheduled: true }, 'US'));
+  cron.schedule('0 14 1 * *', () => runAgentForAll('GenerateMonthlyReport', generateReport, { type: 'monthly', scheduled: true }, 'US'));
 
   // ── Every day at 04:00 UTC: competitor snapshot diff + URL discovery (KAN-160) ──
   // discoverCompetitorUrls runs on its own social_pages_crawled_at guard (7d),
