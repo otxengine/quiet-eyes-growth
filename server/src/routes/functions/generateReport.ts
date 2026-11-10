@@ -162,8 +162,8 @@ export async function generateReport(req: Request, res: Response) {
     await writeAutomationLog('generateReport', businessProfileId, startTime, 1, 'success',
       status === 'partial' ? `${type}: llm_failed` : undefined, cost ?? undefined);
 
-    // Every complete report goes to the internal distribution list as a short email with the PDF
-    // attached. 'empty' has nothing to read and 'partial' is regenerated later, so only 'ready'
+    // Every complete report goes to the internal distribution list — and to the business's own
+    // recipients when it has any (report_recipients) — as a short email with the PDF attached. 'empty' has nothing to read and 'partial' is regenerated later, so only 'ready'
     // sends. Nothing here may fail the report: no PDF still sends the email, no email still saves it.
     let stored = report;
     if (status === 'ready') {
@@ -178,7 +178,7 @@ export async function generateReport(req: Request, res: Response) {
       } catch (e: any) {
         console.error(`[generateReport] ${type} PDF failed (${pdf ? 'upload' : 'render'}):`, e.message);
       }
-      await sendReportEmail(report, bp.name, pdf && { filename: reportPdfFilename(report, loc.tz), content: pdf }, loc).catch((e: any) =>
+      await sendReportEmail(report, bp.name, pdf && { filename: reportPdfFilename(report, loc.tz), content: pdf }, loc, businessProfileId).catch((e: any) =>
         console.warn('[generateReport] report email failed:', e.message));
     }
     return res.json({ report: stored });

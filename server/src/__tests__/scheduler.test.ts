@@ -112,3 +112,30 @@ describe('KAN-24: scheduler cron + runAgentForAll', () => {
     expect(peak).toBeLessThanOrEqual(4);
   });
 });
+
+describe('runAgentForAll region filter (US report schedule)', () => {
+  const sqlOf = () => String(bpFindMany.mock.calls[bpFindMany.mock.calls.length - 1][0]);
+
+  it('no region = every active business, as before', async () => {
+    bpFindMany.mockResolvedValue([]);
+    await runAgentForAll('Test', jest.fn());
+    expect(sqlOf()).not.toContain('locale');
+  });
+
+  it("'US' = businesses with an English locale, 'IL' = everyone else (incl. no locale)", async () => {
+    bpFindMany.mockResolvedValue([]);
+    await runAgentForAll('Test', jest.fn(), {}, 'US');
+    expect(sqlOf()).toContain("(COALESCE(locale, '') ILIKE 'en%') = true");
+    await runAgentForAll('Test', jest.fn(), {}, 'IL');
+    expect(sqlOf()).toContain("(COALESCE(locale, '') ILIKE 'en%') = false");
+  });
+
+  it('the report crons exist once per region', () => {
+    (cron.schedule as jest.Mock).mockClear();
+    startScheduler();
+    const exprs = (cron.schedule as jest.Mock).mock.calls.map(c => c[0]);
+    for (const e of ['0 10 * * *', '30 10 * * 0', '0 11 1 * *', '30 9 * * *', '0 13 * * *', '30 13 * * 0', '0 14 1 * *']) {
+      expect(exprs).toContain(e);
+    }
+  });
+});

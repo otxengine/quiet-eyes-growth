@@ -3,6 +3,7 @@ import { sendEmail } from './email';
 import type { ReportType } from './reportPeriod';
 import { reportKpis, reportPeriodLabel } from './reportPdf/html';
 import type { BizLocale } from './locale';
+import { customerRecipients, unsubscribeUrl } from './reportDelivery';
 
 // Internal distribution list for every generated report, from SSM (/qe/<env>/REPORT_EMAIL_RECIPIENTS),
 // comma-separated. Kept out of the code because the repo is public.
@@ -33,6 +34,9 @@ export function buildReportEmail(
   businessName: string,
   hasPdf = true,
   loc?: BizLocale,
+  // Set for an email to the customer: it must say why they get it and how to stop it.
+  // Omitted = the internal distribution list.
+  customer?: { unsubscribeUrl: string; postalAddress?: string },
 ): { subject: string; html: string } {
   const type = report.report_type as ReportType;
   const s = report.summary ?? {};
@@ -44,6 +48,15 @@ export function buildReportEmail(
     : periodLabel(type, new Date(report.period_start), new Date(report.period_end));
   const title = en ? `${LABEL_EN[type]} competitor report` : `דוח מתחרים ${LABEL[type]}`;
   const subject = `${title} · ${businessName} · ${period}`;
+
+  const footer = customer
+    ? `${en
+      ? `You are receiving this because ${esc(businessName)} is subscribed to Cortexi competitor reports.`
+      : `קיבלת מייל זה כי ${esc(businessName)} רשום לדוחות המתחרים של Cortexi.`}`
+      + ` <a href="${esc(customer.unsubscribeUrl)}" style="color:${C.muted}">${en ? 'Unsubscribe' : 'הסרה מרשימת התפוצה'}</a>`
+      + (customer.postalAddress ? `<br>${esc(customer.postalAddress)}` : '')
+    : en ? 'Sent automatically by Cortexi when the report was generated · internal distribution list'
+      : 'נשלח אוטומטית ע״י Cortexi עם יצירת הדוח · רשימת תפוצה פנימית';
 
   const { on } = reportKpis(report.data, en ? 'en' : 'he');
   const tiles = on.length ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="6" style="margin:12px 0"><tr>${on.map(([label, v]) =>
@@ -65,27 +78,49 @@ export function buildReportEmail(
 <div style="font-size:24px;font-weight:700;margin-top:2px">${title}</div>
 <div style="font-size:14px;color:${C.ink2}">${esc(period)}</div></td></tr>
 <tr><td style="padding:20px 28px">${body}</td></tr>
-<tr><td style="padding:14px 28px;border-top:1px solid ${C.grid};font-size:11px;color:${C.muted}">${en ? 'Sent automatically by Cortexi when the report was generated · internal distribution list' : 'נשלח אוטומטית ע״י Cortexi עם יצירת הדוח · רשימת תפוצה פנימית'}</td></tr>
+<tr><td style="padding:14px 28px;border-top:1px solid ${C.grid};font-size:11px;color:${C.muted}">${footer}</td></tr>
 </table></td></tr></table></body></html>`;
 
   return { subject, html };
 }
 
 /**
- * One Resend call per report to the whole list, with the PDF attached when there is one (a failed
- * render still sends the short email). No-op (false) when the list isn't configured.
+ * One Resend call per report to the whole internal list, then one per customer recipient, with the PDF
+ * attached when there is one (a failed render still sends the short email). False when nobody was sent to.
  */
 export async function sendReportEmail(
   report: Parameters<typeof buildReportEmail>[0],
   businessName: string,
   pdf?: { filename: string; content: Buffer } | null,
   loc?: BizLocale,
+  // With it, the business's own recipients (business_profiles.report_recipients) get the report too.
+  businessProfileId?: string,
 ): Promise<boolean> {
-  const to = reportRecipients();
-  if (!to.length) return false;
-  const { subject, html } = buildReportEmail(report, businessName, !!pdf, loc);
-  return sendEmail({
-    to, subject, html,
-    ...(pdf && { attachments: [{ filename: pdf.filename, content: pdf.content.toString('base64') }] }),
-  });
+  const attachments = pdf && { attachments: [{ filename: pdf.filename, content: pdf.content.toString('base64') }] };
+  let sent = false;
+
+  const internal = reportRecipients();
+  if (internal.length) {
+    const { subject, html } = buildReportEmail(report, businessName, !!pdf, loc);
+    sent = await sendEmail({ to: internal, subject, html, ...attachments });
+  }
+
+  // One email per customer recipient: each carries its own unsubscribe link. No link (signing secret
+  // or public URL not configured) means no customer email at all — never send one without it.
+  const customers = businessProfileId ? (await customerRecipients(businessProfileId)).filter(e => !internal.includes(e)) : [];
+  for (const to of customers) {
+    const url = unsubscribeUrl(businessProfileId!, to);
+    if (!url) {
+      console.warn('[reportEmail] REPORT_UNSUBSCRIBE_SECRET or FRONTEND_URL not set — customer report email skipped');
+      break;
+    }
+    const { subject, html } = buildReportEmail(report, businessName, !!pdf, loc,
+      { unsubscribeUrl: url, postalAddress: process.env.COMPANY_POSTAL_ADDRESS });
+    const ok = await sendEmail({
+      to, subject, html, ...attachments,
+      headers: { 'List-Unsubscribe': `<${url}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
+    });
+    sent = ok || sent;
+  }
+  return sent;
 }

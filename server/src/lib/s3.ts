@@ -143,3 +143,19 @@ export async function uploadImageFromUrl(sourceUrl: string, folder = 'competitor
     return null;
   }
 }
+
+// The keys storeReportPdf writes (reportPdf/index.ts): reports/<businessId>/<type>-<YYYY-MM-DD>.pdf
+const REPORT_KEY_RE = /^reports\/[A-Za-z0-9_-]+\/(daily|weekly|monthly)-\d{4}-\d{2}-\d{2}\.pdf$/;
+
+/** A stored report PDF, only if the URL is one of ours and the key belongs to `businessId`. */
+export async function downloadReportPdf(url: string, businessId: string): Promise<Buffer | null> {
+  if (!isS3Configured() || !isS3Url(url)) return null;
+  const key = new URL(url).pathname.slice(1);
+  if (!REPORT_KEY_RE.test(key) || !key.startsWith(`reports/${businessId}/`)) return null;
+  try {
+    const result = await client.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
+    return Buffer.from(await (result.Body as any).transformToByteArray());
+  } catch {
+    return null;
+  }
+}
