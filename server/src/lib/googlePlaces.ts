@@ -1,3 +1,4 @@
+import { IL_GEO, SearchGeo } from './locale';
 /**
  * Shared Google Places API (New) client.
  * Uses places:searchText and places/{id} — not the legacy /maps/api/place endpoints.
@@ -23,7 +24,7 @@ export const EMPTY_PLACE: PlaceDetails = {
   servesWine: false, servesBeer: false, servesVegetarianFood: false, websiteUri: '',
 };
 
-export async function findPlaceId(name: string, city: string): Promise<string | null> {
+export async function findPlaceId(name: string, city: string, geo: SearchGeo = IL_GEO): Promise<string | null> {
   if (!GOOGLE_API_KEY) { console.warn('[googlePlaces] No GOOGLE_PLACES_API_KEY'); return null; }
   try {
     const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
@@ -33,7 +34,7 @@ export async function findPlaceId(name: string, city: string): Promise<string | 
         'X-Goog-Api-Key':   GOOGLE_API_KEY,
         'X-Goog-FieldMask': 'places.id,places.displayName',
       },
-      body: JSON.stringify({ textQuery: `${name} ${city}`, languageCode: 'iw' }),
+      body: JSON.stringify({ textQuery: `${name} ${city}`, languageCode: geo.hl, regionCode: geo.gl }),
     });
     const data: any = await res.json();
     const placeId = data.places?.[0]?.id || null;

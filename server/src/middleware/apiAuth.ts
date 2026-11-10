@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { getUserId, isAdminKeyRequest } from './auth';
+import { getUserId } from './auth';
 
 /**
  * /api paths reachable without a Clerk user. Health checks; webhooks and the
@@ -25,6 +25,6 @@ const PUBLIC_API_PATHS: RegExp[] = [
  * ownership is still each router's job (middleware/businessAccess.ts).
  */
 export function requireApiAuth(req: Request, res: Response, next: NextFunction) {
-  if (PUBLIC_API_PATHS.some(p => p.test(req.path)) || isAdminKeyRequest(req) || getUserId(req)) return next();
+  if (PUBLIC_API_PATHS.some(p => p.test(req.path)) || getUserId(req)) return next();
   return res.status(401).json({ error: 'Unauthorized' });
 }

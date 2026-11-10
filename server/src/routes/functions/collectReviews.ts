@@ -1,4 +1,5 @@
 import { planLimits, collectorSkipReason } from '../../lib/planLimits';
+import { businessGeo } from '../../lib/businessLocale';
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
@@ -198,13 +199,16 @@ export async function collectReviews(req: Request, res: Response) {
       console.warn(`[collectReviews] DataForSEO reviews disabled or missing credentials — no reviews collected for businessProfileId=${businessProfileId}`);
     } else if (googleAdded === 0) {
       try {
-        const dfsPlaceId: string | null = profile.google_place_id || await findPlaceId(name, city);
+        const geo = await businessGeo(businessProfileId);
+        const dfsPlaceId: string | null = profile.google_place_id || await findPlaceId(name, city, geo);
         if (dfsPlaceId && !profile.google_place_id) {
           await prisma.businessProfile.update({ where: { id: businessProfileId }, data: { google_place_id: dfsPlaceId, google_place_id_verified: true } });
         }
         if (dfsPlaceId) {
           const { taskId, costUsd } = await submitGoogleReviewsTask({
             placeId:     dfsPlaceId,
+            locationName: geo.country,
+            languageName: geo.language,
             depth:       Number(process.env.DATAFORSEO_REVIEWS_DEPTH_OWN) || 300,
             sortBy:      'newest',
             postbackUrl: `${SERVER_BASE_URL}/api/webhooks/dataforseo?secret=${process.env.DATAFORSEO_WEBHOOK_SECRET || ''}`,

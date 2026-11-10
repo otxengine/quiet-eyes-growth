@@ -6,6 +6,8 @@ import { getPlaceDetails } from '../../lib/googlePlaces';
 import { searchOrganic } from '../../lib/dataforseo';
 import { serpGoogleOrganic } from '../../lib/serpapi';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
+import { businessGeo } from '../../lib/businessLocale';
+import { SearchGeo } from '../../lib/locale';
 import { SITE_BLACKLIST, IG_NON_PROFILE, FB_NON_PROFILE, isProfileUrl, handleMatchesBusiness } from './discoverCompetitorUrls';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -16,18 +18,19 @@ function isValidHost(url: string): boolean {
 }
 
 // KAN-220 "SERP transport" AC: DataForSEO organic is primary, SerpAPI is the soft-fail fallback.
-async function organicSearch(queries: string[]): Promise<string[]> {
-  const df = await Promise.all(queries.map(searchOrganic));
+async function organicSearch(queries: string[], geo: SearchGeo): Promise<string[]> {
+  const df = await Promise.all(queries.map(q => searchOrganic(q, geo)));
   const dfUrls = df.flatMap(r => r.urls);
   if (dfUrls.length) return dfUrls;
-  const sp = await Promise.all(queries.map(serpGoogleOrganic));
+  const sp = await Promise.all(queries.map(q => serpGoogleOrganic(q, geo)));
   return sp.flat();
 }
 
 type Found = { url: string; source: 'places' | 'site_extract' | 'serp' | 'tavily' };
 
 // KAN-220 AC3: Places Details (if place_id) → organic SERP → Tavily last resort.
-async function enrichWebsite(placeId: string | null | undefined, name: string, loc: string | null | undefined): Promise<Found | null> {
+async function enrichWebsite(placeId: string | null | undefined, name: string, loc: string | null | undefined, geo: SearchGeo): Promise<Found | null> {
+  const en = geo.hl === 'en';
   if (placeId) {
     const details = await getPlaceDetails(placeId);
     if (details.websiteUri && isValidHost(details.websiteUri)) return { url: details.websiteUri, source: 'places' };
@@ -35,21 +38,21 @@ async function enrichWebsite(placeId: string | null | undefined, name: string, l
   const location = loc || '';
   const validHost = (u: string) => isValidHost(u) && !SITE_BLACKLIST.some(b => u.includes(b));
 
-  const serpHit = (await organicSearch([`"${name}" ${location}`, `"${name}" אתר`])).find(validHost);
+  const serpHit = (await organicSearch([`"${name}" ${location}`, `"${name}" ${en ? 'website' : 'אתר'}`], geo)).find(validHost);
   if (serpHit) return { url: serpHit, source: 'serp' };
 
   if (isTavilyRateLimited()) return null;
-  const tavilyResults = await tavilySearch(`"${name}" ${location} אתר רשמי`, 3);
+  const tavilyResults = await tavilySearch(`"${name}" ${location} ${en ? 'official website' : 'אתר רשמי'}`, 3);
   const tavilyHit = tavilyResults.map((r: any) => r.url).find(validHost);
   return tavilyHit ? { url: tavilyHit, source: 'tavily' } : null;
 }
 
 // KAN-220 AC4/AC6: organic SERP → Tavily last resort for one still-empty social platform.
-async function enrichSocial(domain: string, nonProfile: string[], name: string, loc: string | null | undefined): Promise<Found | null> {
+async function enrichSocial(domain: string, nonProfile: string[], name: string, loc: string | null | undefined, geo: SearchGeo): Promise<Found | null> {
   const location = loc || '';
   const matches = (u: string) => isProfileUrl(u, `${domain}/`, nonProfile) && handleMatchesBusiness(u, name, null);
 
-  const serpHit = (await organicSearch([`"${name}" ${location} site:${domain}`, `"${name}" site:${domain}`])).find(matches);
+  const serpHit = (await organicSearch([`"${name}" ${location} site:${domain}`, `"${name}" site:${domain}`], geo)).find(matches);
   if (serpHit) return { url: serpHit, source: 'serp' };
 
   if (isTavilyRateLimited()) return null;
@@ -89,10 +92,11 @@ export async function enrichCompetitorUrls(
     const comp = c as any;
     const update: Record<string, any> = {};
     let attempted = false;
+    const geo = await businessGeo(comp.linked_business); // cached per business
 
     // AC3 — website missing: paid-tier fallback before giving up on it
     if (!comp.website_url) {
-      const found = await enrichWebsite(comp.google_place_id, comp.name, comp.address);
+      const found = await enrichWebsite(comp.google_place_id, comp.name, comp.address, geo);
       if (found) { update.website_url = found.url; update.website_url_source = found.source; attempted = true; }
     }
 
@@ -119,7 +123,7 @@ export async function enrichCompetitorUrls(
     // AC4/AC6 — still-empty socials after site-extract: paid-tier fallback, never re-spend on a filled field
     for (const [field, domain, nonProfile] of SOCIAL_PLATFORMS) {
       if (comp[field] || update[field]) continue;
-      const found = await enrichSocial(domain, nonProfile, comp.name, comp.address);
+      const found = await enrichSocial(domain, nonProfile, comp.name, comp.address, geo);
       if (found) { update[field] = found.url; update[`${field}_source`] = found.source; attempted = true; }
     }
 

@@ -11,7 +11,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
 import { dispatch } from '../services/execution/executeOrQueue';
 import { createLogger } from '../infra/logger';
-import { requireAdminKey } from '../middleware/businessAccess';
+import { requireAdmin } from '../middleware/auth';
 
 const logger = createLogger('ROIRoute');
 const router = Router();
@@ -30,7 +30,7 @@ const baseSelect = {
 
 // ─── GET /api/roi/:bpId ───────────────────────────────────────────────────────
 
-router.get('/roi/:bpId', requireAdminKey, async (req: Request, res: Response) => {
+router.get('/roi/:bpId', requireAdmin, async (req: Request, res: Response) => {
   const bpId = String(req.params.bpId);
   try {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 3600000).toISOString();
@@ -95,7 +95,7 @@ router.get('/roi/:bpId', requireAdminKey, async (req: Request, res: Response) =>
 
 // ─── GET /api/auto-actions/:bpId ─────────────────────────────────────────────
 
-router.get('/auto-actions/:bpId', requireAdminKey, async (req: Request, res: Response) => {
+router.get('/auto-actions/:bpId', requireAdmin, async (req: Request, res: Response) => {
   const bpId = String(req.params.bpId);
   const status = req.query.status as string | undefined;
   const take = Math.min(Number(req.query.take) || 50, 100);
@@ -119,7 +119,7 @@ router.get('/auto-actions/:bpId', requireAdminKey, async (req: Request, res: Res
 
 // ─── PUT /api/auto-actions/:id/approve ───────────────────────────────────────
 
-router.put('/auto-actions/:id/approve', requireAdminKey, async (req: Request, res: Response) => {
+router.put('/auto-actions/:id/approve', requireAdmin, async (req: Request, res: Response) => {
   const id = String(req.params.id);
   try {
     const action = await prisma.autoAction.findUnique({ where: { id }, select: baseSelect });
@@ -163,7 +163,7 @@ router.put('/auto-actions/:id/approve', requireAdminKey, async (req: Request, re
 
 // ─── PUT /api/auto-actions/:id/reject ────────────────────────────────────────
 
-router.put('/auto-actions/:id/reject', requireAdminKey, async (req: Request, res: Response) => {
+router.put('/auto-actions/:id/reject', requireAdmin, async (req: Request, res: Response) => {
   const id = String(req.params.id);
   try {
     const action = await prisma.autoAction.findUnique({ where: { id } });

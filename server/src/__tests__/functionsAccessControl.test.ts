@@ -19,7 +19,7 @@ jest.mock('../routes/functions/submitSupportTicket', () => ({ submitSupportTicke
 
 jest.mock('../middleware/auth', () => ({
   getUserId: jest.fn(),
-  isAdminKeyRequest: jest.fn(),
+  requireAdmin: jest.fn((_req: any, res: any) => res.status(403).json({ error: 'not_admin' })),
 }));
 
 jest.mock('../lib/ownership', () => {
@@ -30,7 +30,7 @@ jest.mock('../lib/ownership', () => {
 });
 
 import { Request, Response } from 'express';
-import { getUserId, isAdminKeyRequest } from '../middleware/auth';
+import { getUserId, requireAdmin } from '../middleware/auth';
 import { getUserBusinessIds } from '../lib/ownership';
 import { submitSupportTicket } from '../routes/functions/submitSupportTicket';
 
@@ -71,7 +71,6 @@ async function dispatch(req: Request, res: Response) {
 
 describe('POST /api/functions/:name — requireBusinessAccess', () => {
   it('401s when there is no authenticated user', async () => {
-    (isAdminKeyRequest as jest.Mock).mockReturnValue(false);
     (getUserId as jest.Mock).mockReturnValue(null);
 
     const { res } = makeRes();
@@ -82,7 +81,6 @@ describe('POST /api/functions/:name — requireBusinessAccess', () => {
   });
 
   it('403s when businessProfileId is not in the caller\'s owned set', async () => {
-    (isAdminKeyRequest as jest.Mock).mockReturnValue(false);
     (getUserId as jest.Mock).mockReturnValue('user-a');
     (getUserBusinessIds as jest.Mock).mockResolvedValue(['biz-owned-by-a']);
 
@@ -93,7 +91,6 @@ describe('POST /api/functions/:name — requireBusinessAccess', () => {
   });
 
   it('reaches dispatch when businessProfileId is owned (unknown fn -> 404, not 401/403)', async () => {
-    (isAdminKeyRequest as jest.Mock).mockReturnValue(false);
     (getUserId as jest.Mock).mockReturnValue('user-a');
     (getUserBusinessIds as jest.Mock).mockResolvedValue(['biz-1']);
 
@@ -104,23 +101,11 @@ describe('POST /api/functions/:name — requireBusinessAccess', () => {
   });
 
   it('reaches dispatch when the body has no businessProfileId (ownership check skipped)', async () => {
-    (isAdminKeyRequest as jest.Mock).mockReturnValue(false);
     (getUserId as jest.Mock).mockReturnValue('user-a');
 
     const { res } = makeRes();
     await dispatch(makeReq({}), res);
 
-    expect(getUserBusinessIds).not.toHaveBeenCalled();
-    expect(res.status).toHaveBeenCalledWith(404);
-  });
-
-  it('bypasses the check entirely with a valid admin key', async () => {
-    (isAdminKeyRequest as jest.Mock).mockReturnValue(true);
-
-    const { res } = makeRes();
-    await dispatch(makeReq({ businessProfileId: 'someone-elses-business' }), res);
-
-    expect(getUserId).not.toHaveBeenCalled();
     expect(getUserBusinessIds).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(404);
   });
@@ -139,7 +124,6 @@ describe('POST /api/functions/:name — requireFunctionAccess', () => {
   const errorOf = (json: jest.Mock) => json.mock.calls[0]?.[0]?.error;
 
   beforeEach(() => {
-    (isAdminKeyRequest as jest.Mock).mockReturnValue(false);
     (getUserId as jest.Mock).mockReturnValue('user-a');
     (getUserBusinessIds as jest.Mock).mockResolvedValue(['biz-a']);
   });
@@ -183,9 +167,10 @@ describe('POST /api/functions/:name — requireFunctionAccess', () => {
     expect(errorOf(r.json)).toMatch(/Unknown function/);
   });
 
-  it('keeps platform-wide functions to the admin key', async () => {
+  it('sends platform-wide functions through requireAdmin', async () => {
     const { res } = makeRes();
     await dispatch(named('systemHealthMonitor', {}), res);
+    expect(requireAdmin).toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(403);
   });
 
@@ -216,14 +201,6 @@ describe('POST /api/functions/:name — requireFunctionAccess', () => {
     expect(res.status).toHaveBeenCalledWith(400);
     expect(errorOf(json)).toBe('businessProfileId required');
   });
-
-  it('skips the checks for the admin key', async () => {
-    (isAdminKeyRequest as jest.Mock).mockReturnValue(true);
-    prisma.competitor.count.mockResolvedValue(0);
-    const { res, json } = makeRes();
-    await dispatch(makeReq({ competitorId: 'comp-of-b' }), res);
-    expect(errorOf(json)).toMatch(/Unknown function/);
-  });
 });
 
 describe('invokeLLM — limits for signed-in users', () => {
@@ -231,7 +208,6 @@ describe('invokeLLM — limits for signed-in users', () => {
   const llmReq = (body: object) => ({ body, params: { name: 'invokeLLM' }, headers: {} }) as unknown as Request;
 
   beforeEach(() => {
-    (isAdminKeyRequest as jest.Mock).mockReturnValue(false);
     (getUserId as jest.Mock).mockReturnValue('user-a');
     (invokeLLM as jest.Mock).mockClear();
   });

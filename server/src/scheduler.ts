@@ -18,6 +18,7 @@
  *  - Every 15min:    DataForSEO review-task reconciliation (DATAFORSEO_RECONCILE_DISABLED
  *                    kill switch) + a separate keep-alive heartbeat log
  *  - Hourly:         collector failure-rate alert check
+ *  - Every minute:   admin panel "run now" jobs (lib/adminJobs.ts)
  */
 
 import cron from 'node-cron';
@@ -57,6 +58,7 @@ import { generateReport } from './routes/functions/generateReport';
 import { writeHeartbeat } from './lib/agentMonitor';
 import { writeAutomationLog } from './lib/automationLog';
 import { checkAndAlertFailureRate } from './lib/collectorMetrics';
+import { runAdminJobs } from './lib/adminJobs';
 import { generateMorningBriefing } from './routes/functions/generateMorningBriefing';
 import { generateProactiveAlerts } from './routes/functions/generateProactiveAlerts';
 import { generateAdvisoryInsights } from './routes/functions/generateAdvisoryInsights';
@@ -409,6 +411,11 @@ export function startScheduler() {
         .catch(err => logger.error('reconcileDataForSeoReviewTasks failed', { error: err.message }));
     });
   }
+
+  // ── Every minute: admin panel "run now" queue (worker-only, like everything here) ──
+  cron.schedule('* * * * *', () => {
+    runAdminJobs().catch(err => logger.error('runAdminJobs failed', { error: err.message }));
+  });
 
   // ── Every 15 min: keep-alive log ─────────────────────────────────────────────
   cron.schedule('*/15 * * * *', () => {

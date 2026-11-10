@@ -1,3 +1,4 @@
+import { businessGeo } from '../../lib/businessLocale';
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { writeAutomationLog } from '../../lib/automationLog';
@@ -42,11 +43,12 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
     const dataforseoOn = process.env.DATAFORSEO_REVIEWS_ENABLED === 'true' && hasDataForSeoCreds();
     if (!dataforseoOn) console.warn(`[collectCompetitorReviews] DataForSEO reviews disabled or missing credentials — no competitor reviews collected for business ${businessProfileId}`);
 
+    const geo = await businessGeo(businessProfileId);
     for (const comp of competitors) {
       // Resolve Google place_id (cached on competitor row)
       let placeId: string | null = (comp as any).google_place_id || null;
       if (!placeId) {
-        placeId = await findPlaceId(comp.name, (profile as any).city || '');
+        placeId = await findPlaceId(comp.name, (profile as any).city || '', geo);
         if (placeId) {
           await (prisma.competitor as any).update({
             where: { id: comp.id },
@@ -112,6 +114,8 @@ export async function runCollectCompetitorReviews(businessProfileId: string) {
         try {
           const { taskId, costUsd } = await submitGoogleReviewsTask({
             placeId,
+            locationName: geo.country,
+            languageName: geo.language,
             depth:       Number(process.env.DATAFORSEO_REVIEWS_DEPTH_COMPETITOR) || 500,
             sortBy:      'newest',
             postbackUrl: `${SERVER_BASE_URL}/api/webhooks/dataforseo?secret=${process.env.DATAFORSEO_WEBHOOK_SECRET || ''}`,

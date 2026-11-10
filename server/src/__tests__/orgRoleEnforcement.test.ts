@@ -13,7 +13,7 @@ jest.mock('../db', () => ({
     $executeRawUnsafe: jest.fn(),
   },
 }));
-jest.mock('../middleware/auth', () => ({ getUserId: jest.fn(() => 'user-a'), isAdminKeyRequest: jest.fn(() => false) }));
+jest.mock('../middleware/auth', () => ({ getUserId: jest.fn(() => 'user-a') }));
 jest.mock('../lib/llm', () => ({ invokeLLM: jest.fn() }));
 jest.mock('../lib/paddle', () => ({
   ...jest.requireActual('../lib/paddle'),

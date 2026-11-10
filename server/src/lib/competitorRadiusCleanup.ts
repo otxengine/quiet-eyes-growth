@@ -1,12 +1,14 @@
 import { prisma } from '../db';
+import { businessGeo } from './businessLocale';
+import { IL_GEO, SearchGeo } from './locale';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
 
-async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+async function geocodeAddress(address: string, geo: SearchGeo = IL_GEO): Promise<{ lat: number; lng: number } | null> {
   if (!GOOGLE_API_KEY) return null;
   try {
-    const input = encodeURIComponent(`${address} ישראל`);
-    const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${input}&language=iw&region=il&key=${GOOGLE_API_KEY}`);
+    const input = encodeURIComponent(`${address}${geo.geocodeSuffix}`);
+    const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${input}&language=${geo.hl}&region=${geo.gl}&key=${GOOGLE_API_KEY}`);
     const data: any = await res.json();
     const loc = data.results?.[0]?.geometry?.location;
     return loc ? { lat: loc.lat, lng: loc.lng } : null;
@@ -39,7 +41,8 @@ export async function cleanupCompetitorsByRadius(businessProfileId: string): Pro
       .split(',').map((c: string) => c.trim()).filter(Boolean);
 
     // Same center as runCompetitorIdentification: street address first, then city
-    const cityCoords = (profile.full_address && await geocodeAddress(profile.full_address)) || await geocodeAddress(city);
+    const geo = await businessGeo(businessProfileId);
+    const cityCoords = (profile.full_address && await geocodeAddress(profile.full_address, geo)) || await geocodeAddress(city, geo);
     if (!cityCoords) {
       console.log(`competitorRadiusCleanup: could not geocode "${city}", skipping`);
       return;
@@ -55,7 +58,7 @@ export async function cleanupCompetitorsByRadius(businessProfileId: string): Pro
       const keepAreas = [city, ...userExtraCities];
       if (keepAreas.some(a => addr.includes(a.toLowerCase()))) continue;
 
-      const coords = await geocodeAddress(comp.address || comp.name);
+      const coords = await geocodeAddress(comp.address || comp.name, geo);
       if (!coords) continue; // can't verify — keep
 
       const dist = haversineKm(cityCoords.lat, cityCoords.lng, coords.lat, coords.lng);
