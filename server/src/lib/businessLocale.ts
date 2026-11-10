@@ -1,5 +1,5 @@
 import { prisma } from '../db';
-import { BizLocale, IL_LOCALE, localeOf } from './locale';
+import { BizLocale, IL_LOCALE, localeOf, searchGeo } from './locale';
 
 // ponytail: per-process cache — a collector asks once per post; a changed locale shows up within TTL_MS.
 const TTL_MS = 5 * 60 * 1000;
@@ -24,3 +24,6 @@ export async function businessLocale(bpId?: string | null): Promise<BizLocale> {
     return IL_LOCALE;
   }
 }
+
+/** Search region + language of a business (see SearchGeo). No id, or a failed lookup, is Israel. */
+export const businessGeo = async (bpId?: string | null) => searchGeo(await businessLocale(bpId));

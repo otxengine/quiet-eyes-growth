@@ -1,3 +1,4 @@
+import { businessGeo } from '../../lib/businessLocale';
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { findPlaceId } from '../../lib/googlePlaces';
@@ -18,7 +19,7 @@ export async function resolveGooglePlace(req: Request, res: Response) {
       return res.json({ google_place_id: profile.google_place_id, already_set: true });
     }
 
-    const placeId = await findPlaceId(profile.name, profile.city);
+    const placeId = await findPlaceId(profile.name, profile.city, await businessGeo(businessProfileId));
     if (placeId) {
       await prisma.businessProfile.update({
         where: { id: businessProfileId },

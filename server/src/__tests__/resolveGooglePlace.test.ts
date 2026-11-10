@@ -50,7 +50,7 @@ test('no google_place_id — resolves and persists via findPlaceId', async () =>
   mockFindPlaceId.mockResolvedValue('ChIJresolved');
   const { req, res, json } = makeReqRes({ businessProfileId: 'bp1' });
   await resolveGooglePlace(req, res);
-  expect(mockFindPlaceId).toHaveBeenCalledWith('Test Biz', 'תל אביב');
+  expect(mockFindPlaceId).toHaveBeenCalledWith('Test Biz', 'תל אביב', expect.objectContaining({ hl: 'iw', gl: 'il' }));
   expect(bpUpdate).toHaveBeenCalledWith({
     where: { id: 'bp1' },
     data:  { google_place_id: 'ChIJresolved', google_place_id_verified: true },

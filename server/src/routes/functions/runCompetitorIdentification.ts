@@ -9,6 +9,8 @@ import { getAgentMission } from '../../lib/missionPlanner';
 import { searchCompetitorsByKeyword, DataForSEOCandidate } from '../../lib/dataforseo';
 import { enrichCompetitorUrls } from './enrichCompetitorUrls';
 import { getPlaceDetails, PlaceDetails } from '../../lib/googlePlaces';
+import { businessGeo } from '../../lib/businessLocale';
+import { EN_JSON_SYSTEM, IL_GEO, SearchGeo } from '../../lib/locale';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY || '';
 
@@ -30,11 +32,11 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
 
 
 /** Geocode a city name to lat/lng using Google Geocoding API */
-async function geocodeCity(city: string): Promise<{ lat: number; lng: number } | null> {
+async function geocodeCity(city: string, geo: SearchGeo = IL_GEO): Promise<{ lat: number; lng: number } | null> {
   if (!GOOGLE_API_KEY) return null;
   try {
-    const input = encodeURIComponent(`${city} ישראל`);
-    const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${input}&language=iw&region=il&key=${GOOGLE_API_KEY}`);
+    const input = encodeURIComponent(`${city}${geo.geocodeSuffix}`);
+    const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${input}&language=${geo.hl}&region=${geo.gl}&key=${GOOGLE_API_KEY}`);
     const data: any = await res.json();
     const loc = data.results?.[0]?.geometry?.location;
     return loc ? { lat: loc.lat, lng: loc.lng } : null;
@@ -42,15 +44,15 @@ async function geocodeCity(city: string): Promise<{ lat: number; lng: number } |
 }
 
 /** Search Google Places within radius meters of a location */
-async function googleNearbySearch(query: string, lat: number, lng: number, radiusM: number): Promise<any[]> {
+async function googleNearbySearch(query: string, lat: number, lng: number, radiusM: number, geo: SearchGeo = IL_GEO): Promise<any[]> {
   if (!GOOGLE_API_KEY) return [];
   try {
     const params = new URLSearchParams({
       location: `${lat},${lng}`,
       radius: String(Math.min(radiusM, 50000)), // Google max 50km
       keyword: query,
-      language: 'iw',
-      region: 'il',
+      language: geo.hl,
+      region: geo.gl,
       key: GOOGLE_API_KEY,
     });
     const res = await fetch(`https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params}`);
@@ -60,11 +62,11 @@ async function googleNearbySearch(query: string, lat: number, lng: number, radiu
 }
 
 /** Fallback text search when no coordinates available */
-async function googlePlacesSearch(query: string, city: string): Promise<any[]> {
+async function googlePlacesSearch(query: string, city: string, geo: SearchGeo = IL_GEO): Promise<any[]> {
   if (!GOOGLE_API_KEY) return [];
   try {
-    const input = encodeURIComponent(`${query} ${city} ישראל`);
-    const res = await fetch(`https://maps.googleapis.com/maps/api/place/textsearch/json?query=${input}&language=iw&region=il&key=${GOOGLE_API_KEY}`);
+    const input = encodeURIComponent(`${query} ${city}${geo.geocodeSuffix}`);
+    const res = await fetch(`https://maps.googleapis.com/maps/api/place/textsearch/json?query=${input}&language=${geo.hl}&region=${geo.gl}&key=${GOOGLE_API_KEY}`);
     const data: any = await res.json();
     return data.results?.slice(0, 10) || [];
   } catch { return []; }
@@ -173,13 +175,24 @@ export async function runCompetitorIdentification(req: Request, res: Response) {
 
     if (!GOOGLE_API_KEY) console.warn('runCompetitorIdentification: GOOGLE_PLACES_API_KEY missing — Google Places + geocoding skipped');
 
+    // Search region and language of the business: Israel / Hebrew unless its locale is English.
+    const geo = await businessGeo(businessProfileId);
+    const en = geo.hl === 'en';
+    const sys = en ? { systemPrompt: EN_JSON_SYSTEM } : {};
+
     const sp = getSectorProfile(profile);
-    const profileCtx = buildAgentPromptContext(profile);
+    // The sector-profile context block is Hebrew; an English business gets a plain English one.
+    const profileCtx = en
+      ? `Business: ${name} | Category: ${category} | City: ${city}${profile.description ? `\nDescription: ${profile.description}` : ''}`
+      : buildAgentPromptContext(profile);
     const competitorMission = getAgentMission<{ search_terms_he?: string[]; competitor_profile_he?: string }>(profile, 'runCompetitorIdentification');
     // KAN-211 AC1/AC3: approved identity terms are most precise; fall back to mission terms,
     // then sector-profile terms.
     const identityTerms = buildIdentityCompetitorTerms(profile);
-    const prebuiltTerms = identityTerms.length
+    // ponytail: the identity / mission / sector terms are Hebrew (search_terms_he, *_he fields), so an
+    // English business searches with the terms the Haiku call below writes. Add an English term
+    // builder if those prove too loose.
+    const prebuiltTerms = en ? [] : identityTerms.length
       ? identityTerms
       : competitorMission?.search_terms_he?.length
         ? competitorMission.search_terms_he
@@ -190,13 +203,14 @@ export async function runCompetitorIdentification(req: Request, res: Response) {
     const contextResult = await invokeLLM({
       model: 'haiku',
       maxTokens: 300,
+      ...sys,
       prompt: `${profileCtx}
 
 1. What is the exact type of business? (e.g. "UI/UX design studio for SaaS", "Japanese sushi bar", "men's barber")
-2. What are the best 3-4 Hebrew search terms to find DIRECT competitors in the same specific field? Be precise — a pilates studio's competitors are other pilates studios, not generic gyms.
-3. Which cities are within a radius of ${radiusKm} km from ${city} in Israel? (up to 5 cities)
+2. What are the best 3-4 ${geo.language} search terms to find DIRECT competitors in the same specific field? Be precise — a pilates studio's competitors are other pilates studios, not generic gyms.
+3. Which cities are within a radius of ${radiusKm} km from ${city} in ${geo.country}? (up to 5 cities)
 
-Return ONLY valid JSON. ALL string values must be in Hebrew:
+Return ONLY valid JSON. ALL string values must be in ${geo.language}:
 {
   "business_type": "...",
   "search_terms": ["...", "...", "..."],
@@ -235,17 +249,17 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
     // Geocode the primary city to get coordinates, then use nearbysearch with
     // the exact radius so we don't pull in businesses 60km away.
     // Center on the street address when set — more precise than the city centroid
-    const cityCoords = (profile.full_address && await geocodeCity(profile.full_address)) || await geocodeCity(city);
+    const cityCoords = (profile.full_address && await geocodeCity(profile.full_address, geo)) || await geocodeCity(city, geo);
     const radiusM = radiusKm * 1000;
 
     const googleSearchPromises = cityCoords
-      ? searchTerms.map(term => googleNearbySearch(term, cityCoords.lat, cityCoords.lng, radiusM))
-      : [googlePlacesSearch(searchTerms[0] || businessType, city)];
+      ? searchTerms.map(term => googleNearbySearch(term, cityCoords.lat, cityCoords.lng, radiusM, geo))
+      : [googlePlacesSearch(searchTerms[0] || businessType, city, geo)];
 
     // KAN-212 AC1: DataForSEO Maps runs in parallel with Places (below, same Promise.all).
     // Requires coords (no text-search mode) — skipped when ungeocodable, same as AC2 soft-fail.
     const dataForSeoPromises = cityCoords
-      ? searchTerms.map(term => searchCompetitorsByKeyword(term, cityCoords.lat, cityCoords.lng))
+      ? searchTerms.map(term => searchCompetitorsByKeyword(term, cityCoords.lat, cityCoords.lng, undefined, undefined, geo))
       : [];
 
     const [googleResultSets, dataForSeoResultSets] = await Promise.all([
@@ -281,7 +295,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
           const typesStr = c.types?.length ? ` [${c.types.slice(0, 5).join(', ')}]` : '';
           const summary = c.place_id ? placeDetailsCache.get(c.place_id)?.editorialSummary : undefined;
           const summaryStr = summary ? ` — "${summary}"` : '';
-          return `- ${c.name}: ${c.rating ?? '?'}★ (${c.review_count || 0} ביקורות) — ${c.address || city}${typesStr}${summaryStr}`;
+          return `- ${c.name}: ${c.rating ?? '?'}★ (${c.review_count || 0} ${en ? 'reviews' : 'ביקורות'}) — ${c.address || city}${typesStr}${summaryStr}`;
         }).join('\n')}`
       : '';
 
@@ -315,10 +329,11 @@ ${contextBlock}
 For each competitor:
 - name, rating, review_count, address (must include city), strengths, weaknesses, price_range, source_urls
 
-Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [...]}`;
+Return ONLY valid JSON. ALL string values must be in ${geo.language}: {"competitors": [...]}`;
 
     const result = await invokeLLM({
       model: 'sonnet',
+      ...sys,
       prompt: llmPrompt,
       response_json_schema: { type: 'object' },
       maxTokens: 2000,
@@ -340,7 +355,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
       const checked = await Promise.all(
         competitors.slice(0, 10).map(async (c) => {
           const addr = c.address || '';
-          const coords = await geocodeCity(addr || c.name);
+          const coords = await geocodeCity(addr || c.name, geo);
           if (!coords) return c; // can't verify — keep it
           const dist = haversineKm(cityCoords.lat, cityCoords.lng, coords.lat, coords.lng);
           // Allow: within radius, OR in user's explicit extra cities
@@ -471,7 +486,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
             source_urls: sourceUrls,
             last_scanned: new Date().toISOString(),
             data_freshness: 'fresh',
-            verification_status: 'מאומתת',
+            verification_status: 'מאומתת', // stored value the UI matches on (CompetitorSelectCard) — not display text
             linked_business: businessProfileId,
             website_url: urls.website || undefined,
             instagram_url: urls.instagram || undefined,
@@ -514,7 +529,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew: {"competitors": [..
 
       if (cityCoords) {
         // Geocode the competitor and measure actual distance
-        const coords = await geocodeCity(comp.address || comp.name);
+        const coords = await geocodeCity(comp.address || comp.name, geo);
         if (!coords) continue; // can't verify — keep it
         const dist = haversineKm(cityCoords.lat, cityCoords.lng, coords.lat, coords.lng);
         if (dist > radiusKm + 3) {
