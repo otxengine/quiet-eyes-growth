@@ -56,6 +56,8 @@ const TOPIC_HE: Record<string, string> = {
 const fmt = (n: unknown) => (typeof n === 'string' ? n : typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString('en-US') : '—');
 // A competitor's latest ad scan hit its cap (see adScanCapped): its running-ads count is a floor.
 const anyCapped = (comps: any[]) => comps.some(c => c.ads?.active_capped);
+// "12+" inside an LTR isolate (U+2066…U+2069): in RTL text a bare "12+" renders as "+12".
+const atLeast = (n: unknown) => `⁦${fmt(n)}+⁩`;
 const sum = <T,>(xs: T[], f: (x: T) => number) => xs.reduce((s, x) => s + (f(x) || 0), 0);
 
 /** Competitor names are sometimes stored as a site URL: "https://www.ediamonds.co.il/" -> "ediamonds.co.il". */
@@ -122,7 +124,7 @@ export function reportKpis(d: any): { on: [string, number | string][]; off: stri
   if ('reviews' in t) t.reviews = sum(comps, c => c.reviews?.count ?? 0);
   return {
     on: TOTALS.filter(([k]) => t[k]).map(([k, label]) =>
-      [label, k === 'active_ads' && anyCapped(comps) ? `${fmt(t[k])}+` : t[k]] as [string, number | string]),
+      [label, k === 'active_ads' && anyCapped(comps) ? atLeast(t[k]) : t[k]] as [string, number | string]),
     off: TOTALS.filter(([k]) => k in t && !t[k]).map(([, label]) => label),
   };
 }
@@ -188,7 +190,7 @@ function scoreboard(comps: any[], own: any, ownRev: any, business: string): { ta
       return `<bdi class="${v > 0 ? 'good' : v < 0 ? 'bad' : 'z'}">${v < 0 ? '-' : '+'}${Math.abs(v).toLocaleString('en-US')}</bdi>`;
     }
     const cls = !v ? 'z' : v === mx[k] && tableRows.length > 1 ? 'max' : '';
-    const num = `<span class="${cls}">${fmt(v)}${k === 'active_ads' && r.capped ? '+' : ''}</span>`;
+    const num = `<span class="${cls}">${k === 'active_ads' && r.capped ? atLeast(v) : fmt(v)}</span>`;
     if (k === bar) {
       return `<div class="cellbar"><span class="v">${num}</span><span class="track"><i style="width:${((v / (mx[k] || 1)) * 100).toFixed(1)}%"></i></span></div>`;
     }
@@ -357,7 +359,7 @@ export function buildReportHtml(row: ReportRow, opts: BuildOptions): string {
   if (row.status === 'empty' || !s.headline) {
     // No new activity — ads launched earlier can still be running, so show them instead of a blank page.
     const running = sum(comps, c => c.ads?.active_count ?? 0);
-    const line = `לא זוהתה פעילות חדשה של המתחרים ${when}${running ? ` — ${running}${anyCapped(comps) ? '+' : ''} מודעות שלהם ממשיכות לרוץ.` : '.'}`;
+    const line = `לא זוהתה פעילות חדשה של המתחרים ${when}${running ? ` — ${anyCapped(comps) ? atLeast(running) : running} מודעות שלהם ממשיכות לרוץ.` : '.'}`;
     out.push(`<div class="lead"><div class="kicker">בשורה אחת</div><p class="headline">${line}</p>${kpis(d, when)}</div>`);
     out.push(running ? numbers() : section('המתחרים במעקב',
       `<div class="chips">${comps.map(c => `<span class="chip"><bdi>${e(cleanName(c.name))}</bdi></span>`).join('')}</div>`));
