@@ -26,12 +26,16 @@ jest.mock('../lib/searchapi', () => ({
   ...jest.requireActual('../lib/searchapi'),
   searchAllAds: jest.fn(async () => []), hasSearchApiKey: jest.fn(() => true),
 }));
-jest.mock('../lib/s3', () => ({ isS3Configured: jest.fn(() => false), uploadImageFromUrl: jest.fn() }));
+jest.mock('../lib/s3', () => ({
+  isS3Configured: jest.fn(() => false), uploadImageFromUrl: jest.fn(async () => 'https://s3.test/new'),
+  isS3Url: jest.fn((u: string) => u.startsWith('https://s3.test/')),
+}));
 jest.mock('../lib/analyzePostCreative', () => ({ analyzePostCreative: jest.fn(async () => null) }));
 jest.mock('../lib/competitorDonor', () => ({ findDonorCandidates: jest.fn() }));
 
 import { prisma } from '../db';
-import { searchAllAds, fullyScannedPlatforms } from '../lib/searchapi';
+import { searchAllAds, fullyScannedPlatforms, META_ADS_CAP } from '../lib/searchapi';
+import { isS3Configured, uploadImageFromUrl } from '../lib/s3';
 import { invokeLLM } from '../lib/llm';
 import { findDonorCandidates } from '../lib/competitorDonor';
 import { detectCompetitorAds } from '../routes/functions/detectCompetitorAds';
@@ -109,10 +113,22 @@ describe('ads a scan no longer returns', () => {
     expect(String(ended?.[0])).not.toContain('platform'); // whatever the platform: the scan is the truth
   });
 
-  test('are marked ended at the cap too, and the count is reported as "10+"', async () => {
+  test('are marked ended at the cap too, and the count is reported as "N+"', async () => {
     (invokeLLM as jest.Mock).mockResolvedValue({ promoted_product: 'x', urgency: 'low' });
-    expect(await scan(ads('facebook', 10))).toBeTruthy();
-    expect((prisma.marketSignal.create as jest.Mock).mock.calls[0][0].data.summary).toContain('⁦10+⁩ מודעות');
+    expect(await scan(ads('facebook', META_ADS_CAP))).toBeTruthy();
+    expect((prisma.marketSignal.create as jest.Mock).mock.calls[0][0].data.summary).toContain(`⁦${META_ADS_CAP}+⁩ מודעות`);
+  });
+
+  test('a running ad seen again keeps its S3 media instead of uploading it again', async () => {
+    (isS3Configured as jest.Mock).mockReturnValueOnce(true);
+    (findDonorCandidates as jest.Mock).mockResolvedValue([]);
+    queryRawUnsafe.mockResolvedValue([{ id: 'h1', analyzed_at: 'x', media_url: 'https://s3.test/old.jpg', video_url: null }]);
+    (searchAllAds as jest.Mock).mockResolvedValueOnce([{ ...ad('facebook', 0), media_url: 'https://cdn/a.jpg', video_url: 'https://cdn/a.mp4' }]);
+    await detectCompetitorAds({ body: { businessProfileId: 'b1' } } as any, mockRes());
+    expect(uploadImageFromUrl).toHaveBeenCalledTimes(1); // the video, never stored before
+    expect(uploadImageFromUrl).toHaveBeenCalledWith('https://cdn/a.mp4', 'competitor-ads');
+    const update = executeRawUnsafe.mock.calls.find(([sql]) => String(sql).includes('is_active=$1, last_seen_at=NOW()'));
+    expect(update?.slice(6, 8)).toEqual(['https://s3.test/old.jpg', 'https://s3.test/new']); // $6 media, $7 video
   });
 
   test('ads sharing their copy are stored as separate rows (ad id in the hash)', async () => {
@@ -123,8 +139,8 @@ describe('ads a scan no longer returns', () => {
   });
 
   test('stay active when a scan hits its cap, since the rest may still run', () => {
-    expect(fullyScannedPlatforms(ads('facebook', 9))).toEqual(['facebook', 'instagram']);
-    expect(fullyScannedPlatforms(ads('facebook', 10))).toEqual([]);
+    expect(fullyScannedPlatforms(ads('facebook', META_ADS_CAP - 1))).toEqual(['facebook', 'instagram']);
+    expect(fullyScannedPlatforms(ads('facebook', META_ADS_CAP))).toEqual([]);
     expect(fullyScannedPlatforms(ads('google', 4))).toEqual(['google']);
     expect(fullyScannedPlatforms(ads('google', 5))).toEqual([]);
   });

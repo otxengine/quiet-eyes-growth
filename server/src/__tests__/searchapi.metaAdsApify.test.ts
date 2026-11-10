@@ -11,7 +11,7 @@ jest.mock('../lib/apify', () => ({
 }));
 
 import { runApifyActor, hasApifyKey } from '../lib/apify';
-import { searchAllAds, searchMetaAdsViaApify } from '../lib/searchapi';
+import { searchAllAds, searchMetaAdsViaApify, facebookPageUrl } from '../lib/searchapi';
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch as any;
@@ -116,6 +116,13 @@ describe('searchAllAds priority', () => {
     expect(mockFetch).not.toHaveBeenCalled(); // SearchAPI never hit
   });
 
+  it('scrapes the page itself when the stored link is an album of it', async () => {
+    (hasApifyKey as jest.Mock).mockReturnValue(true);
+    (runApifyActor as jest.Mock).mockResolvedValue([]);
+    await searchAllAds('Acme', 'cafe', 'TLV', null, 'https://www.facebook.com/acmeco/albums/111222333444555/');
+    expect((runApifyActor as jest.Mock).mock.calls[0][1].startUrls).toEqual([{ url: 'https://www.facebook.com/acmeco' }]);
+  });
+
   it('falls back to SearchAPI meta_ad_library when Apify is unavailable', async () => {
     (hasApifyKey as jest.Mock).mockReturnValue(false);
     mockFetch.mockResolvedValueOnce(fetchJson({
@@ -129,5 +136,23 @@ describe('searchAllAds priority', () => {
 
     expect(runApifyActor).not.toHaveBeenCalled();
     expect(ads).toEqual([expect.objectContaining({ title: 'from searchapi' })]);
+  });
+});
+
+describe('facebookPageUrl', () => {
+  it.each([
+    ['https://www.facebook.com/acmeco/albums/111222333444555/', 'https://www.facebook.com/acmeco'],
+    ['https://www.facebook.com/acmeco/?fref=ts', 'https://www.facebook.com/acmeco'],
+    ['facebook.com/acmeco', 'https://www.facebook.com/acmeco'],
+    ['https://m.facebook.com/acmeco/photos/a.1/2/', 'https://www.facebook.com/acmeco'],
+    ['https://www.facebook.com/100000000000001/posts/some-slug/222333444555666', 'https://www.facebook.com/100000000000001'],
+    ['https://www.facebook.com/profile.php?id=100000000000002&sk=about', 'https://www.facebook.com/profile.php?id=100000000000002'],
+    ['https://www.facebook.com/permalink.php?story_fbid=123&id=100000000000002', 'https://www.facebook.com/profile.php?id=100000000000002'],
+    ['https://www.facebook.com/p/Acme-Cafe-100000000000002/', 'https://www.facebook.com/100000000000002'],
+    ['https://www.facebook.com/pages/Acme-Cafe/123456789012', 'https://www.facebook.com/123456789012'],
+    ['https://www.facebook.com/share/1AbCdEf/', 'https://www.facebook.com/share/1AbCdEf/'],
+    ['not a url', 'not a url'],
+  ])('%s -> %s', (input, expected) => {
+    expect(facebookPageUrl(input)).toBe(expected);
   });
 });

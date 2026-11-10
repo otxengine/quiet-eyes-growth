@@ -12,6 +12,7 @@ jest.mock('../db', () => ({
 }));
 
 import { buildReportData, isEmptyReport } from '../lib/reportData';
+import { META_ADS_CAP } from '../lib/searchapi';
 
 const ad = (id: string, started: string) => ({
   id, competitor_id: 'c1', platform: 'instagram', title: null, body: `ad ${id}`, cta: 'Learn more',
@@ -38,9 +39,9 @@ describe('buildReportData — running ads', () => {
   });
 
   it('marks the count as a floor only when the latest scan hit its cap', async () => {
-    adRows = { fresh: [], active: Array.from({ length: 10 }, (_, i) => ad(`a${i}`, '2026-11-01')) };
-    expect((await day()).competitors[0].ads).toMatchObject({ active_count: 10, active_capped: true });
-    adRows = { fresh: [], active: Array.from({ length: 9 }, (_, i) => ad(`a${i}`, '2026-11-01')) };
+    adRows = { fresh: [], active: Array.from({ length: META_ADS_CAP }, (_, i) => ad(`a${i}`, '2026-11-01')) };
+    expect((await day()).competitors[0].ads).toMatchObject({ active_count: META_ADS_CAP, active_capped: true });
+    adRows = { fresh: [], active: Array.from({ length: META_ADS_CAP - 1 }, (_, i) => ad(`a${i}`, '2026-11-01')) };
     expect((await day()).competitors[0].ads).not.toHaveProperty('active_capped');
   });
 
