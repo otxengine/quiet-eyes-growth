@@ -5,9 +5,10 @@
  * images arrive already inlined (media.ts) and fonts/logo come from assets.ts.
  */
 import { esc as e } from '../html';
-import { REPORT_CSS } from './css';
+import { REPORT_CSS, REPORT_WEB_CSS } from './css';
 import { loadReportAssets, ReportAssets } from './assets';
 import type { BizLocale } from '../locale';
+import type { ReportLists } from '../reportData';
 
 export interface ReportRow {
   report_type: string;
@@ -28,6 +29,11 @@ export interface BuildOptions {
   assets?: ReportAssets;
   /** Language, direction and timezone of the document. Hebrew / Israel time when omitted. */
   locale?: BizLocale;
+  /**
+   * The web page instead of the PDF: images load through `imageSrc` (null = text-only card), every list
+   * section ends in a "Show all" <details> fed by `lists` (buildReportLists), and a PDF button when `pdfHref`.
+   */
+  web?: { lists: Record<string, ReportLists>; imageSrc: (url: string) => string | null; pdfHref?: string | null };
 }
 
 const KIND: Record<string, string> = { daily: 'יומי', weekly: 'שבועי', monthly: 'חודשי' };
@@ -62,6 +68,7 @@ const anyCapped = (comps: any[]) => comps.some(c => c.ads?.active_capped);
 // "12+" inside an LTR isolate (U+2066…U+2069): in RTL text a bare "12+" renders as "+12".
 const atLeast = (n: unknown) => `⁦${fmt(n)}+⁩`;
 const sum = <T,>(xs: T[], f: (x: T) => number) => xs.reduce((s, x) => s + (f(x) || 0), 0);
+const msOf = (v: unknown) => { const t = v instanceof Date ? v.getTime() : v ? new Date(String(v)).getTime() : NaN; return Number.isNaN(t) ? 0 : t; };
 
 /** Competitor names are sometimes stored as a site URL: "https://www.ediamonds.co.il/" -> "ediamonds.co.il". */
 export function cleanName(s: unknown): string {
@@ -200,6 +207,12 @@ const HE = {
   yourActivity: 'הפעילות שלכם', topPosts: 'הפוסטים הבולטים של המתחרים', byEngagement: 'לפי לייקים + תגובות', yourTopPosts: 'הפוסטים הבולטים שלכם',
   offers: 'מבצעים שזוהו', changes: 'שינויים שזוהו', perCompetitor: 'לפי מתחרה',
   aboutData: 'על הנתונים:', generatedBy: 'הדוח הופק אוטומטית ע״י Cortexi מנתוני הפלטפורמה', generated: (date: string) => `הופק ${date}`,
+  // web page only
+  all: { posts: 'הפוסטים', new_ads: 'המודעות החדשות', running_ads: 'המודעות שעדיין רצות', offers: 'המבצעים', reviews: 'הביקורות על המתחרים' } as Record<string, string>,
+  showAll: (n: number, what: string) => `הצגת כל ${n} ${what}`,
+  fromComps: (n: number) => (n === 1 ? 'ממתחרה אחד' : `מ-${n} מתחרים`),
+  downloadPdf: 'הורדת PDF',
+  stars: (n: number) => `${n} מתוך 5 כוכבים`,
 };
 type Strings = typeof HE;
 
@@ -237,6 +250,11 @@ const EN: Strings = {
   yourActivity: 'Your activity', topPosts: "Competitors' top posts", byEngagement: 'By likes + comments', yourTopPosts: 'Your top posts',
   offers: 'Offers detected', changes: 'Changes detected', perCompetitor: 'By competitor',
   aboutData: 'About the data:', generatedBy: 'Generated automatically by Cortexi from platform data', generated: (date: string) => `Generated ${date}`,
+  all: { posts: 'posts', new_ads: 'new ads', running_ads: 'ads still running', offers: 'offers', reviews: 'competitor reviews' },
+  showAll: (n: number, what: string) => `Show all ${n} ${what}`,
+  fromComps: (n: number) => `from ${n} competitor${n === 1 ? '' : 's'}`,
+  downloadPdf: 'Download PDF',
+  stars: (n: number) => `${n} of 5 stars`,
 };
 const STR: Record<'he' | 'en', Strings> = { he: HE, en: EN };
 
@@ -346,11 +364,24 @@ export interface CardPlan {
   activeAds: [string, any][];
 }
 
+/**
+ * Up to n [competitor, item] pairs, taking each competitor's next item in turn (busiest first), so the
+ * first competitors in the list can't fill every card while the rest never show.
+ */
+export function roundRobin<T>(groups: [string, T[]][], n: number): [string, T][] {
+  const qs = groups.filter(([, xs]) => xs.length).sort((a, b) => b[1].length - a[1].length);
+  const out: [string, T][] = [];
+  for (let i = 0; out.length < n && qs.some(([, xs]) => i < xs.length); i++) {
+    for (const [name, xs] of qs) if (i < xs.length && out.length < n) out.push([name, xs[i]]);
+  }
+  return out;
+}
+
 export function planCards(row: ReportRow): CardPlan {
   const d = row.data ?? {};
   const comps: any[] = d.competitors ?? [];
   const adsOf = (key: string): [string, any][] =>
-    comps.flatMap(c => ((c.ads?.[key] as any[]) ?? []).map(a => [c.name, a] as [string, any])).slice(0, 6);
+    roundRobin(comps.map(c => [c.name, (c.ads?.[key] as any[]) ?? []] as [string, any[]]), 6);
   return {
     tops: comps
       .flatMap(c => ((c.posts?.top as any[]) ?? []).slice(0, 3).map(p => [cleanName(c.name), p] as [string, any]))
@@ -387,15 +418,16 @@ export function buildReportHtml(row: ReportRow, opts: BuildOptions): string {
   const when = S.when[t] ?? S.when.monthly;
   const period = reportPeriodLabel(t, row.period_start, row.period_end, loc);
   const kind = S.kind[t] ?? '';
+  const web = opts.web;
 
   const mediaCard = (o: { who: string; sub: string; text: string; media?: string | null; video?: string | null; page?: string | null; badge?: string; you?: boolean }) => {
-    const pic = o.media ? images[o.media] : undefined;
+    const pic = o.media ? images[o.media] ?? web?.imageSrc(o.media) ?? undefined : undefined;
     const links: string[] = [];
     if (o.page && /^https?:\/\//.test(String(o.page)) && !String(o.page).includes('fb.me')) links.push(`<a href="${e(o.page)}">${S.toSource}</a>`);
     const vid = o.video ? videoHref(o.video) : null;
     if (vid) links.push(`<a href="${e(vid)}">${S.watch}</a>`);
     return `<div class="card${o.you ? ' you' : ''}${pic ? '' : ' noimg'}">`
-      + (pic ? `<div class="pic"><img src="${e(pic)}" alt="">${o.video ? `<span class="tag">${S.video}</span>` : ''}</div>` : '')
+      + (pic ? `<div class="pic"><img src="${e(pic)}" alt=""${web ? ' loading="lazy"' : ''}>${o.video ? `<span class="tag">${S.video}</span>` : ''}</div>` : '')
       + `<div class="body"><div class="who"><bdi>${e(o.who)}</bdi>${o.badge ?? ''}</div><div class="sub">${e(o.sub)}</div>`
       + `<div class="txt">${tx((o.text ?? '').replace(BLANK_LINES, '\n')) || S.noText}</div>`
       + (links.length ? `<div class="links">${links.join(' · ')}</div>` : '') + '</div></div>';
@@ -410,26 +442,70 @@ export function buildReportHtml(row: ReportRow, opts: BuildOptions): string {
     });
   };
 
-  const adCard = (name: string, a: any, since: string) => {
+  const adText = (a: any) => {
     const body = String(a.body ?? '').trim();
     const title = String(a.title ?? '').trim();
-    const text = body || (title.length > 12 && !/^(fb\.me|http)/.test(title) ? title : S.adNoText);
-    const sub = [S.platform[a.platform] ?? a.platform ?? '', `${since} ${sd(a.started_at)}`.trim(), a.cta ? S.button(a.cta) : ''].filter(Boolean).join(' · ');
-    return mediaCard({
-      who: cleanName(name), sub, text: clip(text, 400), media: a.media_url, video: a.video_url, page: a.link,
-      badge: a.offer ? `<span class="badge">${tx(clip(a.offer.details || S.offer, 40))}</span>` : '',
-    });
+    return body || (title.length > 12 && !/^(fb\.me|http)/.test(title) ? title : S.adNoText);
+  };
+  const adSub = (a: any, since: string) =>
+    [S.platform[a.platform] ?? a.platform ?? '', `${since} ${sd(a.started_at)}`.trim(), a.cta ? S.button(a.cta) : ''].filter(Boolean).join(' · ');
+
+  const adCard = (name: string, a: any, since: string) => mediaCard({
+    who: cleanName(name), sub: adSub(a, since), text: clip(adText(a), 400), media: a.media_url, video: a.video_url, page: a.link,
+    badge: a.offer ? `<span class="badge">${tx(clip(a.offer.details || S.offer, 40))}</span>` : '',
+  });
+
+  // ── web page only: "Show all" — every item of the period, grouped by competitor, busiest first ──
+  const thumb = (url?: string | null) => {
+    const src = url ? web?.imageSrc(url) : null;
+    return src ? `<img class="thumb" src="${e(src)}" alt="" loading="lazy">` : '<span class="thumb"></span>';
+  };
+  const srcLink = (url?: string | null) => (url && /^https?:\/\//.test(url) && !url.includes('fb.me')
+    ? `<a class="lnk" href="${e(url)}" target="_blank" rel="noopener noreferrer">${S.toSource}</a>` : '<span></span>');
+  const listRow = (img: string | null, sub: string, text: string, link: string) =>
+    `<div class="row${img === null ? ' noimg' : ''}">${img ?? ''}<div><div class="sub">${sub}</div><div class="txt">${text}</div></div>${link}</div>`;
+  const offerBadge = (x: any) => (x.offer ? `<span class="badge">${S.offer}</span>` : '');
+  const postRow = (p: any) => listRow(thumb(p.media_url),
+    e([S.platform[p.platform] ?? p.platform ?? '', sd(p.posted_at), p.likes == null || p.likes < 0 ? S.likesHidden : S.likes(fmt(p.likes)),
+      S.comments(fmt(p.comments || 0))].filter(Boolean).join(' · ')) + offerBadge(p),
+    tx(clip(p.caption, 300)) || S.noText, srcLink(p.url));
+  const adRow = (since: string) => (a: any) =>
+    listRow(thumb(a.media_url), e(adSub(a, since)) + offerBadge(a), tx(clip(adText(a), 300)), srcLink(a.link));
+  // Stories are analysed, never shown: a story's offer has no link and no image.
+  const offerRow = (o: any) => listRow(null, `${e(S.source[o.source] ?? '')}${o.at ? ` · ${sd(o.at)}` : ''}`,
+    tx(clip(o.details || S.offer, 300)) + (o.urgency ? `<div class="urg">${tx(o.urgency)}</div>` : ''),
+    o.source === 'story' ? '<span></span>' : srcLink(o.url));
+  const reviewRow = (r: any) => {
+    const n = Math.max(0, Math.min(5, Math.round(Number(r.rating) || 0)));
+    return listRow(null, `<span class="stars" role="img" aria-label="${e(S.stars(n))}">${'★'.repeat(n)}${'☆'.repeat(5 - n)}</span>${r.at ? ` · ${sd(r.at)}` : ''}`,
+      tx(r.text) || S.noText, '<span></span>');
+  };
+  const chev = '<span class="chev" aria-hidden="true"></span>';
+  /** Nothing in the PDF, or when the cards above already show everything (`shown`). */
+  const showAll = (key: keyof ReportLists, render: (x: any) => string, shown = 0): string => {
+    if (!web) return '';
+    const groups = comps.map(c => [cleanName(c.name), (web.lists[c.id]?.[key] as any[] | undefined) ?? []] as [string, any[]])
+      .filter(([, xs]) => xs.length).sort((a, b) => b[1].length - a[1].length);
+    const total = sum(groups, ([, xs]) => xs.length);
+    if (total <= shown) return '';
+    const inner = groups.map(([n, xs], i) =>
+      `<details class="grp"${i === 0 ? ' open' : ''}><summary><bdi>${e(n)}</bdi><span class="cnt">${fmt(xs.length)}</span>${chev}</summary>`
+      + `<div class="rows">${xs.map(render).join('')}</div></details>`).join('');
+    return `<details class="more"><summary><span>${e(S.showAll(total, S.all[key]))} <span class="from">${e(S.fromComps(groups.length))}</span></span>${chev}</summary>`
+      + `<div class="more-body">${inner}</div></details>`;
   };
 
   const plan = planCards(row);
   const adSections = (): string[] => {
     // ads.new = launched in the period; ads.active = launched earlier and still running at its end.
     const res: string[] = [];
-    for (const [items, title, since, note] of [
-      [plan.newAds, S.newAds, S.launched, ''],
-      [plan.activeAds, S.runningAds, S.runningSince, S.runningNote],
-    ] as [[string, any][], string, string, string][]) {
-      if (items.length) res.push(section(title, cardGrid(items.map(([n, a]) => adCard(n, a, since))), items.length <= 4, note));
+    for (const [items, title, since, note, key] of [
+      [plan.newAds, S.newAds, S.launched, '', 'new_ads'],
+      [plan.activeAds, S.runningAds, S.runningSince, S.runningNote, 'running_ads'],
+    ] as [[string, any][], string, string, string, keyof ReportLists][]) {
+      if (items.length) {
+        res.push(section(title, cardGrid(items.map(([n, a]) => adCard(n, a, since))) + showAll(key, adRow(since), items.length), items.length <= 4, note));
+      }
     }
     return res;
   };
@@ -438,7 +514,7 @@ export function buildReportHtml(row: ReportRow, opts: BuildOptions): string {
     const { table, idle } = scoreboard(comps, own, ownRev, business, S);
     if (!table && !idle.length) return '';
     const after = idle.length ? `<div class="after">${S.noActivity(when)}: ${e(idle.join(', '))}</div>` : '';
-    return section(Object.keys(own).length || ownRev.count ? S.youVs : S.inNumbers, table + after);
+    return section(Object.keys(own).length || ownRev.count ? S.youVs : S.inNumbers, (table ? `<div class="tw">${table}</div>` : '') + after);
   };
 
   const out: string[] = [
@@ -476,18 +552,23 @@ export function buildReportHtml(row: ReportRow, opts: BuildOptions): string {
     }
 
     out.push(reviewsSection(s, comps, ownRev, S)); // only weekly/monthly rows carry review data
+    out.push(showAll('reviews', reviewRow));
 
     if (plan.tops.length) {
-      out.push(section(S.topPosts, cardGrid(plan.tops.map(([n, p]) => postCard(n, p))), plan.tops.length <= 4, S.byEngagement));
+      out.push(section(S.topPosts, cardGrid(plan.tops.map(([n, p]) => postCard(n, p))) + showAll('posts', postRow, plan.tops.length),
+        plan.tops.length <= 4, S.byEngagement));
     }
     if (plan.ownTop.length) out.push(section(S.yourTopPosts, cardGrid(plan.ownTop.map(p => postCard(business, p, true)))));
 
-    const offers = comps.flatMap(c => ((c.offers?.items as any[]) ?? []).map(o => [cleanName(c.name), o] as const));
+    // The PDF lists every stored offer (up to 5 per competitor); the web page the 5 newest, then "Show all".
+    const allOffers = comps.flatMap(c => ((c.offers?.items as any[]) ?? []).map(o => [cleanName(c.name), o] as const));
+    const offers = web ? [...allOffers].sort((a, b) => msOf(b[1].at) - msOf(a[1].at)).slice(0, 5) : allOffers;
     if (offers.length) {
       out.push(section(S.offers, '<div class="offers">' + offers.map(([n, o]) =>
         `<div class="offer"><div><div class="who"><bdi>${e(n)}</bdi></div><div class="src">${e(S.source[o.source] ?? '')}`
         + `${o.at ? ` · ${sd(o.at)}` : ''}</div></div>`
-        + `<div>${tx(clip(o.details || S.offer, 200))}${o.urgency ? `<div class="urg">${tx(o.urgency)}</div>` : ''}</div></div>`).join('') + '</div>', offers.length <= 4));
+        + `<div>${tx(clip(o.details || S.offer, 200))}${o.urgency ? `<div class="urg">${tx(o.urgency)}</div>` : ''}</div></div>`).join('') + '</div>'
+        + showAll('offers', offerRow, offers.length), offers.length <= 4));
     }
 
     out.push(...adSections());
@@ -508,6 +589,11 @@ export function buildReportHtml(row: ReportRow, opts: BuildOptions): string {
   out.push(`<div class="foot">${limits.length ? `<p><b>${S.aboutData}</b> ${limits.map(x => e(x)).join(' · ')}</p>` : ''}`
     + `<div class="gen"><span>${S.generatedBy}</span><span>${S.generated(created)}</span></div></div>`);
 
+  const content = out.filter(Boolean).join('\n');
+  const body = web
+    ? `<main class="page">${web.pdfHref ? `<div class="webbar"><a class="btn" href="${e(web.pdfHref)}">${S.downloadPdf}</a></div>` : ''}${content}</main>`
+    : content;
   return `<!doctype html><html lang="${S.lang}" dir="${S.dir}"><head><meta charset="utf-8">`
-    + `<title>${S.title(kind)} · ${e(business)} · ${e(period)}</title><style>${assets.fontsCss}${REPORT_CSS}</style></head>\n<body>\n${out.filter(Boolean).join('\n')}\n</body></html>\n`;
+    + (web ? '<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">' : '')
+    + `<title>${S.title(kind)} · ${e(business)} · ${e(period)}</title><style>${assets.fontsCss}${REPORT_CSS}${web ? REPORT_WEB_CSS : ''}</style></head>\n<body>\n${body}\n</body></html>\n`;
 }

@@ -55,6 +55,12 @@ function groupBy<T>(rows: T[], key: (r: T) => string | null): Map<string | null,
   return m;
 }
 
+const postItem = (p: any) => ({
+  platform: p.platform, url: p.post_url, caption: p.caption, posted_at: p.posted_at,
+  likes: p.likes, comments: p.comments_count, offer: p.has_offer ? offerOf(p.analysis) : null,
+  media_url: p.media_url, video_url: p.video_url,
+});
+
 function postsSummary(rows: any[]) {
   const by_platform: Record<string, number> = {};
   for (const p of rows) by_platform[p.platform] = (by_platform[p.platform] ?? 0) + 1;
@@ -62,13 +68,16 @@ function postsSummary(rows: any[]) {
     count: rows.length,
     by_platform,
     total_engagement: rows.reduce((s, p) => s + engagement(p), 0),
-    top: [...rows].sort((a, b) => engagement(b) - engagement(a)).slice(0, 3).map(p => ({
-      platform: p.platform, url: p.post_url, caption: p.caption, posted_at: p.posted_at,
-      likes: p.likes, comments: p.comments_count, offer: p.has_offer ? offerOf(p.analysis) : null,
-      media_url: p.media_url, video_url: p.video_url,
-    })),
+    top: [...rows].sort((a, b) => engagement(b) - engagement(a)).slice(0, 3).map(postItem),
   };
 }
+
+/** Offers found in a competitor's posts, stories and new ads. Stories never carry a link: they are analysed, not shown. */
+const offersOf = (cp: any[], cs: any[], ca: any[]) => [
+  ...cp.filter(x => x.has_offer).map(x => ({ source: 'post', platform: x.platform, url: x.post_url, at: x.posted_at, ...offerOf(x.analysis) })),
+  ...cs.filter(x => x.has_offer).map(x => ({ source: 'story', platform: 'instagram', at: x.posted_at, ...offerOf(x.analysis) })),
+  ...ca.filter(x => x.has_offer).map(x => ({ source: 'ad', platform: x.platform, url: x.link, at: x.started_at, ...offerOf(x.analysis) })),
+];
 
 const adItem = (a: any) => ({
   platform: a.platform, title: a.title, body: a.body, cta: a.cta, link: a.link,
@@ -170,19 +179,22 @@ const LIMITS_EN = {
   ],
 };
 
+type Period = readonly [string, string, string];
+
+const AD_COLS = `id, competitor_id, platform, title, LEFT(body, 600) AS body, cta, link, has_offer, analysis,
+            media_url, video_url, COALESCE(${ts('start_date')}, first_seen_at) AS started_at`;
+
 /**
- * Everything a report covers for one business over [start, end). Daily/weekly/monthly
- * all run the same competitor queries over their window, so a weekly report equals the
- * sum of that week's dailies without double-counting or gaps from a failed daily run.
+ * The period's competitor rows, shared by the stored report (buildReportData) and the web report's
+ * "show all" lists (buildReportLists), so both always count the same rows.
  */
-export async function buildReportData(bpId: string, type: ReportType, start: Date, end: Date, loc: BizLocale = IL_LOCALE) {
-  const p = [bpId, start.toISOString(), end.toISOString()] as const;
+async function periodRows(p: Period, withReviews: boolean) {
   // ponytail: sequential awaits on purpose — runAgentForAll runs 4 businesses at once on an 8-connection pool.
   const competitors = await q<{ id: string; name: string; rating: number | null; review_count: number | null }>(
     `SELECT id, name, rating, review_count FROM competitors
      WHERE linked_business = $1 AND tracking_status = 'approved' AND COALESCE(not_relevant, false) = false
      ORDER BY name`,
-    bpId,
+    p[0],
   );
 
   const posts = await q(
@@ -194,8 +206,6 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
     `SELECT competitor_id, media_type, has_offer, analysis, ${ts('posted_at')} AS posted_at
      FROM competitor_stories WHERE linked_business = $1 AND ${inWindow('posted_at')}`, ...p,
   );
-  const AD_COLS = `id, competitor_id, platform, title, LEFT(body, 600) AS body, cta, link, has_offer, analysis,
-            media_url, video_url, COALESCE(${ts('start_date')}, first_seen_at) AS started_at`;
   const newAds = await q(
     `SELECT ${AD_COLS} FROM competitor_ad_history WHERE linked_business = $1 AND ${newAdsWhere}`, ...p,
   );
@@ -209,6 +219,24 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
      WHERE linked_business = $1 AND is_active AND COALESCE(${ts('start_date')}, first_seen_at) < $3::timestamptz
      ORDER BY started_at DESC NULLS LAST`, ...p,
   );
+  const reviews = withReviews
+    ? await q(
+      `SELECT linked_competitor, rating, response_status, topic_sentiment, LEFT(text, 600) AS text, ${ts('created_at')} AS at
+       FROM reviews WHERE linked_business = $1 AND ${inWindow('created_at')}`, ...p,
+    )
+    : [];
+  return { competitors, posts, stories, newAds, activeAds, reviews };
+}
+
+/**
+ * Everything a report covers for one business over [start, end). Daily/weekly/monthly
+ * all run the same competitor queries over their window, so a weekly report equals the
+ * sum of that week's dailies without double-counting or gaps from a failed daily run.
+ */
+export async function buildReportData(bpId: string, type: ReportType, start: Date, end: Date, loc: BizLocale = IL_LOCALE) {
+  const p = [bpId, start.toISOString(), end.toISOString()] as const;
+  const withReviews = type !== 'daily';
+  const { competitors, posts, stories, newAds, activeAds, reviews } = await periodRows(p, withReviews);
   // Price / promotion / website changes only exist as signals. otx_comp:* rows are
   // routed by sector, not business, so they can belong to someone else — excluded.
   // Signals carry no competitor_id, and some agents also file insights about rivals the
@@ -226,14 +254,6 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
   }).slice(0, 50);
   const followers = await followerDeltas(bpId, start, end, loc.tz);
 
-  const withReviews = type !== 'daily';
-  const reviews = withReviews
-    ? await q(
-      `SELECT linked_competitor, rating, response_status, topic_sentiment, LEFT(text, 200) AS text
-       FROM reviews WHERE linked_business = $1 AND ${inWindow('created_at')}`, ...p,
-    )
-    : [];
-
   const postsBy = groupBy(posts, r => r.competitor_id);
   const storiesBy = groupBy(stories, r => r.competitor_id);
   const adsBy = groupBy(newAds, r => r.competitor_id);
@@ -246,11 +266,7 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
     const ca = adsBy.get(c.id) ?? [];
     const running = activeBy.get(c.id) ?? [];
     const newIds = new Set(ca.map(a => a.id));
-    const offers = [
-      ...cp.filter(x => x.has_offer).map(x => ({ source: 'post', platform: x.platform, url: x.post_url, at: x.posted_at, ...offerOf(x.analysis) })),
-      ...cs.filter(x => x.has_offer).map(x => ({ source: 'story', platform: 'instagram', at: x.posted_at, ...offerOf(x.analysis) })),
-      ...ca.filter(x => x.has_offer).map(x => ({ source: 'ad', platform: x.platform, url: x.link, at: x.started_at, ...offerOf(x.analysis) })),
-    ];
+    const offers = offersOf(cp, cs, ca);
     return {
       id: c.id,
       name: c.name,
@@ -299,6 +315,46 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
       ? (withReviews ? [...LIMITS_EN.all, ...LIMITS_EN.reviews] : LIMITS_EN.all)
       : withReviews ? [...LIMITS_ALL, ...LIMITS_REVIEWS] : LIMITS_ALL,
   };
+}
+
+const time = (v: unknown) => { const t = v ? new Date(v as string).getTime() : NaN; return Number.isNaN(t) ? 0 : t; };
+const newestFirst = (k: string) => (a: any, b: any) => time(b[k]) - time(a[k]);
+
+/**
+ * Everything behind the web report's "Show all" buttons, per tracked competitor id: every post,
+ * new ad, still-running ad, offer and (weekly/monthly) review over [start, end), newest first.
+ * The stored report (buildReportData) keeps only the first few of each.
+ */
+export async function buildReportLists(bpId: string, type: ReportType, start: Date, end: Date) {
+  const withReviews = type !== 'daily';
+  const r = await periodRows([bpId, start.toISOString(), end.toISOString()], withReviews);
+  const postsBy = groupBy(r.posts, x => x.competitor_id);
+  const storiesBy = groupBy(r.stories, x => x.competitor_id);
+  const adsBy = groupBy(r.newAds, x => x.competitor_id);
+  const activeBy = groupBy(r.activeAds, x => x.competitor_id);
+  const reviewsBy = groupBy(r.reviews, x => x.linked_competitor);
+  return Object.fromEntries(r.competitors.map(c => {
+    const cp = postsBy.get(c.id) ?? [];
+    const ca = adsBy.get(c.id) ?? [];
+    const newIds = new Set(ca.map(a => a.id));
+    return [c.id, {
+      posts: cp.map(postItem).sort(newestFirst('posted_at')),
+      new_ads: ca.map(adItem).sort(newestFirst('started_at')),
+      running_ads: (activeBy.get(c.id) ?? []).filter(a => !newIds.has(a.id)).map(adItem), // query order: newest launch first
+      offers: offersOf(cp, storiesBy.get(c.id) ?? [], ca).sort(newestFirst('at')),
+      ...(withReviews ? {
+        reviews: (reviewsBy.get(c.id) ?? []).map(x => ({ rating: x.rating, text: x.text, at: x.at })).sort(newestFirst('at')),
+      } : {}),
+    }];
+  })) as Record<string, ReportLists>;
+}
+
+export interface ReportLists {
+  posts: ReturnType<typeof postItem>[];
+  new_ads: ReturnType<typeof adItem>[];
+  running_ads: ReturnType<typeof adItem>[];
+  offers: ReturnType<typeof offersOf>;
+  reviews?: { rating: number | null; text: string | null; at: unknown }[];
 }
 
 /** The business's own activity over the window — monthly report only. */

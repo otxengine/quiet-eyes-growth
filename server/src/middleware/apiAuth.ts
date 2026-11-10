@@ -17,6 +17,7 @@ const PUBLIC_API_PATHS: RegExp[] = [
   /^\/competitors\/proxy-image$/,
   /^\/social\/media\/[^/]+$/,
   /^\/reports\/unsubscribe$/, // opened from a report email; signed per recipient (lib/reportDelivery.ts)
+  /^\/reports\/[^/]+\/view(\/pdf)?$/, // the web report from the email link; signed per report (reportLinkValid)
 ];
 
 /**

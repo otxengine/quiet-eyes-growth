@@ -101,6 +101,26 @@ describe('customer report email', () => {
     expect(first.headers['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
     expect(second.headers['List-Unsubscribe']).not.toBe(first.headers['List-Unsubscribe']);
   });
+  it('customers get the "Open the full report" link instead of the attachment; the internal list keeps both', async () => {
+    process.env.REPORT_EMAIL_RECIPIENTS = 'team@example.com';
+    const pdf = { filename: 'cortexi-weekly-2026-11-01.pdf', content: Buffer.from('%PDF') };
+    await sendReportEmail({ ...weekly, id: 'r1' } as any, "Joe's Pizza", pdf, NY, 'bp1');
+    const [internal, customer] = sendEmail.mock.calls.map(c => (c as any[])[0]);
+    for (const m of [internal, customer]) {
+      expect(m.html).toContain('https://app.example.com/api/reports/r1/view?e=');
+      expect(m.html).toContain('Open the full report');
+    }
+    expect(internal.attachments).toHaveLength(1);
+    expect(customer.attachments).toBeUndefined();
+    expect(customer.html).not.toContain('attached');
+  });
+  it('without a report id (no web link) the customer still gets the PDF attached', async () => {
+    const pdf = { filename: 'cortexi-weekly-2026-11-01.pdf', content: Buffer.from('%PDF') };
+    await sendReportEmail(weekly as any, "Joe's Pizza", pdf, NY, 'bp1');
+    const customer = (sendEmail.mock.calls[0] as any[])[0];
+    expect(customer.attachments).toHaveLength(1);
+    expect(customer.html).not.toContain('Open the full report');
+  });
   it('never emails a customer without an unsubscribe link', async () => {
     process.env.REPORT_UNSUBSCRIBE_SECRET = '';
     expect(await sendReportEmail(weekly as any, "Joe's Pizza", null, NY, 'bp1')).toBe(false);

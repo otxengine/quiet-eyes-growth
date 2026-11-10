@@ -50,3 +50,28 @@ export async function unsubscribe(bpId: string, rid: string, token: string): Pro
   await prisma.$executeRaw`UPDATE business_profiles SET report_recipients = ${left.join(',') || null} WHERE id = ${bpId}`;
   return true;
 }
+
+// ── the web report link ───────────────────────────────────────────────────────────────────────
+// Same secret as the unsubscribe link, but a different message ("view\n…"), so neither token works as the other.
+export const REPORT_LINK_DAYS = 180;
+const viewSign = (reportId: string, exp: string) =>
+  crypto.createHmac('sha256', secret()).update(`view\n${reportId}\n${exp}`).digest('base64url');
+
+/**
+ * Signed link to one report's web page, valid REPORT_LINK_DAYS. It sits in the customer's email, so
+ * whoever holds it can read that one report and nothing else. Null when the secret or public URL is missing.
+ */
+export function reportViewUrl(reportId: string, now = Date.now()): string | null {
+  const base = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
+  if (!secret() || !base || !reportId) return null;
+  const exp = String(Math.floor(now / 1000) + REPORT_LINK_DAYS * 86400);
+  return `${base}/api/reports/${encodeURIComponent(reportId)}/view?e=${exp}&t=${viewSign(reportId, exp)}`;
+}
+
+/** True only for an unexpired link signed for exactly this report. */
+export function reportLinkValid(reportId: string, exp: string, token: string, now = Date.now()): boolean {
+  if (!secret() || !reportId || !/^\d{1,12}$/.test(exp) || !token || Number(exp) * 1000 < now) return false;
+  const given = Buffer.from(token);
+  const expected = Buffer.from(viewSign(reportId, exp));
+  return given.length === expected.length && crypto.timingSafeEqual(given, expected);
+}
