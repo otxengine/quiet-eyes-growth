@@ -112,7 +112,7 @@ describe('ads a scan no longer returns', () => {
   test('are marked ended at the cap too, and the count is reported as "10+"', async () => {
     (invokeLLM as jest.Mock).mockResolvedValue({ promoted_product: 'x', urgency: 'low' });
     expect(await scan(ads('facebook', 10))).toBeTruthy();
-    expect((prisma.marketSignal.create as jest.Mock).mock.calls[0][0].data.summary).toContain('10+ מודעות');
+    expect((prisma.marketSignal.create as jest.Mock).mock.calls[0][0].data.summary).toContain('⁦10+⁩ מודעות');
   });
 
   test('ads sharing their copy are stored as separate rows (ad id in the hash)', async () => {

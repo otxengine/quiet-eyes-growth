@@ -478,7 +478,8 @@ Return ONLY valid JSON. ALL string values MUST be in Hebrew:
         await prisma.marketSignal.create({
           data: {
             linked_business:    businessProfileId,
-            summary:            `${comp.name} מריץ ${adCountText} מודעות ממומנות (${platforms.join(', ')})`,
+            // LTR isolate: in this RTL line a bare "10+" renders as "+10".
+            summary:            `${comp.name} מריץ ⁦${adCountText}⁩ מודעות ממומנות (${platforms.join(', ')})`,
             impact_level:       analysis.urgency === 'high' ? 'high' : 'medium',
             category:           'competitor_ads',
             recommended_action: analysis.our_counter_action || '',

@@ -314,7 +314,10 @@ export function AdCard({ ad, onSelect }) {
           </span>
           {ad.is_active
             ? <span className="bg-green-100 text-green-700 px-1 py-0.5 rounded mr-auto">פעיל</span>
-            : <span className="mr-auto">{timeAgo(ad.last_seen_at)}</span>
+            // Ended (not in the latest scan). Offer-landscape examples carry no is_active: date only.
+            : ad.is_active === false
+              ? <span className="bg-gray-100 text-gray-500 px-1 py-0.5 rounded mr-auto" title={`נראתה לאחרונה ${timeAgo(ad.last_seen_at)}`}>לא פעיל</span>
+              : <span className="mr-auto">{timeAgo(ad.last_seen_at)}</span>
           }
           {ad.cloned_from_donor && (
             <span className="bg-slate-100 text-slate-600 px-1 py-0.5 rounded" title="מבוסס על סריקה של עסק אחר שעוקב אחרי אותו מתחרה">משוער</span>

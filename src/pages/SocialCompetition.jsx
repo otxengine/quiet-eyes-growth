@@ -17,9 +17,10 @@ import SocialInsightsComparison from '@/components/competitors/SocialInsightsCom
 import SectionTabs from '@/components/layout/SectionTabs';
 
 // = META_ADS_CAP in server/src/lib/searchapi.ts: a scan keeps at most that many ads, so a
-// count at the cap means "at least that many".
+// count at the cap means "at least that many". The LTR isolate (U+2066…U+2069) keeps the
+// "+" after the number in RTL text — without it "10+" renders as "+10".
 const AD_SCAN_CAP = 10;
-const adCount = (n) => `${n || 0}${n >= AD_SCAN_CAP ? '+' : ''}`;
+const adCount = (n) => (n >= AD_SCAN_CAP ? `⁦${n}+⁩` : `${n || 0}`);
 
 function resolveSection(param) {
   if (!param) return null;
