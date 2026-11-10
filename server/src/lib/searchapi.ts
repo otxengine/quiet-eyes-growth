@@ -58,9 +58,10 @@ export interface AdResult {
 const realText = (...vals: any[]): string =>
   vals.find(v => typeof v === 'string' && v.trim() && !v.includes('{{')) || '';
 
-// Most ads one scan keeps per source; see adScanCapped. Apify bills each returned ad (~$0.005).
-// src/pages/SocialCompetition.jsx shows META_ADS_CAP as "N+" — keep its AD_SCAN_CAP in step.
-export const META_ADS_CAP = 10;
+// Most ads one scan keeps per source; see adScanCapped. Apify bills each returned ad (~$0.0042),
+// so a rival running 50 ads costs ~$0.21 a scan; most run 0-3. Was 10, which hid most of a busy
+// advertiser's ads. src/pages/SocialCompetition.jsx shows META_ADS_CAP as "N+" — keep its AD_SCAN_CAP in step.
+export const META_ADS_CAP = 50;
 const GOOGLE_ADS_CAP = 5;
 
 // ── Meta Ads Library ──────────────────────────────────────────────────────────
@@ -105,7 +106,8 @@ export async function searchMetaAdsViaApify(pageUrl: string): Promise<AdResult[]
   const items = await runApifyActor(
     'apify~facebook-ads-scraper',
     { startUrls: [{ url: pageUrl }], activeStatus: 'active', resultsLimit: META_ADS_CAP },
-    90_000, 10,
+    // a poll timeout returns [], which the caller reads as "no ads": leave room for a full 50-ad run
+    180_000, META_ADS_CAP,
     (msg) => console.warn(`[searchMetaAdsViaApify] ${msg}`),
   );
   if (!items?.length) return [];
@@ -238,6 +240,25 @@ export async function searchGoogleNews(query: string, lang = 'he'): Promise<stri
   return (data.news_results as any[]).slice(0, 8).map((n: any) => n.title || '').filter(Boolean);
 }
 
+// The ads scraper finds a page's ads from the page itself. Stored links are often a post, album or
+// photo of the page, or carry tracking params,, and found none of its ads.
+export function facebookPageUrl(url: string): string {
+  let u: URL;
+  try { u = new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`); } catch { return url; }
+  const parts = u.pathname.split('/').filter(Boolean);
+  const id = u.searchParams.get('id');
+  // profile.php?id=, permalink.php?story_fbid=…&id=: the id is the page
+  if (parts[0]?.endsWith('.php')) return id ? `https://www.facebook.com/profile.php?id=${id}` : url;
+  // /pages/<name>/<id>, /people/<name>/<id>, /p/<name>-<id>
+  if (['pages', 'people', 'p'].includes(parts[0])) {
+    const pageId = parts.slice(1).map(p => p.match(/(\d{6,})$/)?.[1]).find(Boolean);
+    return pageId ? `https://www.facebook.com/${pageId}` : url;
+  }
+  // share links and the like only resolve by following them: leave as they are
+  if (!parts[0] || ['share', 'groups', 'watch', 'events', 'hashtag'].includes(parts[0])) return url;
+  return `https://www.facebook.com/${parts[0]}`;
+}
+
 // ── Combined: search all platforms ──────────────────────────────────────────
 export async function searchAllAds(
   competitorName: string,
@@ -247,7 +268,7 @@ export async function searchAllAds(
   facebookUrl?: string | null,
 ): Promise<AdResult[]> {
   let metaAds: AdResult[] = [];
-  if (facebookUrl && hasApifyKey()) metaAds = await searchMetaAdsViaApify(facebookUrl);
+  if (facebookUrl && hasApifyKey()) metaAds = await searchMetaAdsViaApify(facebookPageUrl(facebookUrl));
   if (metaAds.length === 0 && facebookHandle) metaAds = await searchMetaAds(facebookHandle, 'IL');
 
   // ponytail: Google only when the library is empty — saves credits (KAN-172)

@@ -6,7 +6,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { shouldSkipAgent, setLastRun } from '../../lib/agentCache';
 import { searchAllAds, hasSearchApiKey, AdResult, adScanCapped } from '../../lib/searchapi';
 import { hasApifyKey } from '../../lib/apify';
-import { uploadImageFromUrl, isS3Configured } from '../../lib/s3';
+import { uploadImageFromUrl, isS3Configured, isS3Url } from '../../lib/s3';
 import { analyzePostCreative } from '../../lib/analyzePostCreative';
 import { findDonorCandidates, DonorCandidate, DonorPlatform } from '../../lib/competitorDonor';
 
@@ -29,22 +29,23 @@ async function upsertAdHistory(competitorId: string, businessProfileId: string, 
     const content_hash   = adContentHash(ad);
     const external_ad_id = ad.external_ad_id || null;
 
-    // Upload media to S3 for permanent URLs; fall back to CDN URL if S3 not configured
-    const media_url = ad.media_url && s3
-      ? (await uploadImageFromUrl(ad.media_url, 'competitor-ads') ?? ad.media_url)
-      : ad.media_url || null;
-    const video_url = ad.video_url && s3
-      ? (await uploadImageFromUrl(ad.video_url, 'competitor-ads') ?? ad.video_url)
-      : ad.video_url || null;
-
     // Lookup existing by external_ad_id if available, else by content_hash
     const lookup = external_ad_id
       ? `"competitor_id"=$1 AND "platform"=$2 AND "external_ad_id"=$3`
       : `"competitor_id"=$1 AND "platform"=$2 AND "content_hash"=$3`;
     const existing = await (prisma as any).$queryRawUnsafe(
-      `SELECT id, analyzed_at FROM "competitor_ad_history" WHERE ${lookup} LIMIT 1`,
+      `SELECT id, analyzed_at, media_url, video_url FROM "competitor_ad_history" WHERE ${lookup} LIMIT 1`,
       competitorId, ad.platform, external_ad_id ?? content_hash,
-    ).catch((e: any) => { console.warn('[detectCompetitorAds] ad history lookup failed:', e.message); return []; }) as { id: string; analyzed_at: string | null }[];
+    ).catch((e: any) => { console.warn('[detectCompetitorAds] ad history lookup failed:', e.message); return []; }) as { id: string; analyzed_at: string | null; media_url: string | null; video_url: string | null }[];
+
+    // Upload media to S3 for permanent URLs; fall back to CDN URL if S3 not configured.
+    // Media already on S3 is kept: a running ad comes back every daily scan.
+    const store = async (src: string, stored: string | null | undefined) =>
+      stored && isS3Url(stored) ? stored
+      : src && s3 ? (await uploadImageFromUrl(src, 'competitor-ads') ?? src)
+      : src || null;
+    const media_url = await store(ad.media_url || '', existing?.[0]?.media_url);
+    const video_url = await store(ad.video_url || '', existing?.[0]?.video_url);
 
     const caption = [ad.title, ad.body].filter(Boolean).join(' — ');
 
