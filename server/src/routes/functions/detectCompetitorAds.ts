@@ -325,7 +325,7 @@ export async function detectCompetitorAds(req: Request, res: Response) {
             rowsNeedingMedia.slice(i, i + ANALYSIS_CONCURRENCY).map(async row => {
               try {
                 const creative = await analyzePostCreative({
-                  caption: row.caption, cta: row.cta, platform: row.platform, mediaUrl: row.media_url,
+                  caption: row.caption, cta: row.cta, platform: row.platform, mediaUrl: row.media_url, businessProfileId,
                 });
                 if (creative) {
                   await (prisma as any).$executeRawUnsafe(

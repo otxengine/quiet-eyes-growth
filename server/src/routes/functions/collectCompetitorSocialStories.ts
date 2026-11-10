@@ -223,7 +223,7 @@ export async function collectCompetitorSocialStories(req: Request, res: Response
     for (let i = 0; i < toAnalyze.length; i += ANALYSIS_CONCURRENCY) {
       const results = await Promise.allSettled(
         toAnalyze.slice(i, i + ANALYSIS_CONCURRENCY).map(async ({ rowId, mediaUrl, videoUrl }) => {
-          const analysis = await analyzePostCreative({ caption: null, platform: 'instagram', mediaUrl, videoUrl });
+          const analysis = await analyzePostCreative({ caption: null, platform: 'instagram', mediaUrl, videoUrl, businessProfileId });
           if (!analysis) return;
           await (prisma as any).$executeRawUnsafe(
             `UPDATE competitor_stories SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW(), has_offer = $2, has_cta = $3

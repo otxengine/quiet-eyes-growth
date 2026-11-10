@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db';
 import { invokeLLM } from '../../lib/llm';
 import { tavilySearch, isTavilyRateLimited } from '../../lib/tavily';
+import { businessLocale } from '../../lib/businessLocale';
+import { EN_JSON_SYSTEM } from '../../lib/locale';
 
 export async function diffCompetitorSnapshot(req: Request, res: Response) {
   const { businessProfileId } = req.body;
@@ -14,6 +16,10 @@ export async function diffCompetitorSnapshot(req: Request, res: Response) {
     const profile = await prisma.businessProfile.findFirst({ where: { id: businessProfileId } });
     const category = profile?.category || '';
     const city = profile?.city || '';
+    // Search queries, the analysis and every stored text follow the business's language.
+    const en = (await businessLocale(businessProfileId)).lang === 'en';
+    const language = en ? 'English' : 'Hebrew';
+    const sys = en ? { systemPrompt: EN_JSON_SYSTEM } : {};
 
     let totalChanges = 0;
 
@@ -28,12 +34,13 @@ export async function diffCompetitorSnapshot(req: Request, res: Response) {
         if (snapshots.length < 2) {
           // No baseline — take a first snapshot and skip diff
           if (snapshots.length === 0 && !isTavilyRateLimited()) {
-            const webData = (await tavilySearch(`${competitor.name} ${city} מחיר מבצע`, 3))
+            const webData = (await tavilySearch(`${competitor.name} ${city} ${en ? 'prices deals' : 'מחיר מבצע'}`, 3))
               .map(r => `${r.title}: ${(r.content || '').slice(0, 200)}`).join('\n');
             const snap = await invokeLLM({
               model: 'sonnet',
               maxTokens: 400,
-              prompt: `Extract structured business information about "${competitor.name}" (${category} in ${city}) from the following text:\n${webData.slice(0, 2000) || 'no data'}\nReturn ONLY valid JSON. ALL string values must be in Hebrew: {"prices":[],"promotions":[],"rating":null,"review_count":null,"description":"","last_activity":""}`,
+              ...sys,
+              prompt: `Extract structured business information about "${competitor.name}" (${category} in ${city}) from the following text:\n${webData.slice(0, 2000) || 'no data'}\nReturn ONLY valid JSON. ALL string values must be in ${language}: {"prices":[],"promotions":[],"rating":null,"review_count":null,"description":"","last_activity":""}`,
               response_json_schema: { type: 'object' },
             });
             await prisma.$executeRawUnsafe(
@@ -51,7 +58,7 @@ export async function diffCompetitorSnapshot(req: Request, res: Response) {
         // Get fresh web data for the new snapshot
         let freshData = '';
         if (!isTavilyRateLimited()) {
-          const results = await tavilySearch(`${competitor.name} ${city} מחיר מבצע חדש`, 3);
+          const results = await tavilySearch(`${competitor.name} ${city} ${en ? 'new prices deals' : 'מחיר מבצע חדש'}`, 3);
           freshData = results.map(r => `${r.title}: ${(r.content || '').slice(0, 200)}`).join('\n');
         }
 
@@ -60,7 +67,8 @@ export async function diffCompetitorSnapshot(req: Request, res: Response) {
           const updatedSnap = await invokeLLM({
             model: 'sonnet',
             maxTokens: 400,
-            prompt: `Extract structured business information about "${competitor.name}" from the new data:\n${freshData.slice(0, 2000)}\nReturn ONLY valid JSON. ALL string values must be in Hebrew: {"prices":[],"promotions":[],"rating":null,"review_count":null,"description":"","last_activity":""}`,
+            ...sys,
+            prompt: `Extract structured business information about "${competitor.name}" from the new data:\n${freshData.slice(0, 2000)}\nReturn ONLY valid JSON. ALL string values must be in ${language}: {"prices":[],"promotions":[],"rating":null,"review_count":null,"description":"","last_activity":""}`,
             response_json_schema: { type: 'object' },
           });
           if (updatedSnap) {
@@ -75,6 +83,7 @@ export async function diffCompetitorSnapshot(req: Request, res: Response) {
         const diffResult = await invokeLLM({
           model: 'sonnet',
           maxTokens: 500,
+          ...sys,
           prompt: `You are a competitive intelligence analyst. Compare two states of "${competitor.name}" and identify only real changes.
 
 Old state: ${JSON.stringify(oldJson).slice(0, 1000)}
@@ -82,8 +91,8 @@ New state: ${JSON.stringify(newJson).slice(0, 1000)}
 
 Rule: report only concrete, proven changes (a price that changed from one number to another, a specific promotion, a rating change).
 If there is no real change — return {"changes":[]}.
-Return ONLY valid JSON. ALL string values must be in Hebrew:
-{"changes":[{"change_type":"price_change|new_promo|rating_change|new_offering","old_value":"old value","new_value":"new value","description":"specific description in Hebrew — with numbers"}]}`,
+Return ONLY valid JSON. ALL string values must be in ${language}:
+{"changes":[{"change_type":"price_change|new_promo|rating_change|new_offering","old_value":"old value","new_value":"new value","description":"specific description in ${language} — with numbers"}]}`,
           response_json_schema: { type: 'object' },
         });
 
@@ -94,13 +103,15 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
         for (const change of changes.slice(0, 3)) {
           if (!change.description) continue;
 
-          const changeLabels: Record<string, string> = {
-            price_change: 'שינוי מחיר',
-            new_promo: 'מבצע חדש',
-            rating_change: 'שינוי דירוג',
-            new_offering: 'שירות חדש',
-          };
-          const label = changeLabels[change.change_type] || 'שינוי';
+          const changeLabels: Record<string, string> = en
+            ? { price_change: 'Price change', new_promo: 'New offer', rating_change: 'Rating change', new_offering: 'New service' }
+            : {
+              price_change: 'שינוי מחיר',
+              new_promo: 'מבצע חדש',
+              rating_change: 'שינוי דירוג',
+              new_offering: 'שירות חדש',
+            };
+          const label = changeLabels[change.change_type] || (en ? 'Change' : 'שינוי');
           const summary = `${competitor.name}: ${label}${change.old_value && change.new_value ? ` (${change.old_value} → ${change.new_value})` : ''}`;
 
           await prisma.marketSignal.create({
@@ -108,7 +119,9 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
               summary,
               category: 'competitor_move',
               impact_level: 'medium',
-              recommended_action: `בדוק את השינוי אצל ${competitor.name} ושקול תגובה`,
+              recommended_action: en
+                ? `Look at the change at ${competitor.name} and consider a response`
+                : `בדוק את השינוי אצל ${competitor.name} ושקול תגובה`,
               confidence: 65,
               source_signals: 'competitor_diff',
               source_description: JSON.stringify({
@@ -116,7 +129,7 @@ Return ONLY valid JSON. ALL string values must be in Hebrew:
                 old_value: change.old_value,
                 new_value: change.new_value,
                 action_type: 'internal_task',
-                action_label: `📊 שינוי: ${competitor.name}`,
+                action_label: `📊 ${en ? 'Change' : 'שינוי'}: ${competitor.name}`,
               }),
               agent_name: `📊 ${competitor.name}`,
               is_read: false,

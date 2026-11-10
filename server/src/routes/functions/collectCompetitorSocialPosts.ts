@@ -198,7 +198,7 @@ async function scrapeAndSave(
     // once video_analyzed_at is set, never re-run video analysis (cost control).
     const useVideoUrl = alreadyVideoAnalyzed ? null : videoUrl;
     try {
-      const analysis = await analyzePostCreative({ caption, platform, mediaUrl, videoUrl: useVideoUrl, postedAt });
+      const analysis = await analyzePostCreative({ caption, platform, mediaUrl, videoUrl: useVideoUrl, postedAt, businessProfileId });
       if (analysis) {
         await (prisma as any).$executeRawUnsafe(
           `UPDATE competitor_posts SET analysis = convert_from(decode($1, 'hex'), 'UTF8'), analyzed_at = NOW(), has_offer = $2, has_cta = $3

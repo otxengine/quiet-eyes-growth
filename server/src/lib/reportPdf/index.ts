@@ -6,6 +6,7 @@
 import puppeteer from 'puppeteer-core';
 import { downloadFromS3, isS3Url, safeMediaType, uploadObjectToS3 } from '../s3';
 import { buildReportHtml, reportMediaUrls, ReportRow } from './html';
+import type { BizLocale } from '../locale';
 
 export { buildReportHtml, reportMediaUrls } from './html';
 export type { ReportRow } from './html';
@@ -72,9 +73,9 @@ async function printToPdf(html: string): Promise<Buffer> {
 }
 
 /** The report as an A4 PDF. Throws on failure — callers decide whether that matters. */
-export async function renderReportPdf(row: ReportRow, businessName: string): Promise<Buffer> {
+export async function renderReportPdf(row: ReportRow, businessName: string, locale?: BizLocale): Promise<Buffer> {
   const images = await inlineImages(reportMediaUrls(row));
-  const html = buildReportHtml(row, { businessName, images, videoHref });
+  const html = buildReportHtml(row, { businessName, images, videoHref, locale });
   return serialized(async () => {
     let timer: NodeJS.Timeout | undefined;
     try {
@@ -86,17 +87,17 @@ export async function renderReportPdf(row: ReportRow, businessName: string): Pro
   });
 }
 
-/** Israel-time start date of the period, `2026-11-01`. */
-function periodDate(row: ReportRow): string {
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' })
+/** Start date of the period in the business's timezone (Israel by default), `2026-11-01`. */
+function periodDate(row: ReportRow, tz = 'Asia/Jerusalem'): string {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' })
     .format(new Date(row.period_start));
   return parts; // en-CA is YYYY-MM-DD
 }
 
 /** ASCII attachment name: `cortexi-weekly-2026-11-01.pdf`. */
-export const reportPdfFilename = (row: ReportRow) => `cortexi-${row.report_type}-${periodDate(row)}.pdf`;
+export const reportPdfFilename = (row: ReportRow, tz?: string) => `cortexi-${row.report_type}-${periodDate(row, tz)}.pdf`;
 
 /** Stores the PDF in S3 at reports/<businessId>/<type>-<periodDate>.pdf. Null when S3 is off or the upload fails. */
-export function storeReportPdf(businessId: string, row: ReportRow, pdf: Buffer): Promise<string | null> {
-  return uploadObjectToS3(pdf, `reports/${businessId}/${row.report_type}-${periodDate(row)}.pdf`, 'application/pdf');
+export function storeReportPdf(businessId: string, row: ReportRow, pdf: Buffer, tz?: string): Promise<string | null> {
+  return uploadObjectToS3(pdf, `reports/${businessId}/${row.report_type}-${periodDate(row, tz)}.pdf`, 'application/pdf');
 }

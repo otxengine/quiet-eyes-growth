@@ -59,7 +59,7 @@ export async function backfillCompetitorPostAnalysis(req: Request, res: Response
       for (const post of posts) {
         if (timeLeft() <= 0) break;
         const useVideoUrl = post.video_analyzed_at ? null : post.video_url;
-        const analysis = await analyzePostCreative({ caption: post.caption, platform: post.platform, mediaUrl: post.media_url, videoUrl: useVideoUrl, postedAt: post.posted_at });
+        const analysis = await analyzePostCreative({ caption: post.caption, platform: post.platform, mediaUrl: post.media_url, videoUrl: useVideoUrl, postedAt: post.posted_at, businessProfileId });
         if (!analysis) continue;
         try {
           await (prisma as any).$executeRawUnsafe(

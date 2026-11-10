@@ -1,3 +1,4 @@
+import { BizLocale, IL_LOCALE } from './locale';
 import { prisma } from '../db';
 import { tallyThemes } from '../routes/functions/computeThemeRollup';
 import type { ReportType } from './reportPeriod';
@@ -122,17 +123,17 @@ export function mentionedCompetitor(summary: string | null, names: string[]): st
   return null;
 }
 
-const ymdIL = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(d);
+const ymdIn = (d: Date, tz: string) => new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d);
 
 /**
  * Followers gained over the period per entity (competitor_id, null = own business):
  * last snapshot on/before the period start vs the last one inside the period, summed
  * over platforms that have both. Absent → no entry (omit rather than fabricate).
  */
-async function followerDeltas(bpId: string, start: Date, end: Date): Promise<Map<string | null, number>> {
-  const startYmd = ymdIL(start);
-  const endYmd = ymdIL(end);
-  const floor = ymdIL(new Date(start.getTime() - 7 * 86400000)); // baseline tolerance, as socialKpis.ts
+async function followerDeltas(bpId: string, start: Date, end: Date, tz: string): Promise<Map<string | null, number>> {
+  const startYmd = ymdIn(start, tz);
+  const endYmd = ymdIn(end, tz);
+  const floor = ymdIn(new Date(start.getTime() - 7 * 86400000), tz); // baseline tolerance, as socialKpis.ts
   const rows = await q<{ competitor_id: string | null; start_val: number | null; end_val: number | null }>(
     `SELECT competitor_id, split_part(metric_name, ':', 2) AS platform,
        (array_agg(metric_value ORDER BY snapshot_date DESC) FILTER (WHERE snapshot_date <= $2))[1] AS start_val,
@@ -158,13 +159,23 @@ const LIMITS_REVIEWS = [
   'אין היסטוריית דירוג למתחרים — מוצג הממוצע של הביקורות החדשות בתקופה',
   'חלק מהביקורות על העסק (ממקורות חיפוש ברשת) ללא תאריך פרסום אמיתי',
 ];
+const LIMITS_EN = {
+  all: [
+    'Stories are collected from Instagram only (not Facebook)',
+    'Google ads come without a launch date — counted by when we first saw them',
+  ],
+  reviews: [
+    'No rating history for competitors — the average shown is of the new reviews in the period',
+    'Some reviews of your business (from web search sources) have no real publish date',
+  ],
+};
 
 /**
  * Everything a report covers for one business over [start, end). Daily/weekly/monthly
  * all run the same competitor queries over their window, so a weekly report equals the
  * sum of that week's dailies without double-counting or gaps from a failed daily run.
  */
-export async function buildReportData(bpId: string, type: ReportType, start: Date, end: Date) {
+export async function buildReportData(bpId: string, type: ReportType, start: Date, end: Date, loc: BizLocale = IL_LOCALE) {
   const p = [bpId, start.toISOString(), end.toISOString()] as const;
   // ponytail: sequential awaits on purpose — runAgentForAll runs 4 businesses at once on an 8-connection pool.
   const competitors = await q<{ id: string; name: string; rating: number | null; review_count: number | null }>(
@@ -213,7 +224,7 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
     const competitor = mentionedCompetitor(s.summary, competitors.map(c => c.name));
     return competitor ? [{ ...s, competitor }] : [];
   }).slice(0, 50);
-  const followers = await followerDeltas(bpId, start, end);
+  const followers = await followerDeltas(bpId, start, end, loc.tz);
 
   const withReviews = type !== 'daily';
   const reviews = withReviews
@@ -284,7 +295,9 @@ export async function buildReportData(bpId: string, type: ReportType, start: Dat
     changes,
     ...(ownReviews ? { own_reviews: ownReviews } : {}),
     ...(type === 'monthly' ? { own: await buildOwnActivity(p, followers.get(null) ?? null) } : {}),
-    limits: withReviews ? [...LIMITS_ALL, ...LIMITS_REVIEWS] : LIMITS_ALL,
+    limits: loc.lang === 'en'
+      ? (withReviews ? [...LIMITS_EN.all, ...LIMITS_EN.reviews] : LIMITS_EN.all)
+      : withReviews ? [...LIMITS_ALL, ...LIMITS_REVIEWS] : LIMITS_ALL,
   };
 }
 

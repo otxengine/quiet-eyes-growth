@@ -903,6 +903,9 @@ const httpServer = app.listen(PORT, async () => {
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS tiktok_access_token TEXT`);
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS tiktok_open_id      TEXT`);
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS notification_email  TEXT`);
+  // Language + timezone of a business’s reports (lib/locale.ts). NULL = Hebrew / Israel time.
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS locale   TEXT`);
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS timezone TEXT`);
 
   // ── Multi-branch / Multi-user / Agency tables ─────────────────────────────
   await sql(`CREATE TABLE IF NOT EXISTS organizations (
