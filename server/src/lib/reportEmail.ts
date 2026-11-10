@@ -3,7 +3,7 @@ import { sendEmail } from './email';
 import type { ReportType } from './reportPeriod';
 import { reportKpis, reportPeriodLabel } from './reportPdf/html';
 import type { BizLocale } from './locale';
-import { customerRecipients, unsubscribeUrl } from './reportDelivery';
+import { customerRecipients, reportViewUrl, unsubscribeUrl } from './reportDelivery';
 
 // Internal distribution list for every generated report, from SSM (/qe/<env>/REPORT_EMAIL_RECIPIENTS),
 // comma-separated. Kept out of the code because the repo is public.
@@ -26,17 +26,19 @@ export function periodLabel(type: ReportType, start: Date, end: Date): string {
 
 /**
  * Short table-based, inline-styled email in the business's language (RTL Hebrew by default, LTR English) (Gmail/Outlook: no grid/flex, no <style>): the masthead, the
- * one-line headline and the non-zero KPI numbers. The full report is the PDF attached to it.
- * Every value from the report is escaped — LLM output and scraped names are untrusted.
+ * one-line headline and the non-zero KPI numbers. The full report is the web page behind `viewUrl`
+ * (and/or the attached PDF). Every value from the report is escaped — LLM output and scraped names are untrusted.
  */
 export function buildReportEmail(
-  report: { report_type: string; period_start: Date; period_end: Date; data: any; summary: any },
+  report: { id?: string; report_type: string; period_start: Date; period_end: Date; data: any; summary: any },
   businessName: string,
   hasPdf = true,
   loc?: BizLocale,
   // Set for an email to the customer: it must say why they get it and how to stop it.
   // Omitted = the internal distribution list.
   customer?: { unsubscribeUrl: string; postalAddress?: string },
+  // Signed link to the web report (reportViewUrl): the "Open the full report" button.
+  viewUrl?: string | null,
 ): { subject: string; html: string } {
   const type = report.report_type as ReportType;
   const s = report.summary ?? {};
@@ -65,6 +67,8 @@ export function buildReportEmail(
   const body = [
     `<div style="background:${C.tint};border-${side}:4px solid ${C.comp};padding:12px 14px;border-radius:4px;font-size:16px;font-weight:600;line-height:1.5">${esc(s.headline ?? '')}</div>`,
     tiles,
+    viewUrl ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0 0"><tr><td style="background:${C.ink};border-radius:6px">`
+      + `<a href="${esc(viewUrl)}" style="display:inline-block;padding:11px 20px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none">${en ? 'Open the full report' : 'לדוח המלא'}</a></td></tr></table>` : '',
     // Only promise an attachment that is actually there (a failed render still sends this email).
     hasPdf ? `<p style="margin:16px 0 0;font-size:14px;line-height:1.6;color:${C.ink2}">${en ? 'The full report is attached as a PDF' : 'הדוח המלא מצורף כקובץ PDF'}</p>` : '',
   ].join('');
@@ -97,11 +101,12 @@ export async function sendReportEmail(
   businessProfileId?: string,
 ): Promise<boolean> {
   const attachments = pdf && { attachments: [{ filename: pdf.filename, content: pdf.content.toString('base64') }] };
+  const viewUrl = report.id ? reportViewUrl(report.id) : null;
   let sent = false;
 
   const internal = reportRecipients();
   if (internal.length) {
-    const { subject, html } = buildReportEmail(report, businessName, !!pdf, loc);
+    const { subject, html } = buildReportEmail(report, businessName, !!pdf, loc, undefined, viewUrl);
     sent = await sendEmail({ to: internal, subject, html, ...attachments });
   }
 
@@ -114,10 +119,12 @@ export async function sendReportEmail(
       console.warn('[reportEmail] REPORT_UNSUBSCRIBE_SECRET or FRONTEND_URL not set — customer report email skipped');
       break;
     }
-    const { subject, html } = buildReportEmail(report, businessName, !!pdf, loc,
-      { unsubscribeUrl: url, postalAddress: process.env.COMPANY_POSTAL_ADDRESS });
+    // The web report replaces the attachment for customers; the PDF is a button on that page.
+    const attach = viewUrl ? undefined : attachments;
+    const { subject, html } = buildReportEmail(report, businessName, !!attach, loc,
+      { unsubscribeUrl: url, postalAddress: process.env.COMPANY_POSTAL_ADDRESS }, viewUrl);
     const ok = await sendEmail({
-      to, subject, html, ...attachments,
+      to, subject, html, ...attach,
       headers: { 'List-Unsubscribe': `<${url}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
     });
     sent = ok || sent;
