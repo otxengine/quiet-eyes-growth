@@ -3,6 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Google Tag Manager. Prod hosts only, so staging/localhost stay out of the data.
+         Keep in sync with index.html. -->
+    <script>
+      if (['cortexi.ai', 'www.cortexi.ai'].includes(location.hostname)) {
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = function () { dataLayer.push(arguments); };
+        gtag('js', new Date());
+        document.head.appendChild(Object.assign(document.createElement('script'), {
+          async: true, src: 'https://www.googletagmanager.com/gtm.js?id=GTM-5DTZ9QKC',
+        }));
+      }
+    </script>
     <link rel="icon" type="image/png" sizes="32x32" href="/logo/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/logo/icon-192.png" />
     <link rel="apple-touch-icon" href="/logo/apple-touch-icon.png" />
