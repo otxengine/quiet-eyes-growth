@@ -44,6 +44,7 @@ const places = (body: any, ok = true) => { (global as any).fetch = jest.fn(async
 
 beforeEach(() => {
   jest.clearAllMocks();
+  delete process.env.BRIEFING_BLOCK_ISRAEL;
   bp.findMany.mockResolvedValue([]);
   bp.create.mockResolvedValue({ id: 'bp_new' });
 });
@@ -60,12 +61,19 @@ describe('search-business', () => {
     expect(r.body.results).toEqual([{ placeId: 'p1', name: "Joe's Pizza", address: 'Austin, TX', category: '', rating: 4.5, reviewCount: 120 }]);
     expect(JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)).toMatchObject({ languageCode: 'en', regionCode: 'us', maxResultCount: 5 });
   });
-  it('needs a real query and is refused from Israel', async () => {
+  it('needs a real query and, with BRIEFING_BLOCK_ISRAEL on, is refused from Israel', async () => {
     places({});
     expect((await call('/search-business', 'post', { body: { query: 'a' } })).statusCode).toBe(400);
+    process.env.BRIEFING_BLOCK_ISRAEL = 'true';
     const il = await call('/search-business', 'post', { body: { query: 'Cafe Tel Aviv' }, headers: { 'cloudfront-viewer-country': 'IL' } });
     expect(il.statusCode).toBe(403);
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+  it('visitors from Israel are let through while the block is off (the default)', async () => {
+    places({ places: [] });
+    const il = await call('/search-business', 'post', { body: { query: 'Home Slice Pizza Austin' }, headers: { 'cloudfront-viewer-country': 'IL' } });
+    expect(il.statusCode).toBe(200);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -93,6 +101,8 @@ describe('start', () => {
   it('refuses a business in Israel, a visitor from Israel and a bad place id', async () => {
     places({ ...PLACE, addressComponents: [{ shortText: 'IL', longText: 'Israel', types: ['country'] }] });
     expect((await call('/start', 'post', { body: { placeId: PLACE.id } })).statusCode).toBe(403);
+    places(PLACE);
+    process.env.BRIEFING_BLOCK_ISRAEL = 'true';
     expect((await call('/start', 'post', { body: { placeId: PLACE.id }, headers: { 'cloudfront-viewer-country': 'il' } })).statusCode).toBe(403);
     expect((await call('/start', 'post', { body: { placeId: '../etc' } })).statusCode).toBe(400);
     expect(bp.create).not.toHaveBeenCalled();

@@ -36,7 +36,10 @@ const placesKey = () => process.env.GOOGLE_PLACES_API_KEY || '';
 
 // The product is not sold in Israel (the Hebrew app is). CloudFront adds the header when the
 // distribution forwards it; without it nothing is refused here and the CDN redirect is the gate.
-const fromIsrael = (req: Request) => String(req.headers['cloudfront-viewer-country'] || '').toUpperCase() === 'IL';
+// Off unless BRIEFING_BLOCK_ISRAEL=true: the English site is tested from Israel for now. Turn it on
+// together with the CDN's country routing (GEO_ROUTING_ON in infra/lib/qe-stack.ts).
+const fromIsrael = (req: Request) => process.env.BRIEFING_BLOCK_ISRAEL === 'true'
+  && String(req.headers['cloudfront-viewer-country'] || '').toUpperCase() === 'IL';
 const NOT_AVAILABLE = { error: 'This product is not available in Israel', not_available: true };
 
 function placesHeaders(fieldMask: string) {
