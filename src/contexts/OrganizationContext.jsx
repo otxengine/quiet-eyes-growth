@@ -29,7 +29,11 @@ export function OrganizationProvider({ children }) {
     retry: retryUnlessRateLimited(2),
   });
 
-  const orgs          = data?.orgs || [];
+  // The organization of an English report-only business (plan 'brief_…') belongs to its own screens
+  // (/en/briefing): the app shows it only when it is all the user has.
+  const allOrgs       = data?.orgs || [];
+  const appOrgs       = allOrgs.filter(o => !String(o.plan_id || '').startsWith('brief_'));
+  const orgs          = appOrgs.length ? appOrgs : allOrgs;
   const agencyClients = data?.agencyClients || [];
 
   // Restore saved selection or fall back to first org/branch

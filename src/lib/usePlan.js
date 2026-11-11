@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { pickAppProfile } from '@/lib/appLayoutView';
 
 export const PLAN_ORDER = ['free_trial', 'starter', 'growth', 'pro', 'enterprise'];
 
@@ -55,7 +56,7 @@ export function usePlan() {
   });
 
   // Admin override takes priority over billing
-  const bp = profiles?.find(p => p.onboarding_completed) || profiles?.[0];
+  const bp = pickAppProfile(profiles); // the app business, not an English report-only one
   const adminOverride = bp?.subscription_plan || bp?.plan_id;
   const billingPlan    = subData?.plan;
 
