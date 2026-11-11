@@ -56,4 +56,13 @@ describe('buildReportData — running ads', () => {
     adRows = { fresh: [], active: [] };
     expect(isEmptyReport(await day())).toBe(true);
   });
+
+  it('a report-only business: own holds posts, ads and followers only — no crash, own posts count as activity', async () => {
+    adRows = { fresh: [], active: [] };
+    const data: any = await day();
+    data.own = { posts: { count: 0 }, ads: { new_count: 0 }, followers_delta: null };
+    expect(isEmptyReport(data)).toBe(true);
+    data.own.posts.count = 4;
+    expect(isEmptyReport(data)).toBe(false);
+  });
 });

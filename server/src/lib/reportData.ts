@@ -416,9 +416,10 @@ async function buildOwnActivity(p: readonly [string, string, string], followersD
 export function isEmptyReport(data: Awaited<ReturnType<typeof buildReportData>>): boolean {
   const t = data.totals as Record<string, number>;
   const own = (data as any).own;
+  // A report-only business's `own` holds posts, ads and followers only (generateReport strips the app's numbers).
   const ownActivity = own
-    ? own.posts.count + own.ads.new_count + own.published_from_app + own.campaigns.length
-      + own.leads.created + own.conversations + own.auto_actions.completed
+    ? (own.posts?.count ?? 0) + (own.ads?.new_count ?? 0) + (own.published_from_app ?? 0) + (own.campaigns?.length ?? 0)
+      + (own.leads?.created ?? 0) + (own.conversations ?? 0) + (own.auto_actions?.completed ?? 0)
     : 0;
   return Object.values(t).every(v => v === 0) && ownActivity === 0;
 }
