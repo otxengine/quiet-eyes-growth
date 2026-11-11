@@ -22,6 +22,7 @@ import { sendEmail, buildInviteEmail, FRONTEND_URL } from '../lib/email';
 import { getOrCreateOrgForProfile } from '../lib/orgHelpers';
 import { ORG_ROLES, ORG_ADMIN_ROLES } from '../lib/ownership';
 import crypto from 'crypto';
+import { isBriefingPlan } from '../lib/planLimits';
 
 type Params = Record<string, string>;
 
@@ -108,6 +109,9 @@ router.get('/my', async (req: Request, res: Response) => {
         profile.id,
       ).catch(() => []);
       if (linked?.length > 0) continue;
+      // An English report-only business is never a branch of the app's organization: it gets its own
+      // organization when it first pays (onboarding.ts select-plan), and none while it is free.
+      if (isBriefingPlan((profile as any).subscription_plan)) continue;
 
       const planId = (profile as any).subscription_plan || (profile as any).plan_id || 'free_trial';
       const orgId = await getOrCreateOrgForProfile(profile, userId, planId);
@@ -127,6 +131,7 @@ router.get('/my', async (req: Request, res: Response) => {
                               organization_id, branch_display_name, branch_role, branch_sort_order
                            FROM business_profiles
                            WHERE organization_id = $1 AND (is_active IS NULL OR is_active = true)
+                             AND COALESCE(subscription_plan, '') NOT LIKE 'brief\\_%'
                            ORDER BY COALESCE(branch_sort_order, 0) ASC`;
 
         // Managers with limited branch access
@@ -139,6 +144,7 @@ router.get('/my', async (req: Request, res: Response) => {
                              FROM business_profiles
                              WHERE organization_id = $1 AND id = ANY($2::text[])
                                AND (is_active IS NULL OR is_active = true)
+                               AND COALESCE(subscription_plan, '') NOT LIKE 'brief\\_%'
                              ORDER BY COALESCE(branch_sort_order, 0) ASC`;
               const branches = await prisma.$queryRawUnsafe<any[]>(branchQuery, org.id, ids);
               return { ...org, branches };

@@ -8,7 +8,7 @@ import { useScanQuota } from '@/lib/useScanQuota';
 import { PLAN_LABELS } from '@/lib/usePlan';
 import ScanOverlay from '@/components/dashboard/ScanOverlay';
 import { buildNotificationFeed } from '@/lib/notificationFeed';
-import { appLayoutView } from '@/lib/appLayoutView';
+import { appLayoutView, pickAppProfile } from '@/lib/appLayoutView';
 import { retryUnlessRateLimited } from '@/lib/query-client';
 import AppLoadError from '@/components/AppLoadError';
 
@@ -73,8 +73,8 @@ export default function AppLayout() {
     enabled: !!user?.email
   });
 
-  // Prefer a profile that completed onboarding; fall back to the first one
-  const legacyProfile = businessProfiles?.find(p => p.onboarding_completed) || businessProfiles?.[0];
+  // Prefer an app business over an English report-only one, then one that completed onboarding
+  const legacyProfile = pickAppProfile(businessProfiles);
 
   // When org context has a branch selected, use its ID for queries but merge
   // with the full legacy profile data so pages still have all fields available.

@@ -12,3 +12,13 @@ export function appLayoutView({ loading, error, profilesLoaded, hasProfile, from
 export function retryAfterSeconds(error) {
   return error?.status === 429 ? Math.max(1, error.retryAfter || 30) : 0;
 }
+
+// The business the Hebrew app opens. A user can also own an English report-only business
+// (subscription_plan 'brief_…', its screens are /en/briefing): it is chosen only when it is all the
+// user has, so signing in to the app never lands an app customer in the English account.
+export const isBriefingProfile = (p) => String(p?.subscription_plan || '').startsWith('brief_');
+export function pickAppProfile(profiles) {
+  const app = profiles?.filter((p) => !isBriefingProfile(p));
+  const pool = app?.length ? app : profiles;
+  return pool?.find((p) => p.onboarding_completed) || pool?.[0];
+}

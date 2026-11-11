@@ -1,6 +1,6 @@
 // Self-check for appLayoutView — run: node src/lib/appLayoutView.selfcheck.js
 import { strict as assert } from 'node:assert';
-import { appLayoutView, retryAfterSeconds } from './appLayoutView.js';
+import { appLayoutView, retryAfterSeconds, pickAppProfile } from './appLayoutView.js';
 
 const err = (status, extra) => Object.assign(new Error('x'), { status, ...extra });
 const loaded = { loading: false, error: null, profilesLoaded: true, hasProfile: true, fromOnboarding: false };
@@ -22,5 +22,15 @@ assert.equal(appLayoutView({ ...loaded, loading: true, error: err(500) }), 'load
 assert.equal(retryAfterSeconds(err(429, { retryAfter: 120 })), 120, 'Retry-After honoured');
 assert.equal(retryAfterSeconds(err(429)), 30, 'fallback when the header is missing');
 assert.equal(retryAfterSeconds(err(500)), 0, 'only 429 waits');
+
+// A user with both an app business and a newer English report-only one opens the app business
+const he = { id: 'he', subscription_plan: 'pro', onboarding_completed: true };
+const en = { id: 'en', subscription_plan: 'brief_monthly', onboarding_completed: true };
+assert.equal(pickAppProfile([en, he]).id, 'he', 'app business wins over a newer report-only one');
+assert.equal(pickAppProfile([en]).id, 'en', 'report-only business alone is still picked (then redirected)');
+assert.equal(pickAppProfile([{ id: 'new', subscription_plan: 'free_trial' }, he]).id, 'he', 'onboarded first');
+assert.equal(pickAppProfile([{ id: 'new' }, en]).id, 'new', 'an unfinished app business beats a report-only one');
+assert.equal(pickAppProfile([]), undefined);
+assert.equal(pickAppProfile(undefined), undefined);
 
 console.log('appLayoutView self-check passed');
