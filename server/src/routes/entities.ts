@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
-import { planLimits } from '../lib/planLimits';
+import { isBriefingPlan, planLimits } from '../lib/planLimits';
 import { getUserId } from '../middleware/auth';
 import { getUserEmail, getUserBusinessIds, getUserWritableBusinessIds } from '../lib/ownership';
 import { cleanupCompetitorsByRadius } from '../lib/competitorRadiusCleanup';
@@ -352,6 +352,9 @@ router.post('/:entity', async (req: Request, res: Response) => {
             linked_business: data.linked_business,
             not_relevant: { not: true },
             is_dismissed: { not: true },
+            // A report-only business has more suggestions than it may track (see
+            // runCompetitorIdentification): only the ones it chose count against its plan.
+            ...(isBriefingPlan(planId) ? { tracking_status: 'approved' } : {}),
           },
         });
         if (activeCount >= maxCompetitors) {

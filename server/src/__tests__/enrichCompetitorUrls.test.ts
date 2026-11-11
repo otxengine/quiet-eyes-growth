@@ -360,3 +360,40 @@ describe('enrichCompetitorUrlsScheduled (KAN-221)', () => {
     expect(prisma.competitor.findMany).not.toHaveBeenCalled();
   });
 });
+
+// A Google listing whose "website" is the business's Facebook / Instagram page.
+describe('Places website that is a social page', () => {
+  const comp = (over: any = {}) => ({
+    id: 'c1', name: 'Rival Pizza', address: null, linked_business: 'b1', google_place_id: 'p1',
+    website_url: null, instagram_url: null, facebook_url: null, rating: 4, review_count: 10, ...over,
+  });
+  const lastUpdate = () => (prisma.competitor.update as jest.Mock).mock.calls.slice(-1)[0][0].data;
+
+  test('a Facebook page is stored as facebook_url, not as the website, and is not scraped for links', async () => {
+    (prisma.competitor.findMany as jest.Mock).mockResolvedValue([comp()]);
+    (getPlaceDetails as jest.Mock).mockResolvedValue({ websiteUri: 'https://www.facebook.com/rivalpizza/?ref=page' });
+    await enrichCompetitorUrls(['c1']);
+    expect(lastUpdate()).toMatchObject({ facebook_url: 'https://www.facebook.com/rivalpizza/', facebook_url_source: 'places' });
+    expect(lastUpdate().website_url).toBeUndefined();
+    expect(extractSocialLinksFromWebsite).not.toHaveBeenCalled();
+  });
+
+  test('an Instagram profile is stored as instagram_url; a link to a single post is not', async () => {
+    (prisma.competitor.findMany as jest.Mock).mockResolvedValue([comp()]);
+    (getPlaceDetails as jest.Mock).mockResolvedValue({ websiteUri: 'https://instagram.com/rivalpizza' });
+    await enrichCompetitorUrls(['c1']);
+    expect(lastUpdate()).toMatchObject({ instagram_url: 'https://instagram.com/rivalpizza', instagram_url_source: 'places' });
+
+    (getPlaceDetails as jest.Mock).mockResolvedValue({ websiteUri: 'https://www.instagram.com/p/ABC123/' });
+    await enrichCompetitorUrls(['c1']);
+    expect(lastUpdate().instagram_url).toBeUndefined();
+    expect(lastUpdate().website_url).toBeUndefined();
+  });
+
+  test('a real website is still stored as the website', async () => {
+    (prisma.competitor.findMany as jest.Mock).mockResolvedValue([comp()]);
+    (getPlaceDetails as jest.Mock).mockResolvedValue({ websiteUri: 'https://rivalpizza.example.com' });
+    await enrichCompetitorUrls(['c1']);
+    expect(lastUpdate()).toMatchObject({ website_url: 'https://rivalpizza.example.com', website_url_source: 'places' });
+  });
+});

@@ -50,18 +50,16 @@ export const briefingApi = {
     api(`/entities/Competitor?${q({ filter: JSON.stringify({ linked_business: businessProfileId }), limit: 100 })}`),
   confirmCompetitors: (businessProfileId, approvedIds, rejectedIds) =>
     api('/onboarding/confirm-competitors', { method: 'POST', body: { businessProfileId, approvedIds, rejectedIds } }),
-  async addCompetitor(businessProfileId, name, urls) {
+  addCompetitor(businessProfileId, name, urls) {
     const fields = Object.keys(urls).filter((k) => urls[k]);
-    const created = await api('/entities/Competitor', {
+    return api('/entities/Competitor', {
       method: 'POST',
       body: { linked_business: businessProfileId, name, ...Object.fromEntries(fields.map((k) => [k, urls[k]])), manual_url_fields: fields },
     });
-    // Finding the pages we were not given is best-effort: the competitor is usable without them.
-    try {
-      const r = await api(`/competitors/${created.id}/enrich-urls`, { method: 'POST', body: {}, timeoutMs: 45000 });
-      return r.competitor || created;
-    } catch { return created; }
   },
+  // Looks up the Google listing, website, Instagram and Facebook of a competitor. It can outlast the
+  // request (the CDN closes it at 2 minutes) and still finish server-side.
+  lookUpPages: (id) => api(`/competitors/${id}/enrich-urls`, { method: 'POST', body: {}, timeoutMs: 115000 }),
   updateCompetitor: (id, patch) => api(`/entities/Competitor/${id}`, { method: 'PATCH', body: patch }),
 
   reports: (businessProfileId) => api(`/reports?${q({ businessProfileId, limit: 60 })}`),

@@ -61,6 +61,11 @@ async function enrichSocial(domain: string, nonProfile: string[], name: string, 
   return tavilyHit ? { url: tavilyHit, source: 'tavily' } : null;
 }
 
+/** True when `url` is on `domain` or one of its subdomains (www., m., …). */
+function isProfileHost(url: string, domain: string): boolean {
+  try { const h = new URL(url).hostname.toLowerCase(); return h === domain || h.endsWith(`.${domain}`); } catch { return false; }
+}
+
 const SOCIAL_PLATFORMS: [string, string, string[]][] = [
   ['instagram_url', 'instagram.com', IG_NON_PROFILE],
   ['facebook_url',  'facebook.com',  FB_NON_PROFILE],
@@ -97,7 +102,17 @@ export async function enrichCompetitorUrls(
     // AC3 — website missing: paid-tier fallback before giving up on it
     if (!comp.website_url) {
       const found = await enrichWebsite(comp.google_place_id, comp.name, comp.address, geo);
-      if (found) { update.website_url = found.url; update.website_url_source = found.source; attempted = true; }
+      // Many small businesses list their Facebook or Instagram page as their "website" on Google.
+      // That is the social page itself, not a site to extract links from.
+      const social = found && SOCIAL_PLATFORMS.find(([, domain]) => isProfileHost(found.url, domain));
+      if (found && social) {
+        const [field, domain, nonProfile] = social;
+        if (!comp[field] && isProfileUrl(found.url, `${domain}/`, nonProfile)) {
+          update[field] = found.url.split('?')[0];
+          update[`${field}_source`] = found.source;
+        }
+        attempted = true;
+      } else if (found) { update.website_url = found.url; update.website_url_source = found.source; attempted = true; }
     }
 
     // Google rating/review_count — independent of website_url, so a competitor that
@@ -126,6 +141,10 @@ export async function enrichCompetitorUrls(
       const found = await enrichSocial(domain, nonProfile, comp.name, comp.address, geo);
       if (found) { update[field] = found.url; update[`${field}_source`] = found.source; attempted = true; }
     }
+
+    // One line per competitor: which step found each page, so "no pages found" can be traced.
+    const seen = (field: string) => update[`${field}_source`] ?? (comp[field] ? 'had' : 'none');
+    console.log(`enrichCompetitorUrls: "${comp.name}" place=${comp.google_place_id ? 'yes' : 'no'} website=${seen('website_url')} instagram=${seen('instagram_url')} facebook=${seen('facebook_url')}`);
 
     if (!attempted && Object.keys(update).length === 0) { skipped++; continue; }
 
