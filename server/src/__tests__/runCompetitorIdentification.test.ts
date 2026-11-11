@@ -50,6 +50,8 @@ jest.mock('../routes/functions/enrichCompetitorUrls', () => ({
 }));
 
 jest.mock('../lib/googlePlaces', () => ({
+  getPlaceLocation: jest.fn().mockResolvedValue(null),
+  searchPlacesNear: jest.fn().mockResolvedValue([]),
   getPlaceDetails: jest.fn().mockResolvedValue({
     reviews: [], editorialSummary: '', types: [], priceLevel: null,
     servesWine: false, servesBeer: false, servesVegetarianFood: false, websiteUri: '',
@@ -63,7 +65,7 @@ import { publishEvent }     from '../lib/eventBus';
 import { writeAutomationLog } from '../lib/automationLog';
 import { searchCompetitorsByKeyword } from '../lib/dataforseo';
 import { enrichCompetitorUrls } from '../routes/functions/enrichCompetitorUrls';
-import { getPlaceDetails } from '../lib/googlePlaces';
+import { getPlaceDetails, getPlaceLocation, searchPlacesNear } from '../lib/googlePlaces';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -486,6 +488,37 @@ test('AC1 (KAN-212): DataForSEO Maps and Google Places nearby both run for the s
     expect.objectContaining({ hl: 'iw', gl: 'il', country: 'Israel' }));
   expect(placesFetch).toHaveBeenCalledWith(expect.stringContaining('nearbysearch'));
   expect(placesFetch).toHaveBeenCalledWith(expect.stringContaining('language=iw&region=il'));
+});
+
+test('legacy Google search empty: Places (New) runs the same terms around the business\'s own place', async () => {
+  const US_PROFILE = { ...PROFILE, id: 'biz_fallback', name: "Joe's Pizza", category: 'Pizza restaurant', city: 'New York, NY', google_place_id: 'ChIJ_own_place' };
+  (prisma.businessProfile.findMany as jest.Mock).mockResolvedValue([US_PROFILE]);
+  ((prisma as any).$queryRaw as jest.Mock).mockResolvedValueOnce([{ locale: 'en-US', timezone: null }]);
+  // Geocoding and the legacy Places endpoints answer 200 with REQUEST_DENIED and no results.
+  (global as any).fetch = jest.fn(async () => ({ ok: true, json: async () => ({ status: 'REQUEST_DENIED', error_message: 'This API is not activated', results: [] }) }));
+  (getPlaceLocation as jest.Mock).mockResolvedValueOnce({ lat: 40.73, lng: -73.99 });
+  (searchPlacesNear as jest.Mock).mockResolvedValueOnce([
+    { name: 'Rival Pizza', place_id: 'us1', rating: 4.4, user_ratings_total: 210, formatted_address: '2 Oak St, New York, NY', geometry: { location: { lat: 40.74, lng: -73.98 } }, types: ['pizza_restaurant'] },
+  ]);
+  (searchCompetitorsByKeyword as jest.Mock).mockResolvedValue({ candidates: [], costUsd: 0 });
+  (invokeLLM as jest.Mock).mockReset()
+    .mockResolvedValueOnce({ business_type: 'Pizza restaurant', search_terms: ['pizza restaurant New York'], nearby_cities: [] })
+    .mockResolvedValueOnce({ competitors: [] });
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+  const res = makeRes();
+  await runCompetitorIdentification(makeReq('biz_fallback'), res);
+
+  expect(getPlaceLocation).toHaveBeenCalledWith('ChIJ_own_place');
+  expect(searchPlacesNear).toHaveBeenCalledWith('pizza restaurant New York', { lat: 40.73, lng: -73.99 }, 10000, expect.objectContaining({ hl: 'en', gl: 'us' }));
+  // DataForSEO maps needs coordinates: it runs now that the place gave them.
+  expect(searchCompetitorsByKeyword).toHaveBeenCalledWith('pizza restaurant New York', 40.73, -73.99, undefined, undefined, expect.anything());
+  // The candidate reached the selection step instead of the "no candidates" soft-fail…
+  expect((invokeLLM as jest.Mock).mock.calls[1][0].prompt).toContain('Rival Pizza');
+  expect(res.json).not.toHaveBeenCalledWith(expect.objectContaining({ skipped: 'no_candidates' }));
+  // …and the reason the legacy search was empty is in the logs.
+  expect(warn.mock.calls.some(c => String(c[0]).includes('REQUEST_DENIED'))).toBe(true);
+  warn.mockRestore();
 });
 
 test('an English (US) business searches in English, in the US, with English prompts', async () => {

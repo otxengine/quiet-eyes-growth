@@ -12,6 +12,21 @@ import { BRIEFING_SIGNUP_KEY, BUSINESS_QUERY_KEY } from './keys.js';
  * Sign-up flow of the English report-only product: find your business → competitors are discovered →
  * pick them → delivery → plan. A returning user resumes at the competitors step.
  */
+// Discovery (maps search, AI selection, page lookup) often runs longer than the 2 minutes the CDN
+// keeps a request open. The request is then cut off but the search carries on server-side, so wait
+// for its suggestions: until the list has stopped growing, or about 3 more minutes.
+async function waitForSuggestions(businessProfileId) {
+  let last = -1;
+  let stable = 0;
+  for (let i = 0; i < 30; i += 1) {
+    await new Promise((resolve) => { setTimeout(resolve, 6000); });
+    const n = await briefingApi.competitors(businessProfileId).then((list) => list.length, () => last);
+    stable = n > 0 && n === last ? stable + 1 : 0;
+    if (stable >= 2) return;
+    last = n;
+  }
+}
+
 export default function Start() {
   const navigate = useNavigate();
   const [step, setStep] = useState('loading'); // loading | search | discovering | pick | delivery | plan
@@ -60,7 +75,8 @@ export default function Start() {
       setStep('discovering');
       await loadSettings(id);
       // A failed or empty discovery is not the end: the picker lets them add competitors by hand.
-      await briefingApi.discover(id).catch(() => null);
+      const answered = await briefingApi.discover(id).then(() => true, () => false);
+      if (!answered) await waitForSuggestions(id);
       setStep('pick');
     } catch (e) {
       setError(e.data?.not_available ? 'Cortexi reports are not available in your country yet.' : e.message);
@@ -111,7 +127,7 @@ export default function Start() {
 
       {step === 'discovering' && (
         <>
-          <StepHeading step="Step 2 of 4" title="Finding your competitors" sub="We search nearby businesses of the same kind and look up their Instagram, Facebook and website. This takes one to two minutes." />
+          <StepHeading step="Step 2 of 4" title="Finding your competitors" sub="We search nearby businesses of the same kind and look up their Instagram, Facebook and website. This takes two to four minutes." />
           <Spinner label="Searching — keep this page open" />
         </>
       )}

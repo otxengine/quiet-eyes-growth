@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Star, Instagram, Facebook, Globe, Plus } from 'lucide-react';
+import { Star, Instagram, Facebook, Globe, Plus, RefreshCw } from 'lucide-react';
 import { briefingApi } from './api';
 import { Button, Card, ErrorNote, Spinner, TextInput } from './ui.jsx';
 
@@ -15,6 +15,7 @@ export default function CompetitorPicker({ businessProfileId, limit, saveLabel =
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: '', instagram_url: '' });
   const [editing, setEditing] = useState(null); // { id, field, value }
+  const [lookingUp, setLookingUp] = useState(new Set()); // ids whose pages are being looked up
 
   const load = async (keepPicked) => {
     const all = (await briefingApi.competitors(businessProfileId)).filter((c) => !c.not_relevant && c.tracking_status !== 'rejected');
@@ -37,6 +38,20 @@ export default function CompetitorPicker({ businessProfileId, limit, saveLabel =
     return next;
   });
 
+  // The page lookup of a hand-added competitor takes up to a couple of minutes. The competitor is
+  // shown right away, and the list is reloaded while the lookup runs so its pages appear as found.
+  const lookUp = async (id) => {
+    setLookingUp((prev) => new Set(prev).add(id));
+    let finished = false;
+    briefingApi.lookUpPages(id).catch(() => null).finally(() => { finished = true; });
+    for (let i = 0; i < 22 && !finished; i += 1) {
+      await new Promise((resolve) => { setTimeout(resolve, 8000); });
+      await load(true).catch(() => null);
+    }
+    await load(true).catch(() => null);
+    setLookingUp((prev) => { const next = new Set(prev); next.delete(id); return next; });
+  };
+
   const add = async () => {
     setError('');
     if (form.name.trim().length < 2) return setError('Enter the competitor\'s name.');
@@ -45,9 +60,13 @@ export default function CompetitorPicker({ businessProfileId, limit, saveLabel =
       const created = await briefingApi.addCompetitor(businessProfileId, form.name.trim(), { instagram_url: form.instagram_url.trim() });
       setForm({ name: '', instagram_url: '' });
       await load(true);
-      setPicked((prev) => new Set(prev).add(created.id));
+      // Picked right away when there is room; otherwise it joins the list for them to swap in.
+      setPicked((prev) => (prev.size < limit ? new Set(prev).add(created.id) : prev));
+      lookUp(created.id); // not awaited: the form is free for the next one
     } catch (e) {
-      setError(e.data?.plan_limit ? `Your plan tracks ${limit} competitors. Remove one first, or upgrade.` : e.message);
+      setError(e.data?.plan_limit
+        ? `Your plan tracks ${limit} competitors. Save your selection first, then swap one out — or upgrade.`
+        : 'We could not add this competitor. Try again in a moment.');
     } finally { setAdding(false); }
   };
 
@@ -92,7 +111,9 @@ export default function CompetitorPicker({ businessProfileId, limit, saveLabel =
     return (
       <span className="inline-flex items-center gap-1.5 text-[12.5px]" style={{ color: url ? 'var(--mkt-ink-2)' : 'var(--mkt-muted)' }}>
         <Icon size={13} aria-hidden="true" />
-        {url ? <a href={url} target="_blank" rel="noreferrer" className="underline decoration-dotted">{label}</a> : `No ${label} found`}
+        {url
+          ? <a href={url} target="_blank" rel="noreferrer" className="underline decoration-dotted">{label}</a>
+          : lookingUp.has(c.id) ? `Looking for ${label}…` : `No ${label} found`}
         <button type="button" className="underline" style={{ color: 'var(--mkt-muted)' }} onClick={() => setEditing({ id: c.id, field, value: url || '' })}>
           {url ? 'Not right?' : 'Add'}
         </button>
@@ -102,9 +123,15 @@ export default function CompetitorPicker({ businessProfileId, limit, saveLabel =
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between text-[13.5px]">
+      <div className="flex items-center justify-between gap-3 text-[13.5px]">
         <span className="font-bold">{counter}</span>
-        {full && <span style={{ color: 'var(--mkt-muted)' }}>Your plan tracks {limit}. Unselect one to swap.</span>}
+        <span className="flex items-center gap-3" style={{ color: 'var(--mkt-muted)' }}>
+          {full && <span>Your plan tracks {limit}. Unselect one to swap.</span>}
+          {/* Pages are still being looked up for a minute or two after the list appears. */}
+          <button type="button" className="inline-flex items-center gap-1 underline" onClick={() => load(true).catch((e) => setError(e.message))}>
+            <RefreshCw size={12} aria-hidden="true" />Refresh
+          </button>
+        </span>
       </div>
 
       {rows.length === 0 && (
@@ -149,7 +176,10 @@ export default function CompetitorPicker({ businessProfileId, limit, saveLabel =
           <TextInput value={form.instagram_url} onChange={(e) => setForm({ ...form, instagram_url: e.target.value })} placeholder="Instagram link (optional)" aria-label="Competitor Instagram link" maxLength={300} />
           <Button variant="ghost" onClick={add} disabled={adding}><Plus size={15} aria-hidden="true" />{adding ? 'Adding' : 'Add'}</Button>
         </div>
-        <p className="mt-2 text-[12.5px]" style={{ color: 'var(--mkt-muted)' }}>We look up their other pages for you. It can take up to a minute.</p>
+        <p className="mt-2 text-[12.5px]" style={{ color: 'var(--mkt-muted)' }}>
+          We look up their Instagram, Facebook and website for you. It can take a minute or two; you can keep going meanwhile.
+          If we find the wrong page or none, add the link yourself.
+        </p>
       </Card>
 
       <ErrorNote>{error}</ErrorNote>

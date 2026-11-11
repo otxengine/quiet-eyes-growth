@@ -183,7 +183,7 @@ router.get('/settings', requireOwnsBusinessFields, async (req: Request, res: Res
   if (typeof businessProfileId !== 'string' || !businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
   const [profile, rows] = await Promise.all([
     prisma.businessProfile.findUnique({ where: { id: businessProfileId }, select: { name: true, city: true, subscription_plan: true, instagram_url: true, facebook_url: true } }),
-    prisma.$queryRaw<{ timezone: string | null }[]>`SELECT timezone FROM business_profiles WHERE id = ${businessProfileId}`,
+    prisma.$queryRaw<{ timezone: string | null; organization_id: string | null }[]>`SELECT timezone, organization_id FROM business_profiles WHERE id = ${businessProfileId}`,
   ]);
   if (!profile) return res.status(404).json({ error: 'Not found' });
   const limits = planLimits(profile.subscription_plan);
@@ -194,6 +194,7 @@ router.get('/settings', requireOwnsBusinessFields, async (req: Request, res: Res
     competitorsMax: limits.competitors_max,
     reports: limits.reports,
     youVsThem: limits.own_in_report !== false,
+    orgId: rows[0]?.organization_id ?? null, // its own billing org, once a paid plan was chosen
     instagramUrl: profile.instagram_url || '',
     facebookUrl: profile.facebook_url || '',
     recipients: await customerRecipients(businessProfileId),

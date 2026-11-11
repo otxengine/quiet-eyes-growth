@@ -10,23 +10,35 @@ import { Button, ErrorNote } from './ui.jsx';
  * The four report-only plans. Choosing a paid one opens the Paddle checkout; the plan itself
  * switches when Paddle's webhook arrives, a few seconds after payment. `onChosen(planId, paid)`.
  */
-export default function PlanCards({ businessProfileId, currentPlan, onChosen }) {
+export default function PlanCards({ businessProfileId, currentPlan, orgId, onChosen }) {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const paid = !!currentPlan && currentPlan !== 'brief_free';
+
+  // Billing is per business: always its own org, never the account's first one.
+  const openBilling = async (org) => {
+    const { url } = await billingApi.portal(org);
+    if (url) window.open(url, '_blank', 'noopener');
+  };
 
   const choose = async (planId) => {
     setError('');
     setBusy(planId);
     try {
-      const { requiresCheckout, orgId } = await briefingApi.selectPlan(businessProfileId, planId);
+      // Going back to Free from a paid plan means cancelling the subscription, which Paddle's
+      // billing page does; the plan changes when the cancellation takes effect.
+      if (planId === 'brief_free' && paid) { await openBilling(orgId); return undefined; }
+      const { requiresCheckout, orgId: billingOrg } = await briefingApi.selectPlan(businessProfileId, planId);
       if (!requiresCheckout) return onChosen?.(planId, false);
-      const r = await billingApi.checkout(planId, orgId);
+      const r = await billingApi.checkout(planId, billingOrg);
       if (r.transactionId) {
         const outcome = await openPaddleCheckout(r.transactionId);
         if (outcome !== 'completed') return undefined; // closed without paying: nothing changed
       }
       return onChosen?.(planId, true);
-    } catch {
+    } catch (e) {
+      if (e?.data?.needsCancel) { await openBilling(e.data.orgId).catch(() => null); return undefined; }
+      console.error('[briefing] plan change failed:', e?.status, e?.message);
       setError('We could not start the checkout. Try again, or write to contact@cortexi.ai.');
       return undefined;
     } finally { setBusy(''); }
@@ -53,7 +65,7 @@ export default function PlanCards({ businessProfileId, currentPlan, onChosen }) 
                 ))}
               </ul>
               <Button variant={current ? 'ghost' : p.highlighted ? 'gradient' : 'black'} className="mt-4 w-full !h-10 text-[13px]" disabled={current || !!busy} onClick={() => choose(p.id)}>
-                {current ? 'Current plan' : busy === p.id ? 'Opening' : p.cta}
+                {current ? 'Current plan' : busy === p.id ? 'Opening' : p.id === 'brief_free' && paid ? 'Cancel plan' : p.cta}
               </Button>
             </div>
           );

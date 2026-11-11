@@ -69,3 +69,60 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
     };
   } catch (e: any) { console.warn('[googlePlaces] getPlaceDetails error:', e.message); return EMPTY_PLACE; }
 }
+
+/** Coordinates of a place, from Places API (New). Null when unknown. */
+export async function getPlaceLocation(placeId: string): Promise<{ lat: number; lng: number } | null> {
+  if (!GOOGLE_API_KEY || !placeId) return null;
+  try {
+    const res = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': GOOGLE_API_KEY, 'X-Goog-FieldMask': 'location' },
+    });
+    const data: any = await res.json();
+    const loc = data?.location;
+    return loc && typeof loc.latitude === 'number' ? { lat: loc.latitude, lng: loc.longitude } : null;
+  } catch (e: any) { console.warn('[googlePlaces] getPlaceLocation error:', e.message); return null; }
+}
+
+/**
+ * Text search with Places API (New), biased to a circle when a center is known. Results come back in
+ * the shape of the legacy nearbysearch / textsearch items (name, place_id, rating, user_ratings_total,
+ * formatted_address, geometry.location, types) so callers can use either source.
+ */
+export async function searchPlacesNear(
+  query: string,
+  center: { lat: number; lng: number } | null,
+  radiusM: number,
+  geo: SearchGeo = IL_GEO,
+): Promise<any[]> {
+  if (!GOOGLE_API_KEY) return [];
+  try {
+    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_API_KEY,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.types',
+      },
+      body: JSON.stringify({
+        textQuery: query,
+        languageCode: geo.hl,
+        regionCode: geo.gl,
+        maxResultCount: 15,
+        ...(center && {
+          locationBias: { circle: { center: { latitude: center.lat, longitude: center.lng }, radius: Math.min(Math.max(radiusM, 1), 50000) } },
+        }),
+      }),
+    });
+    const data: any = await res.json();
+    if (!res.ok) console.warn(`[googlePlaces] searchPlacesNear ${res.status}: ${data?.error?.message ?? ''}`);
+    return (data.places || []).map((p: any) => ({
+      name: p.displayName?.text || '',
+      place_id: p.id || '',
+      rating: p.rating ?? null,
+      user_ratings_total: p.userRatingCount ?? null,
+      formatted_address: p.formattedAddress || '',
+      geometry: p.location ? { location: { lat: p.location.latitude, lng: p.location.longitude } } : undefined,
+      types: p.types || [],
+    }));
+  } catch (e: any) { console.warn('[googlePlaces] searchPlacesNear error:', e.message); return []; }
+}

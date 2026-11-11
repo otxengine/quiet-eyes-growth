@@ -112,7 +112,9 @@ export default function AppLayout() {
     if (location.pathname.startsWith('/onboarding')) return;
     // A report-only (English) business never enters the Hebrew app: it has its own screens.
     if (String(businessProfile?.subscription_plan || '').startsWith('brief_')) {
-      navigate(businessProfile.onboarding_completed ? '/en/briefing' : '/en/start', { replace: true });
+      // The query string goes along: Paddle's emails ("update your card") link to the default
+      // payment link with ?_ptxn=…, and the English account opens that checkout.
+      navigate(`${businessProfile.onboarding_completed ? '/en/briefing' : '/en/start'}${location.search}`, { replace: true });
       return;
     }
     // If the profile loaded successfully, clear the onboarding guard flag

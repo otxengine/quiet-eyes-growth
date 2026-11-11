@@ -20,7 +20,7 @@ import { fetchSocialPageAbout } from '../lib/fetchSocialPageAbout';
 import { getUserId } from '../middleware/auth';
 import { requireBusinessAccess } from '../middleware/businessAccess';
 import { getOrCreateOrgForProfile } from '../lib/orgHelpers';
-import { businessPlanLimits } from '../lib/planLimits';
+import { businessPlanLimits, isBriefingPlan } from '../lib/planLimits';
 
 const logger = createLogger('Onboarding');
 const router = Router();
@@ -420,6 +420,17 @@ router.post('/select-plan', async (req: Request, res: Response) => {
     const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId } });
     if (!profile) return res.status(404).json({ error: 'Business not found' });
 
+    // A report-only business with a live subscription goes back to Free by cancelling it (billing
+    // portal); the cancel webhook sets the plan. Flipping it here would leave them paying for Free.
+    if (planId === 'brief_free' && isBriefingPlan(profile.subscription_plan) && profile.subscription_plan !== 'brief_free') {
+      const sub = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT o.id FROM organizations o JOIN business_profiles b ON b.organization_id = o.id
+         WHERE b.id = $1 AND o.paddle_subscription_id IS NOT NULL AND o.subscription_status IN ('active', 'trialing', 'past_due')`,
+        businessProfileId,
+      ).catch(() => []);
+      if (sub?.[0]?.id) return res.status(409).json({ ok: false, needsCancel: true, orgId: sub[0].id, error: 'Cancel the subscription from billing to go back to Free' });
+    }
+
     if (!PAID_PLANS.has(planId)) {
       await prisma.businessProfile.update({
         where: { id: businessProfileId },
@@ -429,7 +440,7 @@ router.post('/select-plan', async (req: Request, res: Response) => {
     }
 
     const userId = getUserId(req) || profile.created_by || 'dev-user';
-    const orgId = await getOrCreateOrgForProfile(profile, userId, planId);
+    const orgId = await getOrCreateOrgForProfile(profile, userId, planId, { dedicated: isBriefingPlan(planId) });
     return res.json({ ok: true, requiresCheckout: true, orgId });
   } catch (err: any) {
     logger.warn(`select-plan failed for ${businessProfileId}: ${err.message}`);

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../db';
-import { planLimits } from '../../lib/planLimits';
+import { isBriefingPlan, planLimits } from '../../lib/planLimits';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { invokeLLM } from '../../lib/llm';
 import { publishEvent } from '../../lib/eventBus';
@@ -8,7 +8,7 @@ import { buildCompetitorTerms, buildIdentityCompetitorTerms, buildAgentPromptCon
 import { getAgentMission } from '../../lib/missionPlanner';
 import { searchCompetitorsByKeyword, DataForSEOCandidate } from '../../lib/dataforseo';
 import { enrichCompetitorUrls } from './enrichCompetitorUrls';
-import { getPlaceDetails, PlaceDetails } from '../../lib/googlePlaces';
+import { getPlaceDetails, getPlaceLocation, searchPlacesNear, PlaceDetails } from '../../lib/googlePlaces';
 import { businessGeo } from '../../lib/businessLocale';
 import { EN_JSON_SYSTEM, IL_GEO, SearchGeo } from '../../lib/locale';
 
@@ -31,6 +31,17 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
 }
 
 
+/**
+ * The legacy Google web services answer HTTP 200 with a `status`. Anything but OK / ZERO_RESULTS
+ * (REQUEST_DENIED: API not enabled for the key, OVER_QUERY_LIMIT, …) used to look like "no results".
+ */
+function googleItems(data: any, what: string): any[] {
+  if (data?.status && data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+    console.warn(`runCompetitorIdentification: Google ${what} ${data.status}${data.error_message ? ` — ${data.error_message}` : ''}`);
+  }
+  return data?.results || [];
+}
+
 /** Geocode a city name to lat/lng using Google Geocoding API */
 async function geocodeCity(city: string, geo: SearchGeo = IL_GEO): Promise<{ lat: number; lng: number } | null> {
   if (!GOOGLE_API_KEY) return null;
@@ -38,7 +49,7 @@ async function geocodeCity(city: string, geo: SearchGeo = IL_GEO): Promise<{ lat
     const input = encodeURIComponent(`${city}${geo.geocodeSuffix}`);
     const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${input}&language=${geo.hl}&region=${geo.gl}&key=${GOOGLE_API_KEY}`);
     const data: any = await res.json();
-    const loc = data.results?.[0]?.geometry?.location;
+    const loc = googleItems(data, 'geocode')[0]?.geometry?.location;
     return loc ? { lat: loc.lat, lng: loc.lng } : null;
   } catch { return null; }
 }
@@ -57,7 +68,7 @@ async function googleNearbySearch(query: string, lat: number, lng: number, radiu
     });
     const res = await fetch(`https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params}`);
     const data: any = await res.json();
-    return data.results?.slice(0, 15) || [];
+    return googleItems(data, 'nearbysearch').slice(0, 15);
   } catch { return []; }
 }
 
@@ -68,7 +79,7 @@ async function googlePlacesSearch(query: string, city: string, geo: SearchGeo = 
     const input = encodeURIComponent(`${query} ${city}${geo.geocodeSuffix}`);
     const res = await fetch(`https://maps.googleapis.com/maps/api/place/textsearch/json?query=${input}&language=${geo.hl}&region=${geo.gl}&key=${GOOGLE_API_KEY}`);
     const data: any = await res.json();
-    return data.results?.slice(0, 10) || [];
+    return googleItems(data, 'textsearch').slice(0, 10);
   } catch { return []; }
 }
 
@@ -249,7 +260,9 @@ Return ONLY valid JSON. ALL string values must be in ${geo.language}:
     // Geocode the primary city to get coordinates, then use nearbysearch with
     // the exact radius so we don't pull in businesses 60km away.
     // Center on the street address when set — more precise than the city centroid
-    const cityCoords = (profile.full_address && await geocodeCity(profile.full_address, geo)) || await geocodeCity(city, geo);
+    // …and when geocoding gives nothing, on the business's own Google place.
+    const cityCoords = (profile.full_address && await geocodeCity(profile.full_address, geo)) || await geocodeCity(city, geo)
+      || (profile.google_place_id ? await getPlaceLocation(profile.google_place_id) : null);
     const radiusM = radiusKm * 1000;
 
     const googleSearchPromises = cityCoords
@@ -267,7 +280,16 @@ Return ONLY valid JSON. ALL string values must be in ${geo.language}:
       Promise.all(dataForSeoPromises),
     ]);
 
-    const googleResults     = googleResultSets.flat();
+    let googleResults       = googleResultSets.flat();
+    // The legacy Places endpoints above return nothing when they are not enabled for the key or the
+    // business could not be geocoded. Places API (New) — the one the rest of the app uses — then
+    // runs the same terms, biased to the business's area.
+    if (googleResults.length === 0) {
+      googleResults = (await Promise.all(
+        searchTerms.map(term => searchPlacesNear(cityCoords ? term : `${term} ${city}`, cityCoords, radiusM, geo)),
+      )).flat();
+      console.log(`runCompetitorIdentification: legacy Google search empty — Places (New) returned ${googleResults.length}`);
+    }
     const dataForSeoResults = dataForSeoResultSets.flatMap(r => r.candidates);
     // KAN-216 AC4: sum per-call DataForSEO cost for this identify run
     const dataForSeoCostUsd = dataForSeoResultSets.reduce((sum, r) => sum + r.costUsd, 0);
@@ -371,7 +393,12 @@ Return ONLY valid JSON. ALL string values must be in ${geo.language}: {"competit
     // business_profiles.plan_id is never written after row creation (stays at its "free"
     // default forever) — billing webhooks write the live plan into subscription_plan instead.
     const planId: string = (profile as any).subscription_plan || 'free_trial';
-    const maxCompetitors = planLimits(planId).competitors_max;
+    // A report-only business picks who to watch from a list, so discovery offers more suggestions
+    // than its plan tracks; the cap is enforced when the picks are confirmed (confirm-competitors).
+    const SUGGESTIONS = 10;
+    const maxCompetitors = isBriefingPlan(planId)
+      ? Math.max(planLimits(planId).competitors_max, SUGGESTIONS)
+      : planLimits(planId).competitors_max;
     if (maxCompetitors !== Infinity) {
       const activeCount = existingCompetitors.filter((c: any) => !c.not_relevant && !c.is_dismissed).length;
       const headroom = Math.max(0, maxCompetitors - activeCount);

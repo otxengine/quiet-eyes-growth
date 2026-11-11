@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FileText } from 'lucide-react';
 import { EN_PLANS } from '../marketing/en/plans.js';
 import { billingApi } from '@/api/billingApi';
+import { openLinkedPaddleCheckout } from '@/lib/paddle';
 import { briefingApi } from './api';
 import { BriefingShell, Button, Card, ErrorNote, Spinner } from './ui.jsx';
 import CompetitorPicker from './CompetitorPicker.jsx';
@@ -85,6 +86,9 @@ export default function Account() {
 
   const loadSettings = (id) => briefingApi.settings(id).then(setSettings);
 
+  // A link from a Paddle email (?_ptxn=…) opens its checkout here, as Subscription.jsx does for the app.
+  useEffect(() => { openLinkedPaddleCheckout(); }, []);
+
   useEffect(() => {
     (async () => {
       try {
@@ -99,7 +103,7 @@ export default function Account() {
 
   const planName = EN_PLANS.find((p) => p.id === settings?.plan)?.name || 'Free';
   const openPortal = async () => {
-    try { const { url } = await billingApi.portal(); if (url) window.open(url, '_blank', 'noopener'); }
+    try { const { url } = await billingApi.portal(settings.orgId); if (url) window.open(url, '_blank', 'noopener'); }
     catch { setError('We could not open billing. Write to contact@cortexi.ai.'); }
   };
 
@@ -139,7 +143,7 @@ export default function Account() {
 
           {tab === 'plan' && (
             <div className="space-y-4">
-              <PlanCards businessProfileId={business.businessProfileId} currentPlan={settings.plan}
+              <PlanCards businessProfileId={business.businessProfileId} currentPlan={settings.plan} orgId={settings.orgId}
                 onChosen={(_, paid) => {
                   setNotice(paid ? 'Payment received. Your new plan becomes active within a minute.' : 'Plan updated.');
                   setTimeout(() => loadSettings(business.businessProfileId), paid ? 8000 : 0);
