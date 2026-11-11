@@ -6,8 +6,8 @@ import { queryClientInstance } from '@/lib/query-client';
 import AdminDashboard from '@/pages/AdminDashboard';
 import '@/index.css';
 
-// Same Clerk instance as the app. The server decides who is an admin (ADMIN_USER_IDS + two-step
-// verification, server/src/middleware/auth.ts); this page only signs the user in.
+// Same Clerk instance as the app. The server decides who is an admin (ADMIN_USER_IDS,
+// server/src/middleware/auth.ts); this page only signs the user in.
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const USE_CLERK = PUBLISHABLE_KEY && !PUBLISHABLE_KEY.includes('your_key_here');
 

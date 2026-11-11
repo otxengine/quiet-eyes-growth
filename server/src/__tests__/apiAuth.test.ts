@@ -118,23 +118,18 @@ describe('requireAdmin (middleware/auth.ts)', () => {
     return { status: (res.status as jest.Mock).mock.calls[0]?.[0], error: body(res)?.error, next, adminUserId: (r as any).adminUserId };
   }
 
-  it('lets an allowlisted user with a second factor through', async () => {
-    const out = await call(load(clerkEnv, { userId: 'user_admin', factorVerificationAge: [3, 3] }));
-    expect(out.next).toHaveBeenCalled();
-    expect(out.adminUserId).toBe('user_admin');
-  });
-
-  it('403s an allowlisted user whose session has no second factor', async () => {
-    expect(await call(load(clerkEnv, { userId: 'user_admin', factorVerificationAge: [3, -1] })))
-      .toMatchObject({ status: 403, error: 'mfa_required' });
-    expect(await call(load(clerkEnv, { userId: 'user_admin', factorVerificationAge: null })))
-      .toMatchObject({ status: 403, error: 'mfa_required' });
+  it('lets an allowlisted user through, with or without a second factor', async () => {
+    for (const fva of [[3, 3], [3, -1], null]) {
+      const out = await call(load(clerkEnv, { userId: 'user_other', factorVerificationAge: fva }));
+      expect(out.next).toHaveBeenCalled();
+      expect(out.adminUserId).toBe('user_other');
+    }
   });
 
   it('403s users not on the list, and everyone when the list is unset', async () => {
-    expect(await call(load(clerkEnv, { userId: 'user_x', factorVerificationAge: [3, 3] })))
+    expect(await call(load(clerkEnv, { userId: 'user_x' })))
       .toMatchObject({ status: 403, error: 'not_admin' });
-    expect(await call(load({ ...clerkEnv, ADMIN_USER_IDS: '' }, { userId: 'user_admin', factorVerificationAge: [3, 3] })))
+    expect(await call(load({ ...clerkEnv, ADMIN_USER_IDS: '' }, { userId: 'user_admin' })))
       .toMatchObject({ status: 403, error: 'not_admin' });
   });
 
@@ -144,7 +139,7 @@ describe('requireAdmin (middleware/auth.ts)', () => {
   });
 
   it('401s a signed-out request', async () => {
-    expect(await call(load(clerkEnv, { userId: null, factorVerificationAge: null }))).toMatchObject({ status: 401 });
+    expect(await call(load(clerkEnv, { userId: null }))).toMatchObject({ status: 401 });
   });
 });
 

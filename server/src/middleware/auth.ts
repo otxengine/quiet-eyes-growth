@@ -37,8 +37,8 @@ export function getUserId(req: Request): string | null {
 }
 
 /**
- * Admin panel and system-wide routes: a user listed in ADMIN_USER_IDS whose session passed a
- * second factor. Sets req.adminUserId. 401 signed out; 403 'not_admin' or 'mfa_required'.
+ * Admin panel and system-wide routes: a signed-in user listed in ADMIN_USER_IDS.
+ * Sets req.adminUserId. 401 signed out; 403 'not_admin'.
  * Being an admin never widens the tenant checks of the regular app routes.
  */
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
@@ -47,12 +47,8 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const userId = getUserId(req);
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
   if (!ADMIN_USER_IDS.has(userId)) return res.status(403).json({ error: 'not_admin' });
-  if (CLERK_ENABLED) {
-    const { getAuth } = require('@clerk/express');
-    // [first, second] factor age in minutes, -1 = not verified in this session.
-    const fva: [number, number] | null = getAuth(req)?.factorVerificationAge ?? null;
-    if (!fva || fva[1] < 0) return res.status(403).json({ error: 'mfa_required' });
-  }
+  // ponytail: no second-factor check, Clerk MFA needs a paid plan. When it's on, require
+  // getAuth(req).factorVerificationAge[1] >= 0 here (it is -1 when the session skipped the second factor).
   (req as any).adminUserId = userId;
   next();
 }
