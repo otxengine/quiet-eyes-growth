@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { FileText } from 'lucide-react';
+import { ExternalLink, FileText } from 'lucide-react';
 import { EN_PLANS } from '../marketing/en/plans.js';
 import { billingApi } from '@/api/billingApi';
 import { openLinkedPaddleCheckout } from '@/lib/paddle';
@@ -55,18 +55,27 @@ function Reports({ businessProfileId, timezone, welcome }) {
     <ul className="space-y-2.5">
       {reports.map((r) => (
         <li key={r.id}>
-          <Card className="!p-4 flex items-start justify-between gap-4">
-            <div className="min-w-0">
+          <Card className="!p-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+            <div className="min-w-0 flex-1 basis-60">
               <div className="text-[12.5px] font-bold" style={{ color: 'var(--mkt-muted)' }}>{TYPE[r.report_type]} · {periodText(r, timezone)}</div>
               <div className="mt-0.5 text-[14.5px] font-medium">
                 {r.headline || (r.status === 'empty' ? 'No new competitor activity in this period.' : 'Report is being written.')}
               </div>
             </div>
-            {r.has_pdf && (
-              <Button variant="ghost" className="shrink-0 !h-10 text-[13px]" onClick={() => briefingApi.openReportPdf(r.id).catch((e) => setError(e.message))}>
-                <FileText size={14} aria-hidden="true" />Open PDF
-              </Button>
-            )}
+            <div className="flex shrink-0 gap-2">
+              {r.view_url && r.headline && (
+                <a href={r.view_url} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-full px-5 h-10 text-[13px] font-bold"
+                  style={{ background: 'var(--mkt-ink)', color: '#fff' }}>
+                  <ExternalLink size={14} aria-hidden="true" />View report
+                </a>
+              )}
+              {r.has_pdf && (
+                <Button variant="ghost" className="!h-10 text-[13px]" onClick={() => briefingApi.openReportPdf(r.id).catch((e) => setError(e.message))}>
+                  <FileText size={14} aria-hidden="true" />Open PDF
+                </Button>
+              )}
+            </div>
           </Card>
         </li>
       ))}
@@ -108,7 +117,7 @@ export default function Account() {
   };
 
   const nav = (
-    <nav className="flex items-center gap-1 text-[13.5px] font-medium overflow-x-auto" aria-label="Account">
+    <nav className="flex items-center gap-1 text-[13.5px] font-medium overflow-x-auto order-last w-full justify-center sm:order-none sm:w-auto" aria-label="Account">
       {TABS.map(([k, label]) => (
         <button key={k} type="button" onClick={() => { setNotice(''); setParams({ tab: k }); }} aria-current={tab === k ? 'page' : undefined}
           className="rounded-full px-3.5 h-9 whitespace-nowrap" style={tab === k ? { background: 'var(--mkt-ink)', color: '#fff' } : { color: 'var(--mkt-ink-2)' }}>
