@@ -149,9 +149,12 @@ export default function Start() {
       {step === 'plan' && settings && (
         <>
           <StepHeading step="Step 4 of 4" title="Choose your plan" sub="Every plan starts with a free report on the last 30 days. You can change plans at any time." />
-          <PlanCards businessProfileId={businessProfileId} currentPlan={null} onChosen={finish} />
+          <PlanCards businessProfileId={businessProfileId} currentPlan={null} onChosen={finish} consentRequired />
           <p className="mt-4 text-[12.5px]" style={{ color: 'var(--mkt-muted)' }}>
             On a paid plan you can track more competitors — add them from your account once the plan is active.
+          </p>
+          <p className="mt-2 text-[12.5px]" style={{ color: 'var(--mkt-muted)' }}>
+            By choosing a plan you agree to our <a href="/en/terms" target="_blank" rel="noopener" className="underline">Terms of Service</a> and <a href="/en/privacy" target="_blank" rel="noopener" className="underline">Privacy Policy</a>.
           </p>
         </>
       )}

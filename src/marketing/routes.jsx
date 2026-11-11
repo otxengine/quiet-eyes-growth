@@ -9,6 +9,7 @@ import FeaturePage from './pages/FeaturePage.jsx';
 import NotFound from './pages/NotFound.jsx';
 import EnHome from './en/EnHome.jsx';
 import { EN_FAQ } from './en/plans.js';
+import { EnTerms, EnPrivacy } from './en/EnLegal.jsx';
 import Blog from './pages/Blog.jsx';
 import BlogPost from './pages/BlogPost.jsx';
 import { Terms, Privacy, RefundPolicy, DataDeletion } from './pages/Legal.jsx';
@@ -96,6 +97,16 @@ export const marketingRoutes = [
       canonical: '/en',
       faqItems: EN_FAQ,
     },
+  },
+  {
+    path: '/en/terms',
+    Component: EnTerms,
+    seo: { lang: 'en', title: 'Terms of Service — Cortexi', description: 'The terms of the Cortexi competitor report.', canonical: '/en/terms' },
+  },
+  {
+    path: '/en/privacy',
+    Component: EnPrivacy,
+    seo: { lang: 'en', title: 'Privacy Policy — Cortexi', description: 'What information the Cortexi competitor report collects, how it is used and your choices.', canonical: '/en/privacy' },
   },
   {
     path: '/blog',

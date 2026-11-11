@@ -52,11 +52,18 @@ export function EnFooter() {
           </p>
           <p className="mt-3 text-[12px]" style={{ color: 'var(--mkt-muted)' }}>Inspired by the brain. Built for intelligence.</p>
         </div>
-        <div className="flex gap-14 text-[13.5px]">
+        <div className="flex flex-wrap gap-x-14 gap-y-8 text-[13.5px]">
           <div>
             <div className="font-bold text-[13px] mb-3" style={{ color: 'var(--mkt-ink)' }}>Product</div>
             <ul className="space-y-2">
               {LINKS.map((l) => <li key={l.href}><a href={l.href} className="hover:text-black" style={{ color: 'var(--mkt-muted)' }}>{l.label}</a></li>)}
+            </ul>
+          </div>
+          <div>
+            <div className="font-bold text-[13px] mb-3" style={{ color: 'var(--mkt-ink)' }}>Legal</div>
+            <ul className="space-y-2">
+              <li><a href="/en/terms" className="hover:text-black" style={{ color: 'var(--mkt-muted)' }}>Terms</a></li>
+              <li><a href="/en/privacy" className="hover:text-black" style={{ color: 'var(--mkt-muted)' }}>Privacy</a></li>
             </ul>
           </div>
           <div>

@@ -3,7 +3,7 @@ import { prisma } from '../db';
 import { getUserId } from '../middleware/auth';
 import { getUserBusinessIds } from '../lib/ownership';
 
-jest.mock('../db', () => ({ prisma: { businessProfile: { findUnique: jest.fn(), update: jest.fn() } } }));
+jest.mock('../db', () => ({ prisma: { businessProfile: { findUnique: jest.fn(), update: jest.fn() }, $executeRaw: jest.fn() } }));
 jest.mock('../middleware/auth', () => ({ getUserId: jest.fn() }));
 jest.mock('../lib/ownership', () => ({ getUserBusinessIds: jest.fn(), getUserEmail: jest.fn() }));
 jest.mock('../infra/logger', () => ({
@@ -39,5 +39,29 @@ describe('onboarding routes require an owner of businessProfileId', () => {
       expect((await post(path, { businessProfileId: 'not-mine' })).statusCode).toBe(403);
     }
     expect(prisma.businessProfile.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('select-plan: the Free report-only plan needs marketing-email consent at sign-up', () => {
+  const free = (body: Record<string, any> = {}) => post('/select-plan', { businessProfileId: 'mine', planId: 'brief_free', ...body });
+  beforeEach(() => {
+    (getUserId as jest.Mock).mockReturnValue('u1');
+    (getUserBusinessIds as jest.Mock).mockResolvedValue(['mine']);
+  });
+
+  it('refuses a new business without consent and stores nothing', async () => {
+    (prisma.businessProfile.findUnique as jest.Mock).mockResolvedValue({ id: 'mine', subscription_plan: 'brief_free', onboarding_completed: false });
+    const r = await free();
+    expect(r.statusCode).toBe(400);
+    expect(r.body.needsMarketingConsent).toBe(true);
+    expect((prisma as any).$executeRaw).not.toHaveBeenCalled();
+    expect(prisma.businessProfile.update).not.toHaveBeenCalled();
+  });
+
+  it('records the consent and sets the plan when agreed', async () => {
+    (prisma.businessProfile.findUnique as jest.Mock).mockResolvedValue({ id: 'mine', subscription_plan: 'brief_free', onboarding_completed: false });
+    const r = await free({ marketingConsent: true });
+    expect(r.body).toEqual({ ok: true, requiresCheckout: false });
+    expect(((prisma as any).$executeRaw as jest.Mock).mock.calls[0][0].join('?')).toContain('marketing_consent_at = now()');
   });
 });

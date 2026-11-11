@@ -57,11 +57,12 @@ const BILLING_ROLE_ERROR = 'רק הבעלים או מנהל הארגון יכו�
 
 // The plan of every business in the organization. A report-only business that moves UP a plan is marked
 // (plan_reports_due) so the worker sends that plan's reports now — scheduler.ts upgradedBriefingReports.
-// Not during sign-up (onboarding_completed): the first-report job covers a new business.
+// Only a business that already has a report: a new one (still signing up, or paid before its first
+// report was built) gets its first report from the first-report job, which needs it to have none.
 const BRIEF_RANK = (v: string) => `array_position(ARRAY['brief_free','brief_monthly','brief_weekly','brief_daily','brief_plus'], ${v})`;
 export const SET_BUSINESS_PLANS_SQL =
   `UPDATE business_profiles SET
-     plan_reports_due = CASE WHEN onboarding_completed = true AND ${BRIEF_RANK('$1::text')} > ${BRIEF_RANK('subscription_plan')}
+     plan_reports_due = CASE WHEN EXISTS (SELECT 1 FROM reports r WHERE r.linked_business = business_profiles.id) AND ${BRIEF_RANK('$1::text')} > ${BRIEF_RANK('subscription_plan')}
        THEN $1::text ELSE plan_reports_due END,
      subscription_plan = $1::text
    WHERE organization_id = $2`;
