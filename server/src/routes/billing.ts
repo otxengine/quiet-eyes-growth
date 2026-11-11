@@ -55,15 +55,24 @@ async function getUserOrg(userId: string, orgId?: string): Promise<any | null> {
 const canManageBilling = (org: any) => ORG_ADMIN_ROLES.has(org?.member_role);
 const BILLING_ROLE_ERROR = 'רק הבעלים או מנהל הארגון יכולים לנהל את החיוב';
 
+// The plan of every business in the organization. A report-only business that moves UP a plan is marked
+// (plan_reports_due) so the worker sends that plan's reports now — scheduler.ts upgradedBriefingReports.
+// Not during sign-up (onboarding_completed): the first-report job covers a new business.
+const BRIEF_RANK = (v: string) => `array_position(ARRAY['brief_free','brief_monthly','brief_weekly','brief_daily','brief_plus'], ${v})`;
+export const SET_BUSINESS_PLANS_SQL =
+  `UPDATE business_profiles SET
+     plan_reports_due = CASE WHEN onboarding_completed = true AND ${BRIEF_RANK('$1::text')} > ${BRIEF_RANK('subscription_plan')}
+       THEN $1::text ELSE plan_reports_due END,
+     subscription_plan = $1::text
+   WHERE organization_id = $2`;
+const setBusinessPlans = (orgId: string, planId: string) => prisma.$executeRawUnsafe(SET_BUSINESS_PLANS_SQL, planId, orgId);
+
 async function setOrgPlan(orgId: string, planId: string, status: string) {
   await prisma.$executeRawUnsafe(
     `UPDATE organizations SET plan_id = $1, subscription_status = $2 WHERE id = $3`,
     planId, status, orgId,
   );
-  await prisma.$executeRawUnsafe(
-    `UPDATE business_profiles SET subscription_plan = $1 WHERE organization_id = $2`,
-    planId, orgId,
-  );
+  await setBusinessPlans(orgId, planId);
 }
 
 const toUnix = (iso?: string | null) => (iso ? Math.floor(new Date(iso).getTime() / 1000) : null);
@@ -367,10 +376,7 @@ async function applySubscription(sub: any, occurredAt?: string) {
     logger.info('Skipped stale Paddle event', { subscriptionId: sub.id, occurredAt });
     return;
   }
-  await prisma.$executeRawUnsafe(
-    `UPDATE business_profiles SET subscription_plan = $1 WHERE organization_id = $2`,
-    planId, orgId,
-  );
+  await setBusinessPlans(orgId, planId);
 }
 
 export default router;

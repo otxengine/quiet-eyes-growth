@@ -893,6 +893,8 @@ const httpServer = app.listen(PORT, async () => {
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS timezone TEXT`);
   // Who the competitor report is emailed to (comma-separated). NULL = customer delivery off.
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS report_recipients TEXT`);
+  // Set by billing.ts when a report-only business moves up a plan; the worker then sends that plan's reports (scheduler.ts).
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS plan_reports_due TEXT`);
 
   // ── Multi-branch / Multi-user / Agency tables ─────────────────────────────
   await sql(`CREATE TABLE IF NOT EXISTS organizations (

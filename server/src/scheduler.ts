@@ -85,6 +85,7 @@ import { collectOwnBusinessInfo } from './routes/functions/collectOwnBusinessInf
 import { detectOwnAds } from './routes/functions/detectOwnAds';
 import { collectCompetitorSocialStories } from './routes/functions/collectCompetitorSocialStories';
 import { reconcileDataForSeoReviewTasks } from './routes/functions/reconcileDataForSeoReviewTasks';
+import { isBriefingPlan, planLimits } from './lib/planLimits';
 
 const logger = createLogger('Scheduler');
 
@@ -148,6 +149,31 @@ async function firstBriefingReports() {
   for (const { id } of rows) {
     const res: any = { json: (data: any) => logger.info('FirstBriefingReport result', { id, status: data?.report?.status ?? data?.reason }), status: () => res };
     await generateReport({ body: { businessProfileId: id, type: 'monthly', first: true, scheduled: true } } as any, res);
+  }
+}
+
+// A report-only business that moved up a plan (billing.ts marks plan_reports_due): collect what the new
+// plan adds (its own pages, stories), then build and send every report of that plan now instead of on
+// its next scheduled day. In the worker for the PDF, like the first report.
+// ponytail: the mark is cleared before the work, so a crash mid-run loses this send; the next scheduled
+// report still goes out. Keep the mark until done if that ever shows up.
+export async function upgradedBriefingReports() {
+  const rows = await prisma.$queryRawUnsafe<{ id: string; subscription_plan: string | null }[]>(
+    `UPDATE business_profiles SET plan_reports_due = NULL
+     WHERE plan_reports_due IS NOT NULL AND onboarding_completed = true AND is_active = true
+     RETURNING id, subscription_plan`,
+  );
+  for (const { id, subscription_plan } of rows ?? []) {
+    if (!isBriefingPlan(subscription_plan)) continue;
+    const limits = planLimits(subscription_plan);
+    const run = async (label: string, fn: Function, body: Record<string, any> = {}) => {
+      const res: any = { json: (data: any) => logger.info(`UpgradeReports ${label}`, { id, result: data?.report?.status ?? data?.reason ?? data?.upserted }), status: () => res };
+      try { await fn({ body: { businessProfileId: id, force: true, ...body } } as any, res); }
+      catch (err: any) { logger.error(`UpgradeReports ${label} failed`, { id, error: err.message }); }
+    };
+    if (limits.own_in_report !== false) await run('own pages', collectOwnSocialProfileAndPosts);
+    if (limits.stories) await run('stories', collectCompetitorSocialStories);
+    for (const type of limits.reports) await run(`${type} report`, generateReport, { type, scheduled: true });
   }
 }
 
@@ -384,6 +410,8 @@ export function startScheduler() {
   // Runs here, not in the API, because only the worker can render the PDF. A business qualifies
   // once it has no report and its first posts collection has logged — or after 20 minutes anyway.
   cron.schedule('*/5 * * * *', () => firstBriefingReports().catch(err => logger.error('firstBriefingReports error', { error: err.message })));
+  // …and, on the same beat, the reports of a plan a report-only business has just moved up to.
+  cron.schedule('*/5 * * * *', () => upgradedBriefingReports().catch(err => logger.error('upgradedBriefingReports error', { error: err.message })));
 
   // ── Every day at 04:00 UTC: competitor snapshot diff + URL discovery (KAN-160) ──
   // discoverCompetitorUrls runs on its own social_pages_crawled_at guard (7d),
