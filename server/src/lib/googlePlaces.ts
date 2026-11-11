@@ -24,6 +24,16 @@ export const EMPTY_PLACE: PlaceDetails = {
   servesWine: false, servesBeer: false, servesVegetarianFood: false, websiteUri: '',
 };
 
+// Text search always returns something: for a business with no listing of its own, the first hit is
+// another shop, and its reviews were then collected as the owner's. A hit counts only if one name
+// contains the other (case, spaces, punctuation and accents ignored).
+// ponytail: containment heuristic; a listing under a translated name (Hebrew vs English) is missed and set by hand.
+const compactName = (s: string) => s.normalize('NFKD').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+export function sameBusinessName(a: string, b: string): boolean {
+  const x = compactName(a), y = compactName(b);
+  return x.length >= 3 && y.length >= 3 && (x.includes(y) || y.includes(x));
+}
+
 export async function findPlaceId(name: string, city: string, geo: SearchGeo = IL_GEO): Promise<string | null> {
   if (!GOOGLE_API_KEY) { console.warn('[googlePlaces] No GOOGLE_PLACES_API_KEY'); return null; }
   try {
@@ -37,8 +47,9 @@ export async function findPlaceId(name: string, city: string, geo: SearchGeo = I
       body: JSON.stringify({ textQuery: `${name} ${city}`, languageCode: geo.hl, regionCode: geo.gl }),
     });
     const data: any = await res.json();
-    const placeId = data.places?.[0]?.id || null;
-    console.log(`[googlePlaces] findPlaceId placeId=${placeId} count=${data.places?.length ?? 0}`);
+    const places: any[] = data.places ?? [];
+    const placeId = places.find(p => sameBusinessName(name, p.displayName?.text ?? ''))?.id || null;
+    console.log(`[googlePlaces] findPlaceId placeId=${placeId} count=${places.length}${places.length && !placeId ? ' (no result has this name, none used)' : ''}`);
     return placeId;
   } catch (e: any) { console.warn('[googlePlaces] findPlaceId error:', e.message); return null; }
 }
