@@ -88,15 +88,6 @@ export default function AdminDashboard() {
 }
 
 function AccessError({ error }) {
-  if (error.message === 'mfa_required') {
-    return (
-      <Notice title="Two-step verification required">
-        This session didn't pass a second factor. Open <b>Account → Security</b>, add an authenticator app,
-        then sign out and sign in again.
-        <div className="mt-3"><Button size="sm" onClick={() => clerk()?.openUserProfile()}>Open account</Button></div>
-      </Notice>
-    );
-  }
   if (error.message === 'not_admin') {
     return (
       <Notice title="This account isn't an admin">
