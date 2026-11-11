@@ -45,3 +45,19 @@ test('findPlaceId: language and region follow the business', async () => {
   await findPlaceId('קפה', 'תל אביב');
   expect(lastBody()).toEqual({ textQuery: 'קפה תל אביב', languageCode: 'iw', regionCode: 'il' });
 });
+
+test('findPlaceId: takes the result with the business name, never just the first hit', async () => {
+  const { findPlaceId } = require('../lib/googlePlaces');
+  const results = (...names: string[]) => (global.fetch as jest.Mock).mockResolvedValueOnce({
+    ok: true, json: async () => ({ places: names.map((n, i) => ({ id: `p${i}`, displayName: { text: n } })) }),
+  });
+  // A business with no listing of its own: Google still returns other shops. None may be used.
+  results('Sun Gold Diamonds', "Star's Jewelry", '/');
+  expect(await findPlaceId('Moon Jewelry', 'Tel Aviv')).toBeNull();
+  // Its own listing further down the list, spelled differently.
+  results('Sun Gold Diamonds', 'MOON-JEWELRY | Tel Aviv');
+  expect(await findPlaceId('Moon Jewelry', 'Tel Aviv')).toBe('p1');
+  // Google's name is the shorter one.
+  results('ירח');
+  expect(await findPlaceId('ירח תכשיטים בע"מ', 'תל אביב')).toBe('p0');
+});
