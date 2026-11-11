@@ -124,12 +124,14 @@ export class QeStack extends cdk.Stack {
       removalPolicy: removal,
       autoDeleteObjects: !isProd,
     });
+    const GEO_ROUTING_ON = false;
     const spaRewrite = new cloudfront.Function(this, 'SpaRewrite', {
-      // Prod routes visitors by country (Israel -> Hebrew site, elsewhere -> /en); staging stays open
-      // so both sites can be tested from anywhere. See the header of spa-rewrite.js.
+      // Country routing (Israel -> Hebrew site, elsewhere -> /en; see the header of spa-rewrite.js)
+      // is switched off everywhere while the English site is being tested from Israel. To turn it on
+      // for prod, set GEO_ROUTING_ON to `isProd`; staging should stay open.
       code: cloudfront.FunctionCode.fromInline(
         fs.readFileSync(path.join(__dirname, 'spa-rewrite.js'), 'utf8')
-          .replace('var GEO_ROUTING = false;', `var GEO_ROUTING = ${isProd};`)),
+          .replace('var GEO_ROUTING = false;', `var GEO_ROUTING = ${GEO_ROUTING_ON};`)),
       runtime: cloudfront.FunctionRuntime.JS_2_0,
     });
     // Makes CloudFront-Viewer-Country readable by that function. In the origin request policy, not the
