@@ -1,7 +1,7 @@
 // CloudFront viewer-request function (cloudfront-js-2.0). Mirrors the Render routes in render.yaml:
 // prerendered marketing pages live at /<route>/index.html; any other path without a file
 // extension is a client-side route and gets the SPA shell.
-var MARKETING = ['/home', '/features', '/blog', '/pricing', '/about', '/contact', '/how-it-works', '/terms', '/privacy', '/refund-policy', '/data-deletion', '/en'];
+var MARKETING = ['/home', '/features', '/blog', '/pricing', '/about', '/contact', '/how-it-works', '/terms', '/privacy', '/refund-policy', '/data-deletion', '/en', '/en/terms', '/en/privacy'];
 
 // ── Country routing (prod only: qe-stack.ts flips GEO_ROUTING; staging stays open for testing) ──
 // Visitors in Israel get the Hebrew site, everyone else the English one (/en): the English product
@@ -12,8 +12,8 @@ var MARKETING = ['/home', '/features', '/blog', '/pricing', '/about', '/contact'
 //   - signed-in users (Clerk cookies): "/" is their dashboard wherever they are, and a customer
 //     travelling abroad must still reach it; /en/briefing (the English account) is not routed at all
 //   - crawlers and link previews: Google crawls from the US and would drop the Hebrew pages
-//   - blog, contact and legal pages: there is no English version (Meta and Paddle reviewers open
-//     /privacy and /data-deletion from outside Israel)
+//   - blog, contact and legal pages, in either language (Meta and Paddle reviewers open /privacy
+//     and /data-deletion from outside Israel; /en/terms and /en/privacy are linked from emails)
 //   - a request with no country (the header needs CloudFront-Viewer-Country in the behaviour's
 //     origin request policy)
 var GEO_ROUTING = false;

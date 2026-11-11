@@ -69,5 +69,5 @@ export const briefingApi = {
     window.open(URL.createObjectURL(await res.blob()), '_blank', 'noopener');
   },
 
-  selectPlan: (businessProfileId, planId) => api('/onboarding/select-plan', { method: 'POST', body: { businessProfileId, planId } }),
+  selectPlan: (businessProfileId, planId, marketingConsent) => api('/onboarding/select-plan', { method: 'POST', body: { businessProfileId, planId, marketingConsent } }),
 };

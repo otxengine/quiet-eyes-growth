@@ -22,6 +22,8 @@ assert.strictEqual(to(run(prod, '/', 'IL')), '/index.html');
 assert.strictEqual(to(run(prod, '/pricing', 'IL')), '/pricing/index.html');
 assert.strictEqual(to(run(prod, '/dashboard', 'IL')), '/index.html');
 assert.strictEqual(to(run(prod, '/enterprise', 'IL')), '/index.html'); // only starts with "en"
+// The English legal pages are served everywhere, as prerendered pages.
+for (const c of ['IL', 'US']) for (const uri of ['/en/terms', '/en/privacy']) assert.strictEqual(to(run(prod, uri, c)), uri + '/index.html', uri);
 // An English customer travelling in Israel still reaches the account.
 assert.strictEqual(to(run(prod, '/en/briefing', 'IL')), '/index.html');
 

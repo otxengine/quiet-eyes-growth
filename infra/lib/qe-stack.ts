@@ -124,11 +124,11 @@ export class QeStack extends cdk.Stack {
       removalPolicy: removal,
       autoDeleteObjects: !isProd,
     });
-    const GEO_ROUTING_ON = false;
+    const GEO_ROUTING_ON = isProd;
     const spaRewrite = new cloudfront.Function(this, 'SpaRewrite', {
       // Country routing (Israel -> Hebrew site, elsewhere -> /en; see the header of spa-rewrite.js)
-      // is switched off everywhere while the English site is being tested from Israel. To turn it on
-      // for prod, set GEO_ROUTING_ON to `isProd`; staging should stay open.
+      // is on for prod only; staging stays open so the English site can be tested from Israel.
+      // The same switch makes the API refuse new English sign-ups from Israel (BRIEFING_BLOCK_ISRAEL).
       code: cloudfront.FunctionCode.fromInline(
         fs.readFileSync(path.join(__dirname, 'spa-rewrite.js'), 'utf8')
           .replace('var GEO_ROUTING = false;', `var GEO_ROUTING = ${GEO_ROUTING_ON};`)),
@@ -209,6 +209,7 @@ export class QeStack extends cdk.Stack {
           TRUST_PROXY_HOPS: '2', // CloudFront + ALB
           FRONTEND_URL: siteUrl,
           SERVER_BASE_URL: siteUrl,
+          ...(GEO_ROUTING_ON && { BRIEFING_BLOCK_ISRAEL: 'true' }),
           ...(props.mediaBucket && { AWS_S3_BUCKET: props.mediaBucket.name, AWS_S3_REGION: props.mediaBucket.region }),
         },
         secrets: appSecrets,

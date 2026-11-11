@@ -10,8 +10,10 @@ import { Button, ErrorNote } from './ui.jsx';
  * The four report-only plans. Choosing a paid one opens the Paddle checkout; the plan itself
  * switches when Paddle's webhook arrives, a few seconds after payment. `onChosen(planId, paid)`.
  */
-export default function PlanCards({ businessProfileId, currentPlan, orgId, onChosen }) {
+export default function PlanCards({ businessProfileId, currentPlan, orgId, onChosen, consentRequired = false }) {
   const [busy, setBusy] = useState('');
+  // Sign-up only: the Free plan is given in exchange for marketing emails (the server checks it too).
+  const [consent, setConsent] = useState(false);
   const [error, setError] = useState('');
   const paid = !!currentPlan && currentPlan !== 'brief_free';
 
@@ -23,12 +25,16 @@ export default function PlanCards({ businessProfileId, currentPlan, orgId, onCho
 
   const choose = async (planId) => {
     setError('');
+    if (planId === 'brief_free' && consentRequired && !consent) {
+      setError('To use the Free plan, please agree to receive marketing emails from Cortexi.');
+      return undefined;
+    }
     setBusy(planId);
     try {
       // Going back to Free from a paid plan means cancelling the subscription, which Paddle's
       // billing page does; the plan changes when the cancellation takes effect.
       if (planId === 'brief_free' && paid) { await openBilling(orgId); return undefined; }
-      const { requiresCheckout, orgId: billingOrg } = await briefingApi.selectPlan(businessProfileId, planId);
+      const { requiresCheckout, orgId: billingOrg } = await briefingApi.selectPlan(businessProfileId, planId, planId === 'brief_free' && consent);
       if (!requiresCheckout) return onChosen?.(planId, false);
       const r = await billingApi.checkout(planId, billingOrg);
       if (r.transactionId) {
@@ -64,6 +70,12 @@ export default function PlanCards({ businessProfileId, currentPlan, orgId, onCho
                   </li>
                 ))}
               </ul>
+              {consentRequired && p.id === 'brief_free' && (
+                <label className="mt-3 flex items-start gap-2 text-[12px] leading-snug cursor-pointer" style={{ color: 'var(--mkt-ink-2)' }}>
+                  <input type="checkbox" className="mt-0.5 shrink-0" checked={consent} onChange={(e) => { setConsent(e.target.checked); setError(''); }} />
+                  <span>I agree to receive marketing emails from Cortexi. Required for the Free plan; you can unsubscribe at any time.</span>
+                </label>
+              )}
               <Button variant={current ? 'ghost' : p.highlighted ? 'gradient' : 'black'} className="mt-4 w-full !h-10 text-[13px]" disabled={current || !!busy} onClick={() => choose(p.id)}>
                 {current ? 'Current plan' : busy === p.id ? 'Opening' : p.id === 'brief_free' && paid ? 'Cancel plan' : p.cta}
               </Button>

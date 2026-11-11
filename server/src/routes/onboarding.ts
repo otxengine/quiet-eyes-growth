@@ -432,6 +432,14 @@ router.post('/select-plan', async (req: Request, res: Response) => {
     }
 
     if (!PAID_PLANS.has(planId)) {
+      // The Free report-only plan is given in exchange for marketing emails: a new business must agree
+      // (the checkbox on the plan step). Not asked again of a business that has finished sign-up.
+      if (planId === 'brief_free' && !profile.onboarding_completed) {
+        if (req.body.marketingConsent !== true) {
+          return res.status(400).json({ error: 'Agree to receive marketing emails to use the Free plan', needsMarketingConsent: true });
+        }
+        await prisma.$executeRaw`UPDATE business_profiles SET marketing_consent_at = now() WHERE id = ${businessProfileId}`;
+      }
       await prisma.businessProfile.update({
         where: { id: businessProfileId },
         data: { subscription_plan: planId === 'brief_free' ? 'brief_free' : 'free_trial' },
