@@ -151,6 +151,7 @@ describe('reports routes', () => {
     await handler('/', 'get')({ query: { businessProfileId: 'bp1', type: 'weekly', limit: '500' } } as any, r);
     expect(reportFindMany.mock.calls[0][0]).toMatchObject({ where: { linked_business: 'bp1', report_type: 'weekly' }, orderBy: { period_start: 'desc' }, take: 60 });
     expect(r.body.reports[0]).toMatchObject({ id: 'r1', headline: 'Rival Pizza posted 3 times', has_pdf: true });
+    expect(r.body.reports[0].view_url).toMatch(/\/api\/reports\/r1\/view\?e=\d+&t=/); // the account page's "View report" link
     expect(JSON.stringify(r.body)).not.toContain('bucket');
     const badType = res();
     await handler('/', 'get')({ query: { businessProfileId: 'bp1', type: 'yearly' } } as any, badType);

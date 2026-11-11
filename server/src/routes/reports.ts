@@ -1,6 +1,6 @@
 /**
  * Competitor reports (generateReport.ts) for the customer:
- *   GET      /api/reports?businessProfileId=&type=&limit=   list, newest period first (no report body)
+ *   GET      /api/reports?businessProfileId=&type=&limit=   list, newest period first (no report body; view_url = signed web report link)
  *   GET      /api/reports/:id                                one report with its data and narrative
  *   GET      /api/reports/:id/pdf                            the stored PDF
  *   GET|POST /api/reports/unsubscribe?b=&r=&t=               public: the link in every customer email
@@ -12,7 +12,7 @@ import { prisma } from '../db';
 import { requireOwnsBusinessFields, requireOwnsRecord } from '../middleware/businessAccess';
 import { REPORT_TYPES, ReportType } from '../lib/reportPeriod';
 import { downloadReportPdf, isS3Url } from '../lib/s3';
-import { reportLinkValid, unsubscribe } from '../lib/reportDelivery';
+import { reportLinkValid, reportViewUrl, unsubscribe } from '../lib/reportDelivery';
 import { businessLocale } from '../lib/businessLocale';
 import { reportPdfFilename } from '../lib/reportPdf';
 import { buildReportHtml } from '../lib/reportPdf/html';
@@ -83,7 +83,7 @@ router.get('/', requireOwnsBusinessFields, async (req: Request, res: Response) =
       select: { id: true, report_type: true, period_start: true, period_end: true, status: true, summary: true, pdf_url: true, created_date: true },
     });
     return res.json({
-      reports: rows.map(({ summary, pdf_url, ...r }) => ({ ...r, headline: (summary as any)?.headline ?? null, has_pdf: !!pdf_url })),
+      reports: rows.map(({ summary, pdf_url, ...r }) => ({ ...r, headline: (summary as any)?.headline ?? null, has_pdf: !!pdf_url, view_url: reportViewUrl(r.id) })),
     });
   } catch (err: any) {
     console.error('[reports] list failed:', err.message);
