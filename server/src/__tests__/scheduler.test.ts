@@ -36,11 +36,17 @@ jest.mock('../lib/sectorPrompts',             () => ({}));
 jest.mock('../lib/signalGuard',               () => ({ normReviewOrigin: jest.fn() }));
 jest.mock('../lib/trendMemory',               () => ({}));
 jest.mock('../middleware/auth',               () => ({}));
+jest.mock('../routes/functions/generateReport', () => ({ generateReport: jest.fn() }));
+jest.mock('../routes/functions/collectOwnSocialProfileAndPosts', () => ({ collectOwnSocialProfileAndPosts: jest.fn() }));
+jest.mock('../routes/functions/collectCompetitorSocialStories', () => ({ collectCompetitorSocialStories: jest.fn() }));
 
 import cron from 'node-cron';
 import { prisma } from '../db';
 import { writeHeartbeat } from '../lib/agentMonitor';
-import { runAgentForAll, startScheduler } from '../scheduler';
+import { runAgentForAll, startScheduler, upgradedBriefingReports } from '../scheduler';
+import { generateReport } from '../routes/functions/generateReport';
+import { collectOwnSocialProfileAndPosts } from '../routes/functions/collectOwnSocialProfileAndPosts';
+import { collectCompetitorSocialStories } from '../routes/functions/collectCompetitorSocialStories';
 
 const bpFindMany = prisma.$queryRawUnsafe as jest.Mock;
 const heartbeat  = writeHeartbeat as jest.Mock;
@@ -173,5 +179,29 @@ describe('report-only businesses and the scheduler', () => {
       await runAgentForAll(label, jest.fn(), {}, 'US');
       expect(sqlOf()).not.toContain(EXCLUDES);
     }
+  });
+});
+
+describe('a report-only business that moved up a plan', () => {
+  const bodies = (fn: unknown) => (fn as jest.Mock).mock.calls.map((c: any[]) => c[0].body);
+  beforeEach(() => jest.clearAllMocks());
+
+  it('gets its own pages and stories collected, then every report of the new plan, forced', async () => {
+    bpFindMany.mockResolvedValue([{ id: 'b1', subscription_plan: 'brief_weekly' }]);
+    (collectOwnSocialProfileAndPosts as jest.Mock).mockRejectedValue(new Error('apify down')); // must not stop the reports
+    await upgradedBriefingReports();
+    expect(bpFindMany.mock.calls[0][0]).toMatch(/SET plan_reports_due = NULL[\s\S]*RETURNING/); // claimed once
+    expect(bodies(collectOwnSocialProfileAndPosts)).toEqual([{ businessProfileId: 'b1', force: true }]);
+    expect(bodies(collectCompetitorSocialStories)).toEqual([{ businessProfileId: 'b1', force: true }]);
+    expect(bodies(generateReport)).toEqual([
+      { businessProfileId: 'b1', force: true, type: 'weekly', scheduled: true },
+      { businessProfileId: 'b1', force: true, type: 'monthly', scheduled: true },
+    ]);
+  });
+
+  it('does nothing for a business that is no longer on a report-only plan', async () => {
+    bpFindMany.mockResolvedValue([{ id: 'b2', subscription_plan: 'starter' }]);
+    await upgradedBriefingReports();
+    expect(generateReport).not.toHaveBeenCalled();
   });
 });
