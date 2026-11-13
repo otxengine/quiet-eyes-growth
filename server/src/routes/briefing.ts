@@ -17,6 +17,8 @@ import { getUserId } from '../middleware/auth';
 import { requireOwnsBusinessFields } from '../middleware/businessAccess';
 import { strictLimiter, freeRequestLimiter } from '../middleware/rateLimits';
 import { getUserEmail } from '../lib/ownership';
+import { sendEmail } from '../lib/email';
+import { esc } from '../lib/html';
 import { localeOf } from '../lib/locale';
 import { isBriefingPlan, planLimits } from '../lib/planLimits';
 import { customerRecipients, parseRecipients } from '../lib/reportDelivery';
@@ -234,16 +236,30 @@ async function run(label: string, handler: Function, body: Record<string, unknow
   try { await handler({ body } as any, res); } catch (e: any) { console.warn(`[briefing] ${label} failed:`, e.message); }
 }
 
+// An email to the team for each finished sign-up (Free link or account).
+// ponytail: goes to the support inbox; set SIGNUP_NOTIFY_EMAIL (comma-separated) to send it elsewhere.
+async function notifySignup(userId: string | null, p: { name: string; category: string | null; city: string | null; full_address: string | null }) {
+  const to = (process.env.SIGNUP_NOTIFY_EMAIL || process.env.SUPPORT_NOTIFY_EMAIL || 'contact@otxengine.io').split(',').map(s => s.trim()).filter(Boolean);
+  const rows: [string, unknown][] = [
+    ['Email', userId ? await getUserEmail(userId) : ''],
+    ['Sign-up', isFreeIdentity(userId) ? 'Free, email only' : 'Account'],
+    ['Business', p.name], ['Category', p.category], ['Address', p.full_address || p.city],
+  ];
+  const html = `<table style="font-family:Arial,sans-serif;font-size:14px">${rows.map(([k, v]) => `<tr><td style="padding:4px 12px 4px 0;color:#52514e">${k}</td><td>${esc(v)}</td></tr>`).join('')}</table>`;
+  await sendEmail({ to, subject: `New Cortexi sign-up: ${p.name}`, html });
+}
+
 router.post('/finish', requireOwnsBusinessFields, async (req: Request, res: Response) => {
   const businessProfileId = req.body?.businessProfileId;
   if (typeof businessProfileId !== 'string' || !businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
-  const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId }, select: { subscription_plan: true, onboarding_completed: true } });
+  const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId }, select: { subscription_plan: true, onboarding_completed: true, name: true, category: true, city: true, full_address: true } });
   if (!profile || !isBriefingPlan(profile.subscription_plan)) return res.status(404).json({ error: 'Not found' });
   // A second "finish" must not start the paid first collection again.
   if (profile.onboarding_completed) return res.json({ ok: true });
 
   await prisma.businessProfile.update({ where: { id: businessProfileId }, data: { onboarding_completed: true } });
   res.json({ ok: true });
+  void notifySignup(getUserId(req), profile).catch(e => console.warn('[briefing] sign-up notice failed:', e.message));
 
   // First collection, in the background. The first report (last 30 days) is built by the worker's
   // FirstBriefingReport job once the posts have landed — the worker is the one that can render the PDF.
