@@ -7,6 +7,7 @@ import CompetitorPicker from './CompetitorPicker.jsx';
 import DeliveryForm from './DeliveryForm.jsx';
 import PlanCards from './PlanCards.jsx';
 import { BRIEFING_SIGNUP_KEY, BUSINESS_QUERY_KEY, freeToken, forgetFreeToken } from './keys.js';
+import { track } from '@/lib/gtm.js';
 
 /**
  * Sign-up flow of the English report-only product: find your business → competitors are discovered →
@@ -91,6 +92,7 @@ export default function Start({ free = false }) {
     setBusy(true);
     try {
       const { businessProfileId: id } = await briefingApi.start(placeId, Intl.DateTimeFormat().resolvedOptions().timeZone);
+      track('sign_up', { market: 'en', method: free ? 'free_email' : 'account' });
       sessionStorage.removeItem(BUSINESS_QUERY_KEY);
       sessionStorage.removeItem(BRIEFING_SIGNUP_KEY);
       if (free) localStorage.removeItem(BUSINESS_QUERY_KEY);
