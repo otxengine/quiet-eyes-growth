@@ -21,6 +21,9 @@ const _emailCache = new Map<string, { email: string | null; expires: number }>()
  * so it must be one the user has proven they control.
  */
 export async function getUserEmail(userId: string): Promise<string | null> {
+  // An account-less Free identity (lib/freeAccess.ts) is itself an address its holder confirmed
+  // by using the emailed link. Clerk ids never contain "@".
+  if (userId.includes('@')) return userId;
   const cached = _emailCache.get(userId);
   if (cached && cached.expires > Date.now()) return cached.email;
 

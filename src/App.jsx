@@ -12,7 +12,7 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 
 // Public (marketing) routes — shared by all three trees below
 import { publicRoutes, isPublicPath, marketingNotFound } from '@/marketing/PublicRoutes.jsx';
-import { rememberBriefingSignup } from '@/briefing/keys.js';
+import { rememberBriefingSignup, freeToken, forgetFreeToken } from '@/briefing/keys.js';
 
 // App layout
 import AppLayout from '@/components/layout/AppLayout';
@@ -26,18 +26,59 @@ const Onboarding = lazyPage(() => import('@/pages/Onboarding'));
 // The English report-only product (sold outside Israel): its own sign-up flow and account area.
 const BriefingStart = lazyPage(() => import('@/briefing/Start.jsx'));
 const BriefingAccount = lazyPage(() => import('@/briefing/Account.jsx'));
+const BriefingFree = lazyPage(() => import('@/briefing/Free.jsx'));
+// /en/start opened from the Free plan's emailed link (?t=…) is the account-less setup; otherwise the
+// account flow. A signed-out visitor without a link is sent to sign up.
+const BriefingStartRoute = ({ signedIn }) => {
+  if (freeToken()) return <BriefingStart free />;
+  return signedIn ? <BriefingStart /> : <Navigate to="/sign-up?briefing=1" replace />;
+};
 
 // A visitor from the English landing page (/sign-up?briefing=1) signs up into /en/start; everyone
 // else into the Hebrew onboarding. The flag is kept in sessionStorage across Clerk's sign-up steps.
-const SignUpPage = () => (
-  <div className="min-h-screen flex items-center justify-center bg-secondary/50">
-    {rememberBriefingSignup()
-      ? <SignUp routing="path" path="/sign-up" forceRedirectUrl="/en/start" />
-      : <SignUp routing="path" path="/sign-up" fallbackRedirectUrl="/onboarding" />}
-  </div>
-);
-// Already signed in: the sign-up link from the landing page goes straight to the flow.
-const SignedInSignUp = () => <Navigate to={rememberBriefingSignup() ? '/en/start' : '/'} replace />;
+const SignUpPage = () => {
+  const briefing = rememberBriefingSignup();
+  // Kept for the life of the page: UpgradeSignUp forgets the stored token once it has used it.
+  const [upgradeToken] = React.useState(() => (briefing ? freeToken() : null));
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-secondary/50">
+      {upgradeToken ? <UpgradeSignUp token={upgradeToken} />
+        : briefing ? <SignUp routing="path" path="/sign-up" forceRedirectUrl="/en/start" />
+          : <SignUp routing="path" path="/sign-up" fallbackRedirectUrl="/onboarding" />}
+    </div>
+  );
+};
+// Upgrade from the account-less Free plan (/sign-up?briefing=1&t=…, the link in its report emails).
+// The token is used once, to read the address the reports go to, so the form starts with it: the
+// business moves to the account that verifies that address (server/src/routes/briefing.ts). After
+// that the token is dropped, so the new account is not mistaken for a free-link visitor.
+function UpgradeSignUp({ token }) {
+  const [email, setEmail] = React.useState(null); // null while loading
+  React.useEffect(() => {
+    let live = true;
+    (async () => {
+      let found = '';
+      const { briefingApi, setFreeLink } = await import('@/briefing/api');
+      try {
+        setFreeLink(token);
+        const { business } = await briefingApi.me();
+        if (business) found = (await briefingApi.settings(business.businessProfileId)).recipients?.[0] || '';
+      } catch { /* an expired link: the form simply starts empty */ }
+      setFreeLink(null);
+      forgetFreeToken();
+      if (live) setEmail(found);
+    })();
+    return () => { live = false; };
+  }, [token]);
+  if (email === null) return <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" role="status" aria-label="Loading" />;
+  return <SignUp routing="path" path="/sign-up" forceRedirectUrl="/en/start" initialValues={email ? { emailAddress: email } : undefined} />;
+}
+// Already signed in: the sign-up link from the landing page goes straight to the flow. An upgrade
+// link's token is dropped: this visitor has an account, and the business follows it by email.
+const SignedInSignUp = () => {
+  if (new URLSearchParams(window.location.search).has('t')) forgetFreeToken();
+  return <Navigate to={rememberBriefingSignup() ? '/en/start' : '/'} replace />;
+};
 // Clerk can still land a report-only sign-up on /onboarding (its provider-level fallback).
 const OnboardingOrBriefing = () => (rememberBriefingSignup('') ? <Navigate to="/en/start" replace /> : <Onboarding />);
 const Dashboard = lazyPage(() => import('@/pages/Dashboard.jsx'));
@@ -129,8 +170,9 @@ const AuthenticatedApp = () => {
           </div>
         } />
         <Route path="/sign-up/*" element={<SignUpPage />} />
-        {/* The report-only screens need an account */}
-        <Route path="/en/start" element={<Navigate to="/sign-up?briefing=1" replace />} />
+        {/* The report-only screens need an account — except the Free plan's email page and its emailed setup link */}
+        <Route path="/en/free" element={<BriefingFree />} />
+        <Route path="/en/start" element={<BriefingStartRoute />} />
         <Route path="/en/briefing" element={<Navigate to="/sign-in" replace />} />
         {publicRoutes()}
         <Route path="/join" element={<JoinPage />} />
@@ -154,7 +196,8 @@ const AuthenticatedApp = () => {
       <Route path="/onboarding/*" element={<OnboardingOrBriefing />} />
 
       {/* English report-only product — outside the Hebrew app layout */}
-      <Route path="/en/start" element={<BriefingStart />} />
+      <Route path="/en/free" element={<BriefingFree />} />
+      <Route path="/en/start" element={<BriefingStartRoute signedIn />} />
       <Route path="/en/briefing" element={<BriefingAccount />} />
       <Route path="/sign-up/*" element={<SignedInSignUp />} />
 

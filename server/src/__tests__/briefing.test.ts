@@ -1,5 +1,5 @@
 // The English report-only product: sign-up endpoints, settings, and the first-report period label.
-const bp = { findMany: jest.fn(), create: jest.fn(), findUnique: jest.fn(), update: jest.fn() };
+const bp = { findMany: jest.fn(), create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() };
 const executeRaw = jest.fn(async () => 1);
 const queryRaw = jest.fn(async () => [{ timezone: 'America/Chicago', report_recipients: 'owner@example.com' }]);
 jest.mock('../db', () => ({
@@ -7,9 +7,13 @@ jest.mock('../db', () => ({
 }));
 jest.mock('../middleware/auth', () => ({ getUserId: () => 'user_1', isAdminKeyRequest: () => false }));
 jest.mock('../middleware/businessAccess', () => ({ requireOwnsBusinessFields: (_q: any, _s: any, next: any) => next() }));
-jest.mock('../middleware/rateLimits', () => ({ strictLimiter: (_q: any, _s: any, next: any) => next() }));
+jest.mock('../middleware/rateLimits', () => ({ strictLimiter: (_q: any, _s: any, next: any) => next(), freeRequestLimiter: (_q: any, _s: any, next: any) => next() }));
 jest.mock('../lib/ownership', () => ({ getUserEmail: jest.fn(async () => 'owner@example.com') }));
 jest.mock('../lib/automationLog', () => ({ writeAutomationLog: jest.fn() }));
+const sendFreeLink = jest.fn(async (..._a: any[]) => true);
+jest.mock('../lib/freeAccess', () => ({
+  FREE_CONSENT_TEXT: 'consent text', sendFreeLink: (...a: any[]) => sendFreeLink(...a), isFreeIdentity: (id: string) => id.includes('@'),
+}));
 jest.mock('../lib/extractSocialLinksFromWebsite', () => ({
   extractSocialLinksFromWebsite: jest.fn(async () => ({ instagram_url: 'https://www.instagram.com/joespizza/', facebook_url: null })),
 }));
@@ -47,6 +51,7 @@ beforeEach(() => {
   delete process.env.BRIEFING_BLOCK_ISRAEL;
   bp.findMany.mockResolvedValue([]);
   bp.create.mockResolvedValue({ id: 'bp_new' });
+  bp.updateMany.mockResolvedValue({ count: 0 });
 });
 
 test('cityOf: "Austin, TX" from address components', () => {
@@ -159,4 +164,89 @@ test('the first report (a monthly row over the last 30 days) is labelled as a ra
   const NY = { lang: 'en' as const, intl: 'en-US', tz: 'America/New_York' };
   expect(reportPeriodLabel('monthly', '2026-10-11T04:00:00Z', '2026-11-10T05:00:00Z', NY)).toBe('October 11 – November 9, 2026');
   expect(reportPeriodLabel('monthly', '2026-10-01T04:00:00Z', '2026-11-01T04:00:00Z', NY)).toBe('October 2026');
+});
+
+describe('account-less Free plan', () => {
+  const request = (body: any, headers = {}) => call('/free/request', 'post', { body, headers });
+
+  // The handler's three queries, in order: today's new addresses, the lead row, the claim for one email.
+  const db = (today: number, claim: any[]) => queryRaw
+    .mockResolvedValueOnce([{ n: today }] as any).mockResolvedValueOnce([{ id: 'lead_1' }] as any).mockResolvedValueOnce(claim as any);
+
+  it('needs a valid address and the newsletter consent', async () => {
+    expect((await request({ email: 'not-an-address', consent: true })).statusCode).toBe(400);
+    expect((await request({ email: '"x"<owner@example.com>', consent: true })).statusCode).toBe(400);
+    expect((await request({ email: 'owner@example.com' })).body).toMatchObject({ needsConsent: true });
+    expect((await request({ email: 'owner@example.com', consent: 'yes' })).statusCode).toBe(400);
+    expect(queryRaw).not.toHaveBeenCalled();
+    expect(sendFreeLink).not.toHaveBeenCalled();
+  });
+
+  it('stores the lead and emails the setup link to the lower-cased address', async () => {
+    db(0, [{ id: 'lead_1' }]);
+    const r = await request({ email: ' Owner@Example.com ', consent: true });
+    expect(r.body).toEqual({ ok: true });
+    expect(sendFreeLink).toHaveBeenCalledWith('lead_1', 'owner@example.com');
+  });
+
+  it('answers the same but sends nothing when the address has no email left to claim (unsubscribed, or too many)', async () => {
+    db(0, []);
+    expect((await request({ email: 'owner@example.com', consent: true })).body).toEqual({ ok: true });
+    expect(sendFreeLink).not.toHaveBeenCalled();
+  });
+
+  it('stops taking new addresses at the daily ceiling', async () => {
+    queryRaw.mockResolvedValueOnce([{ n: 300 }] as any);
+    expect((await request({ email: 'owner@example.com', consent: true })).statusCode).toBe(429);
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    expect(sendFreeLink).not.toHaveBeenCalled();
+  });
+
+  it('is refused from Israel when the block is on', async () => {
+    process.env.BRIEFING_BLOCK_ISRAEL = 'true';
+    expect((await request({ email: 'owner@example.com', consent: true }, { 'cloudfront-viewer-country': 'IL' })).statusCode).toBe(403);
+  });
+
+  it('start links the new business to the lead, and refuses an address whose business an account has claimed', async () => {
+    places(PLACE);
+    queryRaw.mockResolvedValueOnce([{ id: 'lead_1' }] as any); // the lead's one slot was free
+    const r = await call('/start', 'post', { body: { placeId: PLACE.id }, freeLeadId: 'lead_1' });
+    expect(r.body).toMatchObject({ businessProfileId: 'bp_new' });
+    expect(executeRaw).toHaveBeenCalledTimes(2); // locale/timezone/recipients, then the lead's business link
+
+    bp.create.mockClear();
+    queryRaw.mockResolvedValueOnce([] as any); // the slot is taken
+    const again = await call('/start', 'post', { body: { placeId: PLACE.id }, freeLeadId: 'lead_1' });
+    expect(again.statusCode).toBe(409);
+    expect(again.body).toMatchObject({ has_account: true });
+    expect(bp.create).not.toHaveBeenCalled();
+  });
+
+  it('an account with the verified address takes the Free business over, on its first visit', async () => {
+    const free = { id: 'bp_free', name: "Joe's Pizza", subscription_plan: 'brief_free', onboarding_completed: true };
+    bp.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([free]); // nothing under the account id, then the claimed one
+    bp.updateMany.mockResolvedValueOnce({ count: 1 });
+    const r = await call('/me', 'get', {});
+    expect(bp.updateMany).toHaveBeenCalledWith({
+      where: { created_by: { in: ['owner@example.com', 'owner@example.com'] }, subscription_plan: { startsWith: 'brief_' } },
+      data: { created_by: 'user_1' },
+    });
+    expect(r.body.business).toMatchObject({ businessProfileId: 'bp_free', onboardingCompleted: true });
+  });
+
+  it('an account without a verified address claims nothing', async () => {
+    const { getUserEmail } = jest.requireMock('../lib/ownership');
+    getUserEmail.mockResolvedValueOnce(null);
+    const r = await call('/me', 'get', {});
+    expect(r.body).toEqual({ business: null });
+    expect(bp.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('a second finish does not start the paid first collection again', async () => {
+    bp.findUnique.mockResolvedValue({ subscription_plan: 'brief_free', onboarding_completed: true });
+    const r = await call('/finish', 'post', { body: { businessProfileId: 'bp_1' } });
+    expect(r.body).toEqual({ ok: true });
+    expect(bp.update).not.toHaveBeenCalled();
+    expect(collectors.posts).not.toHaveBeenCalled();
+  });
 });

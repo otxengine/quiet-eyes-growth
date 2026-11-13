@@ -76,6 +76,40 @@ describe('buildReportEmail', () => {
   });
 });
 
+describe('account-less Free plan', () => {
+  const EN = { lang: 'en' as const, intl: 'en-US', tz: 'America/New_York' };
+  const customer = (free: any) => ({ unsubscribeUrl: 'https://app.example.com/u', free });
+  const info = { total: 3, manageUrl: 'https://app.example.com/en/start?t=tok', upgradeUrl: 'https://app.example.com/sign-up?briefing=1' };
+
+  it('numbers the report and links to change competitors, upgrade and one unsubscribe for both', () => {
+    const { html } = buildReportEmail(weekly, 'Joe\'s Pizza', false, EN, customer({ ...info, number: 1, last: false }));
+    expect(html).toContain('Free report 1 of 3');
+    expect(html).toContain('href="https://app.example.com/en/start?t=tok"');
+    expect(html).toContain('>Change competitors<');
+    expect(html).toContain('>Upgrade<');
+    expect(html).toContain('>Unsubscribe from both<');
+    expect(html).toContain('and the Cortexi newsletter');
+    expect(html).not.toContain('last free report');
+  });
+
+  it('the third report says it is the last, offers the upgrade and no competitor link', () => {
+    const { html } = buildReportEmail(weekly, 'Joe\'s Pizza', false, EN, customer({ ...info, number: 3, last: true, manageUrl: null }));
+    expect(html).toContain('Free report 3 of 3');
+    expect(html).toContain('This is your last free report');
+    expect(html).toContain('>Keep my reports<');
+    expect(html).not.toContain('Change competitors');
+    expect(html).toContain('Your free reports end with this one');
+    expect(html).toContain('>Unsubscribe<');
+  });
+
+  it('every other customer email is unchanged', () => {
+    const { html } = buildReportEmail(weekly, 'Joe\'s Pizza', false, EN, { unsubscribeUrl: 'https://app.example.com/u' });
+    expect(html).not.toContain('Free report');
+    expect(html).not.toContain('Upgrade');
+    expect(html).toContain('is subscribed to Cortexi competitor reports.');
+  });
+});
+
 describe('sendReportEmail', () => {
   const env = process.env.REPORT_EMAIL_RECIPIENTS;
   afterEach(() => { process.env.REPORT_EMAIL_RECIPIENTS = env; sendEmail.mockClear(); });

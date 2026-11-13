@@ -4,7 +4,13 @@
  */
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+// Account-less Free plan: while set, requests carry the emailed-link token instead of a session
+// (the server accepts it on the setup routes only). Start.jsx sets it; it is never set in the account.
+let freeLinkToken = null;
+export const setFreeLink = (token) => { freeLinkToken = token || null; };
+
 async function authHeaders() {
+  if (freeLinkToken) return { 'x-briefing-token': freeLinkToken };
   let token = null;
   if (window.__clerk?.session) {
     try { token = await window.__clerk.session.getToken(); } catch { /* fall through */ }
@@ -69,5 +75,8 @@ export const briefingApi = {
     window.open(URL.createObjectURL(await res.blob()), '_blank', 'noopener');
   },
 
-  selectPlan: (businessProfileId, planId, marketingConsent) => api('/onboarding/select-plan', { method: 'POST', body: { businessProfileId, planId, marketingConsent } }),
+  selectPlan: (businessProfileId, planId) => api('/onboarding/select-plan', { method: 'POST', body: { businessProfileId, planId } }),
+
+  // Account-less Free plan: ask for the setup link. The answer is the same for every address.
+  requestFreeLink: (email, consent) => api('/briefing/free/request', { method: 'POST', body: { email, consent } }),
 };

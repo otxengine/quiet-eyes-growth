@@ -2,7 +2,7 @@ import React from 'react';
 import { Check, Minus, Search } from 'lucide-react';
 import { Container, Section, GradientText, Badge, CtaButton, Faq } from '../ui/primitives.jsx';
 import { EN_PLANS, EN_FAQ, planFeatures } from './plans.js';
-import { START_HREF } from './EnChrome.jsx';
+import { START_HREF, FREE_HREF } from './EnChrome.jsx';
 import useReveal from '../lib/useReveal.js';
 
 /* English landing page for the competitor report (the only product sold outside Israel).
@@ -92,8 +92,7 @@ export default function EnHome() {
           </p>
 
           {/* Plain GET form: works on the prerendered page with no JavaScript. */}
-          <form action="/sign-up" method="get" className="mt-8 max-w-xl mx-auto">
-            <input type="hidden" name="briefing" value="1" />
+          <form action={FREE_HREF} method="get" className="mt-8 max-w-xl mx-auto">
             <div className="flex items-center gap-2 rounded-full border bg-white pl-5 pr-1.5 h-14" style={{ borderColor: 'var(--mkt-border-strong)' }}>
               <Search size={18} style={{ color: 'var(--mkt-muted)' }} aria-hidden="true" />
               <input
@@ -167,7 +166,7 @@ export default function EnHome() {
           <SectionHeading
             eyebrow="Pricing"
             title="Start free. Upgrade when it pays off."
-            sub="Every plan starts with a free report on the last 30 days. Prices are in USD, billed monthly."
+            sub="Free sends three monthly reports to your email, no account needed. Paid plans start with a report on the last 30 days. Prices are in USD, billed monthly."
           />
           <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-stretch">
             {EN_PLANS.map((plan) => (
@@ -185,7 +184,7 @@ export default function EnHome() {
                 <p className="text-[12.5px] mt-0.5" style={{ color: 'var(--mkt-muted)' }}>{plan.cadence}</p>
                 <div className="mt-4 flex items-baseline gap-1.5">
                   <span className="text-[36px] font-extrabold" style={{ letterSpacing: '-0.02em' }}>{plan.price}</span>
-                  <span className="text-[12.5px]" style={{ color: 'var(--mkt-muted)' }}>/month</span>
+                  <span className="text-[12.5px]" style={{ color: 'var(--mkt-muted)' }}>{plan.per || '/month'}</span>
                 </div>
                 <ul className="mt-5 space-y-2.5 flex-1 text-[13px]" style={{ color: 'var(--mkt-ink-2)' }}>
                   {planFeatures(plan).map((f) => (
@@ -197,7 +196,7 @@ export default function EnHome() {
                     </li>
                   ))}
                 </ul>
-                <CtaButton href={START_HREF} variant={plan.highlighted ? 'gradient' : 'ghost'} className="mt-6 w-full !h-11 !px-3 text-[13.5px] whitespace-nowrap">
+                <CtaButton href={plan.id === 'brief_free' ? FREE_HREF : START_HREF} variant={plan.highlighted ? 'gradient' : 'ghost'} className="mt-6 w-full !h-11 !px-3 text-[13.5px] whitespace-nowrap">
                   {plan.cta}
                 </CtaButton>
               </div>
@@ -228,7 +227,7 @@ export default function EnHome() {
             Your first report is free and covers the last 30 days.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <CtaButton href={START_HREF} variant="gradient">Find my competitors</CtaButton>
+            <CtaButton href={FREE_HREF} variant="gradient">Find my competitors</CtaButton>
             <CtaButton href="/en#sample" variant="ghost">See a sample report</CtaButton>
           </div>
         </Container>

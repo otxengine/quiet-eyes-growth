@@ -6,6 +6,7 @@ import { writeAutomationLog } from '../../lib/automationLog';
 import { reportPeriod, REPORT_TYPES, ReportType } from '../../lib/reportPeriod';
 import { buildReportData, isEmptyReport } from '../../lib/reportData';
 import { sendReportEmail } from '../../lib/reportEmail';
+import { freeReportInfo, endFreeReports } from '../../lib/freeAccess';
 import { renderReportPdf, reportPdfFilename, storeReportPdf } from '../../lib/reportPdf';
 import { BizLocale, EN_JSON_SYSTEM, IL_LOCALE } from '../../lib/locale';
 import { businessLocale } from '../../lib/businessLocale';
@@ -200,8 +201,11 @@ export async function generateReport(req: Request, res: Response) {
       } catch (e: any) {
         console.error(`[generateReport] ${type} PDF failed (${pdf ? 'upload' : 'render'}):`, e.message);
       }
-      await sendReportEmail(report, bp.name, pdf && { filename: reportPdfFilename(report, loc.tz), content: pdf }, loc, businessProfileId).catch((e: any) =>
+      // Account-less Free plan: the email says which of its three reports this is, and the third ends it.
+      const free = await freeReportInfo(businessProfileId).catch(() => null);
+      await sendReportEmail(report, bp.name, pdf && { filename: reportPdfFilename(report, loc.tz), content: pdf }, loc, businessProfileId, free).catch((e: any) =>
         console.warn('[generateReport] report email failed:', e.message));
+      if (free?.last) await endFreeReports(businessProfileId).catch((e: any) => console.error('[generateReport] ending the free reports failed:', e.message));
     }
     return res.json({ report: stored });
   } catch (err: any) {

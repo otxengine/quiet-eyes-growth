@@ -57,11 +57,12 @@ async function sendPdf(report: { linked_business: string; pdf_url: string | null
 router.all('/unsubscribe', async (req: Request, res: Response) => {
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).end();
   const [b, r, t] = ['b', 'r', 't'].map(k => (typeof req.query[k] === 'string' ? (req.query[k] as string) : ''));
-  let ok = false;
+  let ok: false | 'reports' | 'all' = false;
   try { ok = await unsubscribe(b, r, t); } catch (e: any) { console.error('[reports] unsubscribe failed:', e.message); }
   const en = ok && (await businessLocale(b)).lang === 'en';
   const text = !ok ? 'This unsubscribe link is not valid.'
-    : en ? 'You have been unsubscribed from Cortexi competitor reports.' : 'הוסרת מרשימת התפוצה של דוחות המתחרים של Cortexi.';
+    : ok === 'all' ? 'You are unsubscribed. We have stopped your competitor reports and the Cortexi newsletter, and you will not hear from us again.'
+      : en ? 'You have been unsubscribed from Cortexi competitor reports.' : 'הוסרת מרשימת התפוצה של דוחות המתחרים של Cortexi.';
   res.status(ok ? 200 : 400).type('html').send(
     `<!doctype html><html lang="${en || !ok ? 'en' : 'he'}" dir="${en || !ok ? 'ltr' : 'rtl'}"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Cortexi</title></head>`
     + `<body style="font-family:Arial,sans-serif;text-align:center;padding:64px 16px;color:#101014"><p style="font-size:18px">${text}</p></body></html>`);

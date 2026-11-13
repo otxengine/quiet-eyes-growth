@@ -65,8 +65,18 @@ describe('unsubscribe link', () => {
     expect(url).toMatch(/^https:\/\/app\.example\.com\/api\/reports\/unsubscribe\?b=bp1&r=[0-9a-f]{16}&t=/);
     expect(url).not.toContain('owner');
     const { b, r, t } = params(url);
-    expect(await unsubscribe(b, r, t)).toBe(true);
+    queryRaw.mockResolvedValueOnce([{ report_recipients: 'owner@example.com,partner@example.com' }]).mockResolvedValueOnce([]); // recipients, then: not a Free address
+    expect(await unsubscribe(b, r, t)).toBe('reports');
     expect((executeRaw.mock.calls[0] as any[])[1]).toBe('partner@example.com'); // what is left
+    expect(executeRaw).toHaveBeenCalledTimes(1);
+  });
+  it('an account-less Free address leaves the reports and the newsletter together, and its reports end', async () => {
+    const { b, r, t } = params(unsubscribeUrl('bp1', 'owner@example.com')!);
+    queryRaw.mockResolvedValueOnce([{ report_recipients: 'owner@example.com' }]).mockResolvedValueOnce([{ id: 'lead_1' }]);
+    expect(await unsubscribe(b, r, t)).toBe('all');
+    // The lead is matched by the address that was removed, never by the business alone.
+    expect((queryRaw.mock.calls[1] as any[]).slice(1)).toEqual(['bp1', 'owner@example.com']);
+    expect(executeRaw).toHaveBeenCalledTimes(2); // recipients, then the ended mark
   });
   it('the last recipient leaving turns delivery off (NULL)', async () => {
     queryRaw.mockResolvedValue([{ report_recipients: 'owner@example.com' }]);

@@ -17,7 +17,7 @@ const to = r => (r.statusCode === 302 ? `-> ${r.headers.location.value}` : r.uri
 const prod = load(true);
 
 // Israel: the English landing page and sign-up go to the Hebrew home; everything else is served.
-for (const uri of ['/en', '/en/', '/en/start']) assert.strictEqual(to(run(prod, uri, 'IL')), '-> /', uri);
+for (const uri of ['/en', '/en/', '/en/free', '/en/start']) assert.strictEqual(to(run(prod, uri, 'IL')), '-> /', uri);
 assert.strictEqual(to(run(prod, '/', 'IL')), '/index.html');
 assert.strictEqual(to(run(prod, '/pricing', 'IL')), '/pricing/index.html');
 assert.strictEqual(to(run(prod, '/dashboard', 'IL')), '/index.html');
@@ -33,6 +33,7 @@ for (const uri of ['/', '/home', '/pricing', '/features', '/features/reputation'
 }
 assert.strictEqual(to(run(prod, '/en', 'US')), '/en/index.html');
 assert.strictEqual(to(run(prod, '/en/start', 'GB')), '/index.html');
+assert.strictEqual(to(run(prod, '/en/free', 'GB')), '/index.html');
 // Pages with no English version, the app and files are never routed.
 for (const [uri, served] of [['/privacy', '/privacy/index.html'], ['/data-deletion', '/data-deletion/index.html'], ['/terms', '/terms/index.html'],
   ['/contact', '/contact/index.html'], ['/blog', '/blog/index.html'], ['/blog/some-post', '/blog/some-post/index.html'],

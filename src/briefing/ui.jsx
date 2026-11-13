@@ -5,7 +5,7 @@ import { base44 } from '@/api/base44Client';
 /* Shell and small controls for the English report-only screens. Same tokens and card style as the
    English landing page (src/marketing/en), left-to-right. */
 
-export function BriefingShell({ children, nav }) {
+export function BriefingShell({ children, nav, signOut = true }) {
   // The app document is lang="he" dir="rtl"; these screens flip it while they are mounted.
   useEffect(() => {
     const el = document.documentElement;
@@ -24,9 +24,11 @@ export function BriefingShell({ children, nav }) {
             <img src="/logo/cortexi-logo-nav.png" alt="Cortexi" width={78} height={30} className="h-[30px] w-auto" />
           </a>
           {nav}
-          <button type="button" onClick={() => base44.auth.logout('/en')} className="text-[13.5px] font-medium whitespace-nowrap hover:text-black" style={{ color: 'var(--mkt-muted)' }}>
-            Sign out
-          </button>
+          {signOut && (
+            <button type="button" onClick={() => base44.auth.logout('/en')} className="text-[13.5px] font-medium whitespace-nowrap hover:text-black" style={{ color: 'var(--mkt-muted)' }}>
+              Sign out
+            </button>
+          )}
         </div>
       </header>
       <main className="flex-1 max-w-4xl w-full mx-auto px-6 py-10">{children}</main>

@@ -3,7 +3,7 @@
    is used by the prerendered landing page and by the in-app English sign-up flow. */
 export const EN_PLANS = [
   {
-    id: 'brief_free', name: 'Free', price: '$0', cadence: 'Monthly summary',
+    id: 'brief_free', name: 'Free', price: '$0', per: 'for 3 months', cadence: 'Three monthly reports, no account',
     competitors: 2, reports: 'Monthly summary', posts: 'Monthly', ads: 'Monthly', reviews: 'Weekly', stories: null, youVsThem: false,
     cta: 'Start free',
   },
@@ -32,6 +32,8 @@ export const EN_PLANS = [
 /** The lines shown on a plan card; `on: false` renders greyed out. */
 export function planFeatures(p) {
   return [
+    // Free needs no account: an email address, three reports, and our newsletter with them.
+    ...(p.id === 'brief_free' ? [{ on: true, text: 'Just your email, no account' }, { on: true, text: 'Comes with the Cortexi newsletter' }] : []),
     { on: true, text: `${p.competitors} competitors` },
     { on: true, text: `Reports: ${p.reports.toLowerCase()}` },
     { on: true, text: `Posts checked ${p.posts.toLowerCase()}, ads ${p.ads.toLowerCase()}` },
@@ -60,10 +62,10 @@ export const EN_FAQ = [
   },
   {
     q: 'Is the first report really free?',
-    a: 'Yes. Right after you pick your competitors you get a report on their last 30 days, with no card. The Free plan then sends a summary of your competitors every month.',
+    a: 'Yes. Right after you pick your competitors you get a report on their last 30 days, with no card and no account. The Free plan then sends two more monthly reports, three in all, together with our newsletter.',
   },
   {
     q: 'Can I cancel?',
-    a: 'Any time, from your account. Paid plans are billed monthly through Paddle, and a cancelled plan goes back to Free.',
+    a: 'Any time, from your account. Paid plans are billed monthly through Paddle, and a cancelled plan runs to the end of the month you paid for.',
   },
 ];

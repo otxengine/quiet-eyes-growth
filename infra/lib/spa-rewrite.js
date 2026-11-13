@@ -6,7 +6,7 @@ var MARKETING = ['/home', '/features', '/blog', '/pricing', '/about', '/contact'
 // ── Country routing (prod only: qe-stack.ts flips GEO_ROUTING; staging stays open for testing) ──
 // Visitors in Israel get the Hebrew site, everyone else the English one (/en): the English product
 // is not sold in Israel and the Hebrew app is not sold outside it.
-//   Israel      + /en or /en/start            -> /
+//   Israel      + /en, /en/free or /en/start  -> /
 //   not Israel  + a Hebrew product page        -> /en
 // Never redirected:
 //   - signed-in users (Clerk cookies): "/" is their dashboard wherever they are, and a customer
@@ -30,7 +30,7 @@ function geoRedirect(request, uri) {
   var agent = request.headers['user-agent'];
   if (!agent || CRAWLER.test(agent.value)) return null;
 
-  if (country.value === 'IL') return uri === '/en' || uri === '/en/start' ? redirectTo('/') : null;
+  if (country.value === 'IL') return uri === '/en' || uri === '/en/free' || uri === '/en/start' ? redirectTo('/') : null;
 
   var cookies = request.cookies || {};
   var signedIn = !!cookies.__session || (!!cookies.__client_uat && cookies.__client_uat.value !== '0');
