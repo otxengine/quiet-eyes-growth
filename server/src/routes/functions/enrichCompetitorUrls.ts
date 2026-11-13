@@ -93,7 +93,8 @@ export async function enrichCompetitorUrls(
   let enriched = 0;
   let skipped = 0;
 
-  for (const c of competitors) {
+  // One competitor's lookups: true when something was looked up, false when there was nothing to do.
+  const lookUp = async (c: (typeof competitors)[number]): Promise<boolean> => {
     const comp = c as any;
     const update: Record<string, any> = {};
     let attempted = false;
@@ -146,12 +147,21 @@ export async function enrichCompetitorUrls(
     const seen = (field: string) => update[`${field}_source`] ?? (comp[field] ? 'had' : 'none');
     console.log(`enrichCompetitorUrls: "${comp.name}" place=${comp.google_place_id ? 'yes' : 'no'} website=${seen('website_url')} instagram=${seen('instagram_url')} facebook=${seen('facebook_url')}`);
 
-    if (!attempted && Object.keys(update).length === 0) { skipped++; continue; }
+    if (!attempted && Object.keys(update).length === 0) return false;
 
     // Fill-if-empty (AC5) — stamp TTL whenever real enrichment work ran (found or soft-empty)
     update.social_pages_crawled_at = new Date().toISOString();
     await prisma.competitor.update({ where: { id: comp.id }, data: update }).catch(() => {});
-    enriched++;
+    return true;
+  };
+
+  // Each competitor has its own lookups and its own row, so several run at once: a new business's
+  // ten suggestions took minutes one after another, while the visitor waited on the sign-up page.
+  // ponytail: a fixed 4 at a time; lower it if a lookup provider starts answering "too many requests".
+  const AT_ONCE = 4;
+  for (let i = 0; i < competitors.length; i += AT_ONCE) {
+    const done = await Promise.all(competitors.slice(i, i + AT_ONCE).map(lookUp));
+    for (const looked of done) { if (looked) enriched++; else skipped++; }
   }
 
   return { enriched, skipped };
