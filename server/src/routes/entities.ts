@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
 import { isBriefingPlan, planLimits } from '../lib/planLimits';
 import { getUserId } from '../middleware/auth';
+import { isFreeIdentity, freeCompetitorWriteOk, FREE_COMPETITOR_ROWS_MAX } from '../lib/freeAccess';
 import { getUserEmail, getUserBusinessIds, getUserWritableBusinessIds } from '../lib/ownership';
 import { cleanupCompetitorsByRadius } from '../lib/competitorRadiusCleanup';
 import { collectCompetitorSocialPosts } from './functions/collectCompetitorSocialPosts';
@@ -329,9 +330,14 @@ router.post('/:entity', async (req: Request, res: Response) => {
     const userId = getUserId(req);
     const data = { ...req.body };
     stripSecrets(String(req.params.entity), data);
+    // Account-less Free plan: only a named competitor of the caller's own business, a bounded number of them.
+    if (!freeCompetitorWriteOk(userId, data) || (isFreeIdentity(userId) && !data.linked_business)) return res.status(403).json({ error: 'Forbidden' });
     // A row is always created on the caller's own behalf.
     if (userId) data.created_by = userId;
     if (await rejectForeignWrite(req, data)) return res.status(403).json({ error: 'Forbidden' });
+    if (isFreeIdentity(userId) && await (prisma as any).competitor.count({ where: { linked_business: data.linked_business } }) >= FREE_COMPETITOR_ROWS_MAX) {
+      return res.status(403).json({ error: 'You have added the most competitors this plan allows.', plan_limit: true });
+    }
 
     // Manually-added competitors need no review gate — the user typed the name themselves —
     // so auto-approve them (auto-discovery creates rows via Prisma directly, bypassing this route).
@@ -378,6 +384,9 @@ router.post('/:entity', async (req: Request, res: Response) => {
         // race can exclude this competitor from its own first scan entirely.
         await enrichCompetitorUrls([record.id]).catch((err: any) =>
           console.warn(`manual competitor add: enrichCompetitorUrls failed: ${err.message}`));
+        // Account-less Free plan: no scan on add. Setup's "finish" runs the first collection, and a
+        // competitor changed later is scanned with the next report.
+        if (isFreeIdentity(userId)) return;
 
         collectCompetitorSocialPosts({ body: { businessProfileId: data.linked_business, force: true } } as Request, noopRes)
           .catch((err: any) => console.warn(`manual competitor add: collectCompetitorSocialPosts failed: ${err.message}`));
@@ -389,7 +398,7 @@ router.post('/:entity', async (req: Request, res: Response) => {
           .catch((err: any) => console.warn(`manual competitor add: detectCompetitorAds failed: ${err.message}`));
       })();
       // Doesn't depend on instagram_url — no need to sequence after enrichment.
-      runCollectCompetitorReviews(data.linked_business)
+      if (!isFreeIdentity(userId)) runCollectCompetitorReviews(data.linked_business)
         .catch((err: any) => console.warn(`manual competitor add: collectCompetitorReviews failed: ${err.message}`));
     }
 
@@ -421,6 +430,7 @@ router.patch('/:entity/:id', async (req: Request, res: Response) => {
       const owned = await verifyRecordOwnership(model, String(req.params.id), userId);
       if (!owned) return res.status(403).json({ error: 'Forbidden' });
     }
+    if (!freeCompetitorWriteOk(userId, data)) return res.status(403).json({ error: 'Forbidden' });
     delete data.created_by; // an owner is never reassigned
     if (await rejectForeignWrite(req, data)) return res.status(403).json({ error: 'Forbidden' });
 

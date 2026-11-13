@@ -10,10 +10,9 @@ import { Button, ErrorNote } from './ui.jsx';
  * The four report-only plans. Choosing a paid one opens the Paddle checkout; the plan itself
  * switches when Paddle's webhook arrives, a few seconds after payment. `onChosen(planId, paid)`.
  */
-export default function PlanCards({ businessProfileId, currentPlan, orgId, onChosen, consentRequired = false }) {
+// `hideFree`: the account sign-up offers paid plans only — Free needs no account (Free.jsx).
+export default function PlanCards({ businessProfileId, currentPlan, orgId, onChosen, hideFree = false }) {
   const [busy, setBusy] = useState('');
-  // Sign-up only: the Free plan is given in exchange for marketing emails (the server checks it too).
-  const [consent, setConsent] = useState(false);
   const [error, setError] = useState('');
   const paid = !!currentPlan && currentPlan !== 'brief_free';
 
@@ -25,16 +24,12 @@ export default function PlanCards({ businessProfileId, currentPlan, orgId, onCho
 
   const choose = async (planId) => {
     setError('');
-    if (planId === 'brief_free' && consentRequired && !consent) {
-      setError('To use the Free plan, please agree to receive marketing emails from Cortexi.');
-      return undefined;
-    }
     setBusy(planId);
     try {
       // Going back to Free from a paid plan means cancelling the subscription, which Paddle's
       // billing page does; the plan changes when the cancellation takes effect.
       if (planId === 'brief_free' && paid) { await openBilling(orgId); return undefined; }
-      const { requiresCheckout, orgId: billingOrg } = await briefingApi.selectPlan(businessProfileId, planId, planId === 'brief_free' && consent);
+      const { requiresCheckout, orgId: billingOrg } = await briefingApi.selectPlan(businessProfileId, planId);
       if (!requiresCheckout) return onChosen?.(planId, false);
       const r = await billingApi.checkout(planId, billingOrg);
       if (r.transactionId) {
@@ -53,14 +48,14 @@ export default function PlanCards({ businessProfileId, currentPlan, orgId, onCho
   return (
     <div className="space-y-3">
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {EN_PLANS.map((p) => {
+        {EN_PLANS.filter((p) => !(hideFree && p.id === 'brief_free')).map((p) => {
           const current = p.id === currentPlan;
           return (
             <div key={p.id} className="mkt-card p-4 flex flex-col" style={current ? { borderColor: 'var(--mkt-ink)', borderWidth: 1.5 } : undefined}>
               <div className="font-extrabold text-[16px]">{p.name}</div>
               <div className="mt-1 flex items-baseline gap-1">
                 <span className="text-[26px] font-extrabold" style={{ letterSpacing: '-0.02em' }}>{p.price}</span>
-                <span className="text-[12px]" style={{ color: 'var(--mkt-muted)' }}>/month</span>
+                <span className="text-[12px]" style={{ color: 'var(--mkt-muted)' }}>{p.per || '/month'}</span>
               </div>
               <ul className="mt-3 space-y-1.5 flex-1 text-[12.5px]" style={{ color: 'var(--mkt-ink-2)' }}>
                 {planFeatures(p).map((f) => (
@@ -70,12 +65,6 @@ export default function PlanCards({ businessProfileId, currentPlan, orgId, onCho
                   </li>
                 ))}
               </ul>
-              {consentRequired && p.id === 'brief_free' && (
-                <label className="mt-3 flex items-start gap-2 text-[12px] leading-snug cursor-pointer" style={{ color: 'var(--mkt-ink-2)' }}>
-                  <input type="checkbox" className="mt-0.5 shrink-0" checked={consent} onChange={(e) => { setConsent(e.target.checked); setError(''); }} />
-                  <span>I agree to receive marketing emails from Cortexi. Required for the Free plan; you can unsubscribe at any time.</span>
-                </label>
-              )}
               <Button variant={current ? 'ghost' : p.highlighted ? 'gradient' : 'black'} className="mt-4 w-full !h-10 text-[13px]" disabled={current || !!busy} onClick={() => choose(p.id)}>
                 {current ? 'Current plan' : busy === p.id ? 'Opening' : p.id === 'brief_free' && paid ? 'Cancel plan' : p.cta}
               </Button>

@@ -139,6 +139,15 @@ export default function Account() {
           </div>
           {notice && <p className="mb-4 text-[14px] font-medium" role="status">{notice}</p>}
 
+          {settings.freeEnded && settings.plan === 'brief_free' && tab !== 'plan' && (
+            <Card className="mb-5 flex items-center gap-4 flex-wrap">
+              <div className="flex-1 min-w-[220px]">
+                <div className="font-extrabold text-[15px]">Your free reports have ended</div>
+                <div className="text-[13.5px] mt-0.5" style={{ color: 'var(--mkt-ink-2)' }}>Choose a plan to keep watching your competitors. Your earlier reports stay here.</div>
+              </div>
+              <Button variant="gradient" onClick={() => { setNotice(''); setParams({ tab: 'plan' }); }}>Choose a plan</Button>
+            </Card>
+          )}
           {tab === 'reports' && <Reports businessProfileId={business.businessProfileId} timezone={settings.timezone} welcome={params.get('welcome') === '1'} />}
 
           {tab === 'competitors' && (

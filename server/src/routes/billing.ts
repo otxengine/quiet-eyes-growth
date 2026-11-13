@@ -57,6 +57,8 @@ const BILLING_ROLE_ERROR = 'רק הבעלים או מנהל הארגון יכו�
 
 // The plan of every business in the organization. A report-only business that moves UP a plan is marked
 // (plan_reports_due) so the worker sends that plan's reports now — scheduler.ts upgradedBriefingReports.
+// free_ended_at (the account-less Free plan's three reports are used up, or it unsubscribed — lib/freeAccess.ts)
+// is lifted by any paid plan; a business that started on that plan and falls back to Free stays ended.
 // Only a business that already has a report: a new one (still signing up, or paid before its first
 // report was built) gets its first report from the first-report job, which needs it to have none.
 const BRIEF_RANK = (v: string) => `array_position(ARRAY['brief_free','brief_monthly','brief_weekly','brief_daily','brief_plus'], ${v})`;
@@ -64,6 +66,9 @@ export const SET_BUSINESS_PLANS_SQL =
   `UPDATE business_profiles SET
      plan_reports_due = CASE WHEN EXISTS (SELECT 1 FROM reports r WHERE r.linked_business = business_profiles.id) AND ${BRIEF_RANK('$1::text')} > ${BRIEF_RANK('subscription_plan')}
        THEN $1::text ELSE plan_reports_due END,
+     free_ended_at = CASE WHEN $1::text <> 'brief_free' THEN NULL
+       WHEN EXISTS (SELECT 1 FROM briefing_leads l WHERE l.business_profile_id = business_profiles.id) THEN COALESCE(free_ended_at, now())
+       ELSE free_ended_at END,
      subscription_plan = $1::text
    WHERE organization_id = $2`;
 const setBusinessPlans = (orgId: string, planId: string) => prisma.$executeRawUnsafe(SET_BUSINESS_PLANS_SQL, planId, orgId);

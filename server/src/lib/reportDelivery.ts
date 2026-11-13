@@ -40,15 +40,28 @@ export function unsubscribeUrl(bpId: string, email: string): string | null {
   return `${base}/api/reports/unsubscribe?b=${encodeURIComponent(bpId)}&r=${rid}&t=${sign(bpId, rid)}`;
 }
 
-/** Removes the recipient the link was issued for. False for a bad or unsigned link. */
-export async function unsubscribe(bpId: string, rid: string, token: string): Promise<boolean> {
+/**
+ * Removes the recipient the link was issued for. False for a bad or unsigned link; 'all' when the
+ * recipient was an account-less Free address (lib/freeAccess.ts): its reports and the newsletter are
+ * one subscription, so the link ends both, for good; otherwise 'reports'.
+ */
+export async function unsubscribe(bpId: string, rid: string, token: string): Promise<false | 'reports' | 'all'> {
   if (!secret() || !bpId || !rid || !token) return false;
   const given = Buffer.from(token);
   const expected = Buffer.from(sign(bpId, rid));
   if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) return false;
-  const left = (await customerRecipients(bpId)).filter(e => recipientId(e) !== rid);
+  const before = await customerRecipients(bpId);
+  const left = before.filter(e => recipientId(e) !== rid);
   await prisma.$executeRaw`UPDATE business_profiles SET report_recipients = ${left.join(',') || null} WHERE id = ${bpId}`;
-  return true;
+  const removed = before.find(e => recipientId(e) === rid) ?? '';
+  const lead = await prisma.$queryRaw<{ id: string }[]>`
+    UPDATE briefing_leads l SET unsubscribed_at = COALESCE(l.unsubscribed_at, now())
+      FROM business_profiles b
+     WHERE b.id = l.business_profile_id AND b.id = ${bpId} AND b.subscription_plan = 'brief_free' AND l.email = ${removed}
+    RETURNING l.id`;
+  if (!lead.length) return 'reports';
+  await prisma.$executeRaw`UPDATE business_profiles SET free_ended_at = COALESCE(free_ended_at, now()) WHERE id = ${bpId}`;
+  return 'all';
 }
 
 // ── the web report link ───────────────────────────────────────────────────────────────────────

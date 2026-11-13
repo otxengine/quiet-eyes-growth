@@ -9,11 +9,13 @@
  * Competitor discovery / selection and billing reuse the existing endpoints
  * (functions/runCompetitorIdentification, onboarding/confirm-competitors, onboarding/select-plan, billing).
  */
+import { randomUUID } from 'crypto';
 import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
+import { FREE_CONSENT_TEXT, sendFreeLink, isFreeIdentity } from '../lib/freeAccess';
 import { getUserId } from '../middleware/auth';
 import { requireOwnsBusinessFields } from '../middleware/businessAccess';
-import { strictLimiter } from '../middleware/rateLimits';
+import { strictLimiter, freeRequestLimiter } from '../middleware/rateLimits';
 import { getUserEmail } from '../lib/ownership';
 import { localeOf } from '../lib/locale';
 import { isBriefingPlan, planLimits } from '../lib/planLimits';
@@ -27,6 +29,8 @@ import { collectReviews } from './functions/collectReviews';
 const router = Router();
 const PLACES = 'https://places.googleapis.com/v1/places';
 const MAX_RECIPIENTS = 5;
+// ponytail: a fixed ceiling on new account-less Free addresses per day. Raise it when real demand gets near it.
+const FREE_LEADS_PER_DAY = 300;
 // The business's own pages, for the "you vs. your competitors" section. Empty clears the link.
 const OWN_PAGES: Record<string, { field: 'instagram_url' | 'facebook_url'; host: RegExp }> = {
   instagramUrl: { field: 'instagram_url', host: /(^|\.)instagram\.com$/i },
@@ -60,9 +64,64 @@ const countryOf = (components: any[] = []) =>
 
 /** The user's report-only business (one per user). */
 async function briefingBusinessOf(userId: string) {
-  return (await prisma.businessProfile.findMany({ where: { created_by: userId }, orderBy: { created_date: 'asc' } }))
+  const mine = async () => (await prisma.businessProfile.findMany({ where: { created_by: userId }, orderBy: { created_date: 'asc' } }))
     .find(b => isBriefingPlan(b.subscription_plan)) ?? null;
+  const found = await mine();
+  if (found || isFreeIdentity(userId)) return found;
+  // Upgrade from the account-less Free plan (lib/freeAccess.ts): that business is stored under the
+  // address that set it up. The account whose primary email is that address takes it over, with its
+  // competitors and reports. getUserEmail returns the address only once Clerk has verified it, so
+  // signing up with someone else's address claims nothing.
+  const email = await getUserEmail(userId);
+  if (!email) return null;
+  const { count } = await prisma.businessProfile.updateMany({
+    where: { created_by: { in: [email, email.toLowerCase()] }, subscription_plan: { startsWith: 'brief_' } },
+    data: { created_by: userId },
+  });
+  return count ? mine() : null;
 }
+
+// Account-less Free plan, step 1: store the address with its marketing consent and email the setup
+// link (lib/freeAccess.ts). Public. The answer is the same whatever we know about the address.
+router.post('/free/request', freeRequestLimiter, async (req: Request, res: Response) => {
+  if (fromIsrael(req)) return res.status(403).json(NOT_AVAILABLE);
+  const email = parseRecipients(typeof req.body?.email === 'string' ? req.body.email.slice(0, 200) : '')[0];
+  if (!email || /[<>"']/.test(email)) return res.status(400).json({ error: 'Enter a valid email address' });
+  if (req.body?.consent !== true) return res.status(400).json({ error: 'Agree to receive the newsletter to get the free reports', needsConsent: true });
+  try {
+    // Abuse valve: every new address can spend real money on lookups and scans.
+    const today = await prisma.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM briefing_leads WHERE created_date > now() - interval '1 day'`;
+    if ((today[0]?.n ?? 0) >= FREE_LEADS_PER_DAY) return res.status(429).json({ error: 'Free sign-ups are full for today. Try again tomorrow.' });
+
+    const country = String(req.headers['cloudfront-viewer-country'] || '').toUpperCase().slice(0, 2) || null;
+    const rows = await prisma.$queryRaw<{ id: string }[]>`
+      INSERT INTO briefing_leads (id, email, consent_at, consent_text, country)
+      VALUES (${randomUUID()}, ${email}, now(), ${FREE_CONSENT_TEXT}, ${country})
+      ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+      RETURNING id`;
+    const leadId = rows[0].id;
+    // One atomic claim per email sent: never to an unsubscribed address, at most one every two
+    // minutes and five a day per address (email bombing someone else's inbox).
+    const send = await prisma.$queryRaw<{ id: string }[]>`
+      UPDATE briefing_leads
+         SET last_link_sent_at = now(), link_day = current_date,
+             link_count = CASE WHEN link_day = current_date THEN link_count + 1 ELSE 1 END
+       WHERE id = ${leadId} AND unsubscribed_at IS NULL
+         AND (last_link_sent_at IS NULL OR last_link_sent_at < now() - interval '2 minutes')
+         AND (link_day IS DISTINCT FROM current_date OR link_count < 5)
+      RETURNING id`;
+    // Not awaited: the answer takes the same time whether or not an email goes out.
+    if (send.length) {
+      void sendFreeLink(leadId, email)
+        .then(ok => { if (!ok) console.error('[briefing] free link email was not sent'); })
+        .catch((e: any) => console.error('[briefing] free link email failed:', e.message));
+    }
+    return res.json({ ok: true });
+  } catch (e: any) {
+    console.error('[briefing] free request failed:', e.message);
+    return res.status(500).json({ error: 'Could not send the link. Try again.' });
+  }
+});
 
 router.get('/me', async (req: Request, res: Response) => {
   const userId = getUserId(req);
@@ -107,6 +166,8 @@ router.post('/start', strictLimiter, async (req: Request, res: Response) => {
   if (!/^[A-Za-z0-9_-]{10,200}$/.test(placeId)) return res.status(400).json({ error: 'placeId required' });
   if (!placesKey()) return res.status(503).json({ error: 'Business search is not configured' });
 
+  const leadId: string | undefined = (req as any).freeLeadId;
+  let claimed = false;
   try {
     // One report-only business per user: a second "start" resumes the first.
     const existing = await briefingBusinessOf(userId);
@@ -128,6 +189,16 @@ router.post('/start', strictLimiter, async (req: Request, res: Response) => {
         new Promise<null>(resolve => setTimeout(() => resolve(null), 8000)),
       ])
       : null;
+    // Account-less Free plan: one business per address, ever. The slot is claimed atomically, so
+    // two requests cannot both create one. If it is taken and no business was found above, an
+    // account has since claimed the business.
+    // ponytail: a crash between the claim and the create leaves the slot 'pending'; clear it by hand.
+    if (leadId) {
+      const claim = await prisma.$queryRaw<{ id: string }[]>`
+        UPDATE briefing_leads SET business_profile_id = 'pending' WHERE id = ${leadId} AND business_profile_id IS NULL RETURNING id`;
+      if (!claim.length) return res.status(409).json({ error: 'This address already has a Cortexi account. Sign in to manage your reports.', has_account: true });
+      claimed = true;
+    }
     const profile = await prisma.businessProfile.create({
       data: {
         instagram_url: own?.instagram_url || null,
@@ -148,9 +219,11 @@ router.post('/start', strictLimiter, async (req: Request, res: Response) => {
     // account's verified email unless they change it in the delivery step.
     const email = await getUserEmail(userId);
     await prisma.$executeRaw`UPDATE business_profiles SET locale = 'en-US', timezone = ${tz}, report_recipients = ${email} WHERE id = ${profile.id}`;
+    if (leadId) await prisma.$executeRaw`UPDATE briefing_leads SET business_profile_id = ${profile.id} WHERE id = ${leadId}`;
     return res.json({ businessProfileId: profile.id, resumed: false, onboardingCompleted: false });
   } catch (e: any) {
     console.error('[briefing] start failed:', e.message);
+    if (claimed) await prisma.$executeRaw`UPDATE briefing_leads SET business_profile_id = NULL WHERE id = ${leadId} AND business_profile_id = 'pending'`.catch(() => null);
     return res.status(500).json({ error: 'Could not set up your business. Try again.' });
   }
 });
@@ -164,8 +237,10 @@ async function run(label: string, handler: Function, body: Record<string, unknow
 router.post('/finish', requireOwnsBusinessFields, async (req: Request, res: Response) => {
   const businessProfileId = req.body?.businessProfileId;
   if (typeof businessProfileId !== 'string' || !businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
-  const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId }, select: { subscription_plan: true } });
+  const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId }, select: { subscription_plan: true, onboarding_completed: true } });
   if (!profile || !isBriefingPlan(profile.subscription_plan)) return res.status(404).json({ error: 'Not found' });
+  // A second "finish" must not start the paid first collection again.
+  if (profile.onboarding_completed) return res.json({ ok: true });
 
   await prisma.businessProfile.update({ where: { id: businessProfileId }, data: { onboarding_completed: true } });
   res.json({ ok: true });
@@ -186,7 +261,7 @@ router.get('/settings', requireOwnsBusinessFields, async (req: Request, res: Res
   if (typeof businessProfileId !== 'string' || !businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
   const [profile, rows] = await Promise.all([
     prisma.businessProfile.findUnique({ where: { id: businessProfileId }, select: { name: true, city: true, subscription_plan: true, instagram_url: true, facebook_url: true } }),
-    prisma.$queryRaw<{ timezone: string | null; organization_id: string | null }[]>`SELECT timezone, organization_id FROM business_profiles WHERE id = ${businessProfileId}`,
+    prisma.$queryRaw<{ timezone: string | null; organization_id: string | null; free_ended_at: Date | null }[]>`SELECT timezone, organization_id, free_ended_at FROM business_profiles WHERE id = ${businessProfileId}`,
   ]);
   if (!profile) return res.status(404).json({ error: 'Not found' });
   const limits = planLimits(profile.subscription_plan);
@@ -198,6 +273,7 @@ router.get('/settings', requireOwnsBusinessFields, async (req: Request, res: Res
     reports: limits.reports,
     youVsThem: limits.own_in_report !== false,
     orgId: rows[0]?.organization_id ?? null, // its own billing org, once a paid plan was chosen
+    freeEnded: !!rows[0]?.free_ended_at, // the three free reports are used up, or the address unsubscribed
     instagramUrl: profile.instagram_url || '',
     facebookUrl: profile.facebook_url || '',
     recipients: await customerRecipients(businessProfileId),

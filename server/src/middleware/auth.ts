@@ -21,6 +21,10 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 const ALLOWED_DEV_USERS = new Set(['dev-user', 'dev-user-2', 'dev-user-3']);
 
 export function getUserId(req: Request): string | null {
+  // The account-less Free plan: lib/freeAccess.ts sets this, only for a valid emailed link and only
+  // on its short list of setup routes. The identity is the confirmed email address.
+  const free = (req as any).freeIdentity;
+  if (typeof free === 'string' && free) return free;
   if (!CLERK_ENABLED) {
     const devUser = req.headers['x-dev-user'];
     if (typeof devUser === 'string' && ALLOWED_DEV_USERS.has(devUser)) {

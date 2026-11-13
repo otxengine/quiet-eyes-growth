@@ -11,6 +11,16 @@ export const generalLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later' },
 });
 
+// Asking for an account-less Free setup link (routes/briefing.ts): 5 per 15 min per IP. Its own
+// counter, so link requests and the setup searches don't eat each other's allowance.
+export const freeRequestLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Try again in a few minutes.' },
+});
+
 // Strict limiter for expensive LLM/scan endpoints: 20 per 15 min
 export const strictLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

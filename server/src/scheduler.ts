@@ -125,7 +125,8 @@ async function getActiveProfiles(region?: Region, includeBriefing = false, sendN
     // ponytail: is_active isn't in schema.prisma (DB column predates it, added via raw SQL
     // elsewhere — see organizations.ts) — raw query until schema.prisma is reconciled.
     const profiles = await prisma.$queryRawUnsafe<{ id: string }[]>(
-      `SELECT id FROM business_profiles WHERE onboarding_completed = true AND is_active = true`
+      // free_ended_at: an account-less Free business after its three reports, or unsubscribed (lib/freeAccess.ts).
+      `SELECT id FROM business_profiles WHERE onboarding_completed = true AND is_active = true AND free_ended_at IS NULL`
       + (region ? ` AND (COALESCE(locale, '') ILIKE 'en%') = ${region === 'US'}` : '')
       + (includeBriefing ? '' : ` AND COALESCE(subscription_plan, '') NOT LIKE 'brief\\_%'`)
       + (sendNow ? ` AND ${SEND_NOW[sendNow]}` : ''),

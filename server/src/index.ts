@@ -47,6 +47,7 @@ import metaWebhookRouter from './routes/meta/webhook';
 import dataforseoWebhookRouter from './routes/webhooks/dataforseo';
 import clerkWebhookRouter from './routes/webhooks/clerk';
 import { requireApiAuth } from './middleware/apiAuth';
+import { freeAccess } from './lib/freeAccess';
 import { requireAdmin } from './middleware/auth';
 import adminRouter from './routes/admin';
 import conversationsRouter from './routes/conversations';
@@ -106,7 +107,7 @@ app.use(cors({
     cb(new Error(`CORS: ${origin} not allowed`));
   },
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-dev-user'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-dev-user', 'x-briefing-token'],
 }));
 
 // After cors(): a 429 needs CORS headers too, or a cross-origin browser reports it as a
@@ -134,6 +135,9 @@ if (clerkEnabled) {
 // Deny by default: every /api route registered below needs a signed-in user, except
 // the short public list in middleware/apiAuth.ts. Mounted before
 // the body parsers so anonymous requests are refused before a 20 MB body is read.
+// Account-less Free plan: a valid emailed-link token stands in for a login, on its own short list of
+// setup routes only (lib/freeAccess.ts). Everything else still needs a signed-in user below.
+app.use('/api', freeAccess);
 app.use('/api', requireApiAuth);
 
 // Media library uploads (images/video as base64) need a higher body limit than
@@ -897,6 +901,10 @@ const httpServer = app.listen(PORT, async () => {
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS plan_reports_due TEXT`);
   // When a new report-only business agreed to marketing emails — required to pick the Free plan (onboarding.ts select-plan).
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS marketing_consent_at TIMESTAMPTZ`);
+  // Account-less Free plan: set when its three reports are used up or it unsubscribes; scheduled jobs then skip the business.
+  await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS free_ended_at TIMESTAMPTZ`);
+  // Account-less Free plan (lib/freeAccess.ts): one row per email address that asked for the free reports.
+  await sql(`CREATE TABLE IF NOT EXISTS briefing_leads (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, consent_at TIMESTAMPTZ, consent_text TEXT, confirmed_at TIMESTAMPTZ, unsubscribed_at TIMESTAMPTZ, last_link_sent_at TIMESTAMPTZ, link_day DATE, link_count INT NOT NULL DEFAULT 0, discovery_runs INT NOT NULL DEFAULT 0, business_profile_id TEXT, country TEXT, created_date TIMESTAMPTZ NOT NULL DEFAULT now())`);
 
   // ── Multi-branch / Multi-user / Agency tables ─────────────────────────────
   await sql(`CREATE TABLE IF NOT EXISTS organizations (

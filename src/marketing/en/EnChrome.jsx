@@ -9,7 +9,8 @@ const LINKS = [
   { label: 'Pricing', href: '/en#pricing' },
 ];
 
-export const START_HREF = '/sign-up?briefing=1';
+export const START_HREF = '/sign-up?briefing=1'; // paid plans: an account first
+export const FREE_HREF = '/en/free'; // the Free plan: an email address, no account (briefing/Free.jsx)
 
 function Wordmark({ height = 30 }) {
   return (
@@ -34,7 +35,7 @@ export function EnNav() {
         </div>
         <div className="flex items-center gap-3">
           <a href="/sign-in" className="hidden sm:block text-[14px] font-medium hover:text-black" style={{ color: 'var(--mkt-ink-2)' }}>Sign in</a>
-          <CtaButton href={START_HREF} variant="gradient" className="!h-10 !px-5 text-[14px]">Start free</CtaButton>
+          <CtaButton href={FREE_HREF} variant="gradient" className="!h-10 !px-5 text-[14px]">Start free</CtaButton>
         </div>
       </nav>
     </header>
@@ -75,7 +76,7 @@ export function EnFooter() {
       <div className="border-t" style={{ borderColor: 'var(--mkt-border)' }}>
         <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col md:flex-row items-center justify-between gap-2 text-[12.5px]" style={{ color: 'var(--mkt-muted)' }}>
           <span>© 2026 Cortexi. All rights reserved.</span>
-          <a href={START_HREF} className="font-bold hover:text-black" style={{ color: 'var(--mkt-ink-2)' }}>Get your first report free — no card</a>
+          <a href={FREE_HREF} className="font-bold hover:text-black" style={{ color: 'var(--mkt-ink-2)' }}>Get your first report free — no card</a>
         </div>
       </div>
     </footer>
