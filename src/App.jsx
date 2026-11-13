@@ -28,10 +28,11 @@ const BriefingStart = lazyPage(() => import('@/briefing/Start.jsx'));
 const BriefingAccount = lazyPage(() => import('@/briefing/Account.jsx'));
 const BriefingFree = lazyPage(() => import('@/briefing/Free.jsx'));
 // /en/start opened from the Free plan's emailed link (?t=…) is the account-less setup; otherwise the
-// account flow. A signed-out visitor without a link is sent to sign up.
+// account flow. A signed-out visitor without a link starts at the Free plan's email page, which
+// also links to the paid plans' sign-up.
 const BriefingStartRoute = ({ signedIn }) => {
   if (freeToken()) return <BriefingStart free />;
-  return signedIn ? <BriefingStart /> : <Navigate to="/sign-up?briefing=1" replace />;
+  return signedIn ? <BriefingStart /> : <Navigate to="/en/free" replace />;
 };
 
 // A visitor from the English landing page (/sign-up?briefing=1) signs up into /en/start; everyone

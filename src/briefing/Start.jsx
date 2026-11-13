@@ -21,6 +21,19 @@ import { track } from '@/lib/gtm.js';
 // Discovery (maps search, AI selection, page lookup) often runs longer than the 2 minutes the CDN
 // keeps a request open. The request is then cut off but the search carries on server-side, so wait
 // for its suggestions: until the list has stopped growing, or about 3 more minutes.
+// The suggestions are saved well before the search ends: after saving them it looks up each one's
+// Instagram, Facebook and website. So the list is shown once it has stopped growing, and the pages
+// fill in while the visitor chooses (CompetitorPicker `pending`).
+async function firstSuggestions(businessProfileId) {
+  let last = 0;
+  for (let i = 0; i < 45; i += 1) {
+    await new Promise((resolve) => { setTimeout(resolve, 4000); });
+    const n = await briefingApi.competitors(businessProfileId).then((list) => list.length, () => 0);
+    if (n > 0 && n === last) return;
+    last = n;
+  }
+}
+
 async function waitForSuggestions(businessProfileId) {
   let last = -1;
   let stable = 0;
@@ -43,6 +56,7 @@ export default function Start({ free = false }) {
   const [results, setResults] = useState(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [lookingUp, setLookingUp] = useState(false); // the search is still looking up the suggestions' pages
   const [error, setError] = useState('');
 
   const loadSettings = async (id) => { const s = await briefingApi.settings(id); setSettings(s); return s; };
@@ -100,9 +114,13 @@ export default function Start({ free = false }) {
       setStep('discovering');
       await loadSettings(id);
       // A failed or empty discovery is not the end: the picker lets them add competitors by hand.
-      // "Already suggested" (a free address gets two runs) means there is nothing more to wait for.
-      const answered = await briefingApi.discover(id).then(() => true, (e) => !!e.data?.already_discovered);
-      if (!answered) await waitForSuggestions(id);
+      // An answer of any kind — done, refused ("already suggested": a free address gets two runs) or
+      // an error — means nothing more is coming. Only a cut-off request (status 0: the CDN closes it
+      // at two minutes) leaves the search running server-side.
+      const answered = briefingApi.discover(id).then(() => true, (e) => e.status > 0);
+      setLookingUp(true);
+      answered.then((yes) => (yes ? null : waitForSuggestions(id))).finally(() => setLookingUp(false));
+      await Promise.race([answered, firstSuggestions(id)]);
       setStep('pick');
     } catch (e) {
       if (expired(e)) return;
@@ -162,7 +180,7 @@ export default function Start({ free = false }) {
 
       {step === 'discovering' && (
         <>
-          <StepHeading step={at(2)} title="Finding your competitors" sub="We search nearby businesses of the same kind and look up their Instagram, Facebook and website. This takes two to four minutes." />
+          <StepHeading step={at(2)} title="Finding your competitors" sub="We search nearby businesses of the same kind. This usually takes under a minute; their Instagram, Facebook and website are looked up while you choose." />
           <Spinner label="Searching — keep this page open" />
         </>
       )}
@@ -174,7 +192,7 @@ export default function Start({ free = false }) {
             title="Pick your competitors"
             sub={`Choose up to ${settings.competitorsMax} to watch. Check the pages we found for each one — the report is built from them.${free ? ' You can change them later from any report email.' : ''}`}
           />
-          <CompetitorPicker businessProfileId={businessProfileId} limit={settings.competitorsMax} saveLabel={free ? 'Finish' : 'Continue'} onSaved={free ? finishFree : () => setStep('delivery')} />
+          <CompetitorPicker businessProfileId={businessProfileId} limit={settings.competitorsMax} pending={lookingUp} saveLabel={free ? 'Finish' : 'Continue'} onSaved={free ? finishFree : () => setStep('delivery')} />
           {free && <div className="mt-3"><ErrorNote>{error}</ErrorNote></div>}
         </>
       )}

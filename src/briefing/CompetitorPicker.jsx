@@ -7,7 +7,10 @@ import { Button, Card, ErrorNote, Spinner, TextInput } from './ui.jsx';
  * Choose which competitors to watch: the suggestions we found plus any the user adds, capped at the
  * plan's limit. Used at sign-up and in the account. `onSaved` fires after the choice is stored.
  */
-export default function CompetitorPicker({ businessProfileId, limit, saveLabel = 'Continue', onSaved }) {
+// `pending`: at sign-up the list is shown while the search is still looking up each suggestion's
+// pages. The list then refreshes on its own, and saving waits: the first scan runs on save and
+// needs those pages.
+export default function CompetitorPicker({ businessProfileId, limit, saveLabel = 'Continue', onSaved, pending = false }) {
   const [rows, setRows] = useState(null);
   const [picked, setPicked] = useState(new Set());
   const [error, setError] = useState('');
@@ -30,6 +33,13 @@ export default function CompetitorPicker({ businessProfileId, limit, saveLabel =
   };
 
   useEffect(() => { load(false).catch((e) => setError(e.message)); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [businessProfileId]);
+  useEffect(() => {
+    if (!pending) return undefined;
+    const timer = setInterval(() => { load(true).catch(() => null); }, 6000);
+    // One last refresh when the lookups end, for whatever arrived since the last tick.
+    return () => { clearInterval(timer); load(true).catch(() => null); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending]);
 
   const full = picked.size >= limit;
   const toggle = (id) => setPicked((prev) => {
@@ -113,7 +123,7 @@ export default function CompetitorPicker({ businessProfileId, limit, saveLabel =
         <Icon size={13} aria-hidden="true" />
         {url
           ? <a href={url} target="_blank" rel="noreferrer" className="underline decoration-dotted">{label}</a>
-          : lookingUp.has(c.id) ? `Looking for ${label}…` : `No ${label} found`}
+          : pending || lookingUp.has(c.id) ? `Looking for ${label}…` : `No ${label} found`}
         <button type="button" className="underline" style={{ color: 'var(--mkt-muted)' }} onClick={() => setEditing({ id: c.id, field, value: url || '' })}>
           {url ? 'Not right?' : 'Add'}
         </button>
@@ -184,7 +194,7 @@ export default function CompetitorPicker({ businessProfileId, limit, saveLabel =
 
       <ErrorNote>{error}</ErrorNote>
       <div className="flex justify-end">
-        <Button variant="gradient" onClick={save} disabled={saving || picked.size === 0}>{saving ? 'Saving' : saveLabel}</Button>
+        <Button variant="gradient" onClick={save} disabled={saving || pending || picked.size === 0}>{saving ? 'Saving' : pending ? 'Looking up pages…' : saveLabel}</Button>
       </div>
     </div>
   );
