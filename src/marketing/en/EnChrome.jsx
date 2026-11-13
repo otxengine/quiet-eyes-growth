@@ -34,7 +34,7 @@ export function EnNav() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <a href="/sign-in" className="hidden sm:block text-[14px] font-medium hover:text-black" style={{ color: 'var(--mkt-ink-2)' }}>Sign in</a>
+          <a href="/sign-in?briefing=1" className="hidden sm:block text-[14px] font-medium hover:text-black" style={{ color: 'var(--mkt-ink-2)' }}>Sign in</a>
           <CtaButton href={FREE_HREF} variant="gradient" className="!h-10 !px-5 text-[14px]">Start free</CtaButton>
         </div>
       </nav>

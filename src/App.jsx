@@ -12,7 +12,17 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 
 // Public (marketing) routes — shared by all three trees below
 import { publicRoutes, isPublicPath, marketingNotFound } from '@/marketing/PublicRoutes.jsx';
+import MarketingLayout from '@/marketing/layout/MarketingLayout.jsx';
 import { rememberBriefingSignup, freeToken, forgetFreeToken } from '@/briefing/keys.js';
+
+// Clerk's sign-in/up inside the site's nav and footer: the English ones for a visitor from the
+// English landing page (?briefing=1). Styling and language are set on ClerkProvider (main.jsx).
+const EN_SEO = { lang: 'en' };
+const AuthPage = ({ en, children }) => (
+  <MarketingLayout seo={en ? EN_SEO : undefined}>
+    <div className="flex justify-center px-4 py-12 sm:py-16">{children}</div>
+  </MarketingLayout>
+);
 
 // App layout
 import AppLayout from '@/components/layout/AppLayout';
@@ -42,11 +52,11 @@ const SignUpPage = () => {
   // Kept for the life of the page: UpgradeSignUp forgets the stored token once it has used it.
   const [upgradeToken] = React.useState(() => (briefing ? freeToken() : null));
   return (
-    <div className="min-h-screen flex items-center justify-center bg-secondary/50">
+    <AuthPage en={briefing}>
       {upgradeToken ? <UpgradeSignUp token={upgradeToken} />
         : briefing ? <SignUp routing="path" path="/sign-up" forceRedirectUrl="/en/start" />
           : <SignUp routing="path" path="/sign-up" fallbackRedirectUrl="/onboarding" />}
-    </div>
+    </AuthPage>
   );
 };
 // Upgrade from the account-less Free plan (/sign-up?briefing=1&t=…, the link in its report emails).
@@ -166,9 +176,9 @@ const AuthenticatedApp = () => {
       <Suspense fallback={<PageSpinner />}>
       <Routes>
         <Route path="/sign-in/*" element={
-          <div className="min-h-screen flex items-center justify-center bg-secondary/50">
+          <AuthPage en={rememberBriefingSignup()}>
             <SignIn routing="path" path="/sign-in" fallbackRedirectUrl="/" />
-          </div>
+          </AuthPage>
         } />
         <Route path="/sign-up/*" element={<SignUpPage />} />
         {/* The report-only screens need an account — except the Free plan's email page and its emailed setup link */}
@@ -201,6 +211,8 @@ const AuthenticatedApp = () => {
       <Route path="/en/start" element={<BriefingStartRoute signedIn />} />
       <Route path="/en/briefing" element={<BriefingAccount />} />
       <Route path="/sign-up/*" element={<SignedInSignUp />} />
+      {/* Already signed in: "/" (AppLayout sends report-only accounts on to /en/briefing) */}
+      <Route path="/sign-in/*" element={<Navigate to="/" replace />} />
 
       {/* Main app with layout */}
       <Route element={<AppLayout />}>
