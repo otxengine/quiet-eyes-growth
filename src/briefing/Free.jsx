@@ -3,6 +3,7 @@ import { Mail } from 'lucide-react';
 import { briefingApi } from './api';
 import { BriefingShell, Button, Card, ErrorNote, StepHeading, TextInput } from './ui.jsx';
 import { BUSINESS_QUERY_KEY } from './keys.js';
+import { track } from '@/lib/gtm.js';
 
 // The exact wording the server stores with the address (FREE_CONSENT_TEXT in server/src/lib/freeAccess.ts).
 // Change both together.
@@ -34,6 +35,7 @@ export default function Free() {
     setBusy(true);
     try {
       await briefingApi.requestFreeLink(address, true);
+      if (!sentTo) track('generate_lead', { market: 'en', method: 'free_email' }); // not on "send again"
       setAgain(!!sentTo);
       setSentTo(address);
     } catch (e) {

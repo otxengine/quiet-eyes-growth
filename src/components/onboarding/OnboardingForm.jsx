@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
+import { track } from '@/lib/gtm.js';
 import { toast } from 'sonner';
 import { MapPin, Search } from 'lucide-react';
 import KoriAvatar from './KoriAvatar';
@@ -292,6 +293,7 @@ export default function OnboardingForm() {
         onboarding_completed: false,
         created_at:          new Date().toISOString(),
       });
+      track('sign_up', { market: 'he', method: 'account' });
       navigate('/onboarding/select-plan', {
         state: {
           businessProfile: profile,

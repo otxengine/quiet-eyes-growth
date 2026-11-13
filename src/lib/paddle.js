@@ -5,6 +5,8 @@
  * The checkout itself is a Paddle-hosted iframe, so card data never touches our app.
  */
 
+import { track, paddleEcommerce } from './gtm.js';
+
 const PADDLE_JS_URL = 'https://cdn.paddle.com/paddle/v2/paddle.js';
 
 let loadPromise = null;
@@ -60,7 +62,10 @@ export async function openPaddleCheckout(transactionId) {
   const Paddle = await loadPaddle();
   return new Promise((resolve) => {
     activeListener = (event) => {
-      if (event.name === 'checkout.completed') {
+      if (event.name === 'checkout.loaded') {
+        track('begin_checkout', { ecommerce: paddleEcommerce(event.data) });
+      } else if (event.name === 'checkout.completed') {
+        track('purchase', { ecommerce: paddleEcommerce(event.data) });
         activeListener = null;
         // Let Paddle's success screen show briefly before handing back to the app.
         setTimeout(() => Paddle.Checkout.close(), 1500);
