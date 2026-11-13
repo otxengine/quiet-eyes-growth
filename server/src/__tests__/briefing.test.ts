@@ -9,6 +9,8 @@ jest.mock('../middleware/auth', () => ({ getUserId: () => 'user_1', isAdminKeyRe
 jest.mock('../middleware/businessAccess', () => ({ requireOwnsBusinessFields: (_q: any, _s: any, next: any) => next() }));
 jest.mock('../middleware/rateLimits', () => ({ strictLimiter: (_q: any, _s: any, next: any) => next(), freeRequestLimiter: (_q: any, _s: any, next: any) => next() }));
 jest.mock('../lib/ownership', () => ({ getUserEmail: jest.fn(async () => 'owner@example.com') }));
+const sendEmail = jest.fn(async (..._a: any[]) => true);
+jest.mock('../lib/email', () => ({ sendEmail: (...a: any[]) => sendEmail(...a) }));
 jest.mock('../lib/automationLog', () => ({ writeAutomationLog: jest.fn() }));
 const sendFreeLink = jest.fn(async (..._a: any[]) => true);
 jest.mock('../lib/freeAccess', () => ({
@@ -116,12 +118,19 @@ describe('start', () => {
 
 describe('finish', () => {
   it('ends onboarding and starts the first collection with force', async () => {
-    bp.findUnique.mockResolvedValue({ subscription_plan: 'brief_free' });
+    bp.findUnique.mockResolvedValue({ subscription_plan: 'brief_free', name: 'Joe <Pizza>', category: 'Pizza restaurant', city: 'Austin', full_address: null });
     const r = await call('/finish', 'post', { body: { businessProfileId: 'bp_new' } });
     expect(r.body).toEqual({ ok: true });
     expect(bp.update).toHaveBeenCalledWith({ where: { id: 'bp_new' }, data: { onboarding_completed: true } });
     await new Promise(setImmediate);
     for (const c of Object.values(collectors)) expect(c.mock.calls[0][0].body).toMatchObject({ businessProfileId: 'bp_new', force: true });
+    // The team is told once, with the address and the business.
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    const mail = sendEmail.mock.calls[0][0];
+    expect(mail.to).toEqual(['contact@otxengine.io']);
+    expect(mail.subject).toBe('New Cortexi sign-up: Joe <Pizza>');
+    expect(mail.html).toContain('owner@example.com');
+    expect(mail.html).toContain('Joe &lt;Pizza&gt;');
   });
   it('is only for report-only businesses', async () => {
     bp.findUnique.mockResolvedValue({ subscription_plan: 'starter' });
