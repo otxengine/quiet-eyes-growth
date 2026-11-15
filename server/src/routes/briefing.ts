@@ -125,13 +125,13 @@ router.post('/free/request', freeRequestLimiter, async (req: Request, res: Respo
     if ((today[0]?.n ?? 0) >= FREE_LEADS_PER_DAY) return res.status(429).json({ error: 'Free sign-ups are full for today. Try again tomorrow.' });
 
     const country = String(req.headers['cloudfront-viewer-country'] || '').toUpperCase().slice(0, 2) || null;
-    const rows = await prisma.$queryRaw<{ id: string }[]>`
+    const rows = await prisma.$queryRaw<{ id: string; place_id: string | null }[]>`
       INSERT INTO briefing_leads (id, email, consent_at, consent_text, country, place_id)
       VALUES (${randomUUID()}, ${email}, ${consent ? new Date() : null}, ${consent ? FREE_CONSENT_TEXT : null}, ${country}, ${placeId})
       ON CONFLICT (email) DO UPDATE SET place_id = COALESCE(EXCLUDED.place_id, briefing_leads.place_id),
         consent_at = COALESCE(briefing_leads.consent_at, EXCLUDED.consent_at),
         consent_text = COALESCE(briefing_leads.consent_text, EXCLUDED.consent_text)
-      RETURNING id`;
+      RETURNING id, place_id`;
     const leadId = rows[0].id;
     // One atomic claim per email sent: never to an unsubscribed address, at most one every two
     // minutes and five a day per address (email bombing someone else's inbox).
@@ -145,7 +145,7 @@ router.post('/free/request', freeRequestLimiter, async (req: Request, res: Respo
       RETURNING id`;
     // Not awaited: the answer takes the same time whether or not an email goes out.
     if (send.length) {
-      void sendFreeLink(leadId, email)
+      void sendFreeLink(leadId, email, !!rows[0].place_id)
         .then(ok => { if (!ok) console.error('[briefing] free link email was not sent'); })
         .catch((e: any) => console.error('[briefing] free link email failed:', e.message));
     }

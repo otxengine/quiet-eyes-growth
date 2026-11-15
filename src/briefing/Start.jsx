@@ -8,6 +8,9 @@ import DeliveryForm from './DeliveryForm.jsx';
 import PlanCards from './PlanCards.jsx';
 import { BRIEFING_SIGNUP_KEY, BUSINESS_QUERY_KEY, freeToken, forgetFreeToken } from './keys.js';
 import { track } from '@/lib/gtm.js';
+import { EN_PLANS } from '../marketing/en/plans.js';
+
+const FREE_WATCHES = EN_PLANS.find((p) => p.id === 'brief_free').competitors; // what quick-start approves
 
 /**
  * Sign-up flow of the English report-only product: find your business → competitors are discovered →
@@ -171,7 +174,7 @@ export default function Start({ free = false }) {
 
       {step === 'quick' && picked && (
         <>
-          <StepHeading title="Start your free report" sub={`On the competitors nearest to ${picked.name}. The first report covers their last 30 days and arrives by email.`} />
+          <StepHeading title="Start your free report" sub={`We'll watch the ${FREE_WATCHES} competitors nearest to ${picked.name}. The first report covers their last 30 days and arrives by email.`} />
           <Card className="!p-4">
             <div className="font-bold text-[15px]">{picked.name}</div>
             <div className="text-[12.5px]" style={{ color: 'var(--mkt-muted)' }}>{[picked.category, picked.address].filter(Boolean).join(' · ')}</div>

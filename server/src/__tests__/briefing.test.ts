@@ -197,7 +197,7 @@ describe('account-less Free plan', () => {
     db(0, [{ id: 'lead_1' }]);
     expect((await request({ email: 'owner@example.com', consent: 'yes' })).body).toEqual({ ok: true });
     expect(leadValues().slice(2, 4)).toEqual([null, null]); // consent_at, consent_text
-    expect(sendFreeLink).toHaveBeenCalledWith('lead_1', 'owner@example.com');
+    expect(sendFreeLink).toHaveBeenCalledWith('lead_1', 'owner@example.com', false);
     queryRaw.mockClear();
     db(0, [{ id: 'lead_1' }]);
     await request({ email: 'owner@example.com', consent: true });
@@ -209,7 +209,7 @@ describe('account-less Free plan', () => {
     db(0, [{ id: 'lead_1' }]);
     const r = await request({ email: ' Owner@Example.com ', consent: true });
     expect(r.body).toEqual({ ok: true });
-    expect(sendFreeLink).toHaveBeenCalledWith('lead_1', 'owner@example.com');
+    expect(sendFreeLink).toHaveBeenCalledWith('lead_1', 'owner@example.com', false);
   });
 
   it('answers the same but sends nothing when the address has no email left to claim (unsubscribed, or too many)', async () => {
@@ -323,6 +323,12 @@ describe('preview on /en/free (public, before any email)', () => {
     expect((await call('/preview/competitors', 'post', { body: { placeId: PLACE.id } })).statusCode).toBe(404);
     places({ ...PLACE, location: NEAR, addressComponents: [{ shortText: 'IL', types: ['country'] }] });
     expect((await call('/preview/competitors', 'post', { body: { placeId: PLACE.id } })).statusCode).toBe(403);
+  });
+
+  it('a lead with a picked business gets the one-tap version of the email', async () => {
+    queryRaw.mockResolvedValueOnce([{ n: 0 }] as any).mockResolvedValueOnce([{ id: 'lead_1', place_id: PLACE.id }] as any).mockResolvedValueOnce([{ id: 'lead_1' }] as any);
+    await call('/free/request', 'post', { body: { email: 'owner@example.com', placeId: PLACE.id } });
+    expect(sendFreeLink).toHaveBeenCalledWith('lead_1', 'owner@example.com', true);
   });
 
   it('the email request keeps the picked place id, and drops anything that is not one', async () => {
