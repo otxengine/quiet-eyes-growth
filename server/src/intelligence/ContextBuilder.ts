@@ -25,12 +25,13 @@ const logger = createLogger('ContextBuilder');
 
 async function loadMetaConfig(businessId: string, category: string): Promise<MetaConfiguration | null> {
   try {
+    // ponytail: meta_configurations has no auto_execute_enabled column (selecting it failed every
+    // call) and nothing writes one, so auto-execute stays off. Add the column if it's ever toggled.
     const row = await prisma.$queryRawUnsafe(
-      `SELECT auto_execute_enabled, signal_keywords, local_radius_meters
+      `SELECT signal_keywords, local_radius_meters
        FROM meta_configurations WHERE business_id = $1 LIMIT 1`,
       businessId,
     ) as Array<{
-      auto_execute_enabled: boolean;
       signal_keywords:      string[];
       local_radius_meters:  number;
     }>;
@@ -38,7 +39,7 @@ async function loadMetaConfig(businessId: string, category: string): Promise<Met
     return {
       business_id:               businessId,
       sector:                    category,
-      auto_execute_enabled:      row[0].auto_execute_enabled ?? false,
+      auto_execute_enabled:      false,
       min_confidence_threshold:  0.30,
       min_score_threshold:       30,
       approval_required_channels: ['instagram', 'facebook', 'whatsapp', 'email'],

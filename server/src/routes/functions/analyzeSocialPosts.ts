@@ -175,7 +175,8 @@ ${adSummary}
 Return ONLY this JSON object (start with { end with }). ALL string values MUST be in Hebrew:
 {"visual_identity":"2-3 sentences on visual style and aesthetic, grounded in the visual analysis above","content_pillars":["topic 1","topic 2","topic 3"],"hook_patterns":"1-2 sentences on which text/visual hooks they rely on to grab attention","cta_strategy":"1-2 sentences on how consistently and how they drive action","promotion_pattern":"1-2 sentences on the offer CADENCE and TIMING — which day(s) of week and roughly how often (every N days) — grounded in the offer breakdown stats above","caption_patterns":"1-2 sentences on caption style: hashtags, tone","ad_messaging":"1-2 sentences on ad angle and targeting","offer_recommendation":"1-2 sentences: a concrete, actionable suggestion for OUR business based on their offer mechanic/timing/framing/audience-intent/performance patterns above — e.g. when to run a competing offer, what mechanic or angle to try, or what gap to fill","top_content_insight":"1 sentence on best performing content type","our_opportunity":"1-2 sentences on what they are missing we could exploit"}`;
 
-  const raw = await invokeLLM({ prompt, model: 'sonnet', maxTokens: 1100, skipCache: true });
+  // 10 Hebrew fields run past 1100 tokens: the cut-off JSON failed to parse for almost every competitor.
+  const raw = await invokeLLM({ prompt, model: 'sonnet', maxTokens: 3000, skipCache: true });
 
   // Parse: invokeLLM without response_json_schema returns raw text
   let analysis: any = null;
