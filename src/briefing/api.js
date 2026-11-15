@@ -83,4 +83,6 @@ export const briefingApi = {
   // /en/free, before any email: find the business, then a first look at its nearest competitors. Public.
   previewSearch: (query) => api('/briefing/preview/search', { method: 'POST', body: { query } }),
   previewCompetitors: (placeId) => api('/briefing/preview/competitors', { method: 'POST', body: { placeId } }),
+  // The emailed link, one click: starts the reports on the business picked on /en/free and its nearest competitors.
+  quickStart: (timezone) => api('/briefing/free/quick-start', { method: 'POST', body: { timezone }, timeoutMs: 60000 }),
 };

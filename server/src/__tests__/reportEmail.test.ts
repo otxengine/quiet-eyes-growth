@@ -82,7 +82,7 @@ describe('account-less Free plan', () => {
   const info = { total: 3, manageUrl: 'https://app.example.com/en/start?t=tok', upgradeUrl: 'https://app.example.com/sign-up?briefing=1' };
 
   it('numbers the report and links to change competitors, upgrade and one unsubscribe for both', () => {
-    const { html } = buildReportEmail(weekly, 'Joe\'s Pizza', false, EN, customer({ ...info, number: 1, last: false }));
+    const { html } = buildReportEmail(weekly, 'Joe\'s Pizza', false, EN, customer({ ...info, number: 1, last: false, newsletter: true }));
     expect(html).toContain('Free report 1 of 3');
     expect(html).toContain('href="https://app.example.com/en/start?t=tok"');
     expect(html).toContain('>Change competitors<');
@@ -90,6 +90,13 @@ describe('account-less Free plan', () => {
     expect(html).toContain('>Unsubscribe from both<');
     expect(html).toContain('and the Cortexi newsletter');
     expect(html).not.toContain('last free report');
+  });
+
+  it('without the optional newsletter the footer names only the reports', () => {
+    const { html } = buildReportEmail(weekly, 'Joe\'s Pizza', false, EN, customer({ ...info, number: 1, last: false, newsletter: false }));
+    expect(html).toContain('gets the free Cortexi competitor reports.');
+    expect(html).not.toContain('newsletter');
+    expect(html).toContain('>Unsubscribe<');
   });
 
   it('the third report says it is the last, offers the upgrade and no competitor link', () => {

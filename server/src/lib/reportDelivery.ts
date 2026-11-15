@@ -42,8 +42,8 @@ export function unsubscribeUrl(bpId: string, email: string): string | null {
 
 /**
  * Removes the recipient the link was issued for. False for a bad or unsigned link; 'all' when the
- * recipient was an account-less Free address (lib/freeAccess.ts): its reports and the newsletter are
- * one subscription, so the link ends both, for good; otherwise 'reports'.
+ * recipient was an account-less Free address (lib/freeAccess.ts): the link ends its reports and any
+ * newsletter, for good; otherwise 'reports'.
  */
 export async function unsubscribe(bpId: string, rid: string, token: string): Promise<false | 'reports' | 'all'> {
   if (!secret() || !bpId || !rid || !token) return false;

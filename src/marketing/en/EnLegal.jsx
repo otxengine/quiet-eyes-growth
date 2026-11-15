@@ -41,8 +41,8 @@ export function EnTerms() {
       </ul></section>
       <section><h2>7. Emails from us</h2><ul>
         <li>We email your reports to the addresses you list, and send messages about your account and billing.</li>
-        <li>The Free plan comes together with the Cortexi newsletter, such as product news and offers. We ask for your agreement when you enter your email address, and we confirm the address with a link before sending anything else.</li>
-        <li>Every report and newsletter email has an unsubscribe link, and you can also write to {CONTACT}. On the Free plan the reports and the newsletter are one subscription, so unsubscribing stops both. On a paid plan, unsubscribing from the newsletter does not affect your reports or your account.</li>
+        <li>On the Free plan you can choose to also receive the Cortexi newsletter, such as product news and offers. It is optional and the reports do not depend on it. We confirm your address with a link before sending anything else.</li>
+        <li>Every report and newsletter email has an unsubscribe link, and you can also write to {CONTACT}. On the Free plan, unsubscribing stops the reports and, if you asked for it, the newsletter. On a paid plan, unsubscribing from the newsletter does not affect your reports or your account.</li>
       </ul></section>
       <section><h2>8. Intellectual property</h2><p>The Service, including its software, design and methods, belongs to Cortexi. You receive a limited, personal, non-transferable license to use it while your account is active.</p></section>
       <section><h2>9. Disclaimer and limitation of liability</h2><p>The Service is provided "as is" and "as available", without warranties of any kind. To the extent the law allows, Cortexi is not liable for indirect, incidental or consequential damages arising from use of the Service, and our total liability is limited to the amount you paid us in the three months before the claim.</p></section>
@@ -61,7 +61,7 @@ export function EnPrivacy() {
       <section><h2>1. Information we collect</h2>
         <h3>Information you give us</h3>
         <ul>
-          <li><strong>Free plan:</strong> your email address, and when and to what wording you agreed to receive our newsletter. No account or password is created.</li>
+          <li><strong>Free plan:</strong> your email address and, if you asked for our newsletter, when and to what wording you agreed. No account or password is created.</li>
           <li><strong>Account:</strong> your name and email address, and your sign-in details, which are handled by our authentication provider.</li>
           <li><strong>Your business:</strong> its name, type, location and public Google listing, and the links to your own Instagram and Facebook pages if you add them.</li>
           <li><strong>Report settings:</strong> the competitors you choose, the email addresses that receive the report and your time zone.</li>
@@ -80,7 +80,7 @@ export function EnPrivacy() {
         <li>To improve the Service, using public business information and usage statistics. We do not use your account or payment details for this.</li>
       </ul></section>
       <section><h2>3. AI processing</h2><p>Report summaries are written with AI models operated by third-party providers. The public posts, ads and reviews in a report are sent to those providers only to produce your report.</p></section>
-      <section><h2>4. Marketing emails</h2><p>If you use the Free plan, we ask you to agree to receive the Cortexi newsletter, such as product news and offers, and we record when you agreed and the wording you agreed to. We send it only to addresses confirmed through the link we email. You can withdraw at any time with the unsubscribe link in any email or by writing to {CONTACT}; on the Free plan this also stops the reports.</p></section>
+      <section><h2>4. Marketing emails</h2><p>On the Free plan you can choose to receive the Cortexi newsletter, such as product news and offers. It is optional; if you ask for it, we record when you agreed and the wording you agreed to. We send it only to addresses confirmed through the link we email. You can withdraw at any time with the unsubscribe link in any email or by writing to {CONTACT}; on the Free plan this also stops the reports.</p></section>
       <section><h2>5. Who we share information with</h2>
         <p>We do not sell your personal information. We share it only with:</p>
         <ul>

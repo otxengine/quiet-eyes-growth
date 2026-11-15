@@ -1,9 +1,10 @@
 // The English report-only product: sign-up endpoints, settings, and the first-report period label.
 const bp = { findMany: jest.fn(), create: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() };
+const comp = { create: jest.fn() };
 const executeRaw = jest.fn(async () => 1);
 const queryRaw = jest.fn(async () => [{ timezone: 'America/Chicago', report_recipients: 'owner@example.com' }]);
 jest.mock('../db', () => ({
-  prisma: { businessProfile: bp, $executeRaw: (...a: any[]) => (executeRaw as any)(...a), $queryRaw: (...a: any[]) => (queryRaw as any)(...a) },
+  prisma: { businessProfile: bp, competitor: comp, $executeRaw: (...a: any[]) => (executeRaw as any)(...a), $queryRaw: (...a: any[]) => (queryRaw as any)(...a) },
 }));
 jest.mock('../middleware/auth', () => ({ getUserId: () => 'user_1', isAdminKeyRequest: () => false }));
 jest.mock('../middleware/businessAccess', () => ({ requireOwnsBusinessFields: (_q: any, _s: any, next: any) => next() }));
@@ -24,6 +25,8 @@ jest.mock('../routes/functions/collectCompetitorSocialProfileAndPosts', () => ({
 jest.mock('../routes/functions/collectCompetitorSocialStories', () => ({ collectCompetitorSocialStories: (...a: any[]) => collectors.stories(...a) }));
 jest.mock('../routes/functions/detectCompetitorAds', () => ({ detectCompetitorAds: (...a: any[]) => collectors.ads(...a) }));
 jest.mock('../routes/functions/collectReviews', () => ({ collectReviews: (...a: any[]) => collectors.reviews(...a) }));
+const enrich = jest.fn(async (..._a: any[]) => ({ enriched: 2, skipped: 0 }));
+jest.mock('../routes/functions/enrichCompetitorUrls', () => ({ enrichCompetitorUrls: (...a: any[]) => enrich(...a) }));
 
 process.env.GOOGLE_PLACES_API_KEY = 'k';
 import router, { cityOf, previewBudget } from '../routes/briefing';
@@ -182,13 +185,24 @@ describe('account-less Free plan', () => {
   const db = (today: number, claim: any[]) => queryRaw
     .mockResolvedValueOnce([{ n: today }] as any).mockResolvedValueOnce([{ id: 'lead_1' }] as any).mockResolvedValueOnce(claim as any);
 
-  it('needs a valid address and the newsletter consent', async () => {
+  it('needs a valid address', async () => {
     expect((await request({ email: 'not-an-address', consent: true })).statusCode).toBe(400);
     expect((await request({ email: '"x"<owner@example.com>', consent: true })).statusCode).toBe(400);
-    expect((await request({ email: 'owner@example.com' })).body).toMatchObject({ needsConsent: true });
-    expect((await request({ email: 'owner@example.com', consent: 'yes' })).statusCode).toBe(400);
     expect(queryRaw).not.toHaveBeenCalled();
     expect(sendFreeLink).not.toHaveBeenCalled();
+  });
+
+  it('the newsletter is optional: without it the lead is stored with no consent', async () => {
+    const leadValues = () => (queryRaw.mock.calls[1] as any[]).slice(1);
+    db(0, [{ id: 'lead_1' }]);
+    expect((await request({ email: 'owner@example.com', consent: 'yes' })).body).toEqual({ ok: true });
+    expect(leadValues().slice(2, 4)).toEqual([null, null]); // consent_at, consent_text
+    expect(sendFreeLink).toHaveBeenCalledWith('lead_1', 'owner@example.com');
+    queryRaw.mockClear();
+    db(0, [{ id: 'lead_1' }]);
+    await request({ email: 'owner@example.com', consent: true });
+    expect(leadValues()[2]).toBeInstanceOf(Date);
+    expect(leadValues()[3]).toBe('consent text');
   });
 
   it('stores the lead and emails the setup link to the lower-cased address', async () => {
@@ -329,5 +343,63 @@ describe('preview on /en/free (public, before any email)', () => {
     const r = await call('/me', 'get', { freeLeadId: 'lead_1' });
     expect(r.body).toEqual({ business: null, picked: expect.objectContaining({ placeId: PLACE.id, name: "Joe's Pizza", rating: 4.2 }) });
     expect((await call('/me', 'get', {})).body).toEqual({ business: null });
+  });
+});
+
+describe('one-click start from the emailed link', () => {
+  const NEAR = { latitude: 30.2672, longitude: -97.7431 };
+  const rival = (id: string, name: string, dLat: number) => ({ id, displayName: { text: name }, formattedAddress: `${name} St, Austin, TX`, location: { latitude: NEAR.latitude + dLat, longitude: NEAR.longitude }, rating: 4.5, userRatingCount: 300 });
+  const flush = async () => { for (let i = 0; i < 10; i += 1) await new Promise(r => setImmediate(r)); };
+  const quick = () => call('/free/quick-start', 'post', { body: { timezone: 'America/Chicago' }, freeLeadId: 'lead_1' });
+  // Google: the place for start, the place again for the nearby search, then the nearby places.
+  const google = (rivals: any[]) => {
+    (global as any).fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => PLACE })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ...PLACE, location: NEAR, primaryType: 'pizza_restaurant' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ places: rivals }) });
+  };
+  beforeEach(() => {
+    comp.create.mockImplementation(async ({ data }: any) => ({ id: `c_${data.google_place_id}` }));
+    bp.update.mockResolvedValue({ name: "Joe's Pizza", category: 'Pizza restaurant', city: 'Austin, TX', full_address: null });
+  });
+
+  it('needs the token\'s lead, and a business picked on /en/free', async () => {
+    expect((await call('/free/quick-start', 'post', {})).statusCode).toBe(401);
+    queryRaw.mockResolvedValueOnce([{ place_id: null }] as any);
+    const r = await quick();
+    expect(r.statusCode).toBe(409);
+    expect(r.body).toMatchObject({ no_pick: true });
+  });
+
+  it('creates the business, approves its nearest rivals up to the Free cap, then looks up their pages before collecting', async () => {
+    queryRaw.mockResolvedValueOnce([{ place_id: PLACE.id }] as any).mockResolvedValueOnce([{ id: 'lead_1' }] as any);
+    google([rival('ChIJ_rival_00003', 'Far Pizza', 0.03), rival('ChIJ_rival_00001', 'Near Pizza', 0.005), rival('ChIJ_rival_00002', 'Mid Pizza', 0.015)]);
+    const r = await quick();
+    expect(r.body).toEqual({ businessProfileId: 'bp_new', competitors: 2 });
+    expect(comp.create.mock.calls.map(([{ data }]: any) => [data.name, data.tracking_status, data.linked_business])).toEqual([
+      ['Near Pizza', 'approved', 'bp_new'], ['Mid Pizza', 'approved', 'bp_new'],
+    ]);
+    expect(bp.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'bp_new' }, data: { onboarding_completed: true } }));
+    await flush();
+    expect(enrich).toHaveBeenCalledWith(['c_ChIJ_rival_00001', 'c_ChIJ_rival_00002']);
+    expect(collectors.posts).toHaveBeenCalledWith(expect.objectContaining({ body: { businessProfileId: 'bp_new', force: true } }), expect.anything());
+    expect(enrich.mock.invocationCallOrder[0]).toBeLessThan(collectors.posts.mock.invocationCallOrder[0]);
+  });
+
+  it('no rivals nearby: the business is created but setup is left to the long way', async () => {
+    queryRaw.mockResolvedValueOnce([{ place_id: PLACE.id }] as any).mockResolvedValueOnce([{ id: 'lead_1' }] as any);
+    google([]);
+    expect((await quick()).body).toEqual({ businessProfileId: 'bp_new', competitors: 0 });
+    expect(bp.update).not.toHaveBeenCalled();
+    await flush();
+    expect(collectors.posts).not.toHaveBeenCalled();
+  });
+
+  it('a second click resumes and adds nothing', async () => {
+    bp.findMany.mockResolvedValueOnce([{ id: 'bp_1', subscription_plan: 'brief_free', onboarding_completed: true }]);
+    queryRaw.mockResolvedValueOnce([{ place_id: PLACE.id }] as any);
+    places(PLACE);
+    expect((await quick()).body).toMatchObject({ businessProfileId: 'bp_1', resumed: true, onboardingCompleted: true });
+    expect(comp.create).not.toHaveBeenCalled();
   });
 });

@@ -32,8 +32,8 @@ export const EN_PLANS = [
 /** The lines shown on a plan card; `on: false` renders greyed out. */
 export function planFeatures(p) {
   return [
-    // Free needs no account: an email address, three reports, and our newsletter with them.
-    ...(p.id === 'brief_free' ? [{ on: true, text: 'Just your email, no account' }, { on: true, text: 'Comes with the Cortexi newsletter' }] : []),
+    // Free needs no account: an email address and three reports.
+    ...(p.id === 'brief_free' ? [{ on: true, text: 'Just your email, no account' }] : []),
     { on: true, text: `${p.competitors} competitors` },
     { on: true, text: `Reports: ${p.reports.toLowerCase()}` },
     { on: true, text: `Posts checked ${p.posts.toLowerCase()}, ads ${p.ads.toLowerCase()}` },
@@ -62,7 +62,7 @@ export const EN_FAQ = [
   },
   {
     q: 'Is the first report really free?',
-    a: 'Yes. Right after you pick your competitors you get a report on their last 30 days, with no card and no account. The Free plan then sends two more monthly reports, three in all, together with our newsletter.',
+    a: 'Yes. Right after you pick your competitors you get a report on their last 30 days, with no card and no account. The Free plan then sends two more monthly reports, three in all.',
   },
   {
     q: 'Can I cancel?',
