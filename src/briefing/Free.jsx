@@ -4,6 +4,11 @@ import { briefingApi } from './api';
 import { BriefingShell, Button, Card, ErrorNote, StepHeading, TextInput } from './ui.jsx';
 import { BUSINESS_QUERY_KEY } from './keys.js';
 import { track } from '@/lib/gtm.js';
+import { EN_PLANS } from '../marketing/en/plans.js';
+
+// How many competitors the Free plan watches (2): the nearest ones on this page's list, which the
+// one-tap start on the emailed link approves (server/src/routes/briefing.ts quick-start).
+const FREE_WATCHES = EN_PLANS.find((p) => p.id === 'brief_free').competitors;
 
 // The optional newsletter checkbox; the server stores this exact wording when it is ticked
 // (FREE_CONSENT_TEXT in server/src/lib/freeAccess.ts). Change both together.
@@ -122,6 +127,7 @@ export default function Free() {
 
   const biz = preview?.business;
   const rivals = preview?.competitors || [];
+  const watched = rivals.slice(0, FREE_WATCHES);
   const ratedHigher = biz?.rating != null ? rivals.filter((c) => c.rating != null && c.rating > biz.rating).length : 0;
 
   return (
@@ -179,13 +185,16 @@ export default function Free() {
                   </div>
                   <span className="shrink-0 text-[12px] font-extrabold mkt-grad-text">You</span>
                 </li>
-                {rivals.map((c) => (
+                {rivals.map((c, i) => (
                   <li key={c.placeId} className="px-4 py-3 flex items-center justify-between gap-3 border-t" style={{ borderColor: 'var(--mkt-border)' }}>
                     <div className="min-w-0">
                       <div className="font-bold text-[14.5px] truncate">{c.name}</div>
                       <div className="text-[12.5px]"><Rating rating={c.rating} reviewCount={c.reviewCount} /></div>
                     </div>
-                    {c.miles != null && <span className="shrink-0 text-[12.5px]" style={muted}>{c.miles < 0.1 ? 'next door' : `${c.miles} mi`}</span>}
+                    <div className="shrink-0 text-right">
+                      {c.miles != null && <div className="text-[12.5px]" style={muted}>{c.miles < 0.1 ? 'next door' : `${c.miles} mi`}</div>}
+                      {i < watched.length && <div className="text-[11px] font-extrabold mkt-grad-text">In your free report</div>}
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -194,7 +203,8 @@ export default function Free() {
           <Card className="mt-5">
             <h2 className="text-[19px] leading-snug font-extrabold">See what they post, advertise and hear from customers</h2>
             <p className="mt-1.5 mb-4 text-[14px] leading-relaxed" style={ink2}>
-              Your free report covers their last 30 days: new Instagram and Facebook posts, Meta ads, Google reviews, and what to do about it. Two more follow, one a month.
+              {watched.length > 0 && <>Your free report watches the {watched.length === 1 ? 'nearest one' : `${watched.length} nearest`}, {watched.map((c) => c.name).join(' and ')}. </>}
+              It covers their last 30 days: new Instagram and Facebook posts, Meta ads, Google reviews, and what to do about it. Two more follow, one a month.
             </p>
             {emailForm}
           </Card>
@@ -219,7 +229,7 @@ export default function Free() {
             <Mail size={34} strokeWidth={1.6} aria-hidden="true" />
             <h1 className="text-[26px] md:text-[28px] leading-tight">Check your email</h1>
             <p className="text-[15px] leading-relaxed" style={ink2}>
-              We sent a link to <strong style={{ color: 'var(--mkt-ink)' }}>{sentTo}</strong>. Open it to confirm your business and pick the competitors to watch.
+              We sent a link to <strong style={{ color: 'var(--mkt-ink)' }}>{sentTo}</strong>. {biz ? <>Open it and one tap starts your first report on {biz.name}&apos;s competitors.</> : 'Open it to tell us about your business and pick the competitors to watch.'}
             </p>
             <p className="text-[13.5px]" style={muted}>The link works for 24 hours. Nothing is collected until you use it.</p>
             <div className="pt-1 flex items-center gap-3 flex-wrap">

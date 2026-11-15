@@ -179,4 +179,15 @@ test('sendFreeLink emails a link to the setup page that carries the token', asyn
   const token = /https:\/\/app\.example\.com\/en\/start\?t=([^"]+)"/.exec(html)![1];
   expect(readFreeToken(token)).toBe('lead_1');
   expect(html).not.toContain('owner@example.com'); // no address in the link or the body
+  expect(html).toContain('pick the competitors to watch');
+  expect(html).toContain('>Set up my report<');
+});
+
+test('sendFreeLink, business already picked on /en/free: the email offers the one-tap start', async () => {
+  expect(await sendFreeLink('lead_1', 'owner@example.com', true)).toBe(true);
+  const { subject, html } = (sendEmail as jest.Mock).mock.calls[0][0];
+  expect(subject).toBe('Confirm your email to start your Cortexi report');
+  expect(html).toContain('One tap starts your first report');
+  expect(html).toContain('>Start my free report<');
+  expect(html).not.toContain('two minutes');
 });

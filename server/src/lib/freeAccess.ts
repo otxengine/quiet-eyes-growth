@@ -160,8 +160,12 @@ export async function freeReportInfo(businessProfileId: string): Promise<FreeRep
 export const endFreeReports = (businessProfileId: string) =>
   prisma.$executeRaw`UPDATE business_profiles SET free_ended_at = COALESCE(free_ended_at, now()) WHERE id = ${businessProfileId}`;
 
-/** The confirmation email with the setup link. False when it could not be built or sent. */
-export async function sendFreeLink(leadId: string, email: string): Promise<boolean> {
+/**
+ * The confirmation email with the setup link. `picked`: they chose their business on /en/free, so the
+ * link opens the one-tap start; otherwise it opens the business search. False when it could not be
+ * built or sent.
+ */
+export async function sendFreeLink(leadId: string, email: string, picked = false): Promise<boolean> {
   const base = siteUrl();
   const token = freeToken(leadId, FREE_SETUP_LINK_DAYS);
   if (!base || !token) return false;
@@ -175,11 +179,13 @@ export async function sendFreeLink(leadId: string, email: string): Promise<boole
 <div style="font-size:24px;font-weight:700;margin-top:2px">Confirm your email</div>
 <div style="font-size:14px;color:#52514e">One step left before your first report</div></td></tr>
 <tr><td style="padding:20px 28px">
-<div style="background:#eef4fc;border-left:4px solid #2a78d6;padding:12px 14px;border-radius:4px;font-size:16px;font-weight:600;line-height:1.5">Tell us about your business and pick the competitors to watch. It takes about two minutes.</div>
+<div style="background:#eef4fc;border-left:4px solid #2a78d6;padding:12px 14px;border-radius:4px;font-size:16px;font-weight:600;line-height:1.5">${picked
+  ? 'Your business is picked. One tap starts your first report on its nearest competitors.'
+  : 'Tell us about your business and pick the competitors to watch. It takes about two minutes.'}</div>
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0 0"><tr><td style="background:#0b0b0b;border-radius:6px">
-<a href="${esc(url)}" style="display:inline-block;padding:11px 20px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none">Set up my report</a></td></tr></table>
-<p style="font-size:13px;color:#52514e;line-height:1.6;margin:16px 0 0">You get three free monthly reports. The link works for 24 hours.</p></td></tr>
+<a href="${esc(url)}" style="display:inline-block;padding:11px 20px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none">${picked ? 'Start my free report' : 'Set up my report'}</a></td></tr></table>
+<p style="font-size:13px;color:#52514e;line-height:1.6;margin:16px 0 0">You get three free monthly reports${picked ? ' and can change the competitors from any of them' : ''}. The link works for 24 hours.</p></td></tr>
 <tr><td style="padding:14px 28px;border-top:1px solid #e1e0d9;font-size:11px;color:#898781;line-height:1.6">You are receiving this because this address was entered at cortexi.ai. If that was not you, ignore this email and nothing more will be sent.${postal ? `<br>${esc(postal)}` : ''}</td></tr>
 </table></td></tr></table></body></html>`;
-  return sendEmail({ to: email, subject: 'Confirm your email to set up your Cortexi report', html });
+  return sendEmail({ to: email, subject: `Confirm your email to ${picked ? 'start' : 'set up'} your Cortexi report`, html });
 }
