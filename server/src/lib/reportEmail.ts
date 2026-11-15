@@ -54,14 +54,14 @@ export function buildReportEmail(
   const subject = `${title} · ${businessName} · ${period}`;
 
   const free = customer?.free;
-  // Free: the reports and the newsletter are one subscription, and the footer says so.
-  const why = free?.last ? 'Your free reports end with this one. You will keep receiving the Cortexi newsletter.'
-    : free ? `You are receiving this because ${esc(businessName)} gets the free Cortexi competitor reports and the Cortexi newsletter.`
+  // Free: one unsubscribe link stops the reports and, if they asked for it, the newsletter; the footer says so.
+  const why = free?.last ? `Your free reports end with this one.${free.newsletter ? ' You will keep receiving the Cortexi newsletter.' : ''}`
+    : free ? `You are receiving this because ${esc(businessName)} gets the free Cortexi competitor reports${free.newsletter ? ' and the Cortexi newsletter' : ''}.`
       : en ? `You are receiving this because ${esc(businessName)} is subscribed to Cortexi competitor reports.`
         : `קיבלת מייל זה כי ${esc(businessName)} רשום לדוחות המתחרים של Cortexi.`;
   const footer = customer
     ? why
-      + ` <a href="${esc(customer.unsubscribeUrl)}" style="color:${C.muted}">${free && !free.last ? 'Unsubscribe from both' : en ? 'Unsubscribe' : 'הסרה מרשימת התפוצה'}</a>`
+      + ` <a href="${esc(customer.unsubscribeUrl)}" style="color:${C.muted}">${free && !free.last && free.newsletter ? 'Unsubscribe from both' : en ? 'Unsubscribe' : 'הסרה מרשימת התפוצה'}</a>`
       + (customer.postalAddress ? `<br>${esc(customer.postalAddress)}` : '')
     : en ? 'Sent automatically by Cortexi when the report was generated · internal distribution list'
       : 'נשלח אוטומטית ע״י Cortexi עם יצירת הדוח · רשימת תפוצה פנימית';

@@ -31,6 +31,7 @@ import { collectCompetitorSocialProfileAndPosts } from './functions/collectCompe
 import { collectCompetitorSocialStories } from './functions/collectCompetitorSocialStories';
 import { detectCompetitorAds } from './functions/detectCompetitorAds';
 import { collectReviews } from './functions/collectReviews';
+import { enrichCompetitorUrls } from './functions/enrichCompetitorUrls';
 
 const router = Router();
 const PLACES = 'https://places.googleapis.com/v1/places';
@@ -107,13 +108,14 @@ async function briefingBusinessOf(userId: string) {
   return count ? mine() : null;
 }
 
-// Account-less Free plan, step 1: store the address with its marketing consent and email the setup
+// Account-less Free plan, step 1: store the address (and its newsletter choice) and email the setup
 // link (lib/freeAccess.ts). Public. The answer is the same whatever we know about the address.
 router.post('/free/request', freeRequestLimiter, async (req: Request, res: Response) => {
   if (fromIsrael(req)) return res.status(403).json(NOT_AVAILABLE);
   const email = parseRecipients(typeof req.body?.email === 'string' ? req.body.email.slice(0, 200) : '')[0];
   if (!email || /[<>"']/.test(email)) return res.status(400).json({ error: 'Enter a valid email address' });
-  if (req.body?.consent !== true) return res.status(400).json({ error: 'Agree to receive the newsletter to get the free reports', needsConsent: true });
+  // The newsletter is optional: the reports never depend on it. Stored with its wording when ticked.
+  const consent = req.body?.consent === true;
   // The business they picked on the page, offered back for confirmation when the link is opened (/me).
   // Only ever a Google place id: what is shown is read from Google, and they confirm it before setup.
   const placeId = typeof req.body?.placeId === 'string' && PLACE_ID.test(req.body.placeId) ? req.body.placeId : null;
@@ -125,8 +127,10 @@ router.post('/free/request', freeRequestLimiter, async (req: Request, res: Respo
     const country = String(req.headers['cloudfront-viewer-country'] || '').toUpperCase().slice(0, 2) || null;
     const rows = await prisma.$queryRaw<{ id: string }[]>`
       INSERT INTO briefing_leads (id, email, consent_at, consent_text, country, place_id)
-      VALUES (${randomUUID()}, ${email}, now(), ${FREE_CONSENT_TEXT}, ${country}, ${placeId})
-      ON CONFLICT (email) DO UPDATE SET place_id = COALESCE(EXCLUDED.place_id, briefing_leads.place_id)
+      VALUES (${randomUUID()}, ${email}, ${consent ? new Date() : null}, ${consent ? FREE_CONSENT_TEXT : null}, ${country}, ${placeId})
+      ON CONFLICT (email) DO UPDATE SET place_id = COALESCE(EXCLUDED.place_id, briefing_leads.place_id),
+        consent_at = COALESCE(briefing_leads.consent_at, EXCLUDED.consent_at),
+        consent_text = COALESCE(briefing_leads.consent_text, EXCLUDED.consent_text)
       RETURNING id`;
     const leadId = rows[0].id;
     // One atomic claim per email sent: never to an unsubscribed address, at most one every two
@@ -222,74 +226,76 @@ router.post('/preview/competitors', previewLimiter, async (req: Request, res: Re
   if (!placesKey()) return res.status(503).json({ error: 'Business search is not configured' });
   if (!previewBudget()) return res.status(429).json(PREVIEW_FULL);
   try {
-    const r = await fetch(`${PLACES}/${placeId}`, {
-      headers: placesHeaders('id,displayName,formattedAddress,location,primaryType,primaryTypeDisplayName,types,rating,userRatingCount,addressComponents'),
-    });
-    const place: any = await r.json();
-    if (!r.ok || !place?.id || !place.location) return res.status(404).json({ error: 'Business not found on Google' });
-    if (countryOf(place.addressComponents) === 'IL') return res.status(403).json(NOT_AVAILABLE);
-
-    // Places of the same kind ("pizza_restaurant") around it, most popular first. This is a quick first
-    // look; the setup after the email runs the full search (runCompetitorIdentification).
-    const type = place.primaryType || (place.types || []).find((t: string) => !GENERIC_TYPES.has(t));
-    let competitors: any[] = [];
-    if (type) {
-      const n = await fetch(`${PLACES}:searchNearby`, {
-        method: 'POST',
-        headers: placesHeaders('places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount'),
-        body: JSON.stringify({
-          [place.primaryType ? 'includedPrimaryTypes' : 'includedTypes']: [type],
-          locationRestriction: { circle: { center: place.location, radius: PREVIEW_RADIUS_M } },
-          rankPreference: 'POPULARITY',
-          maxResultCount: 20,
-          languageCode: 'en',
-          regionCode: 'us',
-        }),
-      });
-      const nearby: any = await n.json();
-      if (!n.ok) console.warn(`[briefing] preview nearby search ${n.status}: ${nearby?.error?.message ?? ''}`);
-      const { latitude, longitude } = place.location;
-      // The nearest of the 20 most popular, leaving out the business's own other branches.
-      competitors = (nearby.places || [])
-        .filter((p: any) => p.id !== place.id && p.displayName?.text && p.location && !sameBusinessName(p.displayName.text, place.displayName?.text || ''))
-        .map((p: any) => ({
-          ...placeResult(p),
-          miles: Math.round(haversineKm(latitude, longitude, p.location.latitude, p.location.longitude) / 1.609 * 10) / 10,
-        }))
-        .sort((a: any, b: any) => a.miles - b.miles)
-        .slice(0, PREVIEW_COMPETITORS);
-    }
-    return res.json({ business: placeResult(place), competitors });
+    const found = await nearbyRivals(placeId);
+    if (!found) return res.status(404).json({ error: 'Business not found on Google' });
+    if (countryOf(found.place.addressComponents) === 'IL') return res.status(403).json(NOT_AVAILABLE);
+    return res.json({ business: placeResult(found.place), competitors: found.competitors });
   } catch (e: any) {
     console.error('[briefing] preview competitors failed:', e.message);
     return res.status(502).json({ error: 'Could not look up your competitors. Try again.' });
   }
 });
 
-router.post('/start', strictLimiter, async (req: Request, res: Response) => {
-  if (fromIsrael(req)) return res.status(403).json(NOT_AVAILABLE);
-  const userId = getUserId(req);
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-  const placeId = typeof req.body?.placeId === 'string' ? req.body.placeId : '';
-  if (!PLACE_ID.test(placeId)) return res.status(400).json({ error: 'placeId required' });
-  if (!placesKey()) return res.status(503).json({ error: 'Business search is not configured' });
+/**
+ * A Google place and the nearest of the 20 most popular places of the same kind ("pizza_restaurant")
+ * within 5 miles, leaving out its own other branches. Null when Google does not know the place.
+ * A quick look from Places alone; the long setup runs the full search (runCompetitorIdentification).
+ */
+async function nearbyRivals(placeId: string): Promise<{ place: any; competitors: any[] } | null> {
+  const r = await fetch(`${PLACES}/${placeId}`, {
+    headers: placesHeaders('id,displayName,formattedAddress,location,primaryType,primaryTypeDisplayName,types,rating,userRatingCount,addressComponents'),
+  });
+  const place: any = await r.json();
+  if (!r.ok || !place?.id || !place.location) return null;
+  const type = place.primaryType || (place.types || []).find((t: string) => !GENERIC_TYPES.has(t));
+  if (!type) return { place, competitors: [] };
+  const n = await fetch(`${PLACES}:searchNearby`, {
+    method: 'POST',
+    headers: placesHeaders('places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount'),
+    body: JSON.stringify({
+      [place.primaryType ? 'includedPrimaryTypes' : 'includedTypes']: [type],
+      locationRestriction: { circle: { center: place.location, radius: PREVIEW_RADIUS_M } },
+      rankPreference: 'POPULARITY',
+      maxResultCount: 20,
+      languageCode: 'en',
+      regionCode: 'us',
+    }),
+  });
+  const nearby: any = await n.json();
+  if (!n.ok) console.warn(`[briefing] nearby search ${n.status}: ${nearby?.error?.message ?? ''}`);
+  const { latitude, longitude } = place.location;
+  const competitors = (nearby.places || [])
+    .filter((p: any) => p.id !== place.id && p.displayName?.text && p.location && !sameBusinessName(p.displayName.text, place.displayName?.text || ''))
+    .map((p: any) => ({
+      ...placeResult(p),
+      miles: Math.round(haversineKm(latitude, longitude, p.location.latitude, p.location.longitude) / 1.609 * 10) / 10,
+    }))
+    .sort((a: any, b: any) => a.miles - b.miles)
+    .slice(0, PREVIEW_COMPETITORS);
+  return { place, competitors };
+}
 
-  const leadId: string | undefined = (req as any).freeLeadId;
+type Answer = { status: number; body: Record<string, unknown> };
+
+/**
+ * Creates the user's report-only business for a Google place (plan brief_free, English, US search),
+ * or resumes the one they have. Nothing about the business is taken from the browser but its id.
+ */
+async function startBusiness(userId: string, placeId: string, timezone: unknown, leadId?: string): Promise<Answer> {
   let claimed = false;
   try {
     // One report-only business per user: a second "start" resumes the first.
     const existing = await briefingBusinessOf(userId);
-    if (existing) return res.json({ businessProfileId: existing.id, resumed: true, onboardingCompleted: !!existing.onboarding_completed });
+    if (existing) return { status: 200, body: { businessProfileId: existing.id, resumed: true, onboardingCompleted: !!existing.onboarding_completed } };
 
-    // Read the place ourselves — nothing about the business is taken from the browser but its id.
     const r = await fetch(`${PLACES}/${placeId}`, {
       headers: placesHeaders('id,displayName,formattedAddress,addressComponents,primaryTypeDisplayName,websiteUri'),
     });
     const place: any = await r.json();
-    if (!r.ok || !place?.id || !place.displayName?.text) return res.status(404).json({ error: 'Business not found on Google' });
-    if (countryOf(place.addressComponents) === 'IL') return res.status(403).json(NOT_AVAILABLE);
+    if (!r.ok || !place?.id || !place.displayName?.text) return { status: 404, body: { error: 'Business not found on Google' } };
+    if (countryOf(place.addressComponents) === 'IL') return { status: 403, body: NOT_AVAILABLE };
 
-    const { tz } = localeOf({ locale: 'en-US', timezone: typeof req.body?.timezone === 'string' ? req.body.timezone : null });
+    const { tz } = localeOf({ locale: 'en-US', timezone: typeof timezone === 'string' ? timezone : null });
     // The business's own Instagram / Facebook, read off its website — best effort, they can fix it later.
     const own = place.websiteUri
       ? await Promise.race([
@@ -304,7 +310,7 @@ router.post('/start', strictLimiter, async (req: Request, res: Response) => {
     if (leadId) {
       const claim = await prisma.$queryRaw<{ id: string }[]>`
         UPDATE briefing_leads SET business_profile_id = 'pending' WHERE id = ${leadId} AND business_profile_id IS NULL RETURNING id`;
-      if (!claim.length) return res.status(409).json({ error: 'This address already has a Cortexi account. Sign in to manage your reports.', has_account: true });
+      if (!claim.length) return { status: 409, body: { error: 'This address already has a Cortexi account. Sign in to manage your reports.', has_account: true } };
       claimed = true;
     }
     const profile = await prisma.businessProfile.create({
@@ -328,12 +334,23 @@ router.post('/start', strictLimiter, async (req: Request, res: Response) => {
     const email = await getUserEmail(userId);
     await prisma.$executeRaw`UPDATE business_profiles SET locale = 'en-US', timezone = ${tz}, report_recipients = ${email} WHERE id = ${profile.id}`;
     if (leadId) await prisma.$executeRaw`UPDATE briefing_leads SET business_profile_id = ${profile.id} WHERE id = ${leadId}`;
-    return res.json({ businessProfileId: profile.id, resumed: false, onboardingCompleted: false });
+    return { status: 200, body: { businessProfileId: profile.id, resumed: false, onboardingCompleted: false } };
   } catch (e: any) {
     console.error('[briefing] start failed:', e.message);
     if (claimed) await prisma.$executeRaw`UPDATE briefing_leads SET business_profile_id = NULL WHERE id = ${leadId} AND business_profile_id = 'pending'`.catch(() => null);
-    return res.status(500).json({ error: 'Could not set up your business. Try again.' });
+    return { status: 500, body: { error: 'Could not set up your business. Try again.' } };
   }
+}
+
+router.post('/start', strictLimiter, async (req: Request, res: Response) => {
+  if (fromIsrael(req)) return res.status(403).json(NOT_AVAILABLE);
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  const placeId = typeof req.body?.placeId === 'string' ? req.body.placeId : '';
+  if (!PLACE_ID.test(placeId)) return res.status(400).json({ error: 'placeId required' });
+  if (!placesKey()) return res.status(503).json({ error: 'Business search is not configured' });
+  const { status, body } = await startBusiness(userId, placeId, req.body?.timezone, (req as any).freeLeadId);
+  return res.status(status).json(body);
 });
 
 /** Runs a functions/* handler outside a request, as the scheduler does. Never throws. */
@@ -355,27 +372,87 @@ async function notifySignup(userId: string | null, p: { name: string; category: 
   await sendEmail({ to, subject: `New Cortexi sign-up: ${p.name}`, html });
 }
 
+const SIGNUP_FIELDS = { subscription_plan: true, onboarding_completed: true, name: true, category: true, city: true, full_address: true } as const;
+
+/**
+ * After onboarding: the team's sign-up notice and the first collection. The first report (last 30
+ * days) is built by the worker's FirstBriefingReport job once the posts have landed — the worker is
+ * the one that can render the PDF. Never throws.
+ */
+async function firstCollection(businessProfileId: string, userId: string | null, profile: { name: string; category: string | null; city: string | null; full_address: string | null }) {
+  void notifySignup(userId, profile).catch(e => console.warn('[briefing] sign-up notice failed:', e.message));
+  const body = { businessProfileId, force: true };
+  await Promise.allSettled([
+    run('posts', collectCompetitorSocialProfileAndPosts, body),
+    run('stories', collectCompetitorSocialStories, body), // skipped inside for plans without stories
+    run('ads', detectCompetitorAds, { ...body, allCompetitors: true }),
+    run('reviews', collectReviews, body),
+  ]);
+}
+
 router.post('/finish', requireOwnsBusinessFields, async (req: Request, res: Response) => {
   const businessProfileId = req.body?.businessProfileId;
   if (typeof businessProfileId !== 'string' || !businessProfileId) return res.status(400).json({ error: 'businessProfileId required' });
-  const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId }, select: { subscription_plan: true, onboarding_completed: true, name: true, category: true, city: true, full_address: true } });
+  const profile = await prisma.businessProfile.findUnique({ where: { id: businessProfileId }, select: SIGNUP_FIELDS });
   if (!profile || !isBriefingPlan(profile.subscription_plan)) return res.status(404).json({ error: 'Not found' });
   // A second "finish" must not start the paid first collection again.
   if (profile.onboarding_completed) return res.json({ ok: true });
 
   await prisma.businessProfile.update({ where: { id: businessProfileId }, data: { onboarding_completed: true } });
   res.json({ ok: true });
-  void notifySignup(getUserId(req), profile).catch(e => console.warn('[briefing] sign-up notice failed:', e.message));
+  void firstCollection(businessProfileId, getUserId(req), profile);
+});
 
-  // First collection, in the background. The first report (last 30 days) is built by the worker's
-  // FirstBriefingReport job once the posts have landed — the worker is the one that can render the PDF.
-  const body = { businessProfileId, force: true };
-  void Promise.allSettled([
-    run('posts', collectCompetitorSocialProfileAndPosts, body),
-    run('stories', collectCompetitorSocialStories, body), // skipped inside for plans without stories
-    run('ads', detectCompetitorAds, { ...body, allCompetitors: true }),
-    run('reviews', collectReviews, body),
-  ]);
+// Account-less Free, one click: the emailed link starts the reports on the business picked on /en/free
+// and its nearest competitors, without the search, discovery and picking steps. The setup page shows
+// the business first, so the address holder confirms it with the click; the long way stays available.
+router.post('/free/quick-start', strictLimiter, async (req: Request, res: Response) => {
+  if (fromIsrael(req)) return res.status(403).json(NOT_AVAILABLE);
+  const userId = getUserId(req);
+  const leadId: string | undefined = (req as any).freeLeadId;
+  if (!userId || !leadId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!placesKey()) return res.status(503).json({ error: 'Business search is not configured' });
+  try {
+    const lead = await prisma.$queryRaw<{ place_id: string | null }[]>`SELECT place_id FROM briefing_leads WHERE id = ${leadId}`;
+    const placeId = lead[0]?.place_id;
+    if (!placeId) return res.status(409).json({ error: 'Find your business first.', no_pick: true });
+
+    const started = await startBusiness(userId, placeId, req.body?.timezone, leadId);
+    if (started.status !== 200 || started.body.resumed) return res.status(started.status).json(started.body);
+    const businessProfileId = started.body.businessProfileId as string;
+
+    // The plan's number of competitors, nearest first. None found: the setup page runs the full search.
+    const found = await nearbyRivals(placeId);
+    const picks = (found?.competitors || []).slice(0, planLimits('brief_free').competitors_max);
+    if (!picks.length) return res.json({ businessProfileId, competitors: 0 });
+    const rows = await Promise.all(picks.map(c => prisma.competitor.create({
+      data: {
+        name: c.name,
+        category: found?.place.primaryTypeDisplayName?.text || null,
+        rating: c.rating,
+        review_count: c.reviewCount,
+        address: c.address || null,
+        google_place_id: c.placeId,
+        linked_business: businessProfileId,
+        tracking_status: 'approved',
+        verification_status: 'מאומתת', // stored value the UI matches on (CompetitorSelectCard), as discovery sets it
+        discovery_sources: JSON.stringify(['google_places']),
+        data_freshness: 'fresh',
+        last_scanned: new Date().toISOString(),
+      },
+    })));
+    const profile = await prisma.businessProfile.update({ where: { id: businessProfileId }, data: { onboarding_completed: true }, select: SIGNUP_FIELDS });
+    res.json({ businessProfileId, competitors: rows.length });
+
+    // Their Instagram, Facebook and website first: the first collection reads those pages.
+    void enrichCompetitorUrls(rows.map(r => r.id))
+      .catch((e: any) => console.warn('[briefing] quick-start page lookup failed:', e.message))
+      .then(() => firstCollection(businessProfileId, userId, profile));
+  } catch (e: any) {
+    console.error('[briefing] quick-start failed:', e.message);
+    return res.status(500).json({ error: 'Could not start your report. Try again.' });
+  }
+  return undefined;
 });
 
 router.get('/settings', requireOwnsBusinessFields, async (req: Request, res: Response) => {
