@@ -10,6 +10,7 @@ import NotFound from './pages/NotFound.jsx';
 import EnHome from './en/EnHome.jsx';
 import { EN_FAQ } from './en/plans.js';
 import { EnTerms, EnPrivacy } from './en/EnLegal.jsx';
+import Free from '../briefing/Free.jsx';
 import Blog from './pages/Blog.jsx';
 import BlogPost from './pages/BlogPost.jsx';
 import { Terms, Privacy, RefundPolicy, DataDeletion } from './pages/Legal.jsx';
@@ -96,6 +97,19 @@ export const marketingRoutes = [
         'What your competitors posted, advertised and offered this week, and what their customers said — in one short email. First report free.',
       canonical: '/en',
       faqItems: EN_FAQ,
+    },
+  },
+  {
+    // The Free plan's email page, where the ads land: prerendered so the form paints before any app
+    // code (Clerk, auth) loads. bare: it brings its own header (BriefingShell), not the site nav/footer.
+    path: '/en/free',
+    Component: Free,
+    bare: true,
+    seo: {
+      lang: 'en',
+      title: 'Cortexi — Competitor report',
+      description: 'Three free monthly reports on your competitors. No account, no password.',
+      canonical: '/en/free',
     },
   },
   {

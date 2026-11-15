@@ -36,7 +36,7 @@ const Onboarding = lazyPage(() => import('@/pages/Onboarding'));
 // The English report-only product (sold outside Israel): its own sign-up flow and account area.
 const BriefingStart = lazyPage(() => import('@/briefing/Start.jsx'));
 const BriefingAccount = lazyPage(() => import('@/briefing/Account.jsx'));
-const BriefingFree = lazyPage(() => import('@/briefing/Free.jsx'));
+// The Free plan's email page (/en/free) is a prerendered marketing route (src/marketing/routes.jsx).
 // /en/start opened from the Free plan's emailed link (?t=…) is the account-less setup; otherwise the
 // account flow. A signed-out visitor without a link starts at the Free plan's email page, which
 // also links to the paid plans' sign-up.
@@ -181,8 +181,7 @@ const AuthenticatedApp = () => {
           </AuthPage>
         } />
         <Route path="/sign-up/*" element={<SignUpPage />} />
-        {/* The report-only screens need an account — except the Free plan's email page and its emailed setup link */}
-        <Route path="/en/free" element={<BriefingFree />} />
+        {/* The report-only screens need an account — except the Free plan's email page (a public route) and its emailed setup link */}
         <Route path="/en/start" element={<BriefingStartRoute />} />
         <Route path="/en/briefing" element={<Navigate to="/sign-in" replace />} />
         {publicRoutes()}
@@ -206,8 +205,7 @@ const AuthenticatedApp = () => {
       {/* Onboarding flow */}
       <Route path="/onboarding/*" element={<OnboardingOrBriefing />} />
 
-      {/* English report-only product — outside the Hebrew app layout */}
-      <Route path="/en/free" element={<BriefingFree />} />
+      {/* English report-only product — outside the Hebrew app layout (/en/free comes with the public routes) */}
       <Route path="/en/start" element={<BriefingStartRoute signedIn />} />
       <Route path="/en/briefing" element={<BriefingAccount />} />
       <Route path="/sign-up/*" element={<SignedInSignUp />} />

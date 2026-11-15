@@ -18,9 +18,11 @@ export function render(path) {
 
   const Page = route.Component;
   const html = renderToString(
-    <MarketingLayout seo={route.seo}>
-      <Page />
-    </MarketingLayout>
+    route.bare ? <Page /> : (
+      <MarketingLayout seo={route.seo}>
+        <Page />
+      </MarketingLayout>
+    )
   );
   return { html, head: buildHead(route.seo) };
 }

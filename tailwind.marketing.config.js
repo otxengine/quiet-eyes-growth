@@ -5,7 +5,8 @@
  * src/** and produces a much larger sheet.
  */
 export default {
-  content: ['./marketing.html', './src/marketing/**/*.{js,jsx}'],
+  // + the Free plan's email page, a prerendered marketing route (src/marketing/routes.jsx)
+  content: ['./marketing.html', './src/marketing/**/*.{js,jsx}', './src/briefing/Free.jsx', './src/briefing/ui.jsx'],
   theme: { extend: {} },
   plugins: [],
 };

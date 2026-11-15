@@ -15,7 +15,9 @@ const Page = route.Component;
 
 hydrateRoot(
   document.getElementById('root'),
-  <MarketingLayout seo={route.seo}>
-    <Page />
-  </MarketingLayout>
+  route.bare ? <Page /> : (
+    <MarketingLayout seo={route.seo}>
+      <Page />
+    </MarketingLayout>
+  )
 );

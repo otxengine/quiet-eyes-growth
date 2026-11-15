@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
 import '../marketing/styles/tokens.css';
-import { base44 } from '@/api/base44Client';
 
 /* Shell and small controls for the English report-only screens. Same tokens and card style as the
    English landing page (src/marketing/en), left-to-right. */
@@ -25,7 +24,8 @@ export function BriefingShell({ children, nav, signOut = true }) {
           </a>
           {nav}
           {signOut && (
-            <button type="button" onClick={() => base44.auth.logout('/en')} className="text-[13.5px] font-medium whitespace-nowrap hover:text-black" style={{ color: 'var(--mkt-muted)' }}>
+            // Imported on click: /en/free is prerendered with the lean marketing bundle, which must not carry the app's API client.
+            <button type="button" onClick={async () => (await import('@/api/base44Client')).base44.auth.logout('/en')}className="text-[13.5px] font-medium whitespace-nowrap hover:text-black" style={{ color: 'var(--mkt-muted)' }}>
               Sign out
             </button>
           )}
