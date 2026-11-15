@@ -6,6 +6,8 @@
  *   POST /api/briefing/finish { businessProfileId }              ends onboarding and starts the first collection
  *   GET  /api/briefing/settings?businessProfileId=               recipients, timezone, plan
  *   PUT  /api/briefing/settings { businessProfileId, recipients?, timezone? }
+ *   POST /api/briefing/preview/search { query }                  public: the /en/free page's business search
+ *   POST /api/briefing/preview/competitors { placeId }           public: that business and its nearest competitors
  * Competitor discovery / selection and billing reuse the existing endpoints
  * (functions/runCompetitorIdentification, onboarding/confirm-competitors, onboarding/select-plan, billing).
  */
@@ -15,7 +17,9 @@ import { prisma } from '../db';
 import { FREE_CONSENT_TEXT, sendFreeLink, isFreeIdentity } from '../lib/freeAccess';
 import { getUserId } from '../middleware/auth';
 import { requireOwnsBusinessFields } from '../middleware/businessAccess';
-import { strictLimiter, freeRequestLimiter } from '../middleware/rateLimits';
+import { strictLimiter, freeRequestLimiter, previewLimiter } from '../middleware/rateLimits';
+import { haversineKm } from '../lib/competitorRadiusCleanup';
+import { sameBusinessName } from '../lib/googlePlaces';
 import { getUserEmail } from '../lib/ownership';
 import { sendEmail } from '../lib/email';
 import { esc } from '../lib/html';
@@ -39,6 +43,26 @@ const OWN_PAGES: Record<string, { field: 'instagram_url' | 'facebook_url'; host:
   facebookUrl: { field: 'facebook_url', host: /(^|\.)facebook\.com$/i },
 };
 const placesKey = () => process.env.GOOGLE_PLACES_API_KEY || '';
+const PLACE_ID = /^[A-Za-z0-9_-]{10,200}$/;
+
+// The public preview on /en/free: each call is one or two paid Places lookups (about $0.02-0.04).
+// ponytail: an in-memory count, so the ceiling is per server instance. Move it to the DB if ads ever
+// bring more visitors than this.
+const PREVIEW_CALLS_PER_DAY = 600;
+const PREVIEW_COMPETITORS = 5;
+const PREVIEW_RADIUS_M = 8000; // about 5 miles
+const PREVIEW_FULL = { error: 'Too many searches today. Enter your email and we will find your competitors for you.', preview_full: true };
+let previewDay = '';
+let previewCalls = 0;
+/** Counts one public preview call against today's ceiling; false once it is spent. */
+export function previewBudget(now = new Date()): boolean {
+  const day = now.toISOString().slice(0, 10);
+  if (day !== previewDay) { previewDay = day; previewCalls = 0; }
+  previewCalls += 1;
+  return previewCalls <= PREVIEW_CALLS_PER_DAY;
+}
+// Too broad to name a kind of business: a place without a primary type is matched on its first other type.
+const GENERIC_TYPES = new Set(['point_of_interest', 'establishment', 'store', 'food', 'health', 'finance', 'premise', 'political']);
 
 // The product is not sold in Israel (the Hebrew app is). CloudFront adds the header when the
 // distribution forwards it; without it nothing is refused here and the CDN redirect is the gate.
@@ -90,6 +114,9 @@ router.post('/free/request', freeRequestLimiter, async (req: Request, res: Respo
   const email = parseRecipients(typeof req.body?.email === 'string' ? req.body.email.slice(0, 200) : '')[0];
   if (!email || /[<>"']/.test(email)) return res.status(400).json({ error: 'Enter a valid email address' });
   if (req.body?.consent !== true) return res.status(400).json({ error: 'Agree to receive the newsletter to get the free reports', needsConsent: true });
+  // The business they picked on the page, offered back for confirmation when the link is opened (/me).
+  // Only ever a Google place id: what is shown is read from Google, and they confirm it before setup.
+  const placeId = typeof req.body?.placeId === 'string' && PLACE_ID.test(req.body.placeId) ? req.body.placeId : null;
   try {
     // Abuse valve: every new address can spend real money on lookups and scans.
     const today = await prisma.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM briefing_leads WHERE created_date > now() - interval '1 day'`;
@@ -97,9 +124,9 @@ router.post('/free/request', freeRequestLimiter, async (req: Request, res: Respo
 
     const country = String(req.headers['cloudfront-viewer-country'] || '').toUpperCase().slice(0, 2) || null;
     const rows = await prisma.$queryRaw<{ id: string }[]>`
-      INSERT INTO briefing_leads (id, email, consent_at, consent_text, country)
-      VALUES (${randomUUID()}, ${email}, now(), ${FREE_CONSENT_TEXT}, ${country})
-      ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+      INSERT INTO briefing_leads (id, email, consent_at, consent_text, country, place_id)
+      VALUES (${randomUUID()}, ${email}, now(), ${FREE_CONSENT_TEXT}, ${country}, ${placeId})
+      ON CONFLICT (email) DO UPDATE SET place_id = COALESCE(EXCLUDED.place_id, briefing_leads.place_id)
       RETURNING id`;
     const leadId = rows[0].id;
     // One atomic claim per email sent: never to an unsubscribed address, at most one every two
@@ -129,10 +156,39 @@ router.get('/me', async (req: Request, res: Response) => {
   const userId = getUserId(req);
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
   const b = await briefingBusinessOf(userId);
-  return res.json({ business: b ? { businessProfileId: b.id, name: b.name, onboardingCompleted: !!b.onboarding_completed } : null });
+  const leadId: string | undefined = (req as any).freeLeadId;
+  const picked = !b && leadId ? await pickedPlace(leadId) : null;
+  return res.json({
+    business: b ? { businessProfileId: b.id, name: b.name, onboardingCompleted: !!b.onboarding_completed } : null,
+    ...(picked && { picked }),
+  });
 });
 
-router.post('/search-business', strictLimiter, async (req: Request, res: Response) => {
+/** The business an account-less Free visitor picked on /en/free, as a search result to confirm; null on any miss. */
+async function pickedPlace(leadId: string) {
+  try {
+    const rows = await prisma.$queryRaw<{ place_id: string | null }[]>`SELECT place_id FROM briefing_leads WHERE id = ${leadId}`;
+    const placeId = rows[0]?.place_id;
+    if (!placeId || !placesKey()) return null;
+    const r = await fetch(`${PLACES}/${placeId}`, { headers: placesHeaders('id,displayName,formattedAddress,primaryTypeDisplayName,rating,userRatingCount') });
+    const p: any = await r.json();
+    return r.ok && p?.id ? placeResult(p) : null;
+  } catch (e: any) {
+    console.warn('[briefing] picked place lookup failed:', e.message);
+    return null;
+  }
+}
+
+const placeResult = (p: any) => ({
+  placeId: p.id,
+  name: p.displayName?.text || '',
+  address: p.formattedAddress || '',
+  category: p.primaryTypeDisplayName?.text || '',
+  rating: p.rating ?? null,
+  reviewCount: p.userRatingCount ?? null,
+});
+
+async function searchBusiness(req: Request, res: Response) {
   if (fromIsrael(req)) return res.status(403).json(NOT_AVAILABLE);
   const query = typeof req.body?.query === 'string' ? req.body.query.trim().slice(0, 120) : '';
   if (query.length < 3) return res.status(400).json({ error: 'Type your business name and city' });
@@ -144,19 +200,69 @@ router.post('/search-business', strictLimiter, async (req: Request, res: Respons
       body: JSON.stringify({ textQuery: query, languageCode: 'en', regionCode: 'us', maxResultCount: 5 }),
     });
     const data: any = await r.json();
-    return res.json({
-      results: (data.places || []).map((p: any) => ({
-        placeId: p.id,
-        name: p.displayName?.text || '',
-        address: p.formattedAddress || '',
-        category: p.primaryTypeDisplayName?.text || '',
-        rating: p.rating ?? null,
-        reviewCount: p.userRatingCount ?? null,
-      })),
-    });
+    return res.json({ results: (data.places || []).map(placeResult) });
   } catch (e: any) {
     console.error('[briefing] search-business failed:', e.message);
     return res.status(502).json({ error: 'Business search failed. Try again.' });
+  }
+}
+
+router.post('/search-business', strictLimiter, searchBusiness);
+
+// The /en/free page shows a visitor their competitors before it asks for an email address: ad visitors
+// left a bare email form without touching it. Public (middleware/apiAuth.ts), so rate-limited per IP
+// and capped per day: every call is a paid Google lookup.
+router.post('/preview/search', previewLimiter, (req: Request, res: Response) =>
+  (previewBudget() ? searchBusiness(req, res) : res.status(429).json(PREVIEW_FULL)));
+
+router.post('/preview/competitors', previewLimiter, async (req: Request, res: Response) => {
+  if (fromIsrael(req)) return res.status(403).json(NOT_AVAILABLE);
+  const placeId = typeof req.body?.placeId === 'string' ? req.body.placeId : '';
+  if (!PLACE_ID.test(placeId)) return res.status(400).json({ error: 'placeId required' });
+  if (!placesKey()) return res.status(503).json({ error: 'Business search is not configured' });
+  if (!previewBudget()) return res.status(429).json(PREVIEW_FULL);
+  try {
+    const r = await fetch(`${PLACES}/${placeId}`, {
+      headers: placesHeaders('id,displayName,formattedAddress,location,primaryType,primaryTypeDisplayName,types,rating,userRatingCount,addressComponents'),
+    });
+    const place: any = await r.json();
+    if (!r.ok || !place?.id || !place.location) return res.status(404).json({ error: 'Business not found on Google' });
+    if (countryOf(place.addressComponents) === 'IL') return res.status(403).json(NOT_AVAILABLE);
+
+    // Places of the same kind ("pizza_restaurant") around it, most popular first. This is a quick first
+    // look; the setup after the email runs the full search (runCompetitorIdentification).
+    const type = place.primaryType || (place.types || []).find((t: string) => !GENERIC_TYPES.has(t));
+    let competitors: any[] = [];
+    if (type) {
+      const n = await fetch(`${PLACES}:searchNearby`, {
+        method: 'POST',
+        headers: placesHeaders('places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount'),
+        body: JSON.stringify({
+          [place.primaryType ? 'includedPrimaryTypes' : 'includedTypes']: [type],
+          locationRestriction: { circle: { center: place.location, radius: PREVIEW_RADIUS_M } },
+          rankPreference: 'POPULARITY',
+          maxResultCount: 20,
+          languageCode: 'en',
+          regionCode: 'us',
+        }),
+      });
+      const nearby: any = await n.json();
+      if (!n.ok) console.warn(`[briefing] preview nearby search ${n.status}: ${nearby?.error?.message ?? ''}`);
+      const { latitude, longitude } = place.location;
+      // The nearest of the 20 most popular, leaving out the business's own other branches.
+      competitors = (nearby.places || [])
+        .filter((p: any) => p.id !== place.id && p.displayName?.text && p.location && !sameBusinessName(p.displayName.text, place.displayName?.text || ''))
+        .map((p: any) => ({
+          ...placeResult(p),
+          miles: Math.round(haversineKm(latitude, longitude, p.location.latitude, p.location.longitude) / 1.609 * 10) / 10,
+        }))
+        .sort((a: any, b: any) => a.miles - b.miles)
+        .slice(0, PREVIEW_COMPETITORS);
+    }
+    return res.json({ business: placeResult(place), competitors });
+  } catch (e: any) {
+    console.error('[briefing] preview competitors failed:', e.message);
+    return res.status(502).json({ error: 'Could not look up your competitors. Try again.' });
   }
 });
 
@@ -165,7 +271,7 @@ router.post('/start', strictLimiter, async (req: Request, res: Response) => {
   const userId = getUserId(req);
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
   const placeId = typeof req.body?.placeId === 'string' ? req.body.placeId : '';
-  if (!/^[A-Za-z0-9_-]{10,200}$/.test(placeId)) return res.status(400).json({ error: 'placeId required' });
+  if (!PLACE_ID.test(placeId)) return res.status(400).json({ error: 'placeId required' });
   if (!placesKey()) return res.status(503).json({ error: 'Business search is not configured' });
 
   const leadId: string | undefined = (req as any).freeLeadId;

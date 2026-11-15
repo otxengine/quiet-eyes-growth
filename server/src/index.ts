@@ -905,6 +905,8 @@ const httpServer = app.listen(PORT, async () => {
   await sql(`ALTER TABLE business_profiles ADD COLUMN IF NOT EXISTS free_ended_at TIMESTAMPTZ`);
   // Account-less Free plan (lib/freeAccess.ts): one row per email address that asked for the free reports.
   await sql(`CREATE TABLE IF NOT EXISTS briefing_leads (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, consent_at TIMESTAMPTZ, consent_text TEXT, confirmed_at TIMESTAMPTZ, unsubscribed_at TIMESTAMPTZ, last_link_sent_at TIMESTAMPTZ, link_day DATE, link_count INT NOT NULL DEFAULT 0, discovery_runs INT NOT NULL DEFAULT 0, business_profile_id TEXT, country TEXT, created_date TIMESTAMPTZ NOT NULL DEFAULT now())`);
+  // The Google place a Free visitor picked on /en/free before giving the address; offered back for confirmation at setup (routes/briefing.ts /me).
+  await sql(`ALTER TABLE briefing_leads ADD COLUMN IF NOT EXISTS place_id TEXT`);
 
   // ── Multi-branch / Multi-user / Agency tables ─────────────────────────────
   await sql(`CREATE TABLE IF NOT EXISTS organizations (

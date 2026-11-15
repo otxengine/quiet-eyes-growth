@@ -32,7 +32,7 @@ function run(mw: any, r: Request, ...extra: any[]) {
 
 describe('requireApiAuth (mounted on /api)', () => {
   it.each(['/social/snapshot/profile', '/kpi/biz-1', '/agents/trigger/collect-reviews', '/orchestrator/running', '/meta/auth/facebook/callback',
-    '/reports/r1', '/reports/r1/pdf', '/reports/r1/view/extra'])(
+    '/reports/r1', '/reports/r1/pdf', '/reports/r1/view/extra', '/briefing/search-business', '/briefing/preview/other'])(
     '401s %s without a user', async path => {
       asUser(null);
       expect((await run(requireApiAuth, req({ path }))).status).toBe(401);
@@ -40,7 +40,7 @@ describe('requireApiAuth (mounted on /api)', () => {
 
   it.each(['/health', '/healthz', '/cron/run', '/webhooks/clerk', '/webhooks/meta', '/billing/webhooks',
     '/oauth/callback/google', '/oauth/confirm-page', '/competitors/proxy-image', '/social/media/asset-1',
-    '/reports/unsubscribe', '/reports/r1/view', '/reports/r1/view/pdf'])(
+    '/reports/unsubscribe', '/reports/r1/view', '/reports/r1/view/pdf', '/briefing/free/request', '/briefing/preview/search', '/briefing/preview/competitors'])(
     'lets %s through without a user', async path => {
       asUser(null);
       expect((await run(requireApiAuth, req({ path }))).next).toHaveBeenCalled();

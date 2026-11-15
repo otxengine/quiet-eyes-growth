@@ -54,6 +54,7 @@ export default function Start({ free = false }) {
   const [settings, setSettings] = useState(null);
   const [query, setQuery] = useState(() => sessionStorage.getItem(BUSINESS_QUERY_KEY) || (free && localStorage.getItem(BUSINESS_QUERY_KEY)) || '');
   const [results, setResults] = useState(null);
+  const [confirming, setConfirming] = useState(false); // results holds the business picked on /en/free
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [lookingUp, setLookingUp] = useState(false); // the search is still looking up the suggestions' pages
@@ -73,13 +74,16 @@ export default function Start({ free = false }) {
     setFreeLink(free ? freeToken() : null);
     (async () => {
       try {
-        const { business } = await briefingApi.me();
+        const { business, picked } = await briefingApi.me();
         if (business?.onboardingCompleted && !free) return navigate('/en/briefing', { replace: true });
         if (business) {
           setBusinessProfileId(business.businessProfileId);
           await loadSettings(business.businessProfileId);
           return setStep(business.onboardingCompleted ? 'manage' : 'pick');
         }
+        // Free: the business they picked on /en/free before giving their address. Shown to confirm, never
+        // set up on its own (anyone can type someone else's address there).
+        if (picked) { setResults([picked]); setConfirming(true); }
         return setStep('search');
       } catch (e) {
         if (expired(e)) return undefined;
@@ -95,6 +99,7 @@ export default function Start({ free = false }) {
     setError('');
     if (query.trim().length < 3) return setError('Type your business name and city.');
     setBusy(true);
+    setConfirming(false);
     try { setResults((await briefingApi.searchBusiness(query.trim())).results); }
     catch (e) { if (!expired(e)) setError(message(e)); }
     finally { setBusy(false); }
@@ -148,7 +153,11 @@ export default function Start({ free = false }) {
 
       {step === 'search' && (
         <>
-          <StepHeading step={at(1)} title="Find your business" sub="We read its type and location from Google to find the right competitors." />
+          <StepHeading
+            step={at(1)}
+            title={confirming ? 'Is this your business?' : 'Find your business'}
+            sub={confirming ? 'The one you picked before. If it is not yours, search for it below.' : 'We read its type and location from Google to find the right competitors.'}
+          />
           <form className="flex gap-2.5" onSubmit={(e) => { e.preventDefault(); search(); }}>
             <TextInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Joe's Pizza, Austin TX" aria-label="Your business name and city" maxLength={120} />
             <Button variant="gradient" disabled={busy} onClick={search}><Search size={15} aria-hidden="true" />{busy ? 'Searching' : 'Search'}</Button>

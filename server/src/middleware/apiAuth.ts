@@ -19,6 +19,7 @@ const PUBLIC_API_PATHS: RegExp[] = [
   /^\/reports\/unsubscribe$/, // opened from a report email; signed per recipient (lib/reportDelivery.ts)
   /^\/reports\/[^/]+\/view(\/pdf)?$/, // the web report from the email link; signed per report (reportLinkValid)
   /^\/briefing\/free\/request$/, // account-less Free plan: an email address asks for its setup link (rate-limited)
+  /^\/briefing\/preview\/(search|competitors)$/, // /en/free: a visitor's business and nearby competitors (rate-limited, capped per day)
 ];
 
 /**
