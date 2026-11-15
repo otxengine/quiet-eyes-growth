@@ -48,13 +48,13 @@ async function waitForSuggestions(businessProfileId) {
 
 export default function Start({ free = false }) {
   const navigate = useNavigate();
-  // loading | search | discovering | pick | delivery | plan — and, free only: done | manage | expired
+  // loading | search | discovering | pick | delivery | plan — and, free only: quick | done | manage | expired
   const [step, setStep] = useState('loading');
   const [businessProfileId, setBusinessProfileId] = useState(null);
   const [settings, setSettings] = useState(null);
   const [query, setQuery] = useState(() => sessionStorage.getItem(BUSINESS_QUERY_KEY) || (free && localStorage.getItem(BUSINESS_QUERY_KEY)) || '');
   const [results, setResults] = useState(null);
-  const [confirming, setConfirming] = useState(false); // results holds the business picked on /en/free
+  const [picked, setPicked] = useState(null); // free: the business chosen on /en/free, started with one click
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [lookingUp, setLookingUp] = useState(false); // the search is still looking up the suggestions' pages
@@ -74,16 +74,16 @@ export default function Start({ free = false }) {
     setFreeLink(free ? freeToken() : null);
     (async () => {
       try {
-        const { business, picked } = await briefingApi.me();
+        const { business, picked: chosen } = await briefingApi.me();
         if (business?.onboardingCompleted && !free) return navigate('/en/briefing', { replace: true });
         if (business) {
           setBusinessProfileId(business.businessProfileId);
           await loadSettings(business.businessProfileId);
           return setStep(business.onboardingCompleted ? 'manage' : 'pick');
         }
-        // Free: the business they picked on /en/free before giving their address. Shown to confirm, never
-        // set up on its own (anyone can type someone else's address there).
-        if (picked) { setResults([picked]); setConfirming(true); }
+        // Free: the business they picked on /en/free before giving their address. Shown first, and set up
+        // only by their click (anyone can type someone else's address there).
+        if (chosen) { setPicked(chosen); return setStep('quick'); }
         return setStep('search');
       } catch (e) {
         if (expired(e)) return undefined;
@@ -99,7 +99,6 @@ export default function Start({ free = false }) {
     setError('');
     if (query.trim().length < 3) return setError('Type your business name and city.');
     setBusy(true);
-    setConfirming(false);
     try { setResults((await briefingApi.searchBusiness(query.trim())).results); }
     catch (e) { if (!expired(e)) setError(message(e)); }
     finally { setBusy(false); }
@@ -138,6 +137,25 @@ export default function Start({ free = false }) {
     await briefingApi.finish(businessProfileId);
     navigate('/en/briefing?welcome=1', { replace: true });
   };
+  // Free, one click: the business picked on /en/free and its nearest competitors, then the first
+  // report. Nothing close by, or a setup already begun: the long way from where it stands.
+  const quickStart = async () => {
+    setError('');
+    setBusy(true);
+    try {
+      const r = await briefingApi.quickStart(Intl.DateTimeFormat().resolvedOptions().timeZone);
+      if (!r.resumed && !r.competitors) return await choose(picked.placeId);
+      setBusinessProfileId(r.businessProfileId);
+      await loadSettings(r.businessProfileId);
+      if (r.resumed) return setStep(r.onboardingCompleted ? 'manage' : 'pick');
+      track('sign_up', { market: 'en', method: 'free_email' });
+      localStorage.removeItem(BUSINESS_QUERY_KEY);
+      return setStep('done');
+    } catch (e) {
+      if (!expired(e)) setError(message(e));
+      return undefined;
+    } finally { setBusy(false); }
+  };
   // Free: saving the competitors ends the setup. The first report is built from here on.
   const finishFree = async () => {
     try { await briefingApi.finish(businessProfileId); setStep('done'); }
@@ -151,13 +169,27 @@ export default function Start({ free = false }) {
     <BriefingShell signOut={!free}>
       {step === 'loading' && <Spinner label="Loading" />}
 
+      {step === 'quick' && picked && (
+        <>
+          <StepHeading title="Start your free report" sub={`On the competitors nearest to ${picked.name}. The first report covers their last 30 days and arrives by email.`} />
+          <Card className="!p-4">
+            <div className="font-bold text-[15px]">{picked.name}</div>
+            <div className="text-[12.5px]" style={{ color: 'var(--mkt-muted)' }}>{[picked.category, picked.address].filter(Boolean).join(' · ')}</div>
+          </Card>
+          <div className="mt-5"><Button variant="gradient" disabled={busy} onClick={quickStart}>{busy ? 'Starting' : 'Start my free report'}</Button></div>
+          <div className="mt-3"><ErrorNote>{error}</ErrorNote></div>
+          <p className="mt-5 text-[13px] leading-relaxed" style={{ color: 'var(--mkt-muted)' }}>
+            You can change the competitors from any report email.{' '}
+            <button type="button" className="underline" disabled={busy} onClick={() => choose(picked.placeId)}>Choose them myself</button>
+            {' · '}
+            <button type="button" className="underline" disabled={busy} onClick={() => { setPicked(null); setError(''); setStep('search'); }}>Not my business</button>
+          </p>
+        </>
+      )}
+
       {step === 'search' && (
         <>
-          <StepHeading
-            step={at(1)}
-            title={confirming ? 'Is this your business?' : 'Find your business'}
-            sub={confirming ? 'The one you picked before. If it is not yours, search for it below.' : 'We read its type and location from Google to find the right competitors.'}
-          />
+          <StepHeading step={at(1)} title="Find your business" sub="We read its type and location from Google to find the right competitors." />
           <form className="flex gap-2.5" onSubmit={(e) => { e.preventDefault(); search(); }}>
             <TextInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Joe's Pizza, Austin TX" aria-label="Your business name and city" maxLength={120} />
             <Button variant="gradient" disabled={busy} onClick={search}><Search size={15} aria-hidden="true" />{busy ? 'Searching' : 'Search'}</Button>

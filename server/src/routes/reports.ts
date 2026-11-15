@@ -61,7 +61,7 @@ router.all('/unsubscribe', async (req: Request, res: Response) => {
   try { ok = await unsubscribe(b, r, t); } catch (e: any) { console.error('[reports] unsubscribe failed:', e.message); }
   const en = ok && (await businessLocale(b)).lang === 'en';
   const text = !ok ? 'This unsubscribe link is not valid.'
-    : ok === 'all' ? 'You are unsubscribed. We have stopped your competitor reports and the Cortexi newsletter, and you will not hear from us again.'
+    : ok === 'all' ? 'You are unsubscribed. We have stopped your competitor reports and any Cortexi newsletter, and you will not hear from us again.'
       : en ? 'You have been unsubscribed from Cortexi competitor reports.' : 'הוסרת מרשימת התפוצה של דוחות המתחרים של Cortexi.';
   res.status(ok ? 200 : 400).type('html').send(
     `<!doctype html><html lang="${en || !ok ? 'en' : 'he'}" dir="${en || !ok ? 'ltr' : 'rtl'}"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Cortexi</title></head>`

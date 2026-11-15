@@ -59,6 +59,15 @@ export class DnsStack extends cdk.Stack {
       new route53.CnameRecord(this, id, { zone, recordName, domainName, ttl: ttl(3600) });
     }
 
+    // Resend: sending from @cortexi.ai (domain added 2026-11-15, region us-east-1, "Forge" infrastructure).
+    // DKIM plus its sending / bounce hosts. Mail keeps coming from FROM_EMAIL (SSM) until that is switched.
+    new route53.TxtRecord(this, 'ResendDkim', {
+      zone, recordName: 'resend._domainkey', ttl: ttl(3600),
+      values: ['p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDMUwrMslzMdCVvQM9nDb/6qqaHIjD0Ii3ncuAwDgQNv4uu/rlZfgiHra4giCta4BzA/k3sHfvycZV/x5SFXtBf0TtFuPdEmm9pHv8E/8vQV8Ri+m8YINujEGkqnPSDp/0rBBBP88qo8WZcyt44fs+VYiquojKftDTssh2a6uMsWQIDAQAB'],
+    });
+    new route53.CnameRecord(this, 'ResendSend', { zone, recordName: 'send', domainName: 'send.forge.rmta.net', ttl: ttl(3600) });
+    new route53.CnameRecord(this, 'ResendRsend', { zone, recordName: 'rsend', domainName: 'rsend.forge.rmta.net', ttl: ttl(3600) });
+
     new cdk.CfnOutput(this, 'NameServers', { value: cdk.Fn.join(' ', zone.hostedZoneNameServers!) });
     new cdk.CfnOutput(this, 'HostedZoneId', { value: zone.hostedZoneId });
   }

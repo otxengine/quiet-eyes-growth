@@ -5,9 +5,9 @@ import { BriefingShell, Button, Card, ErrorNote, StepHeading, TextInput } from '
 import { BUSINESS_QUERY_KEY } from './keys.js';
 import { track } from '@/lib/gtm.js';
 
-// The exact wording the server stores with the address (FREE_CONSENT_TEXT in server/src/lib/freeAccess.ts).
-// Change both together.
-const CONSENT = 'I agree to receive the Cortexi newsletter. It comes with the free reports, and one unsubscribe link stops both.';
+// The optional newsletter checkbox; the server stores this exact wording when it is ticked
+// (FREE_CONSENT_TEXT in server/src/lib/freeAccess.ts). Change both together.
+const CONSENT = 'Also send me the Cortexi newsletter: product news and tips for local businesses. Unsubscribe anytime.';
 const muted = { color: 'var(--mkt-muted)' };
 const ink2 = { color: 'var(--mkt-ink-2)' };
 
@@ -86,10 +86,9 @@ export default function Free() {
   const send = async (address) => {
     setError('');
     if (!/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(address)) return setError('Enter a valid email address.');
-    if (!consent) return setError('To get the free reports, agree to receive the Cortexi newsletter.');
     setBusy(true);
     try {
-      await briefingApi.requestFreeLink(address, true, preview?.business?.placeId);
+      await briefingApi.requestFreeLink(address, consent, preview?.business?.placeId);
       if (!sentTo) track('generate_lead', { market: 'en', method: 'free_email' }); // not on "send again"
       setAgain(!!sentTo);
       setSentTo(address);
@@ -156,7 +155,7 @@ export default function Free() {
             </>
           )}
           <p className="mt-6 text-[13px]" style={muted}>
-            Three free monthly reports on your competitors' posts, ads and Google reviews.{' '}
+            Three free monthly reports on your competitors' posts, ads and Google reviews. No card, no account.{' '}
             <button type="button" className="underline" onClick={() => { setError(''); setStep('email'); }}>Skip this and just email me the link</button>
           </p>
         </>

@@ -20,8 +20,8 @@ export const FREE_REPORTS = 3;
 // The "change competitors" link in a report email: long enough to last until the next monthly report.
 const FREE_MANAGE_LINK_DAYS = 35;
 const siteUrl = () => (process.env.FRONTEND_URL || '').replace(/\/$/, '');
-/** The wording the visitor agreed to, stored with the lead. Change the text here and on the form together. */
-export const FREE_CONSENT_TEXT = 'I agree to receive the Cortexi newsletter. It comes with the free reports, and one unsubscribe link stops both.';
+/** The optional newsletter checkbox's wording, stored with the lead when ticked. Change the text here and on the form together. */
+export const FREE_CONSENT_TEXT = 'Also send me the Cortexi newsletter: product news and tips for local businesses. Unsubscribe anytime.';
 
 // Same secret as the report links (lib/reportDelivery.ts), with its own message prefix, so a
 // report or unsubscribe token never works as a login and the other way round.
@@ -53,7 +53,7 @@ export const isFreeIdentity = (userId?: string | null): boolean => !!userId && u
 // case-sensitive, so an encoded or re-cased path simply does not match (fails closed).
 const ALLOWED: [string, RegExp][] = [
   ['GET', /^\/briefing\/(me|settings)$/],
-  ['POST', /^\/briefing\/(search-business|start|finish)$/],
+  ['POST', /^\/briefing\/(search-business|start|finish|free\/quick-start)$/],
   ['POST', /^\/functions\/runCompetitorIdentification$/],
   ['GET', /^\/entities\/Competitor$/],
   ['POST', /^\/entities\/Competitor$/],
@@ -120,6 +120,7 @@ export async function freeAccess(req: Request, res: Response, next: NextFunction
 
 export interface FreeReportInfo {
   number: number; // which of its free reports this one is, 1-based
+  newsletter: boolean; // the address also asked for the newsletter
   total: number;
   last: boolean;
   manageUrl: string | null; // "change competitors"; none on the last report
@@ -134,13 +135,13 @@ export interface FreeReportInfo {
  * keeps being scanned monthly. Add an age limit if that shows up in the costs.
  */
 export async function freeReportInfo(businessProfileId: string): Promise<FreeReportInfo | null> {
-  const lead = await prisma.$queryRaw<{ id: string; unclaimed: boolean }[]>`
-    SELECT l.id, (b.created_by = l.email) AS unclaimed FROM briefing_leads l JOIN business_profiles b ON b.id = l.business_profile_id
+  const lead = await prisma.$queryRaw<{ id: string; unclaimed: boolean; newsletter: boolean }[]>`
+    SELECT l.id, (b.created_by = l.email) AS unclaimed, (l.consent_at IS NOT NULL) AS newsletter FROM briefing_leads l JOIN business_profiles b ON b.id = l.business_profile_id
      WHERE b.id = ${businessProfileId} AND b.subscription_plan = 'brief_free'`;
   if (!lead[0]) return null;
   const number = await prisma.report.count({ where: { linked_business: businessProfileId, status: 'ready' } });
   const last = number >= FREE_REPORTS;
-  const shown = { number: Math.min(number, FREE_REPORTS), total: FREE_REPORTS, last };
+  const shown = { number: Math.min(number, FREE_REPORTS), total: FREE_REPORTS, last, newsletter: !!lead[0].newsletter };
   // An account has taken the business over but is still on Free: its links go to the account.
   if (!lead[0].unclaimed) {
     return { ...shown, manageUrl: last ? null : `${siteUrl()}/en/briefing?tab=competitors`, upgradeUrl: `${siteUrl()}/en/briefing?tab=plan` };
@@ -177,7 +178,7 @@ export async function sendFreeLink(leadId: string, email: string): Promise<boole
 <div style="background:#eef4fc;border-left:4px solid #2a78d6;padding:12px 14px;border-radius:4px;font-size:16px;font-weight:600;line-height:1.5">Tell us about your business and pick the competitors to watch. It takes about two minutes.</div>
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0 0"><tr><td style="background:#0b0b0b;border-radius:6px">
 <a href="${esc(url)}" style="display:inline-block;padding:11px 20px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none">Set up my report</a></td></tr></table>
-<p style="font-size:13px;color:#52514e;line-height:1.6;margin:16px 0 0">You get three free monthly reports and the Cortexi newsletter. The link works for 24 hours.</p></td></tr>
+<p style="font-size:13px;color:#52514e;line-height:1.6;margin:16px 0 0">You get three free monthly reports. The link works for 24 hours.</p></td></tr>
 <tr><td style="padding:14px 28px;border-top:1px solid #e1e0d9;font-size:11px;color:#898781;line-height:1.6">You are receiving this because this address was entered at cortexi.ai. If that was not you, ignore this email and nothing more will be sent.${postal ? `<br>${esc(postal)}` : ''}</td></tr>
 </table></td></tr></table></body></html>`;
   return sendEmail({ to: email, subject: 'Confirm your email to set up your Cortexi report', html });

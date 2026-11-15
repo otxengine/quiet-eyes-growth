@@ -90,6 +90,13 @@ describe('freeAccess', () => {
     expect(executeRaw).toHaveBeenCalledTimes(1);
   });
 
+  it('the one-click start is a token route that confirms the address', async () => {
+    const { req, next } = await withToken(freeToken('lead_1', 1), { method: 'POST', path: '/briefing/free/quick-start' });
+    expect(next).toHaveBeenCalled();
+    expect((req as any).freeLeadId).toBe('lead_1');
+    expect(executeRaw).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses a bad token, an unknown lead and an unsubscribed lead', async () => {
     expect((await withToken('nope')).res.body).toMatchObject({ link_expired: true });
     queryRaw.mockResolvedValueOnce([]);
