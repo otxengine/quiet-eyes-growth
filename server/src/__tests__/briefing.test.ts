@@ -7,7 +7,7 @@ jest.mock('../db', () => ({
 }));
 jest.mock('../middleware/auth', () => ({ getUserId: () => 'user_1', isAdminKeyRequest: () => false }));
 jest.mock('../middleware/businessAccess', () => ({ requireOwnsBusinessFields: (_q: any, _s: any, next: any) => next() }));
-jest.mock('../middleware/rateLimits', () => ({ strictLimiter: (_q: any, _s: any, next: any) => next(), freeRequestLimiter: (_q: any, _s: any, next: any) => next() }));
+jest.mock('../middleware/rateLimits', () => ({ strictLimiter: (_q: any, _s: any, next: any) => next(), freeRequestLimiter: (_q: any, _s: any, next: any) => next(), previewLimiter: (_q: any, _s: any, next: any) => next() }));
 jest.mock('../lib/ownership', () => ({ getUserEmail: jest.fn(async () => 'owner@example.com') }));
 const sendEmail = jest.fn(async (..._a: any[]) => true);
 jest.mock('../lib/email', () => ({ sendEmail: (...a: any[]) => sendEmail(...a) }));
@@ -26,7 +26,7 @@ jest.mock('../routes/functions/detectCompetitorAds', () => ({ detectCompetitorAd
 jest.mock('../routes/functions/collectReviews', () => ({ collectReviews: (...a: any[]) => collectors.reviews(...a) }));
 
 process.env.GOOGLE_PLACES_API_KEY = 'k';
-import router, { cityOf } from '../routes/briefing';
+import router, { cityOf, previewBudget } from '../routes/briefing';
 import { reportPeriodLabel } from '../lib/reportPdf/html';
 
 const call = async (path: string, method: string, req: any) => {
@@ -257,5 +257,77 @@ describe('account-less Free plan', () => {
     expect(r.body).toEqual({ ok: true });
     expect(bp.update).not.toHaveBeenCalled();
     expect(collectors.posts).not.toHaveBeenCalled();
+  });
+});
+
+describe('preview on /en/free (public, before any email)', () => {
+  const NEAR = { latitude: 30.2672, longitude: -97.7431 };
+  const nearby = (p: string, name: string, lat: number, rating = 4.5) => ({ id: p, displayName: { text: name }, location: { latitude: lat, longitude: NEAR.longitude }, rating, userRatingCount: 100 });
+  // Place Details of the business, then the nearby search.
+  const google = (detail: any, near: any, nearOk = true) => {
+    (global as any).fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => detail })
+      .mockResolvedValueOnce({ ok: nearOk, json: async () => near });
+  };
+
+  it('stops at the daily ceiling and starts again the next day', () => {
+    const day = new Date('2027-01-01T10:00:00Z');
+    let ok = 0;
+    for (let i = 0; i < 700; i += 1) if (previewBudget(day)) ok += 1;
+    expect(ok).toBe(600);
+    expect(previewBudget(new Date('2027-01-02T00:00:01Z'))).toBe(true);
+  });
+
+  it('search answers like search-business', async () => {
+    places({ places: [PLACE] });
+    const r = await call('/preview/search', 'post', { body: { query: "joe's pizza austin" } });
+    expect(r.body.results[0]).toMatchObject({ placeId: PLACE.id, name: "Joe's Pizza", category: 'Pizza restaurant' });
+  });
+
+  it('competitors: the same primary type nearby, nearest first, without the business or its other branches', async () => {
+    google({ ...PLACE, location: NEAR, primaryType: 'pizza_restaurant', rating: 4.2, userRatingCount: 80 }, {
+      places: [nearby(PLACE.id, "Joe's Pizza", NEAR.latitude), nearby('ChIJ_rival_00002', 'Slice Co', NEAR.latitude + 0.029, 4.0),
+        nearby('ChIJ_branch_0001', "Joe's Pizza Downtown", NEAR.latitude + 0.001), nearby('ChIJ_rival_00001', 'Rival Pizza', NEAR.latitude + 0.0145, 4.7)],
+    });
+    const r = await call('/preview/competitors', 'post', { body: { placeId: PLACE.id } });
+    expect(r.body.business).toMatchObject({ placeId: PLACE.id, rating: 4.2, reviewCount: 80 });
+    expect(r.body.competitors.map((c: any) => [c.name, c.miles])).toEqual([['Rival Pizza', 1], ['Slice Co', 2]]);
+    const sent = JSON.parse((global as any).fetch.mock.calls[1][1].body);
+    expect(sent).toMatchObject({ includedPrimaryTypes: ['pizza_restaurant'], locationRestriction: { circle: { center: NEAR } }, rankPreference: 'POPULARITY' });
+  });
+
+  it('a place without a primary type is matched on its first specific type; a failed nearby search is an empty list', async () => {
+    google({ ...PLACE, location: NEAR, types: ['point_of_interest', 'hair_salon', 'establishment'] }, { error: { message: 'quota' } }, false);
+    const r = await call('/preview/competitors', 'post', { body: { placeId: PLACE.id } });
+    expect(JSON.parse((global as any).fetch.mock.calls[1][1].body)).toMatchObject({ includedTypes: ['hair_salon'] });
+    expect(r.body.competitors).toEqual([]);
+  });
+
+  it('refuses a bad place id, an unknown place and a place in Israel', async () => {
+    expect((await call('/preview/competitors', 'post', { body: { placeId: 'x' } })).statusCode).toBe(400);
+    places({ error: { message: 'not found' } }, false);
+    expect((await call('/preview/competitors', 'post', { body: { placeId: PLACE.id } })).statusCode).toBe(404);
+    places({ ...PLACE, location: NEAR, addressComponents: [{ shortText: 'IL', types: ['country'] }] });
+    expect((await call('/preview/competitors', 'post', { body: { placeId: PLACE.id } })).statusCode).toBe(403);
+  });
+
+  it('the email request keeps the picked place id, and drops anything that is not one', async () => {
+    const values = () => (queryRaw.mock.calls[1] as any[]).slice(1);
+    queryRaw.mockResolvedValueOnce([{ n: 0 }] as any).mockResolvedValueOnce([{ id: 'lead_1' }] as any).mockResolvedValueOnce([] as any);
+    await call('/free/request', 'post', { body: { email: 'owner@example.com', consent: true, placeId: PLACE.id } });
+    expect(values()).toContain(PLACE.id);
+    queryRaw.mockClear();
+    queryRaw.mockResolvedValueOnce([{ n: 0 }] as any).mockResolvedValueOnce([{ id: 'lead_1' }] as any).mockResolvedValueOnce([] as any);
+    await call('/free/request', 'post', { body: { email: 'owner@example.com', consent: true, placeId: '<script>' } });
+    expect(values()).not.toContain('<script>');
+    expect(values()[values().length - 1]).toBeNull();
+  });
+
+  it('/me offers the picked business back to confirm, read from Google; nothing without a lead', async () => {
+    queryRaw.mockResolvedValueOnce([{ place_id: PLACE.id }] as any);
+    places({ ...PLACE, rating: 4.2, userRatingCount: 80 });
+    const r = await call('/me', 'get', { freeLeadId: 'lead_1' });
+    expect(r.body).toEqual({ business: null, picked: expect.objectContaining({ placeId: PLACE.id, name: "Joe's Pizza", rating: 4.2 }) });
+    expect((await call('/me', 'get', {})).body).toEqual({ business: null });
   });
 });

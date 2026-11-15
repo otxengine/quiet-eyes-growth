@@ -21,6 +21,16 @@ export const freeRequestLimiter = rateLimit({
   message: { error: 'Too many requests. Try again in a few minutes.' },
 });
 
+// The public competitor preview on /en/free (routes/briefing.ts): 15 per 15 min per IP. A visitor
+// uses 2-4 (search, maybe search again, competitors); each one is a paid Google lookup.
+export const previewLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many searches. Try again in a few minutes.' },
+});
+
 // Strict limiter for expensive LLM/scan endpoints: 20 per 15 min
 export const strictLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

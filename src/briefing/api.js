@@ -78,5 +78,9 @@ export const briefingApi = {
   selectPlan: (businessProfileId, planId) => api('/onboarding/select-plan', { method: 'POST', body: { businessProfileId, planId } }),
 
   // Account-less Free plan: ask for the setup link. The answer is the same for every address.
-  requestFreeLink: (email, consent) => api('/briefing/free/request', { method: 'POST', body: { email, consent } }),
+  // placeId: the business picked on the page, offered back for confirmation when the link is opened.
+  requestFreeLink: (email, consent, placeId) => api('/briefing/free/request', { method: 'POST', body: { email, consent, placeId } }),
+  // /en/free, before any email: find the business, then a first look at its nearest competitors. Public.
+  previewSearch: (query) => api('/briefing/preview/search', { method: 'POST', body: { query } }),
+  previewCompetitors: (placeId) => api('/briefing/preview/competitors', { method: 'POST', body: { placeId } }),
 };
