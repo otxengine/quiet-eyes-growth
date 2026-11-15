@@ -1,7 +1,7 @@
 // CloudFront viewer-request function (cloudfront-js-2.0). Mirrors the Render routes in render.yaml:
 // prerendered marketing pages live at /<route>/index.html; any other path without a file
 // extension is a client-side route and gets the SPA shell.
-var MARKETING = ['/home', '/features', '/blog', '/pricing', '/about', '/contact', '/how-it-works', '/terms', '/privacy', '/refund-policy', '/data-deletion', '/en', '/en/terms', '/en/privacy'];
+var MARKETING = ['/home', '/features', '/blog', '/pricing', '/about', '/contact', '/how-it-works', '/terms', '/privacy', '/refund-policy', '/data-deletion', '/en', '/en/free', '/en/terms', '/en/privacy'];
 
 // ── Country routing (prod only: qe-stack.ts flips GEO_ROUTING; staging stays open for testing) ──
 // Visitors in Israel get the Hebrew site, everyone else the English one (/en): the English product

@@ -33,7 +33,7 @@ for (const uri of ['/', '/home', '/pricing', '/features', '/features/reputation'
 }
 assert.strictEqual(to(run(prod, '/en', 'US')), '/en/index.html');
 assert.strictEqual(to(run(prod, '/en/start', 'GB')), '/index.html');
-assert.strictEqual(to(run(prod, '/en/free', 'GB')), '/index.html');
+assert.strictEqual(to(run(prod, '/en/free', 'GB')), '/en/free/index.html'); // prerendered: the ads land here
 // Pages with no English version, the app and files are never routed.
 for (const [uri, served] of [['/privacy', '/privacy/index.html'], ['/data-deletion', '/data-deletion/index.html'], ['/terms', '/terms/index.html'],
   ['/contact', '/contact/index.html'], ['/blog', '/blog/index.html'], ['/blog/some-post', '/blog/some-post/index.html'],

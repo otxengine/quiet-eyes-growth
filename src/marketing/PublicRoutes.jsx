@@ -12,14 +12,16 @@ export function publicRoutes({ includeRoot = true } = {}) {
     <>
       {marketingRoutes
         .filter((r) => includeRoot || r.path !== '/')
-        .map(({ path, Component, seo }) => (
+        .map(({ path, Component, seo, bare }) => (
           <Route
             key={path}
             path={path}
             element={
-              <MarketingLayout seo={seo}>
-                <Component />
-              </MarketingLayout>
+              bare ? <Component /> : (
+                <MarketingLayout seo={seo}>
+                  <Component />
+                </MarketingLayout>
+              )
             }
           />
         ))}
