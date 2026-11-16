@@ -77,6 +77,7 @@ import { startScheduler } from './scheduler';
 import { refreshExpiringGoogleTokens } from './lib/googleTokenRefresh';
 import { getAgentStatusSummary } from './lib/agentMonitor';
 import { hideServerErrors } from './middleware/hideServerErrors';
+import { accessLog } from './middleware/accessLog';
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -131,6 +132,10 @@ if (clerkEnabled) {
 } else {
   console.log('Clerk not configured — running in dev mode (all requests as dev-user)');
 }
+
+// One JSON line per /api request (user, route, business). After Clerk so it has the user id;
+// before the auth gate so refused requests are logged too.
+app.use('/api', accessLog);
 
 // Deny by default: every /api route registered below needs a signed-in user, except
 // the short public list in middleware/apiAuth.ts. Mounted before
