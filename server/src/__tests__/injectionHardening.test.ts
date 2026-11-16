@@ -11,6 +11,7 @@ jest.mock('../db', () => ({
     review:          { findMany: jest.fn() },
     proactiveAlert:  { findFirst: jest.fn() },
     healthScore:     { findMany: jest.fn() },
+    $queryRaw:       jest.fn(),
   },
 }));
 jest.mock('../lib/s3', () => ({ ...jest.requireActual('../lib/s3'), downloadFromS3: jest.fn() }));
@@ -151,7 +152,7 @@ describe('platform emails escape interpolated values', () => {
   });
 
   it('weekly digest', async () => {
-    db.businessProfile.findMany.mockResolvedValue([{ name: '<u>biz</u>', notification_email: 'owner@example.com' }]);
+    db.$queryRaw.mockResolvedValue([{ name: '<u>biz</u>', notification_email: 'owner@example.com' }]);
     db.lead.findMany.mockResolvedValue([{ name: '<img src=x>', status: '<i>s</i>', score: 50 }]);
     db.lead.count.mockResolvedValue(0);
     db.review.findMany.mockResolvedValue([]);
