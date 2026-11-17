@@ -34,4 +34,11 @@ assert.deepEqual(window.dataLayer, [
   { event: 'sign_up', market: 'he', method: 'account' },
 ]);
 
+// Meta gets only a parameterless Lead, and only for generate_lead; no pixel on the page is fine
+track('generate_lead', { market: 'en', method: 'free_email' });
+window.fbq = (...args) => (window.fbqCalls = [...(window.fbqCalls || []), args]);
+track('sign_up', { market: 'en', method: 'free_email' });
+track('generate_lead', { market: 'en', method: 'free_email' });
+assert.deepEqual(window.fbqCalls, [['track', 'Lead']]);
+
 console.log('gtm selfcheck: ok');
