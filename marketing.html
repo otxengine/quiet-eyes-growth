@@ -15,6 +15,20 @@
         }));
       }
     </script>
+    <!-- Meta Pixel, so the ads can optimize for visits and leads instead of clicks. Prod hosts and the
+         ad landing pages (/en, /en/free) only: other URLs can carry sign-in tokens and the pixel sends
+         the full URL. No automatic events, so nothing typed on the page reaches Meta. Lead is sent
+         from src/lib/gtm.js. -->
+    <script>
+      if (['cortexi.ai', 'www.cortexi.ai'].includes(location.hostname) && /^\/en(\/free)?\/?$/.test(location.pathname)) {
+        const pixel = '1022437750876842';
+        !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+        fbq.disablePushState = true; // no automatic PageView when the page moves to another URL in place
+        fbq('set', 'autoConfig', false, pixel);
+        fbq('init', pixel);
+        fbq('track', 'PageView');
+      }
+    </script>
     <link rel="icon" type="image/png" sizes="32x32" href="/logo/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/logo/icon-192.png" />
     <link rel="apple-touch-icon" href="/logo/apple-touch-icon.png" />

@@ -11,6 +11,8 @@ export function track(event, params = {}) {
   // GA4 merges ecommerce objects across pushes unless the previous one is cleared first.
   if (params.ecommerce) window.dataLayer.push({ ecommerce: null });
   window.dataLayer.push({ event, ...params });
+  // Meta Pixel (marketing.html, ad landing pages only): the lead, with no parameters.
+  if (event === 'generate_lead') window.fbq?.('track', 'Lead');
 }
 
 // Paddle checkout event data → GA4 ecommerce object. Picks ids and amounts only: Paddle's data
