@@ -2,7 +2,7 @@
  * weeklyEmailDigest — sends a weekly summary email to the business owner.
  *
  * Scheduled: Sunday 20:00 UTC (23:00 Israel time — after content calendar runs).
- * Uses Resend. Skips silently when RESEND_API_KEY or notification_email is not set.
+ * Uses Resend. Sends to notification_email, else owner_email, else the owner's verified Clerk address.
  *
  * Summary includes:
  *  - New leads found this week + hot leads count
@@ -17,6 +17,7 @@ import { prisma } from '../../db';
 import { sendEmail } from '../../lib/email';
 import { writeAutomationLog } from '../../lib/automationLog';
 import { esc } from '../../lib/html';
+import { getUserEmail } from '../../lib/ownership';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://quiet-eyes-frontend.onrender.com';
 
@@ -28,15 +29,23 @@ export async function weeklyEmailDigest(req: Request, res: Response) {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600000);
 
   try {
-    const profiles = await prisma.businessProfile.findMany({
-      where: { id: businessProfileId },
-    });
-    const profile = profiles[0];
+    // notification_email / owner_email are raw-SQL columns (index.ts), not in the Prisma model,
+    // so findMany never returns them.
+    const [profile] = await prisma.$queryRaw<{ name: string; created_by: string | null; notification_email: string | null; owner_email: string | null }[]>`
+      SELECT name, created_by, notification_email, owner_email FROM business_profiles WHERE id = ${businessProfileId}`;
     if (!profile) return res.json({ success: false, reason: 'profile not found' });
 
-    const email = (profile as any).notification_email || (profile as any).owner_email;
+    let email = profile.notification_email || profile.owner_email;
+    // Signup never fills either column: resolve the owner through Clerk (verified primary address
+    // only) and keep it in owner_email so this runs once per business.
+    if (!email && profile.created_by) {
+      email = await getUserEmail(profile.created_by);
+      if (email) {
+        await prisma.$executeRaw`UPDATE business_profiles SET owner_email = ${email} WHERE id = ${businessProfileId} AND owner_email IS NULL`;
+      }
+    }
     if (!email) {
-      return res.json({ success: false, reason: 'no notification_email set on profile' });
+      return res.json({ success: false, reason: 'no verified owner email' });
     }
 
     // Load this week's data in parallel
